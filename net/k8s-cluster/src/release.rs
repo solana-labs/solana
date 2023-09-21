@@ -110,13 +110,6 @@ impl<'a> Deploy<'a> {
         };
         if self.config.profile_build {
             return Err(boxed_error!("Profile Build not implemented yet"));
-
-            // error!("Profile Build not implemented yet");
-            // info!("rust flags in build: {}", *super::RUST_FLAGS);
-            // let rustflags = format!("{}{}{}", "RUSTFLAGS='-C force-frame-pointers=y -g ",  *super::RUST_FLAGS, "'");
-            // info!("rust flags: {}", rustflags);
-            // std::env::set_var("RUSTFLAGS", rustflags);
-            // info!("rust flags updated: {}", std::env::var("RUSTFLAGS").ok().unwrap());
         }
 
         let install_directory = SOLANA_ROOT.join("farf");

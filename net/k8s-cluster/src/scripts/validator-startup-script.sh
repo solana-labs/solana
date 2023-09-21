@@ -1,7 +1,5 @@
 #!/bin/bash
 
-echo "about to show args: "
-
 args=()
 stake_sol=
 node_sol=
@@ -56,7 +54,7 @@ MAX_RETRIES=5
 RETRY_DELAY=1
 
 # Solana RPC URL
-SOLANA_RPC_URL="http://$BOOTSTRAP_RPC_PORT"
+SOLANA_RPC_URL="http://$BOOTSTRAP_RPC_ADDRESS"
 
 # Identity file
 IDENTITY_FILE="identity.json"
@@ -105,8 +103,8 @@ nohup solana-validator \
   --no-os-network-limits-test \
   --identity identity.json \
   --vote-account vote.json \
-  --entrypoint $BOOTSTRAP_GOSSIP_PORT \
-  --rpc-faucet-address $BOOTSTRAP_FAUCET_PORT \
+  --entrypoint $BOOTSTRAP_GOSSIP_ADDRESS \
+  --rpc-faucet-address $BOOTSTRAP_FAUCET_ADDRESS \
   --gossip-port 8001 \
   --rpc-port 8899 \
   --ledger ledger \

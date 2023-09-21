@@ -71,7 +71,7 @@ loadConfigFile() {
     entrypointIp=${validatorIpListPrivate[0]}
   fi
 
-  # buildSshOptions
+  buildSshOptions
   configureMetrics
 }
 

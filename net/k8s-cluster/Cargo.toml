@@ -1,6 +1,6 @@
 [package]
 name = "solana-k8s-cluster"
-description = "Blockchain, Rebuilt for Scale"
+description = "Kubernetes Validator Deployment for Testing"
 version = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }

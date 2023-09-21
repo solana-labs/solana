@@ -19,13 +19,10 @@ use {
 lazy_static! {
     #[derive(Debug)]
     static ref SOLANA_ROOT: PathBuf = get_solana_root();
-    // #[derive(Debug)]
-    // static ref RUST_FLAGS: &'static str = get_rust_flags();
 }
 
 pub fn initialize_globals() {
     let _ = *SOLANA_ROOT; // Force initialization of lazy_static
-                          // let _ = *RUST_FLAGS;
 }
 
 pub mod docker;
@@ -58,20 +55,8 @@ pub fn load_env_variable_by_name(name: &str) -> Result<String, env::VarError> {
     env::var(name)
 }
 
-// pub fn get_rust_flags() -> &'static str {
-//     // env::var("RUSTFLAGS").ok().unwrap_or_default())
-//     match env::var("RUSTFLAGS").ok() {
-//         Some(value) => {
-//             info!("env var rust flags: {}", value);
-//             Box::leak(value.into_boxed_str())
-//         }
-//         None => "",
-//     }
-// }
-
 static TRUCK: Emoji = Emoji("🚚 ", "");
 static PACKAGE: Emoji = Emoji("📦 ", "");
-// static DOCKER_WHALE: Emoji = Emoji("🐳 ", "");
 
 /// Creates a new process bar for processing that will take an unknown amount of time
 pub fn new_spinner_progress_bar() -> ProgressBar {

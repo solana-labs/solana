@@ -1,8 +1,6 @@
 #!/bin/bash
 set -e
 
-echo "about to show args: "
-
 # Iterate through the command-line arguments
 args=()
 while [ $# -gt 0 ]; do

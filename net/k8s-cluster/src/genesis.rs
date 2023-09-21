@@ -100,7 +100,6 @@ fn parse_spl_genesis_file(
             // Initialize a HashMap to store parsed arguments
             let mut parsed_args = HashMap::new();
 
-            // The first part is usually empty, so start from index 1
             for part in &parts[1..] {
                 // Trim leading and trailing whitespaces
                 let trimmed_part = part.trim();
@@ -173,7 +172,6 @@ pub struct GenesisFlags {
 
 impl std::fmt::Display for GenesisFlags {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        // You can customize the formatting here based on your preferences
         write!(
             f,
             "GenesisFlags {{\n\
@@ -279,6 +277,7 @@ impl Genesis {
         Ok(())
     }
 
+    // Create identity, stake, and vote accounts
     fn generate_account(
         &mut self,
         validator_type: &str,
@@ -342,21 +341,21 @@ impl Genesis {
         Ok(())
     }
 
+    // Create Genesis
     pub fn generate(&mut self) -> Result<(), Box<dyn Error>> {
         let ledger_path = self.config_dir.join("bootstrap-validator");
         let rent = Rent::default();
 
-        // vote account
-        // lamports set a default 500
         let bootstrap_validator_lamports = match self.flags.bootstrap_validator_sol {
             Some(sol) => sol_to_lamports(sol),
-            None => sol_to_lamports(DEFAULT_BOOTSTRAP_NODE_SOL).max(VoteState::get_rent_exempt_reserve(&rent)),
+            None => sol_to_lamports(DEFAULT_BOOTSTRAP_NODE_SOL)
+                .max(VoteState::get_rent_exempt_reserve(&rent)),
         };
 
-        let bootstrap_validator_stake_lamports = match self.flags.bootstrap_validator_stake_sol
-        {
+        let bootstrap_validator_stake_lamports = match self.flags.bootstrap_validator_stake_sol {
             Some(sol) => sol_to_lamports(sol),
-            None => sol_to_lamports(DEFAULT_BOOTSTRAP_NODE_STAKE_SOL).max(rent.minimum_balance(StakeStateV2::size_of())),
+            None => sol_to_lamports(DEFAULT_BOOTSTRAP_NODE_STAKE_SOL)
+                .max(rent.minimum_balance(StakeStateV2::size_of())),
         };
 
         let faucet_lamports = match self.flags.faucet_lamports {
@@ -515,7 +514,7 @@ impl Genesis {
                 Err(err) => return Err(err),
             };
 
-            // Now you have a HashMap where the keys are flags and the values are vectors of values.
+            // HashMap where the keys are flags and the values are vectors of values.
             // You can access them as needed.
             if let Some(values) = parsed_args.get("--bpf-program") {
                 for value in values {
@@ -624,8 +623,6 @@ impl Genesis {
             }
         }
 
-        // should probably create new implementation that writes this directly to a configmap yaml
-        // or at least a base64 file
         create_new_ledger(
             &ledger_path,
             &genesis_config,
@@ -635,8 +632,6 @@ impl Genesis {
 
         self.genesis_config = Some(genesis_config);
 
-        // genesis
-        // read in the three bootstrap keys
         Ok(())
     }
 

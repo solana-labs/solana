@@ -84,7 +84,7 @@ impl<'a> Kubernetes<'a> {
         let mut data = BTreeMap::<String, ByteString>::new();
         data.insert("genesis.tar.bz2".to_string(), ByteString(buffer));
 
-        // Create the ConfigMap object
+        // Create the ConfigMap
         let config_map = ConfigMap {
             metadata,
             binary_data: Some(data),
@@ -159,7 +159,7 @@ impl<'a> Kubernetes<'a> {
         command.extend(self.generate_bootstrap_command_flags());
 
         for c in command.iter() {
-            info!("bootstrap command: {}", c);
+            debug!("bootstrap command: {}", c);
         }
 
         self.create_replicas_set(
@@ -463,21 +463,21 @@ impl<'a> Kubernetes<'a> {
                 ..Default::default()
             },
             EnvVar {
-                name: "BOOTSTRAP_RPC_PORT".to_string(),
+                name: "BOOTSTRAP_RPC_ADDRESS".to_string(),
                 value: Some(format!(
                     "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8899"
                 )),
                 ..Default::default()
             },
             EnvVar {
-                name: "BOOTSTRAP_GOSSIP_PORT".to_string(),
+                name: "BOOTSTRAP_GOSSIP_ADDRESS".to_string(),
                 value: Some(format!(
                     "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8001"
                 )),
                 ..Default::default()
             },
             EnvVar {
-                name: "BOOTSTRAP_FAUCET_PORT".to_string(),
+                name: "BOOTSTRAP_FAUCET_ADDRESS".to_string(),
                 value: Some(format!(
                     "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:9900"
                 )),
@@ -505,7 +505,7 @@ impl<'a> Kubernetes<'a> {
         command.extend(self.generate_validator_command_flags());
 
         for c in command.iter() {
-            info!("validator command: {}", c);
+            debug!("validator command: {}", c);
         }
 
         self.create_replicas_set(

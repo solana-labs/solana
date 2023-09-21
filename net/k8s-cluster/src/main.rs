@@ -3,7 +3,10 @@ use {
     log::*,
     solana_k8s_cluster::{
         docker::{DockerConfig, DockerImageConfig},
-        genesis::{Genesis, GenesisFlags, SetupConfig, DEFAULT_INTERNAL_NODE_STAKE_SOL, DEFAULT_INTERNAL_NODE_SOL},
+        genesis::{
+            Genesis, GenesisFlags, SetupConfig, DEFAULT_INTERNAL_NODE_SOL,
+            DEFAULT_INTERNAL_NODE_STAKE_SOL,
+        },
         initialize_globals,
         kubernetes::{Kubernetes, RuntimeConfig},
         release::{BuildConfig, Deploy},
@@ -78,7 +81,8 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("deploy-method")
                 .takes_value(true)
                 .possible_values(&["local", "tar", "skip"])
-                .default_value("local"), // .help("Deploy method. tar, local, skip. [default: local]"),
+                .default_value("local")
+                .help("Deploy method. tar, local, skip. [default: local]"),
         )
         .arg(
             Arg::with_name("do_build")
@@ -308,9 +312,7 @@ async fn main() {
             ),
             None => None,
         },
-        bootstrap_validator_stake_sol: match matches
-            .value_of("bootstrap_validator_stake_sol")
-        {
+        bootstrap_validator_stake_sol: match matches.value_of("bootstrap_validator_stake_sol") {
             Some(value_str) => Some(
                 value_str
                     .parse()
@@ -333,8 +335,22 @@ async fn main() {
             .value_of("internal_node_stake_sol")
             .unwrap_or(DEFAULT_INTERNAL_NODE_STAKE_SOL.to_string().as_str())
             .parse::<f64>()
-            .expect("Invalid value for internal_node_stake_sol") as f64
+            .expect("Invalid value for internal_node_stake_sol")
+            as f64,
     };
+
+    let bootstrap_container_name = matches
+        .value_of("bootstrap_container_name")
+        .unwrap_or_default();
+    let bootstrap_image_name = matches
+        .value_of("bootstrap_image_name")
+        .expect("Bootstrap image name is required");
+    let validator_container_name = matches
+        .value_of("validator_container_name")
+        .unwrap_or_default();
+    let validator_image_name = matches
+        .value_of("validator_image_name")
+        .expect("Validator image name is required");
 
     // Check if namespace exists
     let mut kub_controller = Kubernetes::new(setup_config.namespace, &runtime_config).await;
@@ -412,7 +428,6 @@ async fn main() {
 
     info!("Creating Genesis");
     let mut genesis = Genesis::new(genesis_flags);
-    // genesis.generate();
     match genesis.generate_faucet() {
         Ok(_) => (),
         Err(err) => {
@@ -436,11 +451,7 @@ async fn main() {
         }
     }
 
-    // we need to convert the binrary to base64 before we save it to a file
-    // or we create the normal genesis.bin but then we take another step
-    // and that's when we convert it to base64 and put into our config map
-    // then when we load it from the rust code running in the pod,
-    // we have to parse the base64, then convert to binary, and then load().
+    // creates genesis and writes to binary file
     match genesis.generate() {
         Ok(_) => (),
         Err(err) => {
@@ -458,18 +469,7 @@ async fn main() {
         }
     }
 
-    // let base64_genesis_string = match genesis.load_genesis_to_base64_from_file() {
-    //     Ok(genesis_string) => genesis_string,
-    //     Err(err) => {
-    //         error!("Failed to load genesis from file! {}", err);
-    //         return;
-    //     }
-    // };
-
-    // let loaded_config =
-    //     GenesisConfig::load_from_base64_string(base64_genesis_string.as_str()).expect("load");
-    // info!("loaded_config_hash: {}", loaded_config.hash());
-
+    // Begin Kubernetes Setup and Deployment
     let config_map = match kub_controller.create_genesis_config_map().await {
         Ok(config_map) => {
             info!("successfully deployed config map");
@@ -480,19 +480,6 @@ async fn main() {
             return;
         }
     };
-
-    let bootstrap_container_name = matches
-        .value_of("bootstrap_container_name")
-        .unwrap_or_default();
-    let bootstrap_image_name = matches
-        .value_of("bootstrap_image_name")
-        .expect("Bootstrap image name is required");
-    let validator_container_name = matches
-        .value_of("validator_container_name")
-        .unwrap_or_default();
-    let validator_image_name = matches
-        .value_of("validator_image_name")
-        .expect("Validator image name is required");
 
     let bootstrap_secret = match kub_controller.create_bootstrap_secret("bootstrap-accounts-secret")
     {
@@ -529,13 +516,13 @@ async fn main() {
             return;
         }
     };
-    let rs_name = match kub_controller
+    let bootstrap_replica_set_name = match kub_controller
         .deploy_replicas_set(&bootstrap_replica_set)
         .await
     {
-        Ok(rs) => {
+        Ok(replica_set) => {
             info!("bootstrap validator replicas_set deployed successfully");
-            rs.metadata.name.unwrap()
+            replica_set.metadata.name.unwrap()
         }
         Err(err) => {
             error!(
@@ -556,17 +543,22 @@ async fn main() {
         ),
     }
 
-    //TODO: handle this return val properly, don't just unwrap
-    while !kub_controller
-        .check_replica_set_ready(rs_name.as_str())
-        .await
-        .unwrap()
-    {
-        info!("replica set: {} not ready...", rs_name);
+    // wait for bootstrap replicaset to deploy
+    while {
+        match kub_controller
+            .check_replica_set_ready(bootstrap_replica_set_name.as_str())
+            .await
+        {
+            Ok(ok) => !ok, // Continue the loop if replica set is not ready: Ok(false)
+            Err(_) => panic!("Error occurred while checking replica set readiness"),
+        }
+    } {
+        info!("replica set: {} not ready...", bootstrap_replica_set_name);
         thread::sleep(Duration::from_secs(1));
     }
-    info!("replica set: {} Ready!", rs_name);
+    info!("replica set: {} Ready!", bootstrap_replica_set_name);
 
+    // Create and deploy validators
     for validator_index in 0..setup_config.num_validators {
         let validator_secret = match kub_controller.create_validator_secret(validator_index) {
             Ok(secret) => secret,
@@ -612,13 +604,16 @@ async fn main() {
             .await
         {
             Ok(rs) => {
-                info!("validator replicas_sets deployed successfully");
+                info!(
+                    "validator replica set ({}) deployed successfully",
+                    validator_index
+                );
                 rs.metadata.name.unwrap()
             }
             Err(err) => {
                 error!(
-                    "Error! Failed to deploy validator replicas_sets. err: {:?}",
-                    err
+                    "Error! Failed to deploy validator replica set: {}. err: {:?}",
+                    validator_index, err
                 );
                 return;
             }
@@ -629,29 +624,14 @@ async fn main() {
             &label_selector,
         );
         match kub_controller.deploy_service(&validator_service).await {
-            Ok(_) => info!("validator service deployed successfully"),
-            Err(err) => error!("Error! Failed to deploy validator service. err: {:?}", err),
+            Ok(_) => info!(
+                "validator service ({}) deployed successfully",
+                validator_index
+            ),
+            Err(err) => error!(
+                "Error! Failed to deploy validator service: {}. err: {:?}",
+                validator_index, err
+            ),
         }
-
-        // thread::sleep(Duration::from_secs(2));
     }
-
-    // //TODO: handle this return val properly, don't just unwrap
-    // //TODO: not sure this checks for all replica sets
-    // while !kub_controller
-    //     .check_replica_set_ready(validator_rs_name.as_str())
-    //     .await
-    //     .unwrap()
-    // {
-    //     info!("replica set: {} not ready...", validator_rs_name);
-    //     thread::sleep(Duration::from_secs(1));
-    // }
-    // info!("replica set: {} Ready!", rs_name);
-
-    // let _ = kub_controller
-    //     .check_service_matching_replica_set("bootstrap-validator")
-    //     .await;
-    // let _ = kub_controller
-    //     .check_service_matching_replica_set("validator")
-    //     .await;
 }
