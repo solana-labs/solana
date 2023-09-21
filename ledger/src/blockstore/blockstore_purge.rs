@@ -716,8 +716,8 @@ pub mod tests {
             blockstore.insert_shreds(shreds, None, false).unwrap();
             let signature = entries
                 .iter()
-                .cloned()
                 .filter(|entry| !entry.is_tick())
+                .cloned()
                 .flat_map(|entry| entry.transactions)
                 .map(|transaction| transaction.signatures[0])
                 .collect::<Vec<Signature>>()[0];
@@ -759,8 +759,8 @@ pub mod tests {
             blockstore.insert_shreds(shreds, None, false).unwrap();
             let signature: Signature = entries
                 .iter()
-                .cloned()
                 .filter(|entry| !entry.is_tick())
+                .cloned()
                 .flat_map(|entry| entry.transactions)
                 .map(|transaction| transaction.signatures[0])
                 .collect::<Vec<Signature>>()[0];
