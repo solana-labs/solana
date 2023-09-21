@@ -293,7 +293,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .long("accounts-hash-cache-path")
                 .value_name("PATH")
                 .takes_value(true)
-                .help("Use PATH as accounts hash cache location"),
+                .help("Use PATH as accounts hash cache location [default: <LEDGER>/accounts_hash_cache]"),
         )
         .arg(
             Arg::with_name("snapshots")
