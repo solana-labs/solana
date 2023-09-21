@@ -1135,14 +1135,6 @@ fn main() {
         .value_name("PATHS")
         .takes_value(true)
         .help("Comma separated persistent accounts location");
-<<<<<<< HEAD
-=======
-    let accounts_hash_cache_path_arg = Arg::with_name("accounts_hash_cache_path")
-        .long("accounts-hash-cache-path")
-        .value_name("PATH")
-        .takes_value(true)
-        .help("Use PATH as accounts hash cache location [default: <LEDGER>/accounts_hash_cache]");
->>>>>>> 1d39c3167d (Adds default info to cli arg for --accounts-hash-cache-path (#33331))
     let accounts_index_path_arg = Arg::with_name("accounts_index_path")
         .long("accounts-index-path")
         .value_name("PATH")
