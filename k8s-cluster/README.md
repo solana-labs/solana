@@ -136,34 +136,7 @@ solana -ul validators
 solana -ul gossip
 ```
 
-
-
-### TODO
-- [x] Make number of validators to deploy configurable
-- [ ] Configure to be able to set any type of flags needed (see net.sh scripts for gce)
-- [x] Configurable namespace -> define your own namespace and deploy into it
-
-#### docker containers for solana validators
-Builds off of: https://github.com/yihau/solana-local-cluster
-
-
-build containers here with:
-bootstrap:
-```
-sudo docker build -t solana-bootstrap-validator:latest -f bootstrap-validator/Dockerfile .
-```
-
-validator:
-```
-sudo docker build -t solana-validator:latest -f validator/Dockerfile .
-```
-
-Run bootstrap:
-```
-docker run -it -d --name bootstrap --network=solana-cluster --ip=192.168.0.101 solana-bootstrap-validator:latest
-```
-
-Run validator:
-```
-docker run -it -d --name validator --network=solana-cluster --ip=192.168.0.102 solana-validator:latest
-```
+### Notes
+- Have tested deployments of up to 200 validators
+- Additional validator commandline flags are coming....stay tuned
+- Once again, we assume you are logged into docker and you are pulling from a public repo (Monogon hosts need to access)
