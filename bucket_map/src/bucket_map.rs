@@ -12,6 +12,9 @@ pub struct BucketMapConfig {
     pub max_buckets: usize,
     pub drives: Option<Vec<PathBuf>>,
     pub max_search: Option<MaxSearch>,
+    /// A file with a known path where the current state of the bucket files on disk is saved as the index is running.
+    /// This file can be used to restore the index files as they existed prior to the process being stopped.
+    pub restart_config_file: Option<PathBuf>,
 }
 
 impl BucketMapConfig {
@@ -50,6 +53,9 @@ impl<T: Clone + Copy + Debug + PartialEq> Debug for BucketMap<T> {
     }
 }
 
+// this should be <= 1 << DEFAULT_CAPACITY or we end up searching the same items over and over - probably not a big deal since it is so small anyway
+pub(crate) const MAX_SEARCH_DEFAULT: MaxSearch = 32;
+
 /// used to communicate resize necessary and current size.
 #[derive(Debug)]
 pub enum BucketMapError {
@@ -72,9 +78,7 @@ impl<T: Clone + Copy + Debug + PartialEq> BucketMap<T> {
             config.max_buckets.is_power_of_two(),
             "Max number of buckets must be a power of two"
         );
-        // this should be <= 1 << DEFAULT_CAPACITY or we end up searching the same items over and over - probably not a big deal since it is so small anyway
-        const MAX_SEARCH: MaxSearch = 32;
-        let max_search = config.max_search.unwrap_or(MAX_SEARCH);
+        let max_search = config.max_search.unwrap_or(MAX_SEARCH_DEFAULT);
 
         if let Some(drives) = config.drives.as_ref() {
             Self::erase_previous_drives(drives);
