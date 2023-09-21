@@ -15,6 +15,7 @@ use {
         precompiles::verify_if_precompile,
         pubkey::Pubkey,
         signature::Signature,
+        simple_vote_transaction_checker::is_simple_vote_transaction,
         solana_sdk::feature_set,
         transaction::{Result, TransactionError, VersionedTransaction},
         transaction_meta::TransactionMeta,
@@ -32,8 +33,6 @@ pub const MAX_TX_ACCOUNT_LOCKS: usize = 128;
 pub struct SanitizedTransaction {
     message: SanitizedMessage,
     message_hash: Hash,
-    // TODO - can move is_simple_vote into `meta`, make it avaiable to svt as well.
-    is_simple_vote_tx: bool,
     signatures: Vec<Signature>,
     /// Meta data
     transaction_meta: TransactionMeta,
@@ -68,7 +67,6 @@ impl SanitizedTransaction {
     pub fn try_new(
         tx: SanitizedVersionedTransaction,
         message_hash: Hash,
-        is_simple_vote_tx: bool,
         address_loader: impl AddressLoader,
     ) -> Result<Self> {
         let signatures = tx.signatures;
@@ -88,7 +86,6 @@ impl SanitizedTransaction {
         Ok(Self {
             message,
             message_hash,
-            is_simple_vote_tx,
             signatures,
             transaction_meta,
         })
@@ -123,30 +120,25 @@ impl SanitizedTransaction {
             }
         };
 
-        let is_simple_vote_tx = is_simple_vote_tx.unwrap_or_else(|| {
-            if signatures.len() < 3
-                && message.instructions().len() == 1
-                && matches!(message, SanitizedMessage::Legacy(_))
-            {
-                let mut ix_iter = message.program_instructions_iter();
-                ix_iter.next().map(|(program_id, _ix)| program_id)
-                    == Some(&crate::vote::program::id())
-            } else {
-                false
-            }
-        });
-
         // extract transaction meta
-        let transaction_meta = process_compute_budget_instruction(
+        let mut transaction_meta = process_compute_budget_instruction(
             message.program_instructions_iter(),
             feature_set,
             None, // cluster info
         )?;
 
+        transaction_meta.is_simple_vote_tx = is_simple_vote_tx.unwrap_or_else(|| {
+            is_simple_vote_transaction(
+                signatures.len(),
+                message.instructions().len(),
+                matches!(message, SanitizedMessage::Legacy(_)),
+                message.program_instructions_iter(),
+            )
+        });
+
         Ok(Self {
             message,
             message_hash,
-            is_simple_vote_tx,
             signatures,
             transaction_meta,
         })
@@ -159,7 +151,6 @@ impl SanitizedTransaction {
         Ok(Self {
             message_hash: tx.message.hash(),
             message: SanitizedMessage::Legacy(LegacyMessage::new(tx.message)),
-            is_simple_vote_tx: false,
             signatures: tx.signatures,
             transaction_meta: TransactinoMeta::default(),
         })
@@ -199,7 +190,7 @@ impl SanitizedTransaction {
 
     /// Returns true if this transaction is a simple vote
     pub fn is_simple_vote_transaction(&self) -> bool {
-        self.is_simple_vote_tx
+        self.transaction_meta.is_simple_vote_tx
     }
 
     /// Convert this sanitized transaction into a versioned transaction for

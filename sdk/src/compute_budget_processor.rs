@@ -129,6 +129,7 @@ pub fn process_compute_budget_instruction<'a>(
         compute_unit_limit,
         compute_unit_price,
         accounts_loaded_bytes,
+        ..TransactionMeta::default()
     })
 }
 

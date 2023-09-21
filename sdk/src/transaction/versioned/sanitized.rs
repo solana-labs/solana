@@ -2,7 +2,9 @@ use {
     super::VersionedTransaction,
     crate::{
         compute_budget_processor::process_compute_budget_instruction, feature_set::FeatureSet,
-        sanitize::SanitizeError, signature::Signature, transaction_meta::TransactionMeta,
+        message::VersionedMessage, sanitize::SanitizeError, signature::Signature,
+        simple_vote_transaction_checker::is_simple_vote_transaction,
+        transaction_meta::TransactionMeta,
     },
     solana_program::message::SanitizedVersionedMessage,
 };
@@ -21,15 +23,29 @@ pub struct SanitizedVersionedTransaction {
 impl SanitizedVersionedTransaction {
     pub fn try_new(
         tx: VersionedTransaction,
+        is_simple_vote_tx: Option<bool>,
         feature_set: &FeatureSet,
     ) -> Result<Self, SanitizeError> {
         tx.sanitize_signatures()?;
         let sanitized_versioned_message = SanitizedVersionedMessage::try_from(tx.message)?;
-        let transaction_meta = process_compute_budget_instruction(
+        let mut transaction_meta = process_compute_budget_instruction(
             sanitized_versioned_message.program_instructions_iter(),
             feature_set,
             None, //cluster type
         )?;
+
+        transaction_meta.is_simple_vote_tx = is_simple_vote_tx.unwrap_or_else(|| {
+            is_simple_vote_transaction(
+                tx.signatures.len(),
+                sanitized_versioned_message.instructions().len(),
+                matches!(
+                    sanitized_versioned_message.message,
+                    VersionedMessage::Legacy(_)
+                ),
+                sanitized_versioned_message.program_instructions_iter(),
+            )
+        });
+
         Ok(Self {
             signatures: tx.signatures,
             message: sanitized_versioned_message,

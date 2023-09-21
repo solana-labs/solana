@@ -20,9 +20,9 @@ pub struct TransactionMeta {
     /// Maximum accounts data size, in bytes, that a transaction is allowed to load; The
     /// value is capped by MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES to prevent overuse of memory.
     pub accounts_loaded_bytes: usize,
-    // NOTE -
-    // is_simple_vote can be consolidated into Meta here.
+    pub is_simple_vote_tx: bool,
     //
+    // NOTE -
     // other potential compute_budget ix or TLV ix related data here:
     //    pub accounts_written_bytes: usize,
     //    pub storage_bytes: usize,
@@ -39,6 +39,7 @@ impl Default for TransactionMeta {
             compute_unit_limit: MAX_COMPUTE_UNIT_LIMIT,
             compute_unit_price: 0,
             accounts_loaded_bytes: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
+            is_simple_vote_tx: false,
         }
     }
 }

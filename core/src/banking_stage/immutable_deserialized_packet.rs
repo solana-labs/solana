@@ -46,16 +46,19 @@ pub struct ImmutableDeserializedPacket {
 impl ImmutableDeserializedPacket {
     pub fn new(packet: Packet) -> Result<Self, DeserializedPacketError> {
         let versioned_transaction: VersionedTransaction = packet.deserialize_slice(..)?;
+        let is_simple_vote = packet.meta().is_simple_vote_tx();
         // drop transaction if prioritization fails.
         //
         // TODO - wire up feature_set from recent bank. For now, mimic current implementation of
         // hardcoded `true`s for all feature gates needed.
         let feature_set = &FeatureSet::all_enabled();
-        let sanitized_transaction =
-            SanitizedVersionedTransaction::try_new(versioned_transaction, feature_set)?;
+        let sanitized_transaction = SanitizedVersionedTransaction::try_new(
+            versioned_transaction,
+            Some(is_simple_vote),
+            feature_set,
+        )?;
         let message_bytes = packet_message(&packet)?;
         let message_hash = Message::hash_raw_message(message_bytes);
-        let is_simple_vote = packet.meta().is_simple_vote_tx();
 
         // NOTE - successfully sanitized transaction always has transaction_meta
         let transaction_meta = sanitized_transaction.get_transaction_meta();
@@ -116,7 +119,6 @@ impl ImmutableDeserializedPacket {
         let tx = SanitizedTransaction::try_new(
             self.transaction().clone(),
             *self.message_hash(),
-            self.is_simple_vote(),
             address_loader,
         )
         .ok()?;
