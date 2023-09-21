@@ -550,8 +550,9 @@ impl Tower {
                 "Error while recording vote {} {} in local tower {:?}",
                 vote_slot, vote_hash, result
             );
+        } else {
+            self.update_last_vote_from_vote_state(vote_hash);
         }
-        self.update_last_vote_from_vote_state(vote_hash);
 
         let new_root = self.root();
 
