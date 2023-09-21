@@ -53,6 +53,11 @@ cargo_audit_ignores=(
   #
   # https://github.com/solana-labs/solana/issues/32933
   --ignore RUSTSEC-2023-0052
+
+  # quinn-proto
+  #
+  # Denial of service in Quinn servers
+  --ignore RUSTSEC-2023-0063
 )
 scripts/cargo-for-all-lock-files.sh stable audit "${cargo_audit_ignores[@]}" | $dep_tree_filter
 # we want the `cargo audit` exit code, not `$dep_tree_filter`'s
