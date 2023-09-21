@@ -1206,7 +1206,19 @@ impl Validator {
             .unwrap();
 
         let in_wen_restart = config.wen_restart_proto_path.is_some() && !waited_for_supermajority;
-        let tower = process_blockstore.process_to_create_tower()?;
+        let tower = match process_blockstore.process_to_create_tower() {
+            Ok(tower) => {
+                info!("Tower state: {:?}", tower);
+                tower
+            }
+            Err(e) => {
+                warn!(
+                    "Unable to retrieve tower: {:?} creating default tower....",
+                    e
+                );
+                Tower::default()
+            }
+        };
         let last_vote = tower.last_vote();
 
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
@@ -1225,7 +1237,7 @@ impl Validator {
             ledger_signal_receiver,
             &rpc_subscriptions,
             &poh_recorder,
-            Some(tower),
+            tower,
             config.tower_storage.clone(),
             &leader_schedule_cache,
             exit.clone(),
