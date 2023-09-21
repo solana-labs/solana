@@ -149,6 +149,10 @@ pub enum TransactionError {
         "Transaction results in an account ({account_index}) without insufficient funds for rent"
     )]
     InsufficientFundsForRent { account_index: u8 },
+
+    /// The total balance before the transaction does not equal the total balance after the transaction
+    #[error("Sum of account balances before and after transaction do not match")]
+    UnbalancedTransaction,
 }
 
 impl From<SanitizeError> for TransactionError {

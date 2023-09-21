@@ -57,6 +57,7 @@ enum TransactionErrorType {
     WOULD_EXCEED_ACCOUNT_DATA_TOTAL_LIMIT = 29;
     DUPLICATE_INSTRUCTION = 30;
     INSUFFICIENT_FUNDS_FOR_RENT = 31;
+    UNBALANCED_TRANSACTION = 36;
 }
 
 message InstructionError {
