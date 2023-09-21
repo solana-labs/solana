@@ -4033,39 +4033,39 @@ mod tests {
         // when `enable_heap_size_round_up` not enabled:
         {
             // assert less than 32K heap should cost zero unit
-            assert_eq!(0, calculate_heap_cost(31_u32 * 1024, heap_cost, false));
+            assert_eq!(0, calculate_heap_cost(31 * 1024, heap_cost, false));
 
             // assert exact 32K heap should be cost zero unit
-            assert_eq!(0, calculate_heap_cost(32_u32 * 1024, heap_cost, false));
+            assert_eq!(0, calculate_heap_cost(32 * 1024, heap_cost, false));
 
             // assert slightly more than 32K heap is mistakenly cost zero unit
-            assert_eq!(0, calculate_heap_cost(33_u32 * 1024, heap_cost, false));
+            assert_eq!(0, calculate_heap_cost(33 * 1024, heap_cost, false));
 
             // assert exact 64K heap should cost 1 * heap_cost
             assert_eq!(
                 heap_cost,
-                calculate_heap_cost(64_u32 * 1024, heap_cost, false)
+                calculate_heap_cost(64 * 1024, heap_cost, false)
             );
         }
 
         // when `enable_heap_size_round_up` is enabled:
         {
             // assert less than 32K heap should cost zero unit
-            assert_eq!(0, calculate_heap_cost(31_u32 * 1024, heap_cost, true));
+            assert_eq!(0, calculate_heap_cost(31 * 1024, heap_cost, true));
 
             // assert exact 32K heap should be cost zero unit
-            assert_eq!(0, calculate_heap_cost(32_u32 * 1024, heap_cost, true));
+            assert_eq!(0, calculate_heap_cost(32 * 1024, heap_cost, true));
 
             // assert slightly more than 32K heap should cost 1 * heap_cost
             assert_eq!(
                 heap_cost,
-                calculate_heap_cost(33_u32 * 1024, heap_cost, true)
+                calculate_heap_cost(33 * 1024, heap_cost, true)
             );
 
             // assert exact 64K heap should cost 1 * heap_cost
             assert_eq!(
                 heap_cost,
-                calculate_heap_cost(64_u32 * 1024, heap_cost, true)
+                calculate_heap_cost(64 * 1024, heap_cost, true)
             );
         }
     }
