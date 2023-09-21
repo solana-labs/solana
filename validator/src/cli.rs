@@ -1398,7 +1398,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                     the new shred_version agreed on in the consensus.
 
                     If wen_restart fails, refer to the progress file (in proto3 format) for
-                    further debuggin.
+                    further debugging.
                 ")
         )
         .args(&get_deprecated_arguments())
