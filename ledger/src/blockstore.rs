@@ -119,6 +119,17 @@ pub type CompletedSlotsSender = Sender<Vec<Slot>>;
 pub type CompletedSlotsReceiver = Receiver<Vec<Slot>>;
 type CompletedRanges = Vec<(u32, u32)>;
 
+// Previous implementations of ledger cleaning made use of a u64 primary index
+// value to clean the TransactionStatus and AddressSignatures columns. That
+// approach has been phased out, so only use 0u64 value moving forward.
+// See https://github.com/solana-labs/solana/pull/9281 for more context
+const DEFAULT_LEGACY_PRIMARY_INDEX_VALUE: u64 = 0;
+const ALTERNATE_LEGACY_PRIMARY_INDEX_VALUE: u64 = 1;
+const VALID_LEGACY_PRIMARY_INDEX_VALUES: [u64; 2] = [
+    DEFAULT_LEGACY_PRIMARY_INDEX_VALUE,
+    ALTERNATE_LEGACY_PRIMARY_INDEX_VALUE,
+];
+
 #[derive(Default)]
 pub struct SignatureInfosForAddress {
     pub infos: Vec<ConfirmedTransactionStatusWithSignature>,
@@ -2127,9 +2138,9 @@ impl Blockstore {
     /// are stored under this index), the other is frozen.
     fn initialize_transaction_status_index(&self) -> Result<()> {
         self.transaction_status_index_cf
-            .put(0, &TransactionStatusIndexMeta::default())?;
+            .put(DEFAULT_LEGACY_PRIMARY_INDEX_VALUE, &TransactionStatusIndexMeta::default())?;
         self.transaction_status_index_cf
-            .put(1, &TransactionStatusIndexMeta::default())?;
+            .put(ALTERNATE_LEGACY_PRIMARY_INDEX_VALUE, &TransactionStatusIndexMeta::default())?;
 
         // If present, delete dummy entries inserted by old software
         // https://github.com/solana-labs/solana/blob/bc2b372/ledger/src/blockstore.rs#L2130-L2137
@@ -2233,11 +2244,19 @@ impl Blockstore {
         let (signature, slot) = index;
         let result = self
             .transaction_status_cf
-            .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((0, signature, slot))?;
+            .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((
+                DEFAULT_LEGACY_PRIMARY_INDEX_VALUE,
+                signature,
+                slot,
+            ))?;
         if result.is_none() {
             Ok(self
                 .transaction_status_cf
-                .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((1, signature, slot))?
+                .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((
+                    ALTERNATE_LEGACY_PRIMARY_INDEX_VALUE,
+                    signature,
+                    slot,
+                ))?
                 .and_then(|meta| meta.try_into().ok()))
         } else {
             Ok(result.and_then(|meta| meta.try_into().ok()))
@@ -2327,10 +2346,10 @@ impl Blockstore {
         let mut counter = 0;
         let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
 
-        for transaction_status_cf_primary_index in 0..=1 {
+        for transaction_status_cf_primary_index in &VALID_LEGACY_PRIMARY_INDEX_VALUES {
             let index_iterator = self.transaction_status_cf.iter(IteratorMode::From(
                 (
-                    transaction_status_cf_primary_index,
+                    *transaction_status_cf_primary_index,
                     signature,
                     lowest_available_slot,
                 ),
@@ -2338,7 +2357,7 @@ impl Blockstore {
             ))?;
             for ((i, sig, slot), _data) in index_iterator {
                 counter += 1;
-                if i != transaction_status_cf_primary_index || sig != signature {
+                if i != *transaction_status_cf_primary_index || sig != signature {
                     break;
                 }
                 if !self.is_root(slot) && !confirmed_unrooted_slots.contains(&slot) {
@@ -2476,10 +2495,10 @@ impl Blockstore {
         let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
 
         let mut signatures: Vec<(Slot, Signature)> = vec![];
-        for transaction_status_cf_primary_index in 0..=1 {
+        for transaction_status_cf_primary_index in &VALID_LEGACY_PRIMARY_INDEX_VALUES {
             let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
                 (
-                    transaction_status_cf_primary_index,
+                    *transaction_status_cf_primary_index,
                     pubkey,
                     start_slot.max(lowest_available_slot),
                     Signature::default(),
@@ -2487,7 +2506,7 @@ impl Blockstore {
                 IteratorDirection::Forward,
             ))?;
             for ((i, address, slot, signature), _) in index_iterator {
-                if i != transaction_status_cf_primary_index || slot > end_slot || address != pubkey
+                if i != *transaction_status_cf_primary_index || slot > end_slot || address != pubkey
                 {
                     break;
                 }
@@ -2511,10 +2530,10 @@ impl Blockstore {
     ) -> Result<Vec<(Slot, Signature)>> {
         let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
         let mut signatures: Vec<(Slot, Signature)> = vec![];
-        for transaction_status_cf_primary_index in 0..=1 {
+        for transaction_status_cf_primary_index in &VALID_LEGACY_PRIMARY_INDEX_VALUES {
             let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
                 (
-                    transaction_status_cf_primary_index,
+                    *transaction_status_cf_primary_index,
                     pubkey,
                     slot.max(lowest_available_slot),
                     Signature::default(),
@@ -2522,7 +2541,7 @@ impl Blockstore {
                 IteratorDirection::Forward,
             ))?;
             for ((i, address, transaction_slot, signature), _) in index_iterator {
-                if i != transaction_status_cf_primary_index
+                if i != *transaction_status_cf_primary_index
                     || transaction_slot > slot
                     || address != pubkey
                 {
