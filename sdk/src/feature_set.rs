@@ -678,6 +678,10 @@ pub mod require_rent_exempt_split_destination {
     solana_sdk::declare_id!("D2aip4BBr8NPWtU9vLrwrBvbuaQ8w1zV38zFLxx4pfBV");
 }
 
+pub mod better_error_codes_for_tx_lamport_check {
+    solana_sdk::declare_id!("Ffswd3egL3tccB6Rv3XY6oqfdzn913vUcjCSnpvCKpfx");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -842,6 +846,7 @@ lazy_static! {
         (reduce_stake_warmup_cooldown::id(), "reduce stake warmup cooldown from 25% to 9%"),
         (revise_turbine_epoch_stakes::id(), "revise turbine epoch stakes"),
         (require_rent_exempt_split_destination::id(), "Require stake split destination account to be rent exempt"),
+        (better_error_codes_for_tx_lamport_check::id(), "better error codes for tx lamport check #33353"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

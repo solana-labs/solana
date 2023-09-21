@@ -161,6 +161,10 @@ pub enum TransactionError {
     /// Sanitized transaction differed before/after feature activiation. Needs to be resanitized.
     #[error("ResanitizationNeeded")]
     ResanitizationNeeded,
+
+    /// The total balance before the transaction does not equal the total balance after the transaction
+    #[error("Sum of account balances before and after transaction do not match")]
+    UnbalancedTransaction,
 }
 
 impl From<SanitizeError> for TransactionError {

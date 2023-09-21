@@ -806,6 +806,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             32 => TransactionError::MaxLoadedAccountsDataSizeExceeded,
             33 => TransactionError::InvalidLoadedAccountsDataSizeLimit,
             34 => TransactionError::ResanitizationNeeded,
+            36 => TransactionError::UnbalancedTransaction,
             _ => return Err("Invalid TransactionError"),
         })
     }
@@ -917,6 +918,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 }
                 TransactionError::ResanitizationNeeded => {
                     tx_by_addr::TransactionErrorType::ResanitizationNeeded
+                }
+                TransactionError::UnbalancedTransaction => {
+                    tx_by_addr::TransactionErrorType::UnbalancedTransaction
                 }
             } as i32,
             instruction_error: match transaction_error {
@@ -1790,6 +1794,14 @@ mod test {
         );
 
         let transaction_error = TransactionError::InsufficientFundsForRent { account_index: 10 };
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::UnbalancedTransaction;
         let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
             transaction_error.clone().into();
         assert_eq!(
