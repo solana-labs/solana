@@ -28,7 +28,6 @@ RUN set -x \
       protobuf-compiler \
       \
  && apt remove -y libcurl4-openssl-dev \
- && rm -rf /var/lib/apt/lists/* \
  # node
  && sudo apt-get update \
  && sudo apt-get install -y ca-certificates curl gnupg \
@@ -52,4 +51,5 @@ RUN set -x \
  && cargo install wasm-pack \
  && cargo install sccache \
  && rustc --version \
- && cargo --version
+ && cargo --version \
+ && rm -rf /var/lib/apt/lists/*
