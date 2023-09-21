@@ -11,7 +11,7 @@ enum State {
     DONE = 6;
 }
 
-message InitRecord {
+message MyLastVotedForkSlots {
     uint64 last_vote_slot = 1;
     string last_vote_bankhash = 2;
     uint32 shred_version = 3;
@@ -19,5 +19,5 @@ message InitRecord {
 
 message WenRestartProgress {
     State state = 1;
-    optional InitRecord init_record = 2;
+    optional MyLastVotedForkSlots my_last_voted_fork_slots = 2;
 }

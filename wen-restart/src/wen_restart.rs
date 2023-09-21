@@ -1,7 +1,9 @@
 //! The `wen-restart` module handles automatically repair in cluster restart
 
 use {
-    crate::solana::wen_restart_proto,
+    crate::solana::wen_restart_proto::{
+        MyLastVotedForkSlots, State as RestartState, WenRestartProgress,
+    },
     log::*,
     prost::Message,
     solana_gossip::cluster_info::ClusterInfo,
@@ -56,19 +58,19 @@ pub fn wait_for_wen_restart(
     // The rest of the protocol will be in another PR.
     let current_progress = WenRestartProgress {
         state: RestartState::Init.into(),
-        init_record: Some(InitRecord {
+        my_last_voted_fork_slots: Some(MyLastVotedForkSlots {
             last_vote_slot,
             last_vote_bankhash: last_vote.hash().to_string(),
             shred_version: cluster_info.my_shred_version() as u32,
         }),
     };
-    write_wen_restart_records(wen_restart_path, cur_progress)?;
+    write_wen_restart_records(wen_restart_path, current_progress)?;
     Ok(())
 }
 
 fn write_wen_restart_records(
     records_path: &PathBuf,
-    new_progress: wen_restart_proto::WenRestartProgress,
+    new_progress: WenRestartProgress,
 ) -> Result<(), Error> {
     // overwrite anything if exists
     let mut file = File::create(records_path)?;
@@ -134,14 +136,12 @@ mod tests {
         )
         .is_ok());
         let buffer = read(wen_restart_proto_path).unwrap();
-        let progress =
-            wen_restart_proto::WenRestartProgress::decode(&mut std::io::Cursor::new(buffer))
-                .unwrap();
+        let progress = WenRestartProgress::decode(&mut std::io::Cursor::new(buffer)).unwrap();
         assert_eq!(
             progress,
-            wen_restart_proto::WenRestartProgress {
-                state: wen_restart_proto::wen_restart_progress::State::Init.into(),
-                init_record: Some(wen_restart_proto::wen_restart_progress::InitRecord {
+            WenRestartProgress {
+                state: RestartState::Init.into(),
+                my_last_voted_fork_slots: Some(MyLastVotedForkSlots {
                     last_vote_slot,
                     last_vote_bankhash: last_vote_bankhash.to_string(),
                     shred_version: 2,
