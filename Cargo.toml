@@ -266,7 +266,7 @@ protobuf-src = "1.1.0"
 qstring = "0.7.2"
 qualifier_attr = { version = "0.2.2", default-features = false }
 quinn = "0.10.2"
-quinn-proto = "0.10.4"
+quinn-proto = "0.10.5"
 quote = "1.0"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
