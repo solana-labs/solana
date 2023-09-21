@@ -365,7 +365,7 @@ mod tests {
         let writable_accounts = vec![mint_keypair.pubkey()];
         (
             vote_transaction,
-            TransactionCost::Vote { writable_accounts },
+            TransactionCost::SimpleVote { writable_accounts },
         )
     }
 

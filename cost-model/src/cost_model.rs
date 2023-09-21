@@ -37,7 +37,7 @@ impl CostModel {
         feature_set: &FeatureSet,
     ) -> TransactionCost {
         if transaction.is_simple_vote_transaction() {
-            TransactionCost::Vote {
+            TransactionCost::SimpleVote {
                 writable_accounts: Self::get_writable_accounts(transaction),
             }
         } else {

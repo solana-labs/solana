@@ -5,18 +5,18 @@ use {crate::block_cost_limits, solana_sdk::pubkey::Pubkey};
 /// Resources required to process a regular transaction often include
 /// an array of variables, such as execution cost, loaded bytes, write
 /// lock and read lock etc.
-/// Vote has a simpler and pre-determined format, it's cost structure
+/// SimpleVote has a simpler and pre-determined format, it's cost structure
 /// can be simpler, calculation quicker.
 #[derive(Debug)]
 pub enum TransactionCost {
-    Vote { writable_accounts: Vec<Pubkey> },
+    SimpleVote { writable_accounts: Vec<Pubkey> },
     Transaction(UsageCostDetails),
 }
 
 impl TransactionCost {
     pub fn sum(&self) -> u64 {
         match self {
-            Self::Vote { writable_accounts } => {
+            Self::SimpleVote { writable_accounts } => {
                 let num_of_signatures = writable_accounts.len() as u64;
 
                 solana_vote_program::vote_processor::DEFAULT_COMPUTE_UNITS
@@ -33,42 +33,42 @@ impl TransactionCost {
 
     pub fn bpf_execution_cost(&self) -> u64 {
         match self {
-            Self::Vote { .. } => 0,
+            Self::SimpleVote { .. } => 0,
             Self::Transaction(usage_cost) => usage_cost.bpf_execution_cost,
         }
     }
 
     pub fn is_simple_vote(&self) -> bool {
         match self {
-            Self::Vote { .. } => true,
+            Self::SimpleVote { .. } => true,
             Self::Transaction(_) => false,
         }
     }
 
     pub fn data_bytes_cost(&self) -> u64 {
         match self {
-            Self::Vote { .. } => 0,
+            Self::SimpleVote { .. } => 0,
             Self::Transaction(usage_cost) => usage_cost.data_bytes_cost,
         }
     }
 
     pub fn account_data_size(&self) -> u64 {
         match self {
-            Self::Vote { .. } => 0,
+            Self::SimpleVote { .. } => 0,
             Self::Transaction(usage_cost) => usage_cost.account_data_size,
         }
     }
 
     pub fn loaded_accounts_data_size_cost(&self) -> u64 {
         match self {
-            Self::Vote { .. } => 0,
+            Self::SimpleVote { .. } => 0,
             Self::Transaction(usage_cost) => usage_cost.loaded_accounts_data_size_cost,
         }
     }
 
     pub fn signature_cost(&self) -> u64 {
         match self {
-            Self::Vote { writable_accounts } => {
+            Self::SimpleVote { writable_accounts } => {
                 block_cost_limits::SIGNATURE_COST.saturating_mul(writable_accounts.len() as u64)
             }
             Self::Transaction(usage_cost) => usage_cost.signature_cost,
@@ -77,7 +77,7 @@ impl TransactionCost {
 
     pub fn write_lock_cost(&self) -> u64 {
         match self {
-            Self::Vote { writable_accounts } => {
+            Self::SimpleVote { writable_accounts } => {
                 block_cost_limits::WRITE_LOCK_UNITS.saturating_mul(writable_accounts.len() as u64)
             }
             Self::Transaction(usage_cost) => usage_cost.write_lock_cost,
@@ -86,14 +86,14 @@ impl TransactionCost {
 
     pub fn builtins_execution_cost(&self) -> u64 {
         match self {
-            Self::Vote { .. } => solana_vote_program::vote_processor::DEFAULT_COMPUTE_UNITS,
+            Self::SimpleVote { .. } => solana_vote_program::vote_processor::DEFAULT_COMPUTE_UNITS,
             Self::Transaction(usage_cost) => usage_cost.builtins_execution_cost,
         }
     }
 
     pub fn writable_accounts(&self) -> &[Pubkey] {
         match self {
-            Self::Vote { writable_accounts } => writable_accounts,
+            Self::SimpleVote { writable_accounts } => writable_accounts,
             Self::Transaction(usage_cost) => &usage_cost.writable_accounts,
         }
     }
