@@ -4042,10 +4042,7 @@ mod tests {
             assert_eq!(0, calculate_heap_cost(33 * 1024, heap_cost, false));
 
             // assert exact 64K heap should cost 1 * heap_cost
-            assert_eq!(
-                heap_cost,
-                calculate_heap_cost(64 * 1024, heap_cost, false)
-            );
+            assert_eq!(heap_cost, calculate_heap_cost(64 * 1024, heap_cost, false));
         }
 
         // when `enable_heap_size_round_up` is enabled:
@@ -4057,16 +4054,10 @@ mod tests {
             assert_eq!(0, calculate_heap_cost(32 * 1024, heap_cost, true));
 
             // assert slightly more than 32K heap should cost 1 * heap_cost
-            assert_eq!(
-                heap_cost,
-                calculate_heap_cost(33 * 1024, heap_cost, true)
-            );
+            assert_eq!(heap_cost, calculate_heap_cost(33 * 1024, heap_cost, true));
 
             // assert exact 64K heap should cost 1 * heap_cost
-            assert_eq!(
-                heap_cost,
-                calculate_heap_cost(64 * 1024, heap_cost, true)
-            );
+            assert_eq!(heap_cost, calculate_heap_cost(64 * 1024, heap_cost, true));
         }
     }
 
