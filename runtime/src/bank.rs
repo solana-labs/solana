@@ -222,7 +222,7 @@ struct RentMetrics {
 }
 
 pub type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "4uKZVBUbS5wkMK6vSzUoeQjAKbXd7AGeNakBeaBG9f4i")]
+#[frozen_abi(digest = "6p8bfGCZoKaAKQtMKAkQRLFQbG394MRdP2Dox85TCJNY")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
@@ -4076,18 +4076,23 @@ impl Bank {
             Some(lamports_sum)
         }
 
-        let lamports_before_tx =
-            match transaction_accounts_lamports_sum(&transaction_accounts, tx.message()) {
-                Some(lamports) => lamports,
-                None => {
-                    return TransactionExecutionResult::NotExecuted(
-                        TransactionError::InstructionError(
-                            0,
-                            InstructionError::UnbalancedInstruction,
-                        ),
-                    )
-                }
-            };
+        let lamports_before_tx = if let Some(lamports) =
+            transaction_accounts_lamports_sum(&transaction_accounts, tx.message())
+        {
+            lamports
+        } else {
+            // Placeholder line preventing if-else collapse for easier feature cleanup
+            if self
+                .feature_set
+                .is_active(&feature_set::better_error_codes_for_tx_lamport_check::id())
+            {
+                0
+            } else {
+                return TransactionExecutionResult::NotExecuted(
+                    TransactionError::InstructionError(0, InstructionError::UnbalancedInstruction),
+                );
+            }
+        };
 
         let mut transaction_context = TransactionContext::new(
             transaction_accounts,
@@ -4163,7 +4168,7 @@ impl Bank {
             process_message_time.as_us()
         );
 
-        let status = process_result
+        let mut status = process_result
             .and_then(|info| {
                 let post_account_state_info =
                     self.get_transaction_account_state_info(&transaction_context, tx.message());
@@ -4189,10 +4194,6 @@ impl Bank {
                 }
                 err
             });
-        let mut accounts_data_len_delta = status
-            .as_ref()
-            .map_or(0, |info| info.accounts_data_len_delta);
-        let status = status.map(|_| ());
 
         let log_messages: Option<TransactionLogMessages> =
             log_collector.and_then(|log_collector| {
@@ -4221,11 +4222,21 @@ impl Bank {
                 .filter(|lamports_after_tx| lamports_before_tx == *lamports_after_tx)
                 .is_none()
         {
-            return TransactionExecutionResult::NotExecuted(TransactionError::InstructionError(
-                0,
-                InstructionError::UnbalancedInstruction,
-            ));
+            if self
+                .feature_set
+                .is_active(&feature_set::better_error_codes_for_tx_lamport_check::id())
+            {
+                status = Err(TransactionError::UnbalancedTransaction);
+            } else {
+                return TransactionExecutionResult::NotExecuted(
+                    TransactionError::InstructionError(0, InstructionError::UnbalancedInstruction),
+                );
+            }
         }
+        let mut accounts_data_len_delta = status
+            .as_ref()
+            .map_or(0, |info| info.accounts_data_len_delta);
+        let status = status.map(|_| ());
 
         loaded_transaction.accounts = accounts;
         if self
