@@ -36,6 +36,6 @@ fn main() -> Result<()> {
     }
 
     // Generate rust files from protos.
-    prost_build::compile_protos(&["protos/wen_restart.proto"], &["protos/"])?;
+    prost_build::compile_protos(&["proto/wen_restart.proto"], &["proto/"])?;
     Ok(())
 }
