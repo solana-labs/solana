@@ -27,7 +27,9 @@ pub fn wait_for_wen_restart(
     cluster_info: Arc<ClusterInfo>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // repair and restart option does not work without last voted slot.
-    let last_vote_slot = last_vote.last_voted_slot().unwrap();
+    let last_vote_slot = last_vote
+        .last_voted_slot()
+        .expect("wen_restart doesn't work if local tower is wiped");
     let mut last_vote_fork = vec![last_vote_slot];
     let mut slot = last_vote_slot;
     for _ in 0..MAX_SLOTS_ON_VOTED_FORKS {
@@ -48,7 +50,7 @@ pub fn wait_for_wen_restart(
         "wen_restart last voted fork {} {:?}",
         last_vote_slot, last_vote_fork
     );
-    last_vote_fork.sort();
+    last_vote_fork.reverse();
     // Todo(wen): add the following back in after Gossip code is checked in.
     //    cluster_info.push_last_voted_fork_slots(&last_voted_fork, last_vote.hash());
     // The rest of the protocol will be in another PR.
