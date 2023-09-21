@@ -1,5 +1,6 @@
 [package]
 name = "solana-k8s-cluster"
+publish = false
 description = "Kubernetes Validator Deployment for Testing"
 version = { workspace = true }
 authors = { workspace = true }
