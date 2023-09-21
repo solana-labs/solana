@@ -71,8 +71,7 @@ fn write_wen_restart_records(
     // overwrite anything if exists
     let mut file = File::create(records_path)?;
     info!("writing new record {:?}", new_progress);
-    let mut buf = Vec::new();
-    buf.reserve(new_progress.encoded_len());
+    let mut buf = Vec::with_capacity(new_progress.encoded_len());
     new_progress.encode(&mut buf)?;
     file.write_all(&buf)?;
     Ok(())
@@ -127,7 +126,7 @@ mod tests {
         let last_vote_bankhash = Hash::new_unique();
         assert!(wait_for_wen_restart(
             &wen_restart_proto_path,
-            VoteTransaction::from(Vote::new(vec![last_vote_slot], last_vote_bankhash.clone())),
+            VoteTransaction::from(Vote::new(vec![last_vote_slot], last_vote_bankhash)),
             blockstore,
             cluster_info
         )
