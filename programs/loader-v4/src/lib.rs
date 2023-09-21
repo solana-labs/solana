@@ -18,7 +18,7 @@ use {
         vm::{BuiltinProgram, Config, ContextObject, EbpfVm, ProgramResult},
     },
     solana_sdk::{
-        entrypoint::{HEAP_LENGTH, SUCCESS},
+        entrypoint::SUCCESS,
         feature_set,
         instruction::InstructionError,
         loader_v4::{self, LoaderV4State, LoaderV4Status, DEPLOYMENT_COOLDOWN_IN_SLOTS},
@@ -113,15 +113,13 @@ pub fn create_vm<'a, 'b>(
     let config = program.get_config();
     let sbpf_version = program.get_sbpf_version();
     let compute_budget = invoke_context.get_compute_budget();
-    let heap_size = compute_budget.heap_size.unwrap_or(HEAP_LENGTH);
+    let heap_size = compute_budget.heap_size;
     invoke_context.consume_checked(calculate_heap_cost(
         heap_size as u64,
         compute_budget.heap_cost,
     ))?;
     let mut stack = AlignedMemory::<{ ebpf::HOST_ALIGN }>::zero_filled(config.stack_size());
-    let mut heap = AlignedMemory::<{ ebpf::HOST_ALIGN }>::zero_filled(
-        compute_budget.heap_size.unwrap_or(HEAP_LENGTH),
-    );
+    let mut heap = AlignedMemory::<{ ebpf::HOST_ALIGN }>::zero_filled(compute_budget.heap_size);
     let stack_len = stack.len();
     let regions: Vec<MemoryRegion> = vec![
         program.get_ro_region(),

@@ -1821,6 +1821,7 @@ pub fn process_show_stakes(
                                 &stake_history,
                                 &clock,
                                 new_rate_activation_epoch,
+                                false,
                             ),
                         });
                     }
@@ -1840,6 +1841,7 @@ pub fn process_show_stakes(
                                 &stake_history,
                                 &clock,
                                 new_rate_activation_epoch,
+                                false,
                             ),
                         });
                     }

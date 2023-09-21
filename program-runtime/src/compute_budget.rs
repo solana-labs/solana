@@ -101,8 +101,8 @@ pub struct ComputeBudget {
     /// Number of compute units consumed for a multiscalar multiplication (msm) of ristretto points.
     /// The total cost is calculated as `msm_base_cost + (length - 1) * msm_incremental_cost`.
     pub curve25519_ristretto_msm_incremental_cost: u64,
-    /// Optional program heap region size, if `None` then loader default
-    pub heap_size: Option<usize>,
+    /// program heap region size, default: solana_sdk::entrypoint::HEAP_LENGTH
+    pub heap_size: usize,
     /// Number of compute units per additional 32k heap above the default (~.5
     /// us per 32k at 15 units/us rounded up)
     pub heap_cost: u64,
@@ -171,7 +171,7 @@ impl ComputeBudget {
             curve25519_ristretto_multiply_cost: 2_208,
             curve25519_ristretto_msm_base_cost: 2303,
             curve25519_ristretto_msm_incremental_cost: 788,
-            heap_size: None,
+            heap_size: solana_sdk::entrypoint::HEAP_LENGTH,
             heap_cost: 8,
             mem_op_base_cost: 10,
             alt_bn128_addition_cost: 334,
@@ -267,7 +267,7 @@ impl ComputeBudget {
                     InstructionError::InvalidInstructionData,
                 ));
             }
-            self.heap_size = Some(bytes as usize);
+            self.heap_size = bytes as usize;
         }
 
         let compute_unit_limit = updated_compute_unit_limit
@@ -467,7 +467,7 @@ mod tests {
             Ok(PrioritizationFeeDetails::default()),
             ComputeBudget {
                 compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
-                heap_size: Some(40 * 1024),
+                heap_size: 40 * 1024,
                 ..ComputeBudget::default()
             }
         );
@@ -512,7 +512,7 @@ mod tests {
             Ok(PrioritizationFeeDetails::default()),
             ComputeBudget {
                 compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
-                heap_size: Some(MAX_HEAP_FRAME_BYTES as usize),
+                heap_size: MAX_HEAP_FRAME_BYTES as usize,
                 ..ComputeBudget::default()
             }
         );
@@ -562,7 +562,7 @@ mod tests {
             )),
             ComputeBudget {
                 compute_unit_limit: MAX_COMPUTE_UNIT_LIMIT as u64,
-                heap_size: Some(MAX_HEAP_FRAME_BYTES as usize),
+                heap_size: MAX_HEAP_FRAME_BYTES as usize,
                 ..ComputeBudget::default()
             }
         );
@@ -580,7 +580,7 @@ mod tests {
             )),
             ComputeBudget {
                 compute_unit_limit: 1,
-                heap_size: Some(MAX_HEAP_FRAME_BYTES as usize),
+                heap_size: MAX_HEAP_FRAME_BYTES as usize,
                 ..ComputeBudget::default()
             }
         );

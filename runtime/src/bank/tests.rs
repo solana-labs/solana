@@ -9750,7 +9750,7 @@ fn test_compute_budget_program_noop() {
             *compute_budget,
             ComputeBudget {
                 compute_unit_limit: compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
-                heap_size: Some(48 * 1024),
+                heap_size: 48 * 1024,
                 ..ComputeBudget::default()
             }
         );
@@ -9793,7 +9793,7 @@ fn test_compute_request_instruction() {
             *compute_budget,
             ComputeBudget {
                 compute_unit_limit: compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
-                heap_size: Some(48 * 1024),
+                heap_size: 48 * 1024,
                 ..ComputeBudget::default()
             }
         );
@@ -9843,7 +9843,7 @@ fn test_failed_compute_request_instruction() {
             *compute_budget,
             ComputeBudget {
                 compute_unit_limit: compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
-                heap_size: Some(48 * 1024),
+                heap_size: 48 * 1024,
                 ..ComputeBudget::default()
             }
         );

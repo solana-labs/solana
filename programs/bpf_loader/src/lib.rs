@@ -262,10 +262,7 @@ macro_rules! create_vm {
     ($vm:ident, $program:expr, $regions:expr, $accounts_metadata:expr, $invoke_context:expr $(,)?) => {
         let invoke_context = &*$invoke_context;
         let stack_size = $program.get_config().stack_size();
-        let heap_size = invoke_context
-            .get_compute_budget()
-            .heap_size
-            .unwrap_or(solana_sdk::entrypoint::HEAP_LENGTH);
+        let heap_size = invoke_context.get_compute_budget().heap_size;
         let round_up_heap_size = invoke_context
             .feature_set
             .is_active(&solana_sdk::feature_set::round_up_heap_size::id());
