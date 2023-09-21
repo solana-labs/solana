@@ -236,7 +236,7 @@ struct RentMetrics {
 }
 
 pub type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "3FiwE61TtjxHenszm3oFTzmHtGQGohJz3YN3TSTwcbUM")]
+#[frozen_abi(digest = "EzAXfE2xG3ZqdAj8KMC8CeqoSxjo5hxrEaP7fta8LT9u")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
@@ -4804,6 +4804,24 @@ impl Bank {
     ) -> TransactionExecutionResult {
         let prev_accounts_data_len = self.load_accounts_data_size();
         let transaction_accounts = std::mem::take(&mut loaded_transaction.accounts);
+
+        fn transaction_accounts_lamports_sum(
+            accounts: &[(Pubkey, AccountSharedData)],
+            message: &SanitizedMessage,
+        ) -> Option<u128> {
+            let mut lamports_sum = 0u128;
+            for i in 0..message.account_keys().len() {
+                let Some((_, account)) = accounts.get(i) else {
+                    return None;
+                };
+                lamports_sum = lamports_sum.checked_add(u128::from(account.lamports()))?;
+            }
+            Some(lamports_sum)
+        }
+
+        let lamports_before_tx =
+            transaction_accounts_lamports_sum(&transaction_accounts, tx.message()).unwrap_or(0);
+
         let mut transaction_context = TransactionContext::new(
             transaction_accounts,
             if self
@@ -4884,7 +4902,7 @@ impl Bank {
             process_message_time.as_us()
         );
 
-        let status = process_result
+        let mut status = process_result
             .and_then(|info| {
                 let post_account_state_info =
                     self.get_transaction_account_state_info(&transaction_context, tx.message());
@@ -4910,10 +4928,6 @@ impl Bank {
                 }
                 err
             });
-        let mut accounts_data_len_delta = status
-            .as_ref()
-            .map_or(0, |info| info.accounts_data_len_delta);
-        let status = status.map(|_| ());
 
         let log_messages: Option<TransactionLogMessages> =
             log_collector.and_then(|log_collector| {
@@ -4936,6 +4950,19 @@ impl Bank {
             touched_account_count,
             accounts_resize_delta,
         } = transaction_context.into();
+
+        if status.is_ok()
+            && transaction_accounts_lamports_sum(&accounts, tx.message())
+                .filter(|lamports_after_tx| lamports_before_tx == *lamports_after_tx)
+                .is_none()
+        {
+            status = Err(TransactionError::UnbalancedTransaction);
+        }
+        let mut accounts_data_len_delta = status
+            .as_ref()
+            .map_or(0, |info| info.accounts_data_len_delta);
+        let status = status.map(|_| ());
+
         loaded_transaction.accounts = accounts;
         if self
             .feature_set
