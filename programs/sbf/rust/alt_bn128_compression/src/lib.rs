@@ -2,9 +2,9 @@
 
 extern crate solana_program;
 use solana_program::{
-    alt_bn128_compression::prelude::{
-        alt_bn128_compression_g1_compress, alt_bn128_compression_g1_decompress,
-        alt_bn128_compression_g2_compress, alt_bn128_compression_g2_decompress,
+    alt_bn128::compression::prelude::{
+        alt_bn128_g1_compress, alt_bn128_g1_decompress, alt_bn128_g2_compress,
+        alt_bn128_g2_decompress,
     },
     custom_heap_default, custom_panic_default, msg,
 };
@@ -26,8 +26,8 @@ fn alt_bn128_compression_g1() {
         [0u8; 64],
     ];
     points_g1.iter().for_each(|point| {
-        let g1_compressed = alt_bn128_compression_g1_compress(point).unwrap();
-        let g1_decompressed = alt_bn128_compression_g1_decompress(&g1_compressed).unwrap();
+        let g1_compressed = alt_bn128_g1_compress(point).unwrap();
+        let g1_decompressed = alt_bn128_g1_decompress(&g1_compressed).unwrap();
         assert_eq!(*point, g1_decompressed);
     });
 }
@@ -55,8 +55,8 @@ fn alt_bn128_compression_g2() {
         [0u8; 128],
     ];
     points_g2.iter().for_each(|point| {
-        let g2_compressed = alt_bn128_compression_g2_compress(point).unwrap();
-        let g2_decompressed = alt_bn128_compression_g2_decompress(&g2_compressed).unwrap();
+        let g2_compressed = alt_bn128_g2_compress(point).unwrap();
+        let g2_decompressed = alt_bn128_g2_decompress(&g2_compressed).unwrap();
         assert_eq!(*point, g2_decompressed);
     });
 }

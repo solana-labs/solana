@@ -32,22 +32,22 @@ extern "C" {
 /**
  * G1 compression operation.
  */
-#define ALT_BN128_COMPRESSION_G1_COMPRESS 0
+#define ALT_BN128_G1_COMPRESS 0
 
 /**
  * G1 decompression operation.
  */
-#define ALT_BN128_COMPRESSION_G1_DECOMPRESS 1
+#define ALT_BN128_G1_DECOMPRESS 1
 
 /**
  * G2 compression operation.
  */
-#define ALT_BN128_COMPRESSION_G2_COMPRESS 2
+#define ALT_BN128_G2_COMPRESS 2
 
 /**
  * G2 decompression operation.
  */
-#define ALT_BN128_COMPRESSION_G2_DECOMPRESS 3
+#define ALT_BN128_G2_DECOMPRESS 3
 
 /**
  * Compression of alt_bn128 g1 and g2 points

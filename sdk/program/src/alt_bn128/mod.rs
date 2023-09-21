@@ -1,3 +1,4 @@
+pub mod compression;
 pub mod prelude {
     pub use crate::alt_bn128::{consts::*, target_arch::*, AltBn128Error};
 }

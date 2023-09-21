@@ -17,8 +17,8 @@ extern uint64_t entrypoint(const uint8_t *input) {
             254, 243, 191, 218, 122, 42, 81, 193, 84,
     };
 
-    sol_alt_bn128_compression(ALT_BN128_COMPRESSION_G1_COMPRESS, input, SOL_ARRAY_SIZE(input), result_compressed);
-    sol_alt_bn128_compression(ALT_BN128_COMPRESSION_G1_DECOMPRESS, result_compressed, SOL_ARRAY_SIZE(result_compressed), result_decompressed);
+    sol_alt_bn128_compression(ALT_BN128_G1_COMPRESS, input, SOL_ARRAY_SIZE(input), result_compressed);
+    sol_alt_bn128_compression(ALT_BN128_G1_DECOMPRESS, result_compressed, SOL_ARRAY_SIZE(result_compressed), result_decompressed);
 
     sol_assert(0 ==
                sol_memcmp(result_decompressed, input, ALT_BN128_COMPRESSION_G1_DECOMPRESS_OUTPUT_LEN));
@@ -39,8 +39,8 @@ extern uint64_t entrypoint(const uint8_t *input) {
             177, 91, 60, 144, 147, 174, 90, 17, 19, 189, 62, 147, 152, 18,
         };
 
-    sol_alt_bn128_compression(ALT_BN128_COMPRESSION_G2_COMPRESS, input, SOL_ARRAY_SIZE(input), result_compressed);
-    sol_alt_bn128_compression(ALT_BN128_COMPRESSION_G2_DECOMPRESS, result_compressed, SOL_ARRAY_SIZE(result_compressed), result_decompressed);
+    sol_alt_bn128_compression(ALT_BN128_G2_COMPRESS, input, SOL_ARRAY_SIZE(input), result_compressed);
+    sol_alt_bn128_compression(ALT_BN128_G2_DECOMPRESS, result_compressed, SOL_ARRAY_SIZE(result_compressed), result_decompressed);
 
     sol_assert(
         0 == sol_memcmp(result_decompressed, input, ALT_BN128_COMPRESSION_G2_DECOMPRESS_OUTPUT_LEN));
