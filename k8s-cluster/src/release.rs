@@ -87,9 +87,7 @@ impl<'a> Deploy<'a> {
     }
 
     fn setup_local_deploy(&self) -> Result<(), Box<dyn Error>> {
-        info!("local deploy");
         if self.config.do_build {
-            info!("call build()");
             match self.build() {
                 Ok(_) => (),
                 Err(err) => return Err(err),
@@ -101,7 +99,6 @@ impl<'a> Deploy<'a> {
     }
 
     fn build(&self) -> Result<(), Box<dyn Error>> {
-        info!("building!");
         let start_time = Instant::now();
         let build_variant: &str = if self.config.debug_build {
             "--debug"

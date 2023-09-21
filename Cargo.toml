@@ -39,7 +39,7 @@ members = [
     "geyser-plugin-manager",
     "gossip",
     "install",
-    "net/k8s-cluster",
+    "k8s-cluster",
     "keygen",
     "ledger",
     "ledger-tool",

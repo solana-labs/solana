@@ -45,7 +45,7 @@ fi
 
 echo "Sol stake: $stake_sol"
 
-/home/solana/k8s-cluster/src/scripts/decode-accounts.sh -t "validator"
+/home/solana/k8s-cluster-scripts/decode-accounts.sh -t "validator"
 
 # Maximum number of retries
 MAX_RETRIES=5

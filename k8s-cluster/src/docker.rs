@@ -118,6 +118,10 @@ USER solana
 
 COPY ./fetch-perf-libs.sh ./fetch-spl.sh ./scripts /home/solana/
 COPY ./net ./multinode-demo /home/solana/
+
+RUN mkdir -p /home/solana/k8s-cluster-scripts
+COPY ./k8s-cluster/src/scripts /home/solana/k8s-cluster-scripts
+
 RUN mkdir -p /home/solana/.cargo/bin
 
 COPY ./{solana_build_directory}/bin/* /home/solana/.cargo/bin/

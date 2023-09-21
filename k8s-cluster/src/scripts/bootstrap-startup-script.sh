@@ -24,7 +24,7 @@ for arg in "${args[@]}"; do
 done
 
 
-/home/solana/k8s-cluster/src/scripts/decode-accounts.sh -t "bootstrap"
+/home/solana/k8s-cluster-scripts/decode-accounts.sh -t "bootstrap"
 
 # see multinode-demo/boostrap-validator.sh for these default commands
 nohup solana-validator \
