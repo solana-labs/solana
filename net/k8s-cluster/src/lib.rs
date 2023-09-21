@@ -44,11 +44,13 @@ pub enum ValidatorType {
 }
 
 pub fn get_solana_root() -> PathBuf {
-    PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("$CARGO_MANIFEST_DIR"))
+    let solana_root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("$CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(Path::parent)
         .expect("Failed to get Solana root directory")
-        .to_path_buf()
+        .to_path_buf();
+    info!("solana root dir: {:?}", solana_root);
+    solana_root
 }
 
 #[macro_export]

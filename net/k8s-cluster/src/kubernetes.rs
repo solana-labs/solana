@@ -18,6 +18,7 @@ use {
         Client,
     },
     log::*,
+    solana_sdk::hash::Hash,
     std::{collections::BTreeMap, error::Error, fs::File, io::Read},
 };
 
@@ -37,6 +38,7 @@ pub struct RuntimeConfig<'a> {
     pub wait_for_supermajority: Option<u64>,
     pub warp_slot: Option<u64>,
     pub shred_version: Option<u16>,
+    pub bank_hash: Option<Hash>,
 }
 
 impl<'a> std::fmt::Display for RuntimeConfig<'a> {
@@ -58,7 +60,8 @@ impl<'a> std::fmt::Display for RuntimeConfig<'a> {
              skip_require_tower: {}\n\
              wait_for_supermajority: {:?}\n\
              warp_slot: {:?}\n\
-             shred_version: {:?}",
+             shred_version: {:?}\n\
+             bank_hash: {:?}",
             self.enable_udp,
             self.disable_quic,
             self.gpu_mode,
@@ -74,6 +77,7 @@ impl<'a> std::fmt::Display for RuntimeConfig<'a> {
             self.wait_for_supermajority,
             self.warp_slot,
             self.shred_version,
+            self.bank_hash,
         )
     }
 }
@@ -95,6 +99,10 @@ impl<'a> Kubernetes<'a> {
 
     pub fn set_shred_version(&mut self, shred_version: u16) {
         self.runtime_config.shred_version = Some(shred_version);
+    }
+
+    pub fn set_bank_hash(&mut self, bank_hash: Hash) {
+        self.runtime_config.bank_hash = Some(bank_hash);
     }
 
     fn generate_command_flags(&mut self) -> Vec<String> {

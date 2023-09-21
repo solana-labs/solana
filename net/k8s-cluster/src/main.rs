@@ -1,5 +1,3 @@
-use k8s_openapi::apimachinery::pkg::runtime;
-
 use {
     clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches},
     log::*,
@@ -420,8 +418,10 @@ async fn main() {
             None => None,
         },
         shred_version: None, // set after genesis created
+        bank_hash: None, // set after genesis created
     };
 
+    let wait_for_supermajority: Option<u64> = runtime_config.wait_for_supermajority.clone();
     let warp_slot: Option<u64> = runtime_config.warp_slot.clone();
     if ! match (runtime_config.wait_for_supermajority, runtime_config.warp_slot) {
         (Some(slot1), Some(slot2)) => slot1 == slot2,
@@ -556,7 +556,13 @@ async fn main() {
         }
     }
 
-    kub_controller.set_shred_version(LedgerHelper::get_shred_version());
+    match LedgerHelper::get_shred_version() {
+        Ok(shred_version) => kub_controller.set_shred_version(shred_version),
+        Err(err) => {
+            error!("{}", err);
+            return;
+        }
+    }
     match warp_slot {
         Some(slot) => {
             //TODO: this needs to be mounted as a file in the bootstrap pod
@@ -564,6 +570,18 @@ async fn main() {
                 Ok(_) => (),
                 Err(err) => {
                     error!("Failed to create snapshot: {}", err);
+                    return;
+                }
+            }
+        }
+        None => (),
+    }
+    match wait_for_supermajority {
+        Some(_) => {
+            match LedgerHelper::create_bank_hash() {
+                Ok(bank_hash) => kub_controller.set_bank_hash(bank_hash),
+                Err(err) => {
+                    error!("Failed to get bank hash: {}", err);
                     return;
                 }
             }
