@@ -4169,8 +4169,8 @@ fn find_latest_replayed_slot_from_ledger(
             .filter_map(|(s, _)| if s > latest_slot { Some(s) } else { None })
             .collect();
 
-        for new_latest_slot in new_latest_slots {
-            latest_slot = new_latest_slot;
+        if let Some(new_latest_slot) = new_latest_slots.first() {
+            latest_slot = *new_latest_slot;
             info!("Checking latest_slot {}", latest_slot);
             // Wait for the slot to be fully received by the validator
             loop {
@@ -5293,30 +5293,23 @@ fn test_duplicate_shreds_switch_failure() {
     // 2) Wait for a duplicate slot to land on both validators and for the target switch
     // fork validator to get another version of the slot. Also ensure all versions of
     // the block are playable
-    let dup_slot;
-    loop {
-        dup_slot = duplicate_slot_receiver
-            .recv_timeout(Duration::from_millis(30_000))
-            .expect("Duplicate leader failed to make a duplicate slot in allotted time");
+    let dup_slot = duplicate_slot_receiver
+        .recv_timeout(Duration::from_millis(30_000))
+        .expect("Duplicate leader failed to make a duplicate slot in allotted time");
 
-        // Make sure both validators received and replay the complete blocks
-        let dup_frozen_hash = wait_for_duplicate_fork_frozen(
-            &cluster.ledger_path(&duplicate_fork_validator1_pubkey),
-            dup_slot,
-        );
-        let original_frozen_hash = wait_for_duplicate_fork_frozen(
-            &cluster.ledger_path(&duplicate_leader_validator_pubkey),
-            dup_slot,
-        );
-        if original_frozen_hash != dup_frozen_hash {
-            break;
-        } else {
-            panic!(
-                "Duplicate leader and partition target got same hash: {}",
-                original_frozen_hash
-            );
-        }
-    }
+    // Make sure both validators received and replay the complete blocks
+    let dup_frozen_hash = wait_for_duplicate_fork_frozen(
+        &cluster.ledger_path(&duplicate_fork_validator1_pubkey),
+        dup_slot,
+    );
+    let original_frozen_hash = wait_for_duplicate_fork_frozen(
+        &cluster.ledger_path(&duplicate_leader_validator_pubkey),
+        dup_slot,
+    );
+    assert_ne!(
+        original_frozen_hash, dup_frozen_hash,
+        "Duplicate leader and partition target got same hash: {original_frozen_hash}",
+    );
 
     // 3) Force `duplicate_fork_validator1_pubkey` to see a duplicate proof
     info!("Waiting for duplicate proof for slot: {}", dup_slot);
