@@ -7134,8 +7134,8 @@ pub mod tests {
 
         let expected_transactions: Vec<VersionedTransactionWithStatusMeta> = entries
             .iter()
-            .cloned()
             .filter(|entry| !entry.is_tick())
+            .cloned()
             .flat_map(|entry| entry.transactions)
             .map(|transaction| {
                 let mut pre_balances: Vec<u64> = vec![];
@@ -8018,8 +8018,8 @@ pub mod tests {
 
         let expected_transactions: Vec<VersionedTransactionWithStatusMeta> = entries
             .iter()
-            .cloned()
             .filter(|entry| !entry.is_tick())
+            .cloned()
             .flat_map(|entry| entry.transactions)
             .map(|transaction| {
                 let mut pre_balances: Vec<u64> = vec![];
@@ -8138,8 +8138,8 @@ pub mod tests {
 
         let expected_transactions: Vec<VersionedTransactionWithStatusMeta> = entries
             .iter()
-            .cloned()
             .filter(|entry| !entry.is_tick())
+            .cloned()
             .flat_map(|entry| entry.transactions)
             .map(|transaction| {
                 let mut pre_balances: Vec<u64> = vec![];
