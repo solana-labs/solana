@@ -191,10 +191,10 @@ pub fn check_loader_id(id: &Pubkey) -> bool {
 }
 
 /// Only used in macro, do not use directly!
-pub fn calculate_heap_cost(heap_size: u64, heap_cost: u64, enable_rounding_fix: bool) -> u64 {
+pub fn calculate_heap_cost(heap_size: u32, heap_cost: u64, enable_rounding_fix: bool) -> u64 {
     const KIBIBYTE: u64 = 1024;
     const PAGE_SIZE_KB: u64 = 32;
-    let mut rounded_heap_size = heap_size;
+    let mut rounded_heap_size = u64::from(heap_size);
     if enable_rounding_fix {
         rounded_heap_size = rounded_heap_size
             .saturating_add(PAGE_SIZE_KB.saturating_mul(KIBIBYTE).saturating_sub(1));
@@ -267,7 +267,7 @@ macro_rules! create_vm {
             .feature_set
             .is_active(&solana_sdk::feature_set::round_up_heap_size::id());
         let mut heap_cost_result = invoke_context.consume_checked($crate::calculate_heap_cost(
-            heap_size as u64,
+            heap_size,
             invoke_context.get_compute_budget().heap_cost,
             round_up_heap_size,
         ));
@@ -281,7 +281,7 @@ macro_rules! create_vm {
             >::zero_filled(stack_size);
             let mut heap = solana_rbpf::aligned_memory::AlignedMemory::<
                 { solana_rbpf::ebpf::HOST_ALIGN },
-            >::zero_filled(heap_size);
+            >::zero_filled(usize::try_from(heap_size).unwrap());
             let vm = $crate::create_vm(
                 $program,
                 $regions,
