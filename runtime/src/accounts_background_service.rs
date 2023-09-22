@@ -431,7 +431,7 @@ impl SnapshotRequestHandler {
                     snapshot_storages,
                     accounts_hash_for_testing,
                 )
-            },
+            }
         };
         let send_result = self.accounts_package_sender.send(accounts_package);
         if let Err(err) = send_result {
