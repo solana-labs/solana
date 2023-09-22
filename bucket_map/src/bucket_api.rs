@@ -26,7 +26,7 @@ pub struct BucketApi<T: Clone + Copy + PartialEq + 'static> {
 }
 
 impl<T: Clone + Copy + PartialEq + std::fmt::Debug> BucketApi<T> {
-    pub fn new(
+    pub(crate) fn new(
         drives: Arc<Vec<PathBuf>>,
         max_search: MaxSearch,
         stats: Arc<BucketMapStats>,

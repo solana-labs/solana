@@ -110,7 +110,7 @@ pub struct Bucket<T: Copy + PartialEq + 'static> {
 }
 
 impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
-    pub fn new(
+    pub(crate) fn new(
         drives: Arc<Vec<PathBuf>>,
         max_search: MaxSearch,
         stats: Arc<BucketMapStats>,
@@ -342,6 +342,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
     /// insert as much of `entries` as possible into `index`.
     /// return an error if the index needs to resize.
     /// for every entry that already exists in `index`, add it (and the value already in the index) to `duplicates`
+    /// `reverse_sorted_entries` is (raw index (range = U64::MAX) in hash map, index in `items`)
     pub fn batch_insert_non_duplicates_internal(
         index: &mut BucketStorage<IndexBucket<T>>,
         data_buckets: &[BucketStorage<DataBucket>],
@@ -349,6 +350,9 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
         reverse_sorted_entries: &mut Vec<(u64, usize)>,
         duplicates: &mut Vec<(usize, T)>,
     ) -> Result<(), BucketMapError> {
+        if reverse_sorted_entries.is_empty() {
+            return Ok(());
+        }
         let max_search = index.max_search();
         let cap = index.capacity();
         let search_end = max_search.min(cap);
