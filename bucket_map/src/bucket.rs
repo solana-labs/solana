@@ -113,6 +113,11 @@ pub struct Bucket<T: Copy + PartialEq + 'static> {
 
     /// keep track of which index file this bucket is using so on restart we can try to reuse it
     restartable_bucket: RestartableBucket,
+
+    /// true if this bucket was loaded (as opposed to created blank).
+    /// When populating, we want to prioritize looking for data on disk that already matches as opposed to writing new data.
+    #[allow(dead_code)]
+    reused_file_at_startup: bool,
 }
 
 impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
@@ -125,7 +130,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
     ) -> Self {
         let reuse_path = std::mem::take(&mut restartable_bucket.path);
         let elem_size = NonZeroU64::new(std::mem::size_of::<IndexEntry<T>>() as u64).unwrap();
-        let (index, random) = reuse_path
+        let (index, random, reused_file_at_startup) = reuse_path
             .and_then(|path| {
                 // try to re-use the file this bucket was using last time we were running
                 restartable_bucket.get().and_then(|(_file_name, random)| {
@@ -136,7 +141,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
                         Arc::clone(&stats.index),
                         count.clone(),
                     )
-                    .map(|index| (index, random));
+                    .map(|index| (index, random, true /* true = reused file */));
                     if result.is_none() {
                         // we couldn't re-use it, so delete it
                         _ = fs::remove_file(path);
@@ -157,7 +162,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
                 stats.index.resize_grow(0, index.capacity_bytes());
                 let random = thread_rng().gen();
                 restartable_bucket.set_file(file_name, random);
-                (index, random)
+                (index, random, false /* true = reused file */)
             });
 
         Self {
@@ -170,6 +175,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
             anticipated_size: 0,
             at_least_one_entry_deleted: false,
             restartable_bucket,
+            reused_file_at_startup,
         }
     }
 
