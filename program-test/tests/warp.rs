@@ -30,7 +30,7 @@ use {
         transaction::{Transaction, TransactionError},
     },
     solana_stake_program::stake_state,
-    solana_vote_program::vote_state::{self},
+    solana_vote_program::vote_state,
     std::convert::TryInto,
 };
 

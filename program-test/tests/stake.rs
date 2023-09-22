@@ -11,6 +11,7 @@ use {
         stake::{instruction as stake_instruction, instruction::StakeError},
         transaction::{Transaction, TransactionError},
     },
+    test_case::test_case,
 };
 
 #[derive(PartialEq)]
@@ -20,6 +21,10 @@ enum PendingStakeActivationTestFlag {
     NoMerge,
 }
 
+#[test_case(PendingStakeActivationTestFlag::NoMerge; "test that redelegate stake then deactivate it then withdraw from it is not permitted")]
+#[test_case(PendingStakeActivationTestFlag::MergeActive; "test that redelegate stake then merge it with another active stake then deactivate it then withdraw from it is not permitted")]
+#[test_case(PendingStakeActivationTestFlag::MergeInactive; "test that redelegate stake then merge it with another inactive stake then deactivate it then withdraw from it is not permitted")]
+#[tokio::test]
 async fn test_stake_redelegation_pending_activation(merge_flag: PendingStakeActivationTestFlag) {
     let program_test = ProgramTest::default();
     let mut context = program_test.start_with_context().await;
@@ -185,19 +190,4 @@ async fn test_stake_redelegation_pending_activation(merge_flag: PendingStakeActi
         .process_transaction(transaction)
         .await
         .unwrap();
-}
-
-#[tokio::test]
-async fn test_stake_redelegation_then_deactivation_withdraw_not_permitted() {
-    test_stake_redelegation_pending_activation(PendingStakeActivationTestFlag::NoMerge).await
-}
-
-#[tokio::test]
-async fn test_stake_redelegation_then_merge_active_then_deactivation_withdraw_not_permitted() {
-    test_stake_redelegation_pending_activation(PendingStakeActivationTestFlag::MergeActive).await
-}
-
-#[tokio::test]
-async fn test_stake_redelegation_then_merge_inactive_then_deactivation_withdraw_not_permitted() {
-    test_stake_redelegation_pending_activation(PendingStakeActivationTestFlag::MergeInactive).await
 }

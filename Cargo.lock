@@ -6587,6 +6587,7 @@ dependencies = [
  "solana-sdk",
  "solana-stake-program",
  "solana-vote-program",
+ "test-case",
  "thiserror",
  "tokio",
 ]
