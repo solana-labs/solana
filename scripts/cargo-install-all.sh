@@ -35,7 +35,7 @@ EOF
 
 maybeRustVersion=
 installDir=
-# buildProfileArg and buildProfile duplicate some information because cargo 
+# buildProfileArg and buildProfile duplicate some information because cargo
 # doesn't allow '--profile debug' but we still need to know that the binaries
 # will be in target/debug
 buildProfileArg='--profile release'
