@@ -28,7 +28,7 @@ solana-entry = { workspace = true }
 solana-streamer = { workspace = true }
 
 [build-dependencies]
-prost-build = "0.11.4"
+prost-build = { workspace = true }
 rustc_version = { workspace = true }
 
 # windows users should install the protobuf compiler manually and set the PROTOC
