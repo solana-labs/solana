@@ -338,6 +338,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
         self.set_anticipated_count((anticipated).saturating_add(current_len));
         let mut entries = Self::index_entries(items, self.random);
         let mut duplicates = Vec::default();
+        let mut entries_created_on_disk = 0;
         // insert, but resizes may be necessary
         loop {
             let cap = self.index.capacity();
@@ -351,6 +352,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
                 &self.data,
                 items,
                 &mut entries,
+                &mut entries_created_on_disk,
                 &mut duplicates,
             );
             match result {
@@ -361,6 +363,18 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
                         items.len().saturating_sub(duplicates.len()) as u64,
                         Ordering::Relaxed,
                     );
+                    self.index.stats.startup.entries_reused.fetch_add(
+                        items
+                            .len()
+                            .saturating_sub(duplicates.len())
+                            .saturating_sub(entries_created_on_disk) as u64,
+                        Ordering::Relaxed,
+                    );
+                    self.index
+                        .stats
+                        .startup
+                        .entries_created
+                        .fetch_add(entries_created_on_disk as u64, Ordering::Relaxed);
                     return duplicates;
                 }
                 Err(error) => {
@@ -383,6 +397,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
         data_buckets: &[BucketStorage<DataBucket>],
         items: &[(Pubkey, T)],
         reverse_sorted_entries: &mut Vec<(u64, usize)>,
+        entries_created_on_disk: &mut usize,
         duplicates: &mut Vec<(usize, T)>,
     ) -> Result<(), BucketMapError> {
         if reverse_sorted_entries.is_empty() {
@@ -401,6 +416,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
                 let ix_index = (ix_entry + search) % cap;
                 let elem = IndexEntryPlaceInBucket::new(ix_index);
                 if index.try_lock(ix_index) {
+                    *entries_created_on_disk += 1;
                     // found free element and occupied it
                     // These fields will be overwritten after allocation by callers.
                     // Since this part of the mmapped file could have previously been used by someone else, there can be garbage here.
@@ -849,12 +865,14 @@ mod tests {
 
                 let mut index = create_test_index(None);
 
+                let mut entries_created = 0;
                 let mut duplicates = Vec::default();
                 assert!(Bucket::<u64>::batch_insert_non_duplicates_internal(
                     &mut index,
                     &Vec::default(),
                     &raw,
                     &mut hashed,
+                    &mut entries_created,
                     &mut duplicates,
                 )
                 .is_ok());
@@ -898,11 +916,13 @@ mod tests {
                 let mut index = create_test_index(None);
 
                 let mut duplicates = Vec::default();
+                let mut entries_created = 0;
                 assert!(Bucket::<u64>::batch_insert_non_duplicates_internal(
                     &mut index,
                     &Vec::default(),
                     &raw,
                     &mut hashed,
+                    &mut entries_created,
                     &mut duplicates,
                 )
                 .is_ok());
@@ -946,11 +966,13 @@ mod tests {
                     let mut index = create_test_index(Some(max_search as u8));
 
                     let mut duplicates = Vec::default();
+                    let mut entries_created = 0;
                     let result = Bucket::<u64>::batch_insert_non_duplicates_internal(
                         &mut index,
                         &Vec::default(),
                         &raw,
                         &mut hashed,
+                        &mut entries_created,
                         &mut duplicates,
                     );
 
