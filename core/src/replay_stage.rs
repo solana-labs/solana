@@ -3172,18 +3172,10 @@ impl ReplayStage {
                                         .get_hash(last_voted_slot)
                                         .expect("Must exist for us to have frozen descendant"),
                                 );
-                                // The lockout check is cached for previously computed banks. Since we are
-                                // updating our tower we need to update this cache as well.
+                                // Since we are updating our tower we need to update associated caches for previously computed
+                                // slots as well.
                                 for slot in frozen_banks.iter().map(|b| b.slot()) {
-                                    let stats = progress
-                                        .get_fork_stats_mut(slot)
-                                        .expect("All frozen banks must exist in the Progress map");
-                                    stats.is_locked_out = tower.is_locked_out(
-                                        slot,
-                                        ancestors
-                                        .get(&slot)
-                                        .expect("Ancestors map should contain slot for is_locked_out() check"),
-                                    );
+                                    Self::cache_tower_stats(progress, tower, slot, ancestors);
                                 }
                             }
                         }
@@ -3245,22 +3237,31 @@ impl ReplayStage {
                 cluster_slots,
             );
 
-            let stats = progress
-                .get_fork_stats_mut(bank_slot)
-                .expect("All frozen banks must exist in the Progress map");
-
-            stats.vote_threshold =
-                tower.check_vote_stake_threshold(bank_slot, &stats.voted_stakes, stats.total_stake);
-            stats.is_locked_out = tower.is_locked_out(
-                bank_slot,
-                ancestors
-                    .get(&bank_slot)
-                    .expect("Ancestors map should contain slot for is_locked_out() check"),
-            );
-            stats.has_voted = tower.has_voted(bank_slot);
-            stats.is_recent = tower.is_recent(bank_slot);
+            Self::cache_tower_stats(progress, tower, bank_slot, ancestors);
         }
         new_stats
+    }
+
+    fn cache_tower_stats(
+        progress: &mut ProgressMap,
+        tower: &Tower,
+        slot: Slot,
+        ancestors: &HashMap<u64, HashSet<u64>>,
+    ) {
+        let stats = progress
+            .get_fork_stats_mut(slot)
+            .expect("All frozen banks must exist in the Progress map");
+
+        stats.vote_threshold =
+            tower.check_vote_stake_threshold(slot, &stats.voted_stakes, stats.total_stake);
+        stats.is_locked_out = tower.is_locked_out(
+            slot,
+            ancestors
+                .get(&slot)
+                .expect("Ancestors map should contain slot for is_locked_out() check"),
+        );
+        stats.has_voted = tower.has_voted(slot);
+        stats.is_recent = tower.is_recent(slot);
     }
 
     fn update_propagation_status(
