@@ -81,33 +81,5 @@ spl() {
   )
 }
 
-serum_dex() {
-  (
-    set -x
-    rm -rf serum-dex
-    git clone https://github.com/project-serum/serum-dex.git
-    cd serum-dex
-
-    update_solana_dependencies . "$solana_ver"
-    patch_crates_io_solana Cargo.toml "$solana_dir"
-    patch_crates_io_solana dex/Cargo.toml "$solana_dir"
-    cat >> dex/Cargo.toml <<EOF
-[workspace]
-exclude = [
-    "crank",
-    "permissioned",
-]
-EOF
-    $cargo build
-
-    $cargo_build_bpf \
-      --manifest-path dex/Cargo.toml --no-default-features --features program
-
-    $cargo test \
-      --manifest-path dex/Cargo.toml --no-default-features --features program
-  )
-}
-
 _ example_helloworld
 _ spl
-_ serum_dex
