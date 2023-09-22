@@ -4169,7 +4169,7 @@ mod tests {
         assert_eq!(slots[1].1.from, cluster_info.id());
         assert_eq!(slots[2].1.from, node_pubkey);
     }
-    
+
     #[test]
     fn test_append_entrypoint_to_pulls() {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();

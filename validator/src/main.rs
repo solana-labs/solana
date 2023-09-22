@@ -966,7 +966,7 @@ pub fn main() {
                     expected_bank_hash = Some(hash);
                     expected_shred_version = Some(shred_version);
                     in_wen_restart_phase_two = true;
-                }        
+                }
             },
             Err(e) => {
                 warn!("{}", e);

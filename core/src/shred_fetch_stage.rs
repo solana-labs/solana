@@ -74,7 +74,7 @@ impl ShredFetchStage {
                     is_in_wen_restart = false;
                 }
             }
-    
+
             if last_updated.elapsed().as_millis() as u64 > DEFAULT_MS_PER_SLOT {
                 last_updated = Instant::now();
                 let root_bank = {
