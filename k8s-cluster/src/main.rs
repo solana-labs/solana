@@ -257,69 +257,53 @@ async fn main() {
     };
 
     let genesis_flags = GenesisFlags {
-        hashes_per_tick: match matches.value_of("hashes_per_tick") {
-            Some(value_str) => Some(
+        hashes_per_tick: matches.value_of("hashes_per_tick").map(|value_str| {
+            value_str
+                .parse()
+                .expect("Invalid value for hashes_per_tick")
+        }),
+        slots_per_epoch: matches.value_of("slots_per_epoch").map(|value_str| {
+            value_str
+                .parse()
+                .expect("Invalid value for slots_per_epoch")
+        }),
+        target_lamports_per_signature: matches.value_of("target_lamports_per_signature").map(
+            |value_str| {
                 value_str
                     .parse()
-                    .expect("Invalid value for hashes_per_tick"),
-            ),
-            None => None,
-        },
-        slots_per_epoch: match matches.value_of("slots_per_epoch") {
-            Some(value_str) => Some(
-                value_str
-                    .parse()
-                    .expect("Invalid value for slots_per_epoch"),
-            ),
-            None => None,
-        },
-        target_lamports_per_signature: match matches.value_of("target_lamports_per_signature") {
-            Some(value_str) => Some(
-                value_str
-                    .parse()
-                    .expect("Invalid value for target_lamports_per_signature"),
-            ),
-            None => None,
-        },
-        faucet_lamports: match matches.value_of("faucet_lamports") {
-            Some(value_str) => Some(
-                value_str
-                    .parse()
-                    .expect("Invalid value for faucet_lamports"),
-            ),
-            None => None,
-        },
+                    .expect("Invalid value for target_lamports_per_signature")
+            },
+        ),
+        faucet_lamports: matches.value_of("faucet_lamports").map(|value_str| {
+            value_str
+                .parse()
+                .expect("Invalid value for faucet_lamports")
+        }),
         enable_warmup_epochs: matches.value_of("enable_warmup_epochs").unwrap() == "true",
-        max_genesis_archive_unpacked_size: match matches
+        max_genesis_archive_unpacked_size: matches
             .value_of("max_genesis_archive_unpacked_size")
-        {
-            Some(value_str) => Some(
+            .map(|value_str| {
                 value_str
                     .parse()
-                    .expect("Invalid value for max_genesis_archive_unpacked_size"),
-            ),
-            None => None,
-        },
-        cluster_type: match matches.value_of("cluster_type") {
-            Some(value_str) => Some(value_str.parse().expect("Invalid value for cluster_type")),
-            None => None,
-        },
-        bootstrap_validator_sol: match matches.value_of("bootstrap_validator_sol") {
-            Some(value_str) => Some(
+                    .expect("Invalid value for max_genesis_archive_unpacked_size")
+            }),
+        cluster_type: matches
+            .value_of("cluster_type")
+            .map(|value_str| value_str.parse().expect("Invalid value for cluster_type")),
+        bootstrap_validator_sol: matches
+            .value_of("bootstrap_validator_sol")
+            .map(|value_str| {
                 value_str
                     .parse()
-                    .expect("Invalid value for bootstrap_validator_sol"),
-            ),
-            None => None,
-        },
-        bootstrap_validator_stake_sol: match matches.value_of("bootstrap_validator_stake_sol") {
-            Some(value_str) => Some(
+                    .expect("Invalid value for bootstrap_validator_sol")
+            }),
+        bootstrap_validator_stake_sol: matches.value_of("bootstrap_validator_stake_sol").map(
+            |value_str| {
                 value_str
                     .parse()
-                    .expect("Invalid value for bootstrap_validator_stake_sol"),
-            ),
-            None => None,
-        },
+                    .expect("Invalid value for bootstrap_validator_stake_sol")
+            },
+        ),
     };
 
     let runtime_config = RuntimeConfig {
@@ -391,39 +375,36 @@ async fn main() {
         }
     }
 
-    match docker_image_config {
-        Some(config) => {
-            let docker = DockerConfig::new(config, build_config.deploy_method);
-            let image_types = vec!["bootstrap", "validator"];
-            for image_type in image_types {
-                match docker.build_image(image_type).await {
-                    Ok(_) => info!("Docker image built successfully"),
-                    Err(err) => {
-                        error!("Exiting........ {}", err);
-                        return;
-                    }
-                }
-            }
-
-            // Need to push image to registry so Monogon nodes can pull image from registry to local
-            match docker.push_image("bootstrap").await {
-                Ok(_) => info!("Bootstrap Image pushed successfully to registry"),
+    if let Some(config) = docker_image_config {
+        let docker = DockerConfig::new(config, build_config.deploy_method);
+        let image_types = vec!["bootstrap", "validator"];
+        for image_type in image_types {
+            match docker.build_image(image_type).await {
+                Ok(_) => info!("Docker image built successfully"),
                 Err(err) => {
-                    error!("{}", err);
-                    return;
-                }
-            }
-
-            // Need to push image to registry so Monogon nodes can pull image from registry to local
-            match docker.push_image("validator").await {
-                Ok(_) => info!("Validator Image pushed successfully to registry"),
-                Err(err) => {
-                    error!("{}", err);
+                    error!("Exiting........ {}", err);
                     return;
                 }
             }
         }
-        _ => (),
+
+        // Need to push image to registry so Monogon nodes can pull image from registry to local
+        match docker.push_image("bootstrap").await {
+            Ok(_) => info!("Bootstrap Image pushed successfully to registry"),
+            Err(err) => {
+                error!("{}", err);
+                return;
+            }
+        }
+
+        // Need to push image to registry so Monogon nodes can pull image from registry to local
+        match docker.push_image("validator").await {
+            Ok(_) => info!("Validator Image pushed successfully to registry"),
+            Err(err) => {
+                error!("{}", err);
+                return;
+            }
+        }
     }
 
     info!("Creating Genesis");

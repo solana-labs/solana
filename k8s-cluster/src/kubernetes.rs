@@ -36,7 +36,6 @@ pub struct Kubernetes<'a> {
 }
 
 impl<'a> Kubernetes<'a> {
-    #[allow(clippy::too_many_arguments)]
     pub async fn new(namespace: &'a str, runtime_config: &'a RuntimeConfig<'a>) -> Kubernetes<'a> {
         Kubernetes {
             client: Client::try_default().await.unwrap(),
@@ -177,6 +176,7 @@ impl<'a> Kubernetes<'a> {
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn create_replicas_set(
         &self,
         app_name: &str,
