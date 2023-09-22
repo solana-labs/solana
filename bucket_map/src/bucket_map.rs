@@ -1,9 +1,17 @@
 //! BucketMap is a mostly contention free concurrent map backed by MmapMut
 
 use {
-    crate::{bucket_api::BucketApi, bucket_stats::BucketMapStats, MaxSearch, RefCount},
+    crate::{
+        bucket_api::BucketApi, bucket_stats::BucketMapStats, restart::Restart, MaxSearch, RefCount,
+    },
     solana_sdk::pubkey::Pubkey,
-    std::{convert::TryInto, fmt::Debug, fs, path::PathBuf, sync::Arc},
+    std::{
+        convert::TryInto,
+        fmt::Debug,
+        fs::{self},
+        path::PathBuf,
+        sync::{Arc, Mutex},
+    },
     tempfile::TempDir,
 };
 
@@ -83,6 +91,11 @@ impl<T: Clone + Copy + Debug + PartialEq> BucketMap<T> {
         if let Some(drives) = config.drives.as_ref() {
             Self::erase_previous_drives(drives);
         }
+
+        let stats = Arc::default();
+
+        let restart = Restart::new(&config);
+
         let mut temp_dir = None;
         let drives = config.drives.unwrap_or_else(|| {
             temp_dir = Some(TempDir::new().unwrap());
@@ -90,13 +103,19 @@ impl<T: Clone + Copy + Debug + PartialEq> BucketMap<T> {
         });
         let drives = Arc::new(drives);
 
-        let stats = Arc::default();
-        let buckets = (0..config.max_buckets)
-            .map(|_| {
+        let restart = restart.map(|restart| Arc::new(Mutex::new(restart)));
+
+        let restartable_buckets =
+            Restart::get_restartable_buckets(restart.as_ref(), &drives, config.max_buckets);
+
+        let buckets = restartable_buckets
+            .into_iter()
+            .map(|restartable_bucket| {
                 Arc::new(BucketApi::new(
                     Arc::clone(&drives),
                     max_search,
                     Arc::clone(&stats),
+                    restartable_bucket,
                 ))
             })
             .collect();
