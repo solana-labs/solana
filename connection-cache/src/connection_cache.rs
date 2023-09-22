@@ -228,13 +228,13 @@ where
             .and_modify(|pool| {
                 if pool.need_new_connection(connection_pool_size).0 {
                     pool.add_connection(&config, addr);
-                    async_connection_sender.map(|sender| {
+                    if let Some(sender) = async_connection_sender {
                         debug!(
                             "Sending async connection creation {} for {addr}",
                             pool.num_connections() - 1
                         );
                         sender.send((pool.num_connections() - 1, *addr)).unwrap();
-                    });
+                    };
                 } else {
                     hit_cache = true;
                 }
@@ -290,7 +290,7 @@ where
                             self.connection_config.clone(),
                             self.connection_manager.clone(),
                             &mut map,
-                            &addr,
+                            addr,
                             self.connection_pool_size,
                             Some(self.sender.clone()),
                         );
