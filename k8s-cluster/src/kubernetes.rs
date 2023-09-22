@@ -468,21 +468,21 @@ impl<'a> Kubernetes<'a> {
             EnvVar {
                 name: "BOOTSTRAP_RPC_ADDRESS".to_string(),
                 value: Some(
-                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8899".to_string()
+                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8899".to_string(),
                 ),
                 ..Default::default()
             },
             EnvVar {
                 name: "BOOTSTRAP_GOSSIP_ADDRESS".to_string(),
                 value: Some(
-                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8001".to_string()
+                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8001".to_string(),
                 ),
                 ..Default::default()
             },
             EnvVar {
                 name: "BOOTSTRAP_FAUCET_ADDRESS".to_string(),
                 value: Some(
-                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:9900".to_string()
+                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:9900".to_string(),
                 ),
                 ..Default::default()
             },
