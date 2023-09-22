@@ -139,27 +139,27 @@ impl<'a> Deploy<'a> {
 
         // Check if current commit is associated with a tag
         let mut note = branch;
-        for tag in &solana_repo
+        for tag in (&solana_repo
             .tag_names(None)
-            .expect("Failed to retrieve tag names")
+            .expect("Failed to retrieve tag names"))
+            .into_iter()
+            .flatten()
         {
-            if let Some(tag_name) = tag {
-                // Get the target object of the tag
-                let tag_object = solana_repo
-                    .revparse_single(&tag_name)
-                    .expect("Failed to parse tag")
-                    .id();
-                // Check if the commit associated with the tag is the same as the current commit
-                if tag_object == commit {
-                    info!("The current commit is associated with tag: {}", tag_name);
-                    note = tag_object.to_string();
-                    break;
-                }
+            // Get the target object of the tag
+            let tag_object = solana_repo
+                .revparse_single(tag)
+                .expect("Failed to parse tag")
+                .id();
+            // Check if the commit associated with the tag is the same as the current commit
+            if tag_object == commit {
+                info!("The current commit is associated with tag: {}", tag);
+                note = tag_object.to_string();
+                break;
             }
         }
 
         // Write to branch/tag and commit to version.yml
-        let content = format!("channel: devbuild {}\ncommit: {}", note, commit.to_string());
+        let content = format!("channel: devbuild {}\ncommit: {}", note, commit);
         std::fs::write(SOLANA_ROOT.join("farf/version.yml"), content)
             .expect("Failed to write version.yml");
 
@@ -192,7 +192,7 @@ impl<'a> Deploy<'a> {
         );
         info!("update_download_url: {}", update_download_url);
 
-        let _ = download_to_temp(update_download_url.as_str(), tar_file.as_str())
+        download_to_temp(update_download_url.as_str(), tar_file.as_str())
             .await
             .map_err(|err| format!("Unable to download {update_download_url}: {err}"))?;
 

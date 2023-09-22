@@ -14,7 +14,7 @@ use {
         ByteString,
     },
     kube::{
-        api::{Api, ObjectMeta, PostParams},
+        api::{Api, ListParams, ObjectMeta, PostParams},
         Client,
     },
     log::*,
@@ -36,6 +36,7 @@ pub struct Kubernetes<'a> {
 }
 
 impl<'a> Kubernetes<'a> {
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(namespace: &'a str, runtime_config: &'a RuntimeConfig<'a>) -> Kubernetes<'a> {
         Kubernetes {
             client: Client::try_default().await.unwrap(),
@@ -69,8 +70,10 @@ impl<'a> Kubernetes<'a> {
     }
 
     pub async fn create_genesis_config_map(&self) -> Result<ConfigMap, kube::Error> {
-        let mut metadata = ObjectMeta::default();
-        metadata.name = Some("genesis-config".to_string());
+        let metadata = ObjectMeta {
+            name: Some("genesis-config".to_string()),
+            ..Default::default()
+        };
         let genesis_tar_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator/genesis.tar.bz2");
         let mut genesis_tar_file = File::open(genesis_tar_path).unwrap();
         let mut buffer = Vec::new();
@@ -97,16 +100,13 @@ impl<'a> Kubernetes<'a> {
 
     pub async fn namespace_exists(&self) -> Result<bool, kube::Error> {
         let namespaces: Api<Namespace> = Api::all(self.client.clone());
-        let namespace_list = namespaces.list(&Default::default()).await?;
+        let namespace_list = namespaces.list(&ListParams::default()).await?;
 
         for namespace in namespace_list.items {
-            match namespace.metadata.name {
-                Some(ns) => {
-                    if ns == self.namespace.to_string() {
-                        return Ok(true);
-                    }
+            if let Some(ns) = namespace.metadata.name {
+                if ns == *self.namespace {
+                    return Ok(true);
                 }
-                None => (),
             }
         }
         Ok(false)
@@ -185,14 +185,13 @@ impl<'a> Kubernetes<'a> {
         image_name: &str,
         num_validators: i32,
         env_vars: Vec<EnvVar>,
-        command: &Vec<String>,
+        command: &[String],
         config_map_name: Option<String>,
         accounts_volume: Volume,
         accounts_volume_mount: VolumeMount,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
-        let config_map_name = match config_map_name {
-            Some(name) => name,
-            None => return Err(boxed_error!("config_map_name is None!")),
+        let Some(config_map_name) = config_map_name else {
+            return Err(boxed_error!("config_map_name is None!"));
         };
 
         let genesis_volume = Volume {
@@ -222,7 +221,7 @@ impl<'a> Kubernetes<'a> {
                     image: Some(image_name.to_string()),
                     image_pull_policy: Some("Always".to_string()),
                     env: Some(env_vars),
-                    command: Some(command.clone()),
+                    command: Some(command.to_owned()),
                     volume_mounts: Some(vec![genesis_volume_mount, accounts_volume_mount]),
                     ..Default::default()
                 }],
@@ -234,7 +233,6 @@ impl<'a> Kubernetes<'a> {
                 }),
                 ..Default::default()
             }),
-            ..Default::default()
         };
 
         let replicas_set_spec = ReplicaSetSpec {
@@ -260,22 +258,27 @@ impl<'a> Kubernetes<'a> {
 
     pub async fn deploy_secret(&self, secret: &Secret) -> Result<Secret, kube::Error> {
         let secrets_api: Api<Secret> = Api::namespaced(self.client.clone(), self.namespace);
-        secrets_api.create(&PostParams::default(), &secret).await
+        secrets_api.create(&PostParams::default(), secret).await
     }
 
     pub fn create_bootstrap_secret(&self, secret_name: &str) -> Result<Secret, Box<dyn Error>> {
         let faucet_key_path = SOLANA_ROOT.join("config-k8s");
-        let faucet_keypair = std::fs::read(faucet_key_path.join("faucet.json"))
-            .expect(format!("Failed to read faucet.json file! at: {:?}", faucet_key_path).as_str());
+        let faucet_keypair =
+            std::fs::read(faucet_key_path.join("faucet.json")).unwrap_or_else(|_| {
+                panic!("Failed to read faucet.json file! at: {:?}", faucet_key_path)
+            });
 
         let key_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator");
 
         let identity_keypair = std::fs::read(key_path.join("identity.json"))
-            .expect(format!("Failed to read identity.json file! at: {:?}", key_path).as_str());
-        let vote_keypair = std::fs::read(key_path.join("vote-account.json"))
-            .expect(format!("Failed to read vote-account.json file! at: {:?}", key_path).as_str());
-        let stake_keypair = std::fs::read(key_path.join("stake-account.json"))
-            .expect(format!("Failed to read stake-account.json file! at: {:?}", key_path).as_str());
+            .unwrap_or_else(|_| panic!("Failed to read identity.json file! at: {:?}", key_path));
+        let vote_keypair = std::fs::read(key_path.join("vote-account.json")).unwrap_or_else(|_| {
+            panic!("Failed to read vote-account.json file! at: {:?}", key_path)
+        });
+        let stake_keypair =
+            std::fs::read(key_path.join("stake-account.json")).unwrap_or_else(|_| {
+                panic!("Failed to read stake-account.json file! at: {:?}", key_path)
+            });
 
         let mut data = BTreeMap::new();
         data.insert(
@@ -334,14 +337,14 @@ impl<'a> Kubernetes<'a> {
         let mut data: BTreeMap<String, ByteString> = BTreeMap::new();
         let accounts = vec!["identity", "vote", "stake"];
         for account in accounts {
-            let file_name: String;
-            if account == "identity" {
-                file_name = format!("validator-{}-{}.json", account, validator_index);
+            let file_name: String = if account == "identity" {
+                format!("validator-{}-{}.json", account, validator_index)
             } else {
-                file_name = format!("validator-{}-account-{}.json", account, validator_index);
-            }
-            let keypair = std::fs::read(key_path.join(file_name.clone()))
-                .expect(format!("Failed to read {} file! at: {:?}", file_name, key_path).as_str());
+                format!("validator-{}-account-{}.json", account, validator_index)
+            };
+            let keypair = std::fs::read(key_path.join(file_name.clone())).unwrap_or_else(|_| {
+                panic!("Failed to read {} file! at: {:?}", file_name, key_path)
+            });
             data.insert(
                 format!("{}.base64", account),
                 ByteString(
@@ -419,7 +422,7 @@ impl<'a> Kubernetes<'a> {
         let service_api: Api<Service> = Api::namespaced(self.client.clone(), self.namespace);
 
         // Create the Service object in the cluster
-        service_api.create(&post_params, &service).await
+        service_api.create(&post_params, service).await
     }
 
     pub async fn check_replica_set_ready(
@@ -488,7 +491,7 @@ impl<'a> Kubernetes<'a> {
         let accounts_volume = Volume {
             name: format!("validator-accounts-volume-{}", validator_index),
             secret: Some(SecretVolumeSource {
-                secret_name: secret_name,
+                secret_name,
                 ..Default::default()
             }),
             ..Default::default()

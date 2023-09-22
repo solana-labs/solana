@@ -68,7 +68,7 @@ run_solana_command() {
     for ((retry_count = 1; retry_count <= MAX_RETRIES; retry_count++)); do
       echo "Attempt $retry_count for: $description"
 
-      if ! $command; then
+      if $command; then
         echo "Command succeeded: $description"
         return 0
       else
@@ -85,7 +85,6 @@ run_solana_command() {
 }
 
 # Run Solana commands with retries
-
 if ! run_solana_command "solana -u $SOLANA_RPC_URL airdrop $node_sol $IDENTITY_FILE" "Airdrop"; then
   echo "Aidrop command failed."
   exit 1

@@ -36,14 +36,14 @@ impl<'a> DockerConfig<'a> {
             Ok(res) => {
                 if res.status.success() {
                     info!("Successfully created base Image");
-                    return Ok(());
+                    Ok(())
                 } else {
                     error!("Failed to build base image");
-                    return Err(boxed_error!(String::from_utf8_lossy(&res.stderr)));
+                    Err(boxed_error!(String::from_utf8_lossy(&res.stderr)))
                 }
             }
-            Err(err) => return Err(err),
-        };
+            Err(err) => Err(err),
+        }
     }
 
     pub async fn create_base_image(&self, validator_type: &str) -> Result<Output, Box<dyn Error>> {

@@ -1,3 +1,6 @@
+//! A command-line executable for generating the chain's genesis config.
+#![allow(clippy::arithmetic_side_effects)]
+
 use {
     crate::{boxed_error, initialize_globals, SOLANA_ROOT},
     base64::{engine::general_purpose, Engine as _},
@@ -75,12 +78,12 @@ fn fetch_spl(fetch_spl_file: &PathBuf) -> Result<(), Box<dyn Error>> {
 
     // Check if the script execution was successful
     if output.status.success() {
-        return Ok(());
+        Ok(())
     } else {
-        return Err(boxed_error!(format!(
+        Err(boxed_error!(format!(
             "Failed to fun fetch-spl.sh script: {}",
             String::from_utf8_lossy(&output.stderr)
-        )));
+        )))
     }
 }
 
@@ -508,7 +511,7 @@ impl Genesis {
         // add in spl stuff
         let spl_file = SOLANA_ROOT.join("spl-genesis-args.sh");
         // Check if the file exists before reading it
-        if let Ok(_) = std::fs::metadata(&spl_file) {
+        if std::fs::metadata(&spl_file).is_ok() {
             let parsed_args = match parse_spl_genesis_file(&spl_file) {
                 Ok(args) => args,
                 Err(err) => return Err(err),

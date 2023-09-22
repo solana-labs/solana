@@ -4,7 +4,6 @@ use {
     indicatif::{ProgressBar, ProgressStyle},
     lazy_static::lazy_static,
     log::*,
-    reqwest,
     std::{
         env,
         fs::{self, File},
@@ -80,9 +79,9 @@ pub fn extract_release_archive(
     progress_bar.set_message(format!("{PACKAGE}Extracting..."));
 
     if extract_dir.exists() {
-        fs::remove_dir_all(&extract_dir)?;
+        fs::remove_dir_all(extract_dir)?;
     }
-    fs::create_dir_all(&extract_dir)?;
+    fs::create_dir_all(extract_dir)?;
 
     let tmp_extract_dir = extract_dir.with_file_name("tmp-extract");
 
@@ -134,7 +133,7 @@ pub async fn download_to_temp(
 }
 
 pub fn cat_file(path: &PathBuf) -> io::Result<()> {
-    let mut file = fs::File::open(&path)?;
+    let mut file = fs::File::open(path)?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
 
