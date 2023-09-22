@@ -107,10 +107,10 @@ impl<'a> DockerConfig<'a> {
 
         //TODO: implement SKIP
         let dockerfile = format!(
-            r#" 
-FROM {}             
+            r#"
+FROM {}
 RUN apt-get update
-RUN apt-get install -y iputils-ping curl vim bzip2 
+RUN apt-get install -y iputils-ping curl vim bzip2
 
 RUN useradd -ms /bin/bash solana
 RUN adduser solana sudo
