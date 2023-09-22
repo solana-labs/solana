@@ -39,8 +39,8 @@ members = [
     "geyser-plugin-manager",
     "gossip",
     "install",
-    "keygen",
     "k8s-cluster",
+    "keygen",
     "ledger",
     "ledger-tool",
     "local-cluster",
@@ -132,7 +132,7 @@ license = "Apache-2.0"
 edition = "2021"
 
 [workspace.dependencies]
-aes-gcm-siv = { git = "https://github.com/gregcusack/AEADs.git", rev="0b291255b5e71a86b68c21c7b2f2ecba943baabd" }
+aes-gcm-siv = { git = "https://github.com/gregcusack/AEADs.git", rev = "0b291255b5e71a86b68c21c7b2f2ecba943baabd" }
 ahash = "0.8.3"
 anyhow = "1.0.75"
 ark-bn254 = "0.4.0"
@@ -178,7 +178,7 @@ criterion-stats = "0.3.0"
 crossbeam-channel = "0.5.8"
 csv = "1.2.2"
 ctrlc = "3.4.1"
-curve25519-dalek = { git = "https://github.com/gregcusack/curve25519-dalek.git", rev="9d82dab8048cf0a62ea20ea376461be3b10a8a39" }
+curve25519-dalek = { git = "https://github.com/gregcusack/curve25519-dalek.git", rev = "9d82dab8048cf0a62ea20ea376461be3b10a8a39" }
 dashmap = "4.0.2"
 derivation-path = { version = "0.2.0", default-features = false }
 dialoguer = "0.10.4"
