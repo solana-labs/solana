@@ -1,4 +1,4 @@
-//! The `wen-restart` module handles automatically repair in cluster restart
+//! The `wen-restart` module handles automatic repair during a cluster restart
 
 use {
     crate::solana::wen_restart_proto::{
