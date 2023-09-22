@@ -143,6 +143,40 @@ impl Restart {
         Some(restart)
     }
 
+    /// loads and mmaps restart file if it exists
+    /// returns None if the file doesn't exist or is incompatible or corrupt (in obvious ways)
+    pub(crate) fn get_restart_file(config: &BucketMapConfig) -> Option<Restart> {
+        let path = config.restart_config_file.as_ref()?;
+        let metadata = std::fs::metadata(path).ok()?;
+        let file_len = metadata.len();
+
+        let expected_len = Self::expected_len(config.max_buckets);
+        if expected_len as u64 != file_len {
+            // mismatched len, so ignore this file
+            return None;
+        }
+
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(false)
+            .open(path)
+            .ok()?;
+        let mmap = unsafe { MmapMut::map_mut(&file).unwrap() };
+
+        let restart = Restart { mmap };
+        let header = restart.get_header();
+        if header.version != HEADER_VERSION
+            || header.buckets != config.max_buckets as u64
+            || header.max_search != config.max_search.unwrap_or(MAX_SEARCH_DEFAULT)
+        {
+            // file doesn't match our current configuration, so we have to restart with fresh buckets
+            return None;
+        }
+
+        Some(restart)
+    }
+
     /// expected len of file given this many buckets
     fn expected_len(max_buckets: usize) -> usize {
         std::mem::size_of::<Header>() + max_buckets * std::mem::size_of::<OneIndexBucket>()
@@ -156,12 +190,14 @@ impl Restart {
             .create(true)
             .open(file)?;
 
-        // Theoretical performance optimization: write a zero to the end of
-        // the file so that we won't have to resize it later, which may be
-        // expensive.
-        data.seek(SeekFrom::Start(capacity - 1)).unwrap();
-        data.write_all(&[0]).unwrap();
-        data.rewind().unwrap();
+        if capacity > 0 {
+            // Theoretical performance optimization: write a zero to the end of
+            // the file so that we won't have to resize it later, which may be
+            // expensive.
+            data.seek(SeekFrom::Start(capacity - 1)).unwrap();
+            data.write_all(&[0]).unwrap();
+            data.rewind().unwrap();
+        }
         data.flush().unwrap();
         Ok(unsafe { MmapMut::map_mut(&data).unwrap() })
     }
@@ -210,8 +246,91 @@ mod test {
     }
 
     #[test]
+    fn test_restartable_bucket_load() {
+        let tmpdir = tempdir().unwrap();
+        let paths: Vec<PathBuf> = vec![tmpdir.path().to_path_buf()];
+        assert!(!paths.is_empty());
+        let config_file = tmpdir.path().join("config");
+
+        for bucket_pow in [1, 2] {
+            let config = BucketMapConfig {
+                drives: Some(paths.clone()),
+                restart_config_file: Some(config_file.clone()),
+                ..BucketMapConfig::new(1 << bucket_pow)
+            };
+
+            // create file
+            let restart = Arc::new(Mutex::new(Restart::new(&config).unwrap()));
+            test_default_restart(&restart, &config);
+            drop(restart);
+
+            // successful open
+            let restart = Restart::get_restart_file(&config);
+            assert!(restart.is_some());
+            drop(restart);
+
+            // unsuccessful: buckets wrong
+            let config_wrong_buckets = BucketMapConfig {
+                drives: Some(paths.clone()),
+                restart_config_file: Some(config_file.clone()),
+                ..BucketMapConfig::new(1 << (bucket_pow + 1))
+            };
+            let restart = Restart::get_restart_file(&config_wrong_buckets);
+            assert!(restart.is_none());
+
+            // unsuccessful: max search wrong
+            let config_wrong_buckets = BucketMapConfig {
+                max_search: Some(MAX_SEARCH_DEFAULT + 1),
+                drives: Some(paths.clone()),
+                restart_config_file: Some(config_file.clone()),
+                ..BucketMapConfig::new(1 << bucket_pow)
+            };
+            let restart = Restart::get_restart_file(&config_wrong_buckets);
+            assert!(restart.is_none());
+
+            // create file with different header
+            let restart = Arc::new(Mutex::new(Restart::new(&config).unwrap()));
+            test_default_restart(&restart, &config);
+            restart.lock().unwrap().get_header_mut().version = HEADER_VERSION + 1;
+            drop(restart);
+            // unsuccessful: header wrong
+            let restart = Restart::get_restart_file(&config);
+            assert!(restart.is_none());
+
+            // file 0 len
+            let wrong_file_len = 0;
+            let path = config.restart_config_file.as_ref();
+            let path = path.unwrap();
+            _ = remove_file(path);
+            let mmap = Restart::new_map(path, wrong_file_len as u64).unwrap();
+            drop(mmap);
+            // unsuccessful: header wrong
+            let restart = Restart::get_restart_file(&config);
+            assert!(restart.is_none());
+
+            // file too big or small
+            for smaller_bigger in [0, 1, 2] {
+                let wrong_file_len = Restart::expected_len(config.max_buckets) - 1 + smaller_bigger;
+                let path = config.restart_config_file.as_ref();
+                let path = path.unwrap();
+                _ = remove_file(path);
+                let mmap = Restart::new_map(path, wrong_file_len as u64).unwrap();
+                let mut restart = Restart { mmap };
+                let header = restart.get_header_mut();
+                header.version = HEADER_VERSION;
+                header.buckets = config.max_buckets as u64;
+                header.max_search = config.max_search.unwrap_or(MAX_SEARCH_DEFAULT);
+                drop(restart);
+                // unsuccessful: header wrong
+                let restart = Restart::get_restart_file(&config);
+                // 0, 2 are wrong, 1 is right
+                assert_eq!(restart.is_none(), smaller_bigger != 1);
+            }
+        }
+    }
+
+    #[test]
     fn test_restartable_bucket() {
-        solana_logger::setup();
         let tmpdir = tempdir().unwrap();
         let paths: Vec<PathBuf> = vec![tmpdir.path().to_path_buf()];
         assert!(!paths.is_empty());
@@ -224,7 +343,57 @@ mod test {
         };
         let buckets = config.max_buckets;
         let restart = Arc::new(Mutex::new(Restart::new(&config).unwrap()));
+        test_default_restart(&restart, &config);
+        let last_offset = 1;
+        (0..=last_offset).for_each(|offset| test_set_get(&restart, buckets, offset));
+        // drop file (as if process exit)
+        drop(restart);
+        // re-load file (as if at next launch)
+        let restart = Arc::new(Mutex::new(Restart::get_restart_file(&config).unwrap()));
+        // make sure same as last set prior to reload
+        test_get(&restart, buckets, last_offset);
+        (4..6).for_each(|offset| test_set_get(&restart, buckets, offset));
+        drop(restart);
+        // create a new file without deleting old one. Make sure it is default and not re-used.
+        let restart = Arc::new(Mutex::new(Restart::new(&config).unwrap()));
+        test_default_restart(&restart, &config);
+    }
 
+    fn test_set_get(restart: &Arc<Mutex<Restart>>, buckets: usize, test_offset: usize) {
+        test_set(restart, buckets, test_offset);
+        test_get(restart, buckets, test_offset);
+    }
+
+    fn test_set(restart: &Arc<Mutex<Restart>>, buckets: usize, test_offset: usize) {
+        (0..buckets).for_each(|bucket| {
+            let restartable_bucket = RestartableBucket {
+                restart: Some(restart.clone()),
+                index: bucket,
+                path: None,
+            };
+            assert!(restartable_bucket.get().is_some());
+            let file_name = bucket as u128 + test_offset as u128;
+            let random = (file_name as u64 + 5) * 2;
+            restartable_bucket.set_file(file_name, random);
+            assert_eq!(restartable_bucket.get(), Some((file_name, random)));
+        });
+    }
+
+    fn test_get(restart: &Arc<Mutex<Restart>>, buckets: usize, test_offset: usize) {
+        (0..buckets).for_each(|bucket| {
+            let restartable_bucket = RestartableBucket {
+                restart: Some(restart.clone()),
+                index: bucket,
+                path: None,
+            };
+            let file_name = bucket as u128 + test_offset as u128;
+            let random = (file_name as u64 + 5) * 2;
+            assert_eq!(restartable_bucket.get(), Some((file_name, random)));
+        });
+    }
+
+    /// make sure restart is default values we expect
+    fn test_default_restart(restart: &Arc<Mutex<Restart>>, config: &BucketMapConfig) {
         {
             let restart = restart.lock().unwrap();
             let header = restart.get_header();
@@ -236,6 +405,7 @@ mod test {
             );
         }
 
+        let buckets = config.max_buckets;
         (0..buckets).for_each(|bucket| {
             let restartable_bucket = RestartableBucket {
                 restart: Some(restart.clone()),
@@ -244,28 +414,6 @@ mod test {
             };
             // default values
             assert_eq!(restartable_bucket.get(), Some((0, 0)));
-        });
-        (0..buckets).for_each(|bucket| {
-            let restartable_bucket = RestartableBucket {
-                restart: Some(restart.clone()),
-                index: bucket,
-                path: None,
-            };
-            assert!(restartable_bucket.get().is_some());
-            let file_name = bucket as u128;
-            let random = (bucket as u64 + 5) * 2;
-            restartable_bucket.set_file(bucket as u128, random);
-            assert_eq!(restartable_bucket.get(), Some((file_name, random)));
-        });
-        (0..buckets).for_each(|bucket| {
-            let restartable_bucket = RestartableBucket {
-                restart: Some(restart.clone()),
-                index: bucket,
-                path: None,
-            };
-            let file_name = bucket as u128;
-            let random = (bucket as u64 + 5) * 2;
-            assert_eq!(restartable_bucket.get(), Some((file_name, random)));
         });
     }
 }
