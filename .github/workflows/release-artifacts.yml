@@ -47,7 +47,8 @@ jobs:
         id: build
         shell: bash
         run: |
-          export OPENSSL_DIR="C:\Program Files\OpenSSL"
+          choco install openssl
+          export OPENSSL_DIR="C:\Program Files\OpenSSL-Win64"
           choco install protoc
           export PROTOC="C:\ProgramData\chocolatey\lib\protoc\tools\bin\protoc.exe"
           source /tmp/env.sh
