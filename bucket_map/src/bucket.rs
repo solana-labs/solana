@@ -9,7 +9,7 @@ use {
         },
         index_entry::{
             DataBucket, IndexBucket, IndexEntry, IndexEntryPlaceInBucket, MultipleSlots,
-            OccupiedEnum,
+            OccupiedEnum, OccupyIfMatches,
         },
         restart::RestartableBucket,
         MaxSearch, RefCount,
@@ -360,6 +360,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
                 &mut entries,
                 &mut entries_created_on_disk,
                 &mut duplicates,
+                self.reused_file_at_startup,
             );
             match result {
                 Ok(_result) => {
@@ -405,6 +406,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
         reverse_sorted_entries: &mut Vec<(u64, usize)>,
         entries_created_on_disk: &mut usize,
         duplicates: &mut Vec<(usize, T)>,
+        mut try_to_reuse_disk_data: bool,
     ) -> Result<(), BucketMapError> {
         if reverse_sorted_entries.is_empty() {
             return Ok(());
@@ -412,40 +414,80 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
         let max_search = index.max_search();
         let cap = index.capacity();
         let search_end = max_search.min(cap);
+        // if we are trying to reuse disk data, we may loop twice. Otherwise, just once.
+        let max_loop_count = 1 + Into::<usize>::into(try_to_reuse_disk_data);
+        for _ in 0..max_loop_count {
+            let mut not_found = Vec::default();
+            // pop one entry at a time to insert
+            'outer: while let Some((ix_entry_raw, ix)) = reverse_sorted_entries.pop() {
+                let (k, v) = &items[ix];
+                let ix_entry = ix_entry_raw % cap;
+                // search for an empty spot starting at `ix_entry`
+                for search in 0..search_end {
+                    let ix_index = (ix_entry + search) % cap;
+                    let elem = IndexEntryPlaceInBucket::new(ix_index);
+                    if try_to_reuse_disk_data {
+                        match elem.occupy_if_matches(index, v, k) {
+                            OccupyIfMatches::SuccessfulInit => {}
+                            OccupyIfMatches::FoundDuplicate => {
+                                // pubkey is same, and it is occupied, so we found a duplicate
+                                let (v_existing, _ref_count_existing) =
+                                    elem.read_value(index, data_buckets);
+                                // someone is already allocated with this pubkey, so we found a duplicate
+                                duplicates.push((ix, *v_existing.first().unwrap()));
+                            }
+                            OccupyIfMatches::PubkeyMismatch => {
+                                // fall through and look at next search value
+                                continue;
+                            }
+                        }
+                        continue 'outer; // this 'insertion' is completed - either because we found a duplicate or we occupied an entry in the file
+                    } else if index.try_lock(ix_index) {
+                        *entries_created_on_disk += 1;
+                        // found free element and occupied it.
+                        // Note that since we are in the startup phase where we only add and do not remove, it is NOT possible to find this same pubkey AFTER
+                        //  the index we started searching at, or we would have found it as occupied BEFORE we were able to lock it here.
+                        //  This precondition is not true once we are able to delete entries.
 
-        // pop one entry at a time to insert
-        'outer: while let Some((ix_entry_raw, i)) = reverse_sorted_entries.pop() {
-            let (k, v) = &items[i];
-            let ix_entry = ix_entry_raw % cap;
-            // search for an empty spot starting at `ix_entry`
-            for search in 0..search_end {
-                let ix_index = (ix_entry + search) % cap;
-                let elem = IndexEntryPlaceInBucket::new(ix_index);
-                if index.try_lock(ix_index) {
-                    *entries_created_on_disk += 1;
-                    // found free element and occupied it
-                    // These fields will be overwritten after allocation by callers.
-                    // Since this part of the mmapped file could have previously been used by someone else, there can be garbage here.
-                    elem.init(index, k);
+                        // These fields will be overwritten after allocation by callers.
+                        // Since this part of the mmapped file could have previously been used by someone else, there can be garbage here.
+                        elem.init(index, k);
 
-                    // new data stored should be stored in IndexEntry and NOT in data file
-                    // new data len is 1
-                    elem.set_slot_count_enum_value(index, OccupiedEnum::OneSlotInIndex(v));
-                    continue 'outer; // this 'insertion' is completed: inserted successfully
-                } else {
-                    // occupied, see if the key already exists here
-                    if elem.key(index) == k {
-                        let (v_existing, _ref_count_existing) =
-                            elem.read_value(index, data_buckets);
-                        duplicates.push((i, *v_existing.first().unwrap()));
-                        continue 'outer; // this 'insertion' is completed: found a duplicate entry
+                        // new data stored should be stored in IndexEntry and NOT in data file
+                        // new data len is 1
+                        elem.set_slot_count_enum_value(index, OccupiedEnum::OneSlotInIndex(v));
+                        continue 'outer; // this 'insertion' is completed: inserted successfully
+                    } else {
+                        // occupied, see if the key already exists here
+                        if elem.key(index) == k {
+                            let (v_existing, _ref_count_existing) =
+                                elem.read_value(index, data_buckets);
+                            duplicates.push((ix, *v_existing.first().unwrap()));
+                            continue 'outer; // this 'insertion' is completed: found a duplicate entry
+                        }
                     }
                 }
+                if try_to_reuse_disk_data {
+                    // this one did not exist in the file already
+                    not_found.push((ix_entry_raw, ix));
+                } else {
+                    // search loop ended without finding a spot to insert this key
+                    // so, remember the item we were trying to insert for next time after resizing
+                    reverse_sorted_entries.push((ix_entry_raw, ix));
+                    reverse_sorted_entries.append(&mut not_found);
+
+                    return Err(BucketMapError::IndexNoSpace(cap));
+                }
             }
-            // search loop ended without finding a spot to insert this key
-            // so, remember the item we were trying to insert for next time after resizing
-            reverse_sorted_entries.push((ix_entry_raw, i));
-            return Err(BucketMapError::IndexNoSpace(cap));
+            // first iteration inserted everything that already existed in the data in the file.
+            // So, loop again and insert the missing stuff anywhere we can fit it.
+            try_to_reuse_disk_data = false;
+            // now add all entries that were not found
+            *reverse_sorted_entries = not_found;
+            if reverse_sorted_entries.is_empty() {
+                // nothing more to do
+                break;
+            }
         }
 
         Ok(())
@@ -889,6 +931,7 @@ mod tests {
                     &mut hashed,
                     &mut entries_created,
                     &mut duplicates,
+                    false,
                 )
                 .is_ok());
 
@@ -939,6 +982,7 @@ mod tests {
                     &mut hashed,
                     &mut entries_created,
                     &mut duplicates,
+                    false,
                 )
                 .is_ok());
 
@@ -989,6 +1033,7 @@ mod tests {
                         &mut hashed,
                         &mut entries_created,
                         &mut duplicates,
+                        false,
                     );
 
                     assert_eq!(
