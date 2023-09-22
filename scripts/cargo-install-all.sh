@@ -28,22 +28,31 @@ usage() {
     echo "Error: $*"
   fi
   cat <<EOF
-usage: $0 [+<cargo version>] [--debug] [--validator-only] <install directory>
+usage: $0 [+<cargo version>] [--debug] [--validator-only] [--canary] <install directory>
 EOF
   exit $exitcode
 }
 
 maybeRustVersion=
 installDir=
-buildVariant=release
-maybeReleaseFlag=--release
+# buildProfileArg and buildProfile duplicate some information because cargo 
+# doesn't allow '--profile debug' but we still need to know that the binaries
+# will be in target/debug
+buildProfileArg='--profile release'
+buildProfile='release'
+maybeRustFlags=
 validatorOnly=
 
 while [[ -n $1 ]]; do
   if [[ ${1:0:1} = - ]]; then
     if [[ $1 = --debug ]]; then
-      maybeReleaseFlag=
-      buildVariant=debug
+      buildProfileArg=      # the default cargo profile is 'debug'
+      buildProfile='debug'
+      shift
+    elif [[ $1 = --canary ]]; then
+      buildProfileArg='--profile release-with-debug'
+      buildProfile='release-with-debug'
+      maybeRustFlags='-C debug-assertions'
       shift
     elif [[ $1 = --validator-only ]]; then
       validatorOnly=true
@@ -68,7 +77,7 @@ fi
 installDir="$(mkdir -p "$installDir"; cd "$installDir"; pwd)"
 mkdir -p "$installDir/bin/deps"
 
-echo "Install location: $installDir ($buildVariant)"
+echo "Install location: $installDir ($buildProfile)"
 
 cd "$(dirname "$0")"/..
 
@@ -138,7 +147,7 @@ mkdir -p "$installDir/bin"
 (
   set -x
   # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-  "$cargo" $maybeRustVersion build $maybeReleaseFlag "${binArgs[@]}"
+  RUSTFLAGS=$maybeRustFlags "$cargo" $maybeRustVersion build $buildProfileArg "${binArgs[@]}"
 
   # Exclude `spl-token` binary for net.sh builds
   if [[ -z "$validatorOnly" ]]; then
@@ -152,7 +161,7 @@ mkdir -p "$installDir/bin"
 )
 
 for bin in "${BINS[@]}"; do
-  cp -fv "target/$buildVariant/$bin" "$installDir"/bin
+  cp -fv "target/$buildProfile/$bin" "$installDir"/bin
 done
 
 if [[ -d target/perf-libs ]]; then
@@ -206,7 +215,7 @@ fi
   set -x
   # deps dir can be empty
   shopt -s nullglob
-  for dep in target/"$buildVariant"/deps/libsolana*program.*; do
+  for dep in target/"$buildProfile"/deps/libsolana*program.*; do
     cp -fv "$dep" "$installDir/bin/deps"
   done
 )
