@@ -49,7 +49,7 @@ for i in "${!SECRET_FILES[@]}"; do
         echo "Secret file found at $SECRET_FILE"
 
         # Read and decode the base64-encoded secret
-        SECRET_CONTENT=$(cat "$SECRET_FILE" | base64 -d)
+        SECRET_CONTENT=$(base64 -d < "$SECRET_FILE")
 
         # Save the decoded secret content to a file
         echo "$SECRET_CONTENT" > "$DECODED_FILE"

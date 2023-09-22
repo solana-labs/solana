@@ -7,10 +7,10 @@ while [ $# -gt 0 ]; do
   if [[ ${1:0:2} = -- ]]; then
     echo "first arg: $1"
     if [[ $1 == --tpu-enable-udp ]]; then
-      args+=($1)
+      args+=("$1")
       shift 1
     elif [[ $1 == --tpu-disable-quic ]]; then
-      args+=($1)
+      args+=("$1")
       shift 1
     else
       echo "Unknown argument: $1"
@@ -35,10 +35,10 @@ nohup solana-validator \
   --vote-account vote.json \
   --ledger ledger \
   --log logs/solana-validator.log \
-  --gossip-host $MY_POD_IP \
+  --gossip-host "$MY_POD_IP" \
   --gossip-port 8001 \
   --rpc-port 8899 \
-  --rpc-faucet-address $MY_POD_IP:9900 \
+  --rpc-faucet-address "$MY_POD_IP":9900 \
   --no-poh-speed-test \
   --no-incremental-snapshots \
   --full-rpc-api \

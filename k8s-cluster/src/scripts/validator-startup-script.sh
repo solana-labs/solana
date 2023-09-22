@@ -15,10 +15,10 @@ while [ $# -gt 0 ]; do
       node_sol=$2
       shift 2
     elif [[ $1 == --tpu-enable-udp ]]; then
-      args+=($1)
+      args+=("$1")
       shift 1
     elif [[ $1 == --tpu-disable-quic ]]; then
-      args+=($1)
+      args+=("$1")
       shift 1
     else
       echo "Unknown argument: $1"
@@ -65,20 +65,19 @@ run_solana_command() {
     local command="$1"
     local description="$2"
 
-    for ((retry_count=1; retry_count<=$MAX_RETRIES; retry_count++)); do
-        echo "Attempt $retry_count for: $description"
-        $command
+    for ((retry_count = 1; retry_count <= MAX_RETRIES; retry_count++)); do
+      echo "Attempt $retry_count for: $description"
 
-        if [ $? -eq 0 ]; then
-            echo "Command succeeded: $description"
-            return 0
-        else
-            echo "Command failed for: $description (Exit status $?)"
-            if [ $retry_count -lt $MAX_RETRIES ]; then
-                echo "Retrying in $RETRY_DELAY seconds..."
-                sleep $RETRY_DELAY
-            fi
+      if ! $command; then
+        echo "Command succeeded: $description"
+        return 0
+      else
+        echo "Command failed for: $description (Exit status $?)"
+        if [ "$retry_count" -lt $MAX_RETRIES ]; then
+          echo "Retrying in $RETRY_DELAY seconds..."
+          sleep $RETRY_DELAY
         fi
+      fi
     done
 
     echo "Max retry limit reached. Command still failed for: $description"
@@ -86,15 +85,25 @@ run_solana_command() {
 }
 
 # Run Solana commands with retries
-run_solana_command "solana -u $SOLANA_RPC_URL airdrop "$node_sol" $IDENTITY_FILE" "Airdrop"
-run_solana_command "solana -u $SOLANA_RPC_URL create-vote-account --allow-unsafe-authorized-withdrawer vote.json $IDENTITY_FILE $IDENTITY_FILE -k $IDENTITY_FILE" "Create Vote Account"
-run_solana_command "solana -u $SOLANA_RPC_URL create-stake-account stake.json "$stake_sol" -k $IDENTITY_FILE" "Create Stake Account"
-run_solana_command "solana -u $SOLANA_RPC_URL delegate-stake stake.json vote.json --force -k $IDENTITY_FILE" "Delegate Stake"
 
-# Check if any of the commands failed
-if [ $? -ne 0 ]; then
-    echo "One or more commands failed."
-    exit 1
+if ! run_solana_command "solana -u $SOLANA_RPC_URL airdrop $node_sol $IDENTITY_FILE" "Airdrop"; then
+  echo "Aidrop command failed."
+  exit 1
+fi
+
+if ! run_solana_command "solana -u $SOLANA_RPC_URL create-vote-account --allow-unsafe-authorized-withdrawer vote.json $IDENTITY_FILE $IDENTITY_FILE -k $IDENTITY_FILE" "Create Vote Account"; then
+  echo "Create vote account failed."
+  exit 1
+fi
+
+if ! run_solana_command "solana -u $SOLANA_RPC_URL create-stake-account stake.json $stake_sol -k $IDENTITY_FILE" "Create Stake Account"; then
+  echo "Create stake account failed."
+  exit 1
+fi
+
+if ! run_solana_command "solana -u $SOLANA_RPC_URL delegate-stake stake.json vote.json --force -k $IDENTITY_FILE" "Delegate Stake"; then
+  echo "Delegate stake command failed."
+  exit 1
 fi
 
 echo "All commands succeeded. Running solana-validator next..."
@@ -103,8 +112,8 @@ nohup solana-validator \
   --no-os-network-limits-test \
   --identity identity.json \
   --vote-account vote.json \
-  --entrypoint $BOOTSTRAP_GOSSIP_ADDRESS \
-  --rpc-faucet-address $BOOTSTRAP_FAUCET_ADDRESS \
+  --entrypoint "$BOOTSTRAP_GOSSIP_ADDRESS" \
+  --rpc-faucet-address "$BOOTSTRAP_FAUCET_ADDRESS" \
   --gossip-port 8001 \
   --rpc-port 8899 \
   --ledger ledger \
