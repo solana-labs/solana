@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 use {
     crate::bucket_map::{BucketMapConfig, MAX_SEARCH_DEFAULT},
+    bytemuck::{Pod, Zeroable},
     memmap2::MmapMut,
     std::{
         fmt::{Debug, Formatter},
@@ -16,13 +17,13 @@ use {
 const HEADER_VERSION: u64 = 1;
 
 /// written into file at top.
-#[derive(Debug)]
+#[derive(Debug, Pod, Zeroable, Copy, Clone)]
 #[repr(C)]
 pub(crate) struct Header {
     /// version of this file. Differences here indicate the file is not usable.
     version: u64,
     /// number of buckets these files represent.
-    buckets: usize,
+    buckets: u64,
     /// u8 representing how many entries to search for during collisions.
     /// If this is different, then the contents of the index file's contents are likely not as helpful.
     max_search: u8,
@@ -30,7 +31,13 @@ pub(crate) struct Header {
     _dummy: [u8; 15],
 }
 
-#[derive(Debug)]
+// In order to safely guarantee Header is Pod, it cannot have any padding.
+const _: () = assert!(
+    std::mem::size_of::<Header>() == std::mem::size_of::<u128>() * 2,
+    "Header cannot have any padding"
+);
+
+#[derive(Debug, Pod, Zeroable, Copy, Clone)]
 #[repr(C)]
 pub(crate) struct OneIndexBucket {
     /// disk bucket file names are random u128s
@@ -40,6 +47,12 @@ pub(crate) struct OneIndexBucket {
     /// padding to make u128 aligned
     _dummy: u64,
 }
+
+// In order to safely guarantee Header is Pod, it cannot have any padding.
+const _: () = assert!(
+    std::mem::size_of::<OneIndexBucket>() == std::mem::size_of::<u128>() * 2,
+    "Header cannot have any padding"
+);
 
 pub(crate) struct Restart {
     mmap: MmapMut,
@@ -96,7 +109,7 @@ impl Debug for Restart {
             f,
             "{:?}",
             (0..header.buckets)
-                .map(|index| self.get_bucket(index))
+                .map(|index| self.get_bucket(index as usize))
                 .take(10)
                 .collect::<Vec<_>>()
         )?;
@@ -118,7 +131,7 @@ impl Restart {
         let mut restart = Restart { mmap };
         let header = restart.get_header_mut();
         header.version = HEADER_VERSION;
-        header.buckets = config.max_buckets;
+        header.buckets = config.max_buckets as u64;
         header.max_search = config.max_search.unwrap_or(MAX_SEARCH_DEFAULT);
 
         (0..config.max_buckets).for_each(|index| {
@@ -154,23 +167,13 @@ impl Restart {
     }
 
     fn get_header(&self) -> &Header {
-        let start = 0_usize;
-        let end = start + std::mem::size_of::<Header>();
-        let item_slice: &[u8] = &self.mmap[start..end];
-        unsafe {
-            let item = item_slice.as_ptr() as *const Header;
-            &*item
-        }
+        let item_slice = &self.mmap[..std::mem::size_of::<Header>()];
+        bytemuck::from_bytes(item_slice)
     }
 
     fn get_header_mut(&mut self) -> &mut Header {
-        let start = 0_usize;
-        let end = start + std::mem::size_of::<Header>();
-        let item_slice: &[u8] = &self.mmap[start..end];
-        unsafe {
-            let item = item_slice.as_ptr() as *mut Header;
-            &mut *item
-        }
+        let bytes = &mut self.mmap[..std::mem::size_of::<Header>()];
+        bytemuck::from_bytes_mut(bytes)
     }
 
     fn get_bucket(&self, index: usize) -> &OneIndexBucket {
@@ -178,10 +181,7 @@ impl Restart {
         let start = std::mem::size_of::<Header>() + record_len * index;
         let end = start + record_len;
         let item_slice: &[u8] = &self.mmap[start..end];
-        unsafe {
-            let item = item_slice.as_ptr() as *const OneIndexBucket;
-            &*item
-        }
+        bytemuck::from_bytes(item_slice)
     }
 
     fn get_bucket_mut(&mut self, index: usize) -> &mut OneIndexBucket {
@@ -189,10 +189,7 @@ impl Restart {
         let start = std::mem::size_of::<Header>() + record_len * index;
         let end = start + record_len;
         let item_slice: &mut [u8] = &mut self.mmap[start..end];
-        unsafe {
-            let item = item_slice.as_mut_ptr() as *mut OneIndexBucket;
-            &mut *item
-        }
+        bytemuck::from_bytes_mut(item_slice)
     }
 }
 
@@ -227,6 +224,18 @@ mod test {
         };
         let buckets = config.max_buckets;
         let restart = Arc::new(Mutex::new(Restart::new(&config).unwrap()));
+
+        {
+            let restart = restart.lock().unwrap();
+            let header = restart.get_header();
+            assert_eq!(header.version, HEADER_VERSION);
+            assert_eq!(header.buckets, config.max_buckets as u64);
+            assert_eq!(
+                header.max_search,
+                config.max_search.unwrap_or(MAX_SEARCH_DEFAULT)
+            );
+        }
+
         (0..buckets).for_each(|bucket| {
             let restartable_bucket = RestartableBucket {
                 restart: Some(restart.clone()),

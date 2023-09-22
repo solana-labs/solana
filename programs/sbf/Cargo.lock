@@ -4643,6 +4643,7 @@ name = "solana-bucket-map"
 version = "1.17.0"
 dependencies = [
  "bv",
+ "bytemuck",
  "log",
  "memmap2",
  "modular-bitfield",
