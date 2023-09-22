@@ -74,7 +74,7 @@ use {
         rc::Rc,
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc, Mutex, RwLock, RwLockWriteGuard,
+            Arc, Mutex, RwLock,
         },
     },
     tempfile::{Builder, TempDir},
@@ -217,7 +217,6 @@ pub struct Blockstore {
     address_signatures_cf: LedgerColumn<cf::AddressSignatures>,
     transaction_memos_cf: LedgerColumn<cf::TransactionMemos>,
     transaction_status_index_cf: LedgerColumn<cf::TransactionStatusIndex>,
-    active_transaction_status_index: RwLock<u64>,
     rewards_cf: LedgerColumn<cf::Rewards>,
     blocktime_cf: LedgerColumn<cf::Blocktime>,
     perf_samples_cf: LedgerColumn<cf::PerfSamples>,
@@ -337,22 +336,6 @@ impl Blockstore {
             .unwrap_or(0);
         let last_root = RwLock::new(max_root);
 
-        // Get active transaction-status index or 0
-        let active_transaction_status_index = db
-            .iter::<cf::TransactionStatusIndex>(IteratorMode::Start)?
-            .next();
-        let initialize_transaction_status_index = active_transaction_status_index.is_none();
-        let active_transaction_status_index = active_transaction_status_index
-            .and_then(|(_, data)| {
-                let index0: TransactionStatusIndexMeta = deserialize(&data).unwrap();
-                if index0.frozen {
-                    Some(1)
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(0);
-
         measure.stop();
         info!("{:?} {}", blockstore_path, measure);
         let blockstore = Blockstore {
@@ -371,7 +354,6 @@ impl Blockstore {
             address_signatures_cf,
             transaction_memos_cf,
             transaction_status_index_cf,
-            active_transaction_status_index: RwLock::new(active_transaction_status_index),
             rewards_cf,
             blocktime_cf,
             perf_samples_cf,
@@ -387,9 +369,8 @@ impl Blockstore {
             lowest_cleanup_slot: RwLock::<Slot>::default(),
             slots_stats: SlotsStats::default(),
         };
-        if initialize_transaction_status_index {
-            blockstore.initialize_transaction_status_index()?;
-        }
+        blockstore.initialize_transaction_status_index()?;
+
         Ok(blockstore)
     }
 
@@ -1136,7 +1117,7 @@ impl Blockstore {
             .expect("Couldn't fetch from SlotMeta column family")
         {
             // Clear all slot related information
-            self.run_purge(slot, slot, PurgeType::PrimaryIndex)
+            self.run_purge(slot, slot, PurgeType::Exact)
                 .expect("Purge database operations failed");
 
             // Clear this slot as a next slot from parent
@@ -2166,68 +2147,14 @@ impl Blockstore {
         Ok(())
     }
 
-    /// Toggles the active primary index between `0` and `1`, and clears the
-    /// stored max-slot of the frozen index in preparation for pruning.
-    fn toggle_transaction_status_index(
-        &self,
-        batch: &mut WriteBatch,
-        w_active_transaction_status_index: &mut u64,
-        to_slot: Slot,
-    ) -> Result<Option<u64>> {
-        let index0 = self.transaction_status_index_cf.get(0)?;
-        if index0.is_none() {
-            return Ok(None);
-        }
-        let mut index0 = index0.unwrap();
-        let mut index1 = self.transaction_status_index_cf.get(1)?.unwrap();
-
-        if !index0.frozen && !index1.frozen {
-            index0.frozen = true;
-            *w_active_transaction_status_index = 1;
-            batch.put::<cf::TransactionStatusIndex>(0, &index0)?;
-            Ok(None)
-        } else {
-            let purge_target_primary_index = if index0.frozen && to_slot > index0.max_slot {
-                info!(
-                    "Pruning expired primary index 0 up to slot {} (max requested: {})",
-                    index0.max_slot, to_slot
-                );
-                Some(0)
-            } else if index1.frozen && to_slot > index1.max_slot {
-                info!(
-                    "Pruning expired primary index 1 up to slot {} (max requested: {})",
-                    index1.max_slot, to_slot
-                );
-                Some(1)
-            } else {
-                None
-            };
-
-            if let Some(purge_target_primary_index) = purge_target_primary_index {
-                *w_active_transaction_status_index = purge_target_primary_index;
-                if index0.frozen {
-                    index0.max_slot = 0
-                };
-                index0.frozen = !index0.frozen;
-                batch.put::<cf::TransactionStatusIndex>(0, &index0)?;
-                if index1.frozen {
-                    index1.max_slot = 0
-                };
-                index1.frozen = !index1.frozen;
-                batch.put::<cf::TransactionStatusIndex>(1, &index1)?;
-            }
-
-            Ok(purge_target_primary_index)
-        }
-    }
-
-    fn get_primary_index_to_write(
-        &self,
-        slot: Slot,
-        // take WriteGuard to require critical section semantics at call site
-        w_active_transaction_status_index: &RwLockWriteGuard<Slot>,
-    ) -> Result<u64> {
-        let i = **w_active_transaction_status_index;
+    /// Legacy function that was used to choose which primary index to write.
+    /// This function now always returns DEFAULT_LEGACY_PRIMARY_INDEX_VALUE;
+    /// however, keep it in place to continue updating the max_slot field of
+    /// the TransactionStatusIndexMeta. This is useful in the event that a
+    /// Blockstore is updated with a newer version, but then opened again with
+    /// an older version that makes use of both primary index values.
+    fn get_primary_index_to_write(&self, slot: Slot) -> Result<u64> {
+        let i = DEFAULT_LEGACY_PRIMARY_INDEX_VALUE;
         let mut index_meta = self.transaction_status_index_cf.get(i)?.unwrap();
         if slot > index_meta.max_slot {
             assert!(!index_meta.frozen);
@@ -2272,12 +2199,7 @@ impl Blockstore {
         status: TransactionStatusMeta,
     ) -> Result<()> {
         let status = status.into();
-        // This write lock prevents interleaving issues with the transaction_status_index_cf by gating
-        // writes to that column
-        let w_active_transaction_status_index =
-            self.active_transaction_status_index.write().unwrap();
-        let primary_index =
-            self.get_primary_index_to_write(slot, &w_active_transaction_status_index)?;
+        let primary_index = self.get_primary_index_to_write(slot)?;
         self.transaction_status_cf
             .put_protobuf((primary_index, signature, slot), &status)?;
         for address in writable_keys {
@@ -2687,9 +2609,9 @@ impl Blockstore {
         get_initial_slot_timer.stop();
 
         // Check the active_transaction_status_index to see if it contains slot. If so, start with
-        // that index, as it will contain higher slots
-        let starting_primary_index = *self.active_transaction_status_index.read().unwrap();
-        let next_primary_index = u64::from(starting_primary_index == 0);
+        // that index, as it will contain higher slots.
+        let starting_primary_index = DEFAULT_LEGACY_PRIMARY_INDEX_VALUE;
+        let next_primary_index = ALTERNATE_LEGACY_PRIMARY_INDEX_VALUE;
         let next_max_slot = self
             .transaction_status_index_cf
             .get(next_primary_index)?
@@ -5006,7 +4928,7 @@ pub mod tests {
 
         let max_purge_slot = 1;
         blockstore
-            .run_purge(0, max_purge_slot, PurgeType::PrimaryIndex)
+            .run_purge(0, max_purge_slot, PurgeType::Exact)
             .unwrap();
         *blockstore.lowest_cleanup_slot.write().unwrap() = max_purge_slot;
 
@@ -7583,7 +7505,7 @@ pub mod tests {
         assert_eq!(first_address_entry.0, 0);
         assert_eq!(first_address_entry.2, slot0);
 
-        blockstore.run_purge(0, 8, PurgeType::PrimaryIndex).unwrap();
+        blockstore.run_purge(0, 8, PurgeType::Exact).unwrap();
         // First successful prune freezes index 0
         assert_eq!(
             transaction_status_index_cf.get(0).unwrap().unwrap(),
@@ -7678,9 +7600,7 @@ pub mod tests {
         assert_eq!(index1_first_address_entry.0, 1);
         assert_eq!(index1_first_address_entry.2, slot1);
 
-        blockstore
-            .run_purge(0, 18, PurgeType::PrimaryIndex)
-            .unwrap();
+        blockstore.run_purge(0, 18, PurgeType::Exact).unwrap();
         // Successful prune toggles TransactionStatusIndex
         assert_eq!(
             transaction_status_index_cf.get(0).unwrap().unwrap(),
@@ -8161,7 +8081,7 @@ pub mod tests {
             );
         }
 
-        blockstore.run_purge(0, 2, PurgeType::PrimaryIndex).unwrap();
+        blockstore.run_purge(0, 2, PurgeType::Exact).unwrap();
         *blockstore.lowest_cleanup_slot.write().unwrap() = slot;
         for VersionedTransactionWithStatusMeta { transaction, .. } in expected_transactions {
             let signature = transaction.signatures[0];
@@ -8274,7 +8194,7 @@ pub mod tests {
             assert_eq!(blockstore.get_rooted_transaction(signature).unwrap(), None);
         }
 
-        blockstore.run_purge(0, 2, PurgeType::PrimaryIndex).unwrap();
+        blockstore.run_purge(0, 2, PurgeType::Exact).unwrap();
         *blockstore.lowest_cleanup_slot.write().unwrap() = slot;
         for VersionedTransactionWithStatusMeta { transaction, .. } in expected_transactions {
             let signature = transaction.signatures[0];
@@ -8382,9 +8302,7 @@ pub mod tests {
         }
 
         // Purge index 0
-        blockstore
-            .run_purge(0, 10, PurgeType::PrimaryIndex)
-            .unwrap();
+        blockstore.run_purge(0, 10, PurgeType::Exact).unwrap();
         assert_eq!(
             blockstore
                 .get_confirmed_signatures_for_address(address0, 0, 50)
@@ -9210,7 +9128,7 @@ pub mod tests {
             blockstore.insert_shreds(shreds, None, false).unwrap();
         }
         assert_eq!(blockstore.lowest_slot(), 1);
-        blockstore.run_purge(0, 5, PurgeType::PrimaryIndex).unwrap();
+        blockstore.run_purge(0, 5, PurgeType::Exact).unwrap();
         assert_eq!(blockstore.lowest_slot(), 6);
     }
 
@@ -9226,12 +9144,10 @@ pub mod tests {
             blockstore.insert_shreds(shreds, None, false).unwrap();
             assert_eq!(blockstore.highest_slot().unwrap(), Some(slot));
         }
-        blockstore
-            .run_purge(5, 10, PurgeType::PrimaryIndex)
-            .unwrap();
+        blockstore.run_purge(5, 10, PurgeType::Exact).unwrap();
         assert_eq!(blockstore.highest_slot().unwrap(), Some(4));
 
-        blockstore.run_purge(0, 4, PurgeType::PrimaryIndex).unwrap();
+        blockstore.run_purge(0, 4, PurgeType::Exact).unwrap();
         assert_eq!(blockstore.highest_slot().unwrap(), None);
     }
 
@@ -9963,7 +9879,7 @@ pub mod tests {
 
                 // Cleanup the slot
                 blockstore
-                    .run_purge(slot, slot, PurgeType::PrimaryIndex)
+                    .run_purge(slot, slot, PurgeType::Exact)
                     .expect("Purge database operations failed");
                 assert!(blockstore.meta(slot).unwrap().is_none());
 
