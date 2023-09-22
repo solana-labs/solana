@@ -5,8 +5,9 @@ use {
     bytemuck::{Pod, Zeroable},
     memmap2::MmapMut,
     std::{
+        collections::HashMap,
         fmt::{Debug, Formatter},
-        fs::{remove_file, OpenOptions},
+        fs::{self, remove_file, OpenOptions},
         io::{Seek, SeekFrom, Write},
         path::{Path, PathBuf},
         sync::{Arc, Mutex},
@@ -34,7 +35,7 @@ pub(crate) struct Header {
 // In order to safely guarantee Header is Pod, it cannot have any padding.
 const _: () = assert!(
     std::mem::size_of::<Header>() == std::mem::size_of::<u128>() * 2,
-    "Header cannot have any padding"
+    "incorrect size of header struct"
 );
 
 #[derive(Debug, Pod, Zeroable, Copy, Clone)]
@@ -51,7 +52,7 @@ pub(crate) struct OneIndexBucket {
 // In order to safely guarantee Header is Pod, it cannot have any padding.
 const _: () = assert!(
     std::mem::size_of::<OneIndexBucket>() == std::mem::size_of::<u128>() * 2,
-    "Header cannot have any padding"
+    "incorrect size of header struct"
 );
 
 pub(crate) struct Restart {
@@ -182,6 +183,60 @@ impl Restart {
         std::mem::size_of::<Header>() + max_buckets * std::mem::size_of::<OneIndexBucket>()
     }
 
+    /// return all files that matched bucket files in `drives`
+    /// matching files will be parsable as u128
+    fn get_all_possible_index_files_in_drives(drives: &[PathBuf]) -> HashMap<u128, PathBuf> {
+        let mut result = HashMap::default();
+        drives.iter().for_each(|drive| {
+            if drive.is_dir() {
+                let dir = fs::read_dir(drive);
+                if let Ok(dir) = dir {
+                    for entry in dir.flatten() {
+                        if let Some(name) = entry.path().file_name() {
+                            if let Some(id) = name.to_str().and_then(|str| str.parse::<u128>().ok())
+                            {
+                                result.insert(id, entry.path());
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        result
+    }
+
+    /// get one `RestartableBucket` for each bucket.
+    /// If a potentially reusable file exists, then put that file's path in `RestartableBucket` for that bucket.
+    /// Delete all files that cannot possibly be re-used.
+    pub(crate) fn get_restartable_buckets(
+        restart: Option<&Arc<Mutex<Restart>>>,
+        drives: &Arc<Vec<PathBuf>>,
+        num_buckets: usize,
+    ) -> Vec<RestartableBucket> {
+        let mut paths = Self::get_all_possible_index_files_in_drives(drives);
+        let results = (0..num_buckets)
+            .map(|index| {
+                let path = restart.and_then(|restart| {
+                    let restart = restart.lock().unwrap();
+                    let id = restart.get_bucket(index).file_name;
+                    paths.remove(&id)
+                });
+                RestartableBucket {
+                    restart: restart.map(Arc::clone),
+                    index,
+                    path,
+                }
+            })
+            .collect();
+
+        paths.into_iter().for_each(|path| {
+            // delete any left over files that we won't be using
+            _ = fs::remove_file(path.1);
+        });
+
+        results
+    }
+
     /// create mmap from `file`
     fn new_map(file: impl AsRef<Path>, capacity: u64) -> Result<MmapMut, std::io::Error> {
         let mut data = OpenOptions::new()
@@ -243,6 +298,157 @@ mod test {
             0,
             std::mem::size_of::<OneIndexBucket>() % std::mem::size_of::<u128>()
         );
+    }
+
+    #[test]
+    fn test_get_restartable_buckets() {
+        let tmpdir = tempdir().unwrap();
+        let paths: Vec<PathBuf> = vec![tmpdir.path().to_path_buf()];
+        assert!(!paths.is_empty());
+        let config_file = tmpdir.path().join("config");
+
+        let config = BucketMapConfig {
+            drives: Some(paths.clone()),
+            restart_config_file: Some(config_file.clone()),
+            ..BucketMapConfig::new(1 << 2)
+        };
+
+        // create restart file
+        let restart = Arc::new(Mutex::new(Restart::new(&config).unwrap()));
+        let files = Restart::get_all_possible_index_files_in_drives(&paths);
+        assert!(files.is_empty());
+
+        let restartable_buckets = (0..config.max_buckets)
+            .map(|bucket| RestartableBucket {
+                restart: Some(restart.clone()),
+                index: bucket,
+                path: None,
+            })
+            .collect::<Vec<_>>();
+
+        let skip = 2; // skip this file
+                      // note starting at 1 to avoid default values of 0 for file_name
+                      // create 4 bucket files.
+                      // 1,3,4 will match buckets 0,2,3
+                      // 5 is an extra file that will get deleted
+        (0..config.max_buckets + 1).for_each(|i| {
+            if i == skip {
+                return;
+            }
+            let file_name = (i + 1) as u128;
+            let random = (i * 2) as u64;
+            let file = tmpdir.path().join(file_name.to_string());
+            create_dummy_file(&file);
+
+            // bucket is connected to this file_name
+            if i < config.max_buckets {
+                restartable_buckets[i].set_file(file_name, random);
+                assert_eq!(Some((file_name, random)), restartable_buckets[i].get());
+            }
+        });
+
+        let deleted_file = tmpdir.path().join((1 + config.max_buckets).to_string());
+        assert!(std::fs::metadata(deleted_file.clone()).is_ok());
+        let calc_restartable_buckets = Restart::get_restartable_buckets(
+            Some(&restart),
+            &Arc::new(paths.clone()),
+            config.max_buckets,
+        );
+
+        // make sure all bucket files were associated correctly
+        // and all files still exist
+        (0..config.max_buckets).for_each(|i| {
+            if i == skip {
+                assert_eq!(Some((0, 0)), restartable_buckets[i].get());
+                assert_eq!(None, calc_restartable_buckets[i].path);
+            } else {
+                let file_name = (i + 1) as u128;
+                let random = (i * 2) as u64;
+                let expected_path = tmpdir.path().join(file_name.to_string());
+                assert!(std::fs::metadata(expected_path.clone()).is_ok());
+
+                assert_eq!(Some((file_name, random)), restartable_buckets[i].get());
+                assert_eq!(Some(expected_path), calc_restartable_buckets[i].path);
+            }
+        });
+
+        // this file wasn't associated with a bucket
+        assert!(
+            std::fs::metadata(deleted_file).is_err(),
+            "should have been deleted"
+        );
+    }
+
+    fn create_dummy_file(path: &Path) {
+        // easy enough to create a test file in the right spot with creating a 'restart' file of a given name.
+        let config = BucketMapConfig {
+            drives: None,
+            restart_config_file: Some(path.to_path_buf()),
+            ..BucketMapConfig::new(1 << 1)
+        };
+
+        // create file
+        assert!(Restart::new(&config).is_some());
+    }
+
+    #[test]
+    fn test_get_all_possible_index_files_in_drives() {
+        let tmpdir = tempdir().unwrap();
+        let paths: Vec<PathBuf> = vec![tmpdir.path().to_path_buf()];
+        assert!(!paths.is_empty());
+        create_dummy_file(&tmpdir.path().join("config"));
+
+        // create a file with a valid u128 name
+        for file_name in [u128::MAX, 0, 123] {
+            let file = tmpdir.path().join(file_name.to_string());
+            create_dummy_file(&file);
+            let mut files = Restart::get_all_possible_index_files_in_drives(&paths);
+            assert_eq!(files.remove(&file_name), Some(&file).cloned());
+            assert!(files.is_empty());
+            _ = fs::remove_file(&file);
+        }
+
+        // create a file with a u128 name that fails to convert
+        for file_name in [
+            u128::MAX.to_string() + ".",
+            u128::MAX.to_string() + "0",
+            "-123".to_string(),
+        ] {
+            let file = tmpdir.path().join(file_name);
+            create_dummy_file(&file);
+            let files = Restart::get_all_possible_index_files_in_drives(&paths);
+            assert!(files.is_empty(), "{files:?}");
+            _ = fs::remove_file(&file);
+        }
+
+        // 2 drives, 2 files in each
+        // create 2nd tmpdir (ie. drive)
+        let tmpdir2 = tempdir().unwrap();
+        let paths2: Vec<PathBuf> =
+            vec![paths.first().unwrap().clone(), tmpdir2.path().to_path_buf()];
+        (0..4).for_each(|i| {
+            let parent = if i < 2 { &tmpdir } else { &tmpdir2 };
+            let file = parent.path().join(i.to_string());
+            create_dummy_file(&file);
+        });
+
+        let mut files = Restart::get_all_possible_index_files_in_drives(&paths);
+        assert_eq!(files.len(), 2);
+        (0..2).for_each(|file_name| {
+            let path = files.remove(&file_name).unwrap();
+            assert_eq!(tmpdir.path().join(file_name.to_string()), path);
+        });
+        let mut files = Restart::get_all_possible_index_files_in_drives(&paths2);
+        assert_eq!(files.len(), 4);
+        (0..2).for_each(|file_name| {
+            let path = files.remove(&file_name).unwrap();
+            assert_eq!(tmpdir.path().join(file_name.to_string()), path);
+        });
+        (2..4).for_each(|file_name| {
+            let path = files.remove(&file_name).unwrap();
+            assert_eq!(tmpdir2.path().join(file_name.to_string()), path);
+        });
+        assert!(files.is_empty());
     }
 
     #[test]
