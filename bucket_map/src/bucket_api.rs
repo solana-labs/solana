@@ -97,6 +97,7 @@ impl<T: Clone + Copy + PartialEq + std::fmt::Debug> BucketApi<T> {
                 self.max_search,
                 Arc::clone(&self.stats),
                 Arc::clone(&self.count),
+                self.restartable_bucket.clone(),
             ));
         }
     }
