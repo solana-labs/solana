@@ -1,6 +1,6 @@
 [package]
 name = "solana-wen-restart"
-description = "Automatically repair and restart protocol"
+description = "Automatic repair and restart protocol"
 documentation = "https://github.com/solana-foundation/solana-improvement-documents/pull/46"
 version = { workspace = true }
 authors = { workspace = true }
