@@ -521,7 +521,7 @@ fn process_entries_with_callback(
                         });
                         // entry is scheduled to be processed, transactions in it can be used to
                         // update prioritization fee cache asynchronously.
-                        prioritization_fee_cache.update(bank.clone(), transactions.iter());
+                        prioritization_fee_cache.update(bank, transactions.iter());
                         // done with this entry
                         break;
                     }
