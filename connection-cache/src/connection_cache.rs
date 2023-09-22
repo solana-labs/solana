@@ -97,7 +97,7 @@ where
             name,
             map,
             stats,
-            connection_manager: connection_manager,
+            connection_manager,
             last_stats: AtomicInterval::default(),
             connection_pool_size,
             connection_config: config,
@@ -179,7 +179,7 @@ where
                 self.connection_config.clone(),
                 self.connection_manager.clone(),
                 &mut map,
-                &addr,
+                addr,
                 self.connection_pool_size,
                 Some(self.sender.clone()),
             );
