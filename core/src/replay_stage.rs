@@ -3817,7 +3817,6 @@ impl ReplayStage {
             new_root,
             accounts_background_request_sender,
             highest_super_majority_root,
-            false,
         );
 
         drop_bank_sender

@@ -2007,7 +2007,6 @@ fn maybe_warp_slot(
             warp_slot,
             accounts_background_request_sender,
             Some(warp_slot),
-            false,
         );
         leader_schedule_cache.set_root(&bank_forks.root_bank());
 

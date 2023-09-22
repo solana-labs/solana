@@ -250,7 +250,6 @@ impl BankForks {
         root: Slot,
         accounts_background_request_sender: &AbsRequestSender,
         highest_super_majority_root: Option<Slot>,
-        wen_restart_snapshot: bool,
     ) -> (Vec<Arc<Bank>>, SetRootMetrics) {
         let old_epoch = self.root_bank().epoch();
         // To support `RootBankCache` (via `ReadOnlyAtomicSlot`) accessing `root` *without* locking
@@ -342,19 +341,11 @@ impl BankForks {
         // part of the same set of `banks` in a single `set_root()` invocation.  While (very)
         // unlikely for a validator with default snapshot intervals (and accounts hash verifier
         // intervals), it *is* possible, and there are tests to exercise this possibility.
-        let bank_for_snapshot = if wen_restart_snapshot {
-            Some(&root_bank)
-        } else {
+        let bank_for_snapshot =
             banks.iter().find(|bank| {
                 bank.slot() > self.last_accounts_hash_slot
                     && bank.block_height() % self.accounts_hash_interval_slots == 0
-            })
-        };
-        let request_kind = if wen_restart_snapshot {
-            SnapshotRequestKind::WenRestartSnapshot
-        } else {
-            SnapshotRequestKind::Snapshot
-        };
+            });
         if let Some(bank) = bank_for_snapshot {
             let bank_slot = bank.slot();
             self.last_accounts_hash_slot = bank_slot;
@@ -375,7 +366,7 @@ impl BankForks {
                         accounts_background_request_sender.send_snapshot_request(SnapshotRequest {
                             snapshot_root_bank: Arc::clone(bank),
                             status_cache_slot_deltas,
-                            request_kind: request_kind,
+                            request_kind: SnapshotRequestKind::Snapshot,
                             enqueued: Instant::now(),
                         })
                     {
@@ -431,7 +422,6 @@ impl BankForks {
         root: Slot,
         accounts_background_request_sender: &AbsRequestSender,
         highest_super_majority_root: Option<Slot>,
-        write_incremental_snapshot: bool,
     ) -> Vec<Arc<Bank>> {
         let program_cache_prune_start = Instant::now();
         let root_bank = self
@@ -448,7 +438,6 @@ impl BankForks {
             root,
             accounts_background_request_sender,
             highest_super_majority_root,
-            write_incremental_snapshot,
         );
         datapoint_info!(
             "bank-forks_set_root",
