@@ -21,6 +21,7 @@ use {
             Shred, ShredData, ShredId, ShredType, Shredder,
         },
         slot_stats::{ShredSource, SlotsStats},
+        transaction_address_lookup_table_scanner,
     },
     assert_matches::debug_assert_matches,
     bincode::{deserialize, serialize},
@@ -52,7 +53,7 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer},
         timing::timestamp,
-        transaction::VersionedTransaction,
+        transaction::{SanitizedVersionedTransaction, VersionedTransaction},
     },
     solana_storage_proto::{StoredExtendedRewards, StoredTransactionStatusMeta},
     solana_transaction_status::{
@@ -2917,15 +2918,17 @@ impl Blockstore {
     }
 
     /// Gets accounts used in transactions in the slot range [starting_slot, ending_slot].
+    /// Additionally returns a bool indicating if the set may be incomplete.
     /// Used by ledger-tool to create a minimized snapshot
     pub fn get_accounts_used_in_range(
         &self,
         bank: &Bank,
         starting_slot: Slot,
         ending_slot: Slot,
-    ) -> DashSet<Pubkey> {
+    ) -> (DashSet<Pubkey>, bool) {
         let result = DashSet::new();
         let lookup_tables = DashSet::new();
+        let possible_cpi_alt_extend = AtomicBool::new(false);
 
         (starting_slot..=ending_slot)
             .into_par_iter()
@@ -2942,6 +2945,21 @@ impl Blockstore {
                                     lookup_tables.insert(lookup.account_key);
                                 });
                             }
+
+                            let tx = SanitizedVersionedTransaction::try_from(tx)
+                                .expect("transaction failed to sanitize");
+                            let alt_scan_result =
+                                transaction_address_lookup_table_scanner::scan_transaction(&tx);
+                                match alt_scan_result {
+                                    transaction_address_lookup_table_scanner::ScanResult::NotFound => {},
+                                    transaction_address_lookup_table_scanner::ScanResult::NativeUsed(keys) => {
+                                        keys.into_iter().for_each(|key| { result.insert(key); });
+                                    }
+                                    transaction_address_lookup_table_scanner::ScanResult::NonNativeUsed(keys) => {
+                                        keys.into_iter().for_each(|key| { result.insert(key); });
+                                        possible_cpi_alt_extend.store(true, Ordering::Relaxed);
+                                    },
+                                }
                         });
                     });
                 }
@@ -2963,7 +2981,7 @@ impl Blockstore {
             }
         });
 
-        result
+        (result, possible_cpi_alt_extend.load(Ordering::Relaxed))
     }
 
     fn get_completed_ranges(
