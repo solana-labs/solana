@@ -4,7 +4,7 @@ use {
         connection_cache_stats::{ConnectionCacheStats, CONNECTION_STAT_SUBMISSION_INTERVAL},
         nonblocking::client_connection::ClientConnection as NonblockingClientConnection,
     },
-    crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
+    crossbeam_channel::{Receiver, RecvError, Sender},
     indexmap::map::IndexMap,
     log::*,
     rand::{thread_rng, Rng},
@@ -14,7 +14,6 @@ use {
         net::SocketAddr,
         sync::{atomic::Ordering, Arc, RwLock},
         thread::{Builder, JoinHandle},
-        time::Duration,
     },
     thiserror::Error,
 };
@@ -114,13 +113,11 @@ where
         Builder::new()
             .name("solQAsynCon".to_string())
             .spawn(move || loop {
-                let recv_timeout_ms = 100;
-                let recv_result = receiver.recv_timeout(Duration::from_millis(recv_timeout_ms));
+                let recv_result = receiver.recv();
                 match recv_result {
-                    Err(RecvTimeoutError::Disconnected) => {
+                    Err(RecvError) => {
                         break;
                     }
-                    Err(RecvTimeoutError::Timeout) => {}
                     Ok((idx, addr)) => {
                         let map = map.read().unwrap();
                         let pool = map.get(&addr);
@@ -129,8 +126,8 @@ where
                             if let Ok(conn) = conn {
                                 drop(map);
                                 let conn = conn.new_blocking_connection(addr, stats.clone());
-                                let rslt = conn.send_data(&[]);
-                                debug!("Create async connection result {rslt:?} for {addr}");
+                                let result = conn.send_data(&[]);
+                                debug!("Create async connection result {result:?} for {addr}");
                             }
                         }
                     }

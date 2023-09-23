@@ -110,22 +110,6 @@ impl NewConnectionConfig for QuicConfig {
 }
 
 impl QuicConfig {
-    pub fn new() -> Result<Self, ClientError> {
-        let (cert, priv_key) =
-            new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::UNSPECIFIED))?;
-        Ok(Self {
-            client_certificate: Arc::new(QuicClientCertificate {
-                certificate: cert,
-                key: priv_key,
-            }),
-            maybe_staked_nodes: None,
-            maybe_client_pubkey: None,
-            client_endpoint: None,
-        })
-    }
-}
-
-impl QuicConfig {
     fn create_endpoint(&self) -> QuicLazyInitializedEndpoint {
         QuicLazyInitializedEndpoint::new(
             self.client_certificate.clone(),
