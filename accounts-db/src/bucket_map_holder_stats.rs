@@ -226,6 +226,34 @@ impl BucketMapHolderStats {
         // sum of elapsed time in each thread
         let mut thread_time_elapsed_ms = elapsed_ms * storage.threads as u64;
         if disk.is_some() {
+            if startup || was_startup {
+                // these stats only apply at startup
+                datapoint_info!(
+                    "accounts_index_startup",
+                    (
+                        "entries_created",
+                        disk.map(|disk| disk
+                            .stats
+                            .index
+                            .startup
+                            .entries_created
+                            .swap(0, Ordering::Relaxed))
+                            .unwrap_or_default(),
+                        i64
+                    ),
+                    (
+                        "entries_reused",
+                        disk.map(|disk| disk
+                            .stats
+                            .index
+                            .startup
+                            .entries_reused
+                            .swap(0, Ordering::Relaxed))
+                            .unwrap_or_default(),
+                        i64
+                    ),
+                );
+            }
             datapoint_info!(
                 if startup || was_startup {
                     thread_time_elapsed_ms *= 2; // more threads are allocated during startup
