@@ -19,7 +19,9 @@ use {
     solana_sdk::pubkey::Pubkey,
     std::{
         collections::hash_map::DefaultHasher,
+        fs,
         hash::{Hash, Hasher},
+        num::NonZeroU64,
         ops::RangeBounds,
         path::PathBuf,
         sync::{
@@ -119,18 +121,44 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
         max_search: MaxSearch,
         stats: Arc<BucketMapStats>,
         count: Arc<AtomicU64>,
-        restartable_bucket: RestartableBucket,
+        mut restartable_bucket: RestartableBucket,
     ) -> Self {
-        let (index, _file_name) = BucketStorage::new(
-            Arc::clone(&drives),
-            1,
-            std::mem::size_of::<IndexEntry<T>>() as u64,
-            max_search,
-            Arc::clone(&stats.index),
-            count,
-        );
-        stats.index.resize_grow(0, index.capacity_bytes());
-        let random = thread_rng().gen();
+        let reuse_path = std::mem::take(&mut restartable_bucket.path);
+        let elem_size = NonZeroU64::new(std::mem::size_of::<IndexEntry<T>>() as u64).unwrap();
+        let (index, random) = reuse_path
+            .and_then(|path| {
+                // try to re-use the file this bucket was using last time we were running
+                restartable_bucket.get().and_then(|(_file_name, random)| {
+                    let result = BucketStorage::load_on_restart(
+                        path.clone(),
+                        elem_size,
+                        max_search,
+                        Arc::clone(&stats.index),
+                        count.clone(),
+                    )
+                    .map(|index| (index, random));
+                    if result.is_none() {
+                        // we couldn't re-use it, so delete it
+                        _ = fs::remove_file(path);
+                    }
+                    result
+                })
+            })
+            .unwrap_or_else(|| {
+                // no file to re-use, so create a new file
+                let (index, file_name) = BucketStorage::new(
+                    Arc::clone(&drives),
+                    1,
+                    elem_size.into(),
+                    max_search,
+                    Arc::clone(&stats.index),
+                    count,
+                );
+                stats.index.resize_grow(0, index.capacity_bytes());
+                let random = thread_rng().gen();
+                restartable_bucket.set_file(file_name, random);
+                (index, random)
+            });
 
         Self {
             random,
