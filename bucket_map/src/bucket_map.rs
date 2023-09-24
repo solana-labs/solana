@@ -88,13 +88,21 @@ impl<T: Clone + Copy + Debug + PartialEq> BucketMap<T> {
         );
         let max_search = config.max_search.unwrap_or(MAX_SEARCH_DEFAULT);
 
-        if let Some(drives) = config.drives.as_ref() {
-            Self::erase_previous_drives(drives);
+        let mut restart = Restart::get_restart_file(&config);
+
+        if restart.is_none() {
+            // If we were able to load a restart file from the previous run, then don't wipe the accounts index drives from last time.
+            // Unused files will be wiped by `get_restartable_buckets`
+            if let Some(drives) = config.drives.as_ref() {
+                Self::erase_previous_drives(drives);
+            }
         }
 
         let stats = Arc::default();
 
-        let restart = Restart::new(&config);
+        if restart.is_none() {
+            restart = Restart::new(&config);
+        }
 
         let mut temp_dir = None;
         let drives = config.drives.unwrap_or_else(|| {
@@ -129,7 +137,8 @@ impl<T: Clone + Copy + Debug + PartialEq> BucketMap<T> {
             max_buckets_pow2: log2(config.max_buckets) as u8,
             stats,
             temp_dir,
-            erase_drives_on_drop: true,
+            // if we are keeping track of restart, then don't wipe the drives on drop
+            erase_drives_on_drop: restart.is_none(),
         }
     }
 
