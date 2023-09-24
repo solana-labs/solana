@@ -9,7 +9,7 @@ use {
         },
         index_entry::{
             DataBucket, IndexBucket, IndexEntry, IndexEntryPlaceInBucket, MultipleSlots,
-            OccupiedEnum,
+            OccupiedEnum, OccupyIfMatches,
         },
         restart::RestartableBucket,
         MaxSearch, RefCount,
@@ -360,6 +360,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
                 &mut entries,
                 &mut entries_created_on_disk,
                 &mut duplicates,
+                self.reused_file_at_startup,
             );
             match result {
                 Ok(_result) => {
@@ -393,7 +394,54 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
         }
     }
 
-    /// sort `entries` by hash value
+    /// insert every entry in `reverse_sorted_entries` into the index as long as we can find a location where the data in the index
+    /// file already matches the data we want to insert for the pubkey.
+    /// for every entry that already exists in `index`, add it (and the value already in the index) to `duplicates`
+    /// `reverse_sorted_entries` is (raw index (range = U64::MAX) in hash map, index in `items`)
+    /// Any entries where the disk couldn't be updated are returned in `reverse_sorted_entries` or `duplicates`.
+    /// The remaining items in `reverse_sorted_entries` can be inserted by writing new data to the index file.
+    pub fn batch_insert_non_duplicates_reusing_file(
+        index: &mut BucketStorage<IndexBucket<T>>,
+        data_buckets: &[BucketStorage<DataBucket>],
+        items: &[(Pubkey, T)],
+        reverse_sorted_entries: &mut Vec<(u64, usize)>,
+        duplicates: &mut Vec<(usize, T)>,
+    ) {
+        let max_search = index.max_search();
+        let cap = index.capacity();
+        let search_end = max_search.min(cap);
+        let mut not_found = Vec::default();
+        // pop one entry at a time to insert
+        'outer: while let Some((ix_entry_raw, ix)) = reverse_sorted_entries.pop() {
+            let (k, v) = &items[ix];
+            let ix_entry = ix_entry_raw % cap;
+            // search for an empty spot starting at `ix_entry`
+            for search in 0..search_end {
+                let ix_index = (ix_entry + search) % cap;
+                let elem = IndexEntryPlaceInBucket::new(ix_index);
+                match elem.occupy_if_matches(index, v, k) {
+                    OccupyIfMatches::SuccessfulInit => {}
+                    OccupyIfMatches::FoundDuplicate => {
+                        // pubkey is same, and it is occupied, so we found a duplicate
+                        let (v_existing, _ref_count_existing) =
+                            elem.read_value(index, data_buckets);
+                        // someone is already allocated with this pubkey, so we found a duplicate
+                        duplicates.push((ix, *v_existing.first().unwrap()));
+                    }
+                    OccupyIfMatches::PubkeyMismatch => {
+                        // fall through and look at next search value
+                        continue;
+                    }
+                }
+                continue 'outer; // this 'insertion' is completed - either because we found a duplicate or we occupied an entry in the file
+            }
+            // this pubkey did not exist in the file already and we exhausted the search space, so have to try the old way
+            not_found.push((ix_entry_raw, ix));
+        }
+        // now add all entries that were not found
+        *reverse_sorted_entries = not_found;
+    }
+
     /// insert as much of `entries` as possible into `index`.
     /// return an error if the index needs to resize.
     /// for every entry that already exists in `index`, add it (and the value already in the index) to `duplicates`
@@ -405,9 +453,16 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
         reverse_sorted_entries: &mut Vec<(u64, usize)>,
         entries_created_on_disk: &mut usize,
         duplicates: &mut Vec<(usize, T)>,
+        try_to_reuse_disk_data: bool,
     ) -> Result<(), BucketMapError> {
-        if reverse_sorted_entries.is_empty() {
-            return Ok(());
+        if try_to_reuse_disk_data {
+            Self::batch_insert_non_duplicates_reusing_file(
+                index,
+                data_buckets,
+                items,
+                reverse_sorted_entries,
+                duplicates,
+            );
         }
         let max_search = index.max_search();
         let cap = index.capacity();
@@ -423,7 +478,11 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
                 let elem = IndexEntryPlaceInBucket::new(ix_index);
                 if index.try_lock(ix_index) {
                     *entries_created_on_disk += 1;
-                    // found free element and occupied it
+                    // found free element and occupied it.
+                    // Note that since we are in the startup phase where we only add and do not remove, it is NOT possible to find this same pubkey AFTER
+                    //  the index we started searching at, or we would have found it as occupied BEFORE we were able to lock it here.
+                    //  This precondition is not true once we are able to delete entries.
+
                     // These fields will be overwritten after allocation by callers.
                     // Since this part of the mmapped file could have previously been used by someone else, there can be garbage here.
                     elem.init(index, k);
@@ -889,6 +948,7 @@ mod tests {
                     &mut hashed,
                     &mut entries_created,
                     &mut duplicates,
+                    false,
                 )
                 .is_ok());
 
@@ -939,6 +999,7 @@ mod tests {
                     &mut hashed,
                     &mut entries_created,
                     &mut duplicates,
+                    false,
                 )
                 .is_ok());
 
@@ -989,6 +1050,7 @@ mod tests {
                         &mut hashed,
                         &mut entries_created,
                         &mut duplicates,
+                        false,
                     );
 
                     assert_eq!(
