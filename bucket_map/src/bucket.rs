@@ -679,11 +679,20 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
         }
     }
 
-    pub fn apply_grow_index(&mut self, index: BucketStorage<IndexBucket<T>>) {
+    pub fn apply_grow_index(&mut self, mut index: BucketStorage<IndexBucket<T>>) {
         self.stats
             .index
             .resize_grow(self.index.capacity_bytes(), index.capacity_bytes());
 
+        if self.restartable_bucket.restart.is_some() {
+            // we are keeping track of which files we use for restart.
+            // And we are resizing.
+            // So, delete the old file and set the new file to NOT delete.
+            // This way the new file will still be around on startup.
+            // We are completely done with the old file.
+            self.index.delete_file_on_drop = true;
+            index.delete_file_on_drop = false;
+        }
         self.index = index;
     }
 
