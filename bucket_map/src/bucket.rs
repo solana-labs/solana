@@ -414,10 +414,9 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
         // pop one entry at a time to insert
         'outer: while let Some((ix_entry_raw, ix)) = reverse_sorted_entries.pop() {
             let (k, v) = &items[ix];
-            let ix_entry = ix_entry_raw % cap;
             // search for an empty spot starting at `ix_entry`
             for search in 0..search_end {
-                let ix_index = (ix_entry + search) % cap;
+                let ix_index = (ix_entry_raw + search) % cap;
                 let elem = IndexEntryPlaceInBucket::new(ix_index);
                 match elem.occupy_if_matches(index, v, k) {
                     OccupyIfMatches::SuccessfulInit => {}
@@ -1055,8 +1054,6 @@ mod tests {
             let cap = index.capacity();
             let ix = hashed[0].0 % cap;
 
-            // occupy the index data entry with same pubkey, different value.
-            // This causes it to be treated as a duplicate.
             let entry = IndexEntryPlaceInBucket::new(ix);
 
             // file is blank, so nothing matches, so everything returned in `hashed` to retry.
@@ -1168,8 +1165,8 @@ mod tests {
         let cap = index.capacity();
         let ix = hashed[0].0 % cap;
 
-        // occupy the index data entry with same pubkey, different value.
-        // This causes it to be treated as a duplicate.
+        // occupy the index data entry with a different pubkey
+        // This causes it to be skipped.
         let entry = IndexEntryPlaceInBucket::new(ix);
         entry.init(&mut index, &(other.0));
         let entry = IndexEntryPlaceInBucket::new(ix + 1);
@@ -1221,8 +1218,8 @@ mod tests {
         let cap = index.capacity();
         let ix = hashed[0].0 % cap;
 
-        // occupy the index data entry with same pubkey, different value.
-        // This causes it to be treated as a duplicate.
+        // occupy the index data entry with a different pubkey
+        // This causes it to be skipped.
         let entry = IndexEntryPlaceInBucket::new(ix);
         entry.init(&mut index, &(other.0));
         let entry = IndexEntryPlaceInBucket::new(ix + 1);
