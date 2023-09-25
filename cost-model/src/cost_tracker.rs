@@ -186,11 +186,9 @@ impl CostTracker {
             if self.vote_cost.saturating_add(cost) > self.vote_cost_limit {
                 return Err(CostTrackerError::WouldExceedVoteMaxLimit);
             }
-        } else {
+        } else if self.block_cost.saturating_add(cost) > self.block_cost_limit {
             // check against the total package cost
-            if self.block_cost.saturating_add(cost) > self.block_cost_limit {
-                return Err(CostTrackerError::WouldExceedBlockMaxLimit);
-            }
+            return Err(CostTrackerError::WouldExceedBlockMaxLimit);
         }
 
         // check if the transaction itself is more costly than the account_cost_limit

@@ -166,6 +166,7 @@ impl UsageCostDetails {
 #[cfg(test)]
 mod tests {
     use {
+        super::*,
         crate::cost_model::CostModel,
         solana_sdk::{
             feature_set::FeatureSet,
@@ -211,8 +212,8 @@ mod tests {
         )
         .unwrap();
 
-        // expected vote tx cost: 2 write locks, 2 sig, 1 vote ix,
-        let expected_vote_cost = 4140;
+        // expected vote tx cost: 2 write locks, 1 sig, 1 vote ix, 8cu of loaded accounts size,
+        let expected_vote_cost = SIMPLE_VOTE_USAGE_COST;
         // expected non-vote tx cost would include default loaded accounts size cost (16384) additionally
         let expected_none_vote_cost = 20535;
 
