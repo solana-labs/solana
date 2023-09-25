@@ -1,5 +1,4 @@
 //! Persistent info of disk index files to allow files to be reused on restart.
-#![allow(dead_code)]
 use {
     crate::bucket_map::{BucketMapConfig, MAX_SEARCH_DEFAULT},
     bytemuck::{Pod, Zeroable},
