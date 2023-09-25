@@ -21,6 +21,7 @@ use {
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         blockstore::{Blockstore, BlockstoreInsertionMetrics, PossibleDuplicateShred},
+        blockstore_metrics::ExcessiveRepairContext,
         leader_schedule_cache::LeaderScheduleCache,
         shred::{self, Nonce, ReedSolomonCache, Shred},
     },
@@ -236,6 +237,7 @@ fn run_insert<F>(
     handle_duplicate: F,
     metrics: &mut BlockstoreInsertionMetrics,
     ws_metrics: &mut WindowServiceMetrics,
+    excessive_repair_context: &mut ExcessiveRepairContext,
     completed_data_sets_sender: &CompletedDataSetsSender,
     retransmit_sender: &Sender<Vec<ShredPayload>>,
     outstanding_requests: &RwLock<OutstandingShredRepairs>,
@@ -303,6 +305,7 @@ where
         &handle_duplicate,
         reed_solomon_cache,
         metrics,
+        excessive_repair_context,
     )?;
 
     completed_data_sets_sender.try_send(completed_data_sets)?;
@@ -369,6 +372,7 @@ impl WindowService {
         );
 
         let t_insert = Self::start_window_insert_thread(
+            cluster_info,
             exit,
             blockstore,
             leader_schedule_cache,
@@ -416,6 +420,7 @@ impl WindowService {
     }
 
     fn start_window_insert_thread(
+        cluster_info: Arc<ClusterInfo>,
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
@@ -442,6 +447,7 @@ impl WindowService {
                 };
                 let mut metrics = BlockstoreInsertionMetrics::default();
                 let mut ws_metrics = WindowServiceMetrics::default();
+                let mut excessive_repair_context = ExcessiveRepairContext::default();
 
                 let mut last_print = Instant::now();
                 while !exit.load(Ordering::Relaxed) {
@@ -453,6 +459,7 @@ impl WindowService {
                         handle_duplicate,
                         &mut metrics,
                         &mut ws_metrics,
+                        &mut excessive_repair_context,
                         &completed_data_sets_sender,
                         &retransmit_sender,
                         &outstanding_requests,
@@ -465,6 +472,12 @@ impl WindowService {
                     }
 
                     if last_print.elapsed().as_secs() > 2 {
+                        excessive_repair_context.report_excessive_repairs(|| {
+                            (
+                                cluster_info.get_my_max_slot(),
+                                cluster_info.get_known_validators_max_slot(),
+                            )
+                        });
                         metrics.report_metrics("blockstore-insert-shreds");
                         metrics = BlockstoreInsertionMetrics::default();
                         ws_metrics.report_metrics("recv-window-insert-shreds");
@@ -653,6 +666,7 @@ mod test {
                     &handle_duplicate,
                     &ReedSolomonCache::default(),
                     &mut BlockstoreInsertionMetrics::default(),
+                    &mut ExcessiveRepairContext::default(),
                 )
                 .unwrap();
 

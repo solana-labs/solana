@@ -91,6 +91,7 @@ mod tests {
             },
             node_keypair,
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         ));
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let mut wen_restart_proto_path = ledger_path.path().to_path_buf();

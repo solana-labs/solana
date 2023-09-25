@@ -10,6 +10,7 @@ use {
             IteratorMode, LedgerColumn, Result, WriteBatch,
         },
         blockstore_meta::*,
+        blockstore_metrics::ExcessiveRepairContext,
         blockstore_options::{
             AccessType, BlockstoreOptions, LedgerColumnOptions, BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
             BLOCKSTORE_DIRECTORY_ROCKS_LEVEL,
@@ -845,6 +846,7 @@ impl Blockstore {
         retransmit_sender: Option<&Sender<Vec</*shred:*/ Vec<u8>>>>,
         reed_solomon_cache: &ReedSolomonCache,
         metrics: &mut BlockstoreInsertionMetrics,
+        excessive_repair_context: &mut ExcessiveRepairContext,
     ) -> Result<InsertResults> {
         assert_eq!(shreds.len(), is_repaired.len());
         let mut total_start = Measure::start("Total elapsed");
@@ -885,6 +887,7 @@ impl Blockstore {
                         &mut duplicate_shreds,
                         leader_schedule,
                         shred_source,
+                        excessive_repair_context,
                     ) {
                         Err(InsertDataShredError::Exists) => {
                             if is_repaired {
@@ -921,6 +924,7 @@ impl Blockstore {
                         is_trusted,
                         shred_source,
                         metrics,
+                        excessive_repair_context,
                     );
                 }
             };
@@ -968,6 +972,7 @@ impl Blockstore {
                         &mut duplicate_shreds,
                         leader_schedule,
                         ShredSource::Recovered,
+                        excessive_repair_context,
                     ) {
                         Err(InsertDataShredError::Exists) => {
                             metrics.num_recovered_exists += 1;
@@ -1066,6 +1071,7 @@ impl Blockstore {
         handle_duplicate: &F,
         reed_solomon_cache: &ReedSolomonCache,
         metrics: &mut BlockstoreInsertionMetrics,
+        excessive_repair_context: &mut ExcessiveRepairContext,
     ) -> Result<Vec<CompletedDataSetInfo>>
     where
         F: Fn(PossibleDuplicateShred),
@@ -1081,6 +1087,7 @@ impl Blockstore {
             retransmit_sender,
             reed_solomon_cache,
             metrics,
+            excessive_repair_context,
         )?;
 
         for shred in duplicate_shreds {
@@ -1173,6 +1180,7 @@ impl Blockstore {
             None, // retransmit-sender
             &ReedSolomonCache::default(),
             &mut BlockstoreInsertionMetrics::default(),
+            &mut ExcessiveRepairContext::default(),
         )?;
         Ok(insert_results.completed_data_set_infos)
     }
@@ -1190,6 +1198,7 @@ impl Blockstore {
         is_trusted: bool,
         shred_source: ShredSource,
         metrics: &mut BlockstoreInsertionMetrics,
+        excessive_repair_context: &mut ExcessiveRepairContext,
     ) -> bool {
         let slot = shred.slot();
         let shred_index = u64::from(shred.index());
@@ -1267,8 +1276,13 @@ impl Blockstore {
             return false;
         }
 
-        self.slots_stats
-            .record_shred(shred.slot(), shred.fec_set_index(), shred_source, None);
+        self.slots_stats.record_shred(
+            shred.slot(),
+            shred.fec_set_index(),
+            shred_source,
+            None,
+            excessive_repair_context,
+        );
 
         // insert coding shred into rocks
         let result = self
@@ -1367,6 +1381,7 @@ impl Blockstore {
         duplicate_shreds: &mut Vec<PossibleDuplicateShred>,
         leader_schedule: Option<&LeaderScheduleCache>,
         shred_source: ShredSource,
+        excessive_repair_context: &mut ExcessiveRepairContext,
     ) -> std::result::Result<Vec<CompletedDataSetInfo>, InsertDataShredError> {
         let slot = shred.slot();
         let shred_index = u64::from(shred.index());
@@ -1424,6 +1439,7 @@ impl Blockstore {
             &shred,
             write_batch,
             shred_source,
+            excessive_repair_context,
         )?;
         just_inserted_shreds.insert(shred.id(), shred);
         index_meta_working_set_entry.did_insert_occur = true;
@@ -1615,6 +1631,7 @@ impl Blockstore {
         shred: &Shred,
         write_batch: &mut WriteBatch,
         shred_source: ShredSource,
+        excessive_repair_context: &mut ExcessiveRepairContext,
     ) -> Result<Vec<CompletedDataSetInfo>> {
         let slot = shred.slot();
         let index = u64::from(shred.index());
@@ -1673,6 +1690,7 @@ impl Blockstore {
             shred.fec_set_index(),
             shred_source,
             Some(slot_meta),
+            excessive_repair_context,
         );
 
         // slot is full, send slot full timing to poh_timing_report service.
@@ -6718,6 +6736,7 @@ pub mod tests {
             false,
             ShredSource::Turbine,
             &mut BlockstoreInsertionMetrics::default(),
+            &mut ExcessiveRepairContext::default(),
         ));
 
         // insert again fails on dupe
@@ -6733,6 +6752,7 @@ pub mod tests {
             false,
             ShredSource::Turbine,
             &mut BlockstoreInsertionMetrics::default(),
+            &mut ExcessiveRepairContext::default(),
         ));
         assert_eq!(
             duplicate_shreds,

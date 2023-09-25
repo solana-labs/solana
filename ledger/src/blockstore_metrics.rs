@@ -5,14 +5,79 @@ use {
         PerfContext,
     },
     solana_metrics::datapoint_info,
-    solana_sdk::timing::timestamp,
+    solana_sdk::{slot_history::Slot, timing::timestamp},
     std::{
         cell::RefCell,
+        collections::VecDeque,
         fmt::Debug,
         sync::atomic::{AtomicU64, AtomicUsize, Ordering},
         time::{Duration, Instant},
     },
 };
+
+// Max number of samples to maintain
+const EXCESSIVE_REPAIR_SAMPLES_MAX: usize = 1_000;
+// Percent of samples which will trigger an excessive repair warning
+const EXCESSIVE_REPAIR_SAMPLES_THRESHOLD: f32 = 0.5;
+// Slot distance to use for comparison with known validators
+const EXCESSIVE_REPAIR_SLOT_DISTANCE: u64 = 150;
+// Percent of shreds repaired to indicate excessively repaired slot
+const EXCESSIVE_REPAIR_SLOT_THRESHOLD: f32 = 0.5;
+
+#[derive(Default)]
+pub struct ExcessiveRepairContext {
+    // Record excessive repair status of slots as they are completed as 'full'
+    excessive_repairs: VecDeque<bool>,
+    caught_up: bool,
+}
+
+impl ExcessiveRepairContext {
+    pub fn record_slot(&mut self, num_shreds: u64, num_repairs: usize) {
+        let slot_excessive_threshold = num_shreds as f32 * EXCESSIVE_REPAIR_SLOT_THRESHOLD;
+        let excessive_repairs = num_repairs as f32 > slot_excessive_threshold;
+        self.excessive_repairs.push_back(excessive_repairs);
+        if self.excessive_repairs.len() > EXCESSIVE_REPAIR_SAMPLES_MAX {
+            self.excessive_repairs.pop_front();
+        }
+    }
+
+    pub fn report_excessive_repairs(
+        &mut self,
+        get_cluster_max_slots: impl FnOnce() -> (
+            /*my_max_slot*/ Option<Slot>,
+            /*known_validators_max_slot*/ Option<Slot>,
+        ),
+    ) {
+        // Only check when we have a full sample set
+        if self.excessive_repairs.len() < EXCESSIVE_REPAIR_SAMPLES_MAX {
+            return;
+        }
+        let excessive_repair_count = self.excessive_repairs.iter().filter(|x| **x).count();
+        let threshold_count =
+            self.excessive_repairs.len() as f32 * EXCESSIVE_REPAIR_SAMPLES_THRESHOLD;
+        if excessive_repair_count as f32 > threshold_count {
+            // We're repairing many slots, check if we think we're caught up
+            if let (Some(my_max_slot), Some(known_validators_max_slot)) = get_cluster_max_slots() {
+                if my_max_slot
+                    > known_validators_max_slot.saturating_sub(EXCESSIVE_REPAIR_SLOT_DISTANCE)
+                {
+                    // Avoid warning the first time the validator catches up after repair
+                    if !self.caught_up {
+                        self.caught_up = true;
+                    } else {
+                        warn!(
+                            "This node is caught up but is relying heavily on repair. {excessive_repair_count} of the \
+                            last {EXCESSIVE_REPAIR_SAMPLES_MAX} slots where mostly repaired."
+                        );
+                    }
+                    self.excessive_repairs.clear();
+                } else {
+                    self.caught_up = false;
+                }
+            }
+        }
+    }
+}
 
 #[derive(Default)]
 pub struct BlockstoreInsertionMetrics {

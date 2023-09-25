@@ -1,5 +1,5 @@
 use {
-    crate::blockstore_meta::SlotMeta,
+    crate::{blockstore_meta::SlotMeta, blockstore_metrics::ExcessiveRepairContext},
     bitflags::bitflags,
     lru::LruCache,
     solana_sdk::clock::Slot,
@@ -96,6 +96,7 @@ impl SlotsStats {
         fec_set_index: u32,
         source: ShredSource,
         slot_meta: Option<&SlotMeta>,
+        excessive_repair_context: &mut ExcessiveRepairContext,
     ) {
         let mut slot_full_reporting_info = None;
         let mut stats = self.stats.lock().unwrap();
@@ -118,6 +119,8 @@ impl SlotsStats {
                     slot_full_reporting_info =
                         Some((slot_stats.num_repaired, slot_stats.num_recovered));
                 }
+                excessive_repair_context
+                    .record_slot(slot_stats.last_index, slot_stats.num_repaired);
             }
         }
         drop(stats);
