@@ -27,7 +27,7 @@ pub(crate) struct Header {
     /// u8 representing how many entries to search for during collisions.
     /// If this is different, then the contents of the index file's contents are likely not as helpful.
     max_search: u8,
-    /// padding to get header to u128 aligned
+    /// padding to make size of Header be an even multiple of u128
     _dummy: [u8; 15],
 }
 
@@ -44,7 +44,7 @@ pub(crate) struct OneIndexBucket {
     file_name: u128,
     /// each bucket uses a random value to hash with pubkeys. Without this, hashing would be inconsistent between restarts.
     random: u64,
-    /// padding to make u128 aligned
+    /// padding to make size of OneIndexBucket be an even multiple of u128
     _dummy: u64,
 }
 
