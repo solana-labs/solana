@@ -1,10 +1,99 @@
-use solana_sdk::pubkey::Pubkey;
+use {crate::block_cost_limits, solana_sdk::pubkey::Pubkey};
+
+/// TransactionCost is used to represent resources required to process
+/// a transaction, denominated in CU (eg. Compute Units).
+/// Resources required to process a regular transaction often include
+/// an array of variables, such as execution cost, loaded bytes, write
+/// lock and read lock etc.
+/// SimpleVote has a simpler and pre-determined format: it has 1 or 2 signatures,
+/// 2 write locks, a vote instruction and less than 32k (page size) accounts to load.
+/// It's cost therefore can be static #33269.
+const SIMPLE_VOTE_USAGE_COST: u64 = 3428;
+
+#[derive(Debug)]
+pub enum TransactionCost {
+    SimpleVote { writable_accounts: Vec<Pubkey> },
+    Transaction(UsageCostDetails),
+}
+
+impl TransactionCost {
+    pub fn sum(&self) -> u64 {
+        match self {
+            Self::SimpleVote { .. } => SIMPLE_VOTE_USAGE_COST,
+            Self::Transaction(usage_cost) => usage_cost.sum(),
+        }
+    }
+
+    pub fn bpf_execution_cost(&self) -> u64 {
+        match self {
+            Self::SimpleVote { .. } => 0,
+            Self::Transaction(usage_cost) => usage_cost.bpf_execution_cost,
+        }
+    }
+
+    pub fn is_simple_vote(&self) -> bool {
+        match self {
+            Self::SimpleVote { .. } => true,
+            Self::Transaction(_) => false,
+        }
+    }
+
+    pub fn data_bytes_cost(&self) -> u64 {
+        match self {
+            Self::SimpleVote { .. } => 0,
+            Self::Transaction(usage_cost) => usage_cost.data_bytes_cost,
+        }
+    }
+
+    pub fn account_data_size(&self) -> u64 {
+        match self {
+            Self::SimpleVote { .. } => 0,
+            Self::Transaction(usage_cost) => usage_cost.account_data_size,
+        }
+    }
+
+    pub fn loaded_accounts_data_size_cost(&self) -> u64 {
+        match self {
+            Self::SimpleVote { .. } => 8, // simple-vote loads less than 32K account data,
+            // the cost round up to be one page (32K) cost: 8CU
+            Self::Transaction(usage_cost) => usage_cost.loaded_accounts_data_size_cost,
+        }
+    }
+
+    pub fn signature_cost(&self) -> u64 {
+        match self {
+            Self::SimpleVote { .. } => block_cost_limits::SIGNATURE_COST,
+            Self::Transaction(usage_cost) => usage_cost.signature_cost,
+        }
+    }
+
+    pub fn write_lock_cost(&self) -> u64 {
+        match self {
+            Self::SimpleVote { .. } => block_cost_limits::WRITE_LOCK_UNITS.saturating_mul(2),
+            Self::Transaction(usage_cost) => usage_cost.write_lock_cost,
+        }
+    }
+
+    pub fn builtins_execution_cost(&self) -> u64 {
+        match self {
+            Self::SimpleVote { .. } => solana_vote_program::vote_processor::DEFAULT_COMPUTE_UNITS,
+            Self::Transaction(usage_cost) => usage_cost.builtins_execution_cost,
+        }
+    }
+
+    pub fn writable_accounts(&self) -> &[Pubkey] {
+        match self {
+            Self::SimpleVote { writable_accounts } => writable_accounts,
+            Self::Transaction(usage_cost) => &usage_cost.writable_accounts,
+        }
+    }
+}
 
 const MAX_WRITABLE_ACCOUNTS: usize = 256;
 
 // costs are stored in number of 'compute unit's
 #[derive(Debug)]
-pub struct TransactionCost {
+pub struct UsageCostDetails {
     pub writable_accounts: Vec<Pubkey>,
     pub signature_cost: u64,
     pub write_lock_cost: u64,
@@ -13,10 +102,9 @@ pub struct TransactionCost {
     pub bpf_execution_cost: u64,
     pub loaded_accounts_data_size_cost: u64,
     pub account_data_size: u64,
-    pub is_simple_vote: bool,
 }
 
-impl Default for TransactionCost {
+impl Default for UsageCostDetails {
     fn default() -> Self {
         Self {
             writable_accounts: Vec::with_capacity(MAX_WRITABLE_ACCOUNTS),
@@ -27,13 +115,12 @@ impl Default for TransactionCost {
             bpf_execution_cost: 0u64,
             loaded_accounts_data_size_cost: 0u64,
             account_data_size: 0u64,
-            is_simple_vote: false,
         }
     }
 }
 
 #[cfg(test)]
-impl PartialEq for TransactionCost {
+impl PartialEq for UsageCostDetails {
     fn eq(&self, other: &Self) -> bool {
         fn to_hash_set(v: &[Pubkey]) -> std::collections::HashSet<&Pubkey> {
             v.iter().collect()
@@ -46,15 +133,15 @@ impl PartialEq for TransactionCost {
             && self.bpf_execution_cost == other.bpf_execution_cost
             && self.loaded_accounts_data_size_cost == other.loaded_accounts_data_size_cost
             && self.account_data_size == other.account_data_size
-            && self.is_simple_vote == other.is_simple_vote
             && to_hash_set(&self.writable_accounts) == to_hash_set(&other.writable_accounts)
     }
 }
 
 #[cfg(test)]
-impl Eq for TransactionCost {}
+impl Eq for UsageCostDetails {}
 
-impl TransactionCost {
+impl UsageCostDetails {
+    #[cfg(test)]
     pub fn new_with_capacity(capacity: usize) -> Self {
         Self {
             writable_accounts: Vec::with_capacity(capacity),
@@ -67,25 +154,19 @@ impl TransactionCost {
     }
 
     pub fn sum(&self) -> u64 {
-        if self.is_simple_vote {
-            self.signature_cost
-                .saturating_add(self.write_lock_cost)
-                .saturating_add(self.data_bytes_cost)
-                .saturating_add(self.builtins_execution_cost)
-        } else {
-            self.signature_cost
-                .saturating_add(self.write_lock_cost)
-                .saturating_add(self.data_bytes_cost)
-                .saturating_add(self.builtins_execution_cost)
-                .saturating_add(self.bpf_execution_cost)
-                .saturating_add(self.loaded_accounts_data_size_cost)
-        }
+        self.signature_cost
+            .saturating_add(self.write_lock_cost)
+            .saturating_add(self.data_bytes_cost)
+            .saturating_add(self.builtins_execution_cost)
+            .saturating_add(self.bpf_execution_cost)
+            .saturating_add(self.loaded_accounts_data_size_cost)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use {
+        super::*,
         crate::cost_model::CostModel,
         solana_sdk::{
             feature_set::FeatureSet,
@@ -131,8 +212,8 @@ mod tests {
         )
         .unwrap();
 
-        // expected vote tx cost: 2 write locks, 2 sig, 1 vite ix, and 11 CU tx data cost
-        let expected_vote_cost = 4151;
+        // expected vote tx cost: 2 write locks, 1 sig, 1 vote ix, 8cu of loaded accounts size,
+        let expected_vote_cost = SIMPLE_VOTE_USAGE_COST;
         // expected non-vote tx cost would include default loaded accounts size cost (16384) additionally
         let expected_none_vote_cost = 20535;
 
