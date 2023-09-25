@@ -730,6 +730,18 @@ impl<T: SlotColumn> Column for T {
     }
 }
 
+pub enum IndexError {
+    UnpackError,
+}
+
+/// Helper trait to transition primary indexes out from the columns that are using them. This
+/// abbreviated trait assists in iterating past data with new keys. It will be modified and
+/// expanded in a future version to support writing with the new key and reading both key types.
+pub trait ColumnIndexDeprecation: Column {
+    const CURRENT_INDEX_LEN: usize;
+    fn try_current_index(key: &[u8]) -> std::result::Result<Self::Index, IndexError>;
+}
+
 impl Column for columns::TransactionStatus {
     type Index = (u64, Signature, Slot);
 
