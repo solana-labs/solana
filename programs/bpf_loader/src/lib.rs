@@ -191,10 +191,10 @@ pub fn check_loader_id(id: &Pubkey) -> bool {
 }
 
 /// Only used in macro, do not use directly!
-pub fn calculate_heap_cost(heap_size: u64, heap_cost: u64, enable_rounding_fix: bool) -> u64 {
+pub fn calculate_heap_cost(heap_size: u32, heap_cost: u64, enable_rounding_fix: bool) -> u64 {
     const KIBIBYTE: u64 = 1024;
     const PAGE_SIZE_KB: u64 = 32;
-    let mut rounded_heap_size = heap_size;
+    let mut rounded_heap_size = u64::from(heap_size);
     if enable_rounding_fix {
         rounded_heap_size = rounded_heap_size
             .saturating_add(PAGE_SIZE_KB.saturating_mul(KIBIBYTE).saturating_sub(1));
@@ -267,7 +267,7 @@ macro_rules! create_vm {
             .feature_set
             .is_active(&solana_sdk::feature_set::round_up_heap_size::id());
         let mut heap_cost_result = invoke_context.consume_checked($crate::calculate_heap_cost(
-            heap_size as u64,
+            heap_size,
             invoke_context.get_compute_budget().heap_cost,
             round_up_heap_size,
         ));
@@ -281,7 +281,7 @@ macro_rules! create_vm {
             >::zero_filled(stack_size);
             let mut heap = solana_rbpf::aligned_memory::AlignedMemory::<
                 { solana_rbpf::ebpf::HOST_ALIGN },
-            >::zero_filled(heap_size);
+            >::zero_filled(usize::try_from(heap_size).unwrap());
             let vm = $crate::create_vm(
                 $program,
                 $regions,
@@ -4033,40 +4033,31 @@ mod tests {
         // when `enable_heap_size_round_up` not enabled:
         {
             // assert less than 32K heap should cost zero unit
-            assert_eq!(0, calculate_heap_cost(31_u64 * 1024, heap_cost, false));
+            assert_eq!(0, calculate_heap_cost(31 * 1024, heap_cost, false));
 
             // assert exact 32K heap should be cost zero unit
-            assert_eq!(0, calculate_heap_cost(32_u64 * 1024, heap_cost, false));
+            assert_eq!(0, calculate_heap_cost(32 * 1024, heap_cost, false));
 
             // assert slightly more than 32K heap is mistakenly cost zero unit
-            assert_eq!(0, calculate_heap_cost(33_u64 * 1024, heap_cost, false));
+            assert_eq!(0, calculate_heap_cost(33 * 1024, heap_cost, false));
 
             // assert exact 64K heap should cost 1 * heap_cost
-            assert_eq!(
-                heap_cost,
-                calculate_heap_cost(64_u64 * 1024, heap_cost, false)
-            );
+            assert_eq!(heap_cost, calculate_heap_cost(64 * 1024, heap_cost, false));
         }
 
         // when `enable_heap_size_round_up` is enabled:
         {
             // assert less than 32K heap should cost zero unit
-            assert_eq!(0, calculate_heap_cost(31_u64 * 1024, heap_cost, true));
+            assert_eq!(0, calculate_heap_cost(31 * 1024, heap_cost, true));
 
             // assert exact 32K heap should be cost zero unit
-            assert_eq!(0, calculate_heap_cost(32_u64 * 1024, heap_cost, true));
+            assert_eq!(0, calculate_heap_cost(32 * 1024, heap_cost, true));
 
             // assert slightly more than 32K heap should cost 1 * heap_cost
-            assert_eq!(
-                heap_cost,
-                calculate_heap_cost(33_u64 * 1024, heap_cost, true)
-            );
+            assert_eq!(heap_cost, calculate_heap_cost(33 * 1024, heap_cost, true));
 
             // assert exact 64K heap should cost 1 * heap_cost
-            assert_eq!(
-                heap_cost,
-                calculate_heap_cost(64_u64 * 1024, heap_cost, true)
-            );
+            assert_eq!(heap_cost, calculate_heap_cost(64 * 1024, heap_cost, true));
         }
     }
 
