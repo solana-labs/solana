@@ -769,22 +769,6 @@ type ReclaimResult = (AccountSlots, SlotOffsets);
 type PubkeysRemovedFromAccountsIndex = HashSet<Pubkey>;
 type ShrinkCandidates = HashSet<Slot>;
 
-trait Versioned {
-    fn version(&self) -> u64;
-}
-
-impl Versioned for (u64, Hash) {
-    fn version(&self) -> u64 {
-        self.0
-    }
-}
-
-impl Versioned for (u64, AccountInfo) {
-    fn version(&self) -> u64 {
-        self.0
-    }
-}
-
 // Some hints for applicability of additional sanity checks for the do_load fast-path;
 // Slower fallback code path will be taken if the fast path has failed over the retry
 // threshold, regardless of these hints. Also, load cannot fail not-deterministically
