@@ -25,7 +25,7 @@ rand = "0.8"
 rustversion = "1.0.14"
 serde = "1.0.112"
 serde_json = "1.0.56"
-solana_rbpf = "=0.7.1"
+solana_rbpf = "=0.7.2"
 solana-account-decoder = { path = "../../account-decoder", version = "=1.17.0" }
 solana-accounts-db = { path = "../../accounts-db", version = "=1.17.0" }
 solana-bpf-loader-program = { path = "../bpf_loader", version = "=1.17.0" }
