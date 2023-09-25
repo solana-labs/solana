@@ -557,6 +557,9 @@ pub mod enable_bpf_loader_set_authority_checked_ix {
 pub mod enable_alt_bn128_syscall {
     solana_sdk::declare_id!("A16q37opZdQMCbe5qJ6xpBB9usykfv8jZaMkxvZQi4GJ");
 }
+pub mod enable_alt_bn128_compression_syscall {
+    solana_sdk::declare_id!("Compression111111111111111111111111111111111");
+}
 
 pub mod enable_program_redeployment_cooldown {
     solana_sdk::declare_id!("J4HFT8usBxpcF63y46t1upYobJgChmKyZPm5uTBRg25Z");
@@ -866,6 +869,7 @@ lazy_static! {
         (enable_program_runtime_v2_and_loader_v4::id(), "Enable Program-Runtime-v2 and Loader-v4 #33293"),
         (require_rent_exempt_split_destination::id(), "Require stake split destination account to be rent exempt"),
         (better_error_codes_for_tx_lamport_check::id(), "better error codes for tx lamport check #33353"),
+        (enable_alt_bn128_compression_syscall::id(), "add alt_bn128 compression syscalls"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

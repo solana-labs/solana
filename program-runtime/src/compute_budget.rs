@@ -131,6 +131,14 @@ pub struct ComputeBudget {
     pub poseidon_cost_coefficient_c: u64,
     /// Number of compute units consumed for accessing the remaining compute units.
     pub get_remaining_compute_units_cost: u64,
+    /// Number of compute units consumed to call alt_bn128_g1_compress.
+    pub alt_bn128_g1_compress: u64,
+    /// Number of compute units consumed to call alt_bn128_g1_decompress.
+    pub alt_bn128_g1_decompress: u64,
+    /// Number of compute units consumed to call alt_bn128_g2_compress.
+    pub alt_bn128_g2_compress: u64,
+    /// Number of compute units consumed to call alt_bn128_g2_decompress.
+    pub alt_bn128_g2_decompress: u64,
 }
 
 impl Default for ComputeBudget {
@@ -183,6 +191,10 @@ impl ComputeBudget {
             poseidon_cost_coefficient_a: 61,
             poseidon_cost_coefficient_c: 542,
             get_remaining_compute_units_cost: 100,
+            alt_bn128_g1_compress: 30,
+            alt_bn128_g1_decompress: 398,
+            alt_bn128_g2_compress: 86,
+            alt_bn128_g2_decompress: 13610,
         }
     }
 

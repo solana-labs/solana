@@ -5653,6 +5653,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-sbf-rust-alt-bn128-compression"
+version = "1.17.0"
+dependencies = [
+ "array-bytes",
+ "solana-program",
+]
+
+[[package]]
 name = "solana-sbf-rust-call-depth"
 version = "1.17.0"
 dependencies = [
