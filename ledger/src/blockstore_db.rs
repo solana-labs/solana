@@ -739,6 +739,36 @@ impl<T: SlotColumn> Column for T {
     }
 }
 
+pub enum IndexError {
+    UnpackError,
+}
+
+/// Helper trait to transition primary indexes out from the columns that are using them.
+pub trait ColumnIndexDeprecation: Column {
+    const DEPRECATED_INDEX_LEN: usize;
+    const CURRENT_INDEX_LEN: usize;
+    type DeprecatedIndex;
+
+    fn deprecated_key(index: Self::DeprecatedIndex) -> Vec<u8>;
+    fn try_deprecated_index(key: &[u8]) -> std::result::Result<Self::DeprecatedIndex, IndexError>;
+
+    fn try_current_index(key: &[u8]) -> std::result::Result<Self::Index, IndexError>;
+    fn convert_index(deprecated_index: Self::DeprecatedIndex) -> Self::Index;
+
+    fn index(key: &[u8]) -> Self::Index {
+        if let Ok(index) = Self::try_current_index(key) {
+            index
+        } else if let Ok(index) = Self::try_deprecated_index(key) {
+            Self::convert_index(index)
+        } else {
+            // Way back in the day, we broke the TransactionStatus column key. This fallback
+            // preserves the existing logic for ancient keys, but realistically should never be
+            // executed.
+            Self::as_index(0)
+        }
+    }
+}
+
 impl Column for columns::TransactionStatus {
     type Index = (u64, Signature, Slot);
 
