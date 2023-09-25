@@ -66,12 +66,10 @@ impl LedgerHelper {
             let bank_hash_string = stdout.trim();
             match Hash::from_str(bank_hash_string) {
                 Ok(bank_hash) => Ok(bank_hash),
-                Err(err) => {
-                    Err(boxed_error!(format!(
-                        "Failed to convert string to hash: {}",
-                        err
-                    )))
-                }
+                Err(err) => Err(boxed_error!(format!(
+                    "Failed to convert string to hash: {}",
+                    err
+                ))),
             }
         } else {
             Err(boxed_error!(

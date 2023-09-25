@@ -373,38 +373,31 @@ async fn main() {
             .parse::<f64>()
             .expect("Invalid value for internal_node_stake_sol")
             as f64,
-        limit_ledger_size: match matches.value_of("limit_ledger_size") {
-            Some(value_str) => Some(
-                value_str
-                    .parse()
-                    .expect("Invalid value for limit_ledger_size"),
-            ),
-            None => None,
-        },
+        limit_ledger_size: matches.value_of("limit_ledger_size").map(|value_str| {
+            value_str
+                .parse()
+                .expect("Invalid value for limit_ledger_size")
+        }),
         full_rpc: matches.is_present("full_rpc"),
         skip_poh_verify: matches.is_present("skip_poh_verify"),
         tmpfs_accounts: matches.is_present("tmps_accounts"),
         no_snapshot_fetch: matches.is_present("no_snapshot_fetch"),
         accounts_db_skip_shrink: matches.is_present("accounts_db_skip_shrink"),
         skip_require_tower: matches.is_present("skip_require_tower"),
-        wait_for_supermajority: match matches.value_of("wait_for_supermajority") {
-            Some(value_str) => Some(
-                value_str
-                    .parse()
-                    .expect("Invalid value for wait_for_supermajority"),
-            ),
-            None => None,
-        },
-        warp_slot: match matches.value_of("warp_slot") {
-            Some(value_str) => Some(value_str.parse().expect("Invalid value for warp_slot")),
-            None => None,
-        },
+        wait_for_supermajority: matches.value_of("wait_for_supermajority").map(|value_str| {
+            value_str
+                .parse()
+                .expect("Invalid value for wait_for_supermajority")
+        }),
+        warp_slot: matches
+            .value_of("warp_slot")
+            .map(|value_str| value_str.parse().expect("Invalid value for warp_slot")),
         shred_version: None, // set after genesis created
         bank_hash: None,     // set after genesis created
     };
 
-    let wait_for_supermajority: Option<u64> = runtime_config.wait_for_supermajority.clone();
-    let warp_slot: Option<u64> = runtime_config.warp_slot.clone();
+    let wait_for_supermajority: Option<u64> = runtime_config.wait_for_supermajority;
+    let warp_slot: Option<u64> = runtime_config.warp_slot;
     if !match (
         runtime_config.wait_for_supermajority,
         runtime_config.warp_slot,
@@ -543,28 +536,24 @@ async fn main() {
             return;
         }
     }
-    match warp_slot {
-        Some(slot) => {
-            //TODO: this needs to be mounted as a file in the bootstrap pod
-            match LedgerHelper::create_snapshot(slot) {
-                Ok(_) => (),
-                Err(err) => {
-                    error!("Failed to create snapshot: {}", err);
-                    return;
-                }
+    if let Some(slot) = warp_slot {
+        //TODO: this needs to be mounted as a file in the bootstrap pod
+        match LedgerHelper::create_snapshot(slot) {
+            Ok(_) => (),
+            Err(err) => {
+                error!("Failed to create snapshot: {}", err);
+                return;
             }
         }
-        None => (),
     }
-    match wait_for_supermajority {
-        Some(_) => match LedgerHelper::create_bank_hash() {
+    if wait_for_supermajority.is_some() {
+        match LedgerHelper::create_bank_hash() {
             Ok(bank_hash) => kub_controller.set_bank_hash(bank_hash),
             Err(err) => {
                 error!("Failed to get bank hash: {}", err);
                 return;
             }
-        },
-        None => (),
+        }
     }
 
     // Begin Kubernetes Setup and Deployment
