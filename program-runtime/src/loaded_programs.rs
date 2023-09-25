@@ -13,8 +13,11 @@ use {
         vm::{BuiltinProgram, Config},
     },
     solana_sdk::{
-        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, clock::Slot, loader_v4,
-        pubkey::Pubkey, saturating_add_assign,
+        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
+        clock::{Epoch, Slot},
+        loader_v4,
+        pubkey::Pubkey,
+        saturating_add_assign,
     },
     std::{
         collections::HashMap,
@@ -436,8 +439,12 @@ pub struct LoadedPrograms {
     ///
     /// Pubkey is the address of a program, multiple versions can coexists simultaneously under the same address (in different slots).
     entries: HashMap<Pubkey, Vec<Arc<LoadedProgram>>>,
+    /// The slot of the last rerooting
+    pub latest_root_slot: Slot,
+    /// The epoch of the last rerooting
+    pub latest_root_epoch: Epoch,
+    /// Environments of the current epoch
     pub environments: ProgramRuntimeEnvironments,
-    latest_root: Slot,
     pub stats: Stats,
 }
 
@@ -632,7 +639,12 @@ impl LoadedPrograms {
     }
 
     /// Before rerooting the blockstore this removes all superflous entries
-    pub fn prune<F: ForkGraph>(&mut self, fork_graph: &F, new_root: Slot) {
+    pub fn prune<F: ForkGraph>(
+        &mut self,
+        fork_graph: &F,
+        new_root_slot: Slot,
+        new_root_epoch: Epoch,
+    ) {
         for second_level in self.entries.values_mut() {
             // Remove entries un/re/deployed on orphan forks
             let mut first_ancestor_found = false;
@@ -640,12 +652,12 @@ impl LoadedPrograms {
                 .iter()
                 .rev()
                 .filter(|entry| {
-                    let relation = fork_graph.relationship(entry.deployment_slot, new_root);
-                    if entry.deployment_slot >= new_root {
+                    let relation = fork_graph.relationship(entry.deployment_slot, new_root_slot);
+                    if entry.deployment_slot >= new_root_slot {
                         matches!(relation, BlockRelation::Equal | BlockRelation::Descendant)
                     } else if !first_ancestor_found
                         && (matches!(relation, BlockRelation::Ancestor)
-                            || entry.deployment_slot <= self.latest_root)
+                            || entry.deployment_slot <= self.latest_root_slot)
                     {
                         first_ancestor_found = true;
                         first_ancestor_found
@@ -657,7 +669,7 @@ impl LoadedPrograms {
                 .filter(|entry| {
                     // Remove expired
                     if let Some(expiration) = entry.maybe_expiration_slot {
-                        if expiration <= new_root {
+                        if expiration <= new_root_slot {
                             self.stats.prunes_expired.fetch_add(1, Ordering::Relaxed);
                             return false;
                         }
@@ -669,7 +681,11 @@ impl LoadedPrograms {
             second_level.reverse();
         }
         self.remove_programs_with_no_entries();
-        self.latest_root = std::cmp::max(self.latest_root, new_root);
+        debug_assert!(self.latest_root_slot <= new_root_slot);
+        self.latest_root_slot = new_root_slot;
+        if self.latest_root_epoch < new_root_epoch {
+            self.latest_root_epoch = new_root_epoch;
+        }
     }
 
     fn matches_loaded_program_criteria(
@@ -718,7 +734,7 @@ impl LoadedPrograms {
                 if let Some(second_level) = self.entries.get(&key) {
                     for entry in second_level.iter().rev() {
                         let current_slot = working_slot.current_slot();
-                        if entry.deployment_slot <= self.latest_root
+                        if entry.deployment_slot <= self.latest_root_slot
                             || entry.deployment_slot == current_slot
                             || working_slot.is_ancestor(entry.deployment_slot)
                         {
@@ -1310,40 +1326,43 @@ mod tests {
             relation: BlockRelation::Unrelated,
         };
 
-        cache.prune(&fork_graph, 0);
+        cache.prune(&fork_graph, 0, 0);
         assert!(cache.entries.is_empty());
 
-        cache.prune(&fork_graph, 10);
+        cache.prune(&fork_graph, 10, 0);
         assert!(cache.entries.is_empty());
 
+        let mut cache = LoadedPrograms::default();
         let fork_graph = TestForkGraph {
             relation: BlockRelation::Ancestor,
         };
 
-        cache.prune(&fork_graph, 0);
+        cache.prune(&fork_graph, 0, 0);
         assert!(cache.entries.is_empty());
 
-        cache.prune(&fork_graph, 10);
+        cache.prune(&fork_graph, 10, 0);
         assert!(cache.entries.is_empty());
 
+        let mut cache = LoadedPrograms::default();
         let fork_graph = TestForkGraph {
             relation: BlockRelation::Descendant,
         };
 
-        cache.prune(&fork_graph, 0);
+        cache.prune(&fork_graph, 0, 0);
         assert!(cache.entries.is_empty());
 
-        cache.prune(&fork_graph, 10);
+        cache.prune(&fork_graph, 10, 0);
         assert!(cache.entries.is_empty());
 
+        let mut cache = LoadedPrograms::default();
         let fork_graph = TestForkGraph {
             relation: BlockRelation::Unknown,
         };
 
-        cache.prune(&fork_graph, 0);
+        cache.prune(&fork_graph, 0, 0);
         assert!(cache.entries.is_empty());
 
-        cache.prune(&fork_graph, 10);
+        cache.prune(&fork_graph, 10, 0);
         assert!(cache.entries.is_empty());
     }
 
@@ -1754,7 +1773,7 @@ mod tests {
             programs.pop();
         }
 
-        cache.prune(&fork_graph, 5);
+        cache.prune(&fork_graph, 5, 0);
 
         // Fork graph after pruning
         //                   0
@@ -1819,7 +1838,7 @@ mod tests {
         assert!(match_slot(&found, &program3, 25, 27));
         assert!(match_slot(&found, &program4, 5, 27));
 
-        cache.prune(&fork_graph, 15);
+        cache.prune(&fork_graph, 15, 0);
 
         // Fork graph after pruning
         //                  0
@@ -2170,7 +2189,7 @@ mod tests {
         );
 
         // New root 5 should not evict the expired entry for program1
-        cache.prune(&fork_graph, 5);
+        cache.prune(&fork_graph, 5, 0);
         assert_eq!(
             cache
                 .entries
@@ -2181,7 +2200,7 @@ mod tests {
         );
 
         // New root 15 should evict the expired entry for program1
-        cache.prune(&fork_graph, 15);
+        cache.prune(&fork_graph, 15, 0);
         assert!(cache.entries.get(&program1).is_none());
     }
 
@@ -2207,7 +2226,7 @@ mod tests {
         assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
         assert!(!cache.replenish(program1, new_test_loaded_program(5, 6)).0);
 
-        cache.prune(&fork_graph, 10);
+        cache.prune(&fork_graph, 10, 0);
 
         let working_slot = TestWorkingSlot::new(20, &[0, 10, 20]);
         let ExtractedPrograms {
