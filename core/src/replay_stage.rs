@@ -7302,7 +7302,7 @@ pub(crate) mod tests {
         assert_eq!(reset_fork, Some(6));
         assert_eq!(
             failures,
-            vec![HeaviestForkFailures::FailedSwitchThreshold(4, 0, 30000),]
+            vec![HeaviestForkFailures::FailedSwitchThreshold(4)],
         );
 
         let (vote_fork, reset_fork, failures) = run_compute_and_select_forks(
@@ -7318,7 +7318,7 @@ pub(crate) mod tests {
         assert_eq!(reset_fork, Some(6));
         assert_eq!(
             failures,
-            vec![HeaviestForkFailures::FailedSwitchThreshold(4, 0, 30000),]
+            vec![HeaviestForkFailures::FailedSwitchThreshold(4)],
         );
     }
 
