@@ -1,5 +1,5 @@
 use {
-    crate::{input_parsers::PubkeySignature, ArgConstant},
+    crate::{input_parsers::signer::PubkeySignature, ArgConstant},
     clap::{value_parser, Arg, Command},
     solana_sdk::hash::Hash,
 };

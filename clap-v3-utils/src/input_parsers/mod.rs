@@ -9,8 +9,15 @@ use {
     std::str::FromStr,
 };
 
-mod signer;
-pub use signer::*;
+pub mod signer;
+#[deprecated(
+    since = "1.17.0",
+    note = "Please use the functions in `solana_clap_v3_utils::input_parsers::signer` directly instead"
+)]
+pub use signer::{
+    keypair_of, keypairs_of, pubkey_of, pubkey_of_signer, pubkeys_of, pubkeys_of_multiple_signers,
+    pubkeys_sigs_of, resolve_signer, signer_of, STDOUT_OUTFILE_TOKEN,
+};
 
 // Return parsed values from matches at `name`
 pub fn values_of<T>(matches: &ArgMatches, name: &str) -> Option<Vec<T>>
