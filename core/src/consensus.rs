@@ -571,12 +571,11 @@ impl Tower {
         trace!("{} record_vote for {}", self.node_pubkey, vote_slot);
         let old_root = self.root();
 
-<<<<<<< HEAD
         if is_direct_vote_state_update_enabled {
             let vote = Vote::new(vec![vote_slot], vote_hash);
             let result = process_vote_unchecked(&mut self.vote_state, vote);
             if result.is_err() {
-                error!(
+                panic!(
                     "Error while recording vote {} {} in local tower {:?}",
                     vote_slot, vote_hash, result
                 );
@@ -588,14 +587,6 @@ impl Tower {
                 vote_slot,
                 vote_hash,
                 last_voted_slot_in_bank,
-=======
-        let vote = Vote::new(vec![vote_slot], vote_hash);
-        let result = process_vote_unchecked(&mut self.vote_state, vote);
-        if result.is_err() {
-            panic!(
-                "Error while recording vote {} {} in local tower {:?}",
-                vote_slot, vote_hash, result
->>>>>>> 85cc6ace05 (Update is_locked_out cache when adopting on chain vote state (#33341))
             );
 
             new_vote
