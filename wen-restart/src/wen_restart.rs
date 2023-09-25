@@ -1,6 +1,4 @@
 //! The `wen-restart` module handles automatically repair in cluster restart
-
-use solana_runtime::{accounts_background_service::AbsRequestSender, snapshot_config::SnapshotConfig};
 use {
     crate::{
         epoch_stakes_map::EpochStakesMap,
@@ -15,6 +13,7 @@ use {
     solana_runtime::{
         bank_forks::BankForks,
         snapshot_bank_utils::bank_to_incremental_snapshot_archive,
+        snapshot_config::SnapshotConfig,
         snapshot_utils::{
             get_highest_full_snapshot_archive_slot,
             get_incremental_snapshot_archives,
