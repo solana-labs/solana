@@ -3063,7 +3063,7 @@ impl ReplayStage {
     pub fn compute_bank_stats(
         my_vote_pubkey: &Pubkey,
         ancestors: &HashMap<u64, HashSet<u64>>,
-        frozen_banks: &mut Vec<Arc<Bank>>,
+        frozen_banks: &mut [Arc<Bank>],
         tower: &mut Tower,
         progress: &mut ProgressMap,
         vote_tracker: &VoteTracker,
@@ -3074,7 +3074,7 @@ impl ReplayStage {
     ) -> Vec<Slot> {
         frozen_banks.sort_by_key(|bank| bank.slot());
         let mut new_stats = vec![];
-        for bank in frozen_banks {
+        for bank in frozen_banks.iter() {
             let bank_slot = bank.slot();
             // Only time progress map should be missing a bank slot
             // is if this node was the leader for this slot as those banks
@@ -3172,6 +3172,11 @@ impl ReplayStage {
                                         .get_hash(last_voted_slot)
                                         .expect("Must exist for us to have frozen descendant"),
                                 );
+                                // Since we are updating our tower we need to update associated caches for previously computed
+                                // slots as well.
+                                for slot in frozen_banks.iter().map(|b| b.slot()) {
+                                    Self::cache_tower_stats(progress, tower, slot, ancestors);
+                                }
                             }
                         }
                     }
@@ -3232,22 +3237,31 @@ impl ReplayStage {
                 cluster_slots,
             );
 
-            let stats = progress
-                .get_fork_stats_mut(bank_slot)
-                .expect("All frozen banks must exist in the Progress map");
-
-            stats.vote_threshold =
-                tower.check_vote_stake_threshold(bank_slot, &stats.voted_stakes, stats.total_stake);
-            stats.is_locked_out = tower.is_locked_out(
-                bank_slot,
-                ancestors
-                    .get(&bank_slot)
-                    .expect("Ancestors map should contain slot for is_locked_out() check"),
-            );
-            stats.has_voted = tower.has_voted(bank_slot);
-            stats.is_recent = tower.is_recent(bank_slot);
+            Self::cache_tower_stats(progress, tower, bank_slot, ancestors);
         }
         new_stats
+    }
+
+    fn cache_tower_stats(
+        progress: &mut ProgressMap,
+        tower: &Tower,
+        slot: Slot,
+        ancestors: &HashMap<u64, HashSet<u64>>,
+    ) {
+        let stats = progress
+            .get_fork_stats_mut(slot)
+            .expect("All frozen banks must exist in the Progress map");
+
+        stats.vote_threshold =
+            tower.check_vote_stake_threshold(slot, &stats.voted_stakes, stats.total_stake);
+        stats.is_locked_out = tower.is_locked_out(
+            slot,
+            ancestors
+                .get(&slot)
+                .expect("Ancestors map should contain slot for is_locked_out() check"),
+        );
+        stats.has_voted = tower.has_voted(slot);
+        stats.is_recent = tower.is_recent(slot);
     }
 
     fn update_propagation_status(
@@ -6345,7 +6359,7 @@ pub(crate) mod tests {
 
         // All forks have same weight so heaviest bank to vote/reset on should be the tip of
         // the fork with the lower slot
-        let (vote_fork, reset_fork) = run_compute_and_select_forks(
+        let (vote_fork, reset_fork, _) = run_compute_and_select_forks(
             &bank_forks,
             &mut progress,
             &mut tower,
@@ -6361,7 +6375,7 @@ pub(crate) mod tests {
 
         // 4 should be the heaviest slot, but should not be votable
         // because of lockout. 5 is the heaviest slot on the same fork as the last vote.
-        let (vote_fork, reset_fork) = run_compute_and_select_forks(
+        let (vote_fork, reset_fork, _) = run_compute_and_select_forks(
             &bank_forks,
             &mut progress,
             &mut tower,
@@ -6404,7 +6418,7 @@ pub(crate) mod tests {
 
         // 4 should be the heaviest slot, but should not be votable
         // because of lockout. 5 is no longer valid due to it being a duplicate.
-        let (vote_fork, reset_fork) = run_compute_and_select_forks(
+        let (vote_fork, reset_fork, _) = run_compute_and_select_forks(
             &bank_forks,
             &mut progress,
             &mut tower,
@@ -6440,7 +6454,7 @@ pub(crate) mod tests {
         // the right version of the block, so `duplicate_slots_to_repair`
         // should be empty
         assert!(duplicate_slots_to_repair.is_empty());
-        let (vote_fork, reset_fork) = run_compute_and_select_forks(
+        let (vote_fork, reset_fork, _) = run_compute_and_select_forks(
             &bank_forks,
             &mut progress,
             &mut tower,
@@ -6492,7 +6506,7 @@ pub(crate) mod tests {
 
         // All forks have same weight so heaviest bank to vote/reset on should be the tip of
         // the fork with the lower slot
-        let (vote_fork, reset_fork) = run_compute_and_select_forks(
+        let (vote_fork, reset_fork, _) = run_compute_and_select_forks(
             &bank_forks,
             &mut progress,
             &mut tower,
@@ -6536,7 +6550,7 @@ pub(crate) mod tests {
             SlotStateUpdate::Duplicate(duplicate_state),
         );
 
-        let (vote_fork, reset_fork) = run_compute_and_select_forks(
+        let (vote_fork, reset_fork, _) = run_compute_and_select_forks(
             &bank_forks,
             &mut progress,
             &mut tower,
@@ -6571,7 +6585,7 @@ pub(crate) mod tests {
             SlotStateUpdate::Duplicate(duplicate_state),
         );
 
-        let (vote_fork, reset_fork) = run_compute_and_select_forks(
+        let (vote_fork, reset_fork, _) = run_compute_and_select_forks(
             &bank_forks,
             &mut progress,
             &mut tower,
@@ -6611,7 +6625,7 @@ pub(crate) mod tests {
         // the right version of the block, so `duplicate_slots_to_repair`
         // should be empty
         assert!(duplicate_slots_to_repair.is_empty());
-        let (vote_fork, reset_fork) = run_compute_and_select_forks(
+        let (vote_fork, reset_fork, _) = run_compute_and_select_forks(
             &bank_forks,
             &mut progress,
             &mut tower,
@@ -7967,7 +7981,7 @@ pub(crate) mod tests {
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
         latest_validator_votes_for_frozen_banks: &mut LatestValidatorVotesForFrozenBanks,
         my_vote_pubkey: Option<Pubkey>,
-    ) -> (Option<Slot>, Option<Slot>) {
+    ) -> (Option<Slot>, Option<Slot>, Vec<HeaviestForkFailures>) {
         let mut frozen_banks: Vec<_> = bank_forks
             .read()
             .unwrap()
@@ -7994,7 +8008,7 @@ pub(crate) mod tests {
         let SelectVoteAndResetForkResult {
             vote_bank,
             reset_bank,
-            ..
+            heaviest_fork_failures,
         } = ReplayStage::select_vote_and_reset_forks(
             &heaviest_bank,
             heaviest_bank_on_same_fork.as_ref(),
@@ -8008,6 +8022,7 @@ pub(crate) mod tests {
         (
             vote_bank.map(|(b, _)| b.slot()),
             reset_bank.map(|b| b.slot()),
+            heaviest_fork_failures,
         )
     }
 
@@ -8077,7 +8092,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_tower_sync_from_bank() {
+    fn test_tower_sync_from_bank_failed_switch() {
         solana_logger::setup_with_default(
             "error,solana_core::replay_stage=info,solana_core::consensus=info",
         );
@@ -8096,9 +8111,10 @@ pub(crate) mod tests {
                     slot 6
 
             We had some point voted 0 - 6, while the rest of the network voted 0 - 4.
-            We are sitting with an oudated tower that has voted until 1. We see that 2 is the heaviest slot,
+            We are sitting with an oudated tower that has voted until 1. We see that 4 is the heaviest slot,
             however in the past we have voted up to 6. We must acknowledge the vote state present at 6,
-            adopt it as our own and *not* vote on 2 or 4, to respect slashing rules.
+            adopt it as our own and *not* vote on 2 or 4, to respect slashing rules as there is
+            not enough stake to switch
         */
 
         let generate_votes = |pubkeys: Vec<Pubkey>| {
@@ -8117,7 +8133,7 @@ pub(crate) mod tests {
         tower.record_vote(0, bank_hash(0));
         tower.record_vote(1, bank_hash(1));
 
-        let (vote_fork, reset_fork) = run_compute_and_select_forks(
+        let (vote_fork, reset_fork, failures) = run_compute_and_select_forks(
             &bank_forks,
             &mut progress,
             &mut tower,
@@ -8128,8 +8144,12 @@ pub(crate) mod tests {
 
         assert_eq!(vote_fork, None);
         assert_eq!(reset_fork, Some(6));
+        assert_eq!(
+            failures,
+            vec![HeaviestForkFailures::FailedSwitchThreshold(4, 0, 30000),]
+        );
 
-        let (vote_fork, reset_fork) = run_compute_and_select_forks(
+        let (vote_fork, reset_fork, failures) = run_compute_and_select_forks(
             &bank_forks,
             &mut progress,
             &mut tower,
@@ -8140,5 +8160,80 @@ pub(crate) mod tests {
 
         assert_eq!(vote_fork, None);
         assert_eq!(reset_fork, Some(6));
+        assert_eq!(
+            failures,
+            vec![HeaviestForkFailures::FailedSwitchThreshold(4, 0, 30000),]
+        );
+    }
+
+    #[test]
+    fn test_tower_sync_from_bank_failed_lockout() {
+        solana_logger::setup_with_default(
+            "error,solana_core::replay_stage=info,solana_core::consensus=info",
+        );
+        /*
+            Fork structure:
+
+                 slot 0
+                   |
+                 slot 1
+                 /    \
+            slot 3    |
+               |    slot 2
+            slot 4    |
+                    slot 5
+                      |
+                    slot 6
+
+            We had some point voted 0 - 6, while the rest of the network voted 0 - 4.
+            We are sitting with an oudated tower that has voted until 1. We see that 4 is the heaviest slot,
+            however in the past we have voted up to 6. We must acknowledge the vote state present at 6,
+            adopt it as our own and *not* vote on 3 or 4, to respect slashing rules as we are locked
+            out on 4, even though there is enough stake to switch. However we should still reset onto
+            4.
+        */
+
+        let generate_votes = |pubkeys: Vec<Pubkey>| {
+            pubkeys
+                .into_iter()
+                .zip(iter::once(vec![0, 1, 2, 5, 6]).chain(iter::repeat(vec![0, 1, 3, 4]).take(2)))
+                .collect()
+        };
+        let tree = tr(0) / (tr(1) / (tr(3) / (tr(4))) / (tr(2) / (tr(5) / (tr(6)))));
+        let (mut vote_simulator, _blockstore) =
+            setup_forks_from_tree(tree, 3, Some(Box::new(generate_votes)));
+        let (bank_forks, mut progress) = (vote_simulator.bank_forks, vote_simulator.progress);
+        let bank_hash = |slot| bank_forks.read().unwrap().bank_hash(slot).unwrap();
+        let my_vote_pubkey = vote_simulator.vote_pubkeys[0];
+        let mut tower = Tower::default();
+        tower.node_pubkey = vote_simulator.node_pubkeys[0];
+        tower.record_vote(0, bank_hash(0));
+        tower.record_vote(1, bank_hash(1));
+
+        let (vote_fork, reset_fork, failures) = run_compute_and_select_forks(
+            &bank_forks,
+            &mut progress,
+            &mut tower,
+            &mut vote_simulator.heaviest_subtree_fork_choice,
+            &mut vote_simulator.latest_validator_votes_for_frozen_banks,
+            Some(my_vote_pubkey),
+        );
+
+        assert_eq!(vote_fork, None);
+        assert_eq!(reset_fork, Some(4));
+        assert_eq!(failures, vec![HeaviestForkFailures::LockedOut(4),]);
+
+        let (vote_fork, reset_fork, failures) = run_compute_and_select_forks(
+            &bank_forks,
+            &mut progress,
+            &mut tower,
+            &mut vote_simulator.heaviest_subtree_fork_choice,
+            &mut vote_simulator.latest_validator_votes_for_frozen_banks,
+            Some(my_vote_pubkey),
+        );
+
+        assert_eq!(vote_fork, None);
+        assert_eq!(reset_fork, Some(4));
+        assert_eq!(failures, vec![HeaviestForkFailures::LockedOut(4),]);
     }
 }
