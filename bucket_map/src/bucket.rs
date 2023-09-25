@@ -891,6 +891,152 @@ mod tests {
     use {super::*, crate::index_entry::OccupyIfMatches, tempfile::tempdir};
 
     #[test]
+    fn test_batch_insert_non_duplicates_reusing_file_many_entries() {
+        // 3 variations of reuse
+        for reuse_type in 0..3 {
+            let data_buckets = Vec::default();
+            let v = 12u64;
+            let random = 1;
+            // with random=1, 6 entries is the most that don't collide on a single hash % cap value.
+            for len in 0..7 {
+                log::error!("testing with {len}");
+                // cannot use pubkey [0,0,...] because that matches a zeroed out default file contents.
+                let raw = (0..len)
+                    .map(|l| (Pubkey::from([(l + 1) as u8; 32]), v + (l as u64)))
+                    .collect::<Vec<_>>();
+
+                let mut hashed = Bucket::index_entries(&raw, random);
+                let hashed_raw = hashed.clone();
+
+                let tmpdir = tempdir().unwrap();
+                let paths: Arc<Vec<PathBuf>> = Arc::new(vec![tmpdir.path().to_path_buf()]);
+                assert!(!paths.is_empty());
+                let max_search = 2;
+                let (mut index, file_name) = BucketStorage::<IndexBucket<u64>>::new(
+                    paths.clone(),
+                    1,
+                    std::mem::size_of::<crate::index_entry::IndexEntry<u64>>() as u64,
+                    max_search,
+                    Arc::default(),
+                    Arc::default(),
+                );
+                index.delete_file_on_drop = false;
+                let cap = index.capacity();
+
+                hashed.sort_unstable_by(|a, b| (a.0 % cap).cmp(&(b.0 % cap)).reverse());
+                hashed.windows(2).for_each(|two| {
+                    assert_ne!(two[0].0 % cap, two[1].0 % cap, "{two:?}, cap: {cap}");
+                });
+
+                // file is blank, so nothing matches, so everything returned in `hashed` to retry.
+                let mut duplicates = Vec::default();
+                let mut entries_created = 0;
+                // insert normally
+                Bucket::<u64>::batch_insert_non_duplicates_internal(
+                    &mut index,
+                    &data_buckets,
+                    &raw,
+                    &mut hashed,
+                    &mut entries_created,
+                    &mut duplicates,
+                    false,
+                )
+                .unwrap();
+                assert!(hashed.is_empty());
+                assert!(duplicates.is_empty());
+
+                hashed_raw.iter().for_each(|(hash, i)| {
+                    let (k, v) = raw[*i];
+                    let ix = *hash % cap;
+                    let entry = IndexEntryPlaceInBucket::new(ix);
+                    assert_eq!(entry.key(&index), &k);
+                    assert_eq!(
+                        entry.get_slot_count_enum(&index),
+                        OccupiedEnum::OneSlotInIndex(&v)
+                    );
+                });
+
+                drop(index);
+                let path = paths.first().unwrap().join(file_name.to_string());
+                let mut index = BucketStorage::<IndexBucket<u64>>::load_on_restart(
+                    path,
+                    NonZeroU64::new(
+                        std::mem::size_of::<crate::index_entry::IndexEntry<u64>>() as u64
+                    )
+                    .unwrap(),
+                    max_search,
+                    Arc::default(),
+                    Arc::default(),
+                )
+                .unwrap();
+
+                // verify index file is unoccupied, but that contents match
+                hashed_raw.iter().for_each(|(hash, i)| {
+                    let (k, _v) = raw[*i];
+                    let ix = *hash % cap;
+                    let entry = IndexEntryPlaceInBucket::new(ix);
+                    assert_eq!(entry.key(&index), &k);
+                    assert_eq!(entry.get_slot_count_enum(&index), OccupiedEnum::Free);
+                });
+
+                // this was wiped out by the last call to batch_insert..., so recreate it.
+                hashed = hashed_raw.clone();
+                let mut duplicates = Vec::default();
+                if reuse_type == 0 {
+                    Bucket::<u64>::batch_insert_non_duplicates_reusing_file(
+                        &mut index,
+                        &data_buckets,
+                        &raw,
+                        &mut hashed,
+                        &mut duplicates,
+                    );
+                } else if reuse_type == 1 {
+                    // just overwrite all data instead of trying to reuse it
+                    let mut entries_created = 0;
+                    _ = Bucket::<u64>::batch_insert_non_duplicates_internal(
+                        &mut index,
+                        &data_buckets,
+                        &raw,
+                        &mut hashed,
+                        &mut entries_created,
+                        &mut duplicates,
+                        false,
+                    );
+                    assert_eq!(entries_created, hashed_raw.len());
+                } else if reuse_type == 2 {
+                    // just overwrite all data instead of trying to reuse it
+                    let mut entries_created = 0;
+                    _ = Bucket::<u64>::batch_insert_non_duplicates_internal(
+                        &mut index,
+                        &data_buckets,
+                        &raw,
+                        &mut hashed,
+                        &mut entries_created,
+                        &mut duplicates,
+                        // call re-use code first
+                        true,
+                    );
+                    assert_eq!(entries_created, 0);
+                }
+                assert!(hashed.is_empty());
+                assert!(duplicates.is_empty());
+
+                hashed_raw.iter().for_each(|(hash, i)| {
+                    let (k, v) = raw[*i];
+                    let ix = *hash % cap;
+                    let entry = IndexEntryPlaceInBucket::new(ix);
+                    assert_eq!(entry.key(&index), &k);
+                    assert_eq!(
+                        entry.get_slot_count_enum(&index),
+                        OccupiedEnum::OneSlotInIndex(&v),
+                        "i: {i}"
+                    );
+                });
+            }
+        }
+    }
+
+    #[test]
     fn test_batch_insert_non_duplicates_reusing_file_blank_file() {
         let data_buckets = Vec::default();
         let v = 12u64;
@@ -1244,7 +1390,8 @@ mod tests {
                     for len in 1..(max_search + 1) {
                         let raw = (0..len)
                             .map(|l| {
-                                let k = Pubkey::from([l as u8; 32]);
+                                // +1 because pubkey[0,0,...] matches default contents of index file
+                                let k = Pubkey::from([(l + 1) as u8; 32]);
                                 (k, v + (l as u64))
                             })
                             .collect::<Vec<_>>();
