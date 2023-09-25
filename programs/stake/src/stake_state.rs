@@ -639,18 +639,17 @@ fn deactivate_stake(
     stake_flags: &mut StakeFlags,
     epoch: Epoch,
 ) -> Result<(), InstructionError> {
-    let stake_history = invoke_context.get_sysvar_cache().get_stake_history()?;
-
     if invoke_context
         .feature_set
         .is_active(&feature_set::stake_redelegate_instruction::id())
     {
         if stake_flags.contains(StakeFlags::MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED) {
+            let stake_history = invoke_context.get_sysvar_cache().get_stake_history()?;
             // when MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED flag is set on stake_flags,
             // deactivation is only permitted when the stake delegation activating amount is zero.
             let status = stake.delegation.stake_activating_and_deactivating(
                 epoch,
-                Some(&stake_history),
+                Some(stake_history.as_ref()),
                 new_warmup_cooldown_rate_epoch(invoke_context),
             );
             if status.activating != 0 {

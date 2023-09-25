@@ -73,7 +73,7 @@ async fn test_stake_redelegation_pending_activation(merge_flag: PendingStakeActi
     // 3. create 2nd vote account
     let vote_address2 = setup_vote(&mut context).await;
 
-    // 3.1 relegate 1st stake account to 2nd stake account.
+    // 3.1 relegate stake account to 2nd vote account, which creates 2nd stake account
     let stake_keypair2 = Keypair::new();
     let stake_address2 = stake_keypair2.pubkey();
     let transaction = Transaction::new_signed_with_payer(
