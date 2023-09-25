@@ -35,7 +35,7 @@ use {
             cap_bpf_program_instruction_accounts, delay_visibility_of_program_deployment,
             enable_bpf_loader_extend_program_ix, enable_bpf_loader_set_authority_checked_ix,
             enable_program_redeployment_cooldown, limit_max_instruction_trace_length,
-            native_programs_consume_cu, remove_bpf_loader_incorrect_program_id, FeatureSet,
+            native_programs_consume_cu, remove_bpf_loader_incorrect_program_id,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -67,7 +67,7 @@ pub const UPGRADEABLE_LOADER_COMPUTE_UNITS: u64 = 2_370;
 
 #[allow(clippy::too_many_arguments)]
 pub fn load_program_from_bytes(
-    feature_set: &FeatureSet,
+    delay_visibility_of_program_deployment: bool,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     load_program_metrics: &mut LoadProgramMetrics,
     programdata: &[u8],
@@ -77,7 +77,7 @@ pub fn load_program_from_bytes(
     program_runtime_environment: Arc<BuiltinProgram<InvokeContext<'static>>>,
     reloading: bool,
 ) -> Result<LoadedProgram, InstructionError> {
-    let effective_slot = if feature_set.is_active(&delay_visibility_of_program_deployment::id()) {
+    let effective_slot = if delay_visibility_of_program_deployment {
         deployment_slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET)
     } else {
         deployment_slot
@@ -132,7 +132,7 @@ macro_rules! deploy_program {
         register_syscalls_time.stop();
         load_program_metrics.register_syscalls_us = register_syscalls_time.as_us();
         let executor = load_program_from_bytes(
-            &$invoke_context.feature_set,
+            $invoke_context.feature_set.is_active(&delay_visibility_of_program_deployment::id()),
             $invoke_context.get_log_collector(),
             &mut load_program_metrics,
             $new_programdata,
@@ -1707,7 +1707,7 @@ pub mod test_utils {
                     .expect("Failed to get account key");
 
                 if let Ok(loaded_program) = load_program_from_bytes(
-                    &FeatureSet::all_enabled(),
+                    true,
                     None,
                     &mut load_program_metrics,
                     account.data(),
