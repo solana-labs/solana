@@ -558,7 +558,7 @@ pub mod enable_alt_bn128_syscall {
     solana_sdk::declare_id!("A16q37opZdQMCbe5qJ6xpBB9usykfv8jZaMkxvZQi4GJ");
 }
 pub mod enable_alt_bn128_compression_syscall {
-    solana_sdk::declare_id!("Compression111111111111111111111111111111111");
+    solana_sdk::declare_id!("EJJewYSddEEtSZHiqugnvhQHiWyZKjkFDQASd7oKSagn");
 }
 
 pub mod enable_program_redeployment_cooldown {
