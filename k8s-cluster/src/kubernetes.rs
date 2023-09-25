@@ -120,20 +120,17 @@ impl<'a> Kubernetes<'a> {
             "--init-complete-file".to_string(),
             "logs/init-complete-node.log".to_string(),
         ]);
-        match self.runtime_config.limit_ledger_size {
-            Some(size) => flags.extend(vec!["--limit-ledger-size".to_string(), size.to_string()]),
-            None => (),
+        if let Some(size) = self.runtime_config.limit_ledger_size {
+            flags.extend(vec!["--limit-ledger-size".to_string(), size.to_string()])
         }
-        match self.runtime_config.wait_for_supermajority {
-            Some(slot) => flags.extend(vec![
+        if let Some(slot) = self.runtime_config.wait_for_supermajority {
+            flags.extend(vec![
                 "--wait-for-supermajority".to_string(),
                 slot.to_string(),
-            ]),
-            None => (),
+            ])
         }
-        match self.runtime_config.warp_slot {
-            Some(slot) => flags.extend(vec!["--warp-slot".to_string(), slot.to_string()]),
-            None => (),
+        if let Some(slot) = self.runtime_config.warp_slot {
+            flags.extend(vec!["--warp-slot".to_string(), slot.to_string()])
         }
         if self.runtime_config.full_rpc {
             flags.push("--enable-rpc-transaction-history".to_string());
@@ -175,13 +172,13 @@ impl<'a> Kubernetes<'a> {
             self.runtime_config.internal_node_sol.to_string(),
         ]);
 
-        match self.runtime_config.shred_version {
-            Some(shred_version) => flags.extend(vec![
+        if let Some(shred_version) = self.runtime_config.shred_version {
+            flags.extend(vec![
                 "--expected-shred-version".to_string(),
                 shred_version.to_string(),
-            ]),
-            None => (),
+            ])
         }
+
         flags
     }
 

@@ -65,18 +65,18 @@ impl LedgerHelper {
             let stdout = String::from_utf8_lossy(&output.stdout);
             let bank_hash_string = stdout.trim();
             match Hash::from_str(bank_hash_string) {
-                Ok(bank_hash) => return Ok(bank_hash),
+                Ok(bank_hash) => Ok(bank_hash),
                 Err(err) => {
-                    return Err(boxed_error!(format!(
+                    Err(boxed_error!(format!(
                         "Failed to convert string to hash: {}",
                         err
                     )))
                 }
             }
         } else {
-            return Err(boxed_error!(
+            Err(boxed_error!(
                 "Error in solana-ledger-tool bank-hash command"
-            ));
+            ))
         }
     }
 }
