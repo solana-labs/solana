@@ -369,16 +369,15 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
                         items.len().saturating_sub(duplicates.len()) as u64,
                         Ordering::Relaxed,
                     );
-                    self.index.stats.startup.entries_reused.fetch_add(
+                    let stats = &self.index.stats.startup;
+                    stats.entries_reused.fetch_add(
                         items
                             .len()
                             .saturating_sub(duplicates.len())
                             .saturating_sub(entries_created_on_disk) as u64,
                         Ordering::Relaxed,
                     );
-                    self.index
-                        .stats
-                        .startup
+                    stats
                         .entries_created
                         .fetch_add(entries_created_on_disk as u64, Ordering::Relaxed);
                     return duplicates;
