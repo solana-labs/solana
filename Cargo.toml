@@ -298,7 +298,7 @@ siphasher = "0.3.11"
 smpl_jwt = "0.7.1"
 socket2 = "0.5.4"
 soketto = "0.7"
-solana_rbpf = "=0.7.1"
+solana_rbpf = "=0.7.2"
 solana-account-decoder = { path = "account-decoder", version = "=1.17.0" }
 solana-accounts-db = { path = "accounts-db", version = "=1.17.0" }
 solana-address-lookup-table-program = { path = "programs/address-lookup-table", version = "=1.17.0" }
