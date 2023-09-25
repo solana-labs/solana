@@ -1946,7 +1946,7 @@ declare_syscall!(
             _ => Err(SyscallError::InvalidAttribute.into()),
         }
     }
-)
+);
         
 declare_syscallhash!(
     // Generic Hashing Syscall
