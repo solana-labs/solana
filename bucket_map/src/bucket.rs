@@ -1003,7 +1003,9 @@ mod tests {
                     );
                     assert_eq!(entries_created, hashed_raw.len());
                 } else if reuse_type == 2 {
-                    // just overwrite all data instead of trying to reuse it
+                    // call the higher level fn
+                    // That fn will call batch_insert_non_duplicates_reusing_file.
+                    // The inner fn should insert everything, reusing data, so there should be no entries created.
                     let mut entries_created = 0;
                     _ = Bucket::<u64>::batch_insert_non_duplicates_internal(
                         &mut index,
