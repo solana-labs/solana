@@ -505,7 +505,12 @@ fn test_concurrent_snapshot_packaging(
             timestamp(), // wallclock
             0u16,        // shred_version
         );
-        ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
+        ClusterInfo::new(
+            contact_info,
+            keypair,
+            SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
+        )
     });
 
     let (snapshot_package_sender, snapshot_package_receiver) = crossbeam_channel::unbounded();
@@ -955,6 +960,7 @@ fn test_snapshots_with_background_services(
         ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
         node_keypair,
         SocketAddrSpace::Unspecified,
+        /*known_validators*/ None,
     ));
 
     let (pruned_banks_sender, pruned_banks_receiver) = unbounded();

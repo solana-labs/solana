@@ -37,12 +37,11 @@ use {
     },
     solana_sdk::{
         exit::Exit, genesis_config::DEFAULT_GENESIS_DOWNLOAD_PATH, hash::Hash,
-        native_token::lamports_to_sol, pubkey::Pubkey,
+        native_token::lamports_to_sol,
     },
     solana_send_transaction_service::send_transaction_service::{self, SendTransactionService},
     solana_storage_bigtable::CredentialType,
     std::{
-        collections::HashSet,
         net::SocketAddr,
         path::{Path, PathBuf},
         sync::{
@@ -350,7 +349,6 @@ impl JsonRpcService {
         ledger_path: &Path,
         validator_exit: Arc<RwLock<Exit>>,
         exit: Arc<AtomicBool>,
-        known_validators: Option<HashSet<Pubkey>>,
         override_health_check: Arc<AtomicBool>,
         startup_verification_complete: Arc<AtomicBool>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
@@ -369,7 +367,6 @@ impl JsonRpcService {
 
         let health = Arc::new(RpcHealth::new(
             cluster_info.clone(),
-            known_validators,
             config.health_check_slot_distance,
             override_health_check,
             startup_verification_complete,
@@ -601,6 +598,7 @@ mod tests {
             signature::Signer,
         },
         std::{
+            collections::HashSet,
             io::Write,
             net::{IpAddr, Ipv4Addr},
         },
@@ -643,7 +641,6 @@ mod tests {
             &PathBuf::from("farf"),
             validator_exit,
             exit,
-            None,
             Arc::new(AtomicBool::new(false)),
             Arc::new(AtomicBool::new(true)),
             optimistically_confirmed_bank,
@@ -899,19 +896,21 @@ mod tests {
 
     #[test]
     fn test_health_check_with_known_validators() {
-        let cluster_info = Arc::new(new_test_cluster_info());
-        let health_check_slot_distance = 123;
-        let override_health_check = Arc::new(AtomicBool::new(false));
-        let startup_verification_complete = Arc::new(AtomicBool::new(true));
-        let known_validators = vec![
+        let known_validators = [
             solana_sdk::pubkey::new_rand(),
             solana_sdk::pubkey::new_rand(),
             solana_sdk::pubkey::new_rand(),
         ];
+        let mut cluster_info = new_test_cluster_info();
+        cluster_info
+            .set_known_validators(Some(HashSet::from_iter(known_validators.iter().copied())));
+        let cluster_info = Arc::new(cluster_info);
+        let health_check_slot_distance = 123;
+        let override_health_check = Arc::new(AtomicBool::new(false));
+        let startup_verification_complete = Arc::new(AtomicBool::new(true));
 
         let health = Arc::new(RpcHealth::new(
             cluster_info.clone(),
-            Some(known_validators.clone().into_iter().collect()),
             health_check_slot_distance,
             override_health_check.clone(),
             startup_verification_complete,

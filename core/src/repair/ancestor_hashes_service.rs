@@ -1256,6 +1256,7 @@ mod test {
                 responder_node.info.clone(),
                 Arc::new(keypair),
                 SocketAddrSpace::Unspecified,
+                /*known_validators*/ None,
             );
             let responder_serve_repair = ServeRepair::new(
                 Arc::new(cluster_info),
@@ -1350,6 +1351,7 @@ mod test {
                 Node::new_localhost_with_pubkey(&keypair.pubkey()).info,
                 Arc::new(keypair),
                 SocketAddrSpace::Unspecified,
+                /*known_validators*/ None,
             ));
             let repair_whitelist = Arc::new(RwLock::new(HashSet::default()));
             let requester_serve_repair = ServeRepair::new(

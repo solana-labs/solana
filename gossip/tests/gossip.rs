@@ -42,6 +42,7 @@ fn test_node(exit: Arc<AtomicBool>) -> (Arc<ClusterInfo>, GossipService, UdpSock
         test_node.info.clone(),
         keypair,
         SocketAddrSpace::Unspecified,
+        /*known_validators*/ None,
     ));
     let gossip_service = GossipService::new(
         &cluster_info,
@@ -70,6 +71,7 @@ fn test_node_with_bank(
         test_node.info.clone(),
         node_keypair,
         SocketAddrSpace::Unspecified,
+        /*known_validators*/ None,
     ));
     let gossip_service = GossipService::new(
         &cluster_info,

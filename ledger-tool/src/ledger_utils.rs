@@ -262,6 +262,7 @@ pub fn load_and_process_ledger(
         ContactInfo::new_localhost(&node_id.pubkey(), timestamp()),
         Arc::clone(&node_id),
         SocketAddrSpace::Unspecified,
+        /*known_validators*/ None,
     ));
     let (accounts_package_sender, accounts_package_receiver) = crossbeam_channel::unbounded();
     let accounts_hash_verifier = AccountsHashVerifier::new(

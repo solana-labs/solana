@@ -538,6 +538,7 @@ mod test {
             leader_info.info,
             leader_keypair.clone(),
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         ));
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut genesis_config = create_genesis_config(10_000).genesis_config;

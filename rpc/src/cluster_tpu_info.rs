@@ -165,6 +165,7 @@ mod test {
                 ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
                 node_keypair,
                 SocketAddrSpace::Unspecified,
+                /*known_validators*/ None,
             ));
 
             let validator0_socket = (

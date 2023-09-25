@@ -155,7 +155,12 @@ fn start_gossip_node(
         *gossip_addr,
         expected_shred_version.unwrap_or(0),
     );
-    let mut cluster_info = ClusterInfo::new(contact_info, identity_keypair, socket_addr_space);
+    let mut cluster_info = ClusterInfo::new(
+        contact_info,
+        identity_keypair,
+        socket_addr_space,
+        /*known_validators*/ None,
+    );
     cluster_info.set_entrypoints(cluster_entrypoints.to_vec());
     cluster_info.restore_contact_info(ledger_path, 0);
     let cluster_info = Arc::new(cluster_info);

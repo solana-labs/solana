@@ -53,7 +53,12 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let cluster_info = {
         let keypair = Arc::new(Keypair::new());
         let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
-        ClusterInfo::new(node.info, keypair, SocketAddrSpace::Unspecified)
+        ClusterInfo::new(
+            node.info,
+            keypair,
+            SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
+        )
     };
     const NUM_PEERS: usize = 4;
     let peer_sockets: Vec<_> = repeat_with(|| {

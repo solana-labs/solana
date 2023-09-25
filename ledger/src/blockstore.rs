@@ -1055,6 +1055,7 @@ impl Blockstore {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn insert_shreds_handle_duplicate<F>(
         &self,
         shreds: Vec<Shred>,

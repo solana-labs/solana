@@ -660,6 +660,7 @@ pub mod test {
             leader_info.info.clone(),
             leader_keypair,
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         );
         cluster_info.insert_info(broadcast_buddy.info);
         let cluster_info = Arc::new(cluster_info);

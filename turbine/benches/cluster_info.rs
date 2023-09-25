@@ -45,6 +45,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
         leader_info.info,
         leader_keypair,
         SocketAddrSpace::Unspecified,
+        /*known_validators*/ None,
     );
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);

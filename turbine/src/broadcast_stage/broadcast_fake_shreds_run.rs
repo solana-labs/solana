@@ -173,7 +173,12 @@ mod tests {
         let cluster = {
             let keypair = Arc::new(Keypair::new());
             let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
-            ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
+            ClusterInfo::new(
+                contact_info,
+                keypair,
+                SocketAddrSpace::Unspecified,
+                /*known_validators*/ None,
+            )
         };
         for k in 1..5 {
             cluster.insert_info(ContactInfo::new_with_socketaddr(

@@ -288,7 +288,12 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         let cluster_info = {
             let keypair = Arc::new(Keypair::new());
             let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
-            ClusterInfo::new(node.info, keypair, SocketAddrSpace::Unspecified)
+            ClusterInfo::new(
+                node.info,
+                keypair,
+                SocketAddrSpace::Unspecified,
+                /*known_validators*/ None,
+            )
         };
         let cluster_info = Arc::new(cluster_info);
         let (s, _r) = unbounded();

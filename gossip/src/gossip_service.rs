@@ -311,7 +311,12 @@ pub fn make_gossip_node(
     } else {
         ClusterInfo::spy_node(keypair.pubkey(), shred_version)
     };
-    let cluster_info = ClusterInfo::new(node, Arc::new(keypair), socket_addr_space);
+    let cluster_info = ClusterInfo::new(
+        node,
+        Arc::new(keypair),
+        socket_addr_space,
+        /*known_validators*/ None,
+    );
     if let Some(entrypoint) = entrypoint {
         cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entrypoint));
     }
@@ -349,6 +354,7 @@ mod tests {
             tn.info.clone(),
             Arc::new(Keypair::new()),
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         );
         let c = Arc::new(cluster_info);
         let d = GossipService::new(
@@ -377,6 +383,7 @@ mod tests {
             contact_info,
             Arc::new(keypair),
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         );
         cluster_info.insert_info(peer0_info.clone());
         cluster_info.insert_info(peer1_info);

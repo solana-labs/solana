@@ -1,12 +1,9 @@
 use {
     solana_gossip::cluster_info::ClusterInfo,
-    solana_sdk::{clock::Slot, pubkey::Pubkey},
-    std::{
-        collections::HashSet,
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc,
-        },
+    solana_sdk::clock::Slot,
+    std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
     },
 };
 
@@ -19,7 +16,6 @@ pub enum RpcHealthStatus {
 
 pub struct RpcHealth {
     cluster_info: Arc<ClusterInfo>,
-    known_validators: Option<HashSet<Pubkey>>,
     health_check_slot_distance: u64,
     override_health_check: Arc<AtomicBool>,
     startup_verification_complete: Arc<AtomicBool>,
@@ -30,14 +26,12 @@ pub struct RpcHealth {
 impl RpcHealth {
     pub fn new(
         cluster_info: Arc<ClusterInfo>,
-        known_validators: Option<HashSet<Pubkey>>,
         health_check_slot_distance: u64,
         override_health_check: Arc<AtomicBool>,
         startup_verification_complete: Arc<AtomicBool>,
     ) -> Self {
         Self {
             cluster_info,
-            known_validators,
             health_check_slot_distance,
             override_health_check,
             startup_verification_complete,
@@ -60,29 +54,10 @@ impl RpcHealth {
 
         if self.override_health_check.load(Ordering::Relaxed) {
             RpcHealthStatus::Ok
-        } else if let Some(known_validators) = &self.known_validators {
+        } else if self.cluster_info.known_validators().is_some() {
             match (
-                self.cluster_info
-                    .get_accounts_hash_for_node(&self.cluster_info.id(), |hashes| {
-                        hashes
-                            .iter()
-                            .max_by(|a, b| a.0.cmp(&b.0))
-                            .map(|slot_hash| slot_hash.0)
-                    })
-                    .flatten(),
-                known_validators
-                    .iter()
-                    .filter_map(|known_validator| {
-                        self.cluster_info
-                            .get_accounts_hash_for_node(known_validator, |hashes| {
-                                hashes
-                                    .iter()
-                                    .max_by(|a, b| a.0.cmp(&b.0))
-                                    .map(|slot_hash| slot_hash.0)
-                            })
-                            .flatten()
-                    })
-                    .max(),
+                self.cluster_info.get_my_max_slot(),
+                self.cluster_info.get_known_validators_max_slot(),
             ) {
                 (
                     Some(latest_account_hash_slot),
@@ -131,7 +106,6 @@ impl RpcHealth {
         use crate::rpc::tests::new_test_cluster_info;
         Arc::new(Self::new(
             Arc::new(new_test_cluster_info()),
-            None,
             42,
             Arc::new(AtomicBool::new(false)),
             Arc::new(AtomicBool::new(true)),

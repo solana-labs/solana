@@ -361,7 +361,7 @@ impl WindowService {
         let (duplicate_sender, duplicate_receiver) = unbounded();
 
         let t_check_duplicate = Self::start_check_duplicate_thread(
-            cluster_info,
+            cluster_info.clone(),
             exit.clone(),
             blockstore.clone(),
             duplicate_receiver,
@@ -442,6 +442,7 @@ impl WindowService {
                 };
                 let mut metrics = BlockstoreInsertionMetrics::default();
                 let mut ws_metrics = WindowServiceMetrics::default();
+
                 let mut last_print = Instant::now();
                 while !exit.load(Ordering::Relaxed) {
                     if let Err(e) = run_insert(
@@ -581,6 +582,7 @@ mod test {
             contact_info,
             Arc::new(keypair),
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         );
         run_check_duplicate(
             &cluster_info,
@@ -615,6 +617,7 @@ mod test {
             contact_info,
             Arc::new(keypair),
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         ));
 
         // Start duplicate thread receiving and inserting duplicates

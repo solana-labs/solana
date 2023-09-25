@@ -355,7 +355,12 @@ impl JsonRpcRequestProcessor {
                 &keypair.pubkey(),
                 solana_sdk::timing::timestamp(), // wallclock
             );
-            ClusterInfo::new(contact_info, keypair, socket_addr_space)
+            ClusterInfo::new(
+                contact_info,
+                keypair,
+                socket_addr_space,
+                /*known_validators*/ None,
+            )
         });
         let tpu_address = cluster_info
             .my_contact_info()
@@ -387,7 +392,6 @@ impl JsonRpcRequestProcessor {
             validator_exit: create_validator_exit(exit.clone()),
             health: Arc::new(RpcHealth::new(
                 cluster_info.clone(),
-                None,
                 0,
                 exit,
                 Arc::clone(bank.get_startup_verification_complete()),
@@ -4704,7 +4708,12 @@ pub mod tests {
             &keypair.pubkey(),
             solana_sdk::timing::timestamp(), // wallclock
         );
-        ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
+        ClusterInfo::new(
+            contact_info,
+            keypair,
+            SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
+        )
     }
 
     fn create_test_request(method: &str, params: Option<serde_json::Value>) -> serde_json::Value {
@@ -6411,7 +6420,12 @@ pub mod tests {
                 &keypair.pubkey(),
                 &socketaddr!(Ipv4Addr::LOCALHOST, 1234),
             );
-            ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
+            ClusterInfo::new(
+                contact_info,
+                keypair,
+                SocketAddrSpace::Unspecified,
+                /*known_validators*/ None,
+            )
         });
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let tpu_address = cluster_info

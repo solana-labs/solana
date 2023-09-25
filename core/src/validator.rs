@@ -728,6 +728,7 @@ impl Validator {
             node.info.clone(),
             identity_keypair.clone(),
             socket_addr_space,
+            config.known_validators.clone(),
         );
         cluster_info.set_contact_debug_interval(config.contact_debug_interval);
         cluster_info.set_entrypoints(cluster_entrypoints);
@@ -974,7 +975,6 @@ impl Validator {
                 ledger_path,
                 config.validator_exit.clone(),
                 exit.clone(),
-                config.known_validators.clone(),
                 rpc_override_health_check.clone(),
                 startup_verification_complete,
                 optimistically_confirmed_bank.clone(),
@@ -2610,6 +2610,7 @@ mod tests {
             ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
             node_keypair,
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         );
 
         let (genesis_config, _mint_keypair) = create_genesis_config(1);

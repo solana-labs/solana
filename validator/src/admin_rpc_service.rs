@@ -867,6 +867,7 @@ mod tests {
                 ),
                 keypair,
                 SocketAddrSpace::Unspecified,
+                /*known_validators*/ None,
             ));
             let exit = Arc::new(AtomicBool::new(false));
             let validator_exit = create_validator_exit(exit);

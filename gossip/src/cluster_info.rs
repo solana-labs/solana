@@ -173,6 +173,7 @@ pub struct ClusterInfo {
     instance: RwLock<NodeInstance>,
     contact_info_path: PathBuf,
     socket_addr_space: SocketAddrSpace,
+    known_validators: Option<HashSet<Pubkey>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample)]
@@ -407,6 +408,7 @@ impl ClusterInfo {
         contact_info: ContactInfo,
         keypair: Arc<Keypair>,
         socket_addr_space: SocketAddrSpace,
+        known_validators: Option<HashSet<Pubkey>>,
     ) -> Self {
         assert_eq!(contact_info.pubkey(), &keypair.pubkey());
         let id = *contact_info.pubkey();
@@ -429,6 +431,7 @@ impl ClusterInfo {
             contact_info_path: PathBuf::default(),
             contact_save_interval: 0, // disabled
             socket_addr_space,
+            known_validators,
         };
         me.insert_self();
         me.push_self();
@@ -441,6 +444,14 @@ impl ClusterInfo {
 
     pub fn socket_addr_space(&self) -> &SocketAddrSpace {
         &self.socket_addr_space
+    }
+
+    pub fn known_validators(&self) -> &Option<HashSet<Pubkey>> {
+        &self.known_validators
+    }
+
+    pub fn set_known_validators(&mut self, known_validators: Option<HashSet<Pubkey>>) {
+        self.known_validators = known_validators;
     }
 
     fn push_self(&self) {
@@ -2743,6 +2754,29 @@ impl ClusterInfo {
 
         (contact_info, gossip_socket, None)
     }
+
+    fn get_node_max_slot(&self, node: &Pubkey) -> Option<Slot> {
+        self.get_accounts_hash_for_node(node, |hashes| {
+            hashes
+                .iter()
+                .max_by(|a, b| a.0.cmp(&b.0))
+                .map(|slot_hash| slot_hash.0)
+        })
+        .flatten()
+    }
+
+    pub fn get_my_max_slot(&self) -> Option<Slot> {
+        self.get_node_max_slot(&self.id())
+    }
+
+    pub fn get_known_validators_max_slot(&self) -> Option<Slot> {
+        self.known_validators.as_ref().and_then(|known_validators| {
+            known_validators
+                .iter()
+                .filter_map(|known_validator| self.get_node_max_slot(known_validator))
+                .max()
+        })
+    }
 }
 
 // Returns root bank's epoch duration. Falls back on
@@ -3200,7 +3234,12 @@ mod tests {
         let cluster_info = Arc::new({
             let keypair = Arc::new(Keypair::new());
             let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
-            ClusterInfo::new(node.info, keypair, SocketAddrSpace::Unspecified)
+            ClusterInfo::new(
+                node.info,
+                keypair,
+                SocketAddrSpace::Unspecified,
+                /*known_validators*/ None,
+            )
         });
         let entrypoint_pubkey = solana_sdk::pubkey::new_rand();
         let data = test_crds_values(entrypoint_pubkey);
@@ -3264,6 +3303,7 @@ mod tests {
             ContactInfo::new_localhost(&this_node.pubkey(), timestamp()),
             this_node.clone(),
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         );
         let remote_nodes: Vec<(Keypair, SocketAddr)> =
             repeat_with(|| new_rand_remote_node(&mut rng))
@@ -3319,6 +3359,7 @@ mod tests {
             ContactInfo::new_localhost(&this_node.pubkey(), timestamp()),
             this_node.clone(),
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         );
         let remote_nodes: Vec<(Keypair, SocketAddr)> =
             repeat_with(|| new_rand_remote_node(&mut rng))
@@ -3510,7 +3551,12 @@ mod tests {
         let cluster_info = Arc::new({
             let keypair = Arc::new(Keypair::new());
             let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
-            ClusterInfo::new(node.info, keypair, SocketAddrSpace::Unspecified)
+            ClusterInfo::new(
+                node.info,
+                keypair,
+                SocketAddrSpace::Unspecified,
+                /*known_validators*/ None,
+            )
         });
         cluster_info.insert_info(spy);
         cluster_info.gossip.refresh_push_active_set(
@@ -3540,7 +3586,12 @@ mod tests {
     fn test_cluster_info_new() {
         let keypair = Arc::new(Keypair::new());
         let d = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
-        let cluster_info = ClusterInfo::new(d.clone(), keypair, SocketAddrSpace::Unspecified);
+        let cluster_info = ClusterInfo::new(
+            d.clone(),
+            keypair,
+            SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
+        );
         assert_eq!(d.pubkey(), &cluster_info.id());
     }
 
@@ -3548,7 +3599,12 @@ mod tests {
     fn insert_info_test() {
         let keypair = Arc::new(Keypair::new());
         let d = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
-        let cluster_info = ClusterInfo::new(d, keypair, SocketAddrSpace::Unspecified);
+        let cluster_info = ClusterInfo::new(
+            d,
+            keypair,
+            SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
+        );
         let d = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
         let label = CrdsValueLabel::LegacyContactInfo(*d.pubkey());
         cluster_info.insert_info(d);
@@ -3639,6 +3695,7 @@ mod tests {
             contact_info,
             Arc::new(keypair),
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         );
         let stakes = HashMap::<Pubkey, u64>::default();
         cluster_info.ping_cache.lock().unwrap().mock_pong(
@@ -3692,7 +3749,12 @@ mod tests {
     fn test_refresh_vote() {
         let keypair = Arc::new(Keypair::new());
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
-        let cluster_info = ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified);
+        let cluster_info = ClusterInfo::new(
+            contact_info,
+            keypair,
+            SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
+        );
 
         // Construct and push a vote for some other slot
         let unrefresh_slot = 5;
@@ -3780,8 +3842,12 @@ mod tests {
     fn test_push_vote() {
         let keypair = Arc::new(Keypair::new());
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
-        let cluster_info =
-            ClusterInfo::new(contact_info, keypair.clone(), SocketAddrSpace::Unspecified);
+        let cluster_info = ClusterInfo::new(
+            contact_info,
+            keypair.clone(),
+            SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
+        );
 
         // make sure empty crds is handled correctly
         let mut cursor = Cursor::default();
@@ -3849,7 +3915,12 @@ mod tests {
         };
         let keypair = Arc::new(Keypair::new());
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
-        let cluster_info = ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified);
+        let cluster_info = ClusterInfo::new(
+            contact_info,
+            keypair,
+            SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
+        );
         let mut tower = Vec::new();
         for k in 0..MAX_LOCKOUT_HISTORY {
             let slot = k as Slot;
@@ -3898,7 +3969,12 @@ mod tests {
     fn test_push_epoch_slots() {
         let keypair = Arc::new(Keypair::new());
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
-        let cluster_info = ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified);
+        let cluster_info = ClusterInfo::new(
+            contact_info,
+            keypair,
+            SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
+        );
         let slots = cluster_info.get_epoch_slots(&mut Cursor::default());
         assert!(slots.is_empty());
         cluster_info.push_epoch_slots(&[0]);
@@ -3955,6 +4031,7 @@ mod tests {
             ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
             node_keypair,
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         );
         let entrypoint_pubkey = solana_sdk::pubkey::new_rand();
         let entrypoint = LegacyContactInfo::new_localhost(&entrypoint_pubkey, timestamp());
@@ -4109,7 +4186,12 @@ mod tests {
     fn test_tvu_peers_and_stakes() {
         let keypair = Arc::new(Keypair::new());
         let d = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
-        let cluster_info = ClusterInfo::new(d.clone(), keypair, SocketAddrSpace::Unspecified);
+        let cluster_info = ClusterInfo::new(
+            d.clone(),
+            keypair,
+            SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
+        );
         let mut stakes = HashMap::new();
 
         // no stake
@@ -4151,6 +4233,7 @@ mod tests {
             ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
             node_keypair,
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         );
         let entrypoint_pubkey = solana_sdk::pubkey::new_rand();
         let mut entrypoint = ContactInfo::new_localhost(&entrypoint_pubkey, timestamp());
@@ -4213,6 +4296,7 @@ mod tests {
             ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
             node_keypair,
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         );
         for i in 0..10 {
             // make these invalid for the upcoming repair request
@@ -4284,6 +4368,7 @@ mod tests {
             ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
             node_keypair,
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         );
         //random should be hard to compress
         let mut rng = rand::thread_rng();
@@ -4336,6 +4421,7 @@ mod tests {
             ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
             node_keypair,
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         ));
         assert_eq!(cluster_info.my_shred_version(), 0);
 
@@ -4428,6 +4514,7 @@ mod tests {
             },
             node_keypair,
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         ));
         assert_eq!(cluster_info.my_shred_version(), 2);
 
@@ -4467,6 +4554,7 @@ mod tests {
             node.info,
             Arc::new(Keypair::new()),
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         ));
         let entrypoint_pubkey = solana_sdk::pubkey::new_rand();
         let entrypoint = LegacyContactInfo::new_localhost(&entrypoint_pubkey, timestamp());
@@ -4517,6 +4605,7 @@ mod tests {
             node.info,
             host1_key.clone(),
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         ));
         let mut cursor = Cursor::default();
         assert!(cluster_info.get_duplicate_shreds(&mut cursor).is_empty());

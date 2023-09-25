@@ -105,6 +105,7 @@ mod tests {
             node.info,
             host1_key,
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         ));
         let exit = Arc::new(AtomicBool::new(false));
         let count = Arc::new(AtomicU32::new(0));

@@ -1969,7 +1969,12 @@ mod tests {
     fn new_test_cluster_info() -> ClusterInfo {
         let keypair = Arc::new(Keypair::new());
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
-        ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
+        ClusterInfo::new(
+            contact_info,
+            keypair,
+            SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
+        )
     }
 
     #[test]

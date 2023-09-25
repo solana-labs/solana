@@ -655,8 +655,12 @@ mod tests {
     pub(crate) fn new_test_cluster_info(keypair: Option<Arc<Keypair>>) -> (Node, ClusterInfo) {
         let keypair = keypair.unwrap_or_else(|| Arc::new(Keypair::new()));
         let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
-        let cluster_info =
-            ClusterInfo::new(node.info.clone(), keypair, SocketAddrSpace::Unspecified);
+        let cluster_info = ClusterInfo::new(
+            node.info.clone(),
+            keypair,
+            SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
+        );
         (node, cluster_info)
     }
 

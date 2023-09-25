@@ -409,8 +409,12 @@ pub mod tests {
         let (repair_quic_endpoint_sender, _repair_quic_endpoint_receiver) =
             tokio::sync::mpsc::channel(/*buffer:*/ 128);
         //start cluster_info1
-        let cluster_info1 =
-            ClusterInfo::new(target1.info.clone(), keypair, SocketAddrSpace::Unspecified);
+        let cluster_info1 = ClusterInfo::new(
+            target1.info.clone(),
+            keypair,
+            SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
+        );
         cluster_info1.insert_info(leader.info);
         let cref1 = Arc::new(cluster_info1);
 

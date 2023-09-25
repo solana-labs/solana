@@ -4162,6 +4162,7 @@ pub(crate) mod tests {
             Node::new_localhost_with_pubkey(&my_pubkey).info,
             Arc::new(my_keypairs.node_keypair.insecure_clone()),
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         );
         assert_eq!(my_pubkey, cluster_info.id());
 

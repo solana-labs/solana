@@ -436,7 +436,12 @@ fn main() {
         let cluster_info = {
             let keypair = Arc::new(Keypair::new());
             let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
-            ClusterInfo::new(node.info, keypair, SocketAddrSpace::Unspecified)
+            ClusterInfo::new(
+                node.info,
+                keypair,
+                SocketAddrSpace::Unspecified,
+                /*known_validators*/ None,
+            )
         };
         let cluster_info = Arc::new(cluster_info);
         let tpu_disable_quic = matches.is_present("tpu_disable_quic");

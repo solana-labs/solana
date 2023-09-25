@@ -130,6 +130,7 @@ impl TestEnvironment {
             ContactInfo::new_localhost(&node_id.pubkey(), timestamp()),
             Arc::clone(&node_id),
             SocketAddrSpace::Unspecified,
+            /*known_validators*/ None,
         ));
 
         let pruned_banks_receiver =
