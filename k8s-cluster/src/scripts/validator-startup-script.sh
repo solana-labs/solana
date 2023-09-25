@@ -3,9 +3,8 @@
 /home/solana/k8s-cluster-scripts/decode-accounts.sh -t "validator"
 
 # Start Validator
-
+# shellcheck disable=SC1091
 source /home/solana/k8s-cluster-scripts/common.sh
-echo "post source common.sh"
 
 args=(
   --max-genesis-archive-unpacked-size 1073741824
@@ -15,7 +14,6 @@ args=(
 airdrops_enabled=1
 node_sol=500 # 500 SOL: number of SOL to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
 stake_sol=10
-label=
 identity=identity.json
 vote_account=vote.json
 no_restart=0
@@ -37,8 +35,6 @@ Start a validator with no stake
 OPTIONS:
   --ledger PATH             - store ledger under this PATH
   --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
-  --label LABEL             - Append the given label to the configuration files, useful when running
-                              multiple validators in the same workspace
   --node-sol SOL            - Number of SOL this node has been funded from the genesis config (default: $node_sol)
   --no-voting               - start node without vote signer
   --rpc-port port           - custom RPC port for this node
@@ -54,11 +50,7 @@ echo "pre positional args"
 positional_args=()
 while [[ -n $1 ]]; do
   if [[ ${1:0:1} = - ]]; then
-    # validator.sh-only options
-    if [[ $1 = --label ]]; then
-      label="-$2"
-      shift 2
-    elif [[ $1 = --no-restart ]]; then
+    if [[ $1 = --no-restart ]]; then
       no_restart=1
       shift
     elif [[ $1 = --no-airdrop ]]; then

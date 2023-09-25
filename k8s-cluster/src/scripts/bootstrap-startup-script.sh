@@ -9,16 +9,13 @@ nohup solana-faucet --keypair faucet.json >logs/faucet.log 2>&1 &
 # Start the bootstrap validator node
 #
 here=$(dirname "$0")
-# shellcheck source=multinode-demo/common.sh
-# source "$here"/common.sh
+# shellcheck disable=SC1091
 source /home/solana/k8s-cluster-scripts/common.sh
 
 if [[ "$SOLANA_GPU_MISSING" -eq 1 ]]; then
   echo "Testnet requires GPUs, but none were found!  Aborting..."
   exit 1
 fi
-
-echo "solana validator in k8s: $solana_validator"
 
 if [[ -n $SOLANA_CUDA ]]; then
   program="solana-validator --cuda"

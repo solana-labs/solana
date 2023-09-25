@@ -20,7 +20,6 @@ if [[ $(uname) != Linux ]]; then
   fi
 fi
 
-echo "common in k8s-cluster"
 if [[ -n $USE_INSTALL || ! -f "$SOLANA_ROOT"/Cargo.toml ]]; then
   # echo "define if solana program"
   solana_program() {
