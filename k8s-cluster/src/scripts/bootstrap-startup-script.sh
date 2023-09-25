@@ -147,14 +147,14 @@ args+=(
   --no-os-network-limits-test \
   --no-wait-for-vote-to-start-leader \
   --snapshot-interval-slots 200 \
-  --identity identity.json \
-  --vote-account vote.json \
+  --identity "$identity" \
+  --vote-account "$vote_account" \
   --ledger ledger \
   --log logs/solana-validator.log \
-  --gossip-host $MY_POD_IP \
+  --gossip-host "$MY_POD_IP" \
   --gossip-port 8001 \
   --rpc-port 8899 \
-  --rpc-faucet-address $MY_POD_IP:9900 \
+  --rpc-faucet-address "$MY_POD_IP":9900 \
   --no-poh-speed-test \
   --no-incremental-snapshots \
   --full-rpc-api \
