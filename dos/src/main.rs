@@ -38,7 +38,7 @@
 //! solana-dos $COMMON --valid-blockhash --transaction-type account-creation
 //! ```
 //!
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 use {
     crossbeam_channel::{select, tick, unbounded, Receiver, Sender},
     itertools::Itertools,
@@ -343,7 +343,7 @@ fn create_sender_thread(
 fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
     tx_sender: &Sender<TransactionBatchMsg>,
     send_batch_size: usize,
-    transaction_generator: &mut TransactionGenerator,
+    transaction_generator: &TransactionGenerator,
     client: Option<Arc<T>>,
     payer: Option<Keypair>,
 ) -> thread::JoinHandle<()> {
@@ -550,12 +550,17 @@ fn create_payers<T: 'static + BenchTpsClient + Send + Sync>(
         // transactions are built to be invalid so the the amount here is arbitrary
         let funding_key = Keypair::new();
         let funding_key = Arc::new(funding_key);
-        let res =
-            generate_and_fund_keypairs(client.unwrap().clone(), &funding_key, size, 1_000_000)
-                .unwrap_or_else(|e| {
-                    eprintln!("Error could not fund keys: {e:?}");
-                    exit(1);
-                });
+        let res = generate_and_fund_keypairs(
+            client.unwrap().clone(),
+            &funding_key,
+            size,
+            1_000_000,
+            false,
+        )
+        .unwrap_or_else(|e| {
+            eprintln!("Error could not fund keys: {e:?}");
+            exit(1);
+        });
         res.into_iter().map(Some).collect()
     } else {
         std::iter::repeat_with(|| None).take(size).collect()
@@ -589,7 +594,7 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
         client.as_ref(),
     );
 
-    let mut transaction_generator = TransactionGenerator::new(transaction_params);
+    let transaction_generator = TransactionGenerator::new(transaction_params);
     let (tx_sender, tx_receiver) = unbounded();
 
     let sender_thread = create_sender_thread(tx_receiver, iterations, &target, tpu_use_quic);
@@ -599,7 +604,7 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
             create_generator_thread(
                 &tx_sender,
                 send_batch_size,
-                &mut transaction_generator,
+                &transaction_generator,
                 client.clone(),
                 payer,
             )

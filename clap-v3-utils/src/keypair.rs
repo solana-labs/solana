@@ -371,6 +371,7 @@ impl DefaultSigner {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct SignerSource {
     pub kind: SignerSourceKind,
     pub derivation_path: Option<DerivationPath>,
@@ -764,7 +765,7 @@ pub fn signer_from_path_with_config(
     } = parse_signer_source(path)?;
     match kind {
         SignerSourceKind::Prompt => {
-            let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+            let skip_validation = matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
             Ok(Box::new(keypair_from_seed_phrase(
                 keypair_name,
                 skip_validation,
@@ -808,7 +809,7 @@ pub fn signer_from_path_with_config(
                 .and_then(|presigners| presigner_from_pubkey_sigs(&pubkey, presigners));
             if let Some(presigner) = presigner {
                 Ok(Box::new(presigner))
-            } else if config.allow_null_signer || matches.is_present(SIGN_ONLY_ARG.name) {
+            } else if config.allow_null_signer || matches.try_contains_id(SIGN_ONLY_ARG.name)? {
                 Ok(Box::new(NullSigner::new(&pubkey)))
             } else {
                 Err(std::io::Error::new(
@@ -884,7 +885,7 @@ pub fn resolve_signer_from_path(
     } = parse_signer_source(path)?;
     match kind {
         SignerSourceKind::Prompt => {
-            let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+            let skip_validation = matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
             // This method validates the seed phrase, but returns `None` because there is no path
             // on disk or to a device
             keypair_from_seed_phrase(
@@ -1003,7 +1004,8 @@ pub fn keypair_from_path(
     keypair_name: &str,
     confirm_pubkey: bool,
 ) -> Result<Keypair, Box<dyn error::Error>> {
-    let keypair = encodable_key_from_path(matches, path, keypair_name)?;
+    let skip_validation = matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
+    let keypair = encodable_key_from_path(path, keypair_name, skip_validation)?;
     if confirm_pubkey {
         confirm_encodable_keypair_pubkey(&keypair, "pubkey");
     }
@@ -1050,7 +1052,8 @@ pub fn elgamal_keypair_from_path(
     elgamal_keypair_name: &str,
     confirm_pubkey: bool,
 ) -> Result<ElGamalKeypair, Box<dyn error::Error>> {
-    let elgamal_keypair = encodable_key_from_path(matches, path, elgamal_keypair_name)?;
+    let skip_validation = matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
+    let elgamal_keypair = encodable_key_from_path(path, elgamal_keypair_name, skip_validation)?;
     if confirm_pubkey {
         confirm_encodable_keypair_pubkey(&elgamal_keypair, "ElGamal pubkey");
     }
@@ -1104,13 +1107,14 @@ pub fn ae_key_from_path(
     path: &str,
     key_name: &str,
 ) -> Result<AeKey, Box<dyn error::Error>> {
-    encodable_key_from_path(matches, path, key_name)
+    let skip_validation = matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
+    encodable_key_from_path(path, key_name, skip_validation)
 }
 
 fn encodable_key_from_path<K: EncodableKey + SeedDerivable>(
-    matches: &ArgMatches,
     path: &str,
     keypair_name: &str,
+    skip_validation: bool,
 ) -> Result<K, Box<dyn error::Error>> {
     let SignerSource {
         kind,
@@ -1118,15 +1122,12 @@ fn encodable_key_from_path<K: EncodableKey + SeedDerivable>(
         legacy,
     } = parse_signer_source(path)?;
     match kind {
-        SignerSourceKind::Prompt => {
-            let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-            Ok(encodable_key_from_seed_phrase(
-                keypair_name,
-                skip_validation,
-                derivation_path,
-                legacy,
-            )?)
-        }
+        SignerSourceKind::Prompt => Ok(encodable_key_from_seed_phrase(
+            keypair_name,
+            skip_validation,
+            derivation_path,
+            legacy,
+        )?),
         SignerSourceKind::Filepath(path) => match K::read_from_file(&path) {
             Err(e) => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
@@ -1266,6 +1267,7 @@ mod tests {
     use {
         super::*,
         crate::offline::OfflineArgs,
+        assert_matches::assert_matches,
         clap::{Arg, Command},
         solana_remote_wallet::{locator::Manufacturer, remote_wallet::initialize_wallet_manager},
         solana_sdk::{signer::keypair::write_keypair_file, system_instruction},
@@ -1314,31 +1316,31 @@ mod tests {
 
     #[test]
     fn test_parse_signer_source() {
-        assert!(matches!(
+        assert_matches!(
             parse_signer_source(STDOUT_OUTFILE_TOKEN).unwrap(),
             SignerSource {
                 kind: SignerSourceKind::Stdin,
                 derivation_path: None,
                 legacy: false,
             }
-        ));
+        );
         let stdin = "stdin:".to_string();
-        assert!(matches!(
+        assert_matches!(
             parse_signer_source(stdin).unwrap(),
             SignerSource {
                 kind: SignerSourceKind::Stdin,
                 derivation_path: None,
                 legacy: false,
             }
-        ));
-        assert!(matches!(
+        );
+        assert_matches!(
             parse_signer_source(ASK_KEYWORD).unwrap(),
             SignerSource {
                 kind: SignerSourceKind::Prompt,
                 derivation_path: None,
                 legacy: true,
             }
-        ));
+        );
         let pubkey = Pubkey::new_unique();
         assert!(
             matches!(parse_signer_source(pubkey.to_string()).unwrap(), SignerSource {
@@ -1381,39 +1383,39 @@ mod tests {
             manufacturer: Manufacturer::Ledger,
             pubkey: None,
         };
-        assert!(matches!(parse_signer_source(usb).unwrap(), SignerSource {
+        assert_matches!(parse_signer_source(usb).unwrap(), SignerSource {
                 kind: SignerSourceKind::Usb(u),
                 derivation_path: None,
                 legacy: false,
-            } if u == expected_locator));
+            } if u == expected_locator);
         let usb = "usb://ledger?key=0/0".to_string();
         let expected_locator = RemoteWalletLocator {
             manufacturer: Manufacturer::Ledger,
             pubkey: None,
         };
         let expected_derivation_path = Some(DerivationPath::new_bip44(Some(0), Some(0)));
-        assert!(matches!(parse_signer_source(usb).unwrap(), SignerSource {
+        assert_matches!(parse_signer_source(usb).unwrap(), SignerSource {
                 kind: SignerSourceKind::Usb(u),
                 derivation_path: d,
                 legacy: false,
-            } if u == expected_locator && d == expected_derivation_path));
+            } if u == expected_locator && d == expected_derivation_path);
         // Catchall into SignerSource::Filepath fails
         let junk = "sometextthatisnotapubkeyorfile".to_string();
         assert!(Pubkey::from_str(&junk).is_err());
-        assert!(matches!(
+        assert_matches!(
             parse_signer_source(&junk),
             Err(SignerSourceError::IoError(_))
-        ));
+        );
 
         let prompt = "prompt:".to_string();
-        assert!(matches!(
+        assert_matches!(
             parse_signer_source(prompt).unwrap(),
             SignerSource {
                 kind: SignerSourceKind::Prompt,
                 derivation_path: None,
                 legacy: false,
             }
-        ));
+        );
         assert!(
             matches!(parse_signer_source(format!("file:{absolute_path_str}")).unwrap(), SignerSource {
                 kind: SignerSourceKind::Filepath(p),

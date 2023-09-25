@@ -6,7 +6,7 @@ When writing or interacting with Solana programs, there are common questions or
 challenges that often come up. Below are resources to help answer these
 questions.
 
-If not addressed here, ask on [StackOverflow](https://stackoverflow.com/questions/tagged/solana) with the `solana` tag
+If not addressed here, ask on the [Solana Stack Exchange](https://solana.stackexchange.com/) or [StackOverflow](https://stackoverflow.com/questions/tagged/solana) with the `solana` tag
 
 ## Limitations
 

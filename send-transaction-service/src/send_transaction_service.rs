@@ -461,7 +461,7 @@ impl SendTransactionService {
                         .fetch_add(transactions.len() as u64, Ordering::Relaxed);
                     Self::send_transactions_in_batch(
                         &tpu_address,
-                        &mut transactions,
+                        &transactions,
                         leader_info_provider.lock().unwrap().get_leader_info(),
                         &connection_cache,
                         &config,
@@ -558,7 +558,7 @@ impl SendTransactionService {
     /// Process transactions in batch.
     fn send_transactions_in_batch<T: TpuInfo>(
         tpu_address: &SocketAddr,
-        transactions: &mut HashMap<Signature, TransactionInfo>,
+        transactions: &HashMap<Signature, TransactionInfo>,
         leader_info: Option<&T>,
         connection_cache: &Arc<ConnectionCache>,
         config: &Config,

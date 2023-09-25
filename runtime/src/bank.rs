@@ -54,7 +54,6 @@ use {
         stakes::{InvalidCacheEntryReason, Stakes, StakesCache, StakesEnum},
         status_cache::{SlotDelta, StatusCache},
         transaction_batch::TransactionBatch,
-        vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
     },
     byteorder::{ByteOrder, LittleEndian},
     dashmap::{DashMap, DashSet},
@@ -137,7 +136,6 @@ use {
             self, add_set_tx_loaded_accounts_data_size_instruction,
             enable_early_verification_of_account_modifications,
             include_loaded_accounts_data_size_in_fee_calculation,
-            reduce_stake_warmup_cooldown::NewWarmupCooldownRateEpoch,
             remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
             FeatureSet,
         },
@@ -179,6 +177,7 @@ use {
         self, InflationPointCalculationEvent, PointValue, StakeStateV2,
     },
     solana_system_program::{get_system_account_kind, SystemAccountKind},
+    solana_vote::vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
     solana_vote_program::vote_state::VoteState,
     std::{
         borrow::Cow,
@@ -276,6 +275,7 @@ pub struct BankRc {
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
+use solana_program_runtime::loaded_programs::ExtractedPrograms;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl AbiExample for BankRc {
@@ -2963,7 +2963,7 @@ impl Bank {
         reward_calculate_params: &EpochRewardCalculateParamInfo,
         rewards: u64,
         thread_pool: &ThreadPool,
-        metrics: &mut RewardsMetrics,
+        metrics: &RewardsMetrics,
     ) -> Option<PointValue> {
         let EpochRewardCalculateParamInfo {
             stake_history,
@@ -2985,6 +2985,7 @@ impl Bank {
             VoteAccount::try_from(account).ok()
         };
 
+        let new_warmup_cooldown_rate_epoch = self.new_warmup_cooldown_rate_epoch();
         let (points, measure_us) = measure_us!(thread_pool.install(|| {
             stake_delegations
                 .par_iter()
@@ -3006,7 +3007,7 @@ impl Bank {
                         stake_account.stake_state(),
                         vote_state,
                         Some(stake_history),
-                        self.new_warmup_cooldown_rate_epoch(),
+                        new_warmup_cooldown_rate_epoch,
                     )
                     .unwrap_or(0)
                 })
@@ -3023,8 +3024,9 @@ impl Bank {
         rewards: u64,
         stake_history: &StakeHistory,
         thread_pool: &ThreadPool,
-        metrics: &mut RewardsMetrics,
+        metrics: &RewardsMetrics,
     ) -> Option<PointValue> {
+        let new_warmup_cooldown_rate_epoch = self.new_warmup_cooldown_rate_epoch();
         let (points, measure) = measure!(thread_pool.install(|| {
             vote_with_stake_delegations_map
                 .par_iter()
@@ -3042,7 +3044,7 @@ impl Bank {
                                 stake_account.stake_state(),
                                 vote_state,
                                 Some(stake_history),
-                                self.new_warmup_cooldown_rate_epoch(),
+                                new_warmup_cooldown_rate_epoch,
                             )
                             .unwrap_or(0)
                         })
@@ -3088,6 +3090,7 @@ impl Bank {
             VoteAccount::try_from(account).ok()
         };
 
+        let new_warmup_cooldown_rate_epoch = self.new_warmup_cooldown_rate_epoch();
         let vote_account_rewards: VoteRewards = DashMap::new();
         let total_stake_rewards = AtomicU64::default();
         let (stake_rewards, measure_stake_rewards_us) = measure_us!(thread_pool.install(|| {
@@ -3129,7 +3132,7 @@ impl Bank {
                         &point_value,
                         Some(stake_history),
                         reward_calc_tracer.as_ref(),
-                        self.new_warmup_cooldown_rate_epoch(),
+                        new_warmup_cooldown_rate_epoch,
                     );
 
                     let post_lamport = stake_account.lamports();
@@ -3201,6 +3204,7 @@ impl Bank {
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         metrics: &mut RewardsMetrics,
     ) -> (VoteRewards, StakeRewards) {
+        let new_warmup_cooldown_rate_epoch = self.new_warmup_cooldown_rate_epoch();
         let vote_account_rewards: VoteRewards =
             DashMap::with_capacity(vote_with_stake_delegations_map.len());
         let stake_delegation_iterator = vote_with_stake_delegations_map.into_par_iter().flat_map(
@@ -3247,7 +3251,7 @@ impl Bank {
                         &point_value,
                         Some(stake_history),
                         reward_calc_tracer.as_ref(),
-                        self.new_warmup_cooldown_rate_epoch(),
+                        new_warmup_cooldown_rate_epoch,
                     );
                     if let Ok((stakers_reward, voters_reward)) = redeemed {
                         // track voter rewards
@@ -3291,7 +3295,7 @@ impl Bank {
         &self,
         thread_pool: &ThreadPool,
         stake_rewards: &[StakeReward],
-        metrics: &mut RewardsMetrics,
+        metrics: &RewardsMetrics,
     ) {
         // store stake account even if stake_reward is 0
         // because credits observed has changed
@@ -3352,7 +3356,7 @@ impl Bank {
     fn store_vote_accounts_partitioned(
         &self,
         vote_account_rewards: VoteRewardsAccounts,
-        metrics: &mut RewardsMetrics,
+        metrics: &RewardsMetrics,
     ) -> Vec<(Pubkey, RewardInfo)> {
         let (_, measure_us) = measure_us!({
             // reformat data to make it not sparse.
@@ -3378,7 +3382,7 @@ impl Bank {
     fn store_vote_accounts(
         &self,
         vote_account_rewards: VoteRewards,
-        metrics: &mut RewardsMetrics,
+        metrics: &RewardsMetrics,
     ) -> Vec<(Pubkey, RewardInfo)> {
         let (vote_rewards, measure) = measure!(vote_account_rewards
             .into_iter()
@@ -4088,7 +4092,6 @@ impl Bank {
             &ComputeBudget::fee_budget_limits(
                 message.program_instructions_iter(),
                 &self.feature_set,
-                Some(self.cluster_type()),
             ),
             self.feature_set
                 .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
@@ -4656,7 +4659,7 @@ impl Bank {
         ProgramAccountLoadResult::InvalidAccountData
     }
 
-    pub fn load_program(&self, pubkey: &Pubkey) -> Arc<LoadedProgram> {
+    pub fn load_program(&self, pubkey: &Pubkey, reload: bool) -> Arc<LoadedProgram> {
         let environments = self
             .loaded_programs_cache
             .read()
@@ -4689,6 +4692,7 @@ impl Bank {
                     program_account.data().len(),
                     0,
                     environments.program_runtime_v1.clone(),
+                    reload,
                 )
             }
 
@@ -4713,6 +4717,7 @@ impl Bank {
                             .saturating_add(programdata_account.data().len()),
                         slot,
                         environments.program_runtime_v1.clone(),
+                        reload,
                     )
                 }),
 
@@ -4721,16 +4726,32 @@ impl Bank {
                     .data()
                     .get(LoaderV4State::program_data_offset()..)
                     .and_then(|elf_bytes| {
-                        LoadedProgram::new(
-                            &loader_v4::id(),
-                            environments.program_runtime_v2.clone(),
-                            slot,
-                            slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET),
-                            None,
-                            elf_bytes,
-                            program_account.data().len(),
-                            &mut load_program_metrics,
-                        )
+                        if reload {
+                            // Safety: this is safe because the program is being reloaded in the cache.
+                            unsafe {
+                                LoadedProgram::reload(
+                                    &loader_v4::id(),
+                                    environments.program_runtime_v2.clone(),
+                                    slot,
+                                    slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET),
+                                    None,
+                                    elf_bytes,
+                                    program_account.data().len(),
+                                    &mut load_program_metrics,
+                                )
+                            }
+                        } else {
+                            LoadedProgram::new(
+                                &loader_v4::id(),
+                                environments.program_runtime_v2.clone(),
+                                slot,
+                                slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET),
+                                None,
+                                elf_bytes,
+                                program_account.data().len(),
+                                &mut load_program_metrics,
+                            )
+                        }
                         .ok()
                     })
                     .unwrap_or(LoadedProgram::new_tombstone(
@@ -4987,17 +5008,31 @@ impl Bank {
                     .collect()
             };
 
-        let (mut loaded_programs_for_txs, missing_programs) = {
+        let ExtractedPrograms {
+            loaded: mut loaded_programs_for_txs,
+            missing,
+            unloaded,
+        } = {
             // Lock the global cache to figure out which programs need to be loaded
             let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
             loaded_programs_cache.extract(self, programs_and_slots.into_iter())
         };
 
         // Load missing programs while global cache is unlocked
-        let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing_programs
+        let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing
             .iter()
             .map(|(key, count)| {
-                let program = self.load_program(key);
+                let program = self.load_program(key, false);
+                program.tx_usage_counter.store(*count, Ordering::Relaxed);
+                (*key, program)
+            })
+            .collect();
+
+        // Reload unloaded programs while global cache is unlocked
+        let unloaded_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = unloaded
+            .iter()
+            .map(|(key, count)| {
+                let program = self.load_program(key, true);
                 program.tx_usage_counter.store(*count, Ordering::Relaxed);
                 (*key, program)
             })
@@ -5006,6 +5041,11 @@ impl Bank {
         // Lock the global cache again to replenish the missing programs
         let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
         for (key, program) in missing_programs {
+            let (_was_occupied, entry) = loaded_programs_cache.replenish(key, program);
+            // Use the returned entry as that might have been deduplicated globally
+            loaded_programs_for_txs.replenish(key, entry);
+        }
+        for (key, program) in unloaded_programs {
             let (_was_occupied, entry) = loaded_programs_cache.replenish(key, program);
             // Use the returned entry as that might have been deduplicated globally
             loaded_programs_for_txs.replenish(key, entry);
@@ -5075,17 +5115,17 @@ impl Bank {
         );
         check_time.stop();
 
-        let program_owners: Vec<Pubkey> = vec![
+        const PROGRAM_OWNERS: &[Pubkey] = &[
             bpf_loader_upgradeable::id(),
             bpf_loader::id(),
             bpf_loader_deprecated::id(),
+            loader_v4::id(),
         ];
-        let program_owners_refs: Vec<&Pubkey> = program_owners.iter().collect();
         let mut program_accounts_map = self.rc.accounts.filter_executable_program_accounts(
             &self.ancestors,
             sanitized_txs,
             &mut check_results,
-            &program_owners_refs,
+            PROGRAM_OWNERS,
             &self.blockhash_queue.read().unwrap(),
         );
         let native_loader = native_loader::id();
@@ -5138,7 +5178,6 @@ impl Bank {
                             !self
                                 .feature_set
                                 .is_active(&remove_deprecated_request_unit_ix::id()),
-                            true, // don't reject txs that use request heap size ix
                             self.feature_set
                                 .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
                         );
@@ -6565,11 +6604,12 @@ impl Bank {
     ) {
         assert!(!self.freeze_started());
         let mut m = Measure::start("stakes_cache.check_and_store");
+        let new_warmup_cooldown_rate_epoch = self.new_warmup_cooldown_rate_epoch();
         (0..accounts.len()).for_each(|i| {
             self.stakes_cache.check_and_store(
                 accounts.pubkey(i),
                 accounts.account(i),
-                self.new_warmup_cooldown_rate_epoch(),
+                new_warmup_cooldown_rate_epoch,
             )
         });
         self.rc.accounts.store_accounts_cached(accounts);
@@ -7691,6 +7731,7 @@ impl Bank {
     ) {
         debug_assert_eq!(txs.len(), execution_results.len());
         debug_assert_eq!(txs.len(), loaded_txs.len());
+        let new_warmup_cooldown_rate_epoch = self.new_warmup_cooldown_rate_epoch();
         izip!(txs, execution_results, loaded_txs)
             .filter(|(_, execution_result, _)| execution_result.was_executed_successfully())
             .flat_map(|(tx, _, (load_result, _))| {
@@ -7702,11 +7743,8 @@ impl Bank {
             .for_each(|(pubkey, account)| {
                 // note that this could get timed to: self.rc.accounts.accounts_db.stats.stakes_cache_check_and_store_us,
                 //  but this code path is captured separately in ExecuteTimingType::UpdateStakesCacheUs
-                self.stakes_cache.check_and_store(
-                    pubkey,
-                    account,
-                    self.new_warmup_cooldown_rate_epoch(),
-                );
+                self.stakes_cache
+                    .check_and_store(pubkey, account, new_warmup_cooldown_rate_epoch);
             });
     }
 
@@ -8072,6 +8110,7 @@ impl Bank {
             feature_set::disable_deploy_of_alloc_free_syscall::id(),
             feature_set::last_restart_slot_sysvar::id(),
             feature_set::delay_visibility_of_program_deployment::id(),
+            feature_set::remaining_compute_units_syscall_enabled::id(),
         ];
         if !only_apply_transitions_for_new_features
             || FEATURES_AFFECTING_RBPF
@@ -8086,23 +8125,15 @@ impl Bank {
             )
             .unwrap();
             let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
-            if *loaded_programs_cache.environments.program_runtime_v1
-                != program_runtime_environment_v1
-            {
-                loaded_programs_cache.environments.program_runtime_v1 =
-                    Arc::new(program_runtime_environment_v1);
-            }
+            loaded_programs_cache.environments.program_runtime_v1 =
+                Arc::new(program_runtime_environment_v1);
             let program_runtime_environment_v2 =
                 solana_loader_v4_program::create_program_runtime_environment_v2(
                     &self.runtime_config.compute_budget.unwrap_or_default(),
                     false, /* debugging_features */
                 );
-            if *loaded_programs_cache.environments.program_runtime_v2
-                != program_runtime_environment_v2
-            {
-                loaded_programs_cache.environments.program_runtime_v2 =
-                    Arc::new(program_runtime_environment_v2);
-            }
+            loaded_programs_cache.environments.program_runtime_v2 =
+                Arc::new(program_runtime_environment_v2);
             loaded_programs_cache.prune_feature_set_transition();
         }
         for builtin in BUILTINS.iter() {
@@ -8447,7 +8478,7 @@ pub mod test_utils {
         solana_sdk::{hash::hashv, pubkey::Pubkey},
         solana_vote_program::vote_state::{self, BlockTimestamp, VoteStateVersions},
     };
-    pub fn goto_end_of_slot(bank: &mut Bank) {
+    pub fn goto_end_of_slot(bank: &Bank) {
         let mut tick_hash = bank.last_blockhash();
         loop {
             tick_hash = hashv(&[tick_hash.as_ref(), &[42]]);

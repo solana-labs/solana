@@ -47,9 +47,7 @@ jobs:
       - shell: bash
         run: |
           source .github/scripts/downstream-project-spl-common.sh
-
-          sudo apt update
-          sudo apt install libudev-dev binutils-dev libunwind-dev protobuf-compiler -y
+          source .github/scripts/downstream-project-spl-install-deps.sh
 
           cargo check
 
@@ -96,9 +94,7 @@ jobs:
       - shell: bash
         run: |
           source .github/scripts/downstream-project-spl-common.sh
-
-          sudo apt update
-          sudo apt install libudev-dev binutils-dev libunwind-dev protobuf-compiler -y
+          source .github/scripts/downstream-project-spl-install-deps.sh
 
           programStr="${{ tojson(matrix.arrays.required_programs) }}"
           IFS=', ' read -ra programs <<<"${programStr//[\[\]$'\n'$'\r' ]/}"
@@ -132,7 +128,7 @@ jobs:
           - [governance/addin-mock/program, governance/program]
           - [memo/program]
           - [name-service/program]
-          - [stake-pool/program]
+          # - [stake-pool/program]
           - [single-pool/program]
 
     steps:

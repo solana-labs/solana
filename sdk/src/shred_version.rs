@@ -20,7 +20,7 @@ pub fn version_from_hash(hash: &Hash) -> u16 {
     });
     // convert accum into a u16
     // Because accum[0] is a u8, 8bit left shift of the u16 can never overflow
-    #[allow(clippy::integer_arithmetic)]
+    #[allow(clippy::arithmetic_side_effects)]
     let version = ((accum[0] as u16) << 8) | accum[1] as u16;
 
     // ensure version is never zero, to avoid looking like an uninitialized version

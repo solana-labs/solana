@@ -1,5 +1,7 @@
 //! The Solana [`Account`] type.
 
+#[cfg(feature = "dev-context-only-utils")]
+use qualifier_attr::qualifiers;
 use {
     crate::{
         clock::{Epoch, INITIAL_RENT_EPOCH},
@@ -598,7 +600,8 @@ impl AccountSharedData {
         };
     }
 
-    pub fn set_data(&mut self, data: Vec<u8>) {
+    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
+    fn set_data(&mut self, data: Vec<u8>) {
         self.data = Arc::new(data);
     }
 

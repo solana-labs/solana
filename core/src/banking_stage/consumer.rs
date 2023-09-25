@@ -737,7 +737,6 @@ mod tests {
             unprocessed_transaction_storage::ThreadType,
         },
         crossbeam_channel::{unbounded, Receiver},
-        solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
         solana_cost_model::cost_model::CostModel,
         solana_entry::entry::{next_entry, next_versioned_entry},
         solana_ledger::{
@@ -754,6 +753,10 @@ mod tests {
         solana_runtime::prioritization_fee_cache::PrioritizationFeeCache,
         solana_sdk::{
             account::AccountSharedData,
+            address_lookup_table::{
+                self,
+                state::{AddressLookupTable, LookupTableMeta},
+            },
             instruction::InstructionError,
             message::{v0, v0::MessageAddressTableLookup, MessageHeader, VersionedMessage},
             poh_config::PohConfig,
@@ -844,7 +847,7 @@ mod tests {
     ) -> AccountSharedData {
         let data = address_lookup_table.serialize_for_tests().unwrap();
         let mut account =
-            AccountSharedData::new(1, data.len(), &solana_address_lookup_table_program::id());
+            AccountSharedData::new(1, data.len(), &address_lookup_table::program::id());
         account.set_data(data);
         bank.store_account(&account_address, &account);
 
@@ -1242,14 +1245,14 @@ mod tests {
             // account locking
             let commit_transactions_result = commit_transactions_result.unwrap();
             assert_eq!(commit_transactions_result.len(), 2);
-            assert!(matches!(
-                commit_transactions_result.get(0).unwrap(),
-                CommitTransactionDetails::Committed { .. }
-            ));
-            assert!(matches!(
-                commit_transactions_result.get(1).unwrap(),
-                CommitTransactionDetails::NotCommitted
-            ));
+            assert_matches!(
+                commit_transactions_result.get(0),
+                Some(CommitTransactionDetails::Committed { .. })
+            );
+            assert_matches!(
+                commit_transactions_result.get(1),
+                Some(CommitTransactionDetails::NotCommitted)
+            );
             assert_eq!(retryable_transaction_indexes, vec![1]);
 
             let expected_block_cost = if !apply_cost_tracker_during_replay_enabled {
@@ -1834,7 +1837,7 @@ mod tests {
             let mut buffered_packet_batches =
                 UnprocessedTransactionStorage::new_transaction_storage(
                     UnprocessedPacketBatches::from_iter(
-                        deserialized_packets.into_iter(),
+                        deserialized_packets,
                         num_conflicting_transactions,
                     ),
                     ThreadType::Transactions,
@@ -1912,7 +1915,7 @@ mod tests {
             let mut buffered_packet_batches =
                 UnprocessedTransactionStorage::new_transaction_storage(
                     UnprocessedPacketBatches::from_iter(
-                        deserialized_packets.into_iter(),
+                        deserialized_packets,
                         num_conflicting_transactions,
                     ),
                     ThreadType::Transactions,
@@ -1964,7 +1967,7 @@ mod tests {
             let mut buffered_packet_batches =
                 UnprocessedTransactionStorage::new_transaction_storage(
                     UnprocessedPacketBatches::from_iter(
-                        deserialized_packets.into_iter(),
+                        deserialized_packets,
                         num_conflicting_transactions,
                     ),
                     ThreadType::Transactions,

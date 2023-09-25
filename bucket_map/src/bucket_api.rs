@@ -16,7 +16,7 @@ use {
 
 type LockedBucket<T> = RwLock<Option<Bucket<T>>>;
 
-pub struct BucketApi<T: Clone + Copy + 'static> {
+pub struct BucketApi<T: Clone + Copy + PartialEq + 'static> {
     drives: Arc<Vec<PathBuf>>,
     max_search: MaxSearch,
     pub stats: Arc<BucketMapStats>,
@@ -25,7 +25,7 @@ pub struct BucketApi<T: Clone + Copy + 'static> {
     count: Arc<AtomicU64>,
 }
 
-impl<T: Clone + Copy> BucketApi<T> {
+impl<T: Clone + Copy + PartialEq + std::fmt::Debug> BucketApi<T> {
     pub fn new(
         drives: Arc<Vec<PathBuf>>,
         max_search: MaxSearch,
@@ -125,17 +125,10 @@ impl<T: Clone + Copy> BucketApi<T> {
     }
 
     /// batch insert of `items`. Assumption is a single slot list element and ref_count == 1.
-    /// For any pubkeys that already exist, the failed insertion data and the existing data are returned.
-    pub fn batch_insert_non_duplicates(
-        &self,
-        items: impl Iterator<Item = (Pubkey, T)>,
-        count: usize,
-    ) -> Vec<(Pubkey, T, T)> {
+    /// For any pubkeys that already exist, the index in `items` of the failed insertion and the existing data (previously put in the index) are returned.
+    pub fn batch_insert_non_duplicates(&self, items: &[(Pubkey, T)]) -> Vec<(usize, T)> {
         let mut bucket = self.get_write_bucket();
-        bucket
-            .as_mut()
-            .unwrap()
-            .batch_insert_non_duplicates(items, count)
+        bucket.as_mut().unwrap().batch_insert_non_duplicates(items)
     }
 
     pub fn update<F>(&self, key: &Pubkey, updatefn: F)

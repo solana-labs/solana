@@ -16,8 +16,9 @@ use {
         stable_log, timings::ExecuteTimings,
     },
     solana_rbpf::{
+        elf::FunctionRegistry,
         memory_region::{AccessType, MemoryMapping},
-        vm::{BuiltinProgram, Config, ProgramResult, PROGRAM_ENVIRONMENT_KEY_SHIFT},
+        vm::{BuiltinFunction, BuiltinProgram, Config, ProgramResult},
     },
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
@@ -37,17 +38,17 @@ use {
             disable_cpi_setting_executable_and_rent_epoch, disable_deploy_of_alloc_free_syscall,
             disable_fees_sysvar, enable_alt_bn128_syscall, enable_big_mod_exp_syscall,
             enable_early_verification_of_account_modifications, enable_partitioned_epoch_reward,
-            error_on_syscall_bpf_function_hash_collisions, last_restart_slot_sysvar,
-            libsecp256k1_0_5_upgrade_enabled, reject_callx_r10,
-            stop_sibling_instruction_search_at_parent, stop_truncating_strings_in_syscalls,
-            switch_to_new_elf_parser,
+            enable_poseidon_syscall, error_on_syscall_bpf_function_hash_collisions,
+            last_restart_slot_sysvar, libsecp256k1_0_5_upgrade_enabled, reject_callx_r10,
+            remaining_compute_units_syscall_enabled, stop_sibling_instruction_search_at_parent,
+            stop_truncating_strings_in_syscalls, switch_to_new_elf_parser,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
             AccountMeta, InstructionError, ProcessedSiblingInstruction,
             TRANSACTION_LEVEL_STACK_HEIGHT,
         },
-        keccak, native_loader,
+        keccak, native_loader, poseidon,
         precompiles::is_precompile,
         program::MAX_RETURN_DATA,
         program_stubs::is_nonoverlapping,
@@ -123,6 +124,10 @@ pub enum SyscallError {
     },
     #[error("InvalidAttribute")]
     InvalidAttribute,
+    #[error("Invalid pointer")]
+    InvalidPointer,
+    #[error("Arithmetic overflow")]
+    ArithmeticOverflow,
 }
 
 type Error = Box<dyn std::error::Error>;
@@ -135,9 +140,9 @@ fn consume_compute_meter(invoke_context: &InvokeContext, amount: u64) -> Result<
 macro_rules! register_feature_gated_function {
     ($result:expr, $is_feature_active:expr, $name:expr, $call:expr $(,)?) => {
         if $is_feature_active {
-            $result.register_function($name, $call)
+            $result.register_function_hashed($name, $call)
         } else {
-            Ok(())
+            Ok(0)
         }
     };
 }
@@ -158,11 +163,13 @@ pub fn create_program_runtime_environment_v1<'a>(
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
         && feature_set.is_active(&disable_deploy_of_alloc_free_syscall::id());
     let last_restart_slot_syscall_enabled = feature_set.is_active(&last_restart_slot_sysvar::id());
+    let enable_poseidon_syscall = feature_set.is_active(&enable_poseidon_syscall::id());
+    let remaining_compute_units_syscall_enabled =
+        feature_set.is_active(&remaining_compute_units_syscall_enabled::id());
     // !!! ATTENTION !!!
     // When adding new features for RBPF here,
     // also add them to `Bank::apply_builtin_program_feature_transitions()`.
 
-    use rand::Rng;
     let config = Config {
         max_call_depth: compute_budget.max_call_depth,
         stack_frame_size: compute_budget.stack_frame_size,
@@ -175,10 +182,7 @@ pub fn create_program_runtime_environment_v1<'a>(
         reject_broken_elfs: reject_deployment_of_broken_elfs,
         noop_instruction_rate: 256,
         sanitize_user_provided_values: true,
-        runtime_environment_key: rand::thread_rng()
-            .gen::<i32>()
-            .checked_shr(PROGRAM_ENVIRONMENT_KEY_SHIFT)
-            .unwrap_or(0),
+        encrypt_runtime_environment: true,
         external_internal_function_hash_collision: feature_set
             .is_active(&error_on_syscall_bpf_function_hash_collisions::id()),
         reject_callx_r10: feature_set.is_active(&reject_callx_r10::id()),
@@ -189,44 +193,44 @@ pub fn create_program_runtime_environment_v1<'a>(
         aligned_memory_mapping: !feature_set.is_active(&bpf_account_data_direct_mapping::id()),
         // Warning, do not use `Config::default()` so that configuration here is explicit.
     };
-    let mut result = BuiltinProgram::new_loader(config);
+    let mut result = FunctionRegistry::<BuiltinFunction<InvokeContext>>::default();
 
     // Abort
-    result.register_function(b"abort", SyscallAbort::call)?;
+    result.register_function_hashed(*b"abort", SyscallAbort::call)?;
 
     // Panic
-    result.register_function(b"sol_panic_", SyscallPanic::call)?;
+    result.register_function_hashed(*b"sol_panic_", SyscallPanic::call)?;
 
     // Logging
-    result.register_function(b"sol_log_", SyscallLog::call)?;
-    result.register_function(b"sol_log_64_", SyscallLogU64::call)?;
-    result.register_function(b"sol_log_compute_units_", SyscallLogBpfComputeUnits::call)?;
-    result.register_function(b"sol_log_pubkey", SyscallLogPubkey::call)?;
+    result.register_function_hashed(*b"sol_log_", SyscallLog::call)?;
+    result.register_function_hashed(*b"sol_log_64_", SyscallLogU64::call)?;
+    result.register_function_hashed(*b"sol_log_compute_units_", SyscallLogBpfComputeUnits::call)?;
+    result.register_function_hashed(*b"sol_log_pubkey", SyscallLogPubkey::call)?;
 
     // Program defined addresses (PDA)
-    result.register_function(
-        b"sol_create_program_address",
+    result.register_function_hashed(
+        *b"sol_create_program_address",
         SyscallCreateProgramAddress::call,
     )?;
-    result.register_function(
-        b"sol_try_find_program_address",
+    result.register_function_hashed(
+        *b"sol_try_find_program_address",
         SyscallTryFindProgramAddress::call,
     )?;
 
     // Sha256
-    result.register_function(b"sol_sha256", SyscallSha256::call)?;
+    result.register_function_hashed(*b"sol_sha256", SyscallSha256::call)?;
 
     // Keccak256
-    result.register_function(b"sol_keccak256", SyscallKeccak256::call)?;
+    result.register_function_hashed(*b"sol_keccak256", SyscallKeccak256::call)?;
 
     // Secp256k1 Recover
-    result.register_function(b"sol_secp256k1_recover", SyscallSecp256k1Recover::call)?;
+    result.register_function_hashed(*b"sol_secp256k1_recover", SyscallSecp256k1Recover::call)?;
 
     // Blake3
     register_feature_gated_function!(
         result,
         blake3_syscall_enabled,
-        b"sol_blake3",
+        *b"sol_blake3",
         SyscallBlake3::call,
     )?;
 
@@ -234,78 +238,78 @@ pub fn create_program_runtime_environment_v1<'a>(
     register_feature_gated_function!(
         result,
         curve25519_syscall_enabled,
-        b"sol_curve_validate_point",
+        *b"sol_curve_validate_point",
         SyscallCurvePointValidation::call,
     )?;
     register_feature_gated_function!(
         result,
         curve25519_syscall_enabled,
-        b"sol_curve_group_op",
+        *b"sol_curve_group_op",
         SyscallCurveGroupOps::call,
     )?;
     register_feature_gated_function!(
         result,
         curve25519_syscall_enabled,
-        b"sol_curve_multiscalar_mul",
+        *b"sol_curve_multiscalar_mul",
         SyscallCurveMultiscalarMultiplication::call,
     )?;
 
     // Sysvars
-    result.register_function(b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
-    result.register_function(
-        b"sol_get_epoch_schedule_sysvar",
+    result.register_function_hashed(*b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
+    result.register_function_hashed(
+        *b"sol_get_epoch_schedule_sysvar",
         SyscallGetEpochScheduleSysvar::call,
     )?;
     register_feature_gated_function!(
         result,
         !disable_fees_sysvar,
-        b"sol_get_fees_sysvar",
+        *b"sol_get_fees_sysvar",
         SyscallGetFeesSysvar::call,
     )?;
-    result.register_function(b"sol_get_rent_sysvar", SyscallGetRentSysvar::call)?;
+    result.register_function_hashed(*b"sol_get_rent_sysvar", SyscallGetRentSysvar::call)?;
 
     register_feature_gated_function!(
         result,
         last_restart_slot_syscall_enabled,
-        b"sol_get_last_restart_slot",
+        *b"sol_get_last_restart_slot",
         SyscallGetLastRestartSlotSysvar::call,
     )?;
 
     register_feature_gated_function!(
         result,
         epoch_rewards_syscall_enabled,
-        b"sol_get_epoch_rewards_sysvar",
+        *b"sol_get_epoch_rewards_sysvar",
         SyscallGetEpochRewardsSysvar::call,
     )?;
 
     // Memory ops
-    result.register_function(b"sol_memcpy_", SyscallMemcpy::call)?;
-    result.register_function(b"sol_memmove_", SyscallMemmove::call)?;
-    result.register_function(b"sol_memcmp_", SyscallMemcmp::call)?;
-    result.register_function(b"sol_memset_", SyscallMemset::call)?;
+    result.register_function_hashed(*b"sol_memcpy_", SyscallMemcpy::call)?;
+    result.register_function_hashed(*b"sol_memmove_", SyscallMemmove::call)?;
+    result.register_function_hashed(*b"sol_memcmp_", SyscallMemcmp::call)?;
+    result.register_function_hashed(*b"sol_memset_", SyscallMemset::call)?;
 
     // Processed sibling instructions
-    result.register_function(
-        b"sol_get_processed_sibling_instruction",
+    result.register_function_hashed(
+        *b"sol_get_processed_sibling_instruction",
         SyscallGetProcessedSiblingInstruction::call,
     )?;
 
     // Stack height
-    result.register_function(b"sol_get_stack_height", SyscallGetStackHeight::call)?;
+    result.register_function_hashed(*b"sol_get_stack_height", SyscallGetStackHeight::call)?;
 
     // Return data
-    result.register_function(b"sol_set_return_data", SyscallSetReturnData::call)?;
-    result.register_function(b"sol_get_return_data", SyscallGetReturnData::call)?;
+    result.register_function_hashed(*b"sol_set_return_data", SyscallSetReturnData::call)?;
+    result.register_function_hashed(*b"sol_get_return_data", SyscallGetReturnData::call)?;
 
     // Cross-program invocation
-    result.register_function(b"sol_invoke_signed_c", SyscallInvokeSignedC::call)?;
-    result.register_function(b"sol_invoke_signed_rust", SyscallInvokeSignedRust::call)?;
+    result.register_function_hashed(*b"sol_invoke_signed_c", SyscallInvokeSignedC::call)?;
+    result.register_function_hashed(*b"sol_invoke_signed_rust", SyscallInvokeSignedRust::call)?;
 
     // Memory allocator
     register_feature_gated_function!(
         result,
         !disable_deploy_of_alloc_free_syscall,
-        b"sol_alloc_free_",
+        *b"sol_alloc_free_",
         SyscallAllocFree::call,
     )?;
 
@@ -313,7 +317,7 @@ pub fn create_program_runtime_environment_v1<'a>(
     register_feature_gated_function!(
         result,
         enable_alt_bn128_syscall,
-        b"sol_alt_bn128_group_op",
+        *b"sol_alt_bn128_group_op",
         SyscallAltBn128::call,
     )?;
 
@@ -321,14 +325,37 @@ pub fn create_program_runtime_environment_v1<'a>(
     register_feature_gated_function!(
         result,
         enable_big_mod_exp_syscall,
-        b"sol_big_mod_exp",
+        *b"sol_big_mod_exp",
         SyscallBigModExp::call,
     )?;
 
-    // Log data
-    result.register_function(b"sol_log_data", SyscallLogData::call)?;
+    // Poseidon
+    register_feature_gated_function!(
+        result,
+        enable_poseidon_syscall,
+        *b"sol_poseidon",
+        SyscallPoseidon::call,
+    )?;
 
-    Ok(result)
+    // Accessing remaining compute units
+    register_feature_gated_function!(
+        result,
+        remaining_compute_units_syscall_enabled,
+        *b"sol_remaining_compute_units",
+        SyscallRemainingComputeUnits::call
+    )?;
+
+    // Log data
+    result.register_function_hashed(*b"sol_log_data", SyscallLogData::call)?;
+
+    Ok(BuiltinProgram::new_loader(config, result))
+}
+
+fn address_is_aligned<T>(address: u64) -> bool {
+    (address as *mut T as usize)
+        .checked_rem(align_of::<T>())
+        .map(|rem| rem == 0)
+        .expect("T to be non-zero aligned")
 }
 
 fn translate(
@@ -347,11 +374,13 @@ fn translate_type_inner<'a, T>(
     check_aligned: bool,
 ) -> Result<&'a mut T, Error> {
     let host_addr = translate(memory_mapping, access_type, vm_addr, size_of::<T>() as u64)?;
-
-    if check_aligned && (host_addr as *mut T as usize).wrapping_rem(align_of::<T>()) != 0 {
-        return Err(SyscallError::UnalignedPointer.into());
+    if !check_aligned {
+        Ok(unsafe { std::mem::transmute::<u64, &mut T>(host_addr) })
+    } else if !address_is_aligned::<T>(host_addr) {
+        Err(SyscallError::UnalignedPointer.into())
+    } else {
+        Ok(unsafe { &mut *(host_addr as *mut T) })
     }
-    Ok(unsafe { &mut *(host_addr as *mut T) })
 }
 fn translate_type_mut<'a, T>(
     memory_mapping: &MemoryMapping,
@@ -388,7 +417,7 @@ fn translate_slice_inner<'a, T>(
 
     let host_addr = translate(memory_mapping, access_type, vm_addr, total_size)?;
 
-    if check_aligned && (host_addr as *mut T as usize).wrapping_rem(align_of::<T>()) != 0 {
+    if check_aligned && !address_is_aligned::<T>(host_addr) {
         return Err(SyscallError::UnalignedPointer.into());
     }
     Ok(unsafe { from_raw_parts_mut(host_addr as *mut T, len as usize) })
@@ -761,9 +790,11 @@ declare_syscall!(
                     invoke_context.get_check_size(),
                 )?;
                 let cost = compute_budget.mem_op_base_cost.max(
-                    compute_budget
-                        .sha256_byte_cost
-                        .saturating_mul((val.len() as u64).saturating_div(2)),
+                    compute_budget.sha256_byte_cost.saturating_mul(
+                        (val.len() as u64)
+                            .checked_div(2)
+                            .expect("div by non-zero literal"),
+                    ),
                 );
                 consume_compute_meter(invoke_context, cost)?;
                 hasher.hash(bytes);
@@ -824,9 +855,11 @@ declare_syscall!(
                     invoke_context.get_check_size(),
                 )?;
                 let cost = compute_budget.mem_op_base_cost.max(
-                    compute_budget
-                        .sha256_byte_cost
-                        .saturating_mul((val.len() as u64).saturating_div(2)),
+                    compute_budget.sha256_byte_cost.saturating_mul(
+                        (val.len() as u64)
+                            .checked_div(2)
+                            .expect("div by non-zero literal"),
+                    ),
                 );
                 consume_compute_meter(invoke_context, cost)?;
                 hasher.hash(bytes);
@@ -1321,9 +1354,11 @@ declare_syscall!(
                     invoke_context.get_check_size(),
                 )?;
                 let cost = compute_budget.mem_op_base_cost.max(
-                    compute_budget
-                        .sha256_byte_cost
-                        .saturating_mul((val.len() as u64).saturating_div(2)),
+                    compute_budget.sha256_byte_cost.saturating_mul(
+                        (val.len() as u64)
+                            .checked_div(2)
+                            .expect("div by non-zero literal"),
+                    ),
                 );
                 consume_compute_meter(invoke_context, cost)?;
                 hasher.hash(bytes);
@@ -1349,7 +1384,8 @@ declare_syscall!(
         let budget = invoke_context.get_compute_budget();
 
         let cost = len
-            .saturating_div(budget.cpi_bytes_per_unit)
+            .checked_div(budget.cpi_bytes_per_unit)
+            .unwrap_or(u64::MAX)
             .saturating_add(budget.syscall_base_cost);
         consume_compute_meter(invoke_context, cost)?;
 
@@ -1403,7 +1439,8 @@ declare_syscall!(
         if length != 0 {
             let cost = length
                 .saturating_add(size_of::<Pubkey>() as u64)
-                .saturating_div(budget.cpi_bytes_per_unit);
+                .checked_div(budget.cpi_bytes_per_unit)
+                .unwrap_or(u64::MAX);
             consume_compute_meter(invoke_context, cost)?;
 
             let return_data_result = translate_slice_mut::<u8>(
@@ -1636,7 +1673,9 @@ declare_syscall!(
                 ALT_BN128_MULTIPLICATION_OUTPUT_LEN,
             ),
             ALT_BN128_PAIRING => {
-                let ele_len = input_size.saturating_div(ALT_BN128_PAIRING_ELEMENT_LEN as u64);
+                let ele_len = input_size
+                    .checked_div(ALT_BN128_PAIRING_ELEMENT_LEN as u64)
+                    .expect("div by non-zero constant");
                 let cost = budget
                     .alt_bn128_pairing_one_pair_cost_first
                     .saturating_add(
@@ -1732,7 +1771,8 @@ declare_syscall!(
             budget.syscall_base_cost.saturating_add(
                 input_len
                     .saturating_mul(input_len)
-                    .saturating_div(budget.big_modular_exponentiation_cost),
+                    .checked_div(budget.big_modular_exponentiation_cost)
+                    .unwrap_or(u64::MAX),
             ),
         )?;
 
@@ -1775,8 +1815,100 @@ declare_syscall!(
     }
 );
 
+declare_syscall!(
+    // Poseidon
+    SyscallPoseidon,
+    fn inner_call(
+        invoke_context: &mut InvokeContext,
+        parameters: u64,
+        endianness: u64,
+        vals_addr: u64,
+        vals_len: u64,
+        result_addr: u64,
+        memory_mapping: &mut MemoryMapping,
+    ) -> Result<u64, Error> {
+        let parameters: poseidon::Parameters = parameters.try_into()?;
+        let endianness: poseidon::Endianness = endianness.try_into()?;
+
+        if vals_len > 12 {
+            ic_msg!(
+                invoke_context,
+                "Poseidon hashing {} sequences is not supported",
+                vals_len,
+            );
+            return Err(SyscallError::InvalidLength.into());
+        }
+
+        let budget = invoke_context.get_compute_budget();
+        let Some(cost) = budget.poseidon_cost(vals_len) else {
+            ic_msg!(
+                invoke_context,
+                "Overflow while calculating the compute cost"
+            );
+            return Err(SyscallError::ArithmeticOverflow.into());
+        };
+        consume_compute_meter(invoke_context, cost.to_owned())?;
+
+        let hash_result = translate_slice_mut::<u8>(
+            memory_mapping,
+            result_addr,
+            poseidon::HASH_BYTES as u64,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
+        )?;
+        let inputs = translate_slice::<&[u8]>(
+            memory_mapping,
+            vals_addr,
+            vals_len,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
+        )?;
+        let inputs = inputs
+            .iter()
+            .map(|input| {
+                translate_slice::<u8>(
+                    memory_mapping,
+                    input.as_ptr() as *const _ as u64,
+                    input.len() as u64,
+                    invoke_context.get_check_aligned(),
+                    invoke_context.get_check_size(),
+                )
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+        let hash = match poseidon::hashv(parameters, endianness, inputs.as_slice()) {
+            Ok(hash) => hash,
+            Err(e) => {
+                return Ok(e.into());
+            }
+        };
+        hash_result.copy_from_slice(&hash.to_bytes());
+
+        Ok(SUCCESS)
+    }
+);
+
+declare_syscall!(
+    /// Read remaining compute units
+    SyscallRemainingComputeUnits,
+    fn inner_call(
+        invoke_context: &mut InvokeContext,
+        _arg1: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        _memory_mapping: &mut MemoryMapping,
+    ) -> Result<u64, Error> {
+        let budget = invoke_context.get_compute_budget();
+        consume_compute_meter(invoke_context, budget.syscall_base_cost)?;
+
+        use solana_rbpf::vm::ContextObject;
+        Ok(invoke_context.get_remaining())
+    }
+);
+
 #[cfg(test)]
-#[allow(clippy::integer_arithmetic)]
+#[allow(clippy::arithmetic_side_effects)]
 #[allow(clippy::indexing_slicing)]
 mod tests {
     #[allow(deprecated)]
@@ -1784,6 +1916,7 @@ mod tests {
     use {
         super::*,
         crate::mock_create_vm,
+        assert_matches::assert_matches,
         core::slice,
         solana_program_runtime::{invoke_context::InvokeContext, with_mock_invoke_context},
         solana_rbpf::{
@@ -2088,10 +2221,10 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert!(matches!(
+        assert_matches!(
             result,
-            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
-        ));
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded
+        );
 
         invoke_context.mock_set_remaining(string.len() as u64);
         let mut result = ProgramResult::Ok(0);
@@ -2170,10 +2303,10 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert!(matches!(
+        assert_matches!(
             result,
-            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
-        ));
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded
+        );
 
         assert_eq!(
             invoke_context
@@ -2255,10 +2388,10 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert!(matches!(
+        assert_matches!(
             result,
-            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
-        ));
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded
+        );
 
         invoke_context.mock_set_remaining(cost);
         let mut result = ProgramResult::Ok(0);
@@ -2405,10 +2538,7 @@ mod tests {
             );
             let address = result.unwrap();
             assert_ne!(address, 0);
-            assert_eq!(
-                (address as *const u8 as usize).wrapping_rem(align_of::<T>()),
-                0
-            );
+            assert!(address_is_aligned::<T>(address));
         }
         aligned::<u8>();
         aligned::<u16>();
@@ -2523,10 +2653,10 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert!(matches!(
+        assert_matches!(
             result,
-            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
-        ));
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded
+        );
     }
 
     #[test]
@@ -2602,10 +2732,10 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert!(matches!(
+        assert_matches!(
             result,
-            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
-        ));
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded
+        );
     }
 
     #[test]
@@ -2681,10 +2811,10 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert!(matches!(
+        assert_matches!(
             result,
-            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
-        ));
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded
+        );
     }
 
     #[test]
@@ -2852,10 +2982,10 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert!(matches!(
+        assert_matches!(
             result,
-            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
-        ));
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded
+        );
     }
 
     #[test]
@@ -3025,10 +3155,10 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert!(matches!(
+        assert_matches!(
             result,
-            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
-        ));
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded
+        );
     }
 
     #[test]
@@ -3561,10 +3691,10 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert!(matches!(
+        assert_matches!(
             result,
-            ProgramResult::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::CopyOverlapping,
-        ));
+            ProgramResult::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::CopyOverlapping
+        );
     }
 
     #[test]
@@ -3714,10 +3844,10 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert!(matches!(
+        assert_matches!(
             result,
-            ProgramResult::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::CopyOverlapping,
-        ));
+            ProgramResult::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::CopyOverlapping
+        );
     }
 
     #[test]
@@ -3728,18 +3858,18 @@ mod tests {
         let address = bpf_loader_upgradeable::id();
 
         let exceeded_seed = &[127; MAX_SEED_LEN + 1];
-        assert!(matches!(
+        assert_matches!(
             create_program_address(&mut invoke_context, &[exceeded_seed], &address),
-            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded),
-        ));
-        assert!(matches!(
+            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
+        );
+        assert_matches!(
             create_program_address(
                 &mut invoke_context,
                 &[b"short_seed", exceeded_seed],
                 &address,
             ),
-            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded),
-        ));
+            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
+        );
         let max_seed = &[0; MAX_SEED_LEN];
         assert!(create_program_address(&mut invoke_context, &[max_seed], &address).is_ok());
         let exceeded_seeds: &[&[u8]] = &[
@@ -3780,10 +3910,10 @@ mod tests {
             &[16],
             &[17],
         ];
-        assert!(matches!(
+        assert_matches!(
             create_program_address(&mut invoke_context, max_seeds, &address),
-            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded),
-        ));
+            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
+        );
         assert_eq!(
             create_program_address(&mut invoke_context, &[b"", &[1]], &address).unwrap(),
             "BwqrghZA2htAcqq8dzP1WDAhTXYTYWj7CHxF5j7TDBAe"
@@ -3817,10 +3947,10 @@ mod tests {
             create_program_address(&mut invoke_context, &[b"Talking"], &address).unwrap(),
         );
         invoke_context.mock_set_remaining(0);
-        assert!(matches!(
+        assert_matches!(
             create_program_address(&mut invoke_context, &[b"", &[1]], &address),
-            Result::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
-        ));
+            Result::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded
+        );
     }
 
     #[test]
@@ -3856,17 +3986,17 @@ mod tests {
         invoke_context.mock_set_remaining(cost * (max_tries - bump_seed as u64));
         try_find_program_address(&mut invoke_context, seeds, &address).unwrap();
         invoke_context.mock_set_remaining(cost * (max_tries - bump_seed as u64 - 1));
-        assert!(matches!(
+        assert_matches!(
             try_find_program_address(&mut invoke_context, seeds, &address),
-            Result::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
-        ));
+            Result::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded
+        );
 
         let exceeded_seed = &[127; MAX_SEED_LEN + 1];
         invoke_context.mock_set_remaining(cost * (max_tries - 1));
-        assert!(matches!(
+        assert_matches!(
             try_find_program_address(&mut invoke_context, &[exceeded_seed], &address),
-            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded),
-        ));
+            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
+        );
         let exceeded_seeds: &[&[u8]] = &[
             &[1],
             &[2],
@@ -3887,12 +4017,12 @@ mod tests {
             &[17],
         ];
         invoke_context.mock_set_remaining(cost * (max_tries - 1));
-        assert!(matches!(
+        assert_matches!(
             try_find_program_address(&mut invoke_context, exceeded_seeds, &address),
-            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded),
-        ));
+            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
+        );
 
-        assert!(matches!(
+        assert_matches!(
             call_program_address_common(
                 &mut invoke_context,
                 seeds,
@@ -3900,8 +4030,8 @@ mod tests {
                 true,
                 SyscallTryFindProgramAddress::call,
             ),
-            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::CopyOverlapping,
-        ));
+            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::CopyOverlapping
+        );
     }
 
     #[test]
@@ -4001,10 +4131,10 @@ mod tests {
                 &mut result,
             );
 
-            assert!(matches!(
+            assert_matches!(
                 result,
-                ProgramResult::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::InvalidLength,
-            ));
+                ProgramResult::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::InvalidLength
+            );
         }
     }
 
@@ -4031,5 +4161,12 @@ mod tests {
     pub fn bytes_of_slice_mut<T>(val: &mut [T]) -> &mut [u8] {
         let size = val.len().wrapping_mul(mem::size_of::<T>());
         unsafe { slice::from_raw_parts_mut(val.as_mut_ptr().cast(), size) }
+    }
+
+    #[test]
+    fn test_address_is_aligned() {
+        for address in 0..std::mem::size_of::<u64>() {
+            assert_eq!(address_is_aligned::<u64>(address as u64), address == 0);
+        }
     }
 }

@@ -25,23 +25,26 @@ impl BucketMapConfig {
     }
 }
 
-pub struct BucketMap<T: Clone + Copy + Debug + 'static> {
+pub struct BucketMap<T: Clone + Copy + Debug + PartialEq + 'static> {
     buckets: Vec<Arc<BucketApi<T>>>,
     drives: Arc<Vec<PathBuf>>,
     max_buckets_pow2: u8,
     pub stats: Arc<BucketMapStats>,
     pub temp_dir: Option<TempDir>,
+    /// true if dropping self removes all folders.
+    /// This is primarily for test environments.
+    pub erase_drives_on_drop: bool,
 }
 
-impl<T: Clone + Copy + Debug> Drop for BucketMap<T> {
+impl<T: Clone + Copy + Debug + PartialEq> Drop for BucketMap<T> {
     fn drop(&mut self) {
-        if self.temp_dir.is_none() {
+        if self.temp_dir.is_none() && self.erase_drives_on_drop {
             BucketMap::<T>::erase_previous_drives(&self.drives);
         }
     }
 }
 
-impl<T: Clone + Copy + Debug> std::fmt::Debug for BucketMap<T> {
+impl<T: Clone + Copy + Debug + PartialEq> Debug for BucketMap<T> {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }
@@ -59,7 +62,7 @@ pub enum BucketMapError {
     IndexNoSpace(u64),
 }
 
-impl<T: Clone + Copy + Debug> BucketMap<T> {
+impl<T: Clone + Copy + Debug + PartialEq> BucketMap<T> {
     pub fn new(config: BucketMapConfig) -> Self {
         assert_ne!(
             config.max_buckets, 0,
@@ -103,6 +106,7 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
             max_buckets_pow2: log2(config.max_buckets) as u8,
             stats,
             temp_dir,
+            erase_drives_on_drop: true,
         }
     }
 
@@ -507,13 +511,9 @@ mod tests {
                                 );
                                 duplicates += 1;
                             }
-                            let count = batch_additions.len();
                             assert_eq!(
                                 map.get_bucket_from_index(0)
-                                    .batch_insert_non_duplicates(
-                                        batch_additions.into_iter(),
-                                        count,
-                                    )
+                                    .batch_insert_non_duplicates(&batch_additions,)
                                     .len(),
                                 duplicates
                             );

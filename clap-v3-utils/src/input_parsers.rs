@@ -14,7 +14,7 @@ use {
         pubkey::Pubkey,
         signature::{read_keypair_file, Keypair, Signature, Signer},
     },
-    std::{rc::Rc, str::FromStr},
+    std::{error, rc::Rc, str::FromStr},
 };
 
 // Sentinel value used to indicate to write to screen instead of file
@@ -69,6 +69,15 @@ pub fn keypair_of(matches: &ArgMatches, name: &str) -> Option<Keypair> {
     }
 }
 
+// Return the keypair for an argument with filename `name` or `None` if not present wrapped inside `Result`.
+pub fn try_keypair_of(
+    matches: &ArgMatches,
+    name: &str,
+) -> Result<Option<Keypair>, Box<dyn error::Error>> {
+    matches.try_contains_id(name)?;
+    Ok(keypair_of(matches, name))
+}
+
 pub fn keypairs_of(matches: &ArgMatches, name: &str) -> Option<Vec<Keypair>> {
     matches.values_of(name).map(|values| {
         values
@@ -84,10 +93,28 @@ pub fn keypairs_of(matches: &ArgMatches, name: &str) -> Option<Vec<Keypair>> {
     })
 }
 
+pub fn try_keypairs_of(
+    matches: &ArgMatches,
+    name: &str,
+) -> Result<Option<Vec<Keypair>>, Box<dyn error::Error>> {
+    matches.try_contains_id(name)?;
+    Ok(keypairs_of(matches, name))
+}
+
 // Return a pubkey for an argument that can itself be parsed into a pubkey,
 // or is a filename that can be read as a keypair
 pub fn pubkey_of(matches: &ArgMatches, name: &str) -> Option<Pubkey> {
     value_of(matches, name).or_else(|| keypair_of(matches, name).map(|keypair| keypair.pubkey()))
+}
+
+// Return a `Result` wrapped pubkey for an argument that can itself be parsed into a pubkey,
+// or is a filename that can be read as a keypair
+pub fn try_pubkey_of(
+    matches: &ArgMatches,
+    name: &str,
+) -> Result<Option<Pubkey>, Box<dyn error::Error>> {
+    matches.try_contains_id(name)?;
+    Ok(pubkey_of(matches, name))
 }
 
 pub fn pubkeys_of(matches: &ArgMatches, name: &str) -> Option<Vec<Pubkey>> {
@@ -104,6 +131,14 @@ pub fn pubkeys_of(matches: &ArgMatches, name: &str) -> Option<Vec<Pubkey>> {
     })
 }
 
+pub fn try_pubkeys_of(
+    matches: &ArgMatches,
+    name: &str,
+) -> Result<Option<Vec<Pubkey>>, Box<dyn error::Error>> {
+    matches.try_contains_id(name)?;
+    Ok(pubkeys_of(matches, name))
+}
+
 // Return pubkey/signature pairs for a string of the form pubkey=signature
 pub fn pubkeys_sigs_of(matches: &ArgMatches, name: &str) -> Option<Vec<(Pubkey, Signature)>> {
     matches.values_of(name).map(|values| {
@@ -118,6 +153,16 @@ pub fn pubkeys_sigs_of(matches: &ArgMatches, name: &str) -> Option<Vec<(Pubkey, 
     })
 }
 
+// Return pubkey/signature pairs for a string of the form pubkey=signature wrapped inside `Result`
+#[allow(clippy::type_complexity)]
+pub fn try_pubkeys_sigs_of(
+    matches: &ArgMatches,
+    name: &str,
+) -> Result<Option<Vec<(Pubkey, Signature)>>, Box<dyn error::Error>> {
+    matches.try_contains_id(name)?;
+    Ok(pubkeys_sigs_of(matches, name))
+}
+
 // Return a signer from matches at `name`
 #[allow(clippy::type_complexity)]
 pub fn signer_of(
@@ -125,7 +170,7 @@ pub fn signer_of(
     name: &str,
     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<(Option<Box<dyn Signer>>, Option<Pubkey>), Box<dyn std::error::Error>> {
-    if let Some(location) = matches.value_of(name) {
+    if let Some(location) = matches.try_get_one::<String>(name)? {
         let signer = signer_from_path(matches, location, name, wallet_manager)?;
         let signer_pubkey = signer.pubkey();
         Ok((Some(signer), Some(signer_pubkey)))
@@ -139,7 +184,7 @@ pub fn pubkey_of_signer(
     name: &str,
     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<Option<Pubkey>, Box<dyn std::error::Error>> {
-    if let Some(location) = matches.value_of(name) {
+    if let Some(location) = matches.try_get_one::<String>(name)? {
         Ok(Some(pubkey_from_path(
             matches,
             location,
@@ -156,7 +201,7 @@ pub fn pubkeys_of_multiple_signers(
     name: &str,
     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<Option<Vec<Pubkey>>, Box<dyn std::error::Error>> {
-    if let Some(pubkey_matches) = matches.values_of(name) {
+    if let Some(pubkey_matches) = matches.try_get_many::<String>(name)? {
         let mut pubkeys: Vec<Pubkey> = vec![];
         for signer in pubkey_matches {
             pubkeys.push(pubkey_from_path(matches, signer, name, wallet_manager)?);
@@ -174,7 +219,7 @@ pub fn resolve_signer(
 ) -> Result<Option<String>, Box<dyn std::error::Error>> {
     resolve_signer_from_path(
         matches,
-        matches.value_of(name).unwrap(),
+        matches.try_get_one::<String>(name)?.unwrap(),
         name,
         wallet_manager,
     )

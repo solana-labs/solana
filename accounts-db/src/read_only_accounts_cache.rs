@@ -8,6 +8,7 @@ use {
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
         pubkey::Pubkey,
+        timing::timestamp,
     },
     std::sync::{
         atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering},
@@ -23,7 +24,10 @@ type ReadOnlyCacheKey = (Pubkey, Slot);
 #[derive(Debug)]
 struct ReadOnlyAccountCacheEntry {
     account: AccountSharedData,
-    index: AtomicU32, // Index of the entry in the eviction queue.
+    /// Index of the entry in the eviction queue.
+    index: AtomicU32,
+    /// lower bits of last timestamp when eviction queue was updated, in ms
+    last_update_time: AtomicU32,
 }
 
 #[derive(Default, Debug)]
@@ -53,7 +57,7 @@ impl ReadOnlyCacheStats {
 }
 
 #[derive(Debug)]
-pub struct ReadOnlyAccountsCache {
+pub(crate) struct ReadOnlyAccountsCache {
     cache: DashMap<ReadOnlyCacheKey, ReadOnlyAccountCacheEntry>,
     /// When an item is first entered into the cache, it is added to the end of
     /// the queue. Also each time an entry is looked up from the cache it is
@@ -63,18 +67,21 @@ pub struct ReadOnlyAccountsCache {
     queue: Mutex<IndexList<ReadOnlyCacheKey>>,
     max_data_size: usize,
     data_size: AtomicUsize,
+    // read only cache does not update lru on read of an entry unless it has been at least this many ms since the last lru update
+    ms_to_skip_lru_update: u32,
 
     // Performance statistics
     stats: ReadOnlyCacheStats,
 }
 
 impl ReadOnlyAccountsCache {
-    pub(crate) fn new(max_data_size: usize) -> Self {
+    pub(crate) fn new(max_data_size: usize, ms_to_skip_lru_update: u32) -> Self {
         Self {
             max_data_size,
             cache: DashMap::default(),
             queue: Mutex::<IndexList<ReadOnlyCacheKey>>::default(),
             data_size: AtomicUsize::default(),
+            ms_to_skip_lru_update,
             stats: ReadOnlyCacheStats::default(),
         }
     }
@@ -103,10 +110,15 @@ impl ReadOnlyAccountsCache {
             // Move the entry to the end of the queue.
             // self.queue is modified while holding a reference to the cache entry;
             // so that another thread cannot write to the same key.
-            {
+            // If we updated the eviction queue within this much time, then leave it where it is. We're likely to hit it again.
+            let update_lru = entry.ms_since_last_update() >= self.ms_to_skip_lru_update;
+            if update_lru {
                 let mut queue = self.queue.lock().unwrap();
                 queue.remove(entry.index());
                 entry.set_index(queue.insert_last(key));
+                entry
+                    .last_update_time
+                    .store(ReadOnlyAccountCacheEntry::timestamp(), Ordering::Release);
             }
             let account = entry.account.clone();
             drop(entry);
@@ -185,7 +197,11 @@ impl ReadOnlyAccountCacheEntry {
     fn new(account: AccountSharedData, index: Index) -> Self {
         let index = unsafe { std::mem::transmute::<Index, u32>(index) };
         let index = AtomicU32::new(index);
-        Self { account, index }
+        Self {
+            account,
+            index,
+            last_update_time: AtomicU32::new(Self::timestamp()),
+        }
     }
 
     #[inline]
@@ -198,6 +214,16 @@ impl ReadOnlyAccountCacheEntry {
     fn set_index(&self, index: Index) {
         let index = unsafe { std::mem::transmute::<Index, u32>(index) };
         self.index.store(index, Ordering::Relaxed);
+    }
+
+    /// lower bits of current timestamp. We don't need higher bits and u32 packs with Index u32 in `ReadOnlyAccountCacheEntry`
+    fn timestamp() -> u32 {
+        timestamp() as u32
+    }
+
+    /// ms since `last_update_time` timestamp
+    fn ms_since_last_update(&self) -> u32 {
+        Self::timestamp().wrapping_sub(self.last_update_time.load(Ordering::Acquire))
     }
 }
 
@@ -226,7 +252,8 @@ mod tests {
         let per_account_size = CACHE_ENTRY_SIZE;
         let data_size = 100;
         let max = data_size + per_account_size;
-        let cache = ReadOnlyAccountsCache::new(max);
+        let cache =
+            ReadOnlyAccountsCache::new(max, READ_ONLY_CACHE_MS_TO_SKIP_LRU_UPDATE_FOR_TESTS);
         let slot = 0;
         assert!(cache.load(Pubkey::default(), slot).is_none());
         assert_eq!(0, cache.cache_len());
@@ -261,7 +288,8 @@ mod tests {
 
         // can store 2 items, 3rd item kicks oldest item out
         let max = (data_size + per_account_size) * 2;
-        let cache = ReadOnlyAccountsCache::new(max);
+        let cache =
+            ReadOnlyAccountsCache::new(max, READ_ONLY_CACHE_MS_TO_SKIP_LRU_UPDATE_FOR_TESTS);
         cache.store(key1, slot, account1.clone());
         assert_eq!(100 + per_account_size, cache.data_size());
         assert!(accounts_equal(&cache.load(key1, slot).unwrap(), &account1));
@@ -284,13 +312,19 @@ mod tests {
         assert_eq!(2, cache.cache_len());
     }
 
+    /// tests like to deterministically update lru always
+    const READ_ONLY_CACHE_MS_TO_SKIP_LRU_UPDATE_FOR_TESTS: u32 = 0;
+
     #[test]
     fn test_read_only_accounts_cache_random() {
         const SEED: [u8; 32] = [0xdb; 32];
         const DATA_SIZE: usize = 19;
         const MAX_CACHE_SIZE: usize = 17 * (CACHE_ENTRY_SIZE + DATA_SIZE);
         let mut rng = ChaChaRng::from_seed(SEED);
-        let cache = ReadOnlyAccountsCache::new(MAX_CACHE_SIZE);
+        let cache = ReadOnlyAccountsCache::new(
+            MAX_CACHE_SIZE,
+            READ_ONLY_CACHE_MS_TO_SKIP_LRU_UPDATE_FOR_TESTS,
+        );
         let slots: Vec<Slot> = repeat_with(|| rng.gen_range(0..1000)).take(5).collect();
         let pubkeys: Vec<Pubkey> = repeat_with(|| {
             let mut arr = [0u8; 32];

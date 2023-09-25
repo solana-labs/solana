@@ -312,7 +312,6 @@ fn timeout_future<'a, Fut: Future<Output = TransportResult<()>> + 'a>(
 ) -> impl Future<Output = TransportResult<()>> + 'a {
     timeout(timeout_duration, future)
         .unwrap_or_else(|_| Err(TransportError::Custom("Timed out".to_string())))
-        .boxed_local()
 }
 
 #[cfg(feature = "spinner")]
@@ -331,7 +330,6 @@ async fn sleep_and_set_message(
     Ok(())
 }
 
-#[cfg(feature = "spinner")]
 async fn sleep_and_send_wire_transaction_to_addr<P, M, C>(
     sleep_duration: Duration,
     connection_cache: &ConnectionCache<P, M, C>,
@@ -343,8 +341,7 @@ where
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
 {
     sleep(sleep_duration).await;
-    let conn = connection_cache.get_nonblocking_connection(&addr);
-    conn.send_data(&wire_transaction).await
+    send_wire_transaction_to_addr(connection_cache, &addr, wire_transaction).await
 }
 
 async fn send_wire_transaction_to_addr<P, M, C>(

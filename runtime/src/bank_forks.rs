@@ -209,18 +209,16 @@ impl BankForks {
     pub fn remove(&mut self, slot: Slot) -> Option<Arc<Bank>> {
         let bank = self.banks.remove(&slot)?;
         for parent in bank.proper_ancestors() {
-            let mut entry = match self.descendants.entry(parent) {
-                Entry::Vacant(_) => panic!("this should not happen!"),
-                Entry::Occupied(entry) => entry,
+            let Entry::Occupied(mut entry) = self.descendants.entry(parent) else {
+                panic!("this should not happen!");
             };
             entry.get_mut().remove(&slot);
             if entry.get().is_empty() && !self.banks.contains_key(&parent) {
                 entry.remove_entry();
             }
         }
-        let entry = match self.descendants.entry(slot) {
-            Entry::Vacant(_) => panic!("this should not happen!"),
-            Entry::Occupied(entry) => entry,
+        let Entry::Occupied(entry) = self.descendants.entry(slot) else {
+            panic!("this should not happen!");
         };
         if entry.get().is_empty() {
             entry.remove_entry();
@@ -679,6 +677,7 @@ mod tests {
                 create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
             },
         },
+        assert_matches::assert_matches,
         solana_accounts_db::epoch_accounts_hash::EpochAccountsHash,
         solana_sdk::{
             clock::UnixTimestamp,
@@ -1048,100 +1047,34 @@ mod tests {
         //                      |   |
         //                      10  12
 
-        assert!(matches!(
-            bank_forks.relationship(0, 3),
-            BlockRelation::Ancestor
-        ));
-        assert!(matches!(
-            bank_forks.relationship(0, 10),
-            BlockRelation::Ancestor
-        ));
-        assert!(matches!(
-            bank_forks.relationship(0, 12),
-            BlockRelation::Ancestor
-        ));
-        assert!(matches!(
-            bank_forks.relationship(1, 3),
-            BlockRelation::Ancestor
-        ));
-        assert!(matches!(
-            bank_forks.relationship(2, 10),
-            BlockRelation::Ancestor
-        ));
-        assert!(matches!(
-            bank_forks.relationship(2, 12),
-            BlockRelation::Ancestor
-        ));
-        assert!(matches!(
-            bank_forks.relationship(4, 10),
-            BlockRelation::Ancestor
-        ));
-        assert!(matches!(
-            bank_forks.relationship(4, 12),
-            BlockRelation::Ancestor
-        ));
-        assert!(matches!(
-            bank_forks.relationship(6, 10),
-            BlockRelation::Unrelated
-        ));
-        assert!(matches!(
-            bank_forks.relationship(5, 12),
-            BlockRelation::Unrelated
-        ));
-        assert!(matches!(
-            bank_forks.relationship(6, 12),
-            BlockRelation::Ancestor
-        ));
+        assert_matches!(bank_forks.relationship(0, 3), BlockRelation::Ancestor);
+        assert_matches!(bank_forks.relationship(0, 10), BlockRelation::Ancestor);
+        assert_matches!(bank_forks.relationship(0, 12), BlockRelation::Ancestor);
+        assert_matches!(bank_forks.relationship(1, 3), BlockRelation::Ancestor);
+        assert_matches!(bank_forks.relationship(2, 10), BlockRelation::Ancestor);
+        assert_matches!(bank_forks.relationship(2, 12), BlockRelation::Ancestor);
+        assert_matches!(bank_forks.relationship(4, 10), BlockRelation::Ancestor);
+        assert_matches!(bank_forks.relationship(4, 12), BlockRelation::Ancestor);
+        assert_matches!(bank_forks.relationship(6, 10), BlockRelation::Unrelated);
+        assert_matches!(bank_forks.relationship(5, 12), BlockRelation::Unrelated);
+        assert_matches!(bank_forks.relationship(6, 12), BlockRelation::Ancestor);
 
-        assert!(matches!(
-            bank_forks.relationship(6, 2),
-            BlockRelation::Descendant
-        ));
-        assert!(matches!(
-            bank_forks.relationship(10, 2),
-            BlockRelation::Descendant
-        ));
-        assert!(matches!(
-            bank_forks.relationship(8, 3),
-            BlockRelation::Descendant
-        ));
-        assert!(matches!(
-            bank_forks.relationship(6, 3),
-            BlockRelation::Unrelated
-        ));
-        assert!(matches!(
-            bank_forks.relationship(12, 2),
-            BlockRelation::Descendant
-        ));
-        assert!(matches!(
-            bank_forks.relationship(12, 1),
-            BlockRelation::Unrelated
-        ));
-        assert!(matches!(
-            bank_forks.relationship(1, 2),
-            BlockRelation::Unrelated
-        ));
+        assert_matches!(bank_forks.relationship(6, 2), BlockRelation::Descendant);
+        assert_matches!(bank_forks.relationship(10, 2), BlockRelation::Descendant);
+        assert_matches!(bank_forks.relationship(8, 3), BlockRelation::Descendant);
+        assert_matches!(bank_forks.relationship(6, 3), BlockRelation::Unrelated);
+        assert_matches!(bank_forks.relationship(12, 2), BlockRelation::Descendant);
+        assert_matches!(bank_forks.relationship(12, 1), BlockRelation::Unrelated);
+        assert_matches!(bank_forks.relationship(1, 2), BlockRelation::Unrelated);
 
-        assert!(matches!(
-            bank_forks.relationship(1, 13),
-            BlockRelation::Unknown
-        ));
-        assert!(matches!(
-            bank_forks.relationship(13, 2),
-            BlockRelation::Unknown
-        ));
+        assert_matches!(bank_forks.relationship(1, 13), BlockRelation::Unknown);
+        assert_matches!(bank_forks.relationship(13, 2), BlockRelation::Unknown);
         bank_forks.set_root(
             2,
             &AbsRequestSender::default(),
             Some(1), // highest confirmed root
         );
-        assert!(matches!(
-            bank_forks.relationship(1, 2),
-            BlockRelation::Unknown
-        ));
-        assert!(matches!(
-            bank_forks.relationship(2, 0),
-            BlockRelation::Unknown
-        ));
+        assert_matches!(bank_forks.relationship(1, 2), BlockRelation::Unknown);
+        assert_matches!(bank_forks.relationship(2, 0), BlockRelation::Unknown);
     }
 }

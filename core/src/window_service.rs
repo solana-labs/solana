@@ -7,6 +7,7 @@ use {
         completed_data_sets_service::CompletedDataSetsSender,
         repair::{
             ancestor_hashes_service::AncestorHashesReplayUpdateReceiver,
+            quic_endpoint::LocalRequest,
             repair_response,
             repair_service::{
                 DumpedSlotsReceiver, OutstandingShredRepairs, PopularPrunedForksSender, RepairInfo,
@@ -19,7 +20,7 @@ use {
     rayon::{prelude::*, ThreadPool},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
-        blockstore::{Blockstore, BlockstoreInsertionMetrics},
+        blockstore::{Blockstore, BlockstoreInsertionMetrics, PossibleDuplicateShred},
         leader_schedule_cache::LeaderScheduleCache,
         shred::{self, Nonce, ReedSolomonCache, Shred},
     },
@@ -39,6 +40,7 @@ use {
         thread::{self, Builder, JoinHandle},
         time::{Duration, Instant},
     },
+    tokio::sync::mpsc::Sender as AsyncSender,
 };
 
 type ShredPayload = Vec<u8>;
@@ -138,23 +140,37 @@ impl WindowServiceMetrics {
 fn run_check_duplicate(
     cluster_info: &ClusterInfo,
     blockstore: &Blockstore,
-    shred_receiver: &Receiver<Shred>,
+    shred_receiver: &Receiver<PossibleDuplicateShred>,
     duplicate_slots_sender: &DuplicateSlotSender,
 ) -> Result<()> {
-    let check_duplicate = |shred: Shred| -> Result<()> {
+    let check_duplicate = |shred: PossibleDuplicateShred| -> Result<()> {
         let shred_slot = shred.slot();
-        if !blockstore.has_duplicate_shreds_in_slot(shred_slot) {
-            if let Some(existing_shred_payload) = blockstore.is_shred_duplicate(&shred) {
-                cluster_info.push_duplicate_shred(&shred, &existing_shred_payload)?;
+        let (shred1, shred2) = match shred {
+            PossibleDuplicateShred::LastIndexConflict(shred, conflict) => (shred, conflict),
+            PossibleDuplicateShred::ErasureConflict(shred, conflict) => (shred, conflict),
+            PossibleDuplicateShred::Exists(shred) => {
+                // Unlike the other cases we have to wait until here to decide to handle the duplicate and store
+                // in blockstore. This is because the duplicate could have been part of the same insert batch,
+                // so we wait until the batch has been written.
+                if blockstore.has_duplicate_shreds_in_slot(shred_slot) {
+                    return Ok(()); // A duplicate is already recorded
+                }
+                let Some(existing_shred_payload) = blockstore.is_shred_duplicate(&shred) else {
+                    return Ok(()); // Not a duplicate
+                };
                 blockstore.store_duplicate_slot(
                     shred_slot,
-                    existing_shred_payload,
-                    shred.into_payload(),
+                    existing_shred_payload.clone(),
+                    shred.clone().into_payload(),
                 )?;
-
-                duplicate_slots_sender.send(shred_slot)?;
+                (shred, existing_shred_payload)
             }
-        }
+        };
+
+        // Propagate duplicate proof through gossip
+        cluster_info.push_duplicate_shred(&shred1, &shred2)?;
+        // Notify duplicate consensus state machine
+        duplicate_slots_sender.send(shred_slot)?;
 
         Ok(())
     };
@@ -226,7 +242,7 @@ fn run_insert<F>(
     reed_solomon_cache: &ReedSolomonCache,
 ) -> Result<()>
 where
-    F: Fn(Shred),
+    F: Fn(PossibleDuplicateShred),
 {
     const RECV_TIMEOUT: Duration = Duration::from_millis(200);
     let mut shred_receiver_elapsed = Measure::start("shred_receiver_elapsed");
@@ -311,6 +327,8 @@ impl WindowService {
         retransmit_sender: Sender<Vec<ShredPayload>>,
         repair_socket: Arc<UdpSocket>,
         ancestor_hashes_socket: Arc<UdpSocket>,
+        repair_quic_endpoint_sender: AsyncSender<LocalRequest>,
+        repair_quic_endpoint_response_sender: Sender<(SocketAddr, Vec<u8>)>,
         exit: Arc<AtomicBool>,
         repair_info: RepairInfo,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
@@ -330,6 +348,8 @@ impl WindowService {
             exit.clone(),
             repair_socket,
             ancestor_hashes_socket,
+            repair_quic_endpoint_sender,
+            repair_quic_endpoint_response_sender,
             repair_info,
             verified_vote_receiver,
             outstanding_requests.clone(),
@@ -370,7 +390,7 @@ impl WindowService {
         cluster_info: Arc<ClusterInfo>,
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
-        duplicate_receiver: Receiver<Shred>,
+        duplicate_receiver: Receiver<PossibleDuplicateShred>,
         duplicate_slots_sender: DuplicateSlotSender,
     ) -> JoinHandle<()> {
         let handle_error = || {
@@ -400,7 +420,7 @@ impl WindowService {
         blockstore: Arc<Blockstore>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         verified_receiver: Receiver<Vec<PacketBatch>>,
-        check_duplicate_sender: Sender<Shred>,
+        check_duplicate_sender: Sender<PossibleDuplicateShred>,
         completed_data_sets_sender: CompletedDataSetsSender,
         retransmit_sender: Sender<Vec<ShredPayload>>,
         outstanding_requests: Arc<RwLock<OutstandingShredRepairs>>,
@@ -417,8 +437,8 @@ impl WindowService {
         Builder::new()
             .name("solWinInsert".to_string())
             .spawn(move || {
-                let handle_duplicate = |shred| {
-                    let _ = check_duplicate_sender.send(shred);
+                let handle_duplicate = |possible_duplicate_shred| {
+                    let _ = check_duplicate_sender.send(possible_duplicate_shred);
                 };
                 let mut metrics = BlockstoreInsertionMetrics::default();
                 let mut ws_metrics = WindowServiceMetrics::default();
@@ -551,7 +571,9 @@ mod test {
         };
         assert_eq!(duplicate_shred.slot(), shreds[0].slot());
         let duplicate_shred_slot = duplicate_shred.slot();
-        sender.send(duplicate_shred.clone()).unwrap();
+        sender
+            .send(PossibleDuplicateShred::Exists(duplicate_shred.clone()))
+            .unwrap();
         assert!(!blockstore.has_duplicate_shreds_in_slot(duplicate_shred_slot));
         let keypair = Keypair::new();
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());

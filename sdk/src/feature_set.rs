@@ -20,6 +20,7 @@
 
 use {
     lazy_static::lazy_static,
+    solana_program::{epoch_schedule::EpochSchedule, stake_history::Epoch},
     solana_sdk::{
         clock::Slot,
         hash::{Hash, Hasher},
@@ -282,7 +283,7 @@ pub mod stake_deactivate_delinquent_instruction {
 }
 
 pub mod stake_redelegate_instruction {
-    solana_sdk::declare_id!("3EPmAX94PvVJCjMeFfRFvj4avqCPL8vv3TGsZQg7ydMx");
+    solana_sdk::declare_id!("GUrp5BKMyDazsAp9mBoVD6orE5ihXNRPC3jkBRfx6Lq7");
 }
 
 pub mod vote_withdraw_authority_may_change_authorized_voter {
@@ -573,14 +574,6 @@ pub mod disable_turbine_fanout_experiments {
     solana_sdk::declare_id!("Gz1aLrbeQ4Q6PTSafCZcGWZXz91yVRi7ASFzFEr1U4sa");
 }
 
-pub mod drop_merkle_shreds {
-    solana_sdk::declare_id!("84zy5N23Q9vTZuLc9h1HWUtyM9yCFV2SCmyP9W9C3yHZ");
-}
-
-pub mod keep_merkle_shreds {
-    solana_sdk::declare_id!("HyNQzc7TMNmRhpVHXqDGjpsHzeQie82mDQXSF9hj7nAH");
-}
-
 pub mod move_serialized_len_ptr_in_cpi {
     solana_sdk::declare_id!("74CoWuBmt3rUVUrCb2JiSTvh6nXyBWUsK4SaMj3CtE3T");
 }
@@ -621,7 +614,7 @@ pub mod apply_cost_tracker_during_replay {
     solana_sdk::declare_id!("2ry7ygxiYURULZCrypHhveanvP5tzZ4toRwVp89oCNSj");
 }
 pub mod bpf_account_data_direct_mapping {
-    solana_sdk::declare_id!("9gwzizfABsKUereT6phZZxbTzuAnovkgwpVVpdcSxv9h");
+    solana_sdk::declare_id!("EenyoWx9UMXYKpR8mW5Jmfmy2fRjzUtM7NduYMY8bx33");
 }
 
 pub mod add_set_tx_loaded_accounts_data_size_instruction {
@@ -673,22 +666,31 @@ pub mod last_restart_slot_sysvar {
 }
 
 pub mod reduce_stake_warmup_cooldown {
-    use solana_program::{epoch_schedule::EpochSchedule, stake_history::Epoch};
     solana_sdk::declare_id!("GwtDQBghCTBgmX2cpEGNPxTEBUTQRaDMGTr5qychdGMj");
-
-    pub trait NewWarmupCooldownRateEpoch {
-        fn new_warmup_cooldown_rate_epoch(&self, epoch_schedule: &EpochSchedule) -> Option<Epoch>;
-    }
-    impl NewWarmupCooldownRateEpoch for super::FeatureSet {
-        fn new_warmup_cooldown_rate_epoch(&self, epoch_schedule: &EpochSchedule) -> Option<Epoch> {
-            self.activated_slot(&id())
-                .map(|slot| epoch_schedule.get_epoch(slot))
-        }
-    }
 }
 
 pub mod revise_turbine_epoch_stakes {
     solana_sdk::declare_id!("BTWmtJC8U5ZLMbBUUA1k6As62sYjPEjAiNAT55xYGdJU");
+}
+
+pub mod enable_poseidon_syscall {
+    solana_sdk::declare_id!("FL9RsQA6TVUoh5xJQ9d936RHSebA1NLQqe3Zv9sXZRpr");
+}
+
+pub mod timely_vote_credits {
+    solana_sdk::declare_id!("2oXpeh141pPZCTCFHBsvCwG2BtaHZZAtrVhwaxSy6brS");
+}
+
+pub mod remaining_compute_units_syscall_enabled {
+    solana_sdk::declare_id!("5TuppMutoyzhUSfuYdhgzD47F92GL1g89KpCZQKqedxP");
+}
+
+pub mod enable_program_runtime_v2_and_loader_v4 {
+    solana_sdk::declare_id!("8oBxsYqnCvUTGzgEpxPcnVf7MLbWWPYddE33PftFeBBd");
+}
+
+pub mod require_rent_exempt_split_destination {
+    solana_sdk::declare_id!("D2aip4BBr8NPWtU9vLrwrBvbuaQ8w1zV38zFLxx4pfBV");
 }
 
 lazy_static! {
@@ -829,8 +831,6 @@ lazy_static! {
         (commission_updates_only_allowed_in_first_half_of_epoch::id(), "validator commission updates are only allowed in the first half of an epoch #29362"),
         (enable_turbine_fanout_experiments::id(), "enable turbine fanout experiments #29393"),
         (disable_turbine_fanout_experiments::id(), "disable turbine fanout experiments #29393"),
-        (drop_merkle_shreds::id(), "drop merkle shreds #29711"),
-        (keep_merkle_shreds::id(), "keep merkle shreds #29711"),
         (move_serialized_len_ptr_in_cpi::id(), "cpi ignore serialized_len_ptr #29592"),
         (update_hashes_per_tick::id(), "Update desired hashes per tick on epoch boundary"),
         (enable_big_mod_exp_syscall::id(), "add big_mod_exp syscall #28503"),
@@ -856,6 +856,11 @@ lazy_static! {
         (last_restart_slot_sysvar::id(), "enable new sysvar last_restart_slot"),
         (reduce_stake_warmup_cooldown::id(), "reduce stake warmup cooldown from 25% to 9%"),
         (revise_turbine_epoch_stakes::id(), "revise turbine epoch stakes"),
+        (enable_poseidon_syscall::id(), "Enable Poseidon syscall"),
+        (timely_vote_credits::id(), "use timeliness of votes in determining credits to award"),
+        (remaining_compute_units_syscall_enabled::id(), "enable the remaining_compute_units syscall"),
+        (enable_program_runtime_v2_and_loader_v4::id(), "Enable Program-Runtime-v2 and Loader-v4 #33293"),
+        (require_rent_exempt_split_destination::id(), "Require stake split destination account to be rent exempt"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
@@ -954,6 +959,11 @@ impl FeatureSet {
     pub fn deactivate(&mut self, feature_id: &Pubkey) {
         self.active.remove(feature_id);
         self.inactive.insert(*feature_id);
+    }
+
+    pub fn new_warmup_cooldown_rate_epoch(&self, epoch_schedule: &EpochSchedule) -> Option<Epoch> {
+        self.activated_slot(&reduce_stake_warmup_cooldown::id())
+            .map(|slot| epoch_schedule.get_epoch(slot))
     }
 }
 

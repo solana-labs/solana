@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 use {
     clap::{crate_description, crate_name, Arg, ArgEnum, Command},
     crossbeam_channel::{unbounded, Receiver},
@@ -450,7 +450,7 @@ fn main() {
                 DEFAULT_TPU_CONNECTION_POOL_SIZE,
             ),
         };
-        let banking_stage = BankingStage::new_num_threads(
+        let banking_stage = BankingStage::new_thread_local_multi_iterator(
             &cluster_info,
             &poh_recorder,
             non_vote_receiver,

@@ -1,0 +1,87 @@
+[package]
+name = "solana-k8s-cluster"
+publish = false
+description = "Kubernetes Validator Deployment for Testing"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+assert_matches = { workspace = true }
+base64 = { workspace = true }
+bincode = { workspace = true }
+bv = { workspace = true, features = ["serde"] }
+bzip2 = { workspace = true }
+chrono = { workspace = true, features = ["default"] }
+clap = { workspace = true }
+console = { workspace = true }
+crossbeam-channel = { workspace = true }
+env_logger = { workspace = true }
+flate2 = { workspace = true }
+fs_extra = { workspace = true }
+futures-util = { workspace = true }
+git2 = { workspace = true }
+indexmap = { workspace = true, features = ["rayon"] }
+indicatif = { workspace = true }
+itertools = { workspace = true }
+k8s-openapi = { workspace = true }
+kube = { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
+lru = { workspace = true }
+nix = { workspace = true }
+num-traits = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+rayon = { workspace = true }
+reqwest = { workspace = true, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
+serde = { workspace = true }
+serde_bytes = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+solana-accounts-db = { workspace = true }
+solana-bloom = { workspace = true }
+solana-clap-utils = { workspace = true }
+solana-clap-v3-utils = { workspace = true }
+solana-client = { workspace = true }
+solana-entry = { workspace = true }
+solana-frozen-abi = { workspace = true }
+solana-frozen-abi-macro = { workspace = true }
+solana-genesis = { workspace = true }
+solana-ledger = { workspace = true }
+solana-logger = { workspace = true }
+solana-metrics = { workspace = true }
+solana-net-utils = { workspace = true }
+solana-rayon-threadlimit = { workspace = true }
+solana-runtime = { workspace = true }
+solana-sdk = { workspace = true }
+solana-stake-program = { workspace = true }
+solana-version = { workspace = true }
+solana-vote-program = { workspace = true }
+static_assertions = { workspace = true }
+tar = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+tiny-bip39 = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+url = { workspace = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+num_cpus = { workspace = true }
+serial_test = { workspace = true }
+
+[build-dependencies]
+rustc_version = { workspace = true }
+
+[[bin]]
+name = "solana-k8s"
+path = "src/main.rs"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

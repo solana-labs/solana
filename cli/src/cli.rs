@@ -1,7 +1,7 @@
 use {
     crate::{
         address_lookup_table::*, clap_app::*, cluster_query::*, feature::*, inflation::*, nonce::*,
-        program::*, spend_utils::*, stake::*, validator_info::*, vote::*, wallet::*,
+        program::*, program_v4::*, spend_utils::*, stake::*, validator_info::*, vote::*, wallet::*,
     },
     clap::{crate_description, crate_name, value_t_or_exit, ArgMatches, Shell},
     log::*,
@@ -175,6 +175,7 @@ pub enum CliCommand {
     // Program Deployment
     Deploy,
     Program(ProgramCliCommand),
+    ProgramV4(ProgramV4CliCommand),
     // Stake Commands
     CreateStakeAccount {
         stake_account: SignerIndex,
@@ -237,6 +238,7 @@ pub enum CliCommand {
         lamports: u64,
         fee_payer: SignerIndex,
         compute_unit_price: Option<u64>,
+        rent_exempt_reserve: Option<u64>,
     },
     MergeStake {
         stake_account_pubkey: Pubkey,
@@ -687,6 +689,9 @@ pub fn parse_command(
         ("program", Some(matches)) => {
             parse_program_subcommand(matches, default_signer, wallet_manager)
         }
+        ("program-v4", Some(matches)) => {
+            parse_program_v4_subcommand(matches, default_signer, wallet_manager)
+        }
         ("address-lookup-table", Some(matches)) => {
             parse_address_lookup_table_subcommand(matches, default_signer, wallet_manager)
         }
@@ -1103,6 +1108,11 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             process_program_subcommand(rpc_client, config, program_subcommand)
         }
 
+        // Deploy a custom program v4 to the chain
+        CliCommand::ProgramV4(program_subcommand) => {
+            process_program_v4_subcommand(rpc_client, config, program_subcommand)
+        }
+
         // Stake Commands
 
         // Create stake account
@@ -1217,6 +1227,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             lamports,
             fee_payer,
             compute_unit_price,
+            rent_exempt_reserve,
         } => process_split_stake(
             &rpc_client,
             config,
@@ -1233,6 +1244,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *lamports,
             *fee_payer,
             compute_unit_price.as_ref(),
+            rent_exempt_reserve.as_ref(),
         ),
         CliCommand::MergeStake {
             stake_account_pubkey,
@@ -1919,8 +1931,8 @@ mod tests {
         assert!(parse_command(&test_bad_signature, &default_signer, &mut None).is_err());
 
         // Test CreateAddressWithSeed
-        let from_pubkey = Some(solana_sdk::pubkey::new_rand());
-        let from_str = from_pubkey.unwrap().to_string();
+        let from_pubkey = solana_sdk::pubkey::new_rand();
+        let from_str = from_pubkey.to_string();
         for (name, program_id) in &[
             ("STAKE", stake::program::id()),
             ("VOTE", solana_vote_program::id()),
@@ -1938,7 +1950,7 @@ mod tests {
                 parse_command(&test_create_address_with_seed, &default_signer, &mut None).unwrap(),
                 CliCommandInfo {
                     command: CliCommand::CreateAddressWithSeed {
-                        from_pubkey,
+                        from_pubkey: Some(from_pubkey),
                         seed: "seed".to_string(),
                         program_id: *program_id
                     },
@@ -2234,6 +2246,7 @@ mod tests {
             lamports: 30,
             fee_payer: 0,
             compute_unit_price: None,
+            rent_exempt_reserve: None,
         };
         config.signers = vec![&keypair, &split_stake_account];
         let result = process_command(&config);

@@ -5,16 +5,9 @@
 pub enum LoaderV4Instruction {
     /// Write ELF data into an undeployed program account.
     ///
-    /// Writing at the end (offset is length) increases the size of the program account and
-    /// providing additional lamports (via the payer account) is necessary to reach rent exemption.
-    /// The first write (at offset zero when the account is empty) automatically
-    /// initializes the program account and sets the authority needed for subsequent writes.
-    /// Thus, the first write should be in the same transaction as the account creation.
-    ///
     /// # Account references
     ///   0. `[writable]` The program account to write to.
     ///   1. `[signer]` The authority of the program.
-    ///   2. `[signer]` Optional, the payer account.
     Write {
         /// Offset at which to write the given bytes.
         offset: u32,
@@ -23,18 +16,23 @@ pub enum LoaderV4Instruction {
         bytes: Vec<u8>,
     },
 
-    /// Decrease the size of an undeployed program account.
+    /// Changes the size of an undeployed program account.
     ///
-    /// Decreasing to size zero closes the program account and resets it into an uninitialized state.
-    /// Superflous lamports are transfered to the recipient account.
+    /// A program account is automatically initialized when its size is first increased.
+    /// In this initial truncate, the program account needs to be a signer and
+    /// it also sets the authority needed for subsequent operations.
+    /// Decreasing to size zero closes the program account and resets it
+    /// into an uninitialized state.
+    /// Providing additional lamports upfront might be necessary to reach rent exemption.
+    /// Superflous funds are transfered to the recipient account.
     ///
     /// # Account references
-    ///   0. `[writable]` The program account to change the size of.
+    ///   0. `[(signer), writable]` The program account to change the size of.
     ///   1. `[signer]` The authority of the program.
-    ///   2. `[writable]` The recipient account.
+    ///   2. `[writable]` Optional, the recipient account.
     Truncate {
-        /// Offset at which to cut off the rest. This will be the size after the operation.
-        offset: u32,
+        /// The new size after the operation.
+        new_size: u32,
     },
 
     /// Verify the data of a program account to be a valid ELF.

@@ -5,11 +5,10 @@ use {
         compute_budget::{self, ComputeBudgetInstruction},
         entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
         feature_set::{
-            add_set_tx_loaded_accounts_data_size_instruction, enable_request_heap_frame_ix,
-            remove_deprecated_request_unit_ix, FeatureSet,
+            add_set_tx_loaded_accounts_data_size_instruction, remove_deprecated_request_unit_ix,
+            FeatureSet,
         },
         fee::FeeBudgetLimits,
-        genesis_config::ClusterType,
         instruction::{CompiledInstruction, InstructionError},
         pubkey::Pubkey,
         transaction::TransactionError,
@@ -102,8 +101,8 @@ pub struct ComputeBudget {
     /// Number of compute units consumed for a multiscalar multiplication (msm) of ristretto points.
     /// The total cost is calculated as `msm_base_cost + (length - 1) * msm_incremental_cost`.
     pub curve25519_ristretto_msm_incremental_cost: u64,
-    /// Optional program heap region size, if `None` then loader default
-    pub heap_size: Option<usize>,
+    /// program heap region size, default: solana_sdk::entrypoint::HEAP_LENGTH
+    pub heap_size: usize,
     /// Number of compute units per additional 32k heap above the default (~.5
     /// us per 32k at 15 units/us rounded up)
     pub heap_cost: u64,
@@ -122,6 +121,16 @@ pub struct ComputeBudget {
     /// Maximum accounts data size, in bytes, that a transaction is allowed to load; The
     /// value is capped by MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES to prevent overuse of memory.
     pub loaded_accounts_data_size_limit: usize,
+    /// Coefficient `a` of the quadratic function which determines the number
+    /// of compute units consumed to call poseidon syscall for a given number
+    /// of inputs.
+    pub poseidon_cost_coefficient_a: u64,
+    /// Coefficient `c` of the quadratic function which determines the number
+    /// of compute units consumed to call poseidon syscall for a given number
+    /// of inputs.
+    pub poseidon_cost_coefficient_c: u64,
+    /// Number of compute units consumed for accessing the remaining compute units.
+    pub get_remaining_compute_units_cost: u64,
 }
 
 impl Default for ComputeBudget {
@@ -162,7 +171,7 @@ impl ComputeBudget {
             curve25519_ristretto_multiply_cost: 2_208,
             curve25519_ristretto_msm_base_cost: 2303,
             curve25519_ristretto_msm_incremental_cost: 788,
-            heap_size: None,
+            heap_size: solana_sdk::entrypoint::HEAP_LENGTH,
             heap_cost: 8,
             mem_op_base_cost: 10,
             alt_bn128_addition_cost: 334,
@@ -171,6 +180,9 @@ impl ComputeBudget {
             alt_bn128_pairing_one_pair_cost_other: 12_121,
             big_modular_exponentiation_cost: 33,
             loaded_accounts_data_size_limit: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
+            poseidon_cost_coefficient_a: 61,
+            poseidon_cost_coefficient_c: 542,
+            get_remaining_compute_units_cost: 100,
         }
     }
 
@@ -178,7 +190,6 @@ impl ComputeBudget {
         &mut self,
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
         support_request_units_deprecated: bool,
-        enable_request_heap_frame_ix: bool,
         support_set_loaded_accounts_data_size_limit_ix: bool,
     ) -> Result<PrioritizationFeeDetails, TransactionError> {
         let mut num_non_compute_budget_instructions: u32 = 0;
@@ -247,8 +258,7 @@ impl ComputeBudget {
         }
 
         if let Some((bytes, i)) = requested_heap_size {
-            if !enable_request_heap_frame_ix
-                || bytes > MAX_HEAP_FRAME_BYTES
+            if bytes > MAX_HEAP_FRAME_BYTES
                 || bytes < MIN_HEAP_FRAME_BYTES as u32
                 || bytes % 1024 != 0
             {
@@ -257,7 +267,7 @@ impl ComputeBudget {
                     InstructionError::InvalidInstructionData,
                 ));
             }
-            self.heap_size = Some(bytes as usize);
+            self.heap_size = bytes as usize;
         }
 
         let compute_unit_limit = updated_compute_unit_limit
@@ -280,23 +290,13 @@ impl ComputeBudget {
     pub fn fee_budget_limits<'a>(
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
         feature_set: &FeatureSet,
-        maybe_cluster_type: Option<ClusterType>,
     ) -> FeeBudgetLimits {
         let mut compute_budget = Self::default();
 
-        // A cluster specific feature gate, when not activated it keeps v1.13 behavior in mainnet-beta;
-        // once activated for v1.14+, it allows compute_budget::request_heap_frame and
-        // compute_budget::set_compute_unit_price co-exist in same transaction.
-        let enable_request_heap_frame_ix = feature_set
-            .is_active(&enable_request_heap_frame_ix::id())
-            || maybe_cluster_type
-                .and_then(|cluster_type| (cluster_type != ClusterType::MainnetBeta).then_some(0))
-                .is_some();
         let prioritization_fee_details = compute_budget
             .process_instructions(
                 instructions,
                 !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
-                enable_request_heap_frame_ix,
                 feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
             )
             .unwrap_or_default();
@@ -307,6 +307,35 @@ impl ComputeBudget {
             compute_unit_limit: compute_budget.compute_unit_limit,
             prioritization_fee: prioritization_fee_details.get_fee(),
         }
+    }
+
+    /// Returns cost of the Poseidon hash function for the given number of
+    /// inputs is determined by the following quadratic function:
+    ///
+    /// 61*n^2 + 542
+    ///
+    /// Which aproximates the results of benchmarks of light-posiedon
+    /// library[0]. These results assume 1 CU per 33 ns. Examples:
+    ///
+    /// * 1 input
+    ///   * light-poseidon benchmark: `18,303 / 33 ≈ 555`
+    ///   * function: `61*1^2 + 542 = 603`
+    /// * 2 inputs
+    ///   * light-poseidon benchmark: `25,866 / 33 ≈ 784`
+    ///   * function: `61*2^2 + 542 = 786`
+    /// * 3 inputs
+    ///   * light-poseidon benchmark: `37,549 / 33 ≈ 1,138`
+    ///   * function; `61*3^2 + 542 = 1091`
+    ///
+    /// [0] https://github.com/Lightprotocol/light-poseidon#performance
+    pub fn poseidon_cost(&self, nr_inputs: u64) -> Option<u64> {
+        let squared_inputs = nr_inputs.checked_pow(2)?;
+        let mul_result = self
+            .poseidon_cost_coefficient_a
+            .checked_mul(squared_inputs)?;
+        let final_result = mul_result.checked_add(self.poseidon_cost_coefficient_c)?;
+
+        Some(final_result)
     }
 }
 
@@ -327,7 +356,7 @@ mod tests {
     };
 
     macro_rules! test {
-        ( $instructions: expr, $expected_result: expr, $expected_budget: expr, $enable_request_heap_frame_ix: expr, $support_set_loaded_accounts_data_size_limit_ix: expr ) => {
+        ( $instructions: expr, $expected_result: expr, $expected_budget: expr, $support_set_loaded_accounts_data_size_limit_ix: expr ) => {
             let payer_keypair = Keypair::new();
             let tx = SanitizedTransaction::from_transaction_for_tests(Transaction::new(
                 &[&payer_keypair],
@@ -338,20 +367,13 @@ mod tests {
             let result = compute_budget.process_instructions(
                 tx.message().program_instructions_iter(),
                 false, /*not support request_units_deprecated*/
-                $enable_request_heap_frame_ix,
                 $support_set_loaded_accounts_data_size_limit_ix,
             );
             assert_eq!($expected_result, result);
             assert_eq!(compute_budget, $expected_budget);
         };
         ( $instructions: expr, $expected_result: expr, $expected_budget: expr) => {
-            test!(
-                $instructions,
-                $expected_result,
-                $expected_budget,
-                true,
-                false
-            );
+            test!($instructions, $expected_result, $expected_budget, false);
         };
     }
 
@@ -445,7 +467,7 @@ mod tests {
             Ok(PrioritizationFeeDetails::default()),
             ComputeBudget {
                 compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
-                heap_size: Some(40 * 1024),
+                heap_size: 40 * 1024,
                 ..ComputeBudget::default()
             }
         );
@@ -490,7 +512,7 @@ mod tests {
             Ok(PrioritizationFeeDetails::default()),
             ComputeBudget {
                 compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
-                heap_size: Some(MAX_HEAP_FRAME_BYTES as usize),
+                heap_size: MAX_HEAP_FRAME_BYTES as usize,
                 ..ComputeBudget::default()
             }
         );
@@ -540,7 +562,7 @@ mod tests {
             )),
             ComputeBudget {
                 compute_unit_limit: MAX_COMPUTE_UNIT_LIMIT as u64,
-                heap_size: Some(MAX_HEAP_FRAME_BYTES as usize),
+                heap_size: MAX_HEAP_FRAME_BYTES as usize,
                 ..ComputeBudget::default()
             }
         );
@@ -558,7 +580,7 @@ mod tests {
             )),
             ComputeBudget {
                 compute_unit_limit: 1,
-                heap_size: Some(MAX_HEAP_FRAME_BYTES as usize),
+                heap_size: MAX_HEAP_FRAME_BYTES as usize,
                 ..ComputeBudget::default()
             }
         );
@@ -613,103 +635,7 @@ mod tests {
     }
 
     #[test]
-    fn test_process_instructions_disable_request_heap_frame() {
-        // assert empty message results default compute budget and fee
-        test!(
-            &[],
-            Ok(PrioritizationFeeDetails::default()),
-            ComputeBudget {
-                compute_unit_limit: 0,
-                ..ComputeBudget::default()
-            },
-            false,
-            false
-        );
-
-        // assert requesting heap frame when feature is disable will result instruction error
-        test!(
-            &[
-                ComputeBudgetInstruction::request_heap_frame(40 * 1024),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-            ],
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::InvalidInstructionData
-            )),
-            ComputeBudget::default(),
-            false,
-            false
-        );
-        test!(
-            &[
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
-            ],
-            Err(TransactionError::InstructionError(
-                1,
-                InstructionError::InvalidInstructionData,
-            )),
-            ComputeBudget::default(),
-            false,
-            false
-        );
-        test!(
-            &[
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
-                ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT),
-                ComputeBudgetInstruction::set_compute_unit_price(u64::MAX),
-            ],
-            Err(TransactionError::InstructionError(
-                1,
-                InstructionError::InvalidInstructionData,
-            )),
-            ComputeBudget::default(),
-            false,
-            false
-        );
-        test!(
-            &[
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                ComputeBudgetInstruction::set_compute_unit_limit(1),
-                ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
-                ComputeBudgetInstruction::set_compute_unit_price(u64::MAX),
-            ],
-            Err(TransactionError::InstructionError(
-                2,
-                InstructionError::InvalidInstructionData,
-            )),
-            ComputeBudget::default(),
-            false,
-            false
-        );
-
-        // assert normal results when not requesting heap frame when the feature is disabled
-        test!(
-            &[
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-            ],
-            Ok(PrioritizationFeeDetails::default()),
-            ComputeBudget {
-                compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64 * 7,
-                ..ComputeBudget::default()
-            },
-            false,
-            false
-        );
-    }
-
-    #[test]
     fn test_process_loaded_accounts_data_size_limit_instruction() {
-        let enable_request_heap_frame_ix: bool = true;
-
         // Assert for empty instructions, change value of support_set_loaded_accounts_data_size_limit_ix
         // will not change results, which should all be default
         for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
@@ -720,7 +646,6 @@ mod tests {
                     compute_unit_limit: 0,
                     ..ComputeBudget::default()
                 },
-                enable_request_heap_frame_ix,
                 support_set_loaded_accounts_data_size_limit_ix
             );
         }
@@ -759,7 +684,6 @@ mod tests {
                 ],
                 expected_result,
                 expected_budget,
-                enable_request_heap_frame_ix,
                 support_set_loaded_accounts_data_size_limit_ix
             );
         }
@@ -798,7 +722,6 @@ mod tests {
                 ],
                 expected_result,
                 expected_budget,
-                enable_request_heap_frame_ix,
                 support_set_loaded_accounts_data_size_limit_ix
             );
         }
@@ -826,7 +749,6 @@ mod tests {
                 ),],
                 expected_result,
                 expected_budget,
-                enable_request_heap_frame_ix,
                 support_set_loaded_accounts_data_size_limit_ix
             );
         }
@@ -862,7 +784,6 @@ mod tests {
                 ],
                 expected_result,
                 expected_budget,
-                enable_request_heap_frame_ix,
                 support_set_loaded_accounts_data_size_limit_ix
             );
         }
@@ -887,7 +808,6 @@ mod tests {
         let result = compute_budget.process_instructions(
             transaction.message().program_instructions_iter(),
             false, //not support request_units_deprecated
-            true,  //enable_request_heap_frame_ix,
             true,  //support_set_loaded_accounts_data_size_limit_ix,
         );
 

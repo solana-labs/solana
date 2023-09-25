@@ -67,11 +67,80 @@ impl TransactionCost {
     }
 
     pub fn sum(&self) -> u64 {
-        self.signature_cost
-            .saturating_add(self.write_lock_cost)
-            .saturating_add(self.data_bytes_cost)
-            .saturating_add(self.builtins_execution_cost)
-            .saturating_add(self.bpf_execution_cost)
-            .saturating_add(self.loaded_accounts_data_size_cost)
+        if self.is_simple_vote {
+            self.signature_cost
+                .saturating_add(self.write_lock_cost)
+                .saturating_add(self.data_bytes_cost)
+                .saturating_add(self.builtins_execution_cost)
+        } else {
+            self.signature_cost
+                .saturating_add(self.write_lock_cost)
+                .saturating_add(self.data_bytes_cost)
+                .saturating_add(self.builtins_execution_cost)
+                .saturating_add(self.bpf_execution_cost)
+                .saturating_add(self.loaded_accounts_data_size_cost)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use {
+        crate::cost_model::CostModel,
+        solana_sdk::{
+            feature_set::FeatureSet,
+            hash::Hash,
+            message::SimpleAddressLoader,
+            signer::keypair::Keypair,
+            transaction::{MessageHash, SanitizedTransaction, VersionedTransaction},
+        },
+        solana_vote_program::vote_transaction,
+    };
+
+    #[test]
+    fn test_vote_transaction_cost() {
+        solana_logger::setup();
+        let node_keypair = Keypair::new();
+        let vote_keypair = Keypair::new();
+        let auth_keypair = Keypair::new();
+        let transaction = vote_transaction::new_vote_transaction(
+            vec![],
+            Hash::default(),
+            Hash::default(),
+            &node_keypair,
+            &vote_keypair,
+            &auth_keypair,
+            None,
+        );
+
+        // create a sanitized vote transaction
+        let vote_transaction = SanitizedTransaction::try_create(
+            VersionedTransaction::from(transaction.clone()),
+            MessageHash::Compute,
+            Some(true),
+            SimpleAddressLoader::Disabled,
+        )
+        .unwrap();
+
+        // create a identical sanitized transaction, but identified as non-vote
+        let none_vote_transaction = SanitizedTransaction::try_create(
+            VersionedTransaction::from(transaction),
+            MessageHash::Compute,
+            Some(false),
+            SimpleAddressLoader::Disabled,
+        )
+        .unwrap();
+
+        // expected vote tx cost: 2 write locks, 2 sig, 1 vite ix, and 11 CU tx data cost
+        let expected_vote_cost = 4151;
+        // expected non-vote tx cost would include default loaded accounts size cost (16384) additionally
+        let expected_none_vote_cost = 20535;
+
+        let vote_cost = CostModel::calculate_cost(&vote_transaction, &FeatureSet::all_enabled());
+        let none_vote_cost =
+            CostModel::calculate_cost(&none_vote_transaction, &FeatureSet::all_enabled());
+
+        assert_eq!(expected_vote_cost, vote_cost.sum());
+        assert_eq!(expected_none_vote_cost, none_vote_cost.sum());
     }
 }

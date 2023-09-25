@@ -7,9 +7,10 @@ use {
 
 fn mem_op_consume(invoke_context: &mut InvokeContext, n: u64) -> Result<(), Error> {
     let compute_budget = invoke_context.get_compute_budget();
-    let cost = compute_budget
-        .mem_op_base_cost
-        .max(n.saturating_div(compute_budget.cpi_bytes_per_unit));
+    let cost = compute_budget.mem_op_base_cost.max(
+        n.checked_div(compute_budget.cpi_bytes_per_unit)
+            .unwrap_or(u64::MAX),
+    );
     consume_compute_meter(invoke_context, cost)
 }
 
@@ -487,6 +488,7 @@ impl<'a> DoubleEndedIterator for MemoryChunkIterator<'a> {
 mod tests {
     use {
         super::*,
+        assert_matches::assert_matches,
         solana_rbpf::{ebpf::MM_PROGRAM_START, elf::SBPFVersion},
     };
 
@@ -543,10 +545,10 @@ mod tests {
         let mut src_chunk_iter =
             MemoryChunkIterator::new(&memory_mapping, AccessType::Load, MM_PROGRAM_START - 1, 42)
                 .unwrap();
-        assert!(matches!(
+        assert_matches!(
             src_chunk_iter.next().unwrap().unwrap_err().downcast_ref().unwrap(),
             EbpfError::AccessViolation(0, AccessType::Load, addr, 42, "unknown") if *addr == MM_PROGRAM_START - 1
-        ));
+        );
 
         // check oob at the upper bound. Since the memory mapping isn't empty,
         // this always happens on the second next().
@@ -554,20 +556,20 @@ mod tests {
             MemoryChunkIterator::new(&memory_mapping, AccessType::Load, MM_PROGRAM_START, 43)
                 .unwrap();
         assert!(src_chunk_iter.next().unwrap().is_ok());
-        assert!(matches!(
+        assert_matches!(
             src_chunk_iter.next().unwrap().unwrap_err().downcast_ref().unwrap(),
             EbpfError::AccessViolation(0, AccessType::Load, addr, 43, "program") if *addr == MM_PROGRAM_START
-        ));
+        );
 
         // check oob at the upper bound on the first next_back()
         let mut src_chunk_iter =
             MemoryChunkIterator::new(&memory_mapping, AccessType::Load, MM_PROGRAM_START, 43)
                 .unwrap()
                 .rev();
-        assert!(matches!(
+        assert_matches!(
             src_chunk_iter.next().unwrap().unwrap_err().downcast_ref().unwrap(),
             EbpfError::AccessViolation(0, AccessType::Load, addr, 43, "program") if *addr == MM_PROGRAM_START
-        ));
+        );
 
         // check oob at the upper bound on the 2nd next_back()
         let mut src_chunk_iter =
@@ -575,10 +577,10 @@ mod tests {
                 .unwrap()
                 .rev();
         assert!(src_chunk_iter.next().unwrap().is_ok());
-        assert!(matches!(
+        assert_matches!(
             src_chunk_iter.next().unwrap().unwrap_err().downcast_ref().unwrap(),
             EbpfError::AccessViolation(0, AccessType::Load, addr, 43, "unknown") if *addr == MM_PROGRAM_START - 1
-        ));
+        );
     }
 
     #[test]
@@ -694,7 +696,7 @@ mod tests {
         .unwrap();
 
         // dst is shorter than src
-        assert!(matches!(
+        assert_matches!(
             iter_memory_pair_chunks(
                 AccessType::Load,
                 MM_PROGRAM_START,
@@ -706,10 +708,10 @@ mod tests {
                 |_src, _dst, _len| Ok::<_, Error>(0),
             ).unwrap_err().downcast_ref().unwrap(),
             EbpfError::AccessViolation(0, AccessType::Load, addr, 8, "program") if *addr == MM_PROGRAM_START + 8
-        ));
+        );
 
         // src is shorter than dst
-        assert!(matches!(
+        assert_matches!(
             iter_memory_pair_chunks(
                 AccessType::Load,
                 MM_PROGRAM_START + 10,
@@ -721,7 +723,7 @@ mod tests {
                 |_src, _dst, _len| Ok::<_, Error>(0),
             ).unwrap_err().downcast_ref().unwrap(),
             EbpfError::AccessViolation(0, AccessType::Load, addr, 3, "program") if *addr == MM_PROGRAM_START + 10
-        ));
+        );
     }
 
     #[test]

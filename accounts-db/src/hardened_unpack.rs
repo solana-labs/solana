@@ -103,7 +103,6 @@ where
     let mut total_count: u64 = 0;
 
     let mut total_entries = 0;
-    let mut last_log_update = Instant::now();
     for entry in archive.entries()? {
         let mut entry = entry?;
         let path = entry.path()?;
@@ -189,11 +188,6 @@ where
         entry_processor(entry_path);
 
         total_entries += 1;
-        let now = Instant::now();
-        if now.duration_since(last_log_update).as_secs() >= 10 {
-            info!("unpacked {} entries so far...", total_entries);
-            last_log_update = now;
-        }
     }
     info!("unpacked {} entries total", total_entries);
 
