@@ -251,7 +251,7 @@ impl<'a> Kubernetes<'a> {
         };
 
         let mut command =
-            vec!["/home/solana/k8s-cluster/src/scripts/bootstrap-startup-script.sh".to_string()];
+            vec!["/home/solana/k8s-cluster-scripts/bootstrap-startup-script.sh".to_string()];
         command.extend(self.generate_bootstrap_command_flags());
 
         for c in command.iter() {
@@ -597,7 +597,7 @@ impl<'a> Kubernetes<'a> {
         };
 
         let mut command =
-            vec!["/home/solana/k8s-cluster/src/scripts/validator-startup-script.sh".to_string()];
+            vec!["/home/solana/k8s-cluster-scripts/validator-startup-script.sh".to_string()];
         command.extend(self.generate_validator_command_flags());
 
         for c in command.iter() {

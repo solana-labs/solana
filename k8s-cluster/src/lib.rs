@@ -18,6 +18,9 @@ use {
 lazy_static! {
     #[derive(Debug)]
     static ref SOLANA_ROOT: PathBuf = get_solana_root();
+
+    #[derive(Debug)]
+    pub static ref LEDGER_DIR: PathBuf = SOLANA_ROOT.join("config-k8s/bootstrap-validator");
 }
 
 pub fn initialize_globals() {
@@ -28,6 +31,7 @@ pub mod docker;
 pub mod genesis;
 pub mod kubernetes;
 pub mod release;
+pub mod ledger_helper;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ValidatorType {

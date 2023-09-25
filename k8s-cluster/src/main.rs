@@ -10,6 +10,7 @@ use {
         initialize_globals,
         kubernetes::{Kubernetes, RuntimeConfig},
         release::{BuildConfig, Deploy},
+        ledger_helper::LedgerHelper,
     },
     solana_sdk::genesis_config::ClusterType,
     std::{thread, time::Duration},
@@ -230,6 +231,57 @@ fn parse_matches() -> ArgMatches<'static> {
                 .default_value("auto")
                 .help("Not supported yet. Specify GPU mode to launch validators with (default: auto)."),
         )
+        .arg(
+            Arg::with_name("limit_ledger_size")
+                .long("limit-ledger-size")
+                .takes_value(true)
+                .help("Keep this amount of shreds in root slots"),
+        )
+        .arg(
+            Arg::with_name("full_rpc")
+                .long("full-rpc")
+                .help("Support full RPC services on all nodes"),
+        )
+        .arg(
+            Arg::with_name("skip_poh_verify")
+                .long("skip-poh-verify")
+                .help("If set, validators will skip verifying \
+                    the ledger they already have saved to disk at \
+                    boot (results in a much faster boot)"),
+        )
+        .arg(
+            Arg::with_name("tmpfs_accounts")
+                .long("tmpfs-accounts")
+                .help("Put accounts directory on a swap-backed tmpfs volume. from gce.sh \
+                tbh i have no idea if this is going to be supported out of box. TODO"),
+        )
+        .arg(
+            Arg::with_name("no_snapshot_fetch")
+                .long("no-snapshot-fetch")
+                .help("If set, disables booting validators from a snapshot"),
+        )
+        .arg(
+            Arg::with_name("accounts_db_skip_shrink")
+                .long("accounts-db-skip-shrink")
+                .help("not full sure what this does. TODO"),
+        )
+        .arg(
+            Arg::with_name("skip_require_tower")
+                .long("skip-require-tower")
+                .help("Skips require tower"),
+        )
+        .arg(
+            Arg::with_name("wait_for_supermajority")
+                .long("wait-for-supermajority")
+                .takes_value(true)
+                .help("Slot number"),
+        )
+        .arg(
+            Arg::with_name("warp_slot")
+                .long("warp-slot")
+                .takes_value(true)
+                .help("Boot from a snapshot that has warped ahead to WARP_SLOT rather than a slot 0 genesis"),
+        )
         .get_matches()
 }
 
@@ -306,7 +358,7 @@ async fn main() {
         ),
     };
 
-    let runtime_config = RuntimeConfig {
+    let mut runtime_config = RuntimeConfig {
         enable_udp: matches.is_present("tpu_enable_udp"),
         disable_quic: matches.is_present("tpu_disable_quic"),
         gpu_mode: matches.value_of("gpu_mode").unwrap(),
@@ -321,23 +373,55 @@ async fn main() {
             .parse::<f64>()
             .expect("Invalid value for internal_node_stake_sol")
             as f64,
+        limit_ledger_size: match matches.value_of("limit_ledger_size") {
+                Some(value_str) => Some(
+                    value_str
+                        .parse()
+                        .expect("Invalid value for limit_ledger_size"),
+                ),
+                None => None,
+            },
+        full_rpc: matches.is_present("full_rpc"),
+        skip_poh_verify: matches.is_present("skip_poh_verify"),
+        tmpfs_accounts: matches.is_present("tmps_accounts"),
+        no_snapshot_fetch: matches.is_present("no_snapshot_fetch"),
+        accounts_db_skip_shrink: matches.is_present("accounts_db_skip_shrink"),
+        skip_require_tower: matches.is_present("skip_require_tower"),
+        wait_for_supermajority: match matches.value_of("wait_for_supermajority") {
+            Some(value_str) => Some(
+                value_str
+                    .parse()
+                    .expect("Invalid value for wait_for_supermajority"),
+            ),
+            None => None,
+        },
+        warp_slot: match matches.value_of("warp_slot") {
+            Some(value_str) => Some(
+                value_str
+                    .parse()
+                    .expect("Invalid value for warp_slot"),
+            ),
+            None => None,
+        },
+        shred_version: None, // set after genesis created
+        bank_hash: None, // set after genesis created
     };
 
-    let bootstrap_container_name = matches
-        .value_of("bootstrap_container_name")
-        .unwrap_or_default();
-    let bootstrap_image_name = matches
-        .value_of("bootstrap_image_name")
-        .expect("Bootstrap image name is required");
-    let validator_container_name = matches
-        .value_of("validator_container_name")
-        .unwrap_or_default();
-    let validator_image_name = matches
-        .value_of("validator_image_name")
-        .expect("Validator image name is required");
+    let wait_for_supermajority: Option<u64> = runtime_config.wait_for_supermajority.clone();
+    let warp_slot: Option<u64> = runtime_config.warp_slot.clone();
+    if ! match (runtime_config.wait_for_supermajority, runtime_config.warp_slot) {
+        (Some(slot1), Some(slot2)) => slot1 == slot2,
+        (None, None) => true, // Both are None, consider them equal
+        _ => true,
+    } {
+        panic!("Error: When specifying both --wait-for-supermajority and --warp-slot, \
+        they must use the same slot. ({:?} != {:?})", runtime_config.wait_for_supermajority, runtime_config.warp_slot);
+    }
+
+    info!("Runtime Config: {}", runtime_config);
 
     // Check if namespace exists
-    let mut kub_controller = Kubernetes::new(setup_config.namespace, &runtime_config).await;
+    let mut kub_controller = Kubernetes::new(setup_config.namespace, &mut runtime_config).await;
     match kub_controller.namespace_exists().await {
         Ok(res) => {
             if !res {
@@ -450,6 +534,39 @@ async fn main() {
         }
     }
 
+    match LedgerHelper::get_shred_version() {
+        Ok(shred_version) => kub_controller.set_shred_version(shred_version),
+        Err(err) => {
+            error!("{}", err);
+            return;
+        }
+    }
+    match warp_slot {
+        Some(slot) => {
+            //TODO: this needs to be mounted as a file in the bootstrap pod
+            match LedgerHelper::create_snapshot(slot) {
+                Ok(_) => (),
+                Err(err) => {
+                    error!("Failed to create snapshot: {}", err);
+                    return;
+                }
+            }
+        }
+        None => (),
+    }
+    match wait_for_supermajority {
+        Some(_) => {
+            match LedgerHelper::create_bank_hash() {
+                Ok(bank_hash) => kub_controller.set_bank_hash(bank_hash),
+                Err(err) => {
+                    error!("Failed to get bank hash: {}", err);
+                    return;
+                }
+            }
+        }
+        None => (),
+    }
+
     // Begin Kubernetes Setup and Deployment
     let config_map = match kub_controller.create_genesis_config_map().await {
         Ok(config_map) => {
@@ -461,6 +578,19 @@ async fn main() {
             return;
         }
     };
+
+    let bootstrap_container_name = matches
+        .value_of("bootstrap_container_name")
+        .unwrap_or_default();
+    let bootstrap_image_name = matches
+        .value_of("bootstrap_image_name")
+        .expect("Bootstrap image name is required");
+    let validator_container_name = matches
+        .value_of("validator_container_name")
+        .unwrap_or_default();
+    let validator_image_name = matches
+        .value_of("validator_image_name")
+        .expect("Validator image name is required");
 
     let bootstrap_secret = match kub_controller.create_bootstrap_secret("bootstrap-accounts-secret")
     {
