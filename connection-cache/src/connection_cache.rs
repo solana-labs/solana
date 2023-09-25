@@ -159,8 +159,8 @@ where
         let (cache_hit, num_evictions, eviction_timing_ms) =
             if matches!(pool_status, PoolStatus::Empty) {
                 Self::create_connection_internal(
-                    self.connection_config.clone(),
-                    self.connection_manager.clone(),
+                    &self.connection_config,
+                    &self.connection_manager,
                     &mut map,
                     addr,
                     self.connection_pool_size,
@@ -174,12 +174,12 @@ where
             // trigger an async connection create
             debug!("Triggering async connection for {addr:?}");
             Self::create_connection_internal(
-                self.connection_config.clone(),
-                self.connection_manager.clone(),
+                &self.connection_config,
+                &self.connection_manager,
                 &mut map,
                 addr,
                 self.connection_pool_size,
-                Some(self.sender.clone()),
+                Some(&self.sender),
             );
         }
 
@@ -196,12 +196,12 @@ where
     }
 
     fn create_connection_internal(
-        config: Arc<C>,
-        connection_manager: Arc<M>,
+        config: &Arc<C>,
+        connection_manager: &Arc<M>,
         map: &mut std::sync::RwLockWriteGuard<'_, IndexMap<SocketAddr, P>>,
         addr: &SocketAddr,
         connection_pool_size: usize,
-        async_connection_sender: Option<Sender<(usize, SocketAddr)>>,
+        async_connection_sender: Option<&Sender<(usize, SocketAddr)>>,
     ) -> (bool, u64, u64) {
         // evict a connection if the cache is reaching upper bounds
         let mut num_evictions = 0;
@@ -228,7 +228,7 @@ where
                     pool.check_pool_status(connection_pool_size),
                     PoolStatus::PartiallyFull
                 ) {
-                    let idx = pool.add_connection(&config, addr);
+                    let idx = pool.add_connection(config, addr);
                     if let Some(sender) = async_connection_sender {
                         debug!(
                             "Sending async connection creation {} for {addr}",
@@ -242,7 +242,7 @@ where
             })
             .or_insert_with(|| {
                 let mut pool = connection_manager.new_connection_pool();
-                pool.add_connection(&config, addr);
+                pool.add_connection(config, addr);
                 pool
             });
         (
@@ -287,12 +287,12 @@ where
                         drop(map);
                         let mut map = self.map.write().unwrap();
                         Self::create_connection_internal(
-                            self.connection_config.clone(),
-                            self.connection_manager.clone(),
+                            &self.connection_config,
+                            &self.connection_manager,
                             &mut map,
                             addr,
                             self.connection_pool_size,
-                            Some(self.sender.clone()),
+                            Some(&self.sender),
                         );
                     }
                     CreateConnectionResult {
