@@ -141,6 +141,7 @@ impl PartialEq for UsageCostDetails {
 impl Eq for UsageCostDetails {}
 
 impl UsageCostDetails {
+    #[cfg(test)]
     pub fn new_with_capacity(capacity: usize) -> Self {
         Self {
             writable_accounts: Vec::with_capacity(capacity),
@@ -210,7 +211,7 @@ mod tests {
         )
         .unwrap();
 
-        // expected vote tx cost: 2 write locks, 2 sig, 1 vite ix,
+        // expected vote tx cost: 2 write locks, 2 sig, 1 vote ix,
         let expected_vote_cost = 4140;
         // expected non-vote tx cost would include default loaded accounts size cost (16384) additionally
         let expected_none_vote_cost = 20535;
