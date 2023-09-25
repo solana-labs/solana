@@ -53,9 +53,11 @@ impl ConnectionPool for QuicPool {
     type BaseClientConnection = Quic;
     type NewConnectionConfig = QuicConfig;
 
-    fn add_connection(&mut self, config: &Self::NewConnectionConfig, addr: &SocketAddr) {
+    fn add_connection(&mut self, config: &Self::NewConnectionConfig, addr: &SocketAddr) -> usize {
         let connection = self.create_pool_entry(config, addr);
+        let idx = self.connections.len();
         self.connections.push(connection);
+        idx
     }
 
     fn num_connections(&self) -> usize {

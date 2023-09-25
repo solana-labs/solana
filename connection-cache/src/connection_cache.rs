@@ -151,25 +151,26 @@ where
         // Read again, as it is possible that between read lock dropped and the write lock acquired
         // another thread could have setup the connection.
 
-        let (need_new_connection, should_create_connection) = map
+        let pool_status = map
             .get(addr)
-            .map(|pool| pool.need_new_connection(self.connection_pool_size))
-            .unwrap_or((true, true));
+            .map(|pool| pool.check_pool_status(self.connection_pool_size))
+            .unwrap_or(PoolStatus::Empty);
 
-        let (cache_hit, num_evictions, eviction_timing_ms) = if should_create_connection {
-            Self::create_connection_internal(
-                self.connection_config.clone(),
-                self.connection_manager.clone(),
-                &mut map,
-                addr,
-                self.connection_pool_size,
-                None,
-            )
-        } else {
-            (true, 0, 0)
-        };
+        let (cache_hit, num_evictions, eviction_timing_ms) =
+            if matches!(pool_status, PoolStatus::Empty) {
+                Self::create_connection_internal(
+                    self.connection_config.clone(),
+                    self.connection_manager.clone(),
+                    &mut map,
+                    addr,
+                    self.connection_pool_size,
+                    None,
+                )
+            } else {
+                (true, 0, 0)
+            };
 
-        if need_new_connection && !should_create_connection {
+        if matches!(pool_status, PoolStatus::PartiallyFull) {
             // trigger an async connection create
             debug!("Triggering async connection for {addr:?}");
             Self::create_connection_internal(
@@ -223,14 +224,17 @@ where
         let mut hit_cache = false;
         map.entry(*addr)
             .and_modify(|pool| {
-                if pool.need_new_connection(connection_pool_size).0 {
-                    pool.add_connection(&config, addr);
+                if matches!(
+                    pool.check_pool_status(connection_pool_size),
+                    PoolStatus::PartiallyFull
+                ) {
+                    let idx = pool.add_connection(&config, addr);
                     if let Some(sender) = async_connection_sender {
                         debug!(
                             "Sending async connection creation {} for {addr}",
                             pool.num_connections() - 1
                         );
-                        sender.send((pool.num_connections() - 1, *addr)).unwrap();
+                        sender.send((idx, *addr)).unwrap();
                     };
                 } else {
                     hit_cache = true;
@@ -271,15 +275,14 @@ where
             eviction_timing_ms,
         } = match map.get(addr) {
             Some(pool) => {
-                let (need_connection, create_connection_immediately) =
-                    pool.need_new_connection(self.connection_pool_size);
-                if create_connection_immediately {
+                let pool_status = pool.check_pool_status(self.connection_pool_size);
+                if matches!(pool_status, PoolStatus::Empty) {
                     // create more connection and put it in the pool
                     drop(map);
                     self.create_connection(&mut lock_timing_ms, addr)
                 } else {
                     let connection = pool.borrow_connection();
-                    if need_connection {
+                    if matches!(pool_status, PoolStatus::PartiallyFull) {
                         debug!("Creating connection async for {addr}");
                         drop(map);
                         let mut map = self.map.write().unwrap();
@@ -410,12 +413,18 @@ pub trait NewConnectionConfig: Sized + Send + Sync + 'static {
     fn new() -> Result<Self, ClientError>;
 }
 
+pub enum PoolStatus {
+    Empty,
+    PartiallyFull,
+    Full,
+}
+
 pub trait ConnectionPool: Send + Sync + 'static {
     type NewConnectionConfig: NewConnectionConfig;
     type BaseClientConnection: BaseClientConnection;
 
-    /// Add a connection to the pool
-    fn add_connection(&mut self, config: &Self::NewConnectionConfig, addr: &SocketAddr);
+    /// Add a connection to the pool and return its index
+    fn add_connection(&mut self, config: &Self::NewConnectionConfig, addr: &SocketAddr) -> usize;
 
     /// Get the number of current connections in the pool
     fn num_connections(&self) -> usize;
@@ -433,11 +442,14 @@ pub trait ConnectionPool: Send + Sync + 'static {
 
     /// Check if we need to create a new connection. If the count of the connections
     /// is smaller than the pool size and if there is no connection at all.
-    fn need_new_connection(&self, required_pool_size: usize) -> (bool, bool) {
-        (
-            self.num_connections() < required_pool_size,
-            self.num_connections() == 0,
-        )
+    fn check_pool_status(&self, required_pool_size: usize) -> PoolStatus {
+        if self.num_connections() == 0 {
+            PoolStatus::Empty
+        } else if self.num_connections() < required_pool_size {
+            PoolStatus::PartiallyFull
+        } else {
+            PoolStatus::Full
+        }
     }
 
     fn create_pool_entry(
@@ -508,9 +520,16 @@ mod tests {
         type NewConnectionConfig = MockUdpConfig;
         type BaseClientConnection = MockUdp;
 
-        fn add_connection(&mut self, config: &Self::NewConnectionConfig, addr: &SocketAddr) {
+        /// Add a connection into the pool and return its index in the pool.
+        fn add_connection(
+            &mut self,
+            config: &Self::NewConnectionConfig,
+            addr: &SocketAddr,
+        ) -> usize {
             let connection = self.create_pool_entry(config, addr);
+            let idx = self.connections.len();
             self.connections.push(connection);
+            idx
         }
 
         fn num_connections(&self) -> usize {
