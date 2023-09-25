@@ -546,13 +546,12 @@ impl Tower {
         let vote = Vote::new(vec![vote_slot], vote_hash);
         let result = process_vote_unchecked(&mut self.vote_state, vote);
         if result.is_err() {
-            error!(
+            panic!(
                 "Error while recording vote {} {} in local tower {:?}",
                 vote_slot, vote_hash, result
             );
-        } else {
-            self.update_last_vote_from_vote_state(vote_hash);
         }
+        self.update_last_vote_from_vote_state(vote_hash);
 
         let new_root = self.root();
 
