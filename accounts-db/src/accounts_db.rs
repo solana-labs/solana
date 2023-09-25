@@ -9428,41 +9428,45 @@ impl AccountsDb {
         let mut uncleaned_slots = HashSet::<Slot>::default();
         let mut removed_rent_paying = 0;
         let mut removed_top_off = 0;
-        pubkeys.iter().for_each(|pubkey| {
-            if let Some(entry) = self.accounts_index.get_account_read_entry(pubkey) {
-                let slot_list = entry.slot_list();
-                if slot_list.len() < 2 {
-                    return;
+        self.accounts_index.scan(
+            pubkeys.iter(),
+            |pubkey, slots_refs, _entry| {
+                if let Some((slot_list, _ref_count)) = slots_refs {
+                    if slot_list.len() > 1 {
+                        // Only the account data len in the highest slot should be used, and the rest are
+                        // duplicates.  So find the max slot to keep.
+                        // Then sum up the remaining data len, which are the duplicates.
+                        // All of the slots need to go in the 'uncleaned_slots' list. For clean to work properly,
+                        // the slot where duplicate accounts are found in the index need to be in 'uncleaned_slots' list, too.
+                        let max = slot_list.iter().map(|(slot, _)| slot).max().unwrap();
+                        slot_list.iter().for_each(|(slot, account_info)| {
+                            uncleaned_slots.insert(*slot);
+                            if slot == max {
+                                // the info in 'max' is the most recent, current info for this pubkey
+                                return;
+                            }
+                            let maybe_storage_entry = self
+                                .storage
+                                .get_account_storage_entry(*slot, account_info.store_id());
+                            let mut accessor = LoadedAccountAccessor::Stored(
+                                maybe_storage_entry.map(|entry| (entry, account_info.offset())),
+                            );
+                            let loaded_account = accessor.check_and_get_loaded_account();
+                            accounts_data_len_from_duplicates += loaded_account.data().len();
+                            if let Some(lamports_to_top_off) =
+                                Self::stats_for_rent_payers(pubkey, &loaded_account, rent_collector)
+                            {
+                                removed_rent_paying += 1;
+                                removed_top_off += lamports_to_top_off;
+                            }
+                        });
+                    }
                 }
-                // Only the account data len in the highest slot should be used, and the rest are
-                // duplicates.  So find the max slot to keep.
-                // Then sum up the remaining data len, which are the duplicates.
-                // All of the slots need to go in the 'uncleaned_slots' list. For clean to work properly,
-                // the slot where duplicate accounts are found in the index need to be in 'uncleaned_slots' list, too.
-                let max = slot_list.iter().map(|(slot, _)| slot).max().unwrap();
-                slot_list.iter().for_each(|(slot, account_info)| {
-                    uncleaned_slots.insert(*slot);
-                    if slot == max {
-                        // the info in 'max' is the most recent, current info for this pubkey
-                        return;
-                    }
-                    let maybe_storage_entry = self
-                        .storage
-                        .get_account_storage_entry(*slot, account_info.store_id());
-                    let mut accessor = LoadedAccountAccessor::Stored(
-                        maybe_storage_entry.map(|entry| (entry, account_info.offset())),
-                    );
-                    let loaded_account = accessor.check_and_get_loaded_account();
-                    accounts_data_len_from_duplicates += loaded_account.data().len();
-                    if let Some(lamports_to_top_off) =
-                        Self::stats_for_rent_payers(pubkey, &loaded_account, rent_collector)
-                    {
-                        removed_rent_paying += 1;
-                        removed_top_off += lamports_to_top_off;
-                    }
-                });
-            }
-        });
+                AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
+            },
+            None,
+            false,
+        );
         timings
             .rent_paying
             .fetch_sub(removed_rent_paying, Ordering::Relaxed);
