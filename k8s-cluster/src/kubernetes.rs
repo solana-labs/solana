@@ -14,14 +14,13 @@ use {
         ByteString,
     },
     kube::{
-        api::{Api, ObjectMeta, PostParams, ListParams},
+        api::{Api, ListParams, ObjectMeta, PostParams},
         Client,
     },
     log::*,
     solana_sdk::hash::Hash,
     std::{collections::BTreeMap, error::Error, fs::File, io::Read},
 };
-
 
 pub struct RuntimeConfig<'a> {
     pub enable_udp: bool,
@@ -90,7 +89,10 @@ pub struct Kubernetes<'a> {
 }
 
 impl<'a> Kubernetes<'a> {
-    pub async fn new(namespace: &'a str, runtime_config: &'a mut RuntimeConfig<'a>) -> Kubernetes<'a> {
+    pub async fn new(
+        namespace: &'a str,
+        runtime_config: &'a mut RuntimeConfig<'a>,
+    ) -> Kubernetes<'a> {
         Kubernetes {
             client: Client::try_default().await.unwrap(),
             namespace,
@@ -114,13 +116,19 @@ impl<'a> Kubernetes<'a> {
         if self.runtime_config.disable_quic {
             flags.push("--tpu-disable-quic".to_string());
         }
-        flags.extend(vec!["--init-complete-file".to_string(), "logs/init-complete-node.log".to_string()]);
+        flags.extend(vec![
+            "--init-complete-file".to_string(),
+            "logs/init-complete-node.log".to_string(),
+        ]);
         match self.runtime_config.limit_ledger_size {
             Some(size) => flags.extend(vec!["--limit-ledger-size".to_string(), size.to_string()]),
             None => (),
         }
         match self.runtime_config.wait_for_supermajority {
-            Some(slot) => flags.extend(vec!["--wait-for-supermajority".to_string(), slot.to_string()]),
+            Some(slot) => flags.extend(vec![
+                "--wait-for-supermajority".to_string(),
+                slot.to_string(),
+            ]),
             None => (),
         }
         match self.runtime_config.warp_slot {
@@ -135,7 +143,10 @@ impl<'a> Kubernetes<'a> {
             flags.push("--skip-poh-verify".to_string());
         }
         if self.runtime_config.tmpfs_accounts {
-            flags.extend(vec!["--accounts".to_string(), "/mnt/solana-accounts".to_string()]);
+            flags.extend(vec![
+                "--accounts".to_string(),
+                "/mnt/solana-accounts".to_string(),
+            ]);
         }
         if self.runtime_config.no_snapshot_fetch {
             flags.push("--no-snapshot-fetch".to_string());
@@ -155,13 +166,22 @@ impl<'a> Kubernetes<'a> {
 
     fn generate_validator_command_flags(&mut self) -> Vec<String> {
         let mut flags = self.generate_command_flags();
-        flags.extend(vec!["--internal-node-stake-sol".to_string(), self.runtime_config.internal_node_stake_sol.to_string()]);
-        flags.extend(vec!["--internal-node-sol".to_string(), self.runtime_config.internal_node_sol.to_string()]);
+        flags.extend(vec![
+            "--internal-node-stake-sol".to_string(),
+            self.runtime_config.internal_node_stake_sol.to_string(),
+        ]);
+        flags.extend(vec![
+            "--internal-node-sol".to_string(),
+            self.runtime_config.internal_node_sol.to_string(),
+        ]);
 
         match self.runtime_config.shred_version {
-            Some(shred_version) => flags.extend(vec!["--expected-shred-version".to_string(), shred_version.to_string()]),
+            Some(shred_version) => flags.extend(vec![
+                "--expected-shred-version".to_string(),
+                shred_version.to_string(),
+            ]),
             None => (),
-        } 
+        }
         flags
     }
 

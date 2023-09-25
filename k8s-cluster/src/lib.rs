@@ -30,8 +30,8 @@ pub fn initialize_globals() {
 pub mod docker;
 pub mod genesis;
 pub mod kubernetes;
-pub mod release;
 pub mod ledger_helper;
+pub mod release;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ValidatorType {

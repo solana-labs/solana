@@ -9,8 +9,8 @@ use {
         },
         initialize_globals,
         kubernetes::{Kubernetes, RuntimeConfig},
-        release::{BuildConfig, Deploy},
         ledger_helper::LedgerHelper,
+        release::{BuildConfig, Deploy},
     },
     solana_sdk::genesis_config::ClusterType,
     std::{thread, time::Duration},
@@ -374,13 +374,13 @@ async fn main() {
             .expect("Invalid value for internal_node_stake_sol")
             as f64,
         limit_ledger_size: match matches.value_of("limit_ledger_size") {
-                Some(value_str) => Some(
-                    value_str
-                        .parse()
-                        .expect("Invalid value for limit_ledger_size"),
-                ),
-                None => None,
-            },
+            Some(value_str) => Some(
+                value_str
+                    .parse()
+                    .expect("Invalid value for limit_ledger_size"),
+            ),
+            None => None,
+        },
         full_rpc: matches.is_present("full_rpc"),
         skip_poh_verify: matches.is_present("skip_poh_verify"),
         tmpfs_accounts: matches.is_present("tmps_accounts"),
@@ -396,26 +396,28 @@ async fn main() {
             None => None,
         },
         warp_slot: match matches.value_of("warp_slot") {
-            Some(value_str) => Some(
-                value_str
-                    .parse()
-                    .expect("Invalid value for warp_slot"),
-            ),
+            Some(value_str) => Some(value_str.parse().expect("Invalid value for warp_slot")),
             None => None,
         },
         shred_version: None, // set after genesis created
-        bank_hash: None, // set after genesis created
+        bank_hash: None,     // set after genesis created
     };
 
     let wait_for_supermajority: Option<u64> = runtime_config.wait_for_supermajority.clone();
     let warp_slot: Option<u64> = runtime_config.warp_slot.clone();
-    if ! match (runtime_config.wait_for_supermajority, runtime_config.warp_slot) {
+    if !match (
+        runtime_config.wait_for_supermajority,
+        runtime_config.warp_slot,
+    ) {
         (Some(slot1), Some(slot2)) => slot1 == slot2,
         (None, None) => true, // Both are None, consider them equal
         _ => true,
     } {
-        panic!("Error: When specifying both --wait-for-supermajority and --warp-slot, \
-        they must use the same slot. ({:?} != {:?})", runtime_config.wait_for_supermajority, runtime_config.warp_slot);
+        panic!(
+            "Error: When specifying both --wait-for-supermajority and --warp-slot, \
+        they must use the same slot. ({:?} != {:?})",
+            runtime_config.wait_for_supermajority, runtime_config.warp_slot
+        );
     }
 
     info!("Runtime Config: {}", runtime_config);
@@ -555,15 +557,13 @@ async fn main() {
         None => (),
     }
     match wait_for_supermajority {
-        Some(_) => {
-            match LedgerHelper::create_bank_hash() {
-                Ok(bank_hash) => kub_controller.set_bank_hash(bank_hash),
-                Err(err) => {
-                    error!("Failed to get bank hash: {}", err);
-                    return;
-                }
+        Some(_) => match LedgerHelper::create_bank_hash() {
+            Ok(bank_hash) => kub_controller.set_bank_hash(bank_hash),
+            Err(err) => {
+                error!("Failed to get bank hash: {}", err);
+                return;
             }
-        }
+        },
         None => (),
     }
 
