@@ -412,6 +412,10 @@ pub struct ProgramRuntimeEnvironments {
     pub program_runtime_v1: ProgramRuntimeEnvironment,
     /// Globally shared RBPF config and syscall registry for runtime V2
     pub program_runtime_v2: ProgramRuntimeEnvironment,
+    /// Anticipated replacement for `program_runtime_v1` at the next epoch
+    pub upcoming_program_runtime_v1: Option<ProgramRuntimeEnvironment>,
+    /// Anticipated replacement for `program_runtime_v2` at the next epoch
+    pub upcoming_program_runtime_v2: Option<ProgramRuntimeEnvironment>,
 }
 
 impl Default for ProgramRuntimeEnvironments {
@@ -422,7 +426,9 @@ impl Default for ProgramRuntimeEnvironments {
         ));
         Self {
             program_runtime_v1: empty_loader.clone(),
-            program_runtime_v2: empty_loader,
+            program_runtime_v2: empty_loader.clone(),
+            upcoming_program_runtime_v1: Some(empty_loader.clone()),
+            upcoming_program_runtime_v2: Some(empty_loader),
         }
     }
 }
