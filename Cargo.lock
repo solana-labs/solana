@@ -7458,6 +7458,7 @@ dependencies = [
  "protobuf-src",
  "rustc_version 0.4.0",
  "serial_test",
+ "solana-accounts-db",
  "solana-gossip",
  "solana-ledger",
  "solana-logger",

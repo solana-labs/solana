@@ -8,6 +8,7 @@ use {
     },
     log::*,
     prost::Message,
+    solana_accounts_db::accounts_db::CalcAccountsHashDataSource,
     solana_gossip::{cluster_info::ClusterInfo, crds::Cursor},
     solana_ledger::blockstore::Blockstore,
     solana_runtime::{
@@ -236,7 +237,22 @@ pub fn wen_restart(
         let new_root_bank = my_bank_forks.get(my_selected_slot).unwrap();
         new_root_bank.rehash();
         new_root_bank_hash = new_root_bank.hash();
-        bank_to_incremental_snapshot_archive(
+        // Need to set the EAH to Valid so that we don't hit the assertion that EAH is invalid.
+        new_root_bank
+            .rc
+            .accounts
+            .accounts_db
+            .epoch_accounts_hash_manager
+            .set_in_flight(my_selected_slot);
+        let accounts_hash = new_root_bank.update_accounts_hash(
+            CalcAccountsHashDataSource::Storages, false, true);
+        let epoch_accounts_hash = accounts_hash.into();
+        new_root_bank
+            .rc
+            .accounts
+            .accounts_db
+            .epoch_accounts_hash_manager
+            .set_valid(epoch_accounts_hash, my_selected_slot);       bank_to_incremental_snapshot_archive(
             snapshot_config.bank_snapshots_dir.clone(),
             &new_root_bank,
             get_highest_full_snapshot_archive_slot(snapshot_config.full_snapshot_archives_dir.clone()).unwrap(),
