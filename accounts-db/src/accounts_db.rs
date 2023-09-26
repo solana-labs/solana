@@ -6481,7 +6481,7 @@ impl AccountsDb {
         let mut num_roots_flushed = 0;
         for &root in cached_roots.iter().rev() {
             if self
-                .flush_slot_cache_with_clean(&[root], should_flush_f.as_mut(), max_clean_root)
+                .flush_slot_cache_with_clean(root, should_flush_f.as_mut(), max_clean_root)
                 .is_some()
             {
                 num_roots_flushed += 1;
@@ -6643,7 +6643,7 @@ impl AccountsDb {
 
     /// flush all accounts in this slot
     fn flush_slot_cache(&self, slot: Slot) -> Option<FlushStats> {
-        self.flush_slot_cache_with_clean(&[slot], None::<&mut fn(&_, &_) -> bool>, None)
+        self.flush_slot_cache_with_clean(slot, None::<&mut fn(&_, &_) -> bool>, None)
     }
 
     /// 1.13 and some 1.14 could produce legal snapshots with more than 1 append vec per slot.
@@ -6696,12 +6696,10 @@ impl AccountsDb {
     /// accounts
     fn flush_slot_cache_with_clean(
         &self,
-        slots: &[Slot],
+        slot: Slot,
         should_flush_f: Option<&mut impl FnMut(&Pubkey, &AccountSharedData) -> bool>,
         max_clean_root: Option<Slot>,
     ) -> Option<FlushStats> {
-        assert_eq!(1, slots.len());
-        let slot = slots[0];
         if self
             .remove_unrooted_slots_synchronization
             .slots_under_contention
@@ -6725,15 +6723,12 @@ impl AccountsDb {
 
             // Nobody else should have been purging this slot, so should not have been removed
             // from `self.remove_unrooted_slots_synchronization`.
-
-            slots.iter().for_each(|slot| {
-                assert!(self
-                    .remove_unrooted_slots_synchronization
-                    .slots_under_contention
-                    .lock()
-                    .unwrap()
-                    .remove(slot));
-            });
+            assert!(self
+                .remove_unrooted_slots_synchronization
+                .slots_under_contention
+                .lock()
+                .unwrap()
+                .remove(&slot));
 
             // Signal to any threads blocked on `remove_unrooted_slots(slot)` that we have finished
             // flushing
