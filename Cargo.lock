@@ -5700,6 +5700,7 @@ version = "1.17.0"
 dependencies = [
  "async-trait",
  "bincode",
+ "crossbeam-channel",
  "futures-util",
  "indexmap 2.0.0",
  "indicatif",
