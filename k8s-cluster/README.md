@@ -94,6 +94,8 @@ Other Notes:
 - genesis creation is hardcoded for the most part in terms of stakes, lamports, etc.
 - genesis includes bootstrap accounts and SPL args.
 - Registry needs to be remotely accessible by all monogon nodes
+- Must ensure your solana-cli on your host can run `solana-ledger-tool -l <ledger-dir> bank-hash --halt-at-slot 0`
+    - Older CLI versions do not support the `--halt-at-slot` option
 
 TODO:
 - we currently write binary to file for genesis, then read it back to verify it. and then read it again to convert into a base64 string and then converted into binrary and then converted into a GenesisConfig lol. So need to fix

@@ -131,8 +131,6 @@ vote_account=vote.json
 ledger_dir=/home/solana/ledger
 [[ -d "$ledger_dir" ]] || {
   echo "$ledger_dir does not exist"
-  echo
-  echo "Please run: $here/setup.sh"
   exit 1
 }
 
@@ -158,6 +156,10 @@ args+=(
   --allow-private-addr 
 )
 
+echo "Bootstrap Args"
+for arg in "${args[@]}"; do
+  echo "$arg"
+done
 
 pid=
 kill_node() {

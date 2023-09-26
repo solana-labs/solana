@@ -284,11 +284,6 @@ kill_node_and_exit() {
 
 trap 'kill_node_and_exit' INT TERM ERR
 
-
-
-
-
-
 # Maximum number of retries
 MAX_RETRIES=5
 
@@ -348,6 +343,11 @@ if ! run_solana_command "solana -u $SOLANA_RPC_URL delegate-stake stake.json vot
 fi
 
 echo "All commands succeeded. Running solana-validator next..."
+
+echo "Validator Args"
+for arg in "${args[@]}"; do
+  echo "$arg"
+done
 
 while true; do
   echo "$PS4$program ${args[*]}"
