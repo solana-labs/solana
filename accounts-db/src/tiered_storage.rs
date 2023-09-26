@@ -110,9 +110,6 @@ impl TieredStorage {
         }
 
         let result = {
-            // self.format must be Some as write_accounts can only be called on a
-            // TieredStorage instance created via new_writable() where its format
-            // field is required.
             let writer = TieredStorageWriter::new(&self.path, format)?;
             writer.write_accounts(accounts, skip)
         };
