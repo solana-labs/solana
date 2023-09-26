@@ -1615,7 +1615,11 @@ impl<'a> WriteBatch<'a> {
     }
 
     pub fn delete<C: Column + ColumnName>(&mut self, key: C::Index) -> Result<()> {
-        self.write_batch.delete_cf(self.get_cf::<C>(), C::key(key));
+        self.delete_raw::<C>(&C::key(key))
+    }
+
+    pub(crate) fn delete_raw<C: Column + ColumnName>(&mut self, key: &[u8]) -> Result<()> {
+        self.write_batch.delete_cf(self.get_cf::<C>(), key);
         Ok(())
     }
 
