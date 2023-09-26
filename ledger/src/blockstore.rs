@@ -6,8 +6,8 @@ use {
     crate::{
         ancestor_iterator::AncestorIterator,
         blockstore_db::{
-            columns as cf, Column, Database, IteratorDirection, IteratorMode, LedgerColumn, Result,
-            WriteBatch,
+            columns as cf, Column, ColumnIndexDeprecation, Database, IteratorDirection,
+            IteratorMode, LedgerColumn, Result, WriteBatch,
         },
         blockstore_meta::*,
         blockstore_options::{
@@ -2226,19 +2226,35 @@ impl Blockstore {
         Ok(i)
     }
 
-    pub fn read_transaction_status(
+    fn read_deprecated_transaction_status(
         &self,
         index: (Signature, Slot),
     ) -> Result<Option<TransactionStatusMeta>> {
         let (signature, slot) = index;
         let result = self
             .transaction_status_cf
-            .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((0, signature, slot))?;
+            .get_raw_protobuf_or_bincode::<StoredTransactionStatusMeta>(
+                &cf::TransactionStatus::deprecated_key((0, signature, slot)),
+            )?;
         if result.is_none() {
             Ok(self
                 .transaction_status_cf
-                .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((1, signature, slot))?
+                .get_raw_protobuf_or_bincode::<StoredTransactionStatusMeta>(
+                    &cf::TransactionStatus::deprecated_key((1, signature, slot)),
+                )?
                 .and_then(|meta| meta.try_into().ok()))
+        } else {
+            Ok(result.and_then(|meta| meta.try_into().ok()))
+        }
+    }
+
+    pub fn read_transaction_status(
+        &self,
+        index: (Signature, Slot),
+    ) -> Result<Option<TransactionStatusMeta>> {
+        let result = self.transaction_status_cf.get_protobuf(index)?;
+        if result.is_none() {
+            self.read_deprecated_transaction_status(index)
         } else {
             Ok(result.and_then(|meta| meta.try_into().ok()))
         }
