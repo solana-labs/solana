@@ -614,6 +614,23 @@ impl Rocks {
         self.db.iterator_cf(cf, iterator_mode)
     }
 
+    fn iterator_cf_raw_key(
+        &self,
+        cf: &ColumnFamily,
+        iterator_mode: IteratorMode<Vec<u8>>,
+    ) -> DBIterator {
+        let start_key;
+        let iterator_mode = match iterator_mode {
+            IteratorMode::From(start_from, direction) => {
+                start_key = start_from;
+                RocksIteratorMode::From(&start_key, direction)
+            }
+            IteratorMode::Start => RocksIteratorMode::Start,
+            IteratorMode::End => RocksIteratorMode::End,
+        };
+        self.db.iterator_cf(cf, iterator_mode)
+    }
+
     fn raw_iterator_cf(&self, cf: &ColumnFamily) -> DBRawIterator {
         self.db.raw_iterator_cf(cf)
     }
@@ -1611,6 +1628,45 @@ where
         }
 
         result
+    }
+}
+
+impl<C> LedgerColumn<C>
+where
+    C: ColumnIndexDeprecation + ColumnName,
+{
+    pub(crate) fn iter_filtered(
+        &self,
+        iterator_mode: IteratorMode<C::Index>,
+    ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)> + '_> {
+        let cf = self.handle();
+        let iter = self.backend.iterator_cf::<C>(cf, iterator_mode);
+        Ok(iter.filter_map(|pair| {
+            let (key, value) = pair.unwrap();
+            C::try_current_index(&key).ok().map(|index| (index, value))
+        }))
+    }
+
+    pub(crate) fn iter_deprecated_index_filtered(
+        &self,
+        iterator_mode: IteratorMode<C::DeprecatedIndex>,
+    ) -> Result<impl Iterator<Item = (C::DeprecatedIndex, Box<[u8]>)> + '_> {
+        let cf = self.handle();
+        let iterator_mode_raw_key = match iterator_mode {
+            IteratorMode::Start => IteratorMode::Start,
+            IteratorMode::End => IteratorMode::End,
+            IteratorMode::From(start_from, direction) => {
+                let raw_key = C::deprecated_key(start_from);
+                IteratorMode::From(raw_key, direction)
+            }
+        };
+        let iter = self.backend.iterator_cf_raw_key(cf, iterator_mode_raw_key);
+        Ok(iter.filter_map(|pair| {
+            let (key, value) = pair.unwrap();
+            C::try_deprecated_index(&key)
+                .ok()
+                .map(|index| (index, value))
+        }))
     }
 }
 
