@@ -30,6 +30,7 @@ env:
   SHELL: /bin/bash
   SCCACHE_GHA_ENABLED: "true"
   RUSTC_WRAPPER: "sccache"
+  RUST_BACKTRACE: "1"
 
 jobs:
   check:
