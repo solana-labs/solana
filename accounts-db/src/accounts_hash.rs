@@ -960,6 +960,9 @@ impl<'a> AccountsHasher<'a> {
         // already in working_set (i.e. inserted by a later slot group), the next lowest item
         // in this slot group is searched and checked, until either one that is `not` in the
         // working_set is found, which will then be inserted, or no next lowest item is found.
+        // Iterating in reverse order of slot_group will grantee that each slot group will be
+        // scanned only once and scanned continuously. Therefore, it can achieve better data
+        // locality during the scan.
         let max_inclusive_num_pubkeys = sorted_data_by_pubkey
             .iter()
             .enumerate()
