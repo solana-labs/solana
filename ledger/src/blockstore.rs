@@ -2260,7 +2260,7 @@ impl Blockstore {
         let primary_index =
             self.get_primary_index_to_write(slot, &w_active_transaction_status_index)?;
         self.transaction_status_cf
-            .put_protobuf((primary_index, signature, slot), &status)?;
+            .put_protobuf((signature, slot), &status)?;
         for address in writable_keys {
             self.address_signatures_cf.put(
                 (primary_index, *address, slot, signature),
