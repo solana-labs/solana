@@ -1,4 +1,9 @@
-use {super::*, solana_sdk::message::AccountKeys, std::time::Instant};
+use {
+    super::*,
+    crate::blockstore_db::ColumnIndexDeprecation,
+    solana_sdk::message::AccountKeys,
+    std::{cmp, time::Instant},
+};
 
 #[derive(Default)]
 pub struct PurgeStats {
@@ -391,9 +396,8 @@ impl Blockstore {
 
         for slot in from_slot..=to_slot {
             let primary_indexes = slot_indexes(slot);
-            if primary_indexes.is_empty() {
-                continue;
-            }
+            let delete_new_column_key =
+                primary_indexes.is_empty() || (slot == cmp::max(index0.max_slot, index1.max_slot));
 
             let slot_entries = self.get_any_valid_slot_entries(slot, 0);
             let transactions = slot_entries
@@ -401,8 +405,17 @@ impl Blockstore {
                 .flat_map(|entry| entry.transactions);
             for transaction in transactions {
                 if let Some(&signature) = transaction.signatures.get(0) {
+                    if delete_new_column_key {
+                        batch.delete::<cf::TransactionStatus>((signature, slot))?;
+                    }
                     for primary_index in &primary_indexes {
-                        batch.delete::<cf::TransactionStatus>((*primary_index, signature, slot))?;
+                        batch.delete_raw::<cf::TransactionStatus>(
+                            &cf::TransactionStatus::deprecated_key((
+                                *primary_index,
+                                signature,
+                                slot,
+                            )),
+                        )?;
                     }
 
                     let meta = self.read_transaction_status((signature, slot))?;
