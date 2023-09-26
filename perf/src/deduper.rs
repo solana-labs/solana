@@ -4,6 +4,7 @@ use {
     crate::packet::{Packet, PacketBatch},
     ahash::RandomState,
     rand::Rng,
+    solana_sdk::saturating_add_assign,
     std::{
         hash::{BuildHasher, Hash, Hasher},
         iter::repeat_with,
@@ -93,9 +94,9 @@ pub fn dedup_packets_and_count_discards<const K: usize>(
     batches: &mut [PacketBatch],
     mut process_received_packet: impl FnMut(&mut Packet, bool, bool),
 ) -> (usize, usize, usize) {
-    let mut total_discards = 0;
-    let mut forwarded_packets = 0;
-    let mut forwarded_discards = 0;
+    let mut total_discards: usize = 0;
+    let mut forwarded_packets: usize = 0;
+    let mut forwarded_discards: usize = 0;
     batches
         .iter_mut()
         .flat_map(PacketBatch::iter_mut)
@@ -112,9 +113,12 @@ pub fn dedup_packets_and_count_discards<const K: usize>(
             } else {
                 process_received_packet(packet, false, false);
             }
-            total_discards += usize::from(packet.meta().discard());
-            forwarded_packets += usize::from(packet.meta().forwarded());
-            forwarded_discards += usize::from(packet.meta().discard() & packet.meta().forwarded());
+            saturating_add_assign!(total_discards, usize::from(packet.meta().discard()));
+            saturating_add_assign!(forwarded_packets, usize::from(packet.meta().forwarded()));
+            saturating_add_assign!(
+                forwarded_discards,
+                usize::from(packet.meta().discard() & packet.meta().forwarded())
+            );
         });
 
     (total_discards, forwarded_packets, forwarded_discards)
