@@ -969,46 +969,25 @@ impl<'a> AccountsHasher<'a> {
                     Self::find_first_pubkey_in_bin(hash_data, pubkey_bin, bins, binner, stats);
 
                 if let Some(first_pubkey_in_bin) = first_pubkey_in_bin {
-                    let mut key = Some(&hash_data[first_pubkey_in_bin].pubkey);
-                    let mut offset = first_pubkey_in_bin;
+                    let mut next = Some(ItemLocation {
+                        key: &hash_data[first_pubkey_in_bin].pubkey,
+                        division_index: i,
+                        offset: first_pubkey_in_bin,
+                    });
 
-                    while let Some(k) = key {
-                        let found = working_set.binary_search_by(|(slot_group_index, offset)| {
-                            let prob = &sorted_data_by_pubkey[*slot_group_index][*offset].pubkey;
-                            k.cmp(prob)
-                        });
+                    let mut new = None;
 
-                        match found {
-                            Err(index) => {
-                                // found a new new key, so insert into the working_set
-                                working_set.insert(index, (i, offset));
-                                break;
-                            }
-                            Ok(_index) => {
-                                // key already exists in working_set, continue to find next key.
-                                let (_item, new_next) = Self::get_item(
-                                    sorted_data_by_pubkey,
-                                    pubkey_bin,
-                                    binner,
-                                    &ItemLocation {
-                                        key: k,
-                                        division_index: i,
-                                        offset,
-                                    },
-                                );
-                                if let Some(ItemLocation {
-                                    key: new_key,
-                                    division_index: _,
-                                    offset: new_offset,
-                                }) = new_next
-                                {
-                                    key = Some(new_key);
-                                    offset = new_offset;
-                                } else {
-                                    key = None;
-                                }
-                            }
-                        }
+                    Self::add_next_item(
+                        &mut next,
+                        &mut new,
+                        &mut working_set,
+                        sorted_data_by_pubkey,
+                        pubkey_bin,
+                        binner,
+                    );
+
+                    if let Some(new) = new {
+                        working_set.push(new);
                     }
 
                     let mut first_pubkey_in_next_bin = first_pubkey_in_bin + 1;
