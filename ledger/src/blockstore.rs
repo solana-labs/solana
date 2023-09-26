@@ -2344,15 +2344,40 @@ impl Blockstore {
         let (lock, _) = self.ensure_lowest_cleanup_slot();
         let first_available_block = self.get_first_available_block()?;
 
-        for transaction_status_cf_primary_index in 0..=1 {
-            let index_iterator = self.transaction_status_cf.iter(IteratorMode::From(
-                (
-                    transaction_status_cf_primary_index,
-                    signature,
-                    first_available_block,
-                ),
+        let iterator = self
+            .transaction_status_cf
+            .iter_filtered(IteratorMode::From(
+                (signature, first_available_block),
                 IteratorDirection::Forward,
             ))?;
+
+        for ((sig, slot), _data) in iterator {
+            counter += 1;
+            if sig != signature {
+                break;
+            }
+            if !self.is_root(slot) && !confirmed_unrooted_slots.contains(&slot) {
+                continue;
+            }
+            let status = self
+                .transaction_status_cf
+                .get_protobuf((signature, slot))?
+                .and_then(|status| status.try_into().ok())
+                .map(|status| (slot, status));
+            return Ok((status, counter));
+        }
+
+        for transaction_status_cf_primary_index in 0..=1 {
+            let index_iterator =
+                self.transaction_status_cf
+                    .iter_deprecated_index_filtered(IteratorMode::From(
+                        (
+                            transaction_status_cf_primary_index,
+                            signature,
+                            first_available_block,
+                        ),
+                        IteratorDirection::Forward,
+                    ))?;
             for ((i, sig, slot), _data) in index_iterator {
                 counter += 1;
                 if i != transaction_status_cf_primary_index || sig != signature {
@@ -2363,7 +2388,9 @@ impl Blockstore {
                 }
                 let status = self
                     .transaction_status_cf
-                    .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((i, sig, slot))?
+                    .get_raw_protobuf_or_bincode::<StoredTransactionStatusMeta>(
+                        &cf::TransactionStatus::deprecated_key((i, signature, slot)),
+                    )?
                     .and_then(|status| status.try_into().ok())
                     .map(|status| (slot, status));
                 return Ok((status, counter));
