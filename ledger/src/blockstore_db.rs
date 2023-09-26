@@ -1538,11 +1538,18 @@ where
         &self,
         key: C::Index,
     ) -> Result<Option<C::Type>> {
+        self.get_raw_protobuf_or_bincode::<T>(&C::key(key))
+    }
+
+    pub(crate) fn get_raw_protobuf_or_bincode<T: DeserializeOwned + Into<C::Type>>(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<C::Type>> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
             &self.read_perf_status,
         );
-        let result = self.backend.get_pinned_cf(self.handle(), &C::key(key));
+        let result = self.backend.get_pinned_cf(self.handle(), key);
         if let Some(op_start_instant) = is_perf_enabled {
             report_rocksdb_read_perf(
                 C::NAME,
