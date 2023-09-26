@@ -403,7 +403,7 @@ impl Blockstore {
             let transactions = slot_entries
                 .into_iter()
                 .flat_map(|entry| entry.transactions);
-            for transaction in transactions {
+            for (i, transaction) in transactions.enumerate() {
                 if let Some(&signature) = transaction.signatures.get(0) {
                     if delete_new_column_key {
                         batch.delete::<cf::TransactionStatus>((signature, slot))?;
@@ -425,14 +425,26 @@ impl Blockstore {
                         loaded_addresses.as_ref(),
                     );
 
+                    let transaction_index =
+                        u32::try_from(i).map_err(|_| BlockstoreError::TransactionIndexOverflow)?;
                     for pubkey in account_keys.iter() {
-                        for primary_index in &primary_indexes {
+                        if delete_new_column_key {
                             batch.delete::<cf::AddressSignatures>((
-                                *primary_index,
                                 *pubkey,
                                 slot,
+                                transaction_index,
                                 signature,
                             ))?;
+                        }
+                        for primary_index in &primary_indexes {
+                            batch.delete_raw::<cf::AddressSignatures>(
+                                &cf::AddressSignatures::deprecated_key((
+                                    *primary_index,
+                                    *pubkey,
+                                    slot,
+                                    signature,
+                                )),
+                            )?;
                         }
                     }
                 }
