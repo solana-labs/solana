@@ -6897,6 +6897,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-runtime-transaction"
+version = "1.17.0"
+dependencies = [
+ "bincode",
+ "log",
+ "rand 0.8.5",
+ "rustc_version 0.4.0",
+ "solana-program-runtime",
+ "solana-sdk",
+ "thiserror",
+]
+
+[[package]]
 name = "solana-sdk"
 version = "1.17.0"
 dependencies = [
