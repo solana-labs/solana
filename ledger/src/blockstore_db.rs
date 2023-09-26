@@ -146,6 +146,8 @@ pub enum BlockstoreError {
     UnsupportedTransactionVersion,
     #[error("missing transaction metadata")]
     MissingTransactionMetadata,
+    #[error("transaction-index overflow")]
+    TransactionIndexOverflow,
 }
 pub type Result<T> = std::result::Result<T, BlockstoreError>;
 
