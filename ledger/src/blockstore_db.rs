@@ -270,7 +270,7 @@ pub mod columns {
     #[derive(Debug)]
     /// The transaction status column
     ///
-    /// * index type: `(u64, `[`Signature`]`, `[`Slot`])`
+    /// * index type: `(`[`Signature`]`, `[`Slot`])`
     /// * value type: [`generated::TransactionStatusMeta`]
     pub struct TransactionStatus;
 
@@ -787,33 +787,28 @@ pub trait ColumnIndexDeprecation: Column {
 }
 
 impl Column for columns::TransactionStatus {
-    type Index = (u64, Signature, Slot);
+    type Index = (Signature, Slot);
 
-    fn key((index, signature, slot): (u64, Signature, Slot)) -> Vec<u8> {
-        let mut key = vec![0; 8 + 64 + 8]; // size_of u64 + size_of Signature + size_of Slot
-        BigEndian::write_u64(&mut key[0..8], index);
-        key[8..72].copy_from_slice(&signature.as_ref()[0..64]);
-        BigEndian::write_u64(&mut key[72..80], slot);
+    fn key((signature, slot): (Signature, Slot)) -> Vec<u8> {
+        let mut key = vec![0; Self::CURRENT_INDEX_LEN]; // size_of Signature + size_of Slot
+        key[0..64].copy_from_slice(&signature.as_ref()[0..64]);
+        BigEndian::write_u64(&mut key[64..72], slot);
         key
     }
 
-    fn index(key: &[u8]) -> (u64, Signature, Slot) {
-        if key.len() != 80 {
-            Self::as_index(0)
-        } else {
-            let index = BigEndian::read_u64(&key[0..8]);
-            let signature = Signature::try_from(&key[8..72]).unwrap();
-            let slot = BigEndian::read_u64(&key[72..80]);
-            (index, signature, slot)
-        }
+    fn index(key: &[u8]) -> (Signature, Slot) {
+        <columns::TransactionStatus as ColumnIndexDeprecation>::index(key)
     }
 
     fn slot(index: Self::Index) -> Slot {
-        index.2
+        index.1
     }
 
-    fn as_index(index: u64) -> Self::Index {
-        (index, Signature::default(), 0)
+    // This trait method is primarily used by Database::delete_range_cf(). Because the
+    // TransactionStatus Column is not keyed by slot, it cannot be range deleted. Therefore this
+    // method is meaningless for this type, and simply returns a default Index.
+    fn as_index(_index: u64) -> Self::Index {
+        (Signature::default(), 0)
     }
 }
 impl ColumnName for columns::TransactionStatus {
@@ -821,6 +816,44 @@ impl ColumnName for columns::TransactionStatus {
 }
 impl ProtobufColumn for columns::TransactionStatus {
     type Type = generated::TransactionStatusMeta;
+}
+
+impl ColumnIndexDeprecation for columns::TransactionStatus {
+    const DEPRECATED_INDEX_LEN: usize = 80;
+    const CURRENT_INDEX_LEN: usize = 72;
+    type DeprecatedIndex = (u64, Signature, Slot);
+
+    fn deprecated_key(index: Self::DeprecatedIndex) -> Vec<u8> {
+        let (index, signature, slot) = index;
+        let mut key = vec![0; 8];
+        BigEndian::write_u64(&mut key[0..8], index);
+        key.extend_from_slice(&Self::key((signature, slot)));
+        key
+    }
+
+    fn try_deprecated_index(key: &[u8]) -> std::result::Result<Self::DeprecatedIndex, IndexError> {
+        if key.len() != Self::DEPRECATED_INDEX_LEN {
+            return Err(IndexError::UnpackError);
+        }
+        let primary_index = BigEndian::read_u64(&key[0..8]);
+        let signature = Signature::try_from(&key[8..72]).unwrap();
+        let slot = BigEndian::read_u64(&key[72..80]);
+        Ok((primary_index, signature, slot))
+    }
+
+    fn try_current_index(key: &[u8]) -> std::result::Result<Self::Index, IndexError> {
+        if key.len() != Self::CURRENT_INDEX_LEN {
+            return Err(IndexError::UnpackError);
+        }
+        let signature = Signature::try_from(&key[0..64]).unwrap();
+        let slot = BigEndian::read_u64(&key[64..72]);
+        Ok((signature, slot))
+    }
+
+    fn convert_index(deprecated_index: Self::DeprecatedIndex) -> Self::Index {
+        let (_primary_index, signature, slot) = deprecated_index;
+        (signature, slot)
+    }
 }
 
 impl Column for columns::AddressSignatures {
