@@ -975,20 +975,13 @@ impl<'a> AccountsHasher<'a> {
                         offset: first_pubkey_in_bin,
                     });
 
-                    let mut new = None;
-
                     Self::add_next_item(
                         &mut next,
-                        &mut new,
                         &mut working_set,
                         sorted_data_by_pubkey,
                         pubkey_bin,
                         binner,
                     );
-
-                    if let Some(new) = new {
-                        working_set.push(new);
-                    }
 
                     let mut first_pubkey_in_next_bin = first_pubkey_in_bin + 1;
                     while first_pubkey_in_next_bin < hash_data.len() {
@@ -1012,7 +1005,6 @@ impl<'a> AccountsHasher<'a> {
     /// Add next item into hash dedup working set
     fn add_next_item<'b>(
         next: &mut Option<ItemLocation<'b>>,
-        new: &mut Option<(usize, usize)>,
         working_set: &mut Vec<(usize, usize)>,
         sorted_data_by_pubkey: &[&'b [CalculateHashIntermediate]],
         pubkey_bin: usize,
@@ -1025,13 +1017,14 @@ impl<'a> AccountsHasher<'a> {
             offset,
         }) = next
         {
-            // if `new key` is less than the min key in the working set, remember current item and process it directly (skipping working set insertion).
+            // if `new key` is less than the min key in the working set, skip binary search and
+            // insert item to the end vec directly
             if let Some((current_min_slot_group_index, current_min_offset)) = working_set.last() {
                 let current_min_key = &sorted_data_by_pubkey[*current_min_slot_group_index]
                     [*current_min_offset]
                     .pubkey;
                 if *key < current_min_key {
-                    *new = Some((*slot_group_index, *offset));
+                    working_set.push((*slot_group_index, *offset));
                     break;
                 }
             }
@@ -1120,11 +1113,7 @@ impl<'a> AccountsHasher<'a> {
         let mut overall_sum = 0;
         let filler_accounts_enabled = self.filler_accounts_enabled();
 
-        let mut new = None;
-
-        while let Some((slot_group_index, offset)) =
-            std::mem::take(&mut new).or_else(|| working_set.pop())
-        {
+        while let Some((slot_group_index, offset)) = working_set.pop() {
             let key = &sorted_data_by_pubkey[slot_group_index][offset].pubkey;
 
             // get the min item, add lamports, get hash
@@ -1161,7 +1150,6 @@ impl<'a> AccountsHasher<'a> {
 
             Self::add_next_item(
                 &mut next,
-                &mut new,
                 &mut working_set,
                 sorted_data_by_pubkey,
                 pubkey_bin,
