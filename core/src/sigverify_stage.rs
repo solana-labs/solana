@@ -411,7 +411,7 @@ impl SigVerifyStage {
     ) -> JoinHandle<()> {
         let mut stats = SigVerifierStats::default();
         let mut last_print = Instant::now();
-        const MAX_DEDUPER_AGE: Duration = Duration::from_secs(2);
+        let max_deduper_age: Duration = Self::get_max_deduper_age();
         const DEDUPER_FALSE_POSITIVE_RATE: f64 = 0.001;
         const DEDUPER_NUM_BITS: u64 = 63_999_979;
         Builder::new()
@@ -420,7 +420,7 @@ impl SigVerifyStage {
                 let mut rng = rand::thread_rng();
                 let mut deduper = Deduper::<2, [u8]>::new(&mut rng, DEDUPER_NUM_BITS);
                 loop {
-                    if deduper.maybe_reset(&mut rng, DEDUPER_FALSE_POSITIVE_RATE, MAX_DEDUPER_AGE) {
+                    if deduper.maybe_reset(&mut rng, DEDUPER_FALSE_POSITIVE_RATE, max_deduper_age) {
                         stats.num_deduper_saturations += 1;
                     }
                     if let Err(e) =
@@ -455,6 +455,15 @@ impl SigVerifyStage {
         name: &'static str,
     ) -> JoinHandle<()> {
         Self::verifier_service(packet_receiver, verifier, name)
+    }
+
+    fn get_max_deduper_age() -> Duration {
+        let max_deduper_age_millis = std::env::var("SOLANA_MAX_DEDUPER_AGE_MILLIS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(2_000);
+
+        Duration::from_millis(max_deduper_age_millis)
     }
 
     pub fn join(self) -> thread::Result<()> {
@@ -669,5 +678,19 @@ mod tests {
         );
         let expected_remaining_batches = num_generated_batches - expected_num_shrunk_batches;
         assert_eq!(batches.len(), expected_remaining_batches);
+    }
+
+    #[test]
+    fn test_get_max_deduper_age() {
+        let max_deduper_age = SigVerifyStage::get_max_deduper_age();
+        assert_eq!(max_deduper_age.as_millis(), 2_000);
+
+        std::env::set_var("SOLANA_MAX_DEDUPER_AGE_MILLIS", "4000");
+        let max_deduper_age = SigVerifyStage::get_max_deduper_age();
+        assert_eq!(max_deduper_age.as_millis(), 4_000);
+
+        std::env::set_var("SOLANA_MAX_DEDUPER_AGE_MILLIS", " ");
+        let max_deduper_age = SigVerifyStage::get_max_deduper_age();
+        assert_eq!(max_deduper_age.as_millis(), 2_000);
     }
 }
