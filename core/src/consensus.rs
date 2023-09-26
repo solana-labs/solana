@@ -538,7 +538,7 @@ impl Tower {
             let vote = Vote::new(vec![vote_slot], vote_hash);
             let result = self.vote_state.process_vote_unchecked(vote);
             if result.is_err() {
-                error!(
+                panic!(
                     "Error while recording vote {} {} in local tower {:?}",
                     vote_slot, vote_hash, result
                 );
