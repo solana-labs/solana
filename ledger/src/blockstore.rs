@@ -2618,7 +2618,21 @@ impl Blockstore {
             .map(|signatures| signatures.iter().map(|(_, signature)| *signature).collect())
     }
 
+    // Get all signatures in a block, sorted to match the deprecated ordering of the
+    // AddressSignatures column
     fn get_sorted_block_signatures(&self, slot: Slot) -> Result<Vec<Signature>> {
+        // Load all signatures for the block
+        let mut slot_signatures: Vec<_> = self.get_block_signatures(slot)?;
+
+        // Reverse sort signatures as a way to entire a stable ordering within a slot, as
+        // the AddressSignatures column is ordered by signatures within a slot,
+        // not by block ordering
+        slot_signatures.sort_unstable_by(|a, b| b.cmp(a));
+
+        Ok(slot_signatures)
+    }
+
+    fn get_block_signatures(&self, slot: Slot) -> Result<Vec<Signature>> {
         let block = self.get_complete_block(slot, false).map_err(|err| {
             BlockstoreError::Io(IoError::new(
                 ErrorKind::Other,
@@ -2626,8 +2640,7 @@ impl Blockstore {
             ))
         })?;
 
-        // Load all signatures for the block
-        let mut slot_signatures: Vec<_> = block
+        Ok(block
             .transactions
             .into_iter()
             .filter_map(|transaction_with_meta| {
@@ -2637,14 +2650,7 @@ impl Blockstore {
                     .into_iter()
                     .next()
             })
-            .collect();
-
-        // Reverse sort signatures as a way to entire a stable ordering within a slot, as
-        // the AddressSignatures column is ordered by signatures within a slot,
-        // not by block ordering
-        slot_signatures.sort_unstable_by(|a, b| b.cmp(a));
-
-        Ok(slot_signatures)
+            .collect())
     }
 
     pub fn get_confirmed_signatures_for_address2(
