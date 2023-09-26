@@ -440,6 +440,8 @@ pub struct LoadedPrograms {
     /// Pubkey is the address of a program, multiple versions can coexists simultaneously under the same address (in different slots).
     entries: HashMap<Pubkey, Vec<Arc<LoadedProgram>>>,
     pub environments: ProgramRuntimeEnvironments,
+    /// List of loaded programs which should be recompiled before the next epoch (but don't have to).
+    pub programs_to_recompile: Vec<(Pubkey, Arc<LoadedProgram>)>,
     latest_root: Slot,
     pub stats: Stats,
 }

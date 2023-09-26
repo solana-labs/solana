@@ -1445,8 +1445,17 @@ impl Bank {
                 new.update_epoch_stakes(leader_schedule_epoch);
                 // Recompile loaded programs one at a time before the next epoch hits
                 let (_epoch, slot_index) = new.get_epoch_and_slot_index(new.slot());
-                let loaded_programs_cache = new.loaded_programs_cache.write().unwrap();
-                if slot_index.saturating_add(
+                let mut loaded_programs_cache = new.loaded_programs_cache.write().unwrap();
+                if !loaded_programs_cache.programs_to_recompile.is_empty() {
+                    if let Some((key, program_to_recompile)) =
+                        loaded_programs_cache.programs_to_recompile.pop()
+                    {
+                        drop(loaded_programs_cache);
+                        let recompiled = new.load_program(&key, false, Some(program_to_recompile));
+                        let mut loaded_programs_cache = new.loaded_programs_cache.write().unwrap();
+                        loaded_programs_cache.replenish(key, recompiled);
+                    }
+                } else if slot_index.saturating_add(
                     solana_program_runtime::loaded_programs::MAX_LOADED_ENTRY_COUNT
                         .checked_div(2)
                         .unwrap() as u64,
@@ -1495,6 +1504,11 @@ impl Bank {
                             .program_runtime_v2
                             .clone()
                     });
+                    loaded_programs_cache.programs_to_recompile = loaded_programs_cache
+                        .get_entries_sorted_by_tx_usage(
+                            changed_program_runtime_v1,
+                            changed_program_runtime_v2,
+                        );
                 }
             }
             if new.is_partitioned_rewards_code_enabled() {
@@ -4712,20 +4726,35 @@ impl Bank {
         ProgramAccountLoadResult::InvalidAccountData
     }
 
-    pub fn load_program(&self, pubkey: &Pubkey, reload: bool) -> Arc<LoadedProgram> {
+    pub fn load_program(
+        &self,
+        pubkey: &Pubkey,
+        reload: bool,
+        recompile: Option<Arc<LoadedProgram>>,
+    ) -> Arc<LoadedProgram> {
         let environments = self
             .loaded_programs_cache
             .read()
             .unwrap()
             .environments
             .clone();
+        let program_runtime_environment_v1 = if recompile.is_some() {
+            environments.upcoming_program_runtime_v1.as_ref().unwrap()
+        } else {
+            &environments.program_runtime_v1
+        };
+        let program_runtime_environment_v2 = if recompile.is_some() {
+            environments.upcoming_program_runtime_v2.as_ref().unwrap()
+        } else {
+            &environments.program_runtime_v2
+        };
 
         let mut load_program_metrics = LoadProgramMetrics {
             program_id: pubkey.to_string(),
             ..LoadProgramMetrics::default()
         };
 
-        let loaded_program = match self.load_program_accounts(pubkey) {
+        let mut loaded_program = match self.load_program_accounts(pubkey) {
             ProgramAccountLoadResult::AccountNotFound => Ok(LoadedProgram::new_tombstone(
                 self.slot,
                 LoadedProgramType::Closed,
@@ -4745,7 +4774,7 @@ impl Bank {
                     program_account.owner(),
                     program_account.data().len(),
                     0,
-                    environments.program_runtime_v1.clone(),
+                    program_runtime_environment_v1.clone(),
                     reload,
                 )
             }
@@ -4771,7 +4800,7 @@ impl Bank {
                             .len()
                             .saturating_add(programdata_account.data().len()),
                         slot,
-                        environments.program_runtime_v1.clone(),
+                        program_runtime_environment_v1.clone(),
                         reload,
                     )
                 }),
@@ -4786,7 +4815,7 @@ impl Bank {
                             unsafe {
                                 LoadedProgram::reload(
                                     &loader_v4::id(),
-                                    environments.program_runtime_v2.clone(),
+                                    program_runtime_environment_v2.clone(),
                                     slot,
                                     slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET),
                                     None,
@@ -4798,7 +4827,7 @@ impl Bank {
                         } else {
                             LoadedProgram::new(
                                 &loader_v4::id(),
-                                environments.program_runtime_v2.clone(),
+                                program_runtime_environment_v2.clone(),
                                 slot,
                                 slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET),
                                 None,
@@ -4811,25 +4840,36 @@ impl Bank {
                     })
                     .unwrap_or(LoadedProgram::new_tombstone(
                         self.slot,
-                        LoadedProgramType::FailedVerification(environments.program_runtime_v2),
+                        LoadedProgramType::FailedVerification(
+                            program_runtime_environment_v2.clone(),
+                        ),
                     ));
                 Ok(loaded_program)
             }
 
             ProgramAccountLoadResult::InvalidV4Program => Ok(LoadedProgram::new_tombstone(
                 self.slot,
-                LoadedProgramType::FailedVerification(environments.program_runtime_v2),
+                LoadedProgramType::FailedVerification(program_runtime_environment_v2.clone()),
             )),
         }
         .unwrap_or_else(|_| {
             LoadedProgram::new_tombstone(
                 self.slot,
-                LoadedProgramType::FailedVerification(environments.program_runtime_v1),
+                LoadedProgramType::FailedVerification(program_runtime_environment_v1.clone()),
             )
         });
 
         let mut timings = ExecuteDetailsTimings::default();
         load_program_metrics.submit_datapoint(&mut timings);
+        if let Some(recompile) = recompile {
+            loaded_program.effective_slot = self
+                .epoch_schedule()
+                .get_first_slot_in_epoch(self.epoch.saturating_add(1));
+            loaded_program.tx_usage_counter =
+                AtomicU64::new(recompile.tx_usage_counter.load(Ordering::Relaxed));
+            loaded_program.ix_usage_counter =
+                AtomicU64::new(recompile.ix_usage_counter.load(Ordering::Relaxed));
+        }
         Arc::new(loaded_program)
     }
 
@@ -5104,7 +5144,7 @@ impl Bank {
         let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing
             .iter()
             .map(|(key, count)| {
-                let program = self.load_program(key, false);
+                let program = self.load_program(key, false, None);
                 program.tx_usage_counter.store(*count, Ordering::Relaxed);
                 (*key, program)
             })
@@ -5114,7 +5154,7 @@ impl Bank {
         let unloaded_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = unloaded
             .iter()
             .map(|(key, count)| {
-                let program = self.load_program(key, true);
+                let program = self.load_program(key, true, None);
                 program.tx_usage_counter.store(*count, Ordering::Relaxed);
                 (*key, program)
             })
