@@ -476,10 +476,9 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
         // pop one entry at a time to insert in the first free location we find
         'outer: while let Some((ix_entry_raw, i)) = reverse_sorted_entries.pop() {
             let (k, v) = &items[i];
-            let ix_entry = ix_entry_raw % cap;
             // search for an empty spot starting at `ix_entry`
             for search in 0..search_end {
-                let ix_index = (ix_entry + search) % cap;
+                let ix_index = (ix_entry_raw + search) % cap;
                 let elem = IndexEntryPlaceInBucket::new(ix_index);
                 if index.try_lock(ix_index) {
                     *entries_created_on_disk += 1;

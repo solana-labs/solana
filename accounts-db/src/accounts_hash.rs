@@ -542,7 +542,7 @@ impl<'a> AccountsHasher<'a> {
 
     // This function is designed to allow hashes to be located in multiple, perhaps multiply deep vecs.
     // The caller provides a function to return a slice from the source data.
-    pub fn compute_merkle_root_from_slices<'b, F, T>(
+    fn compute_merkle_root_from_slices<'b, F, T>(
         total_hashes: usize,
         fanout: usize,
         max_levels_per_pass: Option<usize>,
@@ -706,7 +706,7 @@ impl<'a> AccountsHasher<'a> {
         }
     }
 
-    pub fn compute_merkle_root_from_slices_recurse(
+    fn compute_merkle_root_from_slices_recurse(
         hashes: Vec<Hash>,
         fanout: usize,
         max_levels_per_pass: Option<usize>,
