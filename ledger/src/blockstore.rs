@@ -2504,15 +2504,17 @@ impl Blockstore {
             return Ok(signatures);
         }
         for transaction_status_cf_primary_index in 0..=1 {
-            let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
-                (
-                    transaction_status_cf_primary_index,
-                    pubkey,
-                    start_slot.max(lowest_available_slot),
-                    Signature::default(),
-                ),
-                IteratorDirection::Forward,
-            ))?;
+            let index_iterator =
+                self.address_signatures_cf
+                    .iter_deprecated_index_filtered(IteratorMode::From(
+                        (
+                            transaction_status_cf_primary_index,
+                            pubkey,
+                            start_slot.max(lowest_available_slot),
+                            Signature::default(),
+                        ),
+                        IteratorDirection::Forward,
+                    ))?;
             for ((i, address, slot, signature), _) in index_iterator {
                 if i != transaction_status_cf_primary_index || slot > end_slot || address != pubkey
                 {
@@ -2531,7 +2533,7 @@ impl Blockstore {
     // Returns all signatures for an address in a particular slot, regardless of whether that slot
     // has been rooted. The transactions will be ordered by signature, and NOT by the order in
     // which the transactions exist in the block
-    fn find_address_signatures_for_slot(
+    fn find_address_signatures_for_slot_with_primary_index(
         &self,
         pubkey: Pubkey,
         slot: Slot,
@@ -2542,15 +2544,17 @@ impl Blockstore {
             return Ok(signatures);
         }
         for transaction_status_cf_primary_index in 0..=1 {
-            let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
-                (
-                    transaction_status_cf_primary_index,
-                    pubkey,
-                    slot,
-                    Signature::default(),
-                ),
-                IteratorDirection::Forward,
-            ))?;
+            let index_iterator =
+                self.address_signatures_cf
+                    .iter_deprecated_index_filtered(IteratorMode::From(
+                        (
+                            transaction_status_cf_primary_index,
+                            pubkey,
+                            slot,
+                            Signature::default(),
+                        ),
+                        IteratorDirection::Forward,
+                    ))?;
             for ((i, address, transaction_slot, signature), _) in index_iterator {
                 if i != transaction_status_cf_primary_index
                     || transaction_slot > slot
@@ -2563,6 +2567,39 @@ impl Blockstore {
         }
         drop(lock);
         signatures.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap().then(a.1.cmp(&b.1)));
+        Ok(signatures)
+    }
+
+    // Returns all signatures for an address in a particular slot, regardless of whether that slot
+    // has been rooted. The transactions will be ordered by their occurrence in the block
+    fn find_address_signatures_for_slot(
+        &self,
+        pubkey: Pubkey,
+        slot: Slot,
+    ) -> Result<Vec<(Slot, Signature)>> {
+        let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
+        let mut signatures: Vec<(Slot, Signature)> = vec![];
+        if slot < lowest_available_slot {
+            return Ok(signatures);
+        }
+        let index_iterator = self
+            .address_signatures_cf
+            .iter_filtered(IteratorMode::From(
+                (
+                    pubkey,
+                    slot.max(lowest_available_slot),
+                    0,
+                    Signature::default(),
+                ),
+                IteratorDirection::Forward,
+            ))?;
+        for ((address, transaction_slot, _transaction_index, signature), _) in index_iterator {
+            if transaction_slot > slot || address != pubkey {
+                break;
+            }
+            signatures.push((slot, signature));
+        }
+        drop(lock);
         Ok(signatures)
     }
 
