@@ -435,6 +435,13 @@ pub struct AccountsHasher<'a> {
     pub(crate) active_stats: &'a ActiveStats,
 }
 
+/// A struct for the location of an account hash item inside chunked accounts hash slices.
+struct ItemLocation<'a> {
+    key: &'a Pubkey,       // account's pubkey
+    division_index: usize, // chunk index
+    offset: usize,         // offset within a chunk
+}
+
 impl<'a> AccountsHasher<'a> {
     /// true if it is possible that there are filler accounts present
     pub fn filler_accounts_enabled(&self) -> bool {
@@ -813,29 +820,23 @@ impl<'a> AccountsHasher<'a> {
         (hashes, lamports_total)
     }
 
+    /// Given the item location, return the item in the `CalculatedHashIntermediate` slices and the next item location in the same bin.
+    /// If reaches the end of the `CalculatedHashIntermediate` slice or has exhausted all the accounts in current bin, return None for next item location.
     fn get_item<'b>(
         sorted_data_by_pubkey: &[&'b [CalculateHashIntermediate]],
         bin: usize,
         binner: &PubkeyBinCalculator24,
-        division_index: usize,
-        offset: usize,
-        key: &Pubkey,
-    ) -> (
-        &'b CalculateHashIntermediate,
-        Option<(&'b Pubkey, usize, usize)>,
-    ) {
-        let division_data = &sorted_data_by_pubkey[division_index];
-        let mut index = offset;
+        item_loc: &ItemLocation<'b>,
+    ) -> (&'b CalculateHashIntermediate, Option<ItemLocation<'b>>) {
+        let division_data = &sorted_data_by_pubkey[item_loc.division_index];
+        let mut index = item_loc.offset;
         index += 1;
         let mut next = None;
 
-        loop {
-            if index >= division_data.len() {
-                break;
-            }
+        while index < division_data.len() {
             // still more items where we found the previous key, so just increment the index for that slot group, skipping all pubkeys that are equal
             let next_key = &division_data[index].pubkey;
-            if next_key == key {
+            if next_key == item_loc.key {
                 index += 1;
                 continue; // duplicate entries of same pubkey, so keep skipping
             }
@@ -846,7 +847,11 @@ impl<'a> AccountsHasher<'a> {
             }
 
             // point to the next pubkey > key
-            next = Some((next_key, division_index, index));
+            next = Some(ItemLocation {
+                key: next_key,
+                division_index: item_loc.division_index,
+                offset: index,
+            });
             break;
         }
 
@@ -930,22 +935,14 @@ impl<'a> AccountsHasher<'a> {
         result
     }
 
-    // go through: [..][pubkey_bin][..] and return hashes and lamport sum
-    //   slot groups^                ^accounts found in a slot group, sorted by pubkey, higher slot, write_version
-    // 1. handle zero lamport accounts
-    // 2. pick the highest slot or (slot = and highest version) of each pubkey
-    // 3. produce this output:
-    //   a. AccountHashesFile: individual account hashes in pubkey order
-    //   b. lamport sum
-    fn de_dup_accounts_in_parallel(
-        &self,
+    /// Return the working_set and max number of pubkeys for hash dedup.
+    fn initialize_dedup_working_set(
         sorted_data_by_pubkey: &[&[CalculateHashIntermediate]],
         pubkey_bin: usize,
         bins: usize,
+        binner: &PubkeyBinCalculator24,
         stats: &HashStats,
-    ) -> (AccountHashesFile, u64) {
-        let binner = PubkeyBinCalculator24::new(bins);
-
+    ) -> (Vec<(usize, usize)>, usize) {
         // working_set hold the lowest items for each slot_group sorted by pubkey descending (min_key is the last)
         let mut working_set: Vec<(usize, usize)> = Vec::default();
 
@@ -961,7 +958,7 @@ impl<'a> AccountsHasher<'a> {
             .rev()
             .map(|(i, hash_data)| {
                 let first_pubkey_in_bin =
-                    Self::find_first_pubkey_in_bin(hash_data, pubkey_bin, bins, &binner, stats);
+                    Self::find_first_pubkey_in_bin(hash_data, pubkey_bin, bins, binner, stats);
 
                 if let Some(first_pubkey_in_bin) = first_pubkey_in_bin {
                     let mut key = Some(&hash_data[first_pubkey_in_bin].pubkey);
@@ -985,12 +982,19 @@ impl<'a> AccountsHasher<'a> {
                                 let (_item, new_next) = Self::get_item(
                                     sorted_data_by_pubkey,
                                     pubkey_bin,
-                                    &binner,
-                                    i,
-                                    offset,
-                                    k,
+                                    binner,
+                                    &ItemLocation {
+                                        key: k,
+                                        division_index: i,
+                                        offset,
+                                    },
                                 );
-                                if let Some((new_key, _, new_offset)) = new_next {
+                                if let Some(ItemLocation {
+                                    key: new_key,
+                                    division_index: _,
+                                    offset: new_offset,
+                                }) = new_next
+                                {
                                     key = Some(new_key);
                                     offset = new_offset;
                                 } else {
@@ -1015,6 +1019,112 @@ impl<'a> AccountsHasher<'a> {
                 }
             })
             .sum::<usize>();
+
+        (working_set, max_inclusive_num_pubkeys)
+    }
+
+    /// Add next item into hash dedup working set
+    fn add_next_item<'b>(
+        next: &mut Option<ItemLocation<'b>>,
+        new: &mut Option<(usize, usize)>,
+        working_set: &mut Vec<(usize, usize)>,
+        sorted_data_by_pubkey: &[&'b [CalculateHashIntermediate]],
+        pubkey_bin: usize,
+        binner: &PubkeyBinCalculator24,
+    ) {
+        // looping to add next item to working set
+        while let Some(ItemLocation {
+            key,
+            division_index: slot_group_index,
+            offset,
+        }) = next
+        {
+            // if `new key` is less than the min key in the working set, remember current item and process it directly (skipping working set insertion).
+            if let Some((current_min_slot_group_index, current_min_offset)) = working_set.last() {
+                let current_min_key = &sorted_data_by_pubkey[*current_min_slot_group_index]
+                    [*current_min_offset]
+                    .pubkey;
+                if *key < current_min_key {
+                    *new = Some((*slot_group_index, *offset));
+                    break;
+                }
+            }
+
+            let found = working_set.binary_search_by(|(slot_group_index, offset)| {
+                let prob = &sorted_data_by_pubkey[*slot_group_index][*offset].pubkey;
+                (*key).cmp(prob)
+            });
+
+            match found {
+                Err(index) => {
+                    // found a new new key, insert into the working_set. This is O(n/2) on
+                    // average. Theoretically, this operation could be expansive and maybe
+                    // optimized.
+                    working_set.insert(index, (*slot_group_index, *offset));
+                    break;
+                }
+                Ok(index) => {
+                    let v = &mut working_set[index];
+                    if v.0 > *slot_group_index {
+                        // There is already a later slot group that contains this key in the working_set,
+                        // look up again.
+                        let (_item, new_next) = Self::get_item(
+                            sorted_data_by_pubkey,
+                            pubkey_bin,
+                            binner,
+                            &ItemLocation {
+                                key,
+                                division_index: *slot_group_index,
+                                offset: *offset,
+                            },
+                        );
+                        *next = new_next;
+                    } else {
+                        // A previous slot contains this key, replace it, and look for next item in the previous slot group.
+                        let (_item, new_next) = Self::get_item(
+                            sorted_data_by_pubkey,
+                            pubkey_bin,
+                            binner,
+                            &ItemLocation {
+                                key,
+                                division_index: v.0,
+                                offset: v.1,
+                            },
+                        );
+                        v.0 = *slot_group_index;
+                        v.1 = *offset;
+                        *next = new_next;
+                    }
+                }
+            }
+        }
+    }
+
+    // go through: [..][pubkey_bin][..] and return hashes and lamport sum
+    //   slot groups^                ^accounts found in a slot group, sorted by pubkey, higher slot, write_version
+    // 1. handle zero lamport accounts
+    // 2. pick the highest slot or (slot = and highest version) of each pubkey
+    // 3. produce this output:
+    //   a. AccountHashesFile: individual account hashes in pubkey order
+    //   b. lamport sum
+    fn de_dup_accounts_in_parallel(
+        &self,
+        sorted_data_by_pubkey: &[&[CalculateHashIntermediate]],
+        pubkey_bin: usize,
+        bins: usize,
+        stats: &HashStats,
+    ) -> (AccountHashesFile, u64) {
+        let binner = PubkeyBinCalculator24::new(bins);
+
+        // working_set hold the lowest items for each slot_group sorted by pubkey descending (min_key is the last)
+        let (mut working_set, max_inclusive_num_pubkeys) = Self::initialize_dedup_working_set(
+            sorted_data_by_pubkey,
+            pubkey_bin,
+            bins,
+            &binner,
+            stats,
+        );
+
         let mut hashes = AccountHashesFile {
             writer: None,
             dir_for_temp_cache_files: self.dir_for_temp_cache_files.clone(),
@@ -1025,14 +1135,10 @@ impl<'a> AccountsHasher<'a> {
         let filler_accounts_enabled = self.filler_accounts_enabled();
 
         let mut new = None;
-        while new.is_some() || !working_set.is_empty() {
-            let (slot_group_index, offset) = if new.is_some() {
-                std::mem::take(&mut new).unwrap()
-            } else {
-                // pop the lowest item from the working_set (last element)
-                working_set.pop().unwrap()
-            };
 
+        while let Some((slot_group_index, offset)) =
+            std::mem::take(&mut new).or_else(|| working_set.pop())
+        {
             let key = &sorted_data_by_pubkey[slot_group_index][offset].pubkey;
 
             // get the min item, add lamports, get hash
@@ -1040,9 +1146,11 @@ impl<'a> AccountsHasher<'a> {
                 sorted_data_by_pubkey,
                 pubkey_bin,
                 &binner,
-                slot_group_index,
-                offset,
-                key,
+                &ItemLocation {
+                    key,
+                    division_index: slot_group_index,
+                    offset,
+                },
             );
 
             // add lamports and get hash
@@ -1065,62 +1173,14 @@ impl<'a> AccountsHasher<'a> {
                 }
             }
 
-            // looping to add next item to working set
-            while let Some((key, slot_group_index, offset)) = next {
-                // if `new key` is less than the min key in the working set, continue process with `new key` directly.
-                if let Some((current_min_slot_group_index, current_min_offset)) = working_set.last()
-                {
-                    let current_min_key = &sorted_data_by_pubkey[*current_min_slot_group_index]
-                        [*current_min_offset]
-                        .pubkey;
-                    if key < current_min_key {
-                        new = Some((slot_group_index, offset));
-                        break;
-                    }
-                }
-
-                let found = working_set.binary_search_by(|(slot_group_index, offset)| {
-                    let prob = &sorted_data_by_pubkey[*slot_group_index][*offset].pubkey;
-                    key.cmp(prob)
-                });
-
-                match found {
-                    Err(index) => {
-                        // found a new new key, insert into the working_set
-                        working_set.insert(index, (slot_group_index, offset));
-                        break;
-                    }
-                    Ok(index) => {
-                        let v = &mut working_set[index];
-                        if v.0 > slot_group_index {
-                            // There is already a later slot group that contains this key in the working_set,
-                            // look up again.
-                            let (_item, new_next) = Self::get_item(
-                                sorted_data_by_pubkey,
-                                pubkey_bin,
-                                &binner,
-                                slot_group_index,
-                                offset,
-                                key,
-                            );
-                            next = new_next;
-                        } else {
-                            // A previous slot contains this key, replace it, and look for next item in the previous slot group.
-                            let (_item, new_next) = Self::get_item(
-                                sorted_data_by_pubkey,
-                                pubkey_bin,
-                                &binner,
-                                v.0,
-                                v.1,
-                                key,
-                            );
-                            v.0 = slot_group_index;
-                            v.1 = offset;
-                            next = new_next;
-                        }
-                    }
-                }
-            }
+            Self::add_next_item(
+                &mut next,
+                &mut new,
+                &mut working_set,
+                sorted_data_by_pubkey,
+                pubkey_bin,
+                &binner,
+            );
         }
 
         (hashes, overall_sum)
