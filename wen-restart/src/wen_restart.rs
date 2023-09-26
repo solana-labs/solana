@@ -244,15 +244,7 @@ pub fn wen_restart(
             .accounts_db
             .epoch_accounts_hash_manager
             .set_in_flight(my_selected_slot);
-        let accounts_hash = new_root_bank.update_accounts_hash(
-            CalcAccountsHashDataSource::Storages, false, true);
-        let epoch_accounts_hash = accounts_hash.into();
-        new_root_bank
-            .rc
-            .accounts
-            .accounts_db
-            .epoch_accounts_hash_manager
-            .set_valid(epoch_accounts_hash, my_selected_slot);       bank_to_incremental_snapshot_archive(
+        bank_to_incremental_snapshot_archive(
             snapshot_config.bank_snapshots_dir.clone(),
             &new_root_bank,
             get_highest_full_snapshot_archive_slot(snapshot_config.full_snapshot_archives_dir.clone()).unwrap(),
