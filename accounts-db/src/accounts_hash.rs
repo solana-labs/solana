@@ -436,10 +436,14 @@ pub struct AccountsHasher<'a> {
 }
 
 /// A struct for the location of an account hash item inside chunked accounts hash slices.
+#[derive(Debug)]
 struct ItemLocation<'a> {
-    key: &'a Pubkey,       // account's pubkey
-    division_index: usize, // chunk index
-    offset: usize,         // offset within a chunk
+    /// account's pubkey
+    key: &'a Pubkey,
+    /// chunk index
+    division_index: usize,
+    /// offset within a chunk
+    offset: usize,
 }
 
 impl<'a> AccountsHasher<'a> {
