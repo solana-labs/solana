@@ -22,6 +22,7 @@ use {
         elf::Executable,
         error::EbpfError,
         memory_region::{AccessType, MemoryCowCallback, MemoryMapping, MemoryRegion},
+        verifier::RequisiteVerifier,
         vm::{BuiltinProgram, ContextObject, EbpfVm, ProgramResult},
     },
     solana_sdk::{
@@ -120,7 +121,7 @@ macro_rules! deploy_program {
      $account_size:expr, $slot:expr, $drop:expr, $new_programdata:expr $(,)?) => {{
         let mut load_program_metrics = LoadProgramMetrics::default();
         let mut register_syscalls_time = Measure::start("register_syscalls_time");
-        let program_runtime_environment = create_program_runtime_environment_v1(
+        let deployment_program_runtime_environment = create_program_runtime_environment_v1(
             &$invoke_context.feature_set,
             $invoke_context.get_compute_budget(),
             true, /* deployment */
@@ -131,6 +132,25 @@ macro_rules! deploy_program {
         })?;
         register_syscalls_time.stop();
         load_program_metrics.register_syscalls_us = register_syscalls_time.as_us();
+        // Verify using stricter deployment_program_runtime_environment
+        let mut load_elf_time = Measure::start("load_elf_time");
+        let executable = Executable::<InvokeContext>::load(
+            $new_programdata,
+            Arc::new(deployment_program_runtime_environment),
+        ).map_err(|err| {
+            ic_logger_msg!($invoke_context.get_log_collector(), "{}", err);
+            InstructionError::InvalidAccountData
+        })?;
+        load_elf_time.stop();
+        load_program_metrics.load_elf_us = load_elf_time.as_us();
+        let mut verify_code_time = Measure::start("verify_code_time");
+        executable.verify::<RequisiteVerifier>().map_err(|err| {
+            ic_logger_msg!($invoke_context.get_log_collector(), "{}", err);
+            InstructionError::InvalidAccountData
+        })?;
+        verify_code_time.stop();
+        load_program_metrics.verify_code_us = verify_code_time.as_us();
+        // Reload but with environments.program_runtime_v1
         let executor = load_program_from_bytes(
             $invoke_context.feature_set.is_active(&delay_visibility_of_program_deployment::id()),
             $invoke_context.get_log_collector(),
@@ -139,8 +159,8 @@ macro_rules! deploy_program {
             $loader_key,
             $account_size,
             $slot,
-            Arc::new(program_runtime_environment),
-            false,
+            $invoke_context.programs_modified_by_tx.environments.program_runtime_v1.clone(),
+            true,
         )?;
         if let Some(old_entry) = $invoke_context.find_program_in_cache(&$program_id) {
             executor.tx_usage_counter.store(
