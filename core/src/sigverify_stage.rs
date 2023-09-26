@@ -84,6 +84,8 @@ struct SigVerifierStats {
     total_batches: usize,
     total_packets: usize,
     total_dedup: usize,
+    forwarded_packets: usize,
+    forwarded_dedup: usize,
     total_excess_fail: usize,
     total_valid_packets: usize,
     total_shrinks: usize,
@@ -201,6 +203,8 @@ impl SigVerifierStats {
             ("total_batches", self.total_batches, i64),
             ("total_packets", self.total_packets, i64),
             ("total_dedup", self.total_dedup, i64),
+            ("forwarded_packets", self.forwarded_packets, i64),
+            ("forwarded_dedup", self.forwarded_dedup, i64),
             ("total_excess_fail", self.total_excess_fail, i64),
             ("total_valid_packets", self.total_valid_packets, i64),
             ("total_discard_random", self.total_discard_random, i64),
@@ -315,20 +319,21 @@ impl SigVerifyStage {
         discard_random_time.stop();
 
         let mut dedup_time = Measure::start("sigverify_dedup_time");
-        let discard_or_dedup_fail = deduper::dedup_packets_and_count_discards(
-            deduper,
-            &mut batches,
-            #[inline(always)]
-            |received_packet, removed_before_sigverify_stage, is_dup| {
-                verifier.process_received_packet(
-                    received_packet,
-                    removed_before_sigverify_stage,
-                    is_dup,
-                );
-            },
-        ) as usize;
+        let (total_discard_or_dedup_fail, forwarded_packets, forwarded_discard_or_dedup_fail) =
+            deduper::dedup_packets_and_count_discards(
+                deduper,
+                &mut batches,
+                #[inline(always)]
+                |received_packet, removed_before_sigverify_stage, is_dup| {
+                    verifier.process_received_packet(
+                        received_packet,
+                        removed_before_sigverify_stage,
+                        is_dup,
+                    );
+                },
+            );
         dedup_time.stop();
-        let num_unique = non_discarded_packets.saturating_sub(discard_or_dedup_fail);
+        let num_unique = non_discarded_packets.saturating_sub(total_discard_or_dedup_fail);
 
         let mut discard_time = Measure::start("sigverify_discard_time");
         let mut num_packets_to_verify = num_unique;
@@ -390,7 +395,9 @@ impl SigVerifyStage {
         stats.packets_hist.increment(num_packets as u64).unwrap();
         stats.total_batches += batches_len;
         stats.total_packets += num_packets;
-        stats.total_dedup += discard_or_dedup_fail;
+        stats.total_dedup += total_discard_or_dedup_fail;
+        stats.forwarded_packets += forwarded_packets;
+        stats.forwarded_dedup += forwarded_discard_or_dedup_fail;
         stats.total_valid_packets += num_valid_packets;
         stats.total_discard_random_time_us += discard_random_time.as_us() as usize;
         stats.total_discard_random += num_discarded_randomly;
