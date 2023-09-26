@@ -199,6 +199,7 @@ impl TransactionStatusService {
                                     tx_account_locks.writable,
                                     tx_account_locks.readonly,
                                     transaction_status_meta,
+                                    transaction_index,
                                 )
                                 .expect("Expect database write to succeed: TransactionStatus");
                         }

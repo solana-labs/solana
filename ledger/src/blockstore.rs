@@ -2267,8 +2267,11 @@ impl Blockstore {
         writable_keys: Vec<&Pubkey>,
         readonly_keys: Vec<&Pubkey>,
         status: TransactionStatusMeta,
+        transaction_index: usize,
     ) -> Result<()> {
         let status = status.into();
+        let transaction_index = u32::try_from(transaction_index)
+            .map_err(|_| BlockstoreError::TransactionIndexOverflow)?;
         // This write lock prevents interleaving issues with the transaction_status_index_cf by gating
         // writes to that column
         let w_active_transaction_status_index =
@@ -2279,13 +2282,13 @@ impl Blockstore {
             .put_protobuf((signature, slot), &status)?;
         for address in writable_keys {
             self.address_signatures_cf.put(
-                (primary_index, *address, slot, signature),
+                (*address, slot, transaction_index, signature),
                 &AddressSignatureMeta { writeable: true },
             )?;
         }
         for address in readonly_keys {
             self.address_signatures_cf.put(
-                (primary_index, *address, slot, signature),
+                (*address, slot, transaction_index, signature),
                 &AddressSignatureMeta { writeable: false },
             )?;
         }
