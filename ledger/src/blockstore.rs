@@ -4522,9 +4522,7 @@ pub fn test_all_empty_or_min(blockstore: &Blockstore, min_slot: Slot) {
             .iter::<cf::TransactionStatus>(IteratorMode::Start)
             .unwrap()
             .next()
-            .map(|((primary_index, _, slot), _)| {
-                slot >= min_slot || (primary_index == 2 && slot == 0)
-            })
+            .map(|((_, slot), _)| slot >= min_slot || slot == 0)
             .unwrap_or(true)
         & blockstore
             .db
