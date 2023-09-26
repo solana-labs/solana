@@ -1629,6 +1629,23 @@ where
     }
 }
 
+impl<C> LedgerColumn<C>
+where
+    C: ColumnIndexDeprecation + ColumnName,
+{
+    pub(crate) fn iter_current_index_filtered(
+        &self,
+        iterator_mode: IteratorMode<C::Index>,
+    ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)> + '_> {
+        let cf = self.handle();
+        let iter = self.backend.iterator_cf::<C>(cf, iterator_mode);
+        Ok(iter.filter_map(|pair| {
+            let (key, value) = pair.unwrap();
+            C::try_current_index(&key).ok().map(|index| (index, value))
+        }))
+    }
+}
+
 impl<'a> WriteBatch<'a> {
     pub fn put_bytes<C: Column + ColumnName>(&mut self, key: C::Index, bytes: &[u8]) -> Result<()> {
         self.write_batch
