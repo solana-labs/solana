@@ -825,7 +825,7 @@ impl<'a> AccountsHasher<'a> {
     }
 
     /// Given the item location, return the item in the `CalculatedHashIntermediate` slices and the next item location in the same bin.
-    /// If reaches the end of the `CalculatedHashIntermediate` slice or has exhausted all the accounts in current bin, return None for next item location.
+    /// If the end of the `CalculatedHashIntermediate` slice is reached or all the accounts in current bin have been exhausted, return `None` for next item location.
     fn get_item<'b>(
         sorted_data_by_pubkey: &[&'b [CalculateHashIntermediate]],
         bin: usize,
@@ -940,22 +940,26 @@ impl<'a> AccountsHasher<'a> {
     }
 
     /// Return the working_set and max number of pubkeys for hash dedup.
+    /// `working_set` holds (division_index, offset) for items in account's pubkey descending order.
     fn initialize_dedup_working_set(
         sorted_data_by_pubkey: &[&[CalculateHashIntermediate]],
         pubkey_bin: usize,
         bins: usize,
         binner: &PubkeyBinCalculator24,
         stats: &HashStats,
-    ) -> (Vec<(usize, usize)>, usize) {
-        // working_set hold the lowest items for each slot_group sorted by pubkey descending (min_key is the last)
+    ) -> (
+        Vec<(usize, usize)>, /* working_set */
+        usize,               /* max_inclusive_num_pubkeys */
+    ) {
+        // working_set holds the lowest items for each slot_group sorted by pubkey descending (min_key is the last)
         let mut working_set: Vec<(usize, usize)> = Vec::default();
 
-        // initialize 'working_set', which holds the current lowest item in each slot group
-        // working_set should be initialized in reverse order of slot_groups. Later slot_groups are
+        // Initialize 'working_set', which holds the current lowest item in each slot group.
+        // `working_set` should be initialized in reverse order of slot_groups. Later slot_groups are
         // processed first. For each slot_group, if the lowest item for current slot group is
-        // already in working_set (i.e. inserted by a later slot group), the next lowest items
-        // in this slot group are searched and checked until either one that is not the
-        // working_set are found, which will then be inserted, or no next lowest items are found.
+        // already in working_set (i.e. inserted by a later slot group), the next lowest item
+        // in this slot group is searched and checked, until either one that is `not` in the
+        // working_set is found, which will then be inserted, or no next lowest item is found.
         let max_inclusive_num_pubkeys = sorted_data_by_pubkey
             .iter()
             .enumerate()
@@ -978,7 +982,6 @@ impl<'a> AccountsHasher<'a> {
                             Err(index) => {
                                 // found a new new key, so insert into the working_set
                                 working_set.insert(index, (i, offset));
-                                // add_to_working_set = true;
                                 break;
                             }
                             Ok(_index) => {
@@ -1062,8 +1065,8 @@ impl<'a> AccountsHasher<'a> {
             match found {
                 Err(index) => {
                     // found a new new key, insert into the working_set. This is O(n/2) on
-                    // average. Theoretically, this operation could be expansive and maybe
-                    // optimized.
+                    // average. Theoretically, this operation could be expensive and may be further
+                    // optimized in future.
                     working_set.insert(index, (*slot_group_index, *offset));
                     break;
                 }
