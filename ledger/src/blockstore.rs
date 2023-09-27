@@ -2531,46 +2531,6 @@ impl Blockstore {
     }
 
     // Returns all signatures for an address in a particular slot, regardless of whether that slot
-    // has been rooted. The transactions will be ordered by signature, and NOT by the order in
-    // which the transactions exist in the block
-    fn find_address_signatures_for_slot_with_primary_index(
-        &self,
-        pubkey: Pubkey,
-        slot: Slot,
-    ) -> Result<Vec<(Slot, Signature)>> {
-        let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
-        let mut signatures: Vec<(Slot, Signature)> = vec![];
-        if slot < lowest_available_slot {
-            return Ok(signatures);
-        }
-        for transaction_status_cf_primary_index in 0..=1 {
-            let index_iterator =
-                self.address_signatures_cf
-                    .iter_deprecated_index_filtered(IteratorMode::From(
-                        (
-                            transaction_status_cf_primary_index,
-                            pubkey,
-                            slot,
-                            Signature::default(),
-                        ),
-                        IteratorDirection::Forward,
-                    ))?;
-            for ((i, address, transaction_slot, signature), _) in index_iterator {
-                if i != transaction_status_cf_primary_index
-                    || transaction_slot > slot
-                    || address != pubkey
-                {
-                    break;
-                }
-                signatures.push((slot, signature));
-            }
-        }
-        drop(lock);
-        signatures.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap().then(a.1.cmp(&b.1)));
-        Ok(signatures)
-    }
-
-    // Returns all signatures for an address in a particular slot, regardless of whether that slot
     // has been rooted. The transactions will be ordered by their occurrence in the block
     fn find_address_signatures_for_slot(
         &self,
@@ -2683,7 +2643,8 @@ impl Blockstore {
                 match transaction_status {
                     None => return Ok(SignatureInfosForAddress::default()),
                     Some((slot, _)) => {
-                        let mut slot_signatures = self.get_sorted_block_signatures(slot)?;
+                        let mut slot_signatures = self.get_block_signatures(slot)?;
+                        slot_signatures.reverse();
                         if let Some(pos) = slot_signatures.iter().position(|&x| x == before) {
                             slot_signatures.truncate(pos + 1);
                         }
@@ -2710,7 +2671,8 @@ impl Blockstore {
                 match transaction_status {
                     None => (first_available_block, HashSet::new()),
                     Some((slot, _)) => {
-                        let mut slot_signatures = self.get_sorted_block_signatures(slot)?;
+                        let mut slot_signatures = self.get_block_signatures(slot)?;
+                        slot_signatures.reverse();
                         if let Some(pos) = slot_signatures.iter().position(|&x| x == until) {
                             slot_signatures = slot_signatures.split_off(pos);
                         }
@@ -2740,65 +2702,21 @@ impl Blockstore {
         }
         get_initial_slot_timer.stop();
 
-        // Check the active_transaction_status_index to see if it contains slot. If so, start with
-        // that index, as it will contain higher slots
-        let starting_primary_index = *self.active_transaction_status_index.read().unwrap();
-        let next_primary_index = u64::from(starting_primary_index == 0);
-        let next_max_slot = self
-            .transaction_status_index_cf
-            .get(next_primary_index)?
-            .unwrap()
-            .max_slot;
-
-        let mut starting_primary_index_iter_timer = Measure::start("starting_primary_index_iter");
-        if slot > next_max_slot {
-            let mut starting_iterator = self.address_signatures_cf.iter(IteratorMode::From(
-                (starting_primary_index, address, slot, Signature::default()),
+        let mut address_signatures_iter_timer = Measure::start("iter_timer");
+        let mut iterator = self
+            .address_signatures_cf
+            .iter_filtered(IteratorMode::From(
+                (address, slot, 0, Signature::default()),
                 IteratorDirection::Reverse,
             ))?;
 
-            // Iterate through starting_iterator until limit is reached
-            while address_signatures.len() < limit {
-                if let Some(((i, key_address, slot, signature), _)) = starting_iterator.next() {
-                    if slot == next_max_slot || slot < lowest_slot {
-                        break;
-                    }
-                    if i == starting_primary_index && key_address == address {
-                        if self.is_root(slot) || confirmed_unrooted_slots.contains(&slot) {
-                            address_signatures.push((slot, signature));
-                        }
-                        continue;
-                    }
-                }
-                break;
-            }
-
-            // Handle slots that cross primary indexes
-            if next_max_slot >= lowest_slot {
-                let mut signatures =
-                    self.find_address_signatures_for_slot(address, next_max_slot)?;
-                signatures.reverse();
-                address_signatures.append(&mut signatures);
-            }
-        }
-        starting_primary_index_iter_timer.stop();
-
-        // Iterate through next_iterator until limit is reached
-        let mut next_primary_index_iter_timer = Measure::start("next_primary_index_iter_timer");
-        let mut next_iterator = self.address_signatures_cf.iter(IteratorMode::From(
-            (next_primary_index, address, slot, Signature::default()),
-            IteratorDirection::Reverse,
-        ))?;
+        // Iterate through starting_iterator until limit is reached
         while address_signatures.len() < limit {
-            if let Some(((i, key_address, slot, signature), _)) = next_iterator.next() {
-                // Skip next_max_slot, which is already included
-                if slot == next_max_slot {
-                    continue;
-                }
+            if let Some(((key_address, slot, _transaction_index, signature), _)) = iterator.next() {
                 if slot < lowest_slot {
                     break;
                 }
-                if i == next_primary_index && key_address == address {
+                if key_address == address {
                     if self.is_root(slot) || confirmed_unrooted_slots.contains(&slot) {
                         address_signatures.push((slot, signature));
                     }
@@ -2807,7 +2725,8 @@ impl Blockstore {
             }
             break;
         }
-        next_primary_index_iter_timer.stop();
+        address_signatures_iter_timer.stop();
+
         let mut address_signatures: Vec<(Slot, Signature)> = address_signatures
             .into_iter()
             .filter(|(_, signature)| !until_excluded_signatures.contains(signature))
@@ -2846,13 +2765,8 @@ impl Blockstore {
                 i64
             ),
             (
-                "starting_primary_index_iter_us",
-                starting_primary_index_iter_timer.as_us() as i64,
-                i64
-            ),
-            (
-                "next_primary_index_iter_us",
-                next_primary_index_iter_timer.as_us() as i64,
+                "address_signatures_iter_us",
+                address_signatures_iter_timer.as_us() as i64,
                 i64
             ),
             (
@@ -8555,8 +8469,7 @@ pub mod tests {
             assert_eq!(results[2], all0[i + 2]);
         }
 
-        // Ensure that the signatures within a slot are reverse ordered by signature
-        // (current limitation of the .get_confirmed_signatures_for_address2())
+        // Ensure that the signatures within a slot are reverse ordered by occurrence in block
         for i in (0..all1.len()).step_by(2) {
             let results = blockstore
                 .get_confirmed_signatures_for_address2(
@@ -8574,7 +8487,6 @@ pub mod tests {
                 .infos;
             assert_eq!(results.len(), 2);
             assert_eq!(results[0].slot, results[1].slot);
-            assert!(results[0].signature >= results[1].signature);
             assert_eq!(results[0], all1[i]);
             assert_eq!(results[1], all1[i + 1]);
         }
@@ -8730,8 +8642,7 @@ pub mod tests {
             assert_eq!(results[1], all0[i + 1]);
         }
 
-        // Ensure that the signatures within a slot are reverse ordered by signature
-        // (current limitation of the .get_confirmed_signatures_for_address2())
+        // Ensure that the signatures within a slot are reverse ordered by occurrence in block
         for i in (0..all1.len()).step_by(2) {
             let results = blockstore
                 .get_confirmed_signatures_for_address2(
@@ -8749,7 +8660,6 @@ pub mod tests {
                 .infos;
             assert_eq!(results.len(), 2);
             assert_eq!(results[0].slot, results[1].slot);
-            assert!(results[0].signature >= results[1].signature);
             assert_eq!(results[0], all1[i]);
             assert_eq!(results[1], all1[i + 1]);
         }
