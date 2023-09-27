@@ -196,8 +196,8 @@ where
     }
 
     fn create_connection_internal(
-        config: &Arc<C>,
-        connection_manager: &Arc<M>,
+        config: &C,
+        connection_manager: &M,
         map: &mut std::sync::RwLockWriteGuard<'_, IndexMap<SocketAddr, P>>,
         addr: &SocketAddr,
         connection_pool_size: usize,
@@ -276,31 +276,34 @@ where
         } = match map.get(addr) {
             Some(pool) => {
                 let pool_status = pool.check_pool_status(self.connection_pool_size);
-                if matches!(pool_status, PoolStatus::Empty) {
-                    // create more connection and put it in the pool
-                    drop(map);
-                    self.create_connection(&mut lock_timing_ms, addr)
-                } else {
-                    let connection = pool.borrow_connection();
-                    if matches!(pool_status, PoolStatus::PartiallyFull) {
-                        debug!("Creating connection async for {addr}");
+                match pool_status {
+                    PoolStatus::Empty => {
+                        // create more connection and put it in the pool
                         drop(map);
-                        let mut map = self.map.write().unwrap();
-                        Self::create_connection_internal(
-                            &self.connection_config,
-                            &self.connection_manager,
-                            &mut map,
-                            addr,
-                            self.connection_pool_size,
-                            Some(&self.sender),
-                        );
+                        self.create_connection(&mut lock_timing_ms, addr)
                     }
-                    CreateConnectionResult {
-                        connection,
-                        cache_hit: true,
-                        connection_cache_stats: self.stats.clone(),
-                        num_evictions: 0,
-                        eviction_timing_ms: 0,
+                    PoolStatus::PartiallyFull | PoolStatus::Full => {
+                        let connection = pool.borrow_connection();
+                        if matches!(pool_status, PoolStatus::PartiallyFull) {
+                            debug!("Creating connection async for {addr}");
+                            drop(map);
+                            let mut map = self.map.write().unwrap();
+                            Self::create_connection_internal(
+                                &self.connection_config,
+                                &self.connection_manager,
+                                &mut map,
+                                addr,
+                                self.connection_pool_size,
+                                Some(&self.sender),
+                            );
+                        }
+                        CreateConnectionResult {
+                            connection,
+                            cache_hit: true,
+                            connection_cache_stats: self.stats.clone(),
+                            num_evictions: 0,
+                            eviction_timing_ms: 0,
+                        }
                     }
                 }
             }
