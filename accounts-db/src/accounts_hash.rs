@@ -435,24 +435,22 @@ pub struct AccountsHasher<'a> {
     pub(crate) active_stats: &'a ActiveStats,
 }
 
-/// A struct for the location of an account hash item inside chunked accounts hash slices.
-#[derive(Debug)]
-struct ItemLocation<'a> {
-    /// account's pubkey
-    key: &'a Pubkey,
-    /// chunk index
-    division_index: usize,
-    /// offset within a chunk
-    offset: usize,
-}
-
 /// Pointer to a specific item in chunked accounts hash slices.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct SlotGroupPointer {
     /// slot group index
     slot_group_index: usize,
     /// offset within a slot group
     offset: usize,
+}
+
+/// A struct for the location of an account hash item inside chunked accounts hash slices.
+#[derive(Debug)]
+struct ItemLocation<'a> {
+    /// account's pubkey
+    key: &'a Pubkey,
+    /// pointer to the item in slot group slices
+    pointer: SlotGroupPointer,
 }
 
 impl<'a> AccountsHasher<'a> {
@@ -841,8 +839,8 @@ impl<'a> AccountsHasher<'a> {
         binner: &PubkeyBinCalculator24,
         item_loc: &ItemLocation<'b>,
     ) -> (&'b CalculateHashIntermediate, Option<ItemLocation<'b>>) {
-        let division_data = &sorted_data_by_pubkey[item_loc.division_index];
-        let mut index = item_loc.offset;
+        let division_data = &sorted_data_by_pubkey[item_loc.pointer.slot_group_index];
+        let mut index = item_loc.pointer.offset;
         index += 1;
         let mut next = None;
 
@@ -862,8 +860,10 @@ impl<'a> AccountsHasher<'a> {
             // point to the next pubkey > key
             next = Some(ItemLocation {
                 key: next_key,
-                division_index: item_loc.division_index,
-                offset: index,
+                pointer: SlotGroupPointer {
+                    slot_group_index: item_loc.pointer.slot_group_index,
+                    offset: index,
+                },
             });
             break;
         }
@@ -983,8 +983,10 @@ impl<'a> AccountsHasher<'a> {
                 if let Some(first_pubkey_in_bin) = first_pubkey_in_bin {
                     let mut next = Some(ItemLocation {
                         key: &hash_data[first_pubkey_in_bin].pubkey,
-                        division_index: i,
-                        offset: first_pubkey_in_bin,
+                        pointer: SlotGroupPointer {
+                            slot_group_index: i,
+                            offset: first_pubkey_in_bin,
+                        },
                     });
 
                     Self::add_next_item(
@@ -1023,12 +1025,7 @@ impl<'a> AccountsHasher<'a> {
         binner: &PubkeyBinCalculator24,
     ) {
         // looping to add next item to working set
-        while let Some(ItemLocation {
-            key,
-            division_index: slot_group_index,
-            offset,
-        }) = next
-        {
+        while let Some(ItemLocation { key, pointer }) = next {
             // if `new key` is less than the min key in the working set, skip binary search and
             // insert item to the end vec directly
             if let Some(SlotGroupPointer {
@@ -1040,11 +1037,7 @@ impl<'a> AccountsHasher<'a> {
                     [*current_min_offset]
                     .pubkey;
                 if *key < current_min_key {
-                    working_set.push(SlotGroupPointer {
-                        slot_group_index: *slot_group_index,
-                        offset: *offset,
-                    });
-
+                    working_set.push(pointer.clone());
                     break;
                 }
             }
@@ -1059,18 +1052,12 @@ impl<'a> AccountsHasher<'a> {
                     // found a new new key, insert into the working_set. This is O(n/2) on
                     // average. Theoretically, this operation could be expensive and may be further
                     // optimized in future.
-                    working_set.insert(
-                        index,
-                        SlotGroupPointer {
-                            slot_group_index: *slot_group_index,
-                            offset: *offset,
-                        },
-                    );
+                    working_set.insert(index, pointer.clone());
                     break;
                 }
                 Ok(index) => {
-                    let pointer = &mut working_set[index];
-                    if pointer.slot_group_index > *slot_group_index {
+                    let found = &mut working_set[index];
+                    if found.slot_group_index > pointer.slot_group_index {
                         // There is already a later slot group that contains this key in the working_set,
                         // look up again.
                         let (_item, new_next) = Self::get_item(
@@ -1079,8 +1066,7 @@ impl<'a> AccountsHasher<'a> {
                             binner,
                             &ItemLocation {
                                 key,
-                                division_index: *slot_group_index,
-                                offset: *offset,
+                                pointer: pointer.clone(),
                             },
                         );
                         *next = new_next;
@@ -1092,12 +1078,10 @@ impl<'a> AccountsHasher<'a> {
                             binner,
                             &ItemLocation {
                                 key,
-                                division_index: pointer.slot_group_index,
-                                offset: pointer.offset,
+                                pointer: found.clone(),
                             },
                         );
-                        pointer.slot_group_index = *slot_group_index;
-                        pointer.offset = *offset;
+                        *found = pointer.clone();
                         *next = new_next;
                     }
                 }
@@ -1139,23 +1123,15 @@ impl<'a> AccountsHasher<'a> {
         let mut overall_sum = 0;
         let filler_accounts_enabled = self.filler_accounts_enabled();
 
-        while let Some(SlotGroupPointer {
-            slot_group_index,
-            offset,
-        }) = working_set.pop()
-        {
-            let key = &sorted_data_by_pubkey[slot_group_index][offset].pubkey;
+        while let Some(pointer) = working_set.pop() {
+            let key = &sorted_data_by_pubkey[pointer.slot_group_index][pointer.offset].pubkey;
 
             // get the min item, add lamports, get hash
             let (item, mut next) = Self::get_item(
                 sorted_data_by_pubkey,
                 pubkey_bin,
                 &binner,
-                &ItemLocation {
-                    key,
-                    division_index: slot_group_index,
-                    offset,
-                },
+                &ItemLocation { key, pointer },
             );
 
             // add lamports and get hash
