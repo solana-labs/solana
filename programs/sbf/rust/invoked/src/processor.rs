@@ -1,7 +1,7 @@
 //! Example Rust-based SBF program that issues a cross-program-invocation
 
 #![cfg(feature = "program")]
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use {
     crate::instructions::*,
@@ -296,6 +296,14 @@ fn process_instruction(
             msg!("Set return data");
 
             set_return_data(b"Set by invoked");
+        }
+        ASSIGN_ACCOUNT_TO_CALLER => {
+            msg!("Assigning account to caller");
+            const ARGUMENT_INDEX: usize = 0;
+            const CALLER_PROGRAM_ID: usize = 2;
+            let account = &accounts[ARGUMENT_INDEX];
+            let caller_program_id = accounts[CALLER_PROGRAM_ID].key;
+            account.assign(caller_program_id);
         }
         _ => panic!(),
     }

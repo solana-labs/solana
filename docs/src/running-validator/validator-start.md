@@ -374,7 +374,7 @@ the validator as expected. Don't forget to mark it executable with `chmod +x /ho
 Start the service with:
 
 ```bash
-$ sudo systemctl enable --now sol
+sudo systemctl enable --now sol
 ```
 
 ### Logging

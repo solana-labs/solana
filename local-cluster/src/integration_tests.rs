@@ -26,6 +26,7 @@ use {
     solana_ledger::{
         ancestor_iterator::AncestorIterator,
         blockstore::{Blockstore, PurgeType},
+        blockstore_meta::DuplicateSlotProof,
         blockstore_options::{AccessType, BlockstoreOptions},
         leader_schedule::{FixedSchedule, LeaderSchedule},
     },
@@ -151,6 +152,23 @@ pub fn wait_for_last_vote_in_tower_to_land_in_ledger(
         }
         last_vote
     })
+}
+
+/// Waits roughly 10 seconds for duplicate proof to appear in blockstore at `dup_slot`. Returns proof if found.
+pub fn wait_for_duplicate_proof(ledger_path: &Path, dup_slot: Slot) -> Option<DuplicateSlotProof> {
+    for _ in 0..10 {
+        let duplicate_fork_validator_blockstore = open_blockstore(ledger_path);
+        if let Some((found_dup_slot, found_duplicate_proof)) =
+            duplicate_fork_validator_blockstore.get_first_duplicate_proof()
+        {
+            if found_dup_slot == dup_slot {
+                return Some(found_duplicate_proof);
+            };
+        }
+
+        sleep(Duration::from_millis(1000));
+    }
+    None
 }
 
 pub fn copy_blocks(end_slot: Slot, source: &Blockstore, dest: &Blockstore) {

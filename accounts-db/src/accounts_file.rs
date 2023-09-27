@@ -116,7 +116,7 @@ impl AccountsFile {
     pub fn account_matches_owners(
         &self,
         offset: usize,
-        owners: &[&Pubkey],
+        owners: &[Pubkey],
     ) -> std::result::Result<usize, MatchAccountOwnerError> {
         match self {
             Self::AppendVec(av) => av.account_matches_owners(offset, owners),

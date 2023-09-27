@@ -1,6 +1,6 @@
 //! Example Rust-based SBF program that test dynamic memory allocation
 
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 #[macro_use]
 extern crate alloc;

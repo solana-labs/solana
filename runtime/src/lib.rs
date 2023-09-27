@@ -1,5 +1,5 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 #[macro_use]
 extern crate lazy_static;
@@ -37,10 +37,6 @@ pub mod static_ids;
 pub mod status_cache;
 pub mod transaction_batch;
 pub mod transaction_priority_details;
-pub mod vote_account;
-pub mod vote_parser;
-pub mod vote_sender_types;
-pub mod vote_transaction;
 
 #[macro_use]
 extern crate solana_metrics;

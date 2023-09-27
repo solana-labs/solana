@@ -67,7 +67,7 @@ impl<'a> SortedStorages<'a> {
         let slots = source.iter().map(|storage| {
             storage.slot() // this must be unique. Will be enforced in new_with_slots
         });
-        Self::new_with_slots(source.iter().zip(slots.into_iter()), None, None)
+        Self::new_with_slots(source.iter().zip(slots), None, None)
     }
 
     /// create [`SortedStorages`] from `source` iterator.

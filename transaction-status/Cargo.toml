@@ -22,7 +22,6 @@ serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
 solana-account-decoder = { workspace = true }
-solana-address-lookup-table-program = { workspace = true }
 solana-sdk = { workspace = true }
 spl-associated-token-account = { workspace = true, features = ["no-entrypoint"] }
 spl-memo = { workspace = true, features = ["no-entrypoint"] }

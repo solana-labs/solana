@@ -2,10 +2,7 @@ use {
     crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result},
     itertools::Itertools,
     solana_perf::packet::PacketBatch,
-    solana_runtime::{
-        bank::Bank,
-        vote_transaction::{VoteTransaction, VoteTransaction::VoteStateUpdate},
-    },
+    solana_runtime::bank::Bank,
     solana_sdk::{
         account::from_account,
         clock::{Slot, UnixTimestamp},
@@ -15,6 +12,7 @@ use {
         slot_hashes::SlotHashes,
         sysvar,
     },
+    solana_vote::vote_transaction::{VoteTransaction, VoteTransaction::VoteStateUpdate},
     std::{
         collections::{BTreeMap, HashMap, HashSet},
         sync::Arc,
@@ -209,7 +207,6 @@ impl VerifiedVotePackets {
         &mut self,
         vote_packets_receiver: &VerifiedLabelVotePacketsReceiver,
         would_be_leader: bool,
-        is_full_tower_vote_enabled: bool,
     ) -> Result<()> {
         use SingleValidatorVotes::*;
         const RECV_TIMEOUT: Duration = Duration::from_millis(200);
@@ -233,8 +230,8 @@ impl VerifiedVotePackets {
                     let hash = vote.hash();
                     let timestamp = vote.timestamp();
 
-                    match (vote, is_full_tower_vote_enabled) {
-                        (VoteStateUpdate(_), true) => {
+                    match vote {
+                        VoteStateUpdate(_) => {
                             let (latest_gossip_slot, latest_timestamp) =
                                 self.0.get(&vote_account_key).map_or((0, None), |vote| {
                                     (vote.get_latest_gossip_slot(), vote.get_latest_timestamp())
@@ -265,7 +262,7 @@ impl VerifiedVotePackets {
                             if let Some(FullTowerVote(gossip_vote)) =
                                 self.0.get_mut(&vote_account_key)
                             {
-                                if slot > gossip_vote.slot && is_full_tower_vote_enabled {
+                                if slot > gossip_vote.slot {
                                     warn!(
                                         "Originally {} submitted full tower votes, but now has reverted to incremental votes. Converting back to old format.",
                                         vote_account_key
@@ -341,7 +338,7 @@ mod tests {
         }])
         .unwrap();
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true, false)
+            .receive_and_process_vote_packets(&r, true)
             .unwrap();
         assert_eq!(
             verified_vote_packets
@@ -361,7 +358,7 @@ mod tests {
         }])
         .unwrap();
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true, false)
+            .receive_and_process_vote_packets(&r, true)
             .unwrap();
         assert_eq!(
             verified_vote_packets
@@ -383,7 +380,7 @@ mod tests {
         }])
         .unwrap();
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true, false)
+            .receive_and_process_vote_packets(&r, true)
             .unwrap();
         assert_eq!(
             verified_vote_packets
@@ -406,7 +403,7 @@ mod tests {
         }])
         .unwrap();
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true, false)
+            .receive_and_process_vote_packets(&r, true)
             .unwrap();
         assert_eq!(
             verified_vote_packets
@@ -419,7 +416,7 @@ mod tests {
 
         // No new messages, should time out
         assert_matches!(
-            verified_vote_packets.receive_and_process_vote_packets(&r, true, false),
+            verified_vote_packets.receive_and_process_vote_packets(&r, true),
             Err(Error::RecvTimeout(_))
         );
     }
@@ -448,7 +445,7 @@ mod tests {
 
         // At most `MAX_VOTES_PER_VALIDATOR` should be stored per validator
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true, false)
+            .receive_and_process_vote_packets(&r, true)
             .unwrap();
         assert_eq!(
             verified_vote_packets
@@ -486,7 +483,7 @@ mod tests {
         // Ingest the votes into the buffer
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true, false)
+            .receive_and_process_vote_packets(&r, true)
             .unwrap();
 
         // Create tracker for previously sent bank votes
@@ -542,7 +539,7 @@ mod tests {
         // Ingest the votes into the buffer
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true, false)
+            .receive_and_process_vote_packets(&r, true)
             .unwrap();
 
         // One batch of vote packets per validator
@@ -603,7 +600,7 @@ mod tests {
         .unwrap();
         // Ingest the votes into the buffer
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true, false)
+            .receive_and_process_vote_packets(&r, true)
             .unwrap();
         let mut gossip_votes_iterator = ValidatorGossipVotesIterator::new(
             my_leader_bank,
@@ -624,7 +621,7 @@ mod tests {
         let second_vote = VoteStateUpdate::from(vec![(2, 4), (4, 3), (11, 1)]);
         let third_vote = VoteStateUpdate::from(vec![(2, 5), (4, 4), (11, 3), (12, 2), (13, 1)]);
 
-        for vote in vec![second_vote.clone(), first_vote.clone()] {
+        for vote in [second_vote, first_vote] {
             s.send(vec![VerifiedVoteMetadata {
                 vote_account_key,
                 vote: VoteTransaction::from(vote),
@@ -636,7 +633,7 @@ mod tests {
 
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true, true)
+            .receive_and_process_vote_packets(&r, true)
             .unwrap();
 
         // second_vote should be kept and first_vote ignored
@@ -650,14 +647,14 @@ mod tests {
         // Now send the third_vote, it should overwrite second_vote
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
-            vote: VoteTransaction::from(third_vote.clone()),
+            vote: VoteTransaction::from(third_vote),
             packet_batch: PacketBatch::default(),
             signature: Signature::from([1u8; 64]),
         }])
         .unwrap();
 
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true, true)
+            .receive_and_process_vote_packets(&r, true)
             .unwrap();
         let slot = verified_vote_packets
             .0
@@ -665,30 +662,6 @@ mod tests {
             .unwrap()
             .get_latest_gossip_slot();
         assert_eq!(13, slot);
-
-        // Now send all three, but keep the feature off
-        for vote in vec![second_vote, first_vote, third_vote] {
-            s.send(vec![VerifiedVoteMetadata {
-                vote_account_key,
-                vote: VoteTransaction::from(vote),
-                packet_batch: PacketBatch::default(),
-                signature: Signature::from([1u8; 64]),
-            }])
-            .unwrap();
-        }
-        let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
-        verified_vote_packets
-            .receive_and_process_vote_packets(&r, true, false)
-            .unwrap();
-
-        assert_eq!(
-            3,
-            verified_vote_packets
-                .0
-                .get(&vote_account_key)
-                .unwrap()
-                .len()
-        );
     }
 
     fn send_vote_state_update_and_process(
@@ -696,7 +669,6 @@ mod tests {
         r: &Receiver<Vec<VerifiedVoteMetadata>>,
         vote: VoteStateUpdate,
         vote_account_key: Pubkey,
-        is_tower_full_vote_enabled: bool,
         verified_vote_packets: &mut VerifiedVotePackets,
     ) -> GossipVote {
         s.send(vec![VerifiedVoteMetadata {
@@ -707,7 +679,7 @@ mod tests {
         }])
         .unwrap();
         verified_vote_packets
-            .receive_and_process_vote_packets(r, true, is_tower_full_vote_enabled)
+            .receive_and_process_vote_packets(r, true)
             .unwrap();
         match verified_vote_packets.0.get(&vote_account_key).unwrap() {
             SingleValidatorVotes::FullTowerVote(gossip_vote) => gossip_vote.clone(),
@@ -743,7 +715,6 @@ mod tests {
             &r,
             vote.clone(),
             vote_account_key,
-            true,
             &mut verified_vote_packets,
         );
         assert_eq!(slot, vote.last_voted_slot().unwrap());
@@ -757,7 +728,6 @@ mod tests {
             &r,
             vote_later_ts.clone(),
             vote_account_key,
-            true,
             &mut verified_vote_packets,
         );
         assert_eq!(slot, vote_later_ts.last_voted_slot().unwrap());
@@ -771,7 +741,6 @@ mod tests {
             &r,
             vote_earlier_ts,
             vote_account_key,
-            true,
             &mut verified_vote_packets,
         );
         assert_eq!(slot, vote_later_ts.last_voted_slot().unwrap());
@@ -785,7 +754,6 @@ mod tests {
             &r,
             vote_no_ts,
             vote_account_key,
-            true,
             &mut verified_vote_packets,
         );
         assert_eq!(slot, vote_later_ts.last_voted_slot().unwrap());
@@ -812,7 +780,7 @@ mod tests {
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
         // Receive votes without the feature active
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true, false)
+            .receive_and_process_vote_packets(&r, true)
             .unwrap();
         assert_eq!(
             100,
@@ -846,7 +814,7 @@ mod tests {
 
         // Receive votes with the feature active
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true, true)
+            .receive_and_process_vote_packets(&r, true)
             .unwrap();
         if let FullTowerVote(vote) = verified_vote_packets.0.get(&vote_account_key).unwrap() {
             assert_eq!(200, vote.slot);
@@ -873,7 +841,7 @@ mod tests {
 
         // Receive incremental votes with the feature active
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true, true)
+            .receive_and_process_vote_packets(&r, true)
             .unwrap();
 
         // Should still store as incremental votes
@@ -902,7 +870,7 @@ mod tests {
 
         // Receive full votes
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true, true)
+            .receive_and_process_vote_packets(&r, true)
             .unwrap();
         assert_eq!(
             42,
@@ -925,7 +893,7 @@ mod tests {
 
         // Try to receive nothing should happen
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true, true)
+            .receive_and_process_vote_packets(&r, true)
             .unwrap();
         if let FullTowerVote(vote) = verified_vote_packets.0.get(&vote_account_key).unwrap() {
             assert_eq!(42, vote.slot);
@@ -946,7 +914,7 @@ mod tests {
 
         // Try to receive and vote lands as well as the conversion back to incremental votes
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true, true)
+            .receive_and_process_vote_packets(&r, true)
             .unwrap();
         if let IncrementalVotes(votes) = verified_vote_packets.0.get(&vote_account_key).unwrap() {
             assert!(votes.contains_key(&(42, hash_42)));

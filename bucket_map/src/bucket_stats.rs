@@ -4,6 +4,12 @@ use std::sync::{
 };
 
 #[derive(Debug, Default)]
+pub struct StartupBucketStats {
+    pub entries_created: AtomicU64,
+    pub entries_reused: AtomicU64,
+}
+
+#[derive(Debug, Default)]
 pub struct BucketStats {
     pub resizes: AtomicU64,
     pub failed_resizes: AtomicU64,
@@ -15,6 +21,7 @@ pub struct BucketStats {
     pub find_index_entry_mut_us: AtomicU64,
     pub file_count: AtomicU64,
     pub total_file_size: AtomicU64,
+    pub startup: StartupBucketStats,
 }
 
 impl BucketStats {

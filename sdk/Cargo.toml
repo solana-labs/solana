@@ -64,6 +64,7 @@ num-traits = { workspace = true }
 num_enum = { workspace = true }
 pbkdf2 = { workspace = true }
 qstring = { workspace = true }
+qualifier_attr = { workspace = true }
 rand = { workspace = true, optional = true }
 rand0-7 = { package = "rand", version = "0.7", optional = true }
 rustversion = { workspace = true }
@@ -90,6 +91,7 @@ js-sys = { workspace = true }
 anyhow = { workspace = true }
 curve25519-dalek = { workspace = true }
 hex = { workspace = true }
+solana-sdk = { path = ".", features = ["dev-context-only-utils"] }
 static_assertions = { workspace = true }
 tiny-bip39 = { workspace = true }
 

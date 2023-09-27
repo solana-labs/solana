@@ -31,6 +31,7 @@ solana_rbpf = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+assert_matches = { workspace = true }
 libsecp256k1 = { workspace = true }
 solana-logger = { workspace = true }
 solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }

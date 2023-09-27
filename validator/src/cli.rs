@@ -289,6 +289,13 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Path to accounts shrink path which can hold a compacted account set."),
         )
         .arg(
+            Arg::with_name("accounts_hash_cache_path")
+                .long("accounts-hash-cache-path")
+                .value_name("PATH")
+                .takes_value(true)
+                .help("Use PATH as accounts hash cache location [default: <LEDGER>/accounts_hash_cache]"),
+        )
+        .arg(
             Arg::with_name("snapshots")
                 .long("snapshots")
                 .value_name("DIR")
@@ -298,7 +305,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         .arg(
             Arg::with_name(use_snapshot_archives_at_startup::cli::NAME)
                 .long(use_snapshot_archives_at_startup::cli::LONG_ARG)
-                .hidden(hidden_unless_forced())
                 .takes_value(true)
                 .possible_values(use_snapshot_archives_at_startup::cli::POSSIBLE_VALUES)
                 .default_value(use_snapshot_archives_at_startup::cli::default_value())

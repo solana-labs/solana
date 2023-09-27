@@ -88,8 +88,8 @@ encoding for returned Account data
 
 - `jsonParsed` encoding attempts to use program-specific state
   parsers to return more human-readable and explicit account state data.
-- If `jsonParsed` is requested but a parser cannot be found, the field falls
-  back to binary encoding, detectable when the `data` field is type `string`.
+- If `jsonParsed` is requested but a [parser cannot be found](https://github.com/solana-labs/solana/blob/cfd0a00ae2ba85a6d76757df8b4fa38ed242d185/account-decoder/src/parse_account_data.rs#L98-L100), the field falls
+  back to `base64` encoding, detectable when the returned `accounts.data` field is type `string`.
 
 </details>
 

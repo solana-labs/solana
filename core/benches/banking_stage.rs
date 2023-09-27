@@ -1,5 +1,7 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 #![feature(test)]
+
+use solana_core::validator::BlockProductionMethod;
 
 extern crate test;
 
@@ -102,7 +104,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
             .collect::<Vec<_>>();
         let batches_len = batches.len();
         let mut transaction_buffer = UnprocessedTransactionStorage::new_transaction_storage(
-            UnprocessedPacketBatches::from_iter(batches.into_iter(), 2 * batches_len),
+            UnprocessedPacketBatches::from_iter(batches, 2 * batches_len),
             ThreadType::Transactions,
         );
         let (s, _r) = unbounded();
@@ -291,6 +293,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         let cluster_info = Arc::new(cluster_info);
         let (s, _r) = unbounded();
         let _banking_stage = BankingStage::new(
+            BlockProductionMethod::ThreadLocalMultiIterator,
             &cluster_info,
             &poh_recorder,
             non_vote_receiver,

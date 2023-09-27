@@ -1,4 +1,4 @@
-#![deny(clippy::integer_arithmetic)]
+#![deny(clippy::arithmetic_side_effects)]
 pub mod aligned_memory;
 
 /// Returns true if `ptr` is aligned to `align`.

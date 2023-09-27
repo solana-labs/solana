@@ -13,8 +13,9 @@ use {
             ancestor_hashes_service::{AncestorHashesReplayUpdateReceiver, AncestorHashesService},
             duplicate_repair_status::AncestorDuplicateSlotToRepair,
             outstanding_requests::OutstandingRequests,
+            quic_endpoint::LocalRequest,
             repair_weight::RepairWeight,
-            serve_repair::{ServeRepair, ShredRepairType, REPAIR_PEERS_CACHE_CAPACITY},
+            serve_repair::{self, ServeRepair, ShredRepairType, REPAIR_PEERS_CACHE_CAPACITY},
         },
     },
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
@@ -46,6 +47,7 @@ use {
         thread::{self, sleep, Builder, JoinHandle},
         time::{Duration, Instant},
     },
+    tokio::sync::mpsc::Sender as AsyncSender,
 };
 
 // Time to defer repair requests to allow for turbine propagation
@@ -239,6 +241,8 @@ impl RepairService {
         exit: Arc<AtomicBool>,
         repair_socket: Arc<UdpSocket>,
         ancestor_hashes_socket: Arc<UdpSocket>,
+        quic_endpoint_sender: AsyncSender<LocalRequest>,
+        quic_endpoint_response_sender: CrossbeamSender<(SocketAddr, Vec<u8>)>,
         repair_info: RepairInfo,
         verified_vote_receiver: VerifiedVoteReceiver,
         outstanding_requests: Arc<RwLock<OutstandingShredRepairs>>,
@@ -250,6 +254,7 @@ impl RepairService {
             let blockstore = blockstore.clone();
             let exit = exit.clone();
             let repair_info = repair_info.clone();
+            let quic_endpoint_sender = quic_endpoint_sender.clone();
             Builder::new()
                 .name("solRepairSvc".to_string())
                 .spawn(move || {
@@ -257,6 +262,8 @@ impl RepairService {
                         &blockstore,
                         &exit,
                         &repair_socket,
+                        &quic_endpoint_sender,
+                        &quic_endpoint_response_sender,
                         repair_info,
                         verified_vote_receiver,
                         &outstanding_requests,
@@ -271,6 +278,7 @@ impl RepairService {
             exit,
             blockstore,
             ancestor_hashes_socket,
+            quic_endpoint_sender,
             repair_info,
             ancestor_hashes_replay_update_receiver,
         );
@@ -281,10 +289,13 @@ impl RepairService {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn run(
         blockstore: &Blockstore,
         exit: &AtomicBool,
         repair_socket: &UdpSocket,
+        quic_endpoint_sender: &AsyncSender<LocalRequest>,
+        quic_endpoint_response_sender: &CrossbeamSender<(SocketAddr, Vec<u8>)>,
         repair_info: RepairInfo,
         verified_vote_receiver: VerifiedVoteReceiver,
         outstanding_requests: &RwLock<OutstandingShredRepairs>,
@@ -305,17 +316,14 @@ impl RepairService {
         let mut peers_cache = LruCache::new(REPAIR_PEERS_CACHE_CAPACITY);
         let mut popular_pruned_forks_requests = HashSet::new();
 
-        loop {
-            if exit.load(Ordering::Relaxed) {
-                break;
-            }
-
+        while !exit.load(Ordering::Relaxed) {
             let mut set_root_elapsed;
             let mut dump_slots_elapsed;
             let mut get_votes_elapsed;
             let mut add_votes_elapsed;
 
             let root_bank = repair_info.bank_forks.read().unwrap().root_bank();
+            let repair_protocol = serve_repair::get_repair_protocol(root_bank.cluster_type());
             let repairs = {
                 let new_root = root_bank.slot();
 
@@ -425,19 +433,22 @@ impl RepairService {
             let batch: Vec<(Vec<u8>, SocketAddr)> = {
                 let mut outstanding_requests = outstanding_requests.write().unwrap();
                 repairs
-                    .iter()
+                    .into_iter()
                     .filter_map(|repair_request| {
                         let (to, req) = serve_repair
                             .repair_request(
                                 &repair_info.cluster_slots,
-                                *repair_request,
+                                repair_request,
                                 &mut peers_cache,
                                 &mut repair_stats,
                                 &repair_info.repair_validators,
                                 &mut outstanding_requests,
                                 identity_keypair,
+                                quic_endpoint_sender,
+                                quic_endpoint_response_sender,
+                                repair_protocol,
                             )
-                            .ok()?;
+                            .ok()??;
                         Some((req, to))
                     })
                     .collect()

@@ -10,7 +10,7 @@ use {
         QuietDisplay, VerboseDisplay,
     },
     base64::{prelude::BASE64_STANDARD, Engine},
-    chrono::{Local, TimeZone},
+    chrono::{Local, TimeZone, Utc},
     clap::ArgMatches,
     console::{style, Emoji},
     inflector::cases::titlecase::to_title_case,
@@ -43,9 +43,7 @@ use {
     },
     solana_vote_program::{
         authorized_voters::AuthorizedVoters,
-        vote_state::{
-            BlockTimestamp, LandedVote, Lockout, MAX_EPOCH_CREDITS_HISTORY, MAX_LOCKOUT_HISTORY,
-        },
+        vote_state::{BlockTimestamp, LandedVote, MAX_EPOCH_CREDITS_HISTORY, MAX_LOCKOUT_HISTORY},
     },
     std::{
         collections::{BTreeMap, HashMap},
@@ -1047,7 +1045,7 @@ impl fmt::Display for CliKeyedEpochRewards {
 
 fn show_votes_and_credits(
     f: &mut fmt::Formatter,
-    votes: &[CliLockout],
+    votes: &[CliLandedVote],
     epoch_voting_history: &[CliEpochVotingHistory],
 ) -> fmt::Result {
     if votes.is_empty() {
@@ -1070,11 +1068,16 @@ fn show_votes_and_credits(
     )?;
 
     for vote in votes.iter().rev() {
-        writeln!(
+        write!(
             f,
             "- slot: {} (confirmation count: {})",
             vote.slot, vote.confirmation_count
         )?;
+        if vote.latency == 0 {
+            writeln!(f)?;
+        } else {
+            writeln!(f, " (latency {})", vote.latency)?;
+        }
     }
     if let Some(newest) = newest_history_entry {
         writeln!(
@@ -1137,9 +1140,36 @@ fn show_votes_and_credits(
     Ok(())
 }
 
+enum Format {
+    Csv,
+    Human,
+}
+
+macro_rules! format_as {
+    ($target:expr, $fmt1:expr, $fmt2:expr, $which_fmt:expr, $($arg:tt)*) => {
+        match $which_fmt {
+            Format::Csv => {
+                writeln!(
+                    $target,
+                    $fmt1,
+                    $($arg)*
+                )
+            },
+            Format::Human => {
+                writeln!(
+                    $target,
+                    $fmt2,
+                    $($arg)*
+                )
+            }
+        }
+    };
+}
+
 fn show_epoch_rewards(
     f: &mut fmt::Formatter,
     epoch_rewards: &Option<Vec<CliEpochReward>>,
+    use_csv: bool,
 ) -> fmt::Result {
     if let Some(epoch_rewards) = epoch_rewards {
         if epoch_rewards.is_empty() {
@@ -1147,9 +1177,12 @@ fn show_epoch_rewards(
         }
 
         writeln!(f, "Epoch Rewards:")?;
-        writeln!(
+        let fmt = if use_csv { Format::Csv } else { Format::Human };
+        format_as!(
             f,
+            "{},{},{},{},{},{},{},{}",
             "  {:<6}  {:<11}  {:<26}  {:<18}  {:<18}  {:>14}  {:>14}  {:>10}",
+            fmt,
             "Epoch",
             "Reward Slot",
             "Time",
@@ -1157,15 +1190,17 @@ fn show_epoch_rewards(
             "New Balance",
             "Percent Change",
             "APR",
-            "Commission"
+            "Commission",
         )?;
         for reward in epoch_rewards {
-            writeln!(
+            format_as!(
                 f,
-                "  {:<6}  {:<11}  {:<26}  ◎{:<17.9}  ◎{:<17.9}  {:>13.6}%  {:>14}  {:>10}",
+                "{},{},{},{},{},{}%,{},{}",
+                "  {:<6}  {:<11}  {:<26}  ◎{:<17.9}  ◎{:<17.9}  {:>13.3}%  {:>14}  {:>10}",
+                fmt,
                 reward.epoch,
                 reward.effective_slot,
-                Local.timestamp_opt(reward.block_time, 0).unwrap(),
+                Utc.timestamp_opt(reward.block_time, 0).unwrap(),
                 lamports_to_sol(reward.amount),
                 lamports_to_sol(reward.post_balance),
                 reward.percent_change,
@@ -1216,6 +1251,8 @@ pub struct CliStakeState {
     pub deactivating_stake: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub epoch_rewards: Option<Vec<CliEpochReward>>,
+    #[serde(skip_serializing)]
+    pub use_csv: bool,
 }
 
 impl QuietDisplay for CliStakeState {}
@@ -1370,7 +1407,7 @@ impl fmt::Display for CliStakeState {
                 }
                 show_authorized(f, self.authorized.as_ref().unwrap())?;
                 show_lockup(f, self.lockup.as_ref())?;
-                show_epoch_rewards(f, &self.epoch_rewards)?
+                show_epoch_rewards(f, &self.epoch_rewards, self.use_csv)?
             }
         }
         Ok(())
@@ -1555,10 +1592,12 @@ pub struct CliVoteAccount {
     pub commission: u8,
     pub root_slot: Option<Slot>,
     pub recent_timestamp: BlockTimestamp,
-    pub votes: Vec<CliLockout>,
+    pub votes: Vec<CliLandedVote>,
     pub epoch_voting_history: Vec<CliEpochVotingHistory>,
     #[serde(skip_serializing)]
     pub use_lamports_unit: bool,
+    #[serde(skip_serializing)]
+    pub use_csv: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub epoch_rewards: Option<Vec<CliEpochReward>>,
 }
@@ -1593,7 +1632,7 @@ impl fmt::Display for CliVoteAccount {
             self.recent_timestamp.slot
         )?;
         show_votes_and_credits(f, &self.votes, &self.epoch_voting_history)?;
-        show_epoch_rewards(f, &self.epoch_rewards)?;
+        show_epoch_rewards(f, &self.epoch_rewards, self.use_csv)?;
         Ok(())
     }
 }
@@ -1637,25 +1676,18 @@ pub struct CliEpochVotingHistory {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CliLockout {
+pub struct CliLandedVote {
+    pub latency: u8,
     pub slot: Slot,
     pub confirmation_count: u32,
 }
 
-impl From<&Lockout> for CliLockout {
-    fn from(lockout: &Lockout) -> Self {
+impl From<&LandedVote> for CliLandedVote {
+    fn from(landed_vote: &LandedVote) -> Self {
         Self {
-            slot: lockout.slot(),
-            confirmation_count: lockout.confirmation_count(),
-        }
-    }
-}
-
-impl From<&LandedVote> for CliLockout {
-    fn from(vote: &LandedVote) -> Self {
-        Self {
-            slot: vote.slot(),
-            confirmation_count: vote.confirmation_count(),
+            latency: landed_vote.latency,
+            slot: landed_vote.slot(),
+            confirmation_count: landed_vote.confirmation_count(),
         }
     }
 }
@@ -2385,7 +2417,7 @@ pub fn return_signers_data(tx: &Transaction, config: &ReturnSignersConfig) -> Cl
     tx.signatures
         .iter()
         .zip(tx.message.account_keys.iter())
-        .zip(verify_results.into_iter())
+        .zip(verify_results)
         .for_each(|((sig, key), res)| {
             if res {
                 signers.push(format!("{key}={sig}"))
@@ -3232,7 +3264,7 @@ mod tests {
                 effective_slot: 100,
                 epoch: 1,
                 amount: 10,
-                block_time: UnixTimestamp::default(),
+                block_time: 0,
                 apr: Some(10.0),
             },
             CliEpochReward {
@@ -3242,19 +3274,25 @@ mod tests {
                 effective_slot: 200,
                 epoch: 2,
                 amount: 12,
-                block_time: UnixTimestamp::default(),
+                block_time: 1_000_000,
                 apr: Some(13.0),
             },
         ];
 
-        let c = CliVoteAccount {
+        let mut c = CliVoteAccount {
             account_balance: 10000,
             validator_identity: Pubkey::default().to_string(),
             epoch_rewards: Some(epoch_rewards),
+            recent_timestamp: BlockTimestamp::default(),
             ..CliVoteAccount::default()
         };
         let s = format!("{c}");
-        assert!(!s.is_empty());
+        assert_eq!(s, "Account Balance: 0.00001 SOL\nValidator Identity: 11111111111111111111111111111111\nVote Authority: {}\nWithdraw Authority: \nCredits: 0\nCommission: 0%\nRoot Slot: ~\nRecent Timestamp: 1970-01-01T00:00:00Z from slot 0\nEpoch Rewards:\n  Epoch   Reward Slot  Time                        Amount              New Balance         Percent Change             APR  Commission\n  1       100          1970-01-01 00:00:00 UTC  ◎0.000000010        ◎0.000000100               11.000%          10.00%          1%\n  2       200          1970-01-12 13:46:40 UTC  ◎0.000000012        ◎0.000000100               11.000%          13.00%          1%\n");
+        println!("{s}");
+
+        c.use_csv = true;
+        let s = format!("{c}");
+        assert_eq!(s, "Account Balance: 0.00001 SOL\nValidator Identity: 11111111111111111111111111111111\nVote Authority: {}\nWithdraw Authority: \nCredits: 0\nCommission: 0%\nRoot Slot: ~\nRecent Timestamp: 1970-01-01T00:00:00Z from slot 0\nEpoch Rewards:\nEpoch,Reward Slot,Time,Amount,New Balance,Percent Change,APR,Commission\n1,100,1970-01-01 00:00:00 UTC,0.00000001,0.0000001,11%,10.00%,1%\n2,200,1970-01-12 13:46:40 UTC,0.000000012,0.0000001,11%,13.00%,1%\n");
         println!("{s}");
     }
 }

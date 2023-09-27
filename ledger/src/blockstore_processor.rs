@@ -43,8 +43,6 @@ use {
         prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
-        vote_account::VoteAccountsHashMap,
-        vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
         clock::{Slot, MAX_PROCESSING_AGE},
@@ -61,6 +59,7 @@ use {
         },
     },
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
+    solana_vote::{vote_account::VoteAccountsHashMap, vote_sender_types::ReplayVoteSender},
     std::{
         borrow::Cow,
         collections::{HashMap, HashSet},
@@ -1859,15 +1858,12 @@ pub mod tests {
                 create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
             },
         },
-        matches::assert_matches,
+        assert_matches::assert_matches,
         rand::{thread_rng, Rng},
         solana_entry::entry::{create_ticks, next_entry, next_entry_mut},
         solana_program_runtime::declare_process_instruction,
-        solana_runtime::{
-            genesis_utils::{
-                self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
-            },
-            vote_account::VoteAccount,
+        solana_runtime::genesis_utils::{
+            self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
         },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
@@ -1881,6 +1877,7 @@ pub mod tests {
             system_transaction,
             transaction::{Transaction, TransactionError},
         },
+        solana_vote::vote_account::VoteAccount,
         solana_vote_program::{
             self,
             vote_state::{VoteState, VoteStateVersions, MAX_LOCKOUT_HISTORY},
@@ -2241,7 +2238,7 @@ pub mod tests {
         info!("last_fork1_entry.hash: {:?}", last_fork1_entry_hash);
         info!("last_fork2_entry.hash: {:?}", last_fork2_entry_hash);
 
-        blockstore.set_roots(vec![0, 1, 4].iter()).unwrap();
+        blockstore.set_roots([0, 1, 4].iter()).unwrap();
 
         let opts = ProcessOptions {
             run_verification: true,
@@ -2321,7 +2318,7 @@ pub mod tests {
         info!("last_fork1_entry.hash: {:?}", last_fork1_entry_hash);
         info!("last_fork2_entry.hash: {:?}", last_fork2_entry_hash);
 
-        blockstore.set_roots(vec![0, 1].iter()).unwrap();
+        blockstore.set_roots([0, 1].iter()).unwrap();
 
         let opts = ProcessOptions {
             run_verification: true,
@@ -3528,7 +3525,7 @@ pub mod tests {
             genesis_config.ticks_per_slot,
             genesis_config.hash(),
         );
-        blockstore.set_roots(vec![0, 1].iter()).unwrap();
+        blockstore.set_roots([0, 1].iter()).unwrap();
 
         // Specify halting at slot 0
         let opts = ProcessOptions {
@@ -3580,7 +3577,7 @@ pub mod tests {
             last_hash =
                 fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, i + 1, i, last_hash);
         }
-        blockstore.set_roots(vec![3, 5].iter()).unwrap();
+        blockstore.set_roots([3, 5].iter()).unwrap();
 
         // Set up bank1
         let mut bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));

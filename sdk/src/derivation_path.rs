@@ -268,7 +268,7 @@ impl Bip44 for Solana {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, uriparse::URIReferenceBuilder};
+    use {super::*, assert_matches::assert_matches, uriparse::URIReferenceBuilder};
 
     struct TestCoin;
     impl Bip44 for TestCoin {
@@ -481,10 +481,10 @@ mod tests {
             .try_query(Some("key=0/0/0"))
             .unwrap();
         let uri = builder.build().unwrap();
-        assert!(matches!(
+        assert_matches!(
             DerivationPath::from_uri(&uri, true),
             Err(DerivationPathError::InvalidDerivationPath(_))
-        ));
+        );
 
         // test://path?key=0/0&bad-key=0/0
         let mut builder = URIReferenceBuilder::new();
@@ -498,10 +498,10 @@ mod tests {
             .try_query(Some("key=0/0&bad-key=0/0"))
             .unwrap();
         let uri = builder.build().unwrap();
-        assert!(matches!(
+        assert_matches!(
             DerivationPath::from_uri(&uri, true),
             Err(DerivationPathError::InvalidDerivationPath(_))
-        ));
+        );
 
         // test://path?bad-key=0/0
         let mut builder = URIReferenceBuilder::new();
@@ -515,10 +515,10 @@ mod tests {
             .try_query(Some("bad-key=0/0"))
             .unwrap();
         let uri = builder.build().unwrap();
-        assert!(matches!(
+        assert_matches!(
             DerivationPath::from_uri(&uri, true),
             Err(DerivationPathError::InvalidDerivationPath(_))
-        ));
+        );
 
         // test://path?key=bad-value
         let mut builder = URIReferenceBuilder::new();
@@ -532,10 +532,10 @@ mod tests {
             .try_query(Some("key=bad-value"))
             .unwrap();
         let uri = builder.build().unwrap();
-        assert!(matches!(
+        assert_matches!(
             DerivationPath::from_uri(&uri, true),
             Err(DerivationPathError::InvalidDerivationPath(_))
-        ));
+        );
 
         // test://path?key=
         let mut builder = URIReferenceBuilder::new();
@@ -549,10 +549,10 @@ mod tests {
             .try_query(Some("key="))
             .unwrap();
         let uri = builder.build().unwrap();
-        assert!(matches!(
+        assert_matches!(
             DerivationPath::from_uri(&uri, true),
             Err(DerivationPathError::InvalidDerivationPath(_))
-        ));
+        );
 
         // test://path?key
         let mut builder = URIReferenceBuilder::new();
@@ -566,10 +566,10 @@ mod tests {
             .try_query(Some("key"))
             .unwrap();
         let uri = builder.build().unwrap();
-        assert!(matches!(
+        assert_matches!(
             DerivationPath::from_uri(&uri, true),
             Err(DerivationPathError::InvalidDerivationPath(_))
-        ));
+        );
     }
 
     #[test]
@@ -656,10 +656,10 @@ mod tests {
             .try_query(Some("full-path=m/44/999/1"))
             .unwrap();
         let uri = builder.build().unwrap();
-        assert!(matches!(
+        assert_matches!(
             DerivationPath::from_uri(&uri, true),
             Err(DerivationPathError::InvalidDerivationPath(_))
-        ));
+        );
 
         // test://path?key=0/0&full-path=m/44/999/1
         let mut builder = URIReferenceBuilder::new();
@@ -673,10 +673,10 @@ mod tests {
             .try_query(Some("key=0/0&full-path=m/44/999/1"))
             .unwrap();
         let uri = builder.build().unwrap();
-        assert!(matches!(
+        assert_matches!(
             DerivationPath::from_uri(&uri, false),
             Err(DerivationPathError::InvalidDerivationPath(_))
-        ));
+        );
 
         // test://path?full-path=m/44/999/1&bad-key=0/0
         let mut builder = URIReferenceBuilder::new();
@@ -690,10 +690,10 @@ mod tests {
             .try_query(Some("full-path=m/44/999/1&bad-key=0/0"))
             .unwrap();
         let uri = builder.build().unwrap();
-        assert!(matches!(
+        assert_matches!(
             DerivationPath::from_uri(&uri, false),
             Err(DerivationPathError::InvalidDerivationPath(_))
-        ));
+        );
 
         // test://path?full-path=bad-value
         let mut builder = URIReferenceBuilder::new();
@@ -707,10 +707,10 @@ mod tests {
             .try_query(Some("full-path=bad-value"))
             .unwrap();
         let uri = builder.build().unwrap();
-        assert!(matches!(
+        assert_matches!(
             DerivationPath::from_uri(&uri, false),
             Err(DerivationPathError::InvalidDerivationPath(_))
-        ));
+        );
 
         // test://path?full-path=
         let mut builder = URIReferenceBuilder::new();
@@ -724,10 +724,10 @@ mod tests {
             .try_query(Some("full-path="))
             .unwrap();
         let uri = builder.build().unwrap();
-        assert!(matches!(
+        assert_matches!(
             DerivationPath::from_uri(&uri, false),
             Err(DerivationPathError::InvalidDerivationPath(_))
-        ));
+        );
 
         // test://path?full-path
         let mut builder = URIReferenceBuilder::new();
@@ -741,10 +741,10 @@ mod tests {
             .try_query(Some("full-path"))
             .unwrap();
         let uri = builder.build().unwrap();
-        assert!(matches!(
+        assert_matches!(
             DerivationPath::from_uri(&uri, false),
             Err(DerivationPathError::InvalidDerivationPath(_))
-        ));
+        );
     }
 
     #[test]

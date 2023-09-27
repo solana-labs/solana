@@ -441,10 +441,7 @@ mod tests {
         };
 
         let mut unprocessed_packet_batches = UnprocessedTransactionStorage::new_transaction_storage(
-            UnprocessedPacketBatches::from_iter(
-                vec![forwarded_packet, normal_packet].into_iter(),
-                2,
-            ),
+            UnprocessedPacketBatches::from_iter(vec![forwarded_packet, normal_packet], 2),
             ThreadType::Transactions,
         );
         let connection_cache = ConnectionCache::new("connection_cache_test");

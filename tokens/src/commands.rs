@@ -31,7 +31,7 @@ use {
         signature::{unique_signers, Signature, Signer},
         stake::{
             instruction::{self as stake_instruction, LockupArgs},
-            state::{Authorized, Lockup, StakeAuthorize},
+            state::{Authorized, Lockup, StakeAuthorize, StakeStateV2},
         },
         system_instruction,
         transaction::Transaction,
@@ -234,12 +234,24 @@ fn distribution_instructions(
                 Some(sender_stake_args) => {
                     let stake_authority = sender_stake_args.stake_authority.pubkey();
                     let withdraw_authority = sender_stake_args.withdraw_authority.pubkey();
-                    let mut instructions = stake_instruction::split(
+                    let rent_exempt_reserve = sender_stake_args
+                        .rent_exempt_reserve
+                        .expect("SenderStakeArgs.rent_exempt_reserve should be populated");
+
+                    // Transfer some tokens to stake account to cover rent-exempt reserve.
+                    let mut instructions = vec![system_instruction::transfer(
+                        &sender_pubkey,
+                        new_stake_account_address,
+                        rent_exempt_reserve,
+                    )];
+
+                    // Split to stake account
+                    instructions.append(&mut stake_instruction::split(
                         &sender_stake_args.stake_account_address,
                         &stake_authority,
-                        allocation.amount - unlocked_sol,
+                        allocation.amount - unlocked_sol - rent_exempt_reserve,
                         new_stake_account_address,
-                    );
+                    ));
 
                     // Make the recipient the new stake authority
                     instructions.push(stake_instruction::authorize(
@@ -1174,11 +1186,15 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
     let output_file = NamedTempFile::new().unwrap();
     let output_path = output_file.path().to_str().unwrap().to_string();
 
+    let rent_exempt_reserve = client
+        .get_minimum_balance_for_rent_exemption(StakeStateV2::size_of())
+        .unwrap();
     let sender_stake_args = SenderStakeArgs {
         stake_account_address,
         stake_authority: Box::new(stake_authority),
         withdraw_authority: Box::new(withdraw_authority),
         lockup_authority: None,
+        rent_exempt_reserve: Some(rent_exempt_reserve),
     };
     let stake_args = StakeArgs {
         unlocked_sol: sol_to_lamports(1.0),
@@ -1529,14 +1545,14 @@ mod tests {
         )); // Same recipient, same lockups
     }
 
-    const SET_LOCKUP_INDEX: usize = 5;
+    const SET_LOCKUP_INDEX: usize = 6;
 
     #[test]
     fn test_set_split_stake_lockup() {
         let lockup_date_str = "2021-01-07T00:00:00Z";
         let allocation = Allocation {
             recipient: Pubkey::default().to_string(),
-            amount: sol_to_lamports(1.0),
+            amount: sol_to_lamports(1.002_282_880),
             lockup_date: lockup_date_str.to_string(),
         };
         let stake_account_address = solana_sdk::pubkey::new_rand();
@@ -1548,6 +1564,7 @@ mod tests {
             stake_authority: Box::new(Keypair::new()),
             withdraw_authority: Box::new(Keypair::new()),
             lockup_authority: Some(Box::new(lockup_authority)),
+            rent_exempt_reserve: Some(2_282_880),
         };
         let stake_args = StakeArgs {
             lockup_authority: Some(lockup_authority_address),
@@ -1821,6 +1838,7 @@ mod tests {
             stake_authority: Box::new(stake_authority),
             withdraw_authority: Box::new(withdraw_authority),
             lockup_authority: None,
+            rent_exempt_reserve: Some(2_282_880),
         };
 
         StakeArgs {

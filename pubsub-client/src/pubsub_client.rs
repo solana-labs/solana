@@ -164,11 +164,8 @@ where
         writable_socket: &Arc<RwLock<WebSocket<MaybeTlsStream<TcpStream>>>>,
         body: String,
     ) -> Result<u64, PubsubClientError> {
-        writable_socket
-            .write()
-            .unwrap()
-            .write_message(Message::Text(body))?;
-        let message = writable_socket.write().unwrap().read_message()?;
+        writable_socket.write().unwrap().send(Message::Text(body))?;
+        let message = writable_socket.write().unwrap().read()?;
         Self::extract_subscription_id(message)
     }
 
@@ -201,7 +198,7 @@ where
         self.socket
             .write()
             .unwrap()
-            .write_message(Message::Text(
+            .send(Message::Text(
                 json!({
                 "jsonrpc":"2.0","id":1,"method":method,"params":[self.subscription_id]
                 })
@@ -213,16 +210,13 @@ where
     fn get_version(
         writable_socket: &Arc<RwLock<WebSocket<MaybeTlsStream<TcpStream>>>>,
     ) -> Result<semver::Version, PubsubClientError> {
-        writable_socket
-            .write()
-            .unwrap()
-            .write_message(Message::Text(
-                json!({
-                    "jsonrpc":"2.0","id":1,"method":"getVersion",
-                })
-                .to_string(),
-            ))?;
-        let message = writable_socket.write().unwrap().read_message()?;
+        writable_socket.write().unwrap().send(Message::Text(
+            json!({
+                "jsonrpc":"2.0","id":1,"method":"getVersion",
+            })
+            .to_string(),
+        ))?;
+        let message = writable_socket.write().unwrap().read()?;
         let message_text = &message.into_text()?;
 
         if let Ok(json_msg) = serde_json::from_str::<Map<String, Value>>(message_text) {
@@ -245,7 +239,7 @@ where
     fn read_message(
         writable_socket: &Arc<RwLock<WebSocket<MaybeTlsStream<TcpStream>>>>,
     ) -> Result<Option<T>, PubsubClientError> {
-        let message = writable_socket.write().unwrap().read_message()?;
+        let message = writable_socket.write().unwrap().read()?;
         if message.is_ping() {
             return Ok(None);
         }

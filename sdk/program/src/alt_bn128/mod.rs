@@ -1,3 +1,4 @@
+pub mod compression;
 pub mod prelude {
     pub use crate::alt_bn128::{consts::*, target_arch::*, AltBn128Error};
 }
@@ -176,6 +177,7 @@ mod target_arch {
         )
         .try_into()?;
 
+        #[allow(clippy::arithmetic_side_effects)]
         let result_point = p + q;
 
         let mut result_point_data = [0u8; ALT_BN128_ADDITION_OUTPUT_LEN];

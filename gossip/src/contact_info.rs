@@ -1,6 +1,6 @@
 use {
     crate::crds_value::MAX_WALLCLOCK,
-    matches::{assert_matches, debug_assert_matches},
+    assert_matches::{assert_matches, debug_assert_matches},
     serde::{Deserialize, Deserializer, Serialize},
     solana_sdk::{
         pubkey::Pubkey,
@@ -527,9 +527,7 @@ fn sanitize_entries(addrs: &[IpAddr], sockets: &[SocketEntry]) -> Result<(), Err
     // Verify that port offsets don't overflow.
     if sockets
         .iter()
-        .fold(Some(0u16), |offset, entry| {
-            offset?.checked_add(entry.offset)
-        })
+        .try_fold(0u16, |offset, entry| offset.checked_add(entry.offset))
         .is_none()
     {
         return Err(Error::PortOffsetsOverflow);

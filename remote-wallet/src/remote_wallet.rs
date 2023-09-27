@@ -1,5 +1,5 @@
 #[cfg(feature = "hidapi")]
-use {crate::ledger::is_valid_ledger, parking_lot::Mutex};
+use {crate::ledger::is_valid_ledger, parking_lot::Mutex, std::sync::Arc};
 use {
     crate::{
         ledger::LedgerWallet,
@@ -14,7 +14,7 @@ use {
         signature::{Signature, SignerError},
     },
     std::{
-        sync::Arc,
+        rc::Rc,
         time::{Duration, Instant},
     },
     thiserror::Error,
@@ -98,8 +98,8 @@ pub struct RemoteWalletManager {
 impl RemoteWalletManager {
     /// Create a new instance.
     #[cfg(feature = "hidapi")]
-    pub fn new(usb: Arc<Mutex<hidapi::HidApi>>) -> Arc<Self> {
-        Arc::new(Self {
+    pub fn new(usb: Arc<Mutex<hidapi::HidApi>>) -> Rc<Self> {
+        Rc::new(Self {
             usb,
             devices: RwLock::new(Vec::new()),
         })
@@ -132,7 +132,7 @@ impl RemoteWalletManager {
                             detected_devices.push(Device {
                                 path,
                                 info,
-                                wallet_type: RemoteWalletType::Ledger(Arc::new(ledger)),
+                                wallet_type: RemoteWalletType::Ledger(Rc::new(ledger)),
                             })
                         }
                         Err(err) => {
@@ -172,7 +172,7 @@ impl RemoteWalletManager {
     pub fn get_ledger(
         &self,
         host_device_path: &str,
-    ) -> Result<Arc<LedgerWallet>, RemoteWalletError> {
+    ) -> Result<Rc<LedgerWallet>, RemoteWalletError> {
         self.devices
             .read()
             .iter()
@@ -261,7 +261,7 @@ pub struct Device {
 /// Remote wallet convenience enum to hold various wallet types
 #[derive(Debug)]
 pub enum RemoteWalletType {
-    Ledger(Arc<LedgerWallet>),
+    Ledger(Rc<LedgerWallet>),
 }
 
 /// Remote wallet information.
@@ -309,18 +309,18 @@ pub fn is_valid_hid_device(usage_page: u16, interface_number: i32) -> bool {
 
 /// Helper to initialize hidapi and RemoteWalletManager
 #[cfg(feature = "hidapi")]
-pub fn initialize_wallet_manager() -> Result<Arc<RemoteWalletManager>, RemoteWalletError> {
+pub fn initialize_wallet_manager() -> Result<Rc<RemoteWalletManager>, RemoteWalletError> {
     let hidapi = Arc::new(Mutex::new(hidapi::HidApi::new()?));
     Ok(RemoteWalletManager::new(hidapi))
 }
 #[cfg(not(feature = "hidapi"))]
-pub fn initialize_wallet_manager() -> Result<Arc<RemoteWalletManager>, RemoteWalletError> {
+pub fn initialize_wallet_manager() -> Result<Rc<RemoteWalletManager>, RemoteWalletError> {
     Err(RemoteWalletError::Hid(
         "hidapi crate compilation disabled in solana-remote-wallet.".to_string(),
     ))
 }
 
-pub fn maybe_wallet_manager() -> Result<Option<Arc<RemoteWalletManager>>, RemoteWalletError> {
+pub fn maybe_wallet_manager() -> Result<Option<Rc<RemoteWalletManager>>, RemoteWalletError> {
     let wallet_manager = initialize_wallet_manager()?;
     let device_count = wallet_manager.update_devices()?;
     if device_count > 0 {

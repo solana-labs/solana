@@ -1719,14 +1719,10 @@ impl JsonRpcRequestProcessor {
             min_context_slot: config.min_context_slot,
         })?;
         let epoch = config.epoch.unwrap_or_else(|| bank.epoch());
-        if bank.epoch().saturating_sub(epoch) > solana_sdk::stake_history::MAX_ENTRIES as u64 {
+        if epoch != bank.epoch() {
             return Err(Error::invalid_params(format!(
-                "Invalid param: epoch {epoch:?} is too far in the past"
-            )));
-        }
-        if epoch > bank.epoch() {
-            return Err(Error::invalid_params(format!(
-                "Invalid param: epoch {epoch:?} has not yet started"
+                "Invalid param: epoch {epoch:?}. Only the current epoch ({:?}) is supported",
+                bank.epoch()
             )));
         }
 
@@ -4635,7 +4631,6 @@ pub mod tests {
         jsonrpc_core_client::transports::local,
         serde::de::DeserializeOwned,
         solana_accounts_db::{inline_spl_token, inline_spl_token_2022},
-        solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
         solana_entry::entry::next_versioned_entry,
         solana_gossip::socketaddr,
         solana_ledger::{
@@ -4657,6 +4652,10 @@ pub mod tests {
         },
         solana_sdk::{
             account::{Account, WritableAccount},
+            address_lookup_table::{
+                self,
+                state::{AddressLookupTable, LookupTableMeta},
+            },
             clock::MAX_RECENT_BLOCKHASHES,
             compute_budget::ComputeBudgetInstruction,
             fee_calculator::{FeeRateGovernor, DEFAULT_BURN_PERCENT},
@@ -4938,7 +4937,7 @@ pub mod tests {
                 AccountSharedData::create(
                     min_balance_lamports,
                     address_table_data,
-                    solana_address_lookup_table_program::id(),
+                    address_lookup_table::program::id(),
                     false,
                     0,
                 )
@@ -7275,12 +7274,16 @@ pub mod tests {
             .unwrap();
         assert_ne!(leader_info.activated_stake, 0);
         // Subtract one because the last vote always carries over to the next epoch
-        let expected_credits = TEST_SLOTS_PER_EPOCH - MAX_LOCKOUT_HISTORY as u64 - 1;
+        // Each slot earned maximum credits
+        let credits_per_slot =
+            solana_vote_program::vote_state::VOTE_CREDITS_MAXIMUM_PER_SLOT as u64;
+        let expected_credits =
+            (TEST_SLOTS_PER_EPOCH - MAX_LOCKOUT_HISTORY as u64 - 1) * credits_per_slot;
         assert_eq!(
             leader_info.epoch_credits,
             vec![
                 (0, expected_credits, 0),
-                (1, expected_credits + 1, expected_credits) // one vote in current epoch
+                (1, expected_credits + credits_per_slot, expected_credits) // one vote in current epoch
             ]
         );
 
@@ -7372,7 +7375,7 @@ pub mod tests {
         let bank = Arc::new(Bank::default_for_tests());
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        blockstore.set_roots(vec![0, 1].iter()).unwrap();
+        blockstore.set_roots([0, 1].iter()).unwrap();
         // Build BlockCommitmentCache with rooted slots
         let mut cache0 = BlockCommitment::default();
         cache0.increase_rooted_stake(50);
@@ -8662,6 +8665,7 @@ pub mod tests {
             0
         );
         let slot0 = rpc.working_bank().slot();
+        let bank0_id = rpc.working_bank().bank_id();
         let account0 = Pubkey::new_unique();
         let account1 = Pubkey::new_unique();
         let account2 = Pubkey::new_unique();
@@ -8681,7 +8685,7 @@ pub mod tests {
         ];
         rpc.update_prioritization_fee_cache(transactions);
         let cache = rpc.get_prioritization_fee_cache();
-        cache.finalize_priority_fee(slot0);
+        cache.finalize_priority_fee(slot0, bank0_id);
         wait_for_cache_blocks(cache, 1);
 
         let request = create_test_request("getRecentPrioritizationFees", None);
@@ -8725,6 +8729,7 @@ pub mod tests {
 
         rpc.advance_bank_to_confirmed_slot(1);
         let slot1 = rpc.working_bank().slot();
+        let bank1_id = rpc.working_bank().bank_id();
         let price1 = 11;
         let transactions = vec![
             Transaction::new_unsigned(Message::new(
@@ -8741,7 +8746,7 @@ pub mod tests {
         ];
         rpc.update_prioritization_fee_cache(transactions);
         let cache = rpc.get_prioritization_fee_cache();
-        cache.finalize_priority_fee(slot1);
+        cache.finalize_priority_fee(slot1, bank1_id);
         wait_for_cache_blocks(cache, 2);
 
         let request = create_test_request("getRecentPrioritizationFees", None);

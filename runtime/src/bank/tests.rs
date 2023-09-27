@@ -17,6 +17,7 @@ use {
         },
         status_cache::MAX_CACHE_ENTRIES,
     },
+    assert_matches::assert_matches,
     crossbeam_channel::{bounded, unbounded},
     itertools::Itertools,
     rand::Rng,
@@ -62,7 +63,7 @@ use {
         entrypoint::MAX_PERMITTED_DATA_INCREASE,
         epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
         feature::{self, Feature},
-        feature_set::{self, enable_request_heap_frame_ix, FeatureSet},
+        feature_set::{self, FeatureSet},
         fee::FeeStructure,
         fee_calculator::FeeRateGovernor,
         genesis_config::{create_genesis_config, ClusterType, GenesisConfig},
@@ -517,7 +518,7 @@ fn test_credit_debit_rent_no_side_effect_on_hash() {
 
 fn store_accounts_for_rent_test(
     bank: &Bank,
-    keypairs: &mut [Keypair],
+    keypairs: &[Keypair],
     mock_program_id: Pubkey,
     generic_rent_due_for_system_account: u64,
 ) {
@@ -1294,7 +1295,7 @@ fn test_rent_complex() {
 
     store_accounts_for_rent_test(
         &bank,
-        &mut keypairs,
+        &keypairs,
         mock_program_id,
         generic_rent_due_for_system_account,
     );
@@ -2720,7 +2721,7 @@ fn test_bank_tx_fee() {
     let (expected_fee_collected, expected_fee_burned) =
         genesis_config.fee_rate_governor.burn(expected_fee_paid);
 
-    let mut bank = Bank::new_for_tests(&genesis_config);
+    let bank = Bank::new_for_tests(&genesis_config);
 
     let capitalization = bank.capitalization();
 
@@ -2741,7 +2742,7 @@ fn test_bank_tx_fee() {
     );
 
     assert_eq!(bank.get_balance(&leader), initial_balance);
-    goto_end_of_slot(&mut bank);
+    goto_end_of_slot(&bank);
     assert_eq!(bank.signature_count(), 1);
     assert_eq!(
         bank.get_balance(&leader),
@@ -2769,7 +2770,7 @@ fn test_bank_tx_fee() {
     );
 
     // Verify that an InstructionError collects fees, too
-    let mut bank = Bank::new_from_parent(Arc::new(bank), &leader, 1);
+    let bank = Bank::new_from_parent(Arc::new(bank), &leader, 1);
     let mut tx = system_transaction::transfer(&mint_keypair, &key, 1, bank.last_blockhash());
     // Create a bogus instruction to system_program to cause an instruction error
     tx.message.instructions[0].data[0] = 40;
@@ -2781,7 +2782,7 @@ fn test_bank_tx_fee() {
         bank.get_balance(&mint_keypair.pubkey()),
         mint - arbitrary_transfer_amount - 2 * expected_fee_paid
     ); // mint_keypair still pays a fee
-    goto_end_of_slot(&mut bank);
+    goto_end_of_slot(&bank);
     assert_eq!(bank.signature_count(), 1);
 
     // Profit! 2 transaction signatures processed at 3 lamports each
@@ -2828,13 +2829,12 @@ fn test_bank_tx_compute_unit_fee() {
         &FeeStructure::default(),
         false,
         true,
-        true,
     );
 
     let (expected_fee_collected, expected_fee_burned) =
         genesis_config.fee_rate_governor.burn(expected_fee_paid);
 
-    let mut bank = Bank::new_for_tests(&genesis_config);
+    let bank = Bank::new_for_tests(&genesis_config);
 
     let capitalization = bank.capitalization();
 
@@ -2854,7 +2854,7 @@ fn test_bank_tx_compute_unit_fee() {
     );
 
     assert_eq!(bank.get_balance(&leader), initial_balance);
-    goto_end_of_slot(&mut bank);
+    goto_end_of_slot(&bank);
     assert_eq!(bank.signature_count(), 1);
     assert_eq!(
         bank.get_balance(&leader),
@@ -2882,7 +2882,7 @@ fn test_bank_tx_compute_unit_fee() {
     );
 
     // Verify that an InstructionError collects fees, too
-    let mut bank = Bank::new_from_parent(Arc::new(bank), &leader, 1);
+    let bank = Bank::new_from_parent(Arc::new(bank), &leader, 1);
     let mut tx = system_transaction::transfer(&mint_keypair, &key, 1, bank.last_blockhash());
     // Create a bogus instruction to system_program to cause an instruction error
     tx.message.instructions[0].data[0] = 40;
@@ -2894,7 +2894,7 @@ fn test_bank_tx_compute_unit_fee() {
         bank.get_balance(&mint_keypair.pubkey()),
         mint - arbitrary_transfer_amount - 2 * expected_fee_paid
     ); // mint_keypair still pays a fee
-    goto_end_of_slot(&mut bank);
+    goto_end_of_slot(&bank);
     assert_eq!(bank.signature_count(), 1);
 
     // Profit! 2 transaction signatures processed at 3 lamports each
@@ -2932,14 +2932,14 @@ fn test_bank_blockhash_fee_structure() {
         .target_lamports_per_signature = 5000;
     genesis_config.fee_rate_governor.target_signatures_per_slot = 0;
 
-    let mut bank = Bank::new_for_tests(&genesis_config);
-    goto_end_of_slot(&mut bank);
+    let bank = Bank::new_for_tests(&genesis_config);
+    goto_end_of_slot(&bank);
     let cheap_blockhash = bank.last_blockhash();
     let cheap_lamports_per_signature = bank.get_lamports_per_signature();
     assert_eq!(cheap_lamports_per_signature, 0);
 
-    let mut bank = Bank::new_from_parent(Arc::new(bank), &leader, 1);
-    goto_end_of_slot(&mut bank);
+    let bank = Bank::new_from_parent(Arc::new(bank), &leader, 1);
+    goto_end_of_slot(&bank);
     let expensive_blockhash = bank.last_blockhash();
     let expensive_lamports_per_signature = bank.get_lamports_per_signature();
     assert!(cheap_lamports_per_signature < expensive_lamports_per_signature);
@@ -2984,14 +2984,14 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
         .target_lamports_per_signature = 1000;
     genesis_config.fee_rate_governor.target_signatures_per_slot = 1;
 
-    let mut bank = Bank::new_for_tests(&genesis_config);
-    goto_end_of_slot(&mut bank);
+    let bank = Bank::new_for_tests(&genesis_config);
+    goto_end_of_slot(&bank);
     let cheap_blockhash = bank.last_blockhash();
     let cheap_lamports_per_signature = bank.get_lamports_per_signature();
     assert_eq!(cheap_lamports_per_signature, 0);
 
-    let mut bank = Bank::new_from_parent(Arc::new(bank), &leader, 1);
-    goto_end_of_slot(&mut bank);
+    let bank = Bank::new_from_parent(Arc::new(bank), &leader, 1);
+    goto_end_of_slot(&bank);
     let expensive_blockhash = bank.last_blockhash();
     let expensive_lamports_per_signature = bank.get_lamports_per_signature();
     assert!(cheap_lamports_per_signature < expensive_lamports_per_signature);
@@ -3010,7 +3010,6 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
         &FeeStructure::default(),
         false,
         true,
-        true,
     );
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -3028,7 +3027,6 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
         expensive_lamports_per_signature,
         &FeeStructure::default(),
         false,
-        true,
         true,
     );
     assert_eq!(
@@ -3142,7 +3140,6 @@ fn test_filter_program_errors_and_collect_compute_unit_fee() {
                             .lamports_per_signature,
                         &FeeStructure::default(),
                         false,
-                        true,
                         true,
                     ) * 2
                 )
@@ -3584,7 +3581,7 @@ fn test_bank_hash_internal_state_verify() {
 }
 
 #[test]
-#[should_panic(expected = "assertion failed: self.is_frozen()")]
+#[should_panic(expected = "self.is_frozen()")]
 fn test_verify_hash_unfrozen() {
     let bank = create_simple_test_bank(2_000);
     assert!(bank.verify_hash());
@@ -5000,7 +4997,7 @@ fn get_nonce_blockhash(bank: &Bank, nonce_pubkey: &Pubkey) -> Option<Hash> {
 }
 
 fn nonce_setup(
-    bank: &mut Arc<Bank>,
+    bank: &Arc<Bank>,
     mint_keypair: &Keypair,
     custodian_lamports: u64,
     nonce_lamports: u64,
@@ -5057,7 +5054,7 @@ where
     }
 
     let (custodian_keypair, nonce_keypair) = nonce_setup(
-        &mut bank,
+        &bank,
         &mint_keypair,
         custodian_lamports,
         nonce_lamports,
@@ -5756,7 +5753,7 @@ fn test_nonce_fee_calculator_updates() {
 
     // Deliberately use bank 0 to initialize nonce account, so that nonce account fee_calculator indicates 0 fees
     let (custodian_keypair, nonce_keypair) =
-        nonce_setup(&mut bank, &mint_keypair, 500_000, 100_000, None).unwrap();
+        nonce_setup(&bank, &mint_keypair, 500_000, 100_000, None).unwrap();
     let custodian_pubkey = custodian_keypair.pubkey();
     let nonce_pubkey = nonce_keypair.pubkey();
 
@@ -5824,7 +5821,7 @@ fn test_nonce_fee_calculator_updates_tx_wide_cap() {
 
     // Deliberately use bank 0 to initialize nonce account, so that nonce account fee_calculator indicates 0 fees
     let (custodian_keypair, nonce_keypair) =
-        nonce_setup(&mut bank, &mint_keypair, 500_000, 100_000, None).unwrap();
+        nonce_setup(&bank, &mint_keypair, 500_000, 100_000, None).unwrap();
     let custodian_pubkey = custodian_keypair.pubkey();
     let nonce_pubkey = nonce_keypair.pubkey();
 
@@ -6043,16 +6040,16 @@ fn test_pre_post_transaction_balances() {
 
     // Failed transactions still produce balance sets
     // This is a TransactionError - not possible to charge fees
-    assert!(matches!(
+    assert_matches!(
         transaction_results.execution_results[1],
-        TransactionExecutionResult::NotExecuted(TransactionError::AccountNotFound),
-    ));
+        TransactionExecutionResult::NotExecuted(TransactionError::AccountNotFound)
+    );
     assert_eq!(transaction_balances_set.pre_balances[1], vec![0, 0, 1]);
     assert_eq!(transaction_balances_set.post_balances[1], vec![0, 0, 1]);
 
     // Failed transactions still produce balance sets
     // This is an InstructionError - fees charged
-    assert!(matches!(
+    assert_matches!(
         transaction_results.execution_results[2],
         TransactionExecutionResult::Executed {
             details: TransactionExecutionDetails {
@@ -6063,8 +6060,8 @@ fn test_pre_post_transaction_balances() {
                 ..
             },
             ..
-        },
-    ));
+        }
+    );
     assert_eq!(
         transaction_balances_set.pre_balances[2],
         vec![909_000, 0, 1]
@@ -6580,10 +6577,9 @@ fn test_same_program_id_uses_unqiue_executable_accounts() {
     declare_process_instruction!(process_instruction, 1, |invoke_context| {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
-        let _ = instruction_context
-            .try_borrow_program_account(transaction_context, 1)?
-            .checked_add_lamports(1);
-        Ok(())
+        instruction_context
+            .try_borrow_program_account(transaction_context, 0)?
+            .set_data_length(2)
     });
 
     let (genesis_config, mint_keypair) = create_genesis_config(50000);
@@ -6595,7 +6591,7 @@ fn test_same_program_id_uses_unqiue_executable_accounts() {
 
     // Add a new program owned by the first
     let program2_pubkey = solana_sdk::pubkey::new_rand();
-    let mut program2_account = AccountSharedData::new(42, 1, &program1_pubkey);
+    let mut program2_account = AccountSharedData::new(1, 1, &program1_pubkey);
     program2_account.set_executable(true);
     bank.store_account(&program2_pubkey, &program2_account);
 
@@ -6607,8 +6603,8 @@ fn test_same_program_id_uses_unqiue_executable_accounts() {
         bank.last_blockhash(),
     );
     assert!(bank.process_transaction(&tx).is_ok());
-    assert_eq!(1, bank.get_balance(&program1_pubkey));
-    assert_eq!(42, bank.get_balance(&program2_pubkey));
+    assert_eq!(6, bank.get_account(&program1_pubkey).unwrap().data().len());
+    assert_eq!(1, bank.get_account(&program2_pubkey).unwrap().data().len());
 }
 
 fn get_shrink_account_size() -> usize {
@@ -7229,8 +7225,8 @@ fn test_bank_load_program() {
     programdata_account.set_rent_epoch(1);
     bank.store_account_and_update_capitalization(&key1, &program_account);
     bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
-    let program = bank.load_program(&key1);
-    assert!(matches!(program.program, LoadedProgramType::LegacyV1(_)));
+    let program = bank.load_program(&key1, false);
+    assert_matches!(program.program, LoadedProgramType::LegacyV1(_));
     assert_eq!(
         program.account_size,
         program_account.data().len() + programdata_account.data().len()
@@ -7384,7 +7380,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         assert_eq!(*elf.get(i).unwrap(), *byte);
     }
 
-    let loaded_program = bank.load_program(&program_keypair.pubkey());
+    let loaded_program = bank.load_program(&program_keypair.pubkey(), false);
 
     // Invoke deployed program
     mock_process_instruction(
@@ -8561,7 +8557,7 @@ fn test_store_scan_consistency_unrooted() {
                 current_major_fork_bank.clean_accounts_for_tests();
                 // Move purge here so that Bank::drop()->purge_slots() doesn't race
                 // with clean. Simulates the call from AccountsBackgroundService
-                pruned_banks_request_handler.handle_request(&current_major_fork_bank, true);
+                pruned_banks_request_handler.handle_request(&current_major_fork_bank);
             }
         },
         Some(Box::new(SendDroppedBankCallback::new(pruned_banks_sender))),
@@ -9192,35 +9188,29 @@ fn test_vote_epoch_panic() {
     let stake_keypair = keypair_from_seed(&[2u8; 32]).unwrap();
 
     let mut setup_ixs = Vec::new();
-    setup_ixs.extend(
-        vote_instruction::create_account_with_config(
-            &mint_keypair.pubkey(),
-            &vote_keypair.pubkey(),
-            &VoteInit {
-                node_pubkey: mint_keypair.pubkey(),
-                authorized_voter: vote_keypair.pubkey(),
-                authorized_withdrawer: mint_keypair.pubkey(),
-                commission: 0,
-            },
-            1_000_000_000,
-            vote_instruction::CreateVoteAccountConfig {
-                space: VoteStateVersions::vote_state_size_of(true) as u64,
-                ..vote_instruction::CreateVoteAccountConfig::default()
-            },
-        )
-        .into_iter(),
-    );
-    setup_ixs.extend(
-        stake_instruction::create_account_and_delegate_stake(
-            &mint_keypair.pubkey(),
-            &stake_keypair.pubkey(),
-            &vote_keypair.pubkey(),
-            &Authorized::auto(&mint_keypair.pubkey()),
-            &Lockup::default(),
-            1_000_000_000_000,
-        )
-        .into_iter(),
-    );
+    setup_ixs.extend(vote_instruction::create_account_with_config(
+        &mint_keypair.pubkey(),
+        &vote_keypair.pubkey(),
+        &VoteInit {
+            node_pubkey: mint_keypair.pubkey(),
+            authorized_voter: vote_keypair.pubkey(),
+            authorized_withdrawer: mint_keypair.pubkey(),
+            commission: 0,
+        },
+        1_000_000_000,
+        vote_instruction::CreateVoteAccountConfig {
+            space: VoteStateVersions::vote_state_size_of(true) as u64,
+            ..vote_instruction::CreateVoteAccountConfig::default()
+        },
+    ));
+    setup_ixs.extend(stake_instruction::create_account_and_delegate_stake(
+        &mint_keypair.pubkey(),
+        &stake_keypair.pubkey(),
+        &vote_keypair.pubkey(),
+        &Authorized::auto(&mint_keypair.pubkey()),
+        &Lockup::default(),
+        1_000_000_000_000,
+    ));
     setup_ixs.push(vote_instruction::withdraw(
         &vote_keypair.pubkey(),
         &mint_keypair.pubkey(),
@@ -9519,7 +9509,7 @@ fn test_get_largest_accounts() {
     }
 
     // Exclude more, and non-sequential, accounts
-    let exclude: HashSet<_> = vec![pubkeys[0], pubkeys[2], pubkeys[4]]
+    let exclude: HashSet<_> = [pubkeys[0], pubkeys[2], pubkeys[4]]
         .iter()
         .cloned()
         .collect();
@@ -9759,7 +9749,7 @@ fn test_compute_budget_program_noop() {
             *compute_budget,
             ComputeBudget {
                 compute_unit_limit: compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
-                heap_size: Some(48 * 1024),
+                heap_size: 48 * 1024,
                 ..ComputeBudget::default()
             }
         );
@@ -9802,7 +9792,7 @@ fn test_compute_request_instruction() {
             *compute_budget,
             ComputeBudget {
                 compute_unit_limit: compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
-                heap_size: Some(48 * 1024),
+                heap_size: 48 * 1024,
                 ..ComputeBudget::default()
             }
         );
@@ -9852,7 +9842,7 @@ fn test_failed_compute_request_instruction() {
             *compute_budget,
             ComputeBudget {
                 compute_unit_limit: compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
-                heap_size: Some(48 * 1024),
+                heap_size: 48 * 1024,
                 ..ComputeBudget::default()
             }
         );
@@ -10079,7 +10069,6 @@ fn calculate_test_fee(
     lamports_per_signature: u64,
     fee_structure: &FeeStructure,
     support_set_accounts_data_size_limit_ix: bool,
-    enable_request_heap_frame_ix: bool,
     remove_congestion_multiplier: bool,
 ) -> u64 {
     let mut feature_set = FeatureSet::all_enabled();
@@ -10089,12 +10078,8 @@ fn calculate_test_fee(
         feature_set.deactivate(&include_loaded_accounts_data_size_in_fee_calculation::id());
     }
 
-    if !enable_request_heap_frame_ix {
-        feature_set.deactivate(&enable_request_heap_frame_ix::id());
-    }
-
     let budget_limits =
-        ComputeBudget::fee_budget_limits(message.program_instructions_iter(), &feature_set, None);
+        ComputeBudget::fee_budget_limits(message.program_instructions_iter(), &feature_set);
     fee_structure.calculate_fee(
         message,
         lamports_per_signature,
@@ -10120,7 +10105,6 @@ fn test_calculate_fee() {
                 },
                 support_set_accounts_data_size_limit_ix,
                 true,
-                true,
             ),
             0
         );
@@ -10137,7 +10121,6 @@ fn test_calculate_fee() {
                     ..FeeStructure::default()
                 },
                 support_set_accounts_data_size_limit_ix,
-                true,
                 true,
             ),
             1
@@ -10160,7 +10143,6 @@ fn test_calculate_fee() {
                     ..FeeStructure::default()
                 },
                 support_set_accounts_data_size_limit_ix,
-                true,
                 true,
             ),
             4
@@ -10189,7 +10171,6 @@ fn test_calculate_fee_compute_units() {
                 &fee_structure,
                 support_set_accounts_data_size_limit_ix,
                 true,
-                true,
             ),
             max_fee + lamports_per_signature
         );
@@ -10208,7 +10189,6 @@ fn test_calculate_fee_compute_units() {
                 1,
                 &fee_structure,
                 support_set_accounts_data_size_limit_ix,
-                true,
                 true,
             ),
             max_fee + 3 * lamports_per_signature
@@ -10251,7 +10231,6 @@ fn test_calculate_fee_compute_units() {
                 &fee_structure,
                 support_set_accounts_data_size_limit_ix,
                 true,
-                true,
             );
             assert_eq!(
                 fee,
@@ -10289,7 +10268,6 @@ fn test_calculate_prioritization_fee() {
         &message,
         fee_structure.lamports_per_signature,
         &fee_structure,
-        true,
         true,
         true,
     );
@@ -10337,7 +10315,6 @@ fn test_calculate_fee_secp256k1() {
                 &fee_structure,
                 support_set_accounts_data_size_limit_ix,
                 true,
-                true,
             ),
             2
         );
@@ -10357,7 +10334,6 @@ fn test_calculate_fee_secp256k1() {
                 1,
                 &fee_structure,
                 support_set_accounts_data_size_limit_ix,
-                true,
                 true,
             ),
             11
@@ -11999,7 +11975,6 @@ fn test_calculate_fee_with_congestion_multiplier() {
                 cheap_lamports_per_signature,
                 &fee_structure,
                 true,
-                true,
                 remove_congestion_multiplier,
             ),
             signature_fee * signature_count
@@ -12020,7 +11995,6 @@ fn test_calculate_fee_with_congestion_multiplier() {
                 &message,
                 expensive_lamports_per_signature,
                 &fee_structure,
-                true,
                 true,
                 remove_congestion_multiplier,
             ),
@@ -12052,34 +12026,11 @@ fn test_calculate_fee_with_request_heap_frame_flag() {
     ))
     .unwrap();
 
-    // assert when enable_request_heap_frame_ix is enabled, prioritization fee will be counted
+    // assert when request_heap_frame is presented in tx, prioritization fee will be counted
     // into transaction fee
-    let mut enable_request_heap_frame_ix = true;
     assert_eq!(
-        calculate_test_fee(
-            &message,
-            lamports_per_signature,
-            &fee_structure,
-            true,
-            enable_request_heap_frame_ix,
-            true,
-        ),
+        calculate_test_fee(&message, lamports_per_signature, &fee_structure, true, true,),
         signature_fee + request_cu * lamports_per_cu
-    );
-
-    // assert when enable_request_heap_frame_ix is disabled (an v1.13 behavior), prioritization fee will not be counted
-    // into transaction fee
-    enable_request_heap_frame_ix = false;
-    assert_eq!(
-        calculate_test_fee(
-            &message,
-            lamports_per_signature,
-            &fee_structure,
-            true,
-            enable_request_heap_frame_ix,
-            true,
-        ),
-        signature_fee
     );
 }
 
@@ -12109,7 +12060,7 @@ fn test_runtime_feature_enable_with_program_cache() {
     genesis_config
         .accounts
         .remove(&feature_set::reject_callx_r10::id());
-    let mut root_bank = Bank::new_for_tests(&genesis_config);
+    let root_bank = Bank::new_for_tests(&genesis_config);
 
     // Test a basic transfer
     let amount = genesis_config.rent.minimum_balance(0);
@@ -12138,7 +12089,7 @@ fn test_runtime_feature_enable_with_program_cache() {
     let transaction1 = Transaction::new(&signers1, message1, root_bank.last_blockhash());
 
     // Advance the bank so the next transaction can be submitted.
-    goto_end_of_slot(&mut root_bank);
+    goto_end_of_slot(&root_bank);
     let mut bank = new_from_parent(Arc::new(root_bank));
 
     // Compose second instruction using the same program with a different block hash
@@ -12334,7 +12285,7 @@ fn test_rewards_point_calculation() {
     let (bank, _, _) = create_reward_bank(expected_num_delegations);
 
     let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
-    let mut rewards_metrics = RewardsMetrics::default();
+    let rewards_metrics = RewardsMetrics::default();
     let expected_rewards = 100_000_000_000;
 
     let stakes: RwLockReadGuard<Stakes<StakeAccount<Delegation>>> = bank.stakes_cache.stakes();
@@ -12344,7 +12295,7 @@ fn test_rewards_point_calculation() {
         &reward_calculate_param,
         expected_rewards,
         &thread_pool,
-        &mut rewards_metrics,
+        &rewards_metrics,
     );
 
     assert!(point_value.is_some());
@@ -12361,7 +12312,7 @@ fn test_rewards_point_calculation_empty() {
     let bank = Bank::new_for_tests(&genesis_config);
 
     let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
-    let mut rewards_metrics: RewardsMetrics = RewardsMetrics::default();
+    let rewards_metrics: RewardsMetrics = RewardsMetrics::default();
     let expected_rewards = 100_000_000_000;
     let stakes: RwLockReadGuard<Stakes<StakeAccount<Delegation>>> = bank.stakes_cache.stakes();
     let reward_calculate_param = bank.get_epoch_reward_calculate_param_info(&stakes);
@@ -12370,7 +12321,7 @@ fn test_rewards_point_calculation_empty() {
         &reward_calculate_param,
         expected_rewards,
         &thread_pool,
-        &mut rewards_metrics,
+        &rewards_metrics,
     );
 
     assert!(point_value.is_none());
@@ -12464,7 +12415,7 @@ fn test_distribute_partitioned_epoch_rewards() {
 }
 
 #[test]
-#[should_panic(expected = "assertion failed: self.epoch_schedule.get_slots_in_epoch")]
+#[should_panic(expected = "self.epoch_schedule.get_slots_in_epoch")]
 fn test_distribute_partitioned_epoch_rewards_too_many_partitions() {
     let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
     let mut bank = Bank::new_for_tests(&genesis_config);
@@ -12697,10 +12648,10 @@ fn test_rewards_computation_and_partitioned_distribution_one_block() {
         if slot == num_slots_in_epoch {
             // This is the first block of epoch 1. Reward computation should happen in this block.
             // assert reward compute status activated at epoch boundary
-            assert!(matches!(
+            assert_matches!(
                 curr_bank.get_reward_interval(),
                 RewardInterval::InsideInterval
-            ));
+            );
 
             // cap should increase because of new epoch rewards
             assert!(post_cap > pre_cap);
@@ -12710,10 +12661,10 @@ fn test_rewards_computation_and_partitioned_distribution_one_block() {
             // rewards are transferred from epoch_rewards sysvar to stake accounts. The cap should stay the same.
             // 2. when curr_slot == num_slots_in_epoch+2, the 3rd block of epoch 1. reward distribution should have already completed. Therefore,
             // reward_status should stay inactive and cap should stay the same.
-            assert!(matches!(
+            assert_matches!(
                 curr_bank.get_reward_interval(),
                 RewardInterval::OutsideInterval
-            ));
+            );
 
             assert_eq!(post_cap, pre_cap);
         } else {
@@ -12810,20 +12761,20 @@ fn test_rewards_computation_and_partitioned_distribution_two_blocks() {
         if slot == num_slots_in_epoch {
             // This is the first block of epoch 1. Reward computation should happen in this block.
             // assert reward compute status activated at epoch boundary
-            assert!(matches!(
+            assert_matches!(
                 curr_bank.get_reward_interval(),
                 RewardInterval::InsideInterval
-            ));
+            );
 
             // cap should increase because of new epoch rewards
             assert!(post_cap > pre_cap);
         } else if slot == num_slots_in_epoch + 1 {
             // When curr_slot == num_slots_in_epoch + 1, the 2nd block of epoch 1, reward distribution should happen in this block.
             // however, since rewards are transferred from epoch_rewards sysvar to stake accounts. The cap should stay the same.
-            assert!(matches!(
+            assert_matches!(
                 curr_bank.get_reward_interval(),
                 RewardInterval::InsideInterval
-            ));
+            );
 
             assert_eq!(post_cap, pre_cap);
         } else if slot == num_slots_in_epoch + 2 || slot == num_slots_in_epoch + 3 {
@@ -12832,10 +12783,10 @@ fn test_rewards_computation_and_partitioned_distribution_two_blocks() {
             // rewards are transferred from epoch_rewards sysvar to stake accounts. The cap should stay the same.
             // 2. when curr_slot == num_slots_in_epoch+2, the 3rd block of epoch 1. reward distribution should have already completed. Therefore,
             // reward_status should stay inactive and cap should stay the same.
-            assert!(matches!(
+            assert_matches!(
                 curr_bank.get_reward_interval(),
                 RewardInterval::OutsideInterval
-            ));
+            );
 
             assert_eq!(post_cap, pre_cap);
         } else {
@@ -13071,10 +13022,9 @@ fn test_store_vote_accounts_partitioned() {
         }
     });
 
-    let mut metrics = RewardsMetrics::default();
+    let metrics = RewardsMetrics::default();
 
-    let stored_vote_accounts =
-        bank.store_vote_accounts_partitioned(vote_rewards_account, &mut metrics);
+    let stored_vote_accounts = bank.store_vote_accounts_partitioned(vote_rewards_account, &metrics);
     assert_eq!(expected_vote_rewards_num, stored_vote_accounts.len());
 
     // load accounts to make sure they were stored correctly
@@ -13094,9 +13044,9 @@ fn test_store_vote_accounts_partitioned_empty() {
 
     let expected = 0;
     let vote_rewards = VoteRewardsAccounts::default();
-    let mut metrics = RewardsMetrics::default();
+    let metrics = RewardsMetrics::default();
 
-    let stored_vote_accounts = bank.store_vote_accounts_partitioned(vote_rewards, &mut metrics);
+    let stored_vote_accounts = bank.store_vote_accounts_partitioned(vote_rewards, &metrics);
     assert_eq!(expected, stored_vote_accounts.len());
 }
 
@@ -13631,4 +13581,105 @@ fn test_calculate_stake_vote_rewards() {
         stake_reward_calculation.stake_rewards[0].stake_reward_info,
         expected_reward_info,
     );
+}
+
+#[test]
+fn test_register_hard_fork() {
+    fn get_hard_forks(bank: &Bank) -> Vec<Slot> {
+        bank.hard_forks().iter().map(|(slot, _)| *slot).collect()
+    }
+
+    let (genesis_config, _mint_keypair) = create_genesis_config(10);
+    let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+
+    let bank7 = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 7);
+    bank7.register_hard_fork(6);
+    bank7.register_hard_fork(7);
+    bank7.register_hard_fork(8);
+    // Bank7 will reject slot 6 since it is older, but allow the other two hard forks
+    assert_eq!(get_hard_forks(&bank7), vec![7, 8]);
+
+    let bank9 = Bank::new_from_parent(bank0, &Pubkey::default(), 9);
+    bank9.freeze();
+    bank9.register_hard_fork(9);
+    bank9.register_hard_fork(10);
+    // Bank9 will reject slot 9 since it has already been frozen
+    assert_eq!(get_hard_forks(&bank9), vec![7, 8, 10]);
+}
+
+#[test]
+fn test_last_restart_slot() {
+    fn last_restart_slot_dirty(bank: &Bank) -> bool {
+        let (dirty_accounts, _, _) = bank
+            .rc
+            .accounts
+            .accounts_db
+            .get_pubkey_hash_for_slot(bank.slot());
+        let dirty_accounts: HashSet<_> = dirty_accounts
+            .into_iter()
+            .map(|(pubkey, _hash)| pubkey)
+            .collect();
+        dirty_accounts.contains(&sysvar::last_restart_slot::id())
+    }
+
+    fn get_last_restart_slot(bank: &Bank) -> Option<Slot> {
+        bank.get_account(&sysvar::last_restart_slot::id())
+            .and_then(|account| {
+                let lrs: Option<LastRestartSlot> = from_account(&account);
+                lrs
+            })
+            .map(|account| account.last_restart_slot)
+    }
+
+    let mint_lamports = 100;
+    let validator_stake_lamports = 10;
+    let leader_pubkey = Pubkey::default();
+    let GenesisConfigInfo {
+        mut genesis_config, ..
+    } = create_genesis_config_with_leader(mint_lamports, &leader_pubkey, validator_stake_lamports);
+    // Remove last restart slot account so we can simluate its' activation
+    genesis_config
+        .accounts
+        .remove(&feature_set::last_restart_slot_sysvar::id())
+        .unwrap();
+
+    let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+    // Register a hard fork in the future so last restart slot will update
+    bank0.register_hard_fork(6);
+    assert!(!last_restart_slot_dirty(&bank0));
+    assert_eq!(get_last_restart_slot(&bank0), None);
+
+    let mut bank1 = Arc::new(Bank::new_from_parent(bank0, &Pubkey::default(), 1));
+    assert!(!last_restart_slot_dirty(&bank1));
+    assert_eq!(get_last_restart_slot(&bank1), None);
+
+    // Activate the feature in slot 1, it will get initialized in slot 1's children
+    Arc::get_mut(&mut bank1)
+        .unwrap()
+        .activate_feature(&feature_set::last_restart_slot_sysvar::id());
+    let bank2 = Arc::new(Bank::new_from_parent(bank1.clone(), &Pubkey::default(), 2));
+    assert!(last_restart_slot_dirty(&bank2));
+    assert_eq!(get_last_restart_slot(&bank2), Some(0));
+    let bank3 = Arc::new(Bank::new_from_parent(bank1, &Pubkey::default(), 3));
+    assert!(last_restart_slot_dirty(&bank3));
+    assert_eq!(get_last_restart_slot(&bank3), Some(0));
+
+    // Not dirty in children where the last restart slot has not changed
+    let bank4 = Arc::new(Bank::new_from_parent(bank2, &Pubkey::default(), 4));
+    assert!(!last_restart_slot_dirty(&bank4));
+    assert_eq!(get_last_restart_slot(&bank4), Some(0));
+    let bank5 = Arc::new(Bank::new_from_parent(bank3, &Pubkey::default(), 5));
+    assert!(!last_restart_slot_dirty(&bank5));
+    assert_eq!(get_last_restart_slot(&bank5), Some(0));
+
+    // Last restart slot has now changed so it will be dirty again
+    let bank6 = Arc::new(Bank::new_from_parent(bank4, &Pubkey::default(), 6));
+    assert!(last_restart_slot_dirty(&bank6));
+    assert_eq!(get_last_restart_slot(&bank6), Some(6));
+
+    // Last restart will not change for a hard fork that has not occurred yet
+    bank6.register_hard_fork(10);
+    let bank7 = Arc::new(Bank::new_from_parent(bank6, &Pubkey::default(), 7));
+    assert!(!last_restart_slot_dirty(&bank7));
+    assert_eq!(get_last_restart_slot(&bank7), Some(6));
 }

@@ -1,3 +1,6 @@
+// REMOVE once https://github.com/rust-lang/rust-clippy/issues/11153 is fixed
+#![allow(clippy::items_after_test_module)]
+
 use {
     crate::snapshot_utils::create_tmp_accounts_dir_for_tests,
     log::*,
@@ -665,7 +668,7 @@ fn test_epoch_accounts_hash_and_warping() {
 // https://github.com/rust-lang/rust/pull/88582
 // https://github.com/jhpratt/rust/blob/727a4fc7e3f836938dfeb4a2ab237cfca612222d/library/core/src/num/uint_macros.rs#L1811-L1837
 const fn next_multiple_of(lhs: u64, rhs: u64) -> u64 {
-    #![allow(clippy::integer_arithmetic)]
+    #![allow(clippy::arithmetic_side_effects)]
     match lhs % rhs {
         0 => lhs,
         r => lhs + (rhs - r),
