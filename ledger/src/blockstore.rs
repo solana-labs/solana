@@ -2120,11 +2120,22 @@ impl Blockstore {
     /// AddressSignatures columns. All new writes go to DEFAULT_LEGACY_PRIMARY_INDEX_VALUE,
     /// but initialize both columns so the written blockstore is backwards compatible.
     fn initialize_transaction_status_index(&self) -> Result<()> {
-<<<<<<< HEAD
-        self.transaction_status_index_cf
-            .put(DEFAULT_LEGACY_PRIMARY_INDEX_VALUE, &TransactionStatusIndexMeta::default())?;
-        self.transaction_status_index_cf
-            .put(ALTERNATE_LEGACY_PRIMARY_INDEX_VALUE, &TransactionStatusIndexMeta::default())?;
+        if !self.db.is_primary_access() {
+            return Ok(());
+        };
+
+        // Fetch each TransactionStatusIndexMeta, mark it as not frozen and
+        // write it back. Use .unwrap_or_default() to initialize the metas
+        // if they did not previously exist.
+        for primary_index in VALID_LEGACY_PRIMARY_INDEX_VALUES.iter() {
+            let mut index = self
+                .transaction_status_index_cf
+                .get(*primary_index)?
+                .unwrap_or_default();
+            index.frozen = false;
+            self.transaction_status_index_cf
+                .put(*primary_index, &index)?;
+        }
 
         // If present, delete dummy entries inserted by old software
         // https://github.com/solana-labs/solana/blob/bc2b372/ledger/src/blockstore.rs#L2130-L2137
@@ -2148,27 +2159,6 @@ impl Blockstore {
         };
 
         Ok(())
-=======
-        // Fetch each TransactionStatusIndexMeta, mark it as not frozen and
-        // write it back. Use .unwrap_or_default() to initialize the metas
-        // if they did not previously exist.
-        for primary_index in VALID_LEGACY_PRIMARY_INDEX_VALUES.iter() {
-            let mut index = self
-                .transaction_status_index_cf
-                .get(*primary_index)?
-                .unwrap_or_default();
-            index.frozen = false;
-            self.transaction_status_index_cf
-                .put(*primary_index, &index)?;
-        }
-
-        // Delete dummy entries that older versions may have inserted
-        // https://github.com/solana-labs/solana/blob/bc2b372/ledger/src/blockstore.rs#L2130-L2137
-        self.transaction_status_cf
-            .delete(cf::TransactionStatus::as_index(2))?;
-        self.address_signatures_cf
-            .delete(cf::AddressSignatures::as_index(2))
->>>>>>> ad241cf2ca (Update initialize function since it is now always called at open)
     }
 
     /// Legacy function that was used to choose which primary index to write.
