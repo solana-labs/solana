@@ -3440,8 +3440,13 @@ impl ReplayStage {
         // 3) The best "selected" bank is on a different fork,
         //    switch_threshold succeeds
         let mut failure_reasons = vec![];
-        let selected_fork = {
-            let switch_fork_decision = tower.check_switch_threshold(
+        struct CandidateVoteAndResetBanks<'a> {
+            candidate_vote_bank: Option<&'a Arc<Bank>>,
+            reset_bank: Option<&'a Arc<Bank>>,
+            switch_fork_decision: SwitchForkDecision,
+        }
+        let candidate_vote_and_reset_banks = {
+            let switch_fork_decision: SwitchForkDecision = tower.check_switch_threshold(
                 heaviest_bank.slot(),
                 ancestors,
                 descendants,
@@ -3456,9 +3461,9 @@ impl ReplayStage {
 
             match switch_fork_decision {
                 SwitchForkDecision::FailedSwitchThreshold(switch_proof_stake, total_stake) => {
-                    let reset_bank = heaviest_bank_on_same_voted_fork;
+                    let candidate_vote_bank = heaviest_bank_on_same_voted_fork;
                     let final_switch_fork_decision = Self::select_forks_failed_switch_threshold(
-                        reset_bank.map(|bank| bank.as_ref()),
+                        candidate_vote_bank.map(|bank| bank.as_ref()),
                         progress,
                         tower,
                         heaviest_bank.slot(),
@@ -3467,7 +3472,16 @@ impl ReplayStage {
                         total_stake,
                         switch_fork_decision,
                     );
-                    reset_bank.map(|b| (b, final_switch_fork_decision))
+                    let candidate_vote_bank = if final_switch_fork_decision.can_vote() {
+                        candidate_vote_bank
+                    } else {
+                        None
+                    };
+                    CandidateVoteAndResetBanks {
+                        candidate_vote_bank,
+                        reset_bank: candidate_vote_bank,
+                        switch_fork_decision: final_switch_fork_decision,
+                    }
                 }
                 SwitchForkDecision::FailedSwitchDuplicateRollback(latest_duplicate_ancestor) => {
                     // If we can't switch and our last vote was on an unconfirmed, duplicate slot,
@@ -3517,13 +3531,29 @@ impl ReplayStage {
                         0, // In this case we never actually performed the switch check, 0 for now
                         0,
                     ));
-                    reset_bank.map(|b| (b, switch_fork_decision))
+                    CandidateVoteAndResetBanks {
+                        candidate_vote_bank: None,
+                        reset_bank,
+                        switch_fork_decision,
+                    }
                 }
-                _ => Some((heaviest_bank, switch_fork_decision)),
+                _ => CandidateVoteAndResetBanks {
+                    candidate_vote_bank: Some(heaviest_bank),
+                    reset_bank: Some(heaviest_bank),
+                    switch_fork_decision,
+                },
             }
         };
 
-        if let Some((bank, switch_fork_decision)) = selected_fork {
+        let CandidateVoteAndResetBanks {
+            candidate_vote_bank,
+            reset_bank,
+            switch_fork_decision,
+        } = candidate_vote_and_reset_banks;
+
+        if let Some(candidate_vote_bank) = candidate_vote_bank {
+            // If there's a bank to potentially vote on, then make the remaining
+            // checks
             let (
                 is_locked_out,
                 vote_threshold,
@@ -3533,8 +3563,10 @@ impl ReplayStage {
                 total_threshold_stake,
                 total_epoch_stake,
             ) = {
-                let fork_stats = progress.get_fork_stats(bank.slot()).unwrap();
-                let propagated_stats = &progress.get_propagated_stats(bank.slot()).unwrap();
+                let fork_stats = progress.get_fork_stats(candidate_vote_bank.slot()).unwrap();
+                let propagated_stats = &progress
+                    .get_propagated_stats(candidate_vote_bank.slot())
+                    .unwrap();
                 (
                     fork_stats.is_locked_out,
                     fork_stats.vote_threshold,
@@ -3548,22 +3580,22 @@ impl ReplayStage {
 
             let propagation_confirmed = is_leader_slot
                 || progress
-                    .get_leader_propagation_slot_must_exist(bank.slot())
+                    .get_leader_propagation_slot_must_exist(candidate_vote_bank.slot())
                     .0;
 
             if is_locked_out {
-                failure_reasons.push(HeaviestForkFailures::LockedOut(bank.slot()));
+                failure_reasons.push(HeaviestForkFailures::LockedOut(candidate_vote_bank.slot()));
             }
             if let ThresholdDecision::FailedThreshold(fork_stake) = vote_threshold {
                 failure_reasons.push(HeaviestForkFailures::FailedThreshold(
-                    bank.slot(),
+                    candidate_vote_bank.slot(),
                     fork_stake,
                     total_threshold_stake,
                 ));
             }
             if !propagation_confirmed {
                 failure_reasons.push(HeaviestForkFailures::NoPropagatedConfirmation(
-                    bank.slot(),
+                    candidate_vote_bank.slot(),
                     propagated_stake,
                     total_epoch_stake,
                 ));
@@ -3574,18 +3606,24 @@ impl ReplayStage {
                 && propagation_confirmed
                 && switch_fork_decision.can_vote()
             {
-                info!("voting: {} {}", bank.slot(), fork_weight);
+                info!("voting: {} {}", candidate_vote_bank.slot(), fork_weight);
                 SelectVoteAndResetForkResult {
-                    vote_bank: Some((bank.clone(), switch_fork_decision)),
-                    reset_bank: Some(bank.clone()),
+                    vote_bank: Some((candidate_vote_bank.clone(), switch_fork_decision)),
+                    reset_bank: Some(candidate_vote_bank.clone()),
                     heaviest_fork_failures: failure_reasons,
                 }
             } else {
                 SelectVoteAndResetForkResult {
                     vote_bank: None,
-                    reset_bank: Some(bank.clone()),
+                    reset_bank: Some(candidate_vote_bank.clone()),
                     heaviest_fork_failures: failure_reasons,
                 }
+            }
+        } else if reset_bank.is_some() {
+            SelectVoteAndResetForkResult {
+                vote_bank: None,
+                reset_bank: reset_bank.cloned(),
+                heaviest_fork_failures: failure_reasons,
             }
         } else {
             SelectVoteAndResetForkResult {
