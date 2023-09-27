@@ -224,7 +224,9 @@ impl CacheHashData {
         result.get_cache_files();
         result
     }
-    fn delete_old_cache_files(&self) {
+
+    /// delete all pre-existing files that will not be used
+    pub(crate) fn delete_old_cache_files(&self) {
         let old_cache_files = std::mem::take(&mut *self.pre_existing_cache_files.lock().unwrap());
         if !old_cache_files.is_empty() {
             self.stats
@@ -236,6 +238,7 @@ impl CacheHashData {
             }
         }
     }
+
     fn get_cache_files(&self) {
         if self.cache_dir.is_dir() {
             let dir = fs::read_dir(&self.cache_dir);
