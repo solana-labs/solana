@@ -19,7 +19,6 @@ byteorder = { workspace = true }
 bzip2 = { workspace = true }
 crossbeam-channel = { workspace = true }
 dashmap = { workspace = true, features = ["rayon", "raw-api"] }
-dir-diff = { workspace = true }
 flate2 = { workspace = true }
 fnv = { workspace = true }
 fs-err = { workspace = true }
@@ -28,7 +27,6 @@ index_list = { workspace = true }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
-lru = { workspace = true }
 lz4 = { workspace = true }
 memmap2 = { workspace = true }
 modular-bitfield = { workspace = true }
@@ -44,18 +42,12 @@ rayon = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true }
-siphasher = { workspace = true }
-solana-bpf-loader-program = { workspace = true }
 solana-bucket-map = { workspace = true }
-solana-compute-budget-program = { workspace = true }
 solana-config-program = { workspace = true }
-solana-cost-model = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
-solana-loader-v4-program = { workspace = true }
 solana-measure = { workspace = true }
 solana-metrics = { workspace = true }
-solana-perf = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
 solana-sdk = { workspace = true }
@@ -67,11 +59,9 @@ solana-zk-token-sdk = { workspace = true }
 static_assertions = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 strum_macros = { workspace = true }
-symlink = { workspace = true }
 tar = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
-zstd = { workspace = true }
 
 [lib]
 crate-type = ["lib"]
@@ -88,7 +78,6 @@ solana-accounts-db = { path = ".", features = ["dev-context-only-utils"] }
 solana-logger = { workspace = true }
 solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 static_assertions = { workspace = true }
-test-case = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
