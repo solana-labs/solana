@@ -8045,6 +8045,7 @@ pub mod tests {
                     vec![&address0],
                     vec![&address1],
                     TransactionStatusMeta::default(),
+                    x as usize,
                 )
                 .unwrap();
         }
@@ -8058,6 +8059,7 @@ pub mod tests {
                     vec![&address0],
                     vec![&address1],
                     TransactionStatusMeta::default(),
+                    x as usize,
                 )
                 .unwrap();
         }
@@ -8151,6 +8153,7 @@ pub mod tests {
                     vec![&address0],
                     vec![&address1],
                     TransactionStatusMeta::default(),
+                    0,
                 )
                 .unwrap();
         }
@@ -8180,6 +8183,7 @@ pub mod tests {
                     vec![&address0],
                     vec![&address1],
                     TransactionStatusMeta::default(),
+                    x as usize,
                 )
                 .unwrap();
         }
@@ -8193,6 +8197,7 @@ pub mod tests {
                     vec![&address0],
                     vec![&address1],
                     TransactionStatusMeta::default(),
+                    x as usize,
                 )
                 .unwrap();
         }
@@ -8205,6 +8210,7 @@ pub mod tests {
                     vec![&address0],
                     vec![&address1],
                     TransactionStatusMeta::default(),
+                    x as usize,
                 )
                 .unwrap();
         }
@@ -8218,6 +8224,7 @@ pub mod tests {
                     vec![&address0],
                     vec![&address1],
                     TransactionStatusMeta::default(),
+                    x as usize,
                 )
                 .unwrap();
         }
@@ -8290,6 +8297,7 @@ pub mod tests {
             );
             blockstore.insert_shreds(shreds, None, false).unwrap();
 
+            let mut counter = 0;
             for entry in entries.into_iter() {
                 for transaction in entry.transactions {
                     assert_eq!(transaction.signatures.len(), 1);
@@ -8300,8 +8308,10 @@ pub mod tests {
                             transaction.message.static_account_keys().iter().collect(),
                             vec![],
                             TransactionStatusMeta::default(),
+                            counter,
                         )
                         .unwrap();
+                    counter += 1;
                 }
             }
         }
@@ -8315,6 +8325,7 @@ pub mod tests {
                 entries_to_test_shreds(&entries, slot, 8, true, 0, /*merkle_variant:*/ true);
             blockstore.insert_shreds(shreds, None, false).unwrap();
 
+            let mut counter = 0;
             for entry in entries.into_iter() {
                 for transaction in entry.transactions {
                     assert_eq!(transaction.signatures.len(), 1);
@@ -8325,8 +8336,10 @@ pub mod tests {
                             transaction.message.static_account_keys().iter().collect(),
                             vec![],
                             TransactionStatusMeta::default(),
+                            counter,
                         )
                         .unwrap();
+                    counter += 1;
                 }
             }
         }
@@ -8678,7 +8691,7 @@ pub mod tests {
         // Remove signature
         blockstore
             .address_signatures_cf
-            .delete((0, address0, 2, all0[0].signature))
+            .delete((address0, 2, 0, all0[0].signature))
             .unwrap();
         let sig_infos = blockstore
             .get_confirmed_signatures_for_address2(
