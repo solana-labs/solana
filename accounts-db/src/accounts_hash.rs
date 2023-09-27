@@ -446,6 +446,15 @@ struct ItemLocation<'a> {
     offset: usize,
 }
 
+/// Pointer to a specific item in chunked accounts hash slices.
+#[derive(Debug)]
+struct SlotGroupPointer {
+    /// slot group index
+    slot_group_index: usize,
+    /// offset within a slot group
+    offset: usize,
+}
+
 impl<'a> AccountsHasher<'a> {
     /// true if it is possible that there are filler accounts present
     pub fn filler_accounts_enabled(&self) -> bool {
@@ -940,7 +949,7 @@ impl<'a> AccountsHasher<'a> {
     }
 
     /// Return the working_set and max number of pubkeys for hash dedup.
-    /// `working_set` holds (division_index, offset) for items in account's pubkey descending order.
+    /// `working_set` holds SlotGroupPointer {slot_group_index, offset} for items in account's pubkey descending order.
     fn initialize_dedup_working_set(
         sorted_data_by_pubkey: &[&[CalculateHashIntermediate]],
         pubkey_bin: usize,
@@ -948,11 +957,11 @@ impl<'a> AccountsHasher<'a> {
         binner: &PubkeyBinCalculator24,
         stats: &HashStats,
     ) -> (
-        Vec<(usize, usize)>, /* working_set */
-        usize,               /* max_inclusive_num_pubkeys */
+        Vec<SlotGroupPointer>, /* working_set */
+        usize,                 /* max_inclusive_num_pubkeys */
     ) {
         // working_set holds the lowest items for each slot_group sorted by pubkey descending (min_key is the last)
-        let mut working_set: Vec<(usize, usize)> = Vec::default();
+        let mut working_set: Vec<SlotGroupPointer> = Vec::default();
 
         // Initialize 'working_set', which holds the current lowest item in each slot group.
         // `working_set` should be initialized in reverse order of slot_groups. Later slot_groups are
@@ -960,7 +969,7 @@ impl<'a> AccountsHasher<'a> {
         // already in working_set (i.e. inserted by a later slot group), the next lowest item
         // in this slot group is searched and checked, until either one that is `not` in the
         // working_set is found, which will then be inserted, or no next lowest item is found.
-        // Iterating in reverse order of slot_group will grantee that each slot group will be
+        // Iterating in reverse order of slot_group will guarantee that each slot group will be
         // scanned only once and scanned continuously. Therefore, it can achieve better data
         // locality during the scan.
         let max_inclusive_num_pubkeys = sorted_data_by_pubkey
@@ -1008,7 +1017,7 @@ impl<'a> AccountsHasher<'a> {
     /// Add next item into hash dedup working set
     fn add_next_item<'b>(
         next: &mut Option<ItemLocation<'b>>,
-        working_set: &mut Vec<(usize, usize)>,
+        working_set: &mut Vec<SlotGroupPointer>,
         sorted_data_by_pubkey: &[&'b [CalculateHashIntermediate]],
         pubkey_bin: usize,
         binner: &PubkeyBinCalculator24,
@@ -1022,18 +1031,26 @@ impl<'a> AccountsHasher<'a> {
         {
             // if `new key` is less than the min key in the working set, skip binary search and
             // insert item to the end vec directly
-            if let Some((current_min_slot_group_index, current_min_offset)) = working_set.last() {
+            if let Some(SlotGroupPointer {
+                slot_group_index: current_min_slot_group_index,
+                offset: current_min_offset,
+            }) = working_set.last()
+            {
                 let current_min_key = &sorted_data_by_pubkey[*current_min_slot_group_index]
                     [*current_min_offset]
                     .pubkey;
                 if *key < current_min_key {
-                    working_set.push((*slot_group_index, *offset));
+                    working_set.push(SlotGroupPointer {
+                        slot_group_index: *slot_group_index,
+                        offset: *offset,
+                    });
+
                     break;
                 }
             }
 
-            let found = working_set.binary_search_by(|(slot_group_index, offset)| {
-                let prob = &sorted_data_by_pubkey[*slot_group_index][*offset].pubkey;
+            let found = working_set.binary_search_by(|pointer| {
+                let prob = &sorted_data_by_pubkey[pointer.slot_group_index][pointer.offset].pubkey;
                 (*key).cmp(prob)
             });
 
@@ -1042,12 +1059,18 @@ impl<'a> AccountsHasher<'a> {
                     // found a new new key, insert into the working_set. This is O(n/2) on
                     // average. Theoretically, this operation could be expensive and may be further
                     // optimized in future.
-                    working_set.insert(index, (*slot_group_index, *offset));
+                    working_set.insert(
+                        index,
+                        SlotGroupPointer {
+                            slot_group_index: *slot_group_index,
+                            offset: *offset,
+                        },
+                    );
                     break;
                 }
                 Ok(index) => {
-                    let v = &mut working_set[index];
-                    if v.0 > *slot_group_index {
+                    let pointer = &mut working_set[index];
+                    if pointer.slot_group_index > *slot_group_index {
                         // There is already a later slot group that contains this key in the working_set,
                         // look up again.
                         let (_item, new_next) = Self::get_item(
@@ -1069,12 +1092,12 @@ impl<'a> AccountsHasher<'a> {
                             binner,
                             &ItemLocation {
                                 key,
-                                division_index: v.0,
-                                offset: v.1,
+                                division_index: pointer.slot_group_index,
+                                offset: pointer.offset,
                             },
                         );
-                        v.0 = *slot_group_index;
-                        v.1 = *offset;
+                        pointer.slot_group_index = *slot_group_index;
+                        pointer.offset = *offset;
                         *next = new_next;
                     }
                 }
@@ -1116,7 +1139,11 @@ impl<'a> AccountsHasher<'a> {
         let mut overall_sum = 0;
         let filler_accounts_enabled = self.filler_accounts_enabled();
 
-        while let Some((slot_group_index, offset)) = working_set.pop() {
+        while let Some(SlotGroupPointer {
+            slot_group_index,
+            offset,
+        }) = working_set.pop()
+        {
             let key = &sorted_data_by_pubkey[slot_group_index][offset].pubkey;
 
             // get the min item, add lamports, get hash
