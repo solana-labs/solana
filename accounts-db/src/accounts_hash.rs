@@ -1025,7 +1025,7 @@ impl<'a> AccountsHasher<'a> {
         binner: &PubkeyBinCalculator24,
     ) {
         // looping to add next item to working set
-        while let Some(ItemLocation { key, pointer }) = next {
+        while let Some(ItemLocation { key, pointer }) = std::mem::take(next) {
             // if `new key` is less than the min key in the working set, skip binary search and
             // insert item to the end vec directly
             if let Some(SlotGroupPointer {
@@ -1036,8 +1036,8 @@ impl<'a> AccountsHasher<'a> {
                 let current_min_key = &sorted_data_by_pubkey[*current_min_slot_group_index]
                     [*current_min_offset]
                     .pubkey;
-                if *key < current_min_key {
-                    working_set.push(*pointer);
+                if key < current_min_key {
+                    working_set.push(pointer);
                     break;
                 }
             }
@@ -1052,7 +1052,7 @@ impl<'a> AccountsHasher<'a> {
                     // found a new new key, insert into the working_set. This is O(n/2) on
                     // average. Theoretically, this operation could be expensive and may be further
                     // optimized in future.
-                    working_set.insert(index, *pointer);
+                    working_set.insert(index, pointer);
                     break;
                 }
                 Ok(index) => {
@@ -1064,10 +1064,7 @@ impl<'a> AccountsHasher<'a> {
                             sorted_data_by_pubkey,
                             pubkey_bin,
                             binner,
-                            &ItemLocation {
-                                key,
-                                pointer: *pointer,
-                            },
+                            &ItemLocation { key, pointer },
                         );
                         *next = new_next;
                     } else {
@@ -1081,7 +1078,7 @@ impl<'a> AccountsHasher<'a> {
                                 pointer: *found,
                             },
                         );
-                        *found = *pointer;
+                        *found = pointer;
                         *next = new_next;
                     }
                 }
