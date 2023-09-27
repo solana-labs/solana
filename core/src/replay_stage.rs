@@ -8101,7 +8101,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_tower_sync_from_bank_failed_switch() {
+    fn test_tower_sync_from_bank_failed_switch_and_lockout() {
         solana_logger::setup_with_default(
             "error,solana_core::replay_stage=info,solana_core::consensus=info",
         );
@@ -8123,7 +8123,7 @@ pub(crate) mod tests {
             We are sitting with an oudated tower that has voted until 1. We see that 4 is the heaviest slot,
             however in the past we have voted up to 6. We must acknowledge the vote state present at 6,
             adopt it as our own and *not* vote on 2 or 4, to respect slashing rules as there is
-            not enough stake to switch
+            not enough stake to switch, and we are locked out on 4.
         */
 
         let generate_votes = |pubkeys: Vec<Pubkey>| {
@@ -8155,7 +8155,10 @@ pub(crate) mod tests {
         assert_eq!(reset_fork, Some(6));
         assert_eq!(
             failures,
-            vec![HeaviestForkFailures::FailedSwitchThreshold(4, 0, 30000),]
+            vec![
+                HeaviestForkFailures::FailedSwitchThreshold(4, 0, 30000),
+                HeaviestForkFailures::LockedOut(4)
+            ]
         );
 
         let (vote_fork, reset_fork, failures) = run_compute_and_select_forks(
@@ -8171,78 +8174,10 @@ pub(crate) mod tests {
         assert_eq!(reset_fork, Some(6));
         assert_eq!(
             failures,
-            vec![HeaviestForkFailures::FailedSwitchThreshold(4, 0, 30000),]
+            vec![
+                HeaviestForkFailures::FailedSwitchThreshold(4, 0, 30000),
+                HeaviestForkFailures::LockedOut(4)
+            ]
         );
-    }
-
-    #[test]
-    fn test_tower_sync_from_bank_failed_lockout() {
-        solana_logger::setup_with_default(
-            "error,solana_core::replay_stage=info,solana_core::consensus=info",
-        );
-        /*
-            Fork structure:
-
-                 slot 0
-                   |
-                 slot 1
-                 /    \
-            slot 3    |
-               |    slot 2
-            slot 4    |
-                    slot 5
-                      |
-                    slot 6
-
-            We had some point voted 0 - 6, while the rest of the network voted 0 - 4.
-            We are sitting with an oudated tower that has voted until 1. We see that 4 is the heaviest slot,
-            however in the past we have voted up to 6. We must acknowledge the vote state present at 6,
-            adopt it as our own and *not* vote on 3 or 4, to respect slashing rules as we are locked
-            out on 4, even though there is enough stake to switch. However we should still reset onto
-            4.
-        */
-
-        let generate_votes = |pubkeys: Vec<Pubkey>| {
-            pubkeys
-                .into_iter()
-                .zip(iter::once(vec![0, 1, 2, 5, 6]).chain(iter::repeat(vec![0, 1, 3, 4]).take(2)))
-                .collect()
-        };
-        let tree = tr(0) / (tr(1) / (tr(3) / (tr(4))) / (tr(2) / (tr(5) / (tr(6)))));
-        let (mut vote_simulator, _blockstore) =
-            setup_forks_from_tree(tree, 3, Some(Box::new(generate_votes)));
-        let (bank_forks, mut progress) = (vote_simulator.bank_forks, vote_simulator.progress);
-        let bank_hash = |slot| bank_forks.read().unwrap().bank_hash(slot).unwrap();
-        let my_vote_pubkey = vote_simulator.vote_pubkeys[0];
-        let mut tower = Tower::default();
-        tower.node_pubkey = vote_simulator.node_pubkeys[0];
-        tower.record_vote(0, bank_hash(0));
-        tower.record_vote(1, bank_hash(1));
-
-        let (vote_fork, reset_fork, failures) = run_compute_and_select_forks(
-            &bank_forks,
-            &mut progress,
-            &mut tower,
-            &mut vote_simulator.heaviest_subtree_fork_choice,
-            &mut vote_simulator.latest_validator_votes_for_frozen_banks,
-            Some(my_vote_pubkey),
-        );
-
-        assert_eq!(vote_fork, None);
-        assert_eq!(reset_fork, Some(4));
-        assert_eq!(failures, vec![HeaviestForkFailures::LockedOut(4),]);
-
-        let (vote_fork, reset_fork, failures) = run_compute_and_select_forks(
-            &bank_forks,
-            &mut progress,
-            &mut tower,
-            &mut vote_simulator.heaviest_subtree_fork_choice,
-            &mut vote_simulator.latest_validator_votes_for_frozen_banks,
-            Some(my_vote_pubkey),
-        );
-
-        assert_eq!(vote_fork, None);
-        assert_eq!(reset_fork, Some(4));
-        assert_eq!(failures, vec![HeaviestForkFailures::LockedOut(4),]);
     }
 }
