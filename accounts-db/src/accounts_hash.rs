@@ -436,7 +436,7 @@ pub struct AccountsHasher<'a> {
 }
 
 /// Pointer to a specific item in chunked accounts hash slices.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 struct SlotGroupPointer {
     /// slot group index
     slot_group_index: usize,
@@ -1037,7 +1037,7 @@ impl<'a> AccountsHasher<'a> {
                     [*current_min_offset]
                     .pubkey;
                 if *key < current_min_key {
-                    working_set.push(pointer.clone());
+                    working_set.push(*pointer);
                     break;
                 }
             }
@@ -1052,7 +1052,7 @@ impl<'a> AccountsHasher<'a> {
                     // found a new new key, insert into the working_set. This is O(n/2) on
                     // average. Theoretically, this operation could be expensive and may be further
                     // optimized in future.
-                    working_set.insert(index, pointer.clone());
+                    working_set.insert(index, *pointer);
                     break;
                 }
                 Ok(index) => {
@@ -1066,7 +1066,7 @@ impl<'a> AccountsHasher<'a> {
                             binner,
                             &ItemLocation {
                                 key,
-                                pointer: pointer.clone(),
+                                pointer: *pointer,
                             },
                         );
                         *next = new_next;
@@ -1078,10 +1078,10 @@ impl<'a> AccountsHasher<'a> {
                             binner,
                             &ItemLocation {
                                 key,
-                                pointer: found.clone(),
+                                pointer: *found,
                             },
                         );
-                        *found = pointer.clone();
+                        *found = *pointer;
                         *next = new_next;
                     }
                 }
