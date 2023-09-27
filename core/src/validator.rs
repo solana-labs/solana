@@ -1272,6 +1272,7 @@ impl Validator {
                 cluster_info.clone(),
                 bank_forks.clone(),
                 slots_to_repair_for_wen_restart.clone().unwrap(),
+                &accounts_background_request_sender,
             ) {
                 Ok(new_root_slot) => {
                     return Err(format!("wen_restart phase one completed, will restart to wait for supermajority: chosen slot {}", new_root_slot));

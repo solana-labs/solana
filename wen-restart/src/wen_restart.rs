@@ -8,10 +8,10 @@ use {
     },
     log::*,
     prost::Message,
-    solana_accounts_db::accounts_db::CalcAccountsHashDataSource,
     solana_gossip::{cluster_info::ClusterInfo, crds::Cursor},
     solana_ledger::blockstore::Blockstore,
     solana_runtime::{
+        accounts_background_service::AbsRequestSender,
         bank_forks::BankForks,
         snapshot_bank_utils::bank_to_incremental_snapshot_archive,
         snapshot_config::SnapshotConfig,
@@ -96,6 +96,7 @@ pub fn wen_restart(
     cluster_info: Arc<ClusterInfo>,
     bank_forks: Arc<RwLock<BankForks>>,
     slots_to_repair_for_wen_restart: Arc<RwLock<Option<Vec<Slot>>>>,
+    accounts_background_request_sender: &AbsRequestSender,
 ) -> Result<Slot, Box<dyn std::error::Error>> {
     // repair and restart option does not work without last voted slot.
     let last_voted_slot = last_vote.last_voted_slot().unwrap();
@@ -231,19 +232,17 @@ pub fn wen_restart(
     let new_root_bank_hash;
     let new_shred_version;
     {
-        let my_bank_forks = bank_forks.write().unwrap();
+        let mut my_bank_forks = bank_forks.write().unwrap();
         let root_bank = my_bank_forks.root_bank();
         root_bank.register_hard_fork(my_selected_slot);
         let new_root_bank = my_bank_forks.get(my_selected_slot).unwrap();
         new_root_bank.rehash();
         new_root_bank_hash = new_root_bank.hash();
-        // Need to set the EAH to Valid so that we don't hit the assertion that EAH is invalid.
-        new_root_bank
-            .rc
-            .accounts
-            .accounts_db
-            .epoch_accounts_hash_manager
-            .set_in_flight(my_selected_slot);
+        my_bank_forks.set_root(
+            my_selected_slot,
+            accounts_background_request_sender,
+            Some(my_selected_slot),
+        );
         bank_to_incremental_snapshot_archive(
             snapshot_config.bank_snapshots_dir.clone(),
             &new_root_bank,
