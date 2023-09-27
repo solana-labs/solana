@@ -243,6 +243,8 @@ pub fn wen_restart(
             accounts_background_request_sender,
             Some(my_selected_slot),
         );
+        // Add get_epoch_accounts_hash_to_serialize() to make sure the previous EAH calculation finished.
+        info!("wen_restart: EAH calculated: {:?}", new_root_bank.get_epoch_accounts_hash_to_serialize());
         bank_to_incremental_snapshot_archive(
             snapshot_config.bank_snapshots_dir.clone(),
             &new_root_bank,
