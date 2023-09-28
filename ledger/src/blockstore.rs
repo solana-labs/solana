@@ -7245,7 +7245,7 @@ pub mod tests {
                 .into();
                 blockstore
                     .transaction_status_cf
-                    .put_protobuf((0, signature, slot), &status)
+                    .put_protobuf((signature, slot), &status)
                     .unwrap();
                 let status = TransactionStatusMeta {
                     status: Ok(()),
@@ -7264,7 +7264,7 @@ pub mod tests {
                 .into();
                 blockstore
                     .transaction_status_cf
-                    .put_protobuf((0, signature, slot + 1), &status)
+                    .put_protobuf((signature, slot + 1), &status)
                     .unwrap();
                 let status = TransactionStatusMeta {
                     status: Ok(()),
@@ -7283,7 +7283,7 @@ pub mod tests {
                 .into();
                 blockstore
                     .transaction_status_cf
-                    .put_protobuf((0, signature, slot + 2), &status)
+                    .put_protobuf((signature, slot + 2), &status)
                     .unwrap();
                 VersionedTransactionWithStatusMeta {
                     transaction,
