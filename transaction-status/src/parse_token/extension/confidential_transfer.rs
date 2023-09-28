@@ -192,8 +192,8 @@ pub(in crate::parse_token) fn parse_confidential_transfer_instruction(
             let proof_instruction_offset: i8 = transfer_data.proof_instruction_offset;
             let mut value = json!({
                 "source": account_keys[account_indexes[0] as usize].to_string(),
-                "destination": account_keys[account_indexes[1] as usize].to_string(),
-                "mint": account_keys[account_indexes[2] as usize].to_string(),
+                "mint": account_keys[account_indexes[1] as usize].to_string(),
+                "destination": account_keys[account_indexes[2] as usize].to_string(),
                 "instructionsSysvar": account_keys[account_indexes[3] as usize].to_string(),
                 "newSourceDecryptableAvailableBalance": format!("{}", transfer_data.new_source_decryptable_available_balance),
                 "proofInstructionOffset": proof_instruction_offset,
