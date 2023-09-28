@@ -88,9 +88,9 @@ mod test {
         // Initialize variations
         let init_ix = initialize(
             &spl_token_2022::id(),
-            &convert_pubkey(mint_pubkey),
-            Some(convert_pubkey(authority)),
-            Some(convert_pubkey(metadata_address)),
+            &mint_pubkey,
+            Some(authority),
+            Some(metadata_address),
         )
         .unwrap();
         let message = Message::new(&[init_ix], None);
@@ -111,13 +111,7 @@ mod test {
             }
         );
 
-        let init_ix = initialize(
-            &spl_token_2022::id(),
-            &convert_pubkey(mint_pubkey),
-            None,
-            None,
-        )
-        .unwrap();
+        let init_ix = initialize(&spl_token_2022::id(), &mint_pubkey, None, None).unwrap();
         let message = Message::new(&[init_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
@@ -137,8 +131,8 @@ mod test {
         // Single owner Update
         let update_ix = update(
             &spl_token_2022::id(),
-            &convert_pubkey(mint_pubkey),
-            &convert_pubkey(authority),
+            &mint_pubkey,
+            &authority,
             &[],
             Some(metadata_address),
         )
@@ -167,12 +161,9 @@ mod test {
         let multisig_signer1 = Pubkey::new_unique();
         let update_ix = update(
             &spl_token_2022::id(),
-            &convert_pubkey(mint_pubkey),
-            &convert_pubkey(multisig_pubkey),
-            &[
-                &convert_pubkey(multisig_signer0),
-                &convert_pubkey(multisig_signer1),
-            ],
+            &mint_pubkey,
+            &multisig_pubkey,
+            &[&multisig_signer0, &multisig_signer1],
             Some(metadata_address),
         )
         .unwrap();
