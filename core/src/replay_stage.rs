@@ -3441,7 +3441,10 @@ impl ReplayStage {
         //    switch_threshold succeeds
         let mut failure_reasons = vec![];
         struct CandidateVoteAndResetBanks<'a> {
+            // A bank that the validator will consider voting on given it passes all
+            // remaining vote checks
             candidate_vote_bank: Option<&'a Arc<Bank>>,
+            // A bank that the validator will reset its PoH to
             reset_bank: Option<&'a Arc<Bank>>,
             switch_fork_decision: SwitchForkDecision,
         }
@@ -3479,7 +3482,7 @@ impl ReplayStage {
                     };
                     CandidateVoteAndResetBanks {
                         candidate_vote_bank,
-                        reset_bank: candidate_vote_bank,
+                        reset_bank: heaviest_bank_on_same_voted_fork,
                         switch_fork_decision: final_switch_fork_decision,
                     }
                 }
@@ -3615,7 +3618,7 @@ impl ReplayStage {
             } else {
                 SelectVoteAndResetForkResult {
                     vote_bank: None,
-                    reset_bank: Some(candidate_vote_bank.clone()),
+                    reset_bank: reset_bank.cloned(),
                     heaviest_fork_failures: failure_reasons,
                 }
             }
