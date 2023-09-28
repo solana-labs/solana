@@ -54,7 +54,7 @@ pub fn unix_timestamp_from_rfc3339_datetime(
 
 #[deprecated(
     since = "1.17.0",
-    note = "please use `UiTokenAmount::parse_amount` and `UiTokenAmount::sol_to_lamport` instead"
+    note = "please use `Amount::parse_decimal` and `Amount::sol_to_lamport` instead"
 )]
 pub fn lamports_of_sol(matches: &ArgMatches, name: &str) -> Option<u64> {
     value_of(matches, name).map(sol_to_lamports)
@@ -105,37 +105,54 @@ pub fn parse_percentage(arg: &str) -> Result<u8, String> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum UiTokenAmount {
-    Amount(f64),
+pub enum Amount {
+    Decimal(f64),
+    Raw(u64),
     All,
 }
-impl UiTokenAmount {
-    pub fn parse_amount(arg: &str) -> Result<UiTokenAmount, String> {
+impl Amount {
+    pub fn parse(arg: &str) -> Result<Amount, String> {
+        if arg == "ALL" {
+            Ok(Amount::All)
+        } else {
+            Self::parse_decimal(arg).or(Self::parse_raw(arg)
+                .map_err(|_| format!("Unable to parse input amount, provided: {arg}")))
+        }
+    }
+
+    pub fn parse_decimal(arg: &str) -> Result<Amount, String> {
         arg.parse::<f64>()
-            .map(UiTokenAmount::Amount)
+            .map(Amount::Decimal)
             .map_err(|_| format!("Unable to parse input amount, provided: {arg}"))
     }
 
-    pub fn parse_amount_or_all(arg: &str) -> Result<UiTokenAmount, String> {
+    pub fn parse_raw(arg: &str) -> Result<Amount, String> {
+        arg.parse::<u64>()
+            .map(Amount::Raw)
+            .map_err(|_| format!("Unable to parse input amount, provided: {arg}"))
+    }
+
+    pub fn parse_decimal_or_all(arg: &str) -> Result<Amount, String> {
         if arg == "ALL" {
-            Ok(UiTokenAmount::All)
+            Ok(Amount::All)
         } else {
-            Self::parse_amount(arg).map_err(|_| {
+            Self::parse_decimal(arg).map_err(|_| {
                 format!("Unable to parse input amount as float or 'ALL' keyword, provided: {arg}")
             })
         }
     }
 
-    pub fn to_raw_amount(&self, decimals: u8) -> RawTokenAmount {
+    pub fn to_raw_amount(&self, decimals: u8) -> Self {
         match self {
-            UiTokenAmount::Amount(amount) => {
-                RawTokenAmount::Amount((amount * 10_usize.pow(decimals as u32) as f64) as u64)
+            Amount::Decimal(amount) => {
+                Amount::Raw((amount * 10_usize.pow(decimals as u32) as f64) as u64)
             }
-            UiTokenAmount::All => RawTokenAmount::All,
+            Amount::Raw(amount) => Amount::Raw(*amount),
+            Amount::All => Amount::All,
         }
     }
 
-    pub fn sol_to_lamport(&self) -> RawTokenAmount {
+    pub fn sol_to_lamport(&self) -> Amount {
         const NATIVE_SOL_DECIMALS: u8 = 9;
         self.to_raw_amount(NATIVE_SOL_DECIMALS)
     }
@@ -328,12 +345,12 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_token_amount() {
+    fn test_parse_token_decimal() {
         let command = Command::new("test").arg(
             Arg::new("amount")
                 .long("amount")
                 .takes_value(true)
-                .value_parser(UiTokenAmount::parse_amount),
+                .value_parser(Amount::parse_decimal),
         );
 
         // success cases
@@ -342,8 +359,8 @@ mod tests {
             .try_get_matches_from(vec!["test", "--amount", "11223344"])
             .unwrap();
         assert_eq!(
-            *matches.get_one::<UiTokenAmount>("amount").unwrap(),
-            UiTokenAmount::Amount(11223344_f64),
+            *matches.get_one::<Amount>("amount").unwrap(),
+            Amount::Decimal(11223344_f64),
         );
 
         let matches = command
@@ -351,8 +368,8 @@ mod tests {
             .try_get_matches_from(vec!["test", "--amount", "0.11223344"])
             .unwrap();
         assert_eq!(
-            *matches.get_one::<UiTokenAmount>("amount").unwrap(),
-            UiTokenAmount::Amount(0.11223344),
+            *matches.get_one::<Amount>("amount").unwrap(),
+            Amount::Decimal(0.11223344),
         );
 
         // validation fail cases
@@ -370,12 +387,12 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_token_amount_or_all() {
+    fn test_parse_token_decimal_or_all() {
         let command = Command::new("test").arg(
             Arg::new("amount")
                 .long("amount")
                 .takes_value(true)
-                .value_parser(UiTokenAmount::parse_amount_or_all),
+                .value_parser(Amount::parse_decimal_or_all),
         );
 
         // success cases
@@ -384,8 +401,8 @@ mod tests {
             .try_get_matches_from(vec!["test", "--amount", "11223344"])
             .unwrap();
         assert_eq!(
-            *matches.get_one::<UiTokenAmount>("amount").unwrap(),
-            UiTokenAmount::Amount(11223344_f64),
+            *matches.get_one::<Amount>("amount").unwrap(),
+            Amount::Decimal(11223344_f64),
         );
 
         let matches = command
@@ -393,18 +410,15 @@ mod tests {
             .try_get_matches_from(vec!["test", "--amount", "0.11223344"])
             .unwrap();
         assert_eq!(
-            *matches.get_one::<UiTokenAmount>("amount").unwrap(),
-            UiTokenAmount::Amount(0.11223344),
+            *matches.get_one::<Amount>("amount").unwrap(),
+            Amount::Decimal(0.11223344),
         );
 
         let matches = command
             .clone()
             .try_get_matches_from(vec!["test", "--amount", "ALL"])
             .unwrap();
-        assert_eq!(
-            *matches.get_one::<UiTokenAmount>("amount").unwrap(),
-            UiTokenAmount::All,
-        );
+        assert_eq!(*matches.get_one::<Amount>("amount").unwrap(), Amount::All,);
 
         // validation fail cases
         let matches_error = command
@@ -420,7 +434,7 @@ mod tests {
             Arg::new("amount")
                 .long("amount")
                 .takes_value(true)
-                .value_parser(UiTokenAmount::parse_amount_or_all),
+                .value_parser(Amount::parse_decimal_or_all),
         );
 
         let test_cases = vec![
@@ -436,10 +450,10 @@ mod tests {
                 .unwrap();
             assert_eq!(
                 matches
-                    .get_one::<UiTokenAmount>("amount")
+                    .get_one::<Amount>("amount")
                     .unwrap()
                     .sol_to_lamport(),
-                RawTokenAmount::Amount(expected_lamport),
+                Amount::Raw(expected_lamport),
             );
         }
     }

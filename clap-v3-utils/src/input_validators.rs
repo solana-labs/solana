@@ -297,10 +297,7 @@ where
         })
 }
 
-#[deprecated(
-    since = "1.17.0",
-    note = "please use `UiTokenAmount::parse_amount` instead"
-)]
+#[deprecated(since = "1.17.0", note = "please use `Amount::parse_decimal` instead")]
 pub fn is_amount<T>(amount: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -316,7 +313,7 @@ where
 
 #[deprecated(
     since = "1.17.0",
-    note = "please use `TokenAmount::parse_amount` instead"
+    note = "please use `TokenAmount::parse_decimal` instead"
 )]
 pub fn is_amount_or_all<T>(amount: T) -> Result<(), String>
 where
