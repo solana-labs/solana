@@ -19,8 +19,6 @@ lazy_static! {
     #[derive(Debug)]
     static ref SOLANA_ROOT: PathBuf = get_solana_root();
 
-    #[derive(Debug)]
-    pub static ref LEDGER_DIR: PathBuf = SOLANA_ROOT.join("config-k8s/bootstrap-validator");
 }
 
 pub fn initialize_globals() {
@@ -28,9 +26,6 @@ pub fn initialize_globals() {
 }
 
 pub mod docker;
-pub mod genesis;
-pub mod kubernetes;
-pub mod ledger_helper;
 pub mod release;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -53,10 +48,6 @@ macro_rules! boxed_error {
     ($message:expr) => {
         Box::new(std::io::Error::new(std::io::ErrorKind::Other, $message)) as Box<dyn Error>
     };
-}
-
-pub fn load_env_variable_by_name(name: &str) -> Result<String, env::VarError> {
-    env::var(name)
 }
 
 static TRUCK: Emoji = Emoji("🚚 ", "");
