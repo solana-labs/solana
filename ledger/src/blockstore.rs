@@ -7424,7 +7424,7 @@ pub mod tests {
 
         // result not found
         assert!(transaction_status_cf
-            .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((0, Signature::default(), 0))
+            .get_protobuf((Signature::default(), 0))
             .unwrap()
             .is_none());
 
@@ -7445,7 +7445,7 @@ pub mod tests {
         }
         .into();
         assert!(transaction_status_cf
-            .put_protobuf((0, Signature::default(), 0), &status,)
+            .put_protobuf((Signature::default(), 0), &status)
             .is_ok());
 
         // result found
@@ -7463,7 +7463,7 @@ pub mod tests {
             return_data,
             compute_units_consumed,
         } = transaction_status_cf
-            .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((0, Signature::default(), 0))
+            .get_protobuf((Signature::default(), 0))
             .unwrap()
             .unwrap()
             .try_into()
@@ -7498,7 +7498,7 @@ pub mod tests {
         }
         .into();
         assert!(transaction_status_cf
-            .put_protobuf((0, Signature::from([2u8; 64]), 9), &status,)
+            .put_protobuf((Signature::from([2u8; 64]), 9), &status,)
             .is_ok());
 
         // result found
@@ -7516,11 +7516,7 @@ pub mod tests {
             return_data,
             compute_units_consumed,
         } = transaction_status_cf
-            .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((
-                0,
-                Signature::from([2u8; 64]),
-                9,
-            ))
+            .get_protobuf((Signature::from([2u8; 64]), 9))
             .unwrap()
             .unwrap()
             .try_into()
