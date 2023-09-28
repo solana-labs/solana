@@ -5,6 +5,7 @@ use {
     solana_cli::{
         cli::{process_command, CliCommand, CliConfig},
         program::{ProgramCliCommand, CLOSE_PROGRAM_WARNING},
+        test_utils::wait_n_slots,
     },
     solana_cli_output::OutputFormat,
     solana_faucet::faucet::run_local_faucet,
@@ -687,6 +688,9 @@ fn test_cli_program_close_program() {
         &[program_keypair.pubkey().as_ref()],
         &bpf_loader_upgradeable::id(),
     );
+
+    // Wait one slot to avoid "Program was deployed in this block already" error
+    wait_n_slots(&rpc_client, 1);
 
     // Close program
     let close_account = rpc_client.get_account(&programdata_pubkey).unwrap();
