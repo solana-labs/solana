@@ -4683,12 +4683,12 @@ pub mod tests {
             vote_instruction,
             vote_state::{self, Vote, VoteInit, VoteStateVersions, MAX_LOCKOUT_HISTORY},
         },
+        spl_pod::optional_keys::OptionalNonZeroPubkey,
         spl_token_2022::{
             extension::{
                 immutable_owner::ImmutableOwner, memo_transfer::MemoTransfer,
                 mint_close_authority::MintCloseAuthority, ExtensionType, StateWithExtensionsMut,
             },
-            pod::OptionalNonZeroPubkey,
             solana_program::{program_option::COption, pubkey::Pubkey as SplTokenPubkey},
             state::{AccountState as TokenAccountState, Mint},
         },
@@ -7439,10 +7439,11 @@ pub mod tests {
                     delegated_amount: 30,
                     close_authority: COption::Some(owner),
                 };
-                let account_size = ExtensionType::get_account_len::<TokenAccount>(&[
+                let account_size = ExtensionType::try_calculate_account_len::<TokenAccount>(&[
                     ExtensionType::ImmutableOwner,
                     ExtensionType::MemoTransfer,
-                ]);
+                ])
+                .unwrap();
                 let mut account_data = vec![0; account_size];
                 let mut account_state =
                     StateWithExtensionsMut::<TokenAccount>::unpack_uninitialized(&mut account_data)
@@ -7466,8 +7467,10 @@ pub mod tests {
                 bank.store_account(&token_account_pubkey, &token_account);
 
                 // Add the mint
-                let mint_size =
-                    ExtensionType::get_account_len::<Mint>(&[ExtensionType::MintCloseAuthority]);
+                let mint_size = ExtensionType::try_calculate_account_len::<Mint>(&[
+                    ExtensionType::MintCloseAuthority,
+                ])
+                .unwrap();
                 let mint_base = Mint {
                     mint_authority: COption::Some(owner),
                     supply: 500,
@@ -7931,10 +7934,11 @@ pub mod tests {
                     delegated_amount: 30,
                     close_authority: COption::Some(owner),
                 };
-                let account_size = ExtensionType::get_account_len::<TokenAccount>(&[
+                let account_size = ExtensionType::try_calculate_account_len::<TokenAccount>(&[
                     ExtensionType::ImmutableOwner,
                     ExtensionType::MemoTransfer,
-                ]);
+                ])
+                .unwrap();
                 let mut account_data = vec![0; account_size];
                 let mut account_state =
                     StateWithExtensionsMut::<TokenAccount>::unpack_uninitialized(&mut account_data)
@@ -7957,8 +7961,10 @@ pub mod tests {
                 });
                 bank.store_account(&token_account_pubkey, &token_account);
 
-                let mint_size =
-                    ExtensionType::get_account_len::<Mint>(&[ExtensionType::MintCloseAuthority]);
+                let mint_size = ExtensionType::try_calculate_account_len::<Mint>(&[
+                    ExtensionType::MintCloseAuthority,
+                ])
+                .unwrap();
                 let mint_base = Mint {
                     mint_authority: COption::Some(owner),
                     supply: 500,

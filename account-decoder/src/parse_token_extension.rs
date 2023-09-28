@@ -324,9 +324,11 @@ impl From<extension::confidential_transfer_fee::ConfidentialTransferFeeConfig>
                 .into();
         Self {
             authority: authority.map(|pubkey| pubkey.to_string()),
-            withdraw_withheld_authority_elgamal_pubkey:
-                withdraw_withheld_authority_elgamal_pubkey.map(|pubkey| pubkey.to_string()),
-            harvest_to_mint_enabled: confidential_transfer_fee_config.harvest_to_mint_enabled.into(),
+            withdraw_withheld_authority_elgamal_pubkey: withdraw_withheld_authority_elgamal_pubkey
+                .map(|pubkey| pubkey.to_string()),
+            harvest_to_mint_enabled: confidential_transfer_fee_config
+                .harvest_to_mint_enabled
+                .into(),
             withheld_amount: format!("{}", confidential_transfer_fee_config.withheld_amount),
         }
     }
@@ -413,9 +415,7 @@ pub struct UiMetadataPointer {
 }
 
 impl From<extension::metadata_pointer::MetadataPointer> for UiMetadataPointer {
-    fn from(
-        metadata_pointer: extension::metadata_pointer::MetadataPointer,
-    ) -> Self {
+    fn from(metadata_pointer: extension::metadata_pointer::MetadataPointer) -> Self {
         let authority: Option<Pubkey> = metadata_pointer.authority.into();
         let metadata_address: Option<Pubkey> = metadata_pointer.metadata_address.into();
         Self {
@@ -458,9 +458,7 @@ pub struct UiTransferHook {
 }
 
 impl From<extension::transfer_hook::TransferHook> for UiTransferHook {
-    fn from(
-        transfer_hook: extension::transfer_hook::TransferHook,
-    ) -> Self {
+    fn from(transfer_hook: extension::transfer_hook::TransferHook) -> Self {
         let authority: Option<Pubkey> = transfer_hook.authority.into();
         let program_id: Option<Pubkey> = transfer_hook.program_id.into();
         Self {
@@ -477,9 +475,7 @@ pub struct UiTransferHookAccount {
 }
 
 impl From<extension::transfer_hook::TransferHookAccount> for UiTransferHookAccount {
-    fn from(
-        transfer_hook: extension::transfer_hook::TransferHookAccount,
-    ) -> Self {
+    fn from(transfer_hook: extension::transfer_hook::TransferHookAccount) -> Self {
         Self {
             transferring: transfer_hook.transferring.into(),
         }
