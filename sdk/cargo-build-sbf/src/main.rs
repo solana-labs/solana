@@ -82,7 +82,7 @@ where
         .iter()
         .map(|arg| arg.as_ref().to_str().unwrap_or("?"))
         .join(" ");
-    info!("spawn: {}", msg);
+    info!("spawn: {:?} {}", program, msg);
 
     let child = Command::new(program)
         .args(args)
@@ -911,7 +911,7 @@ fn main() {
 
     // The following line is scanned by CI configuration script to
     // separate cargo caches according to the version of platform-tools.
-    let platform_tools_version = String::from("v1.37");
+    let platform_tools_version = String::from("v1.39");
     let rust_base_version = get_base_rust_version(platform_tools_version.as_str());
     let version = format!(
         "{}\nplatform-tools {}\n{}",
