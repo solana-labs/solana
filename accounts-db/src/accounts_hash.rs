@@ -781,47 +781,44 @@ impl<'a> AccountsHasher<'a> {
         // b. lamports
         let _guard = self.active_stats.activate(ActiveStatItem::HashDeDup);
 
+        #[derive(Default)]
+        struct DedupResult {
+            hashes_files: Vec<AccountHashesFile>,
+            hashes_count: usize,
+            lamports_sum: u64,
+        }
+
         let mut zeros = Measure::start("eliminate zeros");
-        let (hashes, hash_total, lamports_total) = (0..max_bin)
+        let DedupResult {
+            hashes_files: hashes,
+            hashes_count: hash_total,
+            lamports_sum: lamports_total,
+        } = (0..max_bin)
             .into_par_iter()
-            .fold(
-                || {
-                    (
-                        /*hashes files*/ Vec::with_capacity(max_bin),
-                        /*hashes count*/ 0_usize,
-                        /*lamports sum*/ 0_u64,
-                    )
-                },
-                |mut accum, bin| {
-                    let (hashes_file, lamports_bin) = self.de_dup_accounts_in_parallel(
-                        sorted_data_by_pubkey,
-                        bin,
-                        max_bin,
-                        stats,
-                    );
-                    accum.2 = accum
-                        .2
-                        .checked_add(lamports_bin)
-                        .expect("summing capitalization cannot overflow");
-                    accum.1 += hashes_file.count();
-                    accum.0.push(hashes_file);
-                    accum
-                },
-            )
+            .fold(DedupResult::default, |mut accum, bin| {
+                let (hashes_file, lamports_bin) =
+                    self.de_dup_accounts_in_parallel(sorted_data_by_pubkey, bin, max_bin, stats);
+
+                accum.lamports_sum = accum
+                    .lamports_sum
+                    .checked_add(lamports_bin)
+                    .expect("summing capitalization cannot overflow");
+                accum.hashes_count += hashes_file.count();
+                accum.hashes_files.push(hashes_file);
+                accum
+            })
             .reduce(
-                || {
-                    (
-                        /*hashes files*/ Vec::with_capacity(max_bin),
-                        /*hashes count*/ 0,
-                        /*lamports sum*/ 0,
-                    )
+                || DedupResult {
+                    hashes_files: Vec::with_capacity(max_bin),
+                    ..Default::default()
                 },
                 |mut a, mut b| {
-                    a.2 =
-                        a.2.checked_add(b.2)
-                            .expect("summing capitalization cannot overflow");
-                    a.1 += b.1;
-                    a.0.append(&mut b.0);
+                    a.lamports_sum = a
+                        .lamports_sum
+                        .checked_add(b.lamports_sum)
+                        .expect("summing capitalization cannot overflow");
+                    a.hashes_count += b.hashes_count;
+                    a.hashes_files.append(&mut b.hashes_files);
                     a
                 },
             );
