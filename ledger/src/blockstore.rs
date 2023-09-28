@@ -7962,11 +7962,11 @@ pub mod tests {
         let lowest_available_slot = lowest_cleanup_slot + 1;
 
         transaction_status_cf
-            .put_protobuf((0, signature1, lowest_cleanup_slot), &status)
+            .put_protobuf((signature1, lowest_cleanup_slot), &status)
             .unwrap();
 
         transaction_status_cf
-            .put_protobuf((0, signature2, lowest_available_slot), &status)
+            .put_protobuf((signature2, lowest_available_slot), &status)
             .unwrap();
 
         let address0 = solana_sdk::pubkey::new_rand();
