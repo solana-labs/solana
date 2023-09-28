@@ -920,7 +920,6 @@ dependencies = [
  "camino",
  "cargo-platform",
  "semver",
- "semver 1.0.19",
  "serde",
  "serde_json",
  "thiserror",
@@ -4455,7 +4454,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfa0f585226d2e68097d4f95d113b15b83a82e819ab25717ec0590d9584ef366"
 dependencies = [
- "semver 1.0.19",
+ "semver",
 ]
 
 [[package]]
@@ -4510,12 +4509,12 @@ version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d3987094b1d07b653b7dfdc3f70ce9a1da9c51ac18c1b06b662e4f9a0e9f4b2"
 dependencies = [
- "base64 0.13.1",
+ "base64 0.21.4",
 ]
 
 [[package]]
 name = "rustls-webpki"
-version = "0.101.4"
+version = "0.101.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c7d5dece342910d9ba34d259310cae3e0154b873b35408b787b59bce53d34fe"
 dependencies = [
@@ -4622,15 +4621,6 @@ checksum = "e932934257d3b408ed8f30db49d85ea163bfe74961f017f405b025af298f0c7a"
 dependencies = [
  "core-foundation-sys",
  "libc",
-]
-
-[[package]]
-name = "semver"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f301af10236f6df4160f7c3f04eec6dbc70ace82d23326abad5edee88801c6b6"
-dependencies = [
- "semver-parser",
 ]
 
 [[package]]
@@ -5338,7 +5328,7 @@ dependencies = [
  "predicates 2.1.5",
  "regex",
  "reqwest",
- "semver 1.0.19",
+ "semver",
  "serial_test",
  "solana-download-utils",
  "solana-logger",
@@ -5415,7 +5405,7 @@ dependencies = [
  "num-traits",
  "pretty-hex",
  "reqwest",
- "semver 1.0.19",
+ "semver",
  "serde",
  "serde_derive",
  "serde_json",
@@ -5477,7 +5467,7 @@ dependencies = [
  "humantime",
  "indicatif",
  "pretty-hex",
- "semver 1.0.19",
+ "semver",
  "serde",
  "serde_json",
  "solana-account-decoder",
@@ -5923,7 +5913,7 @@ dependencies = [
  "crossbeam-channel",
  "flate2",
  "indexmap 2.0.1",
- "itertools",
+ "itertools 0.10.5",
  "log",
  "lru",
  "num-traits",
@@ -5981,7 +5971,7 @@ dependencies = [
  "nix 0.26.4",
  "reqwest",
  "scopeguard",
- "semver 1.0.19",
+ "semver",
  "serde",
  "serde_yaml 0.8.26",
  "serde_yaml 0.9.25",
@@ -6481,7 +6471,7 @@ dependencies = [
  "futures-util",
  "log",
  "reqwest",
- "semver 1.0.19",
+ "semver",
  "serde",
  "serde_derive",
  "serde_json",
@@ -6545,7 +6535,7 @@ dependencies = [
  "num-traits",
  "parking_lot 0.12.1",
  "qstring",
- "semver 1.0.19",
+ "semver",
  "solana-sdk",
  "thiserror",
  "uriparse",
@@ -6625,7 +6615,7 @@ dependencies = [
  "jsonrpc-http-server",
  "log",
  "reqwest",
- "semver 1.0.19",
+ "semver",
  "serde",
  "serde_derive",
  "serde_json",
@@ -6646,7 +6636,7 @@ dependencies = [
  "bs58",
  "jsonrpc-core",
  "reqwest",
- "semver 1.0.19",
+ "semver",
  "serde",
  "serde_derive",
  "serde_json",
@@ -6973,7 +6963,7 @@ dependencies = [
  "futures-util",
  "histogram",
  "indexmap 2.0.1",
- "itertools",
+ "itertools 0.10.5",
  "libc",
  "log",
  "nix 0.26.4",
@@ -7284,8 +7274,8 @@ name = "solana-version"
 version = "1.17.0"
 dependencies = [
  "log",
- "rustc_version 0.4.0",
- "semver 1.0.19",
+ "rustc_version",
+ "semver",
  "serde",
  "serde_derive",
  "solana-frozen-abi",
@@ -7299,10 +7289,10 @@ version = "1.17.0"
 dependencies = [
  "bincode",
  "crossbeam-channel",
- "itertools",
+ "itertools 0.10.5",
  "log",
  "rand 0.8.5",
- "rustc_version 0.4.0",
+ "rustc_version",
  "serde",
  "serde_derive",
  "solana-frozen-abi",
