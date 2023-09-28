@@ -15,8 +15,8 @@ fn parse_matches() -> ArgMatches<'static> {
             Arg::with_name("release_channel")
                 .long("release-channel")
                 .takes_value(true)
-                .default_value("")
-                .help("Optional: release version. e.g. v1.16.5"),
+                .required_if("deploy_method", "tar") // Require if deploy_method is "tar"
+                .help("release version. e.g. v1.16.5. Required if '--deploy-method tar'"),
         )
         .arg(
             Arg::with_name("deploy_method")

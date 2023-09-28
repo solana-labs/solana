@@ -58,3 +58,4 @@ cargo run --bin solana-k8s --
 Notes:
 - Scripts that run the actual validator code are in `src/scripts`
 - Registry needs to be remotely accessible by all monogon nodes
+- We use the `docker` cli here for building and pushing docker images since the `docker-rs` rust library has sparse features (doesn't support `docker push`) and is very slow building docker images

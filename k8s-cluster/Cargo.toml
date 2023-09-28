@@ -1,7 +1,7 @@
 [package]
 name = "solana-k8s-cluster"
 publish = false
-description = "Kubernetes Validator Deployment for Testing"
+description = "Kubernetes Validator Deployment for Testing. Image Building Component"
 version = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
@@ -28,8 +28,6 @@ git2 = { workspace = true }
 indexmap = { workspace = true, features = ["rayon"] }
 indicatif = { workspace = true }
 itertools = { workspace = true }
-k8s-openapi = { workspace = true }
-kube = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
 lru = { workspace = true }
