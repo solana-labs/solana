@@ -5412,11 +5412,8 @@ dependencies = [
 name = "solana-cargo-build-bpf"
 version = "1.17.0"
 dependencies = [
- "cargo_metadata",
- "clap 3.2.23",
  "log",
  "solana-logger",
- "solana-sdk",
 ]
 
 [[package]]
@@ -5443,10 +5440,6 @@ dependencies = [
 [[package]]
 name = "solana-cargo-test-bpf"
 version = "1.17.0"
-dependencies = [
- "cargo_metadata",
- "clap 3.2.23",
-]
 
 [[package]]
 name = "solana-cargo-test-sbf"
