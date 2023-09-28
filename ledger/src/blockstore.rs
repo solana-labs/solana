@@ -7792,56 +7792,45 @@ pub mod tests {
 
         blockstore.set_roots([0, 2].iter()).unwrap();
 
-        // Initialize index 0, including:
-        //   signature2 in non-root and root,
-        //   signature4 in non-root,
+        // Initialize statuses:
+        //   signature2 in skipped slot and root,
+        //   signature4 in skipped slot,
         //   signature5 in skipped slot and non-root,
         //   signature6 in skipped slot,
-        transaction_status_cf
-            .put_protobuf((0, signature2, 1), &status)
-            .unwrap();
-
-        transaction_status_cf
-            .put_protobuf((0, signature2, 2), &status)
-            .unwrap();
-
-        transaction_status_cf
-            .put_protobuf((0, signature4, 1), &status)
-            .unwrap();
-
-        transaction_status_cf
-            .put_protobuf((0, signature5, 1), &status)
-            .unwrap();
-
-        transaction_status_cf
-            .put_protobuf((0, signature5, 3), &status)
-            .unwrap();
-
-        transaction_status_cf
-            .put_protobuf((0, signature6, 1), &status)
-            .unwrap();
-
-        // Initialize index 1, including:
-        //   signature4 in root,
-        //   signature6 in non-root,
         //   signature5 extra entries
         transaction_status_cf
-            .put_protobuf((1, signature4, 2), &status)
+            .put_protobuf((signature2, 1), &status)
             .unwrap();
 
         transaction_status_cf
-            .put_protobuf((1, signature5, 4), &status)
+            .put_protobuf((signature2, 2), &status)
             .unwrap();
 
         transaction_status_cf
-            .put_protobuf((1, signature5, 5), &status)
+            .put_protobuf((signature4, 1), &status)
             .unwrap();
 
         transaction_status_cf
-            .put_protobuf((1, signature6, 3), &status)
+            .put_protobuf((signature5, 1), &status)
             .unwrap();
 
-        // Signature exists, root found in index 0
+        transaction_status_cf
+            .put_protobuf((signature5, 3), &status)
+            .unwrap();
+
+        transaction_status_cf
+            .put_protobuf((signature6, 1), &status)
+            .unwrap();
+
+        transaction_status_cf
+            .put_protobuf((signature5, 5), &status)
+            .unwrap();
+
+        transaction_status_cf
+            .put_protobuf((signature6, 3), &status)
+            .unwrap();
+
+        // Signature exists, root found
         if let (Some((slot, _status)), counter) = blockstore
             .get_transaction_status_with_counter(signature2, &[].into())
             .unwrap()
@@ -7859,30 +7848,26 @@ pub mod tests {
             assert_eq!(counter, 2);
         }
 
-        // Signature exists, root found in index 1
-        if let (Some((slot, _status)), counter) = blockstore
+        // Signature exists in skipped slot, no root found
+        let (status, counter) = blockstore
             .get_transaction_status_with_counter(signature4, &[].into())
-            .unwrap()
-        {
-            assert_eq!(slot, 2);
-            assert_eq!(counter, 3);
-        }
+            .unwrap();
+        assert_eq!(status, None);
+        assert_eq!(counter, 2);
 
-        // Signature exists, root found although not required, in index 1
-        if let (Some((slot, _status)), counter) = blockstore
+        // Signature exists in skipped slot, no non-root found
+        let (status, counter) = blockstore
             .get_transaction_status_with_counter(signature4, &[3].into())
-            .unwrap()
-        {
-            assert_eq!(slot, 2);
-            assert_eq!(counter, 3);
-        }
+            .unwrap();
+        assert_eq!(status, None);
+        assert_eq!(counter, 2);
 
         // Signature exists, no root found
         let (status, counter) = blockstore
             .get_transaction_status_with_counter(signature5, &[].into())
             .unwrap();
         assert_eq!(status, None);
-        assert_eq!(counter, 6);
+        assert_eq!(counter, 4);
 
         // Signature exists, root not required
         if let (Some((slot, _status)), counter) = blockstore
@@ -7898,39 +7883,39 @@ pub mod tests {
             .get_transaction_status_with_counter(signature1, &[].into())
             .unwrap();
         assert_eq!(status, None);
-        assert_eq!(counter, 2);
+        assert_eq!(counter, 1);
 
         let (status, counter) = blockstore
             .get_transaction_status_with_counter(signature1, &[3].into())
             .unwrap();
         assert_eq!(status, None);
-        assert_eq!(counter, 2);
+        assert_eq!(counter, 1);
 
         // Signature does not exist, between existing entries
         let (status, counter) = blockstore
             .get_transaction_status_with_counter(signature3, &[].into())
             .unwrap();
         assert_eq!(status, None);
-        assert_eq!(counter, 2);
+        assert_eq!(counter, 1);
 
         let (status, counter) = blockstore
             .get_transaction_status_with_counter(signature3, &[3].into())
             .unwrap();
         assert_eq!(status, None);
-        assert_eq!(counter, 2);
+        assert_eq!(counter, 1);
 
         // Signature does not exist, larger than existing entries
         let (status, counter) = blockstore
             .get_transaction_status_with_counter(signature7, &[].into())
             .unwrap();
         assert_eq!(status, None);
-        assert_eq!(counter, 1);
+        assert_eq!(counter, 0);
 
         let (status, counter) = blockstore
             .get_transaction_status_with_counter(signature7, &[3].into())
             .unwrap();
         assert_eq!(status, None);
-        assert_eq!(counter, 1);
+        assert_eq!(counter, 0);
     }
 
     fn do_test_lowest_cleanup_slot_and_special_cfs(simulate_ledger_cleanup_service: bool) {
