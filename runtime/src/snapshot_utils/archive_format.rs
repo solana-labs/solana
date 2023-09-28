@@ -3,11 +3,10 @@ use {
     strum::Display,
 };
 
-pub const SUPPORTED_ARCHIVE_COMPRESSION: &[&str] = &["bz2", "gzip", "zstd", "lz4", "tar", "none"];
+// Publicly support "zstd" and "lz4", but retain support for "tar" for unit tests
+pub const SUPPORTED_ARCHIVE_COMPRESSION: &[&str] = &["zstd", "lz4"];
 pub const DEFAULT_ARCHIVE_COMPRESSION: &str = "zstd";
 
-pub const TAR_BZIP2_EXTENSION: &str = "tar.bz2";
-pub const TAR_GZIP_EXTENSION: &str = "tar.gz";
 pub const TAR_ZSTD_EXTENSION: &str = "tar.zst";
 pub const TAR_LZ4_EXTENSION: &str = "tar.lz4";
 pub const TAR_EXTENSION: &str = "tar";
@@ -15,8 +14,6 @@ pub const TAR_EXTENSION: &str = "tar";
 /// The different archive formats used for snapshots
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Display)]
 pub enum ArchiveFormat {
-    TarBzip2,
-    TarGzip,
     TarZstd,
     TarLz4,
     Tar,
@@ -26,8 +23,6 @@ impl ArchiveFormat {
     /// Get the file extension for the ArchiveFormat
     pub fn extension(&self) -> &str {
         match self {
-            ArchiveFormat::TarBzip2 => TAR_BZIP2_EXTENSION,
-            ArchiveFormat::TarGzip => TAR_GZIP_EXTENSION,
             ArchiveFormat::TarZstd => TAR_ZSTD_EXTENSION,
             ArchiveFormat::TarLz4 => TAR_LZ4_EXTENSION,
             ArchiveFormat::Tar => TAR_EXTENSION,
@@ -36,11 +31,8 @@ impl ArchiveFormat {
 
     pub fn from_cli_arg(archive_format_str: &str) -> Option<ArchiveFormat> {
         match archive_format_str {
-            "bz2" => Some(ArchiveFormat::TarBzip2),
-            "gzip" => Some(ArchiveFormat::TarGzip),
             "zstd" => Some(ArchiveFormat::TarZstd),
             "lz4" => Some(ArchiveFormat::TarLz4),
-            "tar" | "none" => Some(ArchiveFormat::Tar),
             _ => None,
         }
     }
@@ -53,8 +45,6 @@ impl TryFrom<&str> for ArchiveFormat {
 
     fn try_from(extension: &str) -> Result<Self, Self::Error> {
         match extension {
-            TAR_BZIP2_EXTENSION => Ok(ArchiveFormat::TarBzip2),
-            TAR_GZIP_EXTENSION => Ok(ArchiveFormat::TarGzip),
             TAR_ZSTD_EXTENSION => Ok(ArchiveFormat::TarZstd),
             TAR_LZ4_EXTENSION => Ok(ArchiveFormat::TarLz4),
             TAR_EXTENSION => Ok(ArchiveFormat::Tar),
@@ -93,8 +83,6 @@ mod tests {
 
     #[test]
     fn test_extension() {
-        assert_eq!(ArchiveFormat::TarBzip2.extension(), TAR_BZIP2_EXTENSION);
-        assert_eq!(ArchiveFormat::TarGzip.extension(), TAR_GZIP_EXTENSION);
         assert_eq!(ArchiveFormat::TarZstd.extension(), TAR_ZSTD_EXTENSION);
         assert_eq!(ArchiveFormat::TarLz4.extension(), TAR_LZ4_EXTENSION);
         assert_eq!(ArchiveFormat::Tar.extension(), TAR_EXTENSION);
@@ -102,14 +90,6 @@ mod tests {
 
     #[test]
     fn test_try_from() {
-        assert_eq!(
-            ArchiveFormat::try_from(TAR_BZIP2_EXTENSION),
-            Ok(ArchiveFormat::TarBzip2)
-        );
-        assert_eq!(
-            ArchiveFormat::try_from(TAR_GZIP_EXTENSION),
-            Ok(ArchiveFormat::TarGzip)
-        );
         assert_eq!(
             ArchiveFormat::try_from(TAR_ZSTD_EXTENSION),
             Ok(ArchiveFormat::TarZstd)
@@ -131,14 +111,6 @@ mod tests {
     #[test]
     fn test_from_str() {
         assert_eq!(
-            ArchiveFormat::from_str(TAR_BZIP2_EXTENSION),
-            Ok(ArchiveFormat::TarBzip2)
-        );
-        assert_eq!(
-            ArchiveFormat::from_str(TAR_GZIP_EXTENSION),
-            Ok(ArchiveFormat::TarGzip)
-        );
-        assert_eq!(
             ArchiveFormat::from_str(TAR_ZSTD_EXTENSION),
             Ok(ArchiveFormat::TarZstd)
         );
@@ -158,14 +130,7 @@ mod tests {
 
     #[test]
     fn test_from_cli_arg() {
-        let golden = [
-            Some(ArchiveFormat::TarBzip2),
-            Some(ArchiveFormat::TarGzip),
-            Some(ArchiveFormat::TarZstd),
-            Some(ArchiveFormat::TarLz4),
-            Some(ArchiveFormat::Tar),
-            Some(ArchiveFormat::Tar),
-        ];
+        let golden = [Some(ArchiveFormat::TarZstd), Some(ArchiveFormat::TarLz4)];
 
         for (arg, expected) in zip(SUPPORTED_ARCHIVE_COMPRESSION.iter(), golden.into_iter()) {
             assert_eq!(ArchiveFormat::from_cli_arg(arg), expected);

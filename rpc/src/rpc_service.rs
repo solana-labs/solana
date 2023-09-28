@@ -745,7 +745,9 @@ mod tests {
         assert!(!rrm.is_file_get_path("//genesis.tar.bz2"));
         assert!(!rrm.is_file_get_path("/../genesis.tar.bz2"));
 
-        assert!(!rrm.is_file_get_path("/snapshot.tar.bz2")); // This is a redirect
+        // These two are redirects
+        assert!(!rrm.is_file_get_path("/snapshot.tar.bz2"));
+        assert!(!rrm.is_file_get_path("/incremental-snapshot.tar.bz2"));
 
         assert!(!rrm.is_file_get_path(
             "/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
@@ -754,25 +756,14 @@ mod tests {
             "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
         ));
 
-        assert!(rrm_with_snapshot_config.is_file_get_path(
-            "/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
-        ));
         assert!(rrm_with_snapshot_config.is_file_get_path(
             "/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.zst"
         ));
         assert!(rrm_with_snapshot_config
-            .is_file_get_path("/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.gz"));
-        assert!(rrm_with_snapshot_config
             .is_file_get_path("/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"));
 
         assert!(rrm_with_snapshot_config.is_file_get_path(
-            "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
-        ));
-        assert!(rrm_with_snapshot_config.is_file_get_path(
             "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.zst"
-        ));
-        assert!(rrm_with_snapshot_config.is_file_get_path(
-            "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.gz"
         ));
         assert!(rrm_with_snapshot_config.is_file_get_path(
             "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"
@@ -782,10 +773,10 @@ mod tests {
             "/snapshot-notaslotnumber-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
         ));
         assert!(!rrm_with_snapshot_config.is_file_get_path(
-            "/incremental-snapshot-notaslotnumber-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
+            "/incremental-snapshot-notaslotnumber-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.zstd"
         ));
         assert!(!rrm_with_snapshot_config.is_file_get_path(
-            "/incremental-snapshot-100-notaslotnumber-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
+            "/incremental-snapshot-100-notaslotnumber-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.zstd"
         ));
 
         assert!(!rrm_with_snapshot_config.is_file_get_path("../../../test/snapshot-123-xxx.tar"));

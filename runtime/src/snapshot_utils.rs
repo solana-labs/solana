@@ -10,9 +10,7 @@ use {
             RebuiltSnapshotStorage, SnapshotStorageRebuilder,
         },
     },
-    bzip2::bufread::BzDecoder,
     crossbeam_channel::Sender,
-    flate2::read::GzDecoder,
     fs_err,
     lazy_static::lazy_static,
     log::*,
@@ -70,8 +68,9 @@ pub const DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN: NonZeroUsize =
     unsafe { NonZeroUsize::new_unchecked(2) };
 pub const DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN: NonZeroUsize =
     unsafe { NonZeroUsize::new_unchecked(4) };
-pub const FULL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^snapshot-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz|tar\.lz4)$";
-pub const INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^incremental-snapshot-(?P<base>[[:digit:]]+)-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz|tar\.lz4)$";
+pub const FULL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str =
+    r"^snapshot-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.zst|tar\.lz4)$";
+pub const INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^incremental-snapshot-(?P<base>[[:digit:]]+)-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.zst|tar\.lz4)$";
 
 #[derive(Copy, Clone, Default, Eq, PartialEq, Debug)]
 pub enum SnapshotVersion {
@@ -783,18 +782,6 @@ pub fn archive_snapshot_package(
         };
 
         match snapshot_package.archive_format() {
-            ArchiveFormat::TarBzip2 => {
-                let mut encoder =
-                    bzip2::write::BzEncoder::new(archive_file, bzip2::Compression::best());
-                do_archive_files(&mut encoder)?;
-                encoder.finish()?;
-            }
-            ArchiveFormat::TarGzip => {
-                let mut encoder =
-                    flate2::write::GzEncoder::new(archive_file, flate2::Compression::default());
-                do_archive_files(&mut encoder)?;
-                encoder.finish()?;
-            }
             ArchiveFormat::TarZstd => {
                 let mut encoder = zstd::stream::Encoder::new(archive_file, 0)?;
                 do_archive_files(&mut encoder)?;
@@ -1917,8 +1904,6 @@ fn untar_snapshot_create_shared_buffer(
 ) -> SharedBuffer {
     let open_file = || fs_err::File::open(snapshot_tar).unwrap();
     match archive_format {
-        ArchiveFormat::TarBzip2 => SharedBuffer::new(BzDecoder::new(BufReader::new(open_file()))),
-        ArchiveFormat::TarGzip => SharedBuffer::new(GzDecoder::new(BufReader::new(open_file()))),
         ArchiveFormat::TarZstd => SharedBuffer::new(
             zstd::stream::read::Decoder::new(BufReader::new(open_file())).unwrap(),
         ),
@@ -2341,14 +2326,6 @@ mod tests {
     fn test_parse_full_snapshot_archive_filename() {
         assert_eq!(
             parse_full_snapshot_archive_filename(&format!(
-                "snapshot-42-{}.tar.bz2",
-                Hash::default()
-            ))
-            .unwrap(),
-            (42, SnapshotHash(Hash::default()), ArchiveFormat::TarBzip2)
-        );
-        assert_eq!(
-            parse_full_snapshot_archive_filename(&format!(
                 "snapshot-43-{}.tar.zst",
                 Hash::default()
             ))
@@ -2411,19 +2388,6 @@ mod tests {
 
     #[test]
     fn test_parse_incremental_snapshot_archive_filename() {
-        assert_eq!(
-            parse_incremental_snapshot_archive_filename(&format!(
-                "incremental-snapshot-42-123-{}.tar.bz2",
-                Hash::default()
-            ))
-            .unwrap(),
-            (
-                42,
-                123,
-                SnapshotHash(Hash::default()),
-                ArchiveFormat::TarBzip2
-            )
-        );
         assert_eq!(
             parse_incremental_snapshot_archive_filename(&format!(
                 "incremental-snapshot-43-234-{}.tar.zst",
