@@ -51,7 +51,8 @@ dependencies = [
 [[package]]
 name = "aes-gcm-siv"
 version = "0.10.3"
-source = "git+https://github.com/gregcusack/AEADs.git?rev=0b291255b5e71a86b68c21c7b2f2ecba943baabd#0b291255b5e71a86b68c21c7b2f2ecba943baabd"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "589c637f0e68c877bbd59a4599bbe849cac8e5f3e4b5a3ebae8f528cd218dcdc"
 dependencies = [
  "aead",
  "aes",
@@ -1179,18 +1180,6 @@ dependencies = [
  "byteorder 1.4.3",
  "digest 0.9.0",
  "rand_core 0.5.1",
- "subtle",
- "zeroize",
-]
-
-[[package]]
-name = "curve25519-dalek"
-version = "3.2.1"
-source = "git+https://github.com/gregcusack/curve25519-dalek.git?rev=9d82dab8048cf0a62ea20ea376461be3b10a8a39#9d82dab8048cf0a62ea20ea376461be3b10a8a39"
-dependencies = [
- "byteorder 1.4.3",
- "digest 0.9.0",
- "rand_core 0.5.1",
  "serde",
  "subtle",
  "zeroize",
@@ -1427,7 +1416,7 @@ version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c762bae6dcaf24c4c84667b8579785430908723d5c889f469d76a41d59cc7a9d"
 dependencies = [
- "curve25519-dalek 3.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "curve25519-dalek",
  "ed25519",
  "rand 0.7.3",
  "serde",
@@ -5209,7 +5198,7 @@ dependencies = [
  "bincode",
  "bv",
  "caps",
- "curve25519-dalek 3.2.1 (git+https://github.com/gregcusack/curve25519-dalek.git?rev=9d82dab8048cf0a62ea20ea376461be3b10a8a39)",
+ "curve25519-dalek",
  "dlopen2",
  "fnv",
  "lazy_static",
@@ -5261,7 +5250,7 @@ dependencies = [
  "cc",
  "console_error_panic_hook",
  "console_log",
- "curve25519-dalek 3.2.1 (git+https://github.com/gregcusack/curve25519-dalek.git?rev=9d82dab8048cf0a62ea20ea376461be3b10a8a39)",
+ "curve25519-dalek",
  "getrandom 0.2.10",
  "itertools",
  "js-sys",
@@ -6519,7 +6508,7 @@ dependencies = [
  "bincode",
  "bytemuck",
  "byteorder 1.4.3",
- "curve25519-dalek 3.2.1 (git+https://github.com/gregcusack/curve25519-dalek.git?rev=9d82dab8048cf0a62ea20ea376461be3b10a8a39)",
+ "curve25519-dalek",
  "getrandom 0.1.14",
  "itertools",
  "lazy_static",
