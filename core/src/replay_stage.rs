@@ -3478,7 +3478,13 @@ impl ReplayStage {
                     let candidate_vote_bank = if final_switch_fork_decision.can_vote() {
                         candidate_vote_bank
                     } else {
-                        None
+                        // The only time we would still vote despite `!switch_fork_decision.can_vote()`
+                        // is if we switched the vote candidate to `heaviest_bank_on_same_voted_fork`
+                        // because we needed to refresh the vote to the tip of our last voted fork.
+                        // Otherwise,  we should just return the original vote candidate, the heaviest bank
+                        // for logging purposes, namely to check if there are any additional voting failures
+                        // besides the switch threshold
+                        Some(heaviest_bank)
                     };
                     CandidateVoteAndResetBanks {
                         candidate_vote_bank,
