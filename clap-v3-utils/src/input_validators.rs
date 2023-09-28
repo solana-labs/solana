@@ -25,6 +25,7 @@ where
 
 // Return an error if string cannot be parsed as type T.
 // Takes a String to avoid second type parameter when used as a clap validator
+#[deprecated(since = "1.17.0", note = "please use `clap::value_parser!` instead")]
 pub fn is_parsable<T>(string: &str) -> Result<(), String>
 where
     T: FromStr,
@@ -35,6 +36,10 @@ where
 
 // Return an error if string cannot be parsed as numeric type T, and value not within specified
 // range
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `clap::builder::RangedI64ValueParser` instead"
+)]
 pub fn is_within_range<T, R>(string: String, range: R) -> Result<(), String>
 where
     T: FromStr + Copy + std::fmt::Debug + PartialOrd + std::ops::Add<Output = T> + From<usize>,
@@ -59,6 +64,10 @@ pub fn is_pubkey(string: &str) -> Result<(), String> {
 }
 
 // Return an error if a hash cannot be parsed.
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `clap::value_parser!(Hash)` instead"
+)]
 pub fn is_hash<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -144,6 +153,10 @@ where
 }
 
 // Return an error if string cannot be parsed as pubkey=signature string
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `clap::value_parser!(PubkeySignature)` instead"
+)]
 pub fn is_pubkey_sig<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -169,6 +182,7 @@ where
 }
 
 // Return an error if a url cannot be parsed.
+#[deprecated(since = "1.17.0", note = "please use `parse_url` instead")]
 pub fn is_url<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -185,6 +199,7 @@ where
     }
 }
 
+#[deprecated(since = "1.17.0", note = "please use `parse_url_or_moniker` instead")]
 pub fn is_url_or_moniker<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -212,6 +227,10 @@ pub fn normalize_to_url_if_moniker<T: AsRef<str>>(url_or_moniker: T) -> String {
     .to_string()
 }
 
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `clap::value_parser!(Epoch)` instead"
+)]
 pub fn is_epoch<T>(epoch: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -219,6 +238,10 @@ where
     is_parsable_generic::<Epoch, _>(epoch)
 }
 
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `clap::value_parser!(Slot)` instead"
+)]
 pub fn is_slot<T>(slot: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -226,6 +249,7 @@ where
     is_parsable_generic::<Slot, _>(slot)
 }
 
+#[deprecated(since = "1.17.0", note = "please use `parse_pow2` instead")]
 pub fn is_pow2<T>(bins: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -242,6 +266,10 @@ where
         })
 }
 
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `clap_value_parser!(u16)` instead"
+)]
 pub fn is_port<T>(port: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -249,6 +277,7 @@ where
     is_parsable_generic::<u16, _>(port)
 }
 
+#[deprecated(since = "1.17.0", note = "please use `parse_percentage` instead")]
 pub fn is_valid_percentage<T>(percentage: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -268,6 +297,7 @@ where
         })
 }
 
+#[deprecated(since = "1.17.0", note = "please use `Amount::parse_decimal` instead")]
 pub fn is_amount<T>(amount: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -281,6 +311,10 @@ where
     }
 }
 
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `TokenAmount::parse_decimal` instead"
+)]
 pub fn is_amount_or_all<T>(amount: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -297,6 +331,7 @@ where
     }
 }
 
+#[deprecated(since = "1.17.0", note = "please use `parse_rfc3339_datetime` instead")]
 pub fn is_rfc3339_datetime<T>(value: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -306,6 +341,7 @@ where
         .map_err(|e| format!("{e}"))
 }
 
+#[deprecated(since = "1.17.0", note = "please use `parse_derivation` instead")]
 pub fn is_derivation<T>(value: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -328,6 +364,7 @@ where
         .map(|_| ())
 }
 
+#[deprecated(since = "1.17.0", note = "please use `parse_structured_seed` instead")]
 pub fn is_structured_seed<T>(value: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -373,6 +410,10 @@ where
     }
 }
 
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `parse_derived_address_seed` instead"
+)]
 pub fn is_derived_address_seed<T>(value: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -384,23 +425,5 @@ where
         ))
     } else {
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_is_derivation() {
-        assert_eq!(is_derivation("2"), Ok(()));
-        assert_eq!(is_derivation("0"), Ok(()));
-        assert_eq!(is_derivation("65537"), Ok(()));
-        assert_eq!(is_derivation("0/2"), Ok(()));
-        assert_eq!(is_derivation("0'/2'"), Ok(()));
-        assert!(is_derivation("a").is_err());
-        assert!(is_derivation("4294967296").is_err());
-        assert!(is_derivation("a/b").is_err());
-        assert!(is_derivation("0/4294967296").is_err());
     }
 }
