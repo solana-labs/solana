@@ -314,6 +314,9 @@ impl OptimisticallyConfirmedBankTracker {
                     slot,
                     timestamp: timestamp(),
                 });
+                // NOTE: replay of `slot` may or may not be complete. Therefore, most new
+                // functionality to be triggered on optimistic confirmation should go in
+                // `notify_or_defer()` under the `bank.is_frozen()` case instead of here.
             }
             BankNotification::Frozen(bank) => {
                 let frozen_slot = bank.slot();

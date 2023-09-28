@@ -920,6 +920,7 @@ dependencies = [
  "camino",
  "cargo-platform",
  "semver",
+ "semver 1.0.19",
  "serde",
  "serde_json",
  "thiserror",
@@ -4454,7 +4455,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfa0f585226d2e68097d4f95d113b15b83a82e819ab25717ec0590d9584ef366"
 dependencies = [
- "semver",
+ "semver 1.0.19",
 ]
 
 [[package]]
@@ -4509,12 +4510,12 @@ version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d3987094b1d07b653b7dfdc3f70ce9a1da9c51ac18c1b06b662e4f9a0e9f4b2"
 dependencies = [
- "base64 0.21.4",
+ "base64 0.13.1",
 ]
 
 [[package]]
 name = "rustls-webpki"
-version = "0.101.6"
+version = "0.101.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c7d5dece342910d9ba34d259310cae3e0154b873b35408b787b59bce53d34fe"
 dependencies = [
@@ -4621,6 +4622,15 @@ checksum = "e932934257d3b408ed8f30db49d85ea163bfe74961f017f405b025af298f0c7a"
 dependencies = [
  "core-foundation-sys",
  "libc",
+]
+
+[[package]]
+name = "semver"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f301af10236f6df4160f7c3f04eec6dbc70ace82d23326abad5edee88801c6b6"
+dependencies = [
+ "semver-parser",
 ]
 
 [[package]]
@@ -5040,7 +5050,6 @@ dependencies = [
  "bzip2",
  "crossbeam-channel",
  "dashmap 4.0.2",
- "dir-diff",
  "ed25519-dalek",
  "flate2",
  "fnv",
@@ -5051,7 +5060,6 @@ dependencies = [
  "lazy_static",
  "libsecp256k1",
  "log",
- "lru",
  "lz4",
  "memmap2",
  "memoffset 0.9.0",
@@ -5070,37 +5078,26 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
- "siphasher",
  "solana-accounts-db",
- "solana-bpf-loader-program",
  "solana-bucket-map",
- "solana-compute-budget-program",
  "solana-config-program",
- "solana-cost-model",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
- "solana-loader-v4-program",
  "solana-logger",
  "solana-measure",
  "solana-metrics",
- "solana-perf",
  "solana-program-runtime",
  "solana-rayon-threadlimit",
  "solana-sdk",
  "solana-stake-program",
  "solana-system-program",
  "solana-vote-program",
- "solana-zk-token-proof-program",
- "solana-zk-token-sdk",
  "static_assertions",
  "strum",
  "strum_macros",
- "symlink",
  "tar",
  "tempfile",
- "test-case",
  "thiserror",
- "zstd",
 ]
 
 [[package]]
@@ -5306,6 +5303,7 @@ name = "solana-bucket-map"
 version = "1.17.0"
 dependencies = [
  "bv",
+ "bytemuck",
  "fs_extra",
  "log",
  "memmap2",
@@ -5323,11 +5321,8 @@ dependencies = [
 name = "solana-cargo-build-bpf"
 version = "1.17.0"
 dependencies = [
- "cargo_metadata",
- "clap 3.2.25",
  "log",
  "solana-logger",
- "solana-sdk",
 ]
 
 [[package]]
@@ -5343,7 +5338,7 @@ dependencies = [
  "predicates 2.1.5",
  "regex",
  "reqwest",
- "semver",
+ "semver 1.0.19",
  "serial_test",
  "solana-download-utils",
  "solana-logger",
@@ -5354,10 +5349,6 @@ dependencies = [
 [[package]]
 name = "solana-cargo-test-bpf"
 version = "1.17.0"
-dependencies = [
- "cargo_metadata",
- "clap 3.2.25",
-]
 
 [[package]]
 name = "solana-cargo-test-sbf"
@@ -5424,7 +5415,7 @@ dependencies = [
  "num-traits",
  "pretty-hex",
  "reqwest",
- "semver",
+ "semver 1.0.19",
  "serde",
  "serde_derive",
  "serde_json",
@@ -5486,7 +5477,7 @@ dependencies = [
  "humantime",
  "indicatif",
  "pretty-hex",
- "semver",
+ "semver 1.0.19",
  "serde",
  "serde_json",
  "solana-account-decoder",
@@ -5588,6 +5579,7 @@ version = "1.17.0"
 dependencies = [
  "async-trait",
  "bincode",
+ "crossbeam-channel",
  "futures-util",
  "indexmap 2.0.1",
  "indicatif",
@@ -5931,7 +5923,7 @@ dependencies = [
  "crossbeam-channel",
  "flate2",
  "indexmap 2.0.1",
- "itertools 0.10.5",
+ "itertools",
  "log",
  "lru",
  "num-traits",
@@ -5989,7 +5981,7 @@ dependencies = [
  "nix 0.26.4",
  "reqwest",
  "scopeguard",
- "semver",
+ "semver 1.0.19",
  "serde",
  "serde_yaml 0.8.26",
  "serde_yaml 0.9.25",
@@ -6475,6 +6467,7 @@ dependencies = [
  "solana-sdk",
  "solana-stake-program",
  "solana-vote-program",
+ "test-case",
  "thiserror",
  "tokio",
 ]
@@ -6488,7 +6481,7 @@ dependencies = [
  "futures-util",
  "log",
  "reqwest",
- "semver",
+ "semver 1.0.19",
  "serde",
  "serde_derive",
  "serde_json",
@@ -6552,7 +6545,7 @@ dependencies = [
  "num-traits",
  "parking_lot 0.12.1",
  "qstring",
- "semver",
+ "semver 1.0.19",
  "solana-sdk",
  "thiserror",
  "uriparse",
@@ -6632,7 +6625,7 @@ dependencies = [
  "jsonrpc-http-server",
  "log",
  "reqwest",
- "semver",
+ "semver 1.0.19",
  "serde",
  "serde_derive",
  "serde_json",
@@ -6653,7 +6646,7 @@ dependencies = [
  "bs58",
  "jsonrpc-core",
  "reqwest",
- "semver",
+ "semver 1.0.19",
  "serde",
  "serde_derive",
  "serde_json",
@@ -6980,7 +6973,7 @@ dependencies = [
  "futures-util",
  "histogram",
  "indexmap 2.0.1",
- "itertools 0.10.5",
+ "itertools",
  "libc",
  "log",
  "nix 0.26.4",
@@ -7291,8 +7284,8 @@ name = "solana-version"
 version = "1.17.0"
 dependencies = [
  "log",
- "rustc_version",
- "semver",
+ "rustc_version 0.4.0",
+ "semver 1.0.19",
  "serde",
  "serde_derive",
  "solana-frozen-abi",
@@ -7304,78 +7297,19 @@ dependencies = [
 name = "solana-vote"
 version = "1.17.0"
 dependencies = [
- "arrayref",
- "assert_matches",
  "bincode",
- "blake3",
- "bv",
- "bytemuck",
- "byteorder",
- "bzip2",
  "crossbeam-channel",
- "dashmap 4.0.2",
- "dir-diff",
- "ed25519-dalek",
- "flate2",
- "fnv",
- "fs-err",
- "im",
- "index_list",
- "itertools 0.10.5",
- "lazy_static",
- "libsecp256k1",
+ "itertools",
  "log",
- "lru",
- "lz4",
- "memmap2",
- "memoffset 0.9.0",
- "modular-bitfield",
- "num-derive",
- "num-traits",
- "num_cpus",
- "num_enum 0.6.1",
- "ouroboros",
- "percentage",
- "qualifier_attr",
  "rand 0.8.5",
- "rand_chacha 0.3.1",
- "rayon",
- "regex",
- "rustc_version",
+ "rustc_version 0.4.0",
  "serde",
  "serde_derive",
- "siphasher",
- "solana-address-lookup-table-program",
- "solana-bpf-loader-program",
- "solana-bucket-map",
- "solana-compute-budget-program",
- "solana-config-program",
- "solana-cost-model",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
- "solana-loader-v4-program",
- "solana-logger",
- "solana-measure",
- "solana-metrics",
- "solana-perf",
- "solana-program-runtime",
- "solana-rayon-threadlimit",
  "solana-sdk",
- "solana-stake-program",
- "solana-system-program",
- "solana-vote",
  "solana-vote-program",
- "solana-zk-token-proof-program",
- "solana-zk-token-sdk",
- "static_assertions",
- "strum",
- "strum_macros",
- "symlink",
- "tar",
- "tempfile",
- "test-case",
  "thiserror",
- "zstd",
 ]
 
 [[package]]
@@ -7495,9 +7429,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.7.1"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d08e812351a5c726e51fa6aaae8687c661acfeb9a8b651bd58fc413a58701a58"
+checksum = "103318aa365ff7caa8cf534f2246b5eb7e5b34668736d52b1266b143f7a21196"
 dependencies = [
  "byteorder",
  "combine",

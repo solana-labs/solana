@@ -1,7 +1,7 @@
 use {
     crate::{
         bucket::Bucket, bucket_item::BucketItem, bucket_map::BucketMapError,
-        bucket_stats::BucketMapStats, MaxSearch, RefCount,
+        bucket_stats::BucketMapStats, restart::RestartableBucket, MaxSearch, RefCount,
     },
     solana_sdk::pubkey::Pubkey,
     std::{
@@ -23,13 +23,19 @@ pub struct BucketApi<T: Clone + Copy + PartialEq + 'static> {
 
     bucket: LockedBucket<T>,
     count: Arc<AtomicU64>,
+
+    /// keeps track of which index file this bucket is currently using
+    /// or at startup, which bucket file this bucket should initially use
+    #[allow(dead_code)]
+    restartable_bucket: RestartableBucket,
 }
 
 impl<T: Clone + Copy + PartialEq + std::fmt::Debug> BucketApi<T> {
-    pub fn new(
+    pub(crate) fn new(
         drives: Arc<Vec<PathBuf>>,
         max_search: MaxSearch,
         stats: Arc<BucketMapStats>,
+        restartable_bucket: RestartableBucket,
     ) -> Self {
         Self {
             drives,
@@ -37,6 +43,7 @@ impl<T: Clone + Copy + PartialEq + std::fmt::Debug> BucketApi<T> {
             stats,
             bucket: RwLock::default(),
             count: Arc::default(),
+            restartable_bucket,
         }
     }
 
@@ -90,6 +97,7 @@ impl<T: Clone + Copy + PartialEq + std::fmt::Debug> BucketApi<T> {
                 self.max_search,
                 Arc::clone(&self.stats),
                 Arc::clone(&self.count),
+                self.restartable_bucket.clone(),
             ));
         }
     }

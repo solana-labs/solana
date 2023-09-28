@@ -46,7 +46,6 @@ pub struct TieredStorageFormat {
 #[derive(Debug)]
 pub struct TieredStorage {
     reader: OnceLock<TieredStorageReader>,
-    format: Option<TieredStorageFormat>,
     path: PathBuf,
 }
 
@@ -64,10 +63,9 @@ impl TieredStorage {
     ///
     /// Note that the actual file will not be created until write_accounts
     /// is called.
-    pub fn new_writable(path: impl Into<PathBuf>, format: TieredStorageFormat) -> Self {
+    pub fn new_writable(path: impl Into<PathBuf>) -> Self {
         Self {
             reader: OnceLock::<TieredStorageReader>::new(),
-            format: Some(format),
             path: path.into(),
         }
     }
@@ -78,7 +76,6 @@ impl TieredStorage {
         let path = path.into();
         Ok(Self {
             reader: TieredStorageReader::new_from_path(&path).map(OnceLock::from)?,
-            format: None,
             path,
         })
     }
@@ -104,6 +101,7 @@ impl TieredStorage {
         &self,
         accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
         skip: usize,
+        format: &TieredStorageFormat,
     ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
         if self.is_read_only() {
             return Err(TieredStorageError::AttemptToUpdateReadOnly(
@@ -112,10 +110,7 @@ impl TieredStorage {
         }
 
         let result = {
-            // self.format must be Some as write_accounts can only be called on a
-            // TieredStorage instance created via new_writable() where its format
-            // field is required.
-            let writer = TieredStorageWriter::new(&self.path, self.format.as_ref().unwrap())?;
+            let writer = TieredStorageWriter::new(&self.path, format)?;
             writer.write_accounts(accounts, skip)
         };
 
@@ -191,7 +186,7 @@ mod tests {
                 Vec::<StoredMetaWriteVersion>::new(),
             );
 
-        let result = tiered_storage.write_accounts(&storable_accounts, 0);
+        let result = tiered_storage.write_accounts(&storable_accounts, 0, &HOT_FORMAT);
 
         match (&result, &expected_result) {
             (
@@ -220,10 +215,8 @@ mod tests {
         let tiered_storage_path = temp_dir.path().join("test_new_meta_file_only");
 
         {
-            let tiered_storage = ManuallyDrop::new(TieredStorage::new_writable(
-                &tiered_storage_path,
-                HOT_FORMAT.clone(),
-            ));
+            let tiered_storage =
+                ManuallyDrop::new(TieredStorage::new_writable(&tiered_storage_path));
 
             assert!(!tiered_storage.is_read_only());
             assert_eq!(tiered_storage.path(), tiered_storage_path);
@@ -256,7 +249,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let tiered_storage_path = temp_dir.path().join("test_write_accounts_twice");
 
-        let tiered_storage = TieredStorage::new_writable(&tiered_storage_path, HOT_FORMAT.clone());
+        let tiered_storage = TieredStorage::new_writable(&tiered_storage_path);
         // Expect the result to be TieredStorageError::Unsupported as the feature
         // is not yet fully supported, but we can still check its partial results
         // in the test.
@@ -277,18 +270,15 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let tiered_storage_path = temp_dir.path().join("test_remove_on_drop");
         {
-            let tiered_storage =
-                TieredStorage::new_writable(&tiered_storage_path, HOT_FORMAT.clone());
+            let tiered_storage = TieredStorage::new_writable(&tiered_storage_path);
             write_zero_accounts(&tiered_storage, Err(TieredStorageError::Unsupported()));
         }
         // expect the file does not exists as it has been removed on drop
         assert!(!tiered_storage_path.try_exists().unwrap());
 
         {
-            let tiered_storage = ManuallyDrop::new(TieredStorage::new_writable(
-                &tiered_storage_path,
-                HOT_FORMAT.clone(),
-            ));
+            let tiered_storage =
+                ManuallyDrop::new(TieredStorage::new_writable(&tiered_storage_path));
             write_zero_accounts(&tiered_storage, Err(TieredStorageError::Unsupported()));
         }
         // expect the file exists as we have ManuallyDrop this time.
@@ -370,8 +360,8 @@ mod tests {
 
         let temp_dir = tempdir().unwrap();
         let tiered_storage_path = temp_dir.path().join(path_suffix);
-        let tiered_storage = TieredStorage::new_writable(tiered_storage_path, format.clone());
-        _ = tiered_storage.write_accounts(&storable_accounts, 0);
+        let tiered_storage = TieredStorage::new_writable(tiered_storage_path);
+        _ = tiered_storage.write_accounts(&storable_accounts, 0, &format);
 
         verify_hot_storage(&tiered_storage, &accounts, format);
     }

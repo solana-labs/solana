@@ -10,86 +10,24 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-arrayref = { workspace = true }
-bincode = { workspace = true }
-blake3 = { workspace = true }
-bv = { workspace = true, features = ["serde"] }
-bytemuck = { workspace = true }
-byteorder = { workspace = true }
-bzip2 = { workspace = true }
 crossbeam-channel = { workspace = true }
-dashmap = { workspace = true, features = ["rayon", "raw-api"] }
-dir-diff = { workspace = true }
-flate2 = { workspace = true }
-fnv = { workspace = true }
-fs-err = { workspace = true }
-im = { workspace = true, features = ["rayon", "serde"] }
-index_list = { workspace = true }
 itertools = { workspace = true }
-lazy_static = { workspace = true }
 log = { workspace = true }
-lru = { workspace = true }
-lz4 = { workspace = true }
-memmap2 = { workspace = true }
-modular-bitfield = { workspace = true }
-num-derive = { workspace = true }
-num-traits = { workspace = true }
-num_cpus = { workspace = true }
-num_enum = { workspace = true }
-ouroboros = { workspace = true }
-percentage = { workspace = true }
-qualifier_attr = { workspace = true }
-rand = { workspace = true }
-rayon = { workspace = true }
-regex = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true }
-siphasher = { workspace = true }
-solana-address-lookup-table-program = { workspace = true }
-solana-bpf-loader-program = { workspace = true }
-solana-bucket-map = { workspace = true }
-solana-compute-budget-program = { workspace = true }
-solana-config-program = { workspace = true }
-solana-cost-model = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
-solana-loader-v4-program = { workspace = true }
-solana-measure = { workspace = true }
-solana-metrics = { workspace = true }
-solana-perf = { workspace = true }
-solana-program-runtime = { workspace = true }
-solana-rayon-threadlimit = { workspace = true }
 solana-sdk = { workspace = true }
-solana-stake-program = { workspace = true }
-solana-system-program = { workspace = true }
 solana-vote-program = { workspace = true }
-solana-zk-token-proof-program = { workspace = true }
-solana-zk-token-sdk = { workspace = true }
-static_assertions = { workspace = true }
-strum = { workspace = true, features = ["derive"] }
-strum_macros = { workspace = true }
-symlink = { workspace = true }
-tar = { workspace = true }
-tempfile = { workspace = true }
 thiserror = { workspace = true }
-zstd = { workspace = true }
 
 [lib]
 crate-type = ["lib"]
 name = "solana_vote"
 
 [dev-dependencies]
-assert_matches = { workspace = true }
-ed25519-dalek = { workspace = true }
-libsecp256k1 = { workspace = true }
-memoffset = { workspace = true }
-rand_chacha = { workspace = true }
-solana-logger = { workspace = true }
-solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
-# See order-crates-for-publishing.py for using this unusual `path = "."`
-solana-vote = { path = ".", features = ["dev-context-only-utils"] }
-static_assertions = { workspace = true }
-test-case = { workspace = true }
+bincode = { workspace = true }
+rand = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
