@@ -1,10 +1,18 @@
 use {
-    crate::input_validators::normalize_to_url_if_moniker,
+    crate::{
+        input_validators::normalize_to_url_if_moniker,
+        keypair::{keypair_from_seed_phrase, ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG},
+    },
     chrono::DateTime,
     clap::ArgMatches,
     solana_sdk::{
-        clock::UnixTimestamp, commitment_config::CommitmentConfig, genesis_config::ClusterType,
-        native_token::sol_to_lamports, pubkey::MAX_SEED_LEN,
+        clock::UnixTimestamp,
+        commitment_config::CommitmentConfig,
+        genesis_config::ClusterType,
+        native_token::sol_to_lamports,
+        pubkey::Pubkey,
+        pubkey::MAX_SEED_LEN,
+        signature::{read_keypair_file, Keypair, Signer},
     },
     std::str::FromStr,
 };
@@ -15,8 +23,8 @@ pub mod signer;
     note = "Please use the functions in `solana_clap_v3_utils::input_parsers::signer` directly instead"
 )]
 pub use signer::{
-    keypair_of, keypairs_of, pubkey_of, pubkey_of_signer, pubkeys_of, pubkeys_of_multiple_signers,
-    pubkeys_sigs_of, resolve_signer, signer_of, STDOUT_OUTFILE_TOKEN,
+    pubkey_of_signer, pubkeys_of_multiple_signers, pubkeys_sigs_of, resolve_signer, signer_of,
+    STDOUT_OUTFILE_TOKEN,
 };
 
 // Return parsed values from matches at `name`
@@ -237,6 +245,56 @@ pub fn parse_derived_address_seed(arg: &str) -> Result<String, String> {
             "Address seed must not be longer than {MAX_SEED_LEN} bytes"
         ))
 }
+
+// Return the keypair for an argument with filename `name` or None if not present.
+pub fn keypair_of(matches: &ArgMatches, name: &str) -> Option<Keypair> {
+    if let Some(value) = matches.value_of(name) {
+        if value == ASK_KEYWORD {
+            let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+            keypair_from_seed_phrase(name, skip_validation, true, None, true).ok()
+        } else {
+            read_keypair_file(value).ok()
+        }
+    } else {
+        None
+    }
+}
+
+pub fn keypairs_of(matches: &ArgMatches, name: &str) -> Option<Vec<Keypair>> {
+    matches.values_of(name).map(|values| {
+        values
+            .filter_map(|value| {
+                if value == ASK_KEYWORD {
+                    let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+                    keypair_from_seed_phrase(name, skip_validation, true, None, true).ok()
+                } else {
+                    read_keypair_file(value).ok()
+                }
+            })
+            .collect()
+    })
+}
+
+// Return a pubkey for an argument that can itself be parsed into a pubkey,
+// or is a filename that can be read as a keypair
+pub fn pubkey_of(matches: &ArgMatches, name: &str) -> Option<Pubkey> {
+    value_of(matches, name).or_else(|| keypair_of(matches, name).map(|keypair| keypair.pubkey()))
+}
+
+pub fn pubkeys_of(matches: &ArgMatches, name: &str) -> Option<Vec<Pubkey>> {
+    matches.values_of(name).map(|values| {
+        values
+            .map(|value| {
+                value.parse::<Pubkey>().unwrap_or_else(|_| {
+                    read_keypair_file(value)
+                        .expect("read_keypair_file failed")
+                        .pubkey()
+                })
+            })
+            .collect()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use {
