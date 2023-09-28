@@ -7,8 +7,6 @@ set -e
 nohup solana-faucet --keypair faucet.json >logs/faucet.log 2>&1 &
 
 # Start the bootstrap validator node
-#
-here=$(dirname "$0")
 # shellcheck disable=SC1091
 source /home/solana/k8s-cluster-scripts/common.sh
 
