@@ -9031,7 +9031,7 @@ pub mod tests {
             }
             .into();
             transaction_status_cf
-                .put_protobuf((0, transaction.signatures[0], slot), &status)
+                .put_protobuf((transaction.signatures[0], slot), &status)
                 .unwrap();
             transactions.push(transaction.into());
         }
