@@ -869,6 +869,7 @@ impl<'a> AccountsHasher<'a> {
         (&division_data[index - 1], next)
     }
 
+    #[cfg(test)]
     /// `hash_data` must be sorted by `binner.bin_from_pubkey()`
     /// return index in `hash_data` of first pubkey that is in `bin`, based on `binner`
     fn binary_search_for_first_pubkey_in_bin(
@@ -910,7 +911,6 @@ impl<'a> AccountsHasher<'a> {
     fn find_first_pubkey_in_bin(
         hash_data: &[CalculateHashIntermediate],
         bin: usize,
-        bins: usize,
         binner: &PubkeyBinCalculator24,
         stats: &HashStats,
     ) -> Option<usize> {
@@ -918,29 +918,16 @@ impl<'a> AccountsHasher<'a> {
             return None;
         }
         let (result, us) = measure_us!({
-            // assume uniform distribution of pubkeys and choose first guess based on bin we're looking for
-            let i = hash_data.len() * bin / bins;
-            let estimate = &hash_data[i];
-
-            let pubkey_bin = binner.bin_from_pubkey(&estimate.pubkey);
-            let range = if pubkey_bin >= bin {
-                // i pubkey matches or is too large, so look <= i for the first pubkey in the right bin
-                // i+1 could be the first pubkey in the right bin
-                0..(i + 1)
+            let p = hash_data.partition_point(|x| binner.bin_from_pubkey(&x.pubkey) < bin);
+            if p == hash_data.len() {
+                None
+            } else if binner.bin_from_pubkey(&(hash_data[p].pubkey)) == bin {
+                Some(p)
             } else {
-                // i pubkey is too small, so look after i
-                (i + 1)..hash_data.len()
-            };
-            Some(
-                range.start +
-                // binary search the subset
-                Self::binary_search_for_first_pubkey_in_bin(
-                    &hash_data[range],
-                    bin,
-                    binner,
-                )?,
-            )
+                None
+            }
         });
+
         stats.pubkey_bin_search_us.fetch_add(us, Ordering::Relaxed);
         result
     }
@@ -950,7 +937,6 @@ impl<'a> AccountsHasher<'a> {
     fn initialize_dedup_working_set(
         sorted_data_by_pubkey: &[&[CalculateHashIntermediate]],
         pubkey_bin: usize,
-        bins: usize,
         binner: &PubkeyBinCalculator24,
         stats: &HashStats,
     ) -> (
@@ -975,9 +961,14 @@ impl<'a> AccountsHasher<'a> {
             .rev()
             .map(|(i, hash_data)| {
                 let first_pubkey_in_bin =
-                    Self::find_first_pubkey_in_bin(hash_data, pubkey_bin, bins, binner, stats);
+                    Self::find_first_pubkey_in_bin(hash_data, pubkey_bin, binner, stats);
 
                 if let Some(first_pubkey_in_bin) = first_pubkey_in_bin {
+                    // Estimate the number of pubkeys in current bin. This is the upperbound of the
+                    // size of result hash dedup output file.
+                    let max_inclusive_num_pubkeys = hash_data[first_pubkey_in_bin..]
+                        .partition_point(|x| binner.bin_from_pubkey(&x.pubkey) == pubkey_bin);
+
                     let mut next = Some(ItemLocation {
                         key: &hash_data[first_pubkey_in_bin].pubkey,
                         pointer: SlotGroupPointer {
@@ -994,16 +985,7 @@ impl<'a> AccountsHasher<'a> {
                         binner,
                     );
 
-                    let mut first_pubkey_in_next_bin = first_pubkey_in_bin + 1;
-                    while first_pubkey_in_next_bin < hash_data.len() {
-                        if binner.bin_from_pubkey(&hash_data[first_pubkey_in_next_bin].pubkey)
-                            != pubkey_bin
-                        {
-                            break;
-                        }
-                        first_pubkey_in_next_bin += 1;
-                    }
-                    first_pubkey_in_next_bin - first_pubkey_in_bin
+                    max_inclusive_num_pubkeys
                 } else {
                     0
                 }
@@ -1100,13 +1082,8 @@ impl<'a> AccountsHasher<'a> {
         let binner = PubkeyBinCalculator24::new(bins);
 
         // working_set hold the lowest items for each slot_group sorted by pubkey descending (min_key is the last)
-        let (mut working_set, max_inclusive_num_pubkeys) = Self::initialize_dedup_working_set(
-            sorted_data_by_pubkey,
-            pubkey_bin,
-            bins,
-            &binner,
-            stats,
-        );
+        let (mut working_set, max_inclusive_num_pubkeys) =
+            Self::initialize_dedup_working_set(sorted_data_by_pubkey, pubkey_bin, &binner, stats);
 
         let mut hashes = AccountHashesFile {
             writer: None,
@@ -1373,9 +1350,8 @@ mod tests {
                     .collect::<Vec<_>>();
                 // look for the first pubkey in each bin
                 for (bin, count_in_bin) in counts.iter().enumerate().take(bins) {
-                    let first = AccountsHasher::find_first_pubkey_in_bin(
-                        &hash_data, bin, bins, &binner, &stats,
-                    );
+                    let first =
+                        AccountsHasher::find_first_pubkey_in_bin(&hash_data, bin, &binner, &stats);
                     // test both functions
                     let first_again = AccountsHasher::binary_search_for_first_pubkey_in_bin(
                         &hash_data, bin, &binner,
