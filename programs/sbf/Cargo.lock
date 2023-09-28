@@ -4822,7 +4822,6 @@ dependencies = [
  "strum",
  "strum_macros",
  "sys-info",
- "sysctl",
  "tempfile",
  "thiserror",
  "tokio",
@@ -6672,19 +6671,6 @@ checksum = "0b3a0d0aba8bf96a0e1ddfdc352fc53b3df7f39318c71854910c3c4b024ae52c"
 dependencies = [
  "cc",
  "libc",
-]
-
-[[package]]
-name = "sysctl"
-version = "0.4.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "225e483f02d0ad107168dc57381a8a40c3aeea6abe47f37506931f861643cfa8"
-dependencies = [
- "bitflags 1.3.2",
- "byteorder 1.4.3",
- "libc",
- "thiserror",
- "walkdir",
 ]
 
 [[package]]

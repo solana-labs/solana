@@ -96,9 +96,6 @@ static_assertions = { workspace = true }
 systemstat = { workspace = true }
 test-case = { workspace = true }
 
-[target."cfg(unix)".dependencies]
-sysctl = { workspace = true }
-
 [build-dependencies]
 rustc_version = { workspace = true }
 
