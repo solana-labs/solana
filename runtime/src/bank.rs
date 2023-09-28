@@ -7254,9 +7254,7 @@ impl Bank {
                 Builder::new()
                     .name("solBgHashVerify".into())
                     .spawn(move || {
-                        info!(
-                            "running initial verification accounts hash calculation in background"
-                        );
+                        info!("Initial background accounts hash verification has started");
                         let result = accounts_.verify_accounts_hash_and_lamports(
                             slot,
                             cap,
@@ -7276,6 +7274,7 @@ impl Bank {
                             .accounts_db
                             .verify_accounts_hash_in_bg
                             .background_finished();
+                        info!("Initial background accounts hash verification has stopped");
                         result
                     })
                     .unwrap()
