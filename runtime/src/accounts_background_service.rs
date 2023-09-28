@@ -643,12 +643,16 @@ impl AccountsBackgroundService {
                     if let Some(snapshot_handle_result) = snapshot_handle_result {
                         // Safe, see proof above
 
-                        if let Ok(snapshot_block_height) = snapshot_handle_result {
-                            assert!(last_cleaned_block_height <= snapshot_block_height);
-                            last_cleaned_block_height = snapshot_block_height;
-                        } else {
-                            exit.store(true, Ordering::Relaxed);
-                            return;
+                        match snapshot_handle_result {
+                            Ok(snapshot_block_height) => {
+                                assert!(last_cleaned_block_height <= snapshot_block_height);
+                                last_cleaned_block_height = snapshot_block_height;
+                            }
+                            Err(err) => {
+                                error!("Stopping AccountsBackgroundService! Fatal error while handling snapshot requests: {err}");
+                                exit.store(true, Ordering::Relaxed);
+                                break;
+                            }
                         }
                     } else {
                         if bank.block_height() - last_cleaned_block_height
