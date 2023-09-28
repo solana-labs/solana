@@ -7695,6 +7695,7 @@ pub mod tests {
                 vec![&address0],
                 vec![],
                 TransactionStatusMeta::default(),
+                0,
             )
             .unwrap();
         blockstore
@@ -7704,6 +7705,7 @@ pub mod tests {
                 vec![&address1],
                 vec![],
                 TransactionStatusMeta::default(),
+                0,
             )
             .unwrap();
 
@@ -7716,10 +7718,6 @@ pub mod tests {
                     .is_none(),
                 blockstore
                     .find_address_signatures_for_slot(address0, lowest_cleanup_slot)
-                    .unwrap()
-                    .is_empty(),
-                blockstore
-                    .find_address_signatures(address0, lowest_cleanup_slot, lowest_cleanup_slot)
                     .unwrap()
                     .is_empty(),
             )
@@ -7736,17 +7734,13 @@ pub mod tests {
                     .find_address_signatures_for_slot(address1, lowest_available_slot)
                     .unwrap()
                     .is_empty(),
-                !blockstore
-                    .find_address_signatures(address1, lowest_available_slot, lowest_available_slot)
-                    .unwrap()
-                    .is_empty(),
             );
-            assert_eq!(are_existing_always, (true, true, true));
+            assert_eq!(are_existing_always, (true, true));
         };
 
         let are_missing = check_for_missing();
         // should never be missing before the conditional compaction & simulation...
-        assert_eq!(are_missing, (false, false, false));
+        assert_eq!(are_missing, (false, false));
         assert_existing_always();
 
         if simulate_ledger_cleanup_service {
@@ -7758,10 +7752,10 @@ pub mod tests {
         if simulate_ledger_cleanup_service {
             // ... when either simulation (or both) is effective, we should observe to be missing
             // consistently
-            assert_eq!(are_missing, (true, true, true));
+            assert_eq!(are_missing, (true, true));
         } else {
             // ... otherwise, we should observe to be existing...
-            assert_eq!(are_missing, (false, false, false));
+            assert_eq!(are_missing, (false, false));
         }
         assert_existing_always();
     }
