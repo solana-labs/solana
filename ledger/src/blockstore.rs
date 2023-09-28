@@ -9724,6 +9724,10 @@ pub mod tests {
         }
     }
 
+    // This test is probably superfluous, since it is highly unlikely that bincode-format
+    // TransactionStatus entries exist in any current ledger. They certainly exist in historical
+    // ledger archives, but typically those require contemporaraneous software for other reasons.
+    // However, we are persisting the test since the apis still exist in `blockstore_db`.
     #[test]
     fn test_transaction_status_protobuf_backward_compatability() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -9781,13 +9785,13 @@ pub mod tests {
             let data = serialize(&deprecated_status).unwrap();
             blockstore
                 .transaction_status_cf
-                .put_bytes((0, Signature::default(), slot), &data)
+                .put_bytes((Signature::default(), slot), &data)
                 .unwrap();
         }
         for slot in 2..4 {
             blockstore
                 .transaction_status_cf
-                .put_protobuf((0, Signature::default(), slot), &protobuf_status)
+                .put_protobuf((Signature::default(), slot), &protobuf_status)
                 .unwrap();
         }
         for slot in 0..4 {
@@ -9795,7 +9799,6 @@ pub mod tests {
                 blockstore
                     .transaction_status_cf
                     .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((
-                        0,
                         Signature::default(),
                         slot
                     ))
