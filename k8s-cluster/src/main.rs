@@ -119,7 +119,7 @@ async fn main() {
     let docker = DockerConfig::new(docker_image_config, build_config.deploy_method);
     let image_types = vec!["bootstrap", "validator"];
     for image_type in image_types {
-        match docker.build_image(image_type).await {
+        match docker.build_image(image_type) {
             Ok(_) => info!("Docker image built successfully"),
             Err(err) => {
                 error!("Exiting........ {}", err);
@@ -129,7 +129,7 @@ async fn main() {
     }
 
     // Need to push image to registry so Monogon nodes can pull image from registry to local
-    match docker.push_image("bootstrap").await {
+    match docker.push_image("bootstrap") {
         Ok(_) => info!("Bootstrap Image pushed successfully to registry"),
         Err(err) => {
             error!("{}", err);
@@ -138,11 +138,10 @@ async fn main() {
     }
 
     // Need to push image to registry so Monogon nodes can pull image from registry to local
-    match docker.push_image("validator").await {
+    match docker.push_image("validator") {
         Ok(_) => info!("Validator Image pushed successfully to registry"),
         Err(err) => {
             error!("{}", err);
-            return;
         }
     }
 }

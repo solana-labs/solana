@@ -31,8 +31,8 @@ impl<'a> DockerConfig<'a> {
         }
     }
 
-    pub async fn build_image(&self, validator_type: &str) -> Result<(), Box<dyn Error>> {
-        match self.create_base_image(validator_type).await {
+    pub fn build_image(&self, validator_type: &str) -> Result<(), Box<dyn Error>> {
+        match self.create_base_image(validator_type) {
             Ok(res) => {
                 if res.status.success() {
                     info!("Successfully created base Image");
@@ -46,7 +46,7 @@ impl<'a> DockerConfig<'a> {
         }
     }
 
-    pub async fn create_base_image(&self, validator_type: &str) -> Result<Output, Box<dyn Error>> {
+    pub fn create_base_image(&self, validator_type: &str) -> Result<Output, Box<dyn Error>> {
         let image_name = format!("{}-{}", validator_type, self.image_config.image_name);
         let docker_path = SOLANA_ROOT.join(format!("{}/{}", "docker-build", validator_type));
 
@@ -146,7 +146,7 @@ WORKDIR /home/solana
         Ok(docker_path)
     }
 
-    pub async fn push_image(&self, validator_type: &str) -> Result<(), Box<dyn Error>> {
+    pub fn push_image(&self, validator_type: &str) -> Result<(), Box<dyn Error>> {
         let image = format!(
             "{}/{}-{}:{}",
             self.image_config.registry,
