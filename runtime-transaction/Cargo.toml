@@ -28,6 +28,3 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
 rustc_version = { workspace = true }
-
-[features]
-dev-context-only-utils = []
