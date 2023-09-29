@@ -550,37 +550,20 @@ pub mod tests {
                     vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
                     vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
                     TransactionStatusMeta::default(),
-                )
-                .unwrap();
-        }
-        // Purge to freeze index 0
-        blockstore.run_purge(0, 1, PurgeType::PrimaryIndex).unwrap();
-
-        for x in max_slot..2 * max_slot {
-            let random_bytes: [u8; 64] = std::array::from_fn(|_| rand::random::<u8>());
-            blockstore
-                .write_transaction_status(
-                    x,
-                    Signature::from(random_bytes),
-                    vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
-                    vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
-                    TransactionStatusMeta::default(),
+                    0,
                 )
                 .unwrap();
         }
 
         // Purging range outside of TransactionStatus max slots should not affect TransactionStatus data
-        blockstore.run_purge(20, 30, PurgeType::Exact).unwrap();
+        blockstore.run_purge(10, 20, PurgeType::Exact).unwrap();
 
-        let mut status_entry_iterator = blockstore
+        let status_entries: Vec<_> = blockstore
             .db
-            .iter::<cf::TransactionStatus>(IteratorMode::From(
-                cf::TransactionStatus::as_index(0),
-                IteratorDirection::Forward,
-            ))
-            .unwrap();
-        let entry = status_entry_iterator.next().unwrap().0;
-        assert_eq!(entry.0, 0);
+            .iter::<cf::TransactionStatus>(IteratorMode::Start)
+            .unwrap()
+            .collect();
+        assert_eq!(status_entries.len(), 10);
     }
 
     fn clear_and_repopulate_transaction_statuses_for_test(blockstore: &Blockstore, max_slot: u64) {
