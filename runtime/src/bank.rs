@@ -8303,65 +8303,97 @@ impl Bank {
                 &[source_address.as_ref()],
                 &bpf_loader_upgradeable::id(),
             );
-            if let Some(source_data_account) =
-                self.get_account_with_fixed_root(&source_data_address)
+
+            // Make sure the data within the source account is the PDA of its
+            // data account. This also means it has at least the necessary
+            // lamports for rent.
+            if let Ok(source_state) =
+                bincode::deserialize::<UpgradeableLoaderState>(source_account.data())
             {
-                // Make sure the destination account is empty
-                // We aren't going to check that there isn't a data account at
-                // the known program-derived address (ie. `destination_data_address`),
-                // because if it exists, it will be overwritten
-                if self
-                    .get_account_with_fixed_root(destination_address)
-                    .is_none()
-                {
-                    let state = UpgradeableLoaderState::Program {
-                        programdata_address: destination_data_address,
-                    };
-                    if let Ok(data) = bincode::serialize(&state) {
-                        let lamports = self.get_minimum_balance_for_rent_exemption(data.len());
-                        let created_program_account = Account {
-                            lamports,
-                            data,
-                            owner: bpf_loader_upgradeable::id(),
-                            executable: true,
-                            rent_epoch: source_account.rent_epoch(),
-                        };
+                match source_state {
+                    UpgradeableLoaderState::Program {
+                        programdata_address: _,
+                    } => {
+                        if let Some(source_data_account) =
+                            self.get_account_with_fixed_root(&source_data_address)
+                        {
+                            // Make sure the destination account is empty
+                            // We aren't going to check that there isn't a data account at
+                            // the known program-derived address (ie. `destination_data_address`),
+                            // because if it exists, it will be overwritten
+                            if self
+                                .get_account_with_fixed_root(destination_address)
+                                .is_none()
+                            {
+                                let state = UpgradeableLoaderState::Program {
+                                    programdata_address: destination_data_address,
+                                };
+                                if let Ok(data) = bincode::serialize(&state) {
+                                    let lamports =
+                                        self.get_minimum_balance_for_rent_exemption(data.len());
+                                    let created_program_account = Account {
+                                        lamports,
+                                        data,
+                                        owner: bpf_loader_upgradeable::id(),
+                                        executable: true,
+                                        rent_epoch: source_account.rent_epoch(),
+                                    };
 
-                        // Make sure the source account has enough rent-exempt
-                        // lamports for the empty account that will now house the
-                        // PDA, and we can properly serialize the program account's
-                        // state
-                        if source_account.lamports() >= lamports {
-                            datapoint_info!(datapoint_name, ("slot", self.slot, i64));
-                            let change_in_capitalization =
-                                source_account.lamports().saturating_sub(lamports);
+                                    datapoint_info!(datapoint_name, ("slot", self.slot, i64));
+                                    let change_in_capitalization =
+                                        source_account.lamports().saturating_sub(lamports);
 
-                            // Replace the destination data account with the source one
-                            // If the destination data account does not exist, it will be created
-                            // If it does exist, it will be overwritten
-                            self.move_account(
-                                &source_data_address,
-                                &source_data_account,
-                                &destination_data_address,
-                                self.get_account_with_fixed_root(&destination_data_address)
-                                    .as_ref(),
-                            );
+                                    // Replace the destination data account with the source one
+                                    // If the destination data account does not exist, it will be created
+                                    // If it does exist, it will be overwritten
+                                    self.move_account(
+                                        &source_data_address,
+                                        &source_data_account,
+                                        &destination_data_address,
+                                        self.get_account_with_fixed_root(&destination_data_address)
+                                            .as_ref(),
+                                    );
 
-                            // Write the source data account's PDA into the destination program account
-                            self.move_account(
+                                    // Write the source data account's PDA into the destination program account
+                                    self.move_account(
+                                        source_address,
+                                        &created_program_account,
+                                        destination_address,
+                                        None::<&AccountSharedData>,
+                                    );
+
+                                    // Any remaining lamports in the source program account are burnt
+                                    self.capitalization
+                                        .fetch_sub(change_in_capitalization, Relaxed);
+                                } else {
+                                    error!(
+                                        "Unable to serialize program account state. \
+                                        Source program: {} Source data account: {} \
+                                        Destination program: {} Destination data account: {}",
+                                        source_address,
+                                        source_data_address,
+                                        destination_address,
+                                        destination_data_address,
+                                    );
+                                    datapoint_error!(datapoint_name, ("slot", self.slot(), i64),);
+                                }
+                            }
+                        } else {
+                            warn!(
+                                "Unable to find data account for source program. \
+                                Source program: {} Source data account: {} \
+                                Destination program: {} Destination data account: {}",
                                 source_address,
-                                &created_program_account,
+                                source_data_address,
                                 destination_address,
-                                None::<&AccountSharedData>,
+                                destination_data_address,
                             );
-
-                            // Any remaining lamports in the source program account are burnt
-                            self.capitalization
-                                .fetch_sub(change_in_capitalization, Relaxed);
+                            datapoint_warn!(datapoint_name, ("slot", self.slot(), i64),);
                         }
-                    } else {
-                        error!(
-                            "Unable to serialize program account state. \
+                    }
+                    _ => {
+                        warn!(
+                            "Source program account is not an upgradeable program. \
                             Source program: {} Source data account: {} \
                             Destination program: {} Destination data account: {}",
                             source_address,
@@ -8369,20 +8401,10 @@ impl Bank {
                             destination_address,
                             destination_data_address,
                         );
-                        datapoint_error!(datapoint_name, ("slot", self.slot(), i64),);
+                        datapoint_warn!(datapoint_name, ("slot", self.slot(), i64),);
+                        return;
                     }
                 }
-            } else {
-                warn!(
-                    "Unable to find data account for source program. \
-                    Source program: {} Source data account: {} \
-                    Destination program: {} Destination data account: {}",
-                    source_address,
-                    source_data_address,
-                    destination_address,
-                    destination_data_address,
-                );
-                datapoint_warn!(datapoint_name, ("slot", self.slot(), i64),);
             }
         } else {
             warn!(
