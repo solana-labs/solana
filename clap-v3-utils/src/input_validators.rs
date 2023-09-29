@@ -59,6 +59,10 @@ where
 }
 
 // Return an error if a pubkey cannot be parsed.
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `clap::value_parser!(Pubkey)` instead"
+)]
 pub fn is_pubkey(string: &str) -> Result<(), String> {
     is_parsable_generic::<Pubkey, _>(string)
 }
