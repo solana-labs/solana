@@ -1,72 +1,130 @@
 use {
     crate::{
-        simple_vote_transaction_checker::is_simple_vote_transaction, transaction_meta::TransactionMeta,
+        simple_vote_transaction_checker::is_simple_vote_transaction,
+        transaction_meta::{DynamicMeta, StaticMeta, TransactionMeta},
     },
     solana_sdk::{
         hash::Hash,
-        message::{
-            v0::{self},
-            AddressLoader, LegacyMessage, SanitizedMessage, SanitizedVersionedMessage,
-            VersionedMessage,
-        },
+        message::{AddressLoader, SanitizedMessage, SanitizedVersionedMessage},
         signature::Signature,
-        transaction::{MessageHash, Result, SanitizedVersionedTransaction},
+        transaction::{Result, SanitizedVersionedTransaction},
     },
 };
 
-/// RuntimeTransaction is runtime face representation of transaction, as
-/// SanitizedTransaction is client facing rep.
+/// RuntimeTransaction is `runtime` facing representation of transaction, while
+/// solana_sdk::SanitizedTransaction is client facing representation.
+///
+/// It has two states:
+/// 1. Statically Loaded: after receiving `packet` from sigverify and deserializing
+///    it into `solana_sdk::VersionedTransaction`, then sanitizing into
+///    `solana_sdk::SanitizedVersionedTransaction`, `RuntimeTransactionStatic`
+///    can be created from it with static transaction metadata extracted.
+/// 2. Dynamically Loaded: after successfully loaded account addresses from onchain
+///    ALT, RuntimeTransaction transits into Dynamically Loaded state, with
+///    its dynamic metadata loaded.
+
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct RuntimeTransaction {
-    message: SanitizedMessage,
-    message_hash: Hash,
+pub struct RuntimeTransactionStatic {
+    // sanitized signatures
     signatures: Vec<Signature>,
-    transaction_meta: TransactionMeta,
+
+    // sanitized message
+    message: SanitizedVersionedMessage,
+
+    // transaction meta is a collection of fields, it is updated
+    // during message state transition
+    meta: TransactionMeta,
 }
 
-impl RuntimeTransaction {
-    /// Create a runtime transaction from a sanitized versioend transaction,
-    /// then load account addresses from address-lookup-table if apply, and
-    /// populate transaction metadata.
-    pub fn try_new(
-        // Note: transaction sanitization is a function of `sdk` that is shared
-        // by both runtime and client.
+impl StaticMeta for RuntimeTransactionStatic {
+    fn message_hash(&self) -> &Hash {
+        &self.meta.message_hash
+    }
+    fn is_simple_vote_tx(&self) -> bool {
+        self.meta.is_simple_vote_tx
+    }
+}
+
+impl RuntimeTransactionStatic {
+    pub fn try_from(
         sanitized_versioned_tx: SanitizedVersionedTransaction,
-        message_hash: impl Into<MessageHash>,
+        message_hash: Option<Hash>,
         is_simple_vote_tx: Option<bool>,
-        address_loader: impl AddressLoader,
     ) -> Result<Self> {
-        // metadata can be lazily updated alone transaction's execution path
-        let mut transaction_meta = TransactionMeta::default();
-        transaction_meta.set_is_simple_vote_tx(is_simple_vote_tx.unwrap_or_else(|| {
-            is_simple_vote_transaction(&sanitized_versioned_tx)
-        }));
-
-        let signatures = sanitized_versioned_tx.signatures;
-
-        let SanitizedVersionedMessage { message } = sanitized_versioned_tx.message;
-
-        let message_hash = match message_hash.into() {
-            MessageHash::Compute => message.hash(),
-            MessageHash::Precomputed(hash) => hash,
-        };
-
-        let message = match message {
-            VersionedMessage::Legacy(message) => {
-                SanitizedMessage::Legacy(LegacyMessage::new(message))
-            }
-            VersionedMessage::V0(message) => {
-                let loaded_addresses =
-                    address_loader.load_addresses(&message.address_table_lookups)?;
-                SanitizedMessage::V0(v0::LoadedMessage::new(message, loaded_addresses))
-            }
-        };
+        let meta =
+            Self::load_static_metadata(&sanitized_versioned_tx, message_hash, is_simple_vote_tx)?;
 
         Ok(Self {
-            message,
-            message_hash,
-            signatures,
-            transaction_meta,
+            signatures: sanitized_versioned_tx.signatures,
+            message: sanitized_versioned_tx.message,
+            meta,
         })
+    }
+
+    // private helpers
+    fn load_static_metadata(
+        sanitized_versioned_tx: &SanitizedVersionedTransaction,
+        message_hash: Option<Hash>,
+        is_simple_vote_tx: Option<bool>,
+    ) -> Result<TransactionMeta> {
+        let mut meta = TransactionMeta::default();
+        meta.set_is_simple_vote_tx(
+            is_simple_vote_tx.unwrap_or_else(|| is_simple_vote_transaction(sanitized_versioned_tx)),
+        );
+        meta.set_message_hash(
+            message_hash.unwrap_or_else(|| sanitized_versioned_tx.message.message.hash()),
+        );
+
+        Ok(meta)
+    }
+}
+
+/// Statically Loaded transaction can transit to Dynamically Loaded with supplied
+/// address_loader, to load accounts from on-chain ALT, then resolve dynamic metadata
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct RuntimeTransactionDynamic {
+    // sanitized signatures
+    signatures: Vec<Signature>,
+
+    // sanitized message
+    message: SanitizedMessage,
+
+    // transaction meta is a collection of fields, it is updated
+    // during message state transition
+    meta: TransactionMeta,
+}
+
+impl DynamicMeta for RuntimeTransactionDynamic {}
+
+impl StaticMeta for RuntimeTransactionDynamic {
+    fn message_hash(&self) -> &Hash {
+        &self.meta.message_hash
+    }
+    fn is_simple_vote_tx(&self) -> bool {
+        self.meta.is_simple_vote_tx
+    }
+}
+
+impl RuntimeTransactionDynamic {
+    pub fn try_from(
+        statically_loaded_runtime_tx: RuntimeTransactionStatic,
+        address_loader: impl AddressLoader,
+    ) -> Result<Self> {
+        let mut tx = Self {
+            signatures: statically_loaded_runtime_tx.signatures,
+            message: SanitizedMessage::try_new(
+                statically_loaded_runtime_tx.message,
+                address_loader,
+            )?,
+            meta: statically_loaded_runtime_tx.meta,
+        };
+        tx.load_dynamic_metadata()?;
+
+        Ok(tx)
+    }
+
+    // private helpers
+    fn load_dynamic_metadata(&mut self) -> Result<()> {
+        Ok(())
     }
 }

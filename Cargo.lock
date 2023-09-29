@@ -7067,7 +7067,7 @@ dependencies = [
 
 [[package]]
 name = "solana-runtime-transaction"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "bincode",
  "log",
