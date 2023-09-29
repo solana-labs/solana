@@ -28,12 +28,8 @@ spl-token-metadata-interface = { workspace = true }
 thiserror = { workspace = true }
 zstd = { workspace = true }
 
-<<<<<<< HEAD
-=======
 [dev-dependencies]
-assert_matches = { workspace = true }
 spl-pod = { workspace = true }
 
->>>>>>> de38b05ad1 (spl: Bump token-2022 and friends (#33453))
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
