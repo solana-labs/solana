@@ -1105,7 +1105,9 @@ pub mod tests {
             index0_max_slot,
             index1_max_slot,
         );
-        blockstore.run_purge(0, index0_max_slot - 1, PurgeType::Exact).unwrap();
+        blockstore
+            .run_purge(0, index0_max_slot - 1, PurgeType::Exact)
+            .unwrap();
         assert_eq!(
             blockstore
                 .transaction_status_index_cf
