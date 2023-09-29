@@ -440,6 +440,8 @@ pub(crate) enum SignerSourceError {
     DerivationPathError(#[from] DerivationPathError),
     #[error(transparent)]
     IoError(#[from] std::io::Error),
+    #[error("unsupported source")]
+    UnsupportedSource,
 }
 
 pub(crate) fn parse_signer_source<S: AsRef<str>>(
