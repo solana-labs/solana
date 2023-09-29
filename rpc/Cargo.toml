@@ -64,6 +64,7 @@ tokio-util = { workspace = true, features = ["codec", "compat"] }
 serial_test = { workspace = true }
 solana-net-utils = { workspace = true }
 solana-stake-program = { workspace = true }
+spl-pod = { workspace = true }
 symlink = { workspace = true }
 
 [lib]

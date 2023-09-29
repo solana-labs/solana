@@ -7626,16 +7626,11 @@ impl AccountsDb {
     }
 
     fn sort_slot_storage_scan(accum: &mut BinnedHashData) -> u64 {
-        let time = AtomicU64::new(0);
-        accum.iter_mut().for_each(|items| {
-            let mut sort_time = Measure::start("sort");
+        let (_, sort_time) = measure_us!(accum.iter_mut().for_each(|items| {
             // sort_by vs unstable because slot and write_version are already in order
             items.sort_by(AccountsHasher::compare_two_hash_entries);
-            sort_time.stop();
-            time.fetch_add(sort_time.as_us(), Ordering::Relaxed);
-        });
-
-        time.load(Ordering::Relaxed)
+        }));
+        sort_time
     }
 
     /// normal code path returns the common cache path
@@ -8233,11 +8228,12 @@ impl AccountsDb {
         let mut shrink_candidate_slots = self.shrink_candidate_slots.lock().unwrap();
         for slot in new_shrink_candidates {
             shrink_candidate_slots.insert(slot);
-            measure.stop();
-            self.clean_accounts_stats
-                .remove_dead_accounts_shrink_us
-                .fetch_add(measure.as_us(), Ordering::Relaxed);
         }
+        drop(shrink_candidate_slots);
+        measure.stop();
+        self.clean_accounts_stats
+            .remove_dead_accounts_shrink_us
+            .fetch_add(measure.as_us(), Ordering::Relaxed);
 
         dead_slots.retain(|slot| {
             if let Some(slot_store) = self.storage.get_slot_storage_entry(*slot) {
