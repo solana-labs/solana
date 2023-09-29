@@ -7626,16 +7626,11 @@ impl AccountsDb {
     }
 
     fn sort_slot_storage_scan(accum: &mut BinnedHashData) -> u64 {
-        let time = AtomicU64::new(0);
-        accum.iter_mut().for_each(|items| {
-            let mut sort_time = Measure::start("sort");
+        let (_, sort_time) = measure_us!(accum.iter_mut().for_each(|items| {
             // sort_by vs unstable because slot and write_version are already in order
             items.sort_by(AccountsHasher::compare_two_hash_entries);
-            sort_time.stop();
-            time.fetch_add(sort_time.as_us(), Ordering::Relaxed);
-        });
-
-        time.load(Ordering::Relaxed)
+        }));
+        sort_time
     }
 
     /// normal code path returns the common cache path
