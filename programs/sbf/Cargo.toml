@@ -169,8 +169,10 @@ ntapi = { git = "https://github.com/solana-labs/ntapi", rev = "97ede981a1777883f
 #  * spl-associated-token-account
 #  * spl-instruction-padding
 #  * spl-memo
+#  * spl-pod
 #  * spl-token
 #  * spl-token-2022
+#  * spl-token-metadata-interface
 #
 # They are included indirectly, for example, `account-decoder` depends on
 #

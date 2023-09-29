@@ -3,9 +3,10 @@ use {
         check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
     },
     extension::{
-        confidential_transfer::*, cpi_guard::*, default_account_state::*, interest_bearing_mint::*,
-        memo_transfer::*, mint_close_authority::*, permanent_delegate::*, reallocate::*,
-        transfer_fee::*,
+        confidential_transfer::*, confidential_transfer_fee::*, cpi_guard::*,
+        default_account_state::*, interest_bearing_mint::*, memo_transfer::*, metadata_pointer::*,
+        mint_close_authority::*, permanent_delegate::*, reallocate::*, transfer_fee::*,
+        transfer_hook::*,
     },
     serde_json::{json, Map, Value},
     solana_account_decoder::parse_token::{token_amount_to_ui_amount, UiAccountState},
@@ -229,7 +230,10 @@ pub fn parse_token(
                 | AuthorityType::CloseMint
                 | AuthorityType::InterestRate
                 | AuthorityType::PermanentDelegate
-                | AuthorityType::ConfidentialTransferMint => "mint",
+                | AuthorityType::ConfidentialTransferMint
+                | AuthorityType::TransferHookProgramId
+                | AuthorityType::ConfidentialTransferFeeConfig
+                | AuthorityType::MetadataPointer => "mint",
                 AuthorityType::AccountOwner | AuthorityType::CloseAccount => "account",
             };
             let mut value = json!({
@@ -590,6 +594,62 @@ pub fn parse_token(
                 account_keys,
             )
         }
+        TokenInstruction::TransferHookExtension => {
+            if instruction.data.len() < 2 {
+                return Err(ParseInstructionError::InstructionNotParsable(
+                    ParsableProgram::SplToken,
+                ));
+            }
+            parse_transfer_hook_instruction(
+                &instruction.data[1..],
+                &instruction.accounts,
+                account_keys,
+            )
+        }
+        TokenInstruction::ConfidentialTransferFeeExtension => {
+            if instruction.data.len() < 2 {
+                return Err(ParseInstructionError::InstructionNotParsable(
+                    ParsableProgram::SplToken,
+                ));
+            }
+            parse_confidential_transfer_fee_instruction(
+                &instruction.data[1..],
+                &instruction.accounts,
+                account_keys,
+            )
+        }
+        TokenInstruction::WithdrawExcessLamports => {
+            check_num_token_accounts(&instruction.accounts, 3)?;
+            let mut value = json!({
+                "source": account_keys[instruction.accounts[0] as usize].to_string(),
+                "destination": account_keys[instruction.accounts[1] as usize].to_string(),
+            });
+            let map = value.as_object_mut().unwrap();
+            parse_signers(
+                map,
+                2,
+                account_keys,
+                &instruction.accounts,
+                "authority",
+                "multisigAuthority",
+            );
+            Ok(ParsedInstructionEnum {
+                instruction_type: "withdrawExcessLamports".to_string(),
+                info: value,
+            })
+        }
+        TokenInstruction::MetadataPointerExtension => {
+            if instruction.data.len() < 2 {
+                return Err(ParseInstructionError::InstructionNotParsable(
+                    ParsableProgram::SplToken,
+                ));
+            }
+            parse_metadata_pointer_instruction(
+                &instruction.data[1..],
+                &instruction.accounts,
+                account_keys,
+            )
+        }
     }
 }
 
@@ -606,6 +666,9 @@ pub enum UiAuthorityType {
     InterestRate,
     PermanentDelegate,
     ConfidentialTransferMint,
+    TransferHookProgramId,
+    ConfidentialTransferFeeConfig,
+    MetadataPointer,
 }
 
 impl From<AuthorityType> for UiAuthorityType {
@@ -621,6 +684,11 @@ impl From<AuthorityType> for UiAuthorityType {
             AuthorityType::InterestRate => UiAuthorityType::InterestRate,
             AuthorityType::PermanentDelegate => UiAuthorityType::PermanentDelegate,
             AuthorityType::ConfidentialTransferMint => UiAuthorityType::ConfidentialTransferMint,
+            AuthorityType::TransferHookProgramId => UiAuthorityType::TransferHookProgramId,
+            AuthorityType::ConfidentialTransferFeeConfig => {
+                UiAuthorityType::ConfidentialTransferFeeConfig
+            }
+            AuthorityType::MetadataPointer => UiAuthorityType::MetadataPointer,
         }
     }
 }
@@ -642,6 +710,12 @@ pub enum UiExtensionType {
     CpiGuard,
     PermanentDelegate,
     NonTransferableAccount,
+    TransferHook,
+    TransferHookAccount,
+    ConfidentialTransferFeeConfig,
+    ConfidentialTransferFeeAmount,
+    MetadataPointer,
+    TokenMetadata,
 }
 
 impl From<ExtensionType> for UiExtensionType {
@@ -663,6 +737,16 @@ impl From<ExtensionType> for UiExtensionType {
             ExtensionType::CpiGuard => UiExtensionType::CpiGuard,
             ExtensionType::PermanentDelegate => UiExtensionType::PermanentDelegate,
             ExtensionType::NonTransferableAccount => UiExtensionType::NonTransferableAccount,
+            ExtensionType::TransferHook => UiExtensionType::TransferHook,
+            ExtensionType::TransferHookAccount => UiExtensionType::TransferHookAccount,
+            ExtensionType::ConfidentialTransferFeeConfig => {
+                UiExtensionType::ConfidentialTransferFeeConfig
+            }
+            ExtensionType::ConfidentialTransferFeeAmount => {
+                UiExtensionType::ConfidentialTransferFeeAmount
+            }
+            ExtensionType::MetadataPointer => UiExtensionType::MetadataPointer,
+            ExtensionType::TokenMetadata => UiExtensionType::TokenMetadata,
         }
     }
 }

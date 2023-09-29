@@ -63,6 +63,7 @@ serial_test = { workspace = true }
 solana-address-lookup-table-program = { workspace = true }
 solana-net-utils = { workspace = true }
 solana-stake-program = { workspace = true }
+spl-pod = { workspace = true }
 symlink = { workspace = true }
 
 [lib]
