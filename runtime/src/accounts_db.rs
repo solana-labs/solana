@@ -8066,11 +8066,11 @@ impl AccountsDb {
             );
 
             shrink_candidate_slots.insert(slot, store);
-            measure.stop();
-            self.clean_accounts_stats
-                .remove_dead_accounts_shrink_us
-                .fetch_add(measure.as_us(), Ordering::Relaxed);
         }
+        measure.stop();
+        self.clean_accounts_stats
+            .remove_dead_accounts_shrink_us
+            .fetch_add(measure.as_us(), Ordering::Relaxed);
 
         dead_slots.retain(|slot| {
             if let Some(slot_store) = self.storage.get_slot_storage_entry(*slot) {
