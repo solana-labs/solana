@@ -8206,8 +8206,8 @@ impl Bank {
     }
 
     /// Moves one account in place of another
-    /// `source`: the program to replace with
-    /// `destination`: the program to be replaced
+    /// `source`: the account to replace with
+    /// `destination`: the account to be replaced
     fn move_account<U, V>(
         &mut self,
         source_address: &Pubkey,
@@ -8241,9 +8241,9 @@ impl Bank {
         );
     }
 
-    /// Use to replace programs by feature activation
-    /// `source`: the program to replace with
-    /// `destination`: the program to be replaced
+    /// Use to replace non-upgradeable programs by feature activation
+    /// `source`: the non-upgradeable program account to replace with
+    /// `destination`: the non-upgradeable program account to be replaced
     #[allow(dead_code)]
     fn replace_non_upgradeable_program_account(
         &mut self,
@@ -8281,6 +8281,11 @@ impl Bank {
     }
 
     /// Use to replace an empty account with a program by feature activation
+    /// Note: The upgradeable program should have both:
+    ///     - Program account
+    ///     - Program data account
+    /// `source`: the upgradeable program account to replace with
+    /// `destination`: the empty account to be replaced
     fn replace_empty_account_with_upgradeable_program(
         &mut self,
         source_address: &Pubkey,

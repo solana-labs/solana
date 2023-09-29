@@ -8084,7 +8084,7 @@ fn test_replace_non_upgradeable_program_account() {
     assert_eq!(destination_account.owner(), &bpf_id);
     assert!(destination_account.executable());
 
-    // Lamports from the source program account were burnt
+    // The destination account's original lamports balance was burnt
     assert_eq!(
         bank.capitalization(),
         original_capitalization - destination_lamports
