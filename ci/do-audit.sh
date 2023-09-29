@@ -58,6 +58,9 @@ cargo_audit_ignores=(
   #
   # Denial of service in Quinn servers
   --ignore RUSTSEC-2023-0063
+
+  # tungstenite
+  --ignore RUSTSEC-2023-0065
 )
 scripts/cargo-for-all-lock-files.sh stable audit "${cargo_audit_ignores[@]}" | $dep_tree_filter
 # we want the `cargo audit` exit code, not `$dep_tree_filter`'s
