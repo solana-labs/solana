@@ -8054,7 +8054,6 @@ impl AccountsDb {
 
         let mut measure = Measure::start("shrink");
         let mut shrink_candidate_slots = self.shrink_candidate_slots.lock().unwrap();
-<<<<<<< HEAD:runtime/src/accounts_db.rs
         for (slot, store) in new_shrink_candidates {
             debug!(
                 "adding: {} {} to shrink candidates: count: {}/{} bytes: {}/{}",
@@ -8067,14 +8066,6 @@ impl AccountsDb {
             );
 
             shrink_candidate_slots.insert(slot, store);
-            measure.stop();
-            self.clean_accounts_stats
-                .remove_dead_accounts_shrink_us
-                .fetch_add(measure.as_us(), Ordering::Relaxed);
-=======
-        for slot in new_shrink_candidates {
-            shrink_candidate_slots.insert(slot);
->>>>>>> b81ff5d654 (Fixup the metrics for remove_dead_accounts_shrink_us (#33458)):accounts-db/src/accounts_db.rs
         }
         measure.stop();
         self.clean_accounts_stats
