@@ -87,7 +87,7 @@ impl From<Infallible> for LocatorError {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Locator {
     pub manufacturer: Manufacturer,
     pub pubkey: Option<Pubkey>,
