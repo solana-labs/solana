@@ -8,6 +8,9 @@ use {
     },
     crate::{
         accounts_background_service::{PrunedBanksRequestHandler, SendDroppedBankCallback},
+        bank::replace_account::{
+            replace_empty_account_with_upgradeable_program, replace_non_upgradeable_program_account,
+        },
         bank_client::BankClient,
         epoch_rewards_hasher::hash_rewards_into_partitions,
         genesis_utils::{
@@ -8063,7 +8066,8 @@ fn test_replace_non_upgradeable_program_account() {
 
     let original_capitalization = bank.capitalization();
 
-    bank.replace_non_upgradeable_program_account(
+    replace_non_upgradeable_program_account(
+        &mut bank,
         &source,
         &destination,
         "bank-apply_program_replacement",
@@ -8179,7 +8183,8 @@ fn test_replace_empty_account_with_upgradeable_program_success(
     let original_capitalization = bank.capitalization();
 
     // Do the replacement
-    bank.replace_empty_account_with_upgradeable_program(
+    replace_empty_account_with_upgradeable_program(
+        &mut bank,
         &source,
         &destination,
         "bank-apply_empty_account_replacement_for_program",
@@ -8309,7 +8314,8 @@ fn test_replace_empty_account_with_upgradeable_program_fail_when_account_exists(
     let original_capitalization = bank.capitalization();
 
     // Attempt the replacement
-    bank.replace_empty_account_with_upgradeable_program(
+    replace_empty_account_with_upgradeable_program(
+        &mut bank,
         &source,
         &destination,
         "bank-apply_empty_account_replacement_for_program",
