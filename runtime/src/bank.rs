@@ -8314,13 +8314,11 @@ impl Bank {
                     .get_account_with_fixed_root(destination_address)
                     .is_none()
                 {
-                    let lamports = self.get_minimum_balance_for_rent_exemption(
-                        UpgradeableLoaderState::size_of_program(),
-                    );
                     let state = UpgradeableLoaderState::Program {
                         programdata_address: destination_data_address,
                     };
                     if let Ok(data) = bincode::serialize(&state) {
+                        let lamports = self.get_minimum_balance_for_rent_exemption(data.len());
                         let created_program_account = Account {
                             lamports,
                             data,
