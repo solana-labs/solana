@@ -6544,9 +6544,9 @@ dependencies = [
 
 [[package]]
 name = "spl-discriminator-derive"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4fa8f409b5c5e0ac571df17c981ae1424b204743daa4428430627d38717caf5"
+checksum = "fadbefec4f3c678215ca72bd71862697bb06b41fd77c0088902dd3203354387b"
 dependencies = [
  "quote",
  "spl-discriminator-syn",
@@ -6555,13 +6555,13 @@ dependencies = [
 
 [[package]]
 name = "spl-discriminator-syn"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21968d7da2f0a624c509f24580c3fee70b364a6886d90709e679e64f572eca2f"
+checksum = "0e5f2044ca42c8938d54d1255ce599c79a1ffd86b677dfab695caa20f9ffc3f2"
 dependencies = [
  "proc-macro2",
  "quote",
- "solana-program",
+ "sha2 0.10.7",
  "syn 2.0.37",
  "thiserror",
 ]
@@ -6603,13 +6603,13 @@ dependencies = [
 
 [[package]]
 name = "spl-program-error-derive"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6709c5f41fefb730f2bd8464da741079cf0efd1d0f522e041224b98d431b9b3"
+checksum = "ab5269c8e868da17b6552ef35a51355a017bd8e0eae269c201fef830d35fa52c"
 dependencies = [
  "proc-macro2",
  "quote",
- "solana-program",
+ "sha2 0.10.7",
  "syn 2.0.37",
 ]
 
