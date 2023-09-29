@@ -16,7 +16,7 @@ use {
     },
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
-    solana_measure::measure,
+    solana_measure::{measure, measure_us},
     solana_runtime::bank::Bank,
     solana_sdk::{
         clock::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, feature_set::FeatureSet, hash::Hash,
@@ -133,6 +133,7 @@ fn filter_processed_packets<'a, F>(
 pub struct ConsumeScannerPayload<'a> {
     pub reached_end_of_slot: bool,
     pub account_locks: ReadWriteAccountSet,
+    pub batch_priority_guard: ReadWriteAccountSet,
     pub sanitized_transactions: Vec<SanitizedTransaction>,
     pub slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
     pub message_hash_to_transaction: &'a mut HashMap<Hash, DeserializedPacket>,
@@ -149,18 +150,11 @@ fn consume_scan_should_process_packet(
         return ProcessingDecision::Now;
     }
 
-    // Before sanitization, let's quickly check the static keys (performance optimization)
-    let message = &packet.transaction().get_message().message;
-    if !payload.account_locks.check_static_account_locks(message) {
-        return ProcessingDecision::Later;
-    }
-
-    // Try to deserialize the packet
-    let (maybe_sanitized_transaction, sanitization_time) = measure!(
+    // Try to sanitize the packet
+    let (maybe_sanitized_transaction, sanitization_time_us) = measure_us!(
         packet.build_sanitized_transaction(&bank.feature_set, bank.vote_only_bank(), bank)
     );
 
-    let sanitization_time_us = sanitization_time.as_us();
     payload
         .slot_metrics_tracker
         .increment_transactions_from_packets_us(sanitization_time_us);
@@ -181,13 +175,35 @@ fn consume_scan_should_process_packet(
             payload
                 .message_hash_to_transaction
                 .remove(packet.message_hash());
-            ProcessingDecision::Never
-        } else if payload.account_locks.try_locking(message) {
-            payload.sanitized_transactions.push(sanitized_transaction);
-            ProcessingDecision::Now
-        } else {
-            ProcessingDecision::Later
+            return ProcessingDecision::Never;
         }
+
+        if !payload
+            .account_locks
+            .check_sanitized_message_account_locks(message)
+        {
+            payload
+                .batch_priority_guard
+                .add_sanitized_message_account_locks(message);
+            return ProcessingDecision::Later;
+        }
+
+        if !payload
+            .batch_priority_guard
+            .check_sanitized_message_account_locks(message)
+        {
+            payload
+                .batch_priority_guard
+                .add_sanitized_message_account_locks(message);
+            return ProcessingDecision::Later;
+        }
+
+        payload
+            .account_locks
+            .add_sanitized_message_account_locks(message);
+
+        payload.sanitized_transactions.push(sanitized_transaction);
+        ProcessingDecision::Now
     } else {
         payload
             .message_hash_to_transaction
@@ -212,6 +228,7 @@ where
     let payload = ConsumeScannerPayload {
         reached_end_of_slot: false,
         account_locks: ReadWriteAccountSet::default(),
+        batch_priority_guard: ReadWriteAccountSet::default(),
         sanitized_transactions: Vec::with_capacity(UNPROCESSED_BUFFER_STEP_SIZE),
         slot_metrics_tracker,
         message_hash_to_transaction,
