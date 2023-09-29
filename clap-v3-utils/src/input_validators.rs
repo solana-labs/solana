@@ -107,6 +107,10 @@ where
 }
 
 // Return an error if a `SignerSourceKind::Prompt` cannot be parsed
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `SignerSourceParseBuilder::new().allow_prompt().build()` instead"
+)]
 pub fn is_prompt_signer_source(string: &str) -> Result<(), String> {
     if string == ASK_KEYWORD {
         return Ok(());
