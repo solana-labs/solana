@@ -127,6 +127,10 @@ pub fn is_prompt_signer_source(string: &str) -> Result<(), String> {
 }
 
 // Return an error if string cannot be parsed as pubkey string or keypair file location
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `SignerSourceParseBuilder::new().allow_pubkey().allow_path().build()` instead"
+)]
 pub fn is_pubkey_or_keypair<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -136,6 +140,10 @@ where
 
 // Return an error if string cannot be parsed as a pubkey string, or a valid Signer that can
 // produce a pubkey()
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `SignerSourceParseBuilder::new().allow_pubkey().allow_path().build()` instead"
+)]
 pub fn is_valid_pubkey<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -157,6 +165,10 @@ where
 // when paired with an offline `--signer` argument to provide a Presigner (pubkey + signature).
 // Clap validators can't check multiple fields at once, so the verification that a `--signer` is
 // also provided and correct happens in parsing, not in validation.
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `SignerSourceParseBuilder::new().build()` instead"
+)]
 pub fn is_valid_signer<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
