@@ -171,8 +171,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 #  * spl-associated-token-account
 #  * spl-instruction-padding
 #  * spl-memo
+#  * spl-pod
 #  * spl-token
 #  * spl-token-2022
+#  * spl-token-metadata-interface
 #
 # They are included indirectly, for example, `account-decoder` depends on
 #
