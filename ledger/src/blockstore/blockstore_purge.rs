@@ -1100,6 +1100,25 @@ pub mod tests {
         assert_eq!(entry.0, 2); // Buffer entry, no index 1 entries remaining
         drop(status_entry_iterator);
 
+        // Purge up to but not including index0_max_slot
+        clear_and_repopulate_transaction_statuses_for_test(
+            &blockstore,
+            index0_max_slot,
+            index1_max_slot,
+        );
+        blockstore.run_purge(0, index0_max_slot - 1, PurgeType::Exact).unwrap();
+        assert_eq!(
+            blockstore
+                .transaction_status_index_cf
+                .get(0)
+                .unwrap()
+                .unwrap(),
+            TransactionStatusIndexMeta {
+                max_slot: index0_max_slot,
+                frozen: true,
+            }
+        );
+
         // Test purge all
         clear_and_repopulate_transaction_statuses_for_test(
             &blockstore,
