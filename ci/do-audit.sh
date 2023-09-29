@@ -36,6 +36,9 @@ cargo_audit_ignores=(
   # webpki
   # https://github.com/solana-labs/solana/issues/32933
   --ignore RUSTSEC-2023-0052
+
+  # tungstenite
+  --ignore RUSTSEC-2023-0065
 )
 scripts/cargo-for-all-lock-files.sh audit "${cargo_audit_ignores[@]}" | $dep_tree_filter
 # we want the `cargo audit` exit code, not `$dep_tree_filter`'s
