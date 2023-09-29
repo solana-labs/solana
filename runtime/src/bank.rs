@@ -8206,68 +8206,76 @@ impl Bank {
     }
 
     /// Moves one account in place of another
-    /// `src`: the program to replace with
-    /// `dst`: the program to be replaced
+    /// `source`: the program to replace with
+    /// `destination`: the program to be replaced
     fn move_account<U, V>(
         &mut self,
-        src_address: &Pubkey,
-        src_account: &V,
-        dst_address: &Pubkey,
-        dst_account: Option<&U>,
+        source_address: &Pubkey,
+        source_account: &V,
+        destination_address: &Pubkey,
+        destination_account: Option<&U>,
     ) where
         U: ReadableAccount + Sync + ZeroLamport,
         V: ReadableAccount + Sync + ZeroLamport,
     {
-        let (dst_lamports, dst_len) = match dst_account {
-            Some(dst_account) => (dst_account.lamports(), dst_account.data().len()),
+        let (destination_lamports, destination_len) = match destination_account {
+            Some(destination_account) => (
+                destination_account.lamports(),
+                destination_account.data().len(),
+            ),
             None => (0, 0),
         };
 
         // Burn lamports in the destination account
-        self.capitalization.fetch_sub(dst_lamports, Relaxed);
+        self.capitalization.fetch_sub(destination_lamports, Relaxed);
 
         // Transfer source account to destination account
-        self.store_account(dst_address, src_account);
+        self.store_account(destination_address, source_account);
 
         // Clear source account
-        self.store_account(src_address, &AccountSharedData::default());
+        self.store_account(source_address, &AccountSharedData::default());
 
         self.calculate_and_update_accounts_data_size_delta_off_chain(
-            dst_len,
-            src_account.data().len(),
+            destination_len,
+            source_account.data().len(),
         );
     }
 
     /// Use to replace programs by feature activation
-    /// `src`: the program to replace with
-    /// `dst`: the program to be replaced
+    /// `source`: the program to replace with
+    /// `destination`: the program to be replaced
     #[allow(dead_code)]
     fn replace_non_upgradeable_program_account(
         &mut self,
-        src_address: &Pubkey,
-        dst_address: &Pubkey,
+        source_address: &Pubkey,
+        destination_address: &Pubkey,
         datapoint_name: &'static str,
     ) {
-        if let Some(dst_account) = self.get_account_with_fixed_root(dst_address) {
-            if let Some(src_account) = self.get_account_with_fixed_root(src_address) {
+        if let Some(destination_account) = self.get_account_with_fixed_root(destination_address) {
+            if let Some(source_account) = self.get_account_with_fixed_root(source_address) {
                 datapoint_info!(datapoint_name, ("slot", self.slot, i64));
 
-                self.move_account(src_address, &src_account, dst_address, Some(&dst_account));
+                self.move_account(
+                    source_address,
+                    &source_account,
+                    destination_address,
+                    Some(&destination_account),
+                );
 
                 // Unload a program from the bank's cache
                 self.loaded_programs_cache
                     .write()
                     .unwrap()
-                    .remove_programs([*dst_address].into_iter());
+                    .remove_programs([*destination_address].into_iter());
             } else {
                 warn!(
                     "Unable to find source program {}. Destination: {}",
-                    src_address, dst_address
+                    source_address, destination_address
                 );
                 datapoint_warn!(datapoint_name, ("slot", self.slot(), i64),);
             }
         } else {
-            warn!("Unable to find destination program {}", dst_address);
+            warn!("Unable to find destination program {}", destination_address);
             datapoint_warn!(datapoint_name, ("slot", self.slot(), i64),);
         }
     }
@@ -8275,32 +8283,37 @@ impl Bank {
     /// Use to replace an empty account with a program by feature activation
     fn replace_empty_account_with_upgradeable_program(
         &mut self,
-        src_address: &Pubkey,
-        dst_address: &Pubkey,
+        source_address: &Pubkey,
+        destination_address: &Pubkey,
         datapoint_name: &'static str,
     ) {
         // Must be attempting to replace an empty account with a program
         // account _and_ data account
-        if let Some(src_account) = self.get_account_with_fixed_root(src_address) {
-            let (dst_data_address, _) = Pubkey::find_program_address(
-                &[dst_address.as_ref()],
+        if let Some(source_account) = self.get_account_with_fixed_root(source_address) {
+            let (destination_data_address, _) = Pubkey::find_program_address(
+                &[destination_address.as_ref()],
                 &bpf_loader_upgradeable::id(),
             );
-            let (src_data_address, _) = Pubkey::find_program_address(
-                &[src_address.as_ref()],
+            let (source_data_address, _) = Pubkey::find_program_address(
+                &[source_address.as_ref()],
                 &bpf_loader_upgradeable::id(),
             );
-            if let Some(src_data_account) = self.get_account_with_fixed_root(&src_data_address) {
+            if let Some(source_data_account) =
+                self.get_account_with_fixed_root(&source_data_address)
+            {
                 // Make sure the destination account is empty
                 // We aren't going to check that there isn't a data account at
-                // the known program-derived address (ie. `dst_data_address`),
+                // the known program-derived address (ie. `destination_data_address`),
                 // because if it exists, it will be overwritten
-                if self.get_account_with_fixed_root(dst_address).is_none() {
+                if self
+                    .get_account_with_fixed_root(destination_address)
+                    .is_none()
+                {
                     let lamports = self.get_minimum_balance_for_rent_exemption(
                         UpgradeableLoaderState::size_of_program(),
                     );
                     let state = UpgradeableLoaderState::Program {
-                        programdata_address: dst_data_address,
+                        programdata_address: destination_data_address,
                     };
                     if let Ok(data) = bincode::serialize(&state) {
                         let created_program_account = Account {
@@ -8308,33 +8321,34 @@ impl Bank {
                             data,
                             owner: bpf_loader_upgradeable::id(),
                             executable: true,
-                            rent_epoch: src_account.rent_epoch(),
+                            rent_epoch: source_account.rent_epoch(),
                         };
 
                         // Make sure the source account has enough rent-exempt
                         // lamports for the empty account that will now house the
                         // PDA, and we can properly serialize the program account's
                         // state
-                        if src_account.lamports() >= lamports {
+                        if source_account.lamports() >= lamports {
                             datapoint_info!(datapoint_name, ("slot", self.slot, i64));
                             let change_in_capitalization =
-                                src_account.lamports().saturating_sub(lamports);
+                                source_account.lamports().saturating_sub(lamports);
 
                             // Replace the destination data account with the source one
                             // If the destination data account does not exist, it will be created
                             // If it does exist, it will be overwritten
                             self.move_account(
-                                &src_data_address,
-                                &src_data_account,
-                                &dst_data_address,
-                                self.get_account_with_fixed_root(&dst_data_address).as_ref(),
+                                &source_data_address,
+                                &source_data_account,
+                                &destination_data_address,
+                                self.get_account_with_fixed_root(&destination_data_address)
+                                    .as_ref(),
                             );
 
                             // Write the source data account's PDA into the destination program account
                             self.move_account(
-                                src_address,
+                                source_address,
                                 &created_program_account,
-                                dst_address,
+                                destination_address,
                                 None::<&AccountSharedData>,
                             );
 
@@ -8347,7 +8361,10 @@ impl Bank {
                             "Unable to serialize program account state. \
                             Source program: {} Source data account: {} \
                             Destination program: {} Destination data account: {}",
-                            src_address, src_data_address, dst_address, dst_data_address,
+                            source_address,
+                            source_data_address,
+                            destination_address,
+                            destination_data_address,
                         );
                         datapoint_error!(datapoint_name, ("slot", self.slot(), i64),);
                     }
@@ -8357,14 +8374,17 @@ impl Bank {
                     "Unable to find data account for source program. \
                     Source program: {} Source data account: {} \
                     Destination program: {} Destination data account: {}",
-                    src_address, src_data_address, dst_address, dst_data_address,
+                    source_address,
+                    source_data_address,
+                    destination_address,
+                    destination_data_address,
                 );
                 datapoint_warn!(datapoint_name, ("slot", self.slot(), i64),);
             }
         } else {
             warn!(
                 "Unable to find source program {}. Destination: {}",
-                src_address, dst_address
+                source_address, destination_address
             );
             datapoint_warn!(datapoint_name, ("slot", self.slot(), i64),);
         }
