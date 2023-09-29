@@ -177,6 +177,9 @@ fn consume_scan_should_process_packet(
             return ProcessingDecision::Never;
         }
 
+        // Always take locks during batch creation.
+        // This prevents lower-priority transactions from taking locks
+        // needed by higher-priority txs that were skipped by this check.
         if !payload.account_locks.take_locks(message) {
             return ProcessingDecision::Later;
         }
