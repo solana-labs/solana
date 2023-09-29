@@ -3464,9 +3464,8 @@ impl ReplayStage {
 
             match switch_fork_decision {
                 SwitchForkDecision::FailedSwitchThreshold(switch_proof_stake, total_stake) => {
-                    let candidate_vote_bank = heaviest_bank_on_same_voted_fork;
                     let final_switch_fork_decision = Self::select_forks_failed_switch_threshold(
-                        candidate_vote_bank.map(|bank| bank.as_ref()),
+                        heaviest_bank_on_same_voted_fork.map(|bank| bank.as_ref()),
                         progress,
                         tower,
                         heaviest_bank.slot(),
@@ -3476,11 +3475,11 @@ impl ReplayStage {
                         switch_fork_decision,
                     );
                     let candidate_vote_bank = if final_switch_fork_decision.can_vote() {
-                        candidate_vote_bank
-                    } else {
                         // The only time we would still vote despite `!switch_fork_decision.can_vote()`
                         // is if we switched the vote candidate to `heaviest_bank_on_same_voted_fork`
                         // because we needed to refresh the vote to the tip of our last voted fork.
+                        heaviest_bank_on_same_voted_fork
+                    } else {
                         // Otherwise,  we should just return the original vote candidate, the heaviest bank
                         // for logging purposes, namely to check if there are any additional voting failures
                         // besides the switch threshold
@@ -8194,7 +8193,10 @@ pub(crate) mod tests {
         assert_eq!(reset_fork, Some(6));
         assert_eq!(
             failures,
-            vec![HeaviestForkFailures::FailedSwitchThreshold(4, 0, 30000),]
+            vec![
+                HeaviestForkFailures::FailedSwitchThreshold(4, 0, 30000),
+                HeaviestForkFailures::LockedOut(4)
+            ]
         );
 
         let (vote_fork, reset_fork, failures) = run_compute_and_select_forks(
@@ -8210,7 +8212,10 @@ pub(crate) mod tests {
         assert_eq!(reset_fork, Some(6));
         assert_eq!(
             failures,
-            vec![HeaviestForkFailures::FailedSwitchThreshold(4, 0, 30000),]
+            vec![
+                HeaviestForkFailures::FailedSwitchThreshold(4, 0, 30000),
+                HeaviestForkFailures::LockedOut(4)
+            ]
         );
     }
 
