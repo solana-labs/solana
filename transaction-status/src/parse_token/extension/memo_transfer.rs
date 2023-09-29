@@ -64,7 +64,7 @@ mod test {
         )
         .unwrap();
         let message = Message::new(&[enable_memo_transfers_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,
@@ -92,7 +92,7 @@ mod test {
         )
         .unwrap();
         let message = Message::new(&[enable_memo_transfers_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,
@@ -121,7 +121,7 @@ mod test {
         )
         .unwrap();
         let message = Message::new(&[enable_memo_transfers_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,
@@ -149,7 +149,7 @@ mod test {
         )
         .unwrap();
         let message = Message::new(&[enable_memo_transfers_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,

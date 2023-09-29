@@ -74,7 +74,7 @@ mod test {
         )
         .unwrap();
         let message = Message::new(&[init_default_account_state_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,
@@ -101,7 +101,7 @@ mod test {
         )
         .unwrap();
         let message = Message::new(&[update_default_account_state_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,
@@ -131,7 +131,7 @@ mod test {
         )
         .unwrap();
         let message = Message::new(&[update_default_account_state_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,

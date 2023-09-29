@@ -39,7 +39,7 @@ mod test {
         )
         .unwrap();
         let message = Message::new(&[mint_close_authority_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,
@@ -58,7 +58,7 @@ mod test {
         let mint_close_authority_ix =
             initialize_mint_close_authority(&spl_token_2022::id(), &mint_pubkey, None).unwrap();
         let message = Message::new(&[mint_close_authority_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,

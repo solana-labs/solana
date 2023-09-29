@@ -184,7 +184,7 @@ mod test {
         )
         .unwrap();
         let message = Message::new(&[init_transfer_fee_config_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,
@@ -213,7 +213,7 @@ mod test {
         )
         .unwrap();
         let message = Message::new(&[init_transfer_fee_config_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,
@@ -250,7 +250,7 @@ mod test {
         )
         .unwrap();
         let message = Message::new(&[transfer_checked_with_fee_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,
@@ -297,7 +297,7 @@ mod test {
         )
         .unwrap();
         let message = Message::new(&[transfer_checked_with_fee_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,
@@ -341,7 +341,7 @@ mod test {
         )
         .unwrap();
         let message = Message::new(&[withdraw_withheld_tokens_from_mint_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,
@@ -368,7 +368,7 @@ mod test {
         )
         .unwrap();
         let message = Message::new(&[withdraw_withheld_tokens_from_mint_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,
@@ -402,7 +402,7 @@ mod test {
         )
         .unwrap();
         let message = Message::new(&[withdraw_withheld_tokens_from_accounts_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,
@@ -434,7 +434,7 @@ mod test {
         )
         .unwrap();
         let message = Message::new(&[withdraw_withheld_tokens_from_accounts_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,
@@ -467,7 +467,7 @@ mod test {
         )
         .unwrap();
         let message = Message::new(&[harvest_withheld_tokens_to_mint_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,
@@ -497,7 +497,7 @@ mod test {
         )
         .unwrap();
         let message = Message::new(&[set_transfer_fee_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,
@@ -526,7 +526,7 @@ mod test {
         )
         .unwrap();
         let message = Message::new(&[set_transfer_fee_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,

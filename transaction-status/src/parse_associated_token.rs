@@ -100,22 +100,9 @@ mod test {
                 create_associated_token_account, create_associated_token_account_idempotent,
                 recover_nested,
             },
-            solana_program::{
-                instruction::CompiledInstruction as SplAssociatedTokenCompiledInstruction,
-                message::Message, sysvar,
-            },
+            solana_program::{message::Message, sysvar},
         },
     };
-
-    fn convert_compiled_instruction(
-        instruction: &SplAssociatedTokenCompiledInstruction,
-    ) -> CompiledInstruction {
-        CompiledInstruction {
-            program_id_index: instruction.program_id_index,
-            accounts: instruction.accounts.clone(),
-            data: instruction.data.clone(),
-        }
-    }
 
     #[test]
     fn test_parse_create_deprecated() {
@@ -125,8 +112,8 @@ mod test {
         let associated_account_address = get_associated_token_address(&wallet_address, &mint);
         #[allow(deprecated)]
         let create_ix = create_associated_token_account_deprecated(&funder, &wallet_address, &mint);
-        let message = Message::new(&[create_ix], None);
-        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let mut message = Message::new(&[create_ix], None);
+        let mut compiled_instruction = &mut message.instructions[0];
         let expected_parsed_ix = ParsedInstructionEnum {
             instruction_type: "create".to_string(),
             info: json!({
@@ -182,8 +169,8 @@ mod test {
             get_associated_token_address_with_program_id(&wallet_address, &mint, &token_program_id);
         let create_ix =
             create_associated_token_account(&funder, &wallet_address, &mint, &token_program_id);
-        let message = Message::new(&[create_ix], None);
-        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let mut message = Message::new(&[create_ix], None);
+        let mut compiled_instruction = &mut message.instructions[0];
         assert_eq!(
             parse_associated_token(
                 &compiled_instruction,
@@ -224,8 +211,8 @@ mod test {
             &mint,
             &token_program_id,
         );
-        let message = Message::new(&[create_ix], None);
-        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let mut message = Message::new(&[create_ix], None);
+        let mut compiled_instruction = &mut message.instructions[0];
         assert_eq!(
             parse_associated_token(
                 &compiled_instruction,
@@ -279,8 +266,8 @@ mod test {
             &nested_mint,
             &token_program_id,
         );
-        let message = Message::new(&[recover_ix], None);
-        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let mut message = Message::new(&[recover_ix], None);
+        let mut compiled_instruction = &mut message.instructions[0];
         assert_eq!(
             parse_associated_token(
                 &compiled_instruction,

@@ -57,7 +57,7 @@ mod test {
         let enable_cpi_guard_ix =
             enable_cpi_guard(&spl_token_2022::id(), &account_pubkey, &owner_pubkey, &[]).unwrap();
         let message = Message::new(&[enable_cpi_guard_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,
@@ -85,7 +85,7 @@ mod test {
         )
         .unwrap();
         let message = Message::new(&[enable_cpi_guard_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,
@@ -109,7 +109,7 @@ mod test {
         let enable_cpi_guard_ix =
             disable_cpi_guard(&spl_token_2022::id(), &account_pubkey, &owner_pubkey, &[]).unwrap();
         let message = Message::new(&[enable_cpi_guard_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,
@@ -137,7 +137,7 @@ mod test {
         )
         .unwrap();
         let message = Message::new(&[enable_cpi_guard_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
                 &compiled_instruction,
