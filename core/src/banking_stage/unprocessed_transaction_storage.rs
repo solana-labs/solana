@@ -133,7 +133,6 @@ fn filter_processed_packets<'a, F>(
 pub struct ConsumeScannerPayload<'a> {
     pub reached_end_of_slot: bool,
     pub account_locks: ReadWriteAccountSet,
-    pub batch_priority_guard: ReadWriteAccountSet,
     pub sanitized_transactions: Vec<SanitizedTransaction>,
     pub slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
     pub message_hash_to_transaction: &'a mut HashMap<Hash, DeserializedPacket>,
@@ -178,29 +177,9 @@ fn consume_scan_should_process_packet(
             return ProcessingDecision::Never;
         }
 
-        if !payload
-            .account_locks
-            .check_sanitized_message_account_locks(message)
-        {
-            payload
-                .batch_priority_guard
-                .add_sanitized_message_account_locks(message);
+        if !payload.account_locks.take_locks(message) {
             return ProcessingDecision::Later;
         }
-
-        if !payload
-            .batch_priority_guard
-            .check_sanitized_message_account_locks(message)
-        {
-            payload
-                .batch_priority_guard
-                .add_sanitized_message_account_locks(message);
-            return ProcessingDecision::Later;
-        }
-
-        payload
-            .account_locks
-            .add_sanitized_message_account_locks(message);
 
         payload.sanitized_transactions.push(sanitized_transaction);
         ProcessingDecision::Now
@@ -228,7 +207,6 @@ where
     let payload = ConsumeScannerPayload {
         reached_end_of_slot: false,
         account_locks: ReadWriteAccountSet::default(),
-        batch_priority_guard: ReadWriteAccountSet::default(),
         sanitized_transactions: Vec::with_capacity(UNPROCESSED_BUFFER_STEP_SIZE),
         slot_metrics_tracker,
         message_hash_to_transaction,

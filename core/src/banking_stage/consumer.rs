@@ -172,7 +172,6 @@ impl Consumer {
         // Clear payload for next iteration
         payload.sanitized_transactions.clear();
         payload.account_locks.clear();
-        payload.batch_priority_guard.clear();
 
         let ProcessTransactionsSummary {
             reached_max_poh_height,
