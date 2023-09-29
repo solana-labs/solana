@@ -40,7 +40,6 @@ pub(in crate::parse_token) fn parse_memo_transfer_instruction(
 mod test {
     use {
         super::*,
-        crate::parse_token::test::*,
         solana_sdk::pubkey::Pubkey,
         spl_token_2022::{
             extension::memo_transfer::instruction::{
@@ -58,16 +57,16 @@ mod test {
         let owner_pubkey = Pubkey::new_unique();
         let enable_memo_transfers_ix = enable_required_transfer_memos(
             &spl_token_2022::id(),
-            &convert_pubkey(account_pubkey),
-            &convert_pubkey(owner_pubkey),
+            &account_pubkey,
+            &owner_pubkey,
             &[],
         )
         .unwrap();
         let message = Message::new(&[enable_memo_transfers_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
-                &compiled_instruction,
+                compiled_instruction,
                 &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
@@ -86,19 +85,16 @@ mod test {
         let multisig_signer1 = Pubkey::new_unique();
         let enable_memo_transfers_ix = enable_required_transfer_memos(
             &spl_token_2022::id(),
-            &convert_pubkey(account_pubkey),
-            &convert_pubkey(multisig_pubkey),
-            &[
-                &convert_pubkey(multisig_signer0),
-                &convert_pubkey(multisig_signer1),
-            ],
+            &account_pubkey,
+            &multisig_pubkey,
+            &[&multisig_signer0, &multisig_signer1],
         )
         .unwrap();
         let message = Message::new(&[enable_memo_transfers_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
-                &compiled_instruction,
+                compiled_instruction,
                 &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
@@ -118,16 +114,16 @@ mod test {
         // Disable, single owner
         let enable_memo_transfers_ix = disable_required_transfer_memos(
             &spl_token_2022::id(),
-            &convert_pubkey(account_pubkey),
-            &convert_pubkey(owner_pubkey),
+            &account_pubkey,
+            &owner_pubkey,
             &[],
         )
         .unwrap();
         let message = Message::new(&[enable_memo_transfers_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
-                &compiled_instruction,
+                compiled_instruction,
                 &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
@@ -146,19 +142,16 @@ mod test {
         let multisig_signer1 = Pubkey::new_unique();
         let enable_memo_transfers_ix = disable_required_transfer_memos(
             &spl_token_2022::id(),
-            &convert_pubkey(account_pubkey),
-            &convert_pubkey(multisig_pubkey),
-            &[
-                &convert_pubkey(multisig_signer0),
-                &convert_pubkey(multisig_signer1),
-            ],
+            &account_pubkey,
+            &multisig_pubkey,
+            &[&multisig_signer0, &multisig_signer1],
         )
         .unwrap();
         let message = Message::new(&[enable_memo_transfers_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
-                &compiled_instruction,
+                compiled_instruction,
                 &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),

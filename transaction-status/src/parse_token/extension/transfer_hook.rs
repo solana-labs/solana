@@ -68,10 +68,7 @@ pub(in crate::parse_token) fn parse_transfer_hook_instruction(
 
 #[cfg(test)]
 mod test {
-    use {
-        super::*, crate::parse_token::test::*, solana_sdk::pubkey::Pubkey,
-        spl_token_2022::solana_program::message::Message,
-    };
+    use {super::*, solana_sdk::pubkey::Pubkey, spl_token_2022::solana_program::message::Message};
 
     #[test]
     fn test_parse_transfer_hook_instruction() {
@@ -87,11 +84,11 @@ mod test {
             Some(program_id),
         )
         .unwrap();
-        let message = Message::new(&[init_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let mut message = Message::new(&[init_ix], None);
+        let compiled_instruction = &mut message.instructions[0];
         assert_eq!(
             parse_token(
-                &compiled_instruction,
+                compiled_instruction,
                 &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
@@ -106,11 +103,11 @@ mod test {
         );
 
         let init_ix = initialize(&spl_token_2022::id(), &mint_pubkey, None, None).unwrap();
-        let message = Message::new(&[init_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let mut message = Message::new(&[init_ix], None);
+        let compiled_instruction = &mut message.instructions[0];
         assert_eq!(
             parse_token(
-                &compiled_instruction,
+                compiled_instruction,
                 &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
@@ -131,11 +128,11 @@ mod test {
             Some(program_id),
         )
         .unwrap();
-        let message = Message::new(&[update_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let mut message = Message::new(&[update_ix], None);
+        let compiled_instruction = &mut message.instructions[0];
         assert_eq!(
             parse_token(
-                &compiled_instruction,
+                compiled_instruction,
                 &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
@@ -161,11 +158,11 @@ mod test {
             Some(program_id),
         )
         .unwrap();
-        let message = Message::new(&[update_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let mut message = Message::new(&[update_ix], None);
+        let compiled_instruction = &mut message.instructions[0];
         assert_eq!(
             parse_token(
-                &compiled_instruction,
+                compiled_instruction,
                 &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
