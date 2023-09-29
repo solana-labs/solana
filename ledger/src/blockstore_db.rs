@@ -2150,4 +2150,31 @@ pub mod tests {
         });
         assert!(!should_enable_cf_compaction("something else"));
     }
+
+    impl<C> LedgerColumn<C>
+    where
+        C: ColumnIndexDeprecation + ProtobufColumn + ColumnName,
+    {
+        pub fn put_deprecated_protobuf(
+            &self,
+            key: C::DeprecatedIndex,
+            value: &C::Type,
+        ) -> Result<()> {
+            let mut buf = Vec::with_capacity(value.encoded_len());
+            value.encode(&mut buf)?;
+            self.backend
+                .put_cf(self.handle(), &C::deprecated_key(key), &buf)
+        }
+    }
+
+    impl<C> LedgerColumn<C>
+    where
+        C: ColumnIndexDeprecation + TypedColumn + ColumnName,
+    {
+        pub fn put_deprecated(&self, key: C::DeprecatedIndex, value: &C::Type) -> Result<()> {
+            let serialized_value = serialize(value)?;
+            self.backend
+                .put_cf(self.handle(), &C::deprecated_key(key), &serialized_value)
+        }
+    }
 }

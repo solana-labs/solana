@@ -8029,6 +8029,34 @@ pub mod tests {
 
     #[test]
     fn test_get_confirmed_signatures_for_address() {
+        impl Blockstore {
+            fn write_deprecated_transaction_status(
+                &self,
+                slot: Slot,
+                signature: Signature,
+                writable_keys: Vec<&Pubkey>,
+                readonly_keys: Vec<&Pubkey>,
+                status: TransactionStatusMeta,
+            ) -> Result<()> {
+                let status = status.into();
+                self.transaction_status_cf
+                    .put_deprecated_protobuf((0, signature, slot), &status)?;
+                for address in writable_keys {
+                    self.address_signatures_cf.put_deprecated(
+                        (0, *address, slot, signature),
+                        &AddressSignatureMeta { writeable: true },
+                    )?;
+                }
+                for address in readonly_keys {
+                    self.address_signatures_cf.put_deprecated(
+                        (0, *address, slot, signature),
+                        &AddressSignatureMeta { writeable: false },
+                    )?;
+                }
+                Ok(())
+            }
+        }
+
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
@@ -8039,13 +8067,12 @@ pub mod tests {
         for x in 1..5 {
             let signature = Signature::from([x; 64]);
             blockstore
-                .write_transaction_status(
+                .write_deprecated_transaction_status(
                     slot0,
                     signature,
                     vec![&address0],
                     vec![&address1],
                     TransactionStatusMeta::default(),
-                    x as usize,
                 )
                 .unwrap();
         }
@@ -8053,13 +8080,12 @@ pub mod tests {
         for x in 5..9 {
             let signature = Signature::from([x; 64]);
             blockstore
-                .write_transaction_status(
+                .write_deprecated_transaction_status(
                     slot1,
                     signature,
                     vec![&address0],
                     vec![&address1],
                     TransactionStatusMeta::default(),
-                    x as usize,
                 )
                 .unwrap();
         }
