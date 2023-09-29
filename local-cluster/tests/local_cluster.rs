@@ -5635,3 +5635,72 @@ fn test_invalid_forks_persisted_on_restart() {
         sleep(Duration::from_millis(100));
     }
 }
+
+#[test]
+#[serial]
+fn test_mainnet_beta_cluster_subscribe() {
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
+
+    let num_nodes = 2;
+    let test_duration = Duration::from_secs(20);
+
+    // Create a validator config configured for block generation.
+    let mut validator_config = ValidatorConfig::default_for_test();
+    validator_config.enable_default_rpc_block_subscribe();
+
+    // Create a cluster config with the generator validator config.
+    let mut config = ClusterConfig {
+        cluster_type: ClusterType::MainnetBeta,
+        node_stakes: vec![DEFAULT_NODE_STAKE; num_nodes],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
+        validator_configs: make_identical_validator_configs(&validator_config, num_nodes),
+        ..ClusterConfig::default()
+    };
+
+    // Create the cluster.
+    let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
+    let cluster_nodes = discover_cluster(
+        &cluster.entry_point_info.gossip().unwrap(),
+        num_nodes,
+        SocketAddrSpace::Unspecified,
+    )
+    .unwrap();
+    assert_eq!(cluster_nodes.len(), num_nodes);
+
+    let (mut block_subscribe_client, receiver) = PubsubClient::block_subscribe(
+        &format!(
+            "ws://{}",
+            &cluster.entry_point_info.rpc_pubsub().unwrap().to_string()
+        ),
+        RpcBlockSubscribeFilter::All,
+        Some(RpcBlockSubscribeConfig {
+            commitment: Some(CommitmentConfig::confirmed()),
+            encoding: None,
+            transaction_details: None,
+            show_rewards: None,
+            max_supported_transaction_version: None,
+        }),
+    )
+    .unwrap();
+
+    sleep(Duration::from_millis(800));
+
+    // check that the leader generated transactions that call transfer system instruction
+    let num_response_check_iterations = 5;
+    let check_sleep_duration = test_duration / num_response_check_iterations;
+    let mut num_errors = 0;
+    for _ in 0..num_response_check_iterations {
+        receiver.try_iter().for_each(|response| {
+            if response.value.err.is_some() {
+                num_errors += 1;
+            }
+        });
+        sleep(check_sleep_duration);
+    }
+    assert_eq!(num_errors, 0);
+
+    // If we don't drop the cluster, the blocking web socket service
+    // won't return, and the `block_subscribe_client` won't shut down
+    drop(cluster);
+    block_subscribe_client.shutdown().unwrap();
+}
