@@ -3441,10 +3441,11 @@ impl ReplayStage {
         //    switch_threshold succeeds
         let mut failure_reasons = vec![];
         struct CandidateVoteAndResetBanks<'a> {
-            // A bank that the validator will consider voting on given it passes all
+            // A bank that the validator will vote on given it passes all
             // remaining vote checks
             candidate_vote_bank: Option<&'a Arc<Bank>>,
-            // A bank that the validator will reset its PoH to
+            // A bank that the validator will reset its PoH to regardless
+            // of voting behavior
             reset_bank: Option<&'a Arc<Bank>>,
             switch_fork_decision: SwitchForkDecision,
         }
