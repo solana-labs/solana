@@ -48,7 +48,16 @@ jobs:
         shell: bash
         run: |
           choco install openssl
-          export OPENSSL_DIR="C:\Program Files\OpenSSL-Win64"
+          if [[ -d "C:\Program Files\OpenSSL" ]]; then
+            echo "OPENSSL_DIR: C:\Program Files\OpenSSL"
+            export OPENSSL_DIR="C:\Program Files\OpenSSL"
+          elif [[ -d "C:\Program Files\OpenSSL-Win64" ]]; then
+            echo "OPENSSL_DIR: C:\Program Files\OpenSSL-Win64"
+            export OPENSSL_DIR="C:\Program Files\OpenSSL-Win64"
+          else
+            echo "can't determine OPENSSL_DIR"
+            exit 1
+          fi
           choco install protoc
           export PROTOC="C:\ProgramData\chocolatey\lib\protoc\tools\bin\protoc.exe"
           source /tmp/env.sh
