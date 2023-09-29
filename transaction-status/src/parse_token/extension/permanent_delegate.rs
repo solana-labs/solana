@@ -19,7 +19,6 @@ pub(in crate::parse_token) fn parse_initialize_permanent_delegate_instruction(
 mod test {
     use {
         super::*,
-        crate::parse_token::test::*,
         solana_sdk::pubkey::Pubkey,
         spl_token_2022::{instruction::*, solana_program::message::Message},
     };
@@ -34,7 +33,7 @@ mod test {
         let compiled_instruction = &message.instructions[0];
         assert_eq!(
             parse_token(
-                &compiled_instruction,
+                compiled_instruction,
                 &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),

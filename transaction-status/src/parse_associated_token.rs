@@ -94,13 +94,13 @@ mod test {
     use spl_associated_token_account::create_associated_token_account as create_associated_token_account_deprecated;
     use {
         super::*,
+        solana_sdk::{message::Message, sysvar},
         spl_associated_token_account::{
             get_associated_token_address, get_associated_token_address_with_program_id,
             instruction::{
                 create_associated_token_account, create_associated_token_account_idempotent,
                 recover_nested,
             },
-            solana_program::{message::Message, sysvar},
         },
     };
 
@@ -113,7 +113,7 @@ mod test {
         #[allow(deprecated)]
         let create_ix = create_associated_token_account_deprecated(&funder, &wallet_address, &mint);
         let mut message = Message::new(&[create_ix], None);
-        let mut compiled_instruction = &mut message.instructions[0];
+        let compiled_instruction = &mut message.instructions[0];
         let expected_parsed_ix = ParsedInstructionEnum {
             instruction_type: "create".to_string(),
             info: json!({
@@ -127,7 +127,7 @@ mod test {
         };
         assert_eq!(
             parse_associated_token(
-                &compiled_instruction,
+                compiled_instruction,
                 &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
@@ -143,7 +143,7 @@ mod test {
         compiled_instruction.accounts.remove(rent_account_index);
         assert_eq!(
             parse_associated_token(
-                &compiled_instruction,
+                compiled_instruction,
                 &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
@@ -153,7 +153,7 @@ mod test {
         // after popping another account, parsing should fail
         compiled_instruction.accounts.pop();
         assert!(parse_associated_token(
-            &compiled_instruction,
+            compiled_instruction,
             &AccountKeys::new(&message.account_keys, None)
         )
         .is_err());
@@ -170,10 +170,10 @@ mod test {
         let create_ix =
             create_associated_token_account(&funder, &wallet_address, &mint, &token_program_id);
         let mut message = Message::new(&[create_ix], None);
-        let mut compiled_instruction = &mut message.instructions[0];
+        let compiled_instruction = &mut message.instructions[0];
         assert_eq!(
             parse_associated_token(
-                &compiled_instruction,
+                compiled_instruction,
                 &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
@@ -191,7 +191,7 @@ mod test {
         );
         compiled_instruction.accounts.pop();
         assert!(parse_associated_token(
-            &compiled_instruction,
+            compiled_instruction,
             &AccountKeys::new(&message.account_keys, None)
         )
         .is_err());
@@ -212,10 +212,10 @@ mod test {
             &token_program_id,
         );
         let mut message = Message::new(&[create_ix], None);
-        let mut compiled_instruction = &mut message.instructions[0];
+        let compiled_instruction = &mut message.instructions[0];
         assert_eq!(
             parse_associated_token(
-                &compiled_instruction,
+                compiled_instruction,
                 &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
@@ -233,7 +233,7 @@ mod test {
         );
         compiled_instruction.accounts.pop();
         assert!(parse_associated_token(
-            &compiled_instruction,
+            compiled_instruction,
             &AccountKeys::new(&message.account_keys, None)
         )
         .is_err());
@@ -267,10 +267,10 @@ mod test {
             &token_program_id,
         );
         let mut message = Message::new(&[recover_ix], None);
-        let mut compiled_instruction = &mut message.instructions[0];
+        let compiled_instruction = &mut message.instructions[0];
         assert_eq!(
             parse_associated_token(
-                &compiled_instruction,
+                compiled_instruction,
                 &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
@@ -289,7 +289,7 @@ mod test {
         );
         compiled_instruction.accounts.pop();
         assert!(parse_associated_token(
-            &compiled_instruction,
+            compiled_instruction,
             &AccountKeys::new(&message.account_keys, None)
         )
         .is_err());
