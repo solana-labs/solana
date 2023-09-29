@@ -354,8 +354,7 @@ impl Blockstore {
     ) -> Result<()> {
         let mut index0 = self.transaction_status_index_cf.get(0)?.unwrap_or_default();
         let mut index1 = self.transaction_status_index_cf.get(1)?.unwrap_or_default();
-        let to_slot = to_slot.saturating_add(1);
-        for slot in from_slot..to_slot {
+        for slot in from_slot..to_slot.saturating_add(1) {
             let slot_entries = self.get_any_valid_slot_entries(slot, 0);
             let transactions = slot_entries
                 .into_iter()
