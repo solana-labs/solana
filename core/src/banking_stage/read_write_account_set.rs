@@ -13,6 +13,22 @@ pub struct ReadWriteAccountSet {
 }
 
 impl ReadWriteAccountSet {
+    /// Returns true if all account locks were available and false otherwise.
+    #[allow(dead_code)]
+    pub fn check_locks(&self, message: &SanitizedMessage) -> bool {
+        message
+            .account_keys()
+            .iter()
+            .enumerate()
+            .all(|(index, pubkey)| {
+                if message.is_writable(index) {
+                    self.can_write(pubkey)
+                } else {
+                    self.can_read(pubkey)
+                }
+            })
+    }
+
     /// Add all account locks.
     /// Returns true if all account locks were available and false otherwise.
     pub fn take_locks(&mut self, message: &SanitizedMessage) -> bool {
@@ -165,11 +181,7 @@ mod tests {
     // conflict_index = 1 means read lock conflict with static key
     // conflict_index = 2 means write lock conflict with address table key
     // conflict_index = 3 means read lock conflict with address table key
-    fn test_check_sanitized_message_account_locks(
-        conflict_index: usize,
-        add_write: bool,
-        expectation: bool,
-    ) {
+    fn test_check_and_take_locks(conflict_index: usize, add_write: bool, expectation: bool) {
         let bank = create_test_bank();
         let (bank, table_address) = create_test_address_lookup_table(bank, 2);
         let tx = create_test_sanitized_transaction(
@@ -192,31 +204,32 @@ mod tests {
         } else {
             account_locks.add_read(conflict_key);
         }
+        assert_eq!(expectation, account_locks.check_locks(message));
         assert_eq!(expectation, account_locks.take_locks(message));
     }
 
     #[test]
-    fn test_check_sanitized_message_account_locks_write_write_conflict() {
-        test_check_sanitized_message_account_locks(0, true, false); // static key conflict
-        test_check_sanitized_message_account_locks(2, true, false); // lookup key conflict
+    fn test_check_and_take_locks_write_write_conflict() {
+        test_check_and_take_locks(0, true, false); // static key conflict
+        test_check_and_take_locks(2, true, false); // lookup key conflict
     }
 
     #[test]
-    fn test_check_sanitized_message_account_locks_read_write_conflict() {
-        test_check_sanitized_message_account_locks(0, false, false); // static key conflict
-        test_check_sanitized_message_account_locks(2, false, false); // lookup key conflict
+    fn test_check_and_take_locks_read_write_conflict() {
+        test_check_and_take_locks(0, false, false); // static key conflict
+        test_check_and_take_locks(2, false, false); // lookup key conflict
     }
 
     #[test]
-    fn test_check_sanitized_message_account_locks_write_read_conflict() {
-        test_check_sanitized_message_account_locks(1, true, false); // static key conflict
-        test_check_sanitized_message_account_locks(3, true, false); // lookup key conflict
+    fn test_check_and_take_locks_write_read_conflict() {
+        test_check_and_take_locks(1, true, false); // static key conflict
+        test_check_and_take_locks(3, true, false); // lookup key conflict
     }
 
     #[test]
-    fn test_check_sanitized_message_account_locks_read_read_non_conflict() {
-        test_check_sanitized_message_account_locks(1, false, true); // static key conflict
-        test_check_sanitized_message_account_locks(3, false, true); // lookup key conflict
+    fn test_check_and_take_locks_read_read_non_conflict() {
+        test_check_and_take_locks(1, false, true); // static key conflict
+        test_check_and_take_locks(3, false, true); // lookup key conflict
     }
 
     #[test]
