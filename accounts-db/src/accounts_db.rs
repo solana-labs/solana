@@ -8229,6 +8229,7 @@ impl AccountsDb {
         for slot in new_shrink_candidates {
             shrink_candidate_slots.insert(slot);
         }
+        drop(shrink_candidate_slots);
         measure.stop();
         self.clean_accounts_stats
             .remove_dead_accounts_shrink_us
