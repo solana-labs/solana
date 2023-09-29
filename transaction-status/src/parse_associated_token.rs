@@ -102,14 +102,10 @@ mod test {
             },
             solana_program::{
                 instruction::CompiledInstruction as SplAssociatedTokenCompiledInstruction,
-                message::Message, pubkey::Pubkey as SplAssociatedTokenPubkey, sysvar,
+                message::Message, sysvar,
             },
         },
     };
-
-    fn convert_pubkey(pubkey: Pubkey) -> SplAssociatedTokenPubkey {
-        SplAssociatedTokenPubkey::new_from_array(pubkey.to_bytes())
-    }
 
     fn convert_compiled_instruction(
         instruction: &SplAssociatedTokenCompiledInstruction,
@@ -126,14 +122,9 @@ mod test {
         let funder = Pubkey::new_unique();
         let wallet_address = Pubkey::new_unique();
         let mint = Pubkey::new_unique();
-        let associated_account_address =
-            get_associated_token_address(&convert_pubkey(wallet_address), &convert_pubkey(mint));
+        let associated_account_address = get_associated_token_address(&wallet_address, &mint);
         #[allow(deprecated)]
-        let create_ix = create_associated_token_account_deprecated(
-            &convert_pubkey(funder),
-            &convert_pubkey(wallet_address),
-            &convert_pubkey(mint),
-        );
+        let create_ix = create_associated_token_account_deprecated(&funder, &wallet_address, &mint);
         let message = Message::new(&[create_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         let expected_parsed_ix = ParsedInstructionEnum {
@@ -187,17 +178,10 @@ mod test {
         let wallet_address = Pubkey::new_unique();
         let mint = Pubkey::new_unique();
         let token_program_id = Pubkey::new_unique();
-        let associated_account_address = get_associated_token_address_with_program_id(
-            &convert_pubkey(wallet_address),
-            &convert_pubkey(mint),
-            &convert_pubkey(token_program_id),
-        );
-        let create_ix = create_associated_token_account(
-            &convert_pubkey(funder),
-            &convert_pubkey(wallet_address),
-            &convert_pubkey(mint),
-            &convert_pubkey(token_program_id),
-        );
+        let associated_account_address =
+            get_associated_token_address_with_program_id(&wallet_address, &mint, &token_program_id);
+        let create_ix =
+            create_associated_token_account(&funder, &wallet_address, &mint, &token_program_id);
         let message = Message::new(&[create_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
@@ -232,16 +216,13 @@ mod test {
         let wallet_address = Pubkey::new_unique();
         let mint = Pubkey::new_unique();
         let token_program_id = Pubkey::new_unique();
-        let associated_account_address = get_associated_token_address_with_program_id(
-            &convert_pubkey(wallet_address),
-            &convert_pubkey(mint),
-            &convert_pubkey(token_program_id),
-        );
+        let associated_account_address =
+            get_associated_token_address_with_program_id(&wallet_address, &mint, &token_program_id);
         let create_ix = create_associated_token_account_idempotent(
-            &convert_pubkey(funder),
-            &convert_pubkey(wallet_address),
-            &convert_pubkey(mint),
-            &convert_pubkey(token_program_id),
+            &funder,
+            &wallet_address,
+            &mint,
+            &token_program_id,
         );
         let message = Message::new(&[create_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
@@ -278,25 +259,25 @@ mod test {
         let nested_mint = Pubkey::new_unique();
         let token_program_id = Pubkey::new_unique();
         let owner_associated_account_address = get_associated_token_address_with_program_id(
-            &convert_pubkey(wallet_address),
-            &convert_pubkey(owner_mint),
-            &convert_pubkey(token_program_id),
+            &wallet_address,
+            &owner_mint,
+            &token_program_id,
         );
         let nested_associated_account_address = get_associated_token_address_with_program_id(
             &owner_associated_account_address,
-            &convert_pubkey(nested_mint),
-            &convert_pubkey(token_program_id),
+            &nested_mint,
+            &token_program_id,
         );
         let destination_associated_account_address = get_associated_token_address_with_program_id(
-            &convert_pubkey(wallet_address),
-            &convert_pubkey(nested_mint),
-            &convert_pubkey(token_program_id),
+            &wallet_address,
+            &nested_mint,
+            &token_program_id,
         );
         let recover_ix = recover_nested(
-            &convert_pubkey(wallet_address),
-            &convert_pubkey(owner_mint),
-            &convert_pubkey(nested_mint),
-            &convert_pubkey(token_program_id),
+            &wallet_address,
+            &owner_mint,
+            &nested_mint,
+            &token_program_id,
         );
         let message = Message::new(&[recover_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);

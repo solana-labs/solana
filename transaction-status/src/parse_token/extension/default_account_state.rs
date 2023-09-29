@@ -69,7 +69,7 @@ mod test {
         let mint_pubkey = Pubkey::new_unique();
         let init_default_account_state_ix = initialize_default_account_state(
             &spl_token_2022::id(),
-            &convert_pubkey(mint_pubkey),
+            &mint_pubkey,
             &AccountState::Frozen,
         )
         .unwrap();
@@ -94,8 +94,8 @@ mod test {
         let mint_freeze_authority = Pubkey::new_unique();
         let update_default_account_state_ix = update_default_account_state(
             &spl_token_2022::id(),
-            &convert_pubkey(mint_pubkey),
-            &convert_pubkey(mint_freeze_authority),
+            &mint_pubkey,
+            &mint_freeze_authority,
             &[],
             &AccountState::Initialized,
         )
@@ -124,12 +124,9 @@ mod test {
         let multisig_signer1 = Pubkey::new_unique();
         let update_default_account_state_ix = update_default_account_state(
             &spl_token_2022::id(),
-            &convert_pubkey(mint_pubkey),
-            &convert_pubkey(multisig_pubkey),
-            &[
-                &convert_pubkey(multisig_signer0),
-                &convert_pubkey(multisig_signer1),
-            ],
+            &mint_pubkey,
+            &multisig_pubkey,
+            &[&multisig_signer0, &multisig_signer1],
             &AccountState::Initialized,
         )
         .unwrap();

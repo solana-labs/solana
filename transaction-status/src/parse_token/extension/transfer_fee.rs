@@ -176,9 +176,9 @@ mod test {
         // InitializeTransferFeeConfig variations
         let init_transfer_fee_config_ix = initialize_transfer_fee_config(
             &spl_token_2022::id(),
-            &convert_pubkey(mint_pubkey),
-            Some(&convert_pubkey(transfer_fee_config_authority)),
-            Some(&convert_pubkey(withdraw_withheld_authority)),
+            &mint_pubkey,
+            Some(&transfer_fee_config_authority),
+            Some(&withdraw_withheld_authority),
             transfer_fee_basis_points,
             maximum_fee,
         )
@@ -205,7 +205,7 @@ mod test {
 
         let init_transfer_fee_config_ix = initialize_transfer_fee_config(
             &spl_token_2022::id(),
-            &convert_pubkey(mint_pubkey),
+            &mint_pubkey,
             None,
             None,
             transfer_fee_basis_points,
@@ -239,10 +239,10 @@ mod test {
         let fee = 5;
         let transfer_checked_with_fee_ix = transfer_checked_with_fee(
             &spl_token_2022::id(),
-            &convert_pubkey(account_pubkey),
-            &convert_pubkey(mint_pubkey),
-            &convert_pubkey(recipient),
-            &convert_pubkey(owner),
+            &account_pubkey,
+            &mint_pubkey,
+            &recipient,
+            &owner,
             &[],
             amount,
             decimals,
@@ -286,14 +286,11 @@ mod test {
         let multisig_signer1 = Pubkey::new_unique();
         let transfer_checked_with_fee_ix = transfer_checked_with_fee(
             &spl_token_2022::id(),
-            &convert_pubkey(account_pubkey),
-            &convert_pubkey(mint_pubkey),
-            &convert_pubkey(recipient),
-            &convert_pubkey(multisig_pubkey),
-            &[
-                &convert_pubkey(multisig_signer0),
-                &convert_pubkey(multisig_signer1),
-            ],
+            &account_pubkey,
+            &mint_pubkey,
+            &recipient,
+            &multisig_pubkey,
+            &[&multisig_signer0, &multisig_signer1],
             amount,
             decimals,
             fee,
@@ -337,9 +334,9 @@ mod test {
         // Single authority WithdrawWithheldTokensFromMint
         let withdraw_withheld_tokens_from_mint_ix = withdraw_withheld_tokens_from_mint(
             &spl_token_2022::id(),
-            &convert_pubkey(mint_pubkey),
-            &convert_pubkey(recipient),
-            &convert_pubkey(withdraw_withheld_authority),
+            &mint_pubkey,
+            &recipient,
+            &withdraw_withheld_authority,
             &[],
         )
         .unwrap();
@@ -364,13 +361,10 @@ mod test {
         // Multisig WithdrawWithheldTokensFromMint
         let withdraw_withheld_tokens_from_mint_ix = withdraw_withheld_tokens_from_mint(
             &spl_token_2022::id(),
-            &convert_pubkey(mint_pubkey),
-            &convert_pubkey(recipient),
-            &convert_pubkey(multisig_pubkey),
-            &[
-                &convert_pubkey(multisig_signer0),
-                &convert_pubkey(multisig_signer1),
-            ],
+            &mint_pubkey,
+            &recipient,
+            &multisig_pubkey,
+            &[&multisig_signer0, &multisig_signer1],
         )
         .unwrap();
         let message = Message::new(&[withdraw_withheld_tokens_from_mint_ix], None);
@@ -400,11 +394,11 @@ mod test {
         let fee_account1 = Pubkey::new_unique();
         let withdraw_withheld_tokens_from_accounts_ix = withdraw_withheld_tokens_from_accounts(
             &spl_token_2022::id(),
-            &convert_pubkey(mint_pubkey),
-            &convert_pubkey(recipient),
-            &convert_pubkey(withdraw_withheld_authority),
+            &mint_pubkey,
+            &recipient,
+            &withdraw_withheld_authority,
             &[],
-            &[&convert_pubkey(fee_account0), &convert_pubkey(fee_account1)],
+            &[&fee_account0, &fee_account1],
         )
         .unwrap();
         let message = Message::new(&[withdraw_withheld_tokens_from_accounts_ix], None);
@@ -432,14 +426,11 @@ mod test {
         // Multisig WithdrawWithheldTokensFromAccounts
         let withdraw_withheld_tokens_from_accounts_ix = withdraw_withheld_tokens_from_accounts(
             &spl_token_2022::id(),
-            &convert_pubkey(mint_pubkey),
-            &convert_pubkey(recipient),
-            &convert_pubkey(multisig_pubkey),
-            &[
-                &convert_pubkey(multisig_signer0),
-                &convert_pubkey(multisig_signer1),
-            ],
-            &[&convert_pubkey(fee_account0), &convert_pubkey(fee_account1)],
+            &mint_pubkey,
+            &recipient,
+            &multisig_pubkey,
+            &[&multisig_signer0, &multisig_signer1],
+            &[&fee_account0, &fee_account1],
         )
         .unwrap();
         let message = Message::new(&[withdraw_withheld_tokens_from_accounts_ix], None);
@@ -471,8 +462,8 @@ mod test {
         // HarvestWithheldTokensToMint
         let harvest_withheld_tokens_to_mint_ix = harvest_withheld_tokens_to_mint(
             &spl_token_2022::id(),
-            &convert_pubkey(mint_pubkey),
-            &[&convert_pubkey(fee_account0), &convert_pubkey(fee_account1)],
+            &mint_pubkey,
+            &[&fee_account0, &fee_account1],
         )
         .unwrap();
         let message = Message::new(&[harvest_withheld_tokens_to_mint_ix], None);
@@ -498,8 +489,8 @@ mod test {
         // Single authority SetTransferFee
         let set_transfer_fee_ix = set_transfer_fee(
             &spl_token_2022::id(),
-            &convert_pubkey(mint_pubkey),
-            &convert_pubkey(transfer_fee_config_authority),
+            &mint_pubkey,
+            &transfer_fee_config_authority,
             &[],
             transfer_fee_basis_points,
             maximum_fee,
@@ -527,12 +518,9 @@ mod test {
         // Multisig WithdrawWithheldTokensFromMint
         let set_transfer_fee_ix = set_transfer_fee(
             &spl_token_2022::id(),
-            &convert_pubkey(mint_pubkey),
-            &convert_pubkey(multisig_pubkey),
-            &[
-                &convert_pubkey(multisig_signer0),
-                &convert_pubkey(multisig_signer1),
-            ],
+            &mint_pubkey,
+            &multisig_pubkey,
+            &[&multisig_signer0, &multisig_signer1],
             transfer_fee_basis_points,
             maximum_fee,
         )

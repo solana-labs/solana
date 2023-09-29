@@ -54,13 +54,8 @@ mod test {
 
         // Enable, single owner
         let owner_pubkey = Pubkey::new_unique();
-        let enable_cpi_guard_ix = enable_cpi_guard(
-            &spl_token_2022::id(),
-            &convert_pubkey(account_pubkey),
-            &convert_pubkey(owner_pubkey),
-            &[],
-        )
-        .unwrap();
+        let enable_cpi_guard_ix =
+            enable_cpi_guard(&spl_token_2022::id(), &account_pubkey, &owner_pubkey, &[]).unwrap();
         let message = Message::new(&[enable_cpi_guard_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
@@ -84,12 +79,9 @@ mod test {
         let multisig_signer1 = Pubkey::new_unique();
         let enable_cpi_guard_ix = enable_cpi_guard(
             &spl_token_2022::id(),
-            &convert_pubkey(account_pubkey),
-            &convert_pubkey(multisig_pubkey),
-            &[
-                &convert_pubkey(multisig_signer0),
-                &convert_pubkey(multisig_signer1),
-            ],
+            &account_pubkey,
+            &multisig_pubkey,
+            &[&multisig_signer0, &multisig_signer1],
         )
         .unwrap();
         let message = Message::new(&[enable_cpi_guard_ix], None);
@@ -114,13 +106,8 @@ mod test {
         );
 
         // Disable, single owner
-        let enable_cpi_guard_ix = disable_cpi_guard(
-            &spl_token_2022::id(),
-            &convert_pubkey(account_pubkey),
-            &convert_pubkey(owner_pubkey),
-            &[],
-        )
-        .unwrap();
+        let enable_cpi_guard_ix =
+            disable_cpi_guard(&spl_token_2022::id(), &account_pubkey, &owner_pubkey, &[]).unwrap();
         let message = Message::new(&[enable_cpi_guard_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
@@ -144,12 +131,9 @@ mod test {
         let multisig_signer1 = Pubkey::new_unique();
         let enable_cpi_guard_ix = disable_cpi_guard(
             &spl_token_2022::id(),
-            &convert_pubkey(account_pubkey),
-            &convert_pubkey(multisig_pubkey),
-            &[
-                &convert_pubkey(multisig_signer0),
-                &convert_pubkey(multisig_signer1),
-            ],
+            &account_pubkey,
+            &multisig_pubkey,
+            &[&multisig_signer0, &multisig_signer1],
         )
         .unwrap();
         let message = Message::new(&[enable_cpi_guard_ix], None);

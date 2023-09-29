@@ -50,9 +50,9 @@ mod test {
         let owner_pubkey = Pubkey::new_unique();
         let reallocate_ix = reallocate(
             &spl_token_2022::id(),
-            &convert_pubkey(account_pubkey),
-            &convert_pubkey(payer_pubkey),
-            &convert_pubkey(owner_pubkey),
+            &account_pubkey,
+            &payer_pubkey,
+            &owner_pubkey,
             &[],
             &extension_types,
         )
@@ -83,13 +83,10 @@ mod test {
         let multisig_signer1 = Pubkey::new_unique();
         let reallocate_ix = reallocate(
             &spl_token_2022::id(),
-            &convert_pubkey(account_pubkey),
-            &convert_pubkey(payer_pubkey),
-            &convert_pubkey(multisig_pubkey),
-            &[
-                &convert_pubkey(multisig_signer0),
-                &convert_pubkey(multisig_signer1),
-            ],
+            &account_pubkey,
+            &payer_pubkey,
+            &multisig_pubkey,
+            &[&multisig_signer0, &multisig_signer1],
             &extension_types,
         )
         .unwrap();

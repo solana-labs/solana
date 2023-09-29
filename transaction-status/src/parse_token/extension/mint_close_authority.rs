@@ -34,8 +34,8 @@ mod test {
         let close_authority = Pubkey::new_unique();
         let mint_close_authority_ix = initialize_mint_close_authority(
             &spl_token_2022::id(),
-            &convert_pubkey(mint_pubkey),
-            Some(&convert_pubkey(close_authority)),
+            &mint_pubkey,
+            Some(&close_authority),
         )
         .unwrap();
         let message = Message::new(&[mint_close_authority_ix], None);
@@ -55,12 +55,8 @@ mod test {
             }
         );
 
-        let mint_close_authority_ix = initialize_mint_close_authority(
-            &spl_token_2022::id(),
-            &convert_pubkey(mint_pubkey),
-            None,
-        )
-        .unwrap();
+        let mint_close_authority_ix =
+            initialize_mint_close_authority(&spl_token_2022::id(), &mint_pubkey, None).unwrap();
         let message = Message::new(&[mint_close_authority_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
