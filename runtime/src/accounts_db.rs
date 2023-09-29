@@ -8067,6 +8067,7 @@ impl AccountsDb {
 
             shrink_candidate_slots.insert(slot, store);
         }
+        drop(shrink_candidate_slots);
         measure.stop();
         self.clean_accounts_stats
             .remove_dead_accounts_shrink_us
