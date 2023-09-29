@@ -88,7 +88,7 @@ mod test {
         let compiled_instruction = &mut message.instructions[0];
         assert_eq!(
             parse_token(
-                &compiled_instruction,
+                compiled_instruction,
                 &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
@@ -107,7 +107,7 @@ mod test {
         let compiled_instruction = &mut message.instructions[0];
         assert_eq!(
             parse_token(
-                &compiled_instruction,
+                compiled_instruction,
                 &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
@@ -132,7 +132,7 @@ mod test {
         let compiled_instruction = &mut message.instructions[0];
         assert_eq!(
             parse_token(
-                &compiled_instruction,
+                compiled_instruction,
                 &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
@@ -162,7 +162,7 @@ mod test {
         let compiled_instruction = &mut message.instructions[0];
         assert_eq!(
             parse_token(
-                &compiled_instruction,
+                compiled_instruction,
                 &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
