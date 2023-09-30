@@ -13,7 +13,7 @@ use {
     crate::{
         input_parsers::{
             pubkeys_sigs_of,
-            signer::{parse_signer_source, SignerSource, SignerSourceKind},
+            signer::{SignerSource, SignerSourceKind},
         },
         offline::{SIGNER_ARG, SIGN_ONLY_ARG},
         ArgConstant,
@@ -165,7 +165,7 @@ impl DefaultSigner {
 
     fn path(&self) -> Result<&str, Box<dyn std::error::Error>> {
         if !self.is_path_checked.borrow().deref() {
-            parse_signer_source(&self.path)
+            SignerSource::parse(&self.path)
                 .and_then(|s| {
                     if let SignerSourceKind::Filepath(path) = &s.kind {
                         std::fs::metadata(path).map(|_| ()).map_err(|e| e.into())
@@ -622,7 +622,7 @@ pub fn signer_from_path_with_config(
         kind,
         derivation_path,
         legacy,
-    } = parse_signer_source(path)?;
+    } = SignerSource::parse(path)?;
     match kind {
         SignerSourceKind::Prompt => {
             let skip_validation = matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
@@ -725,7 +725,7 @@ pub fn pubkey_from_path(
     keypair_name: &str,
     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<Pubkey, Box<dyn error::Error>> {
-    let SignerSource { kind, .. } = parse_signer_source(path)?;
+    let SignerSource { kind, .. } = SignerSource::parse(path)?;
     match kind {
         SignerSourceKind::Pubkey(pubkey) => Ok(pubkey),
         _ => Ok(signer_from_path(matches, path, keypair_name, wallet_manager)?.pubkey()),
@@ -742,7 +742,7 @@ pub fn resolve_signer_from_path(
         kind,
         derivation_path,
         legacy,
-    } = parse_signer_source(path)?;
+    } = SignerSource::parse(path)?;
     match kind {
         SignerSourceKind::Prompt => {
             let skip_validation = matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
@@ -980,7 +980,7 @@ fn encodable_key_from_path<K: EncodableKey + SeedDerivable>(
         kind,
         derivation_path,
         legacy,
-    } = parse_signer_source(path)?;
+    } = SignerSource::parse(path)?;
     match kind {
         SignerSourceKind::Prompt => Ok(encodable_key_from_seed_phrase(
             keypair_name,

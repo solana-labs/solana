@@ -88,69 +88,69 @@ impl SignerSource {
             legacy: true,
         }
     }
-}
 
-pub fn parse_signer_source<S: AsRef<str>>(source: S) -> Result<SignerSource, SignerSourceError> {
-    let source = source.as_ref();
-    let source = {
-        #[cfg(target_family = "windows")]
-        {
-            // trim matched single-quotes since cmd.exe won't
-            let mut source = source;
-            while let Some(trimmed) = source.strip_prefix('\'') {
-                source = if let Some(trimmed) = trimmed.strip_suffix('\'') {
-                    trimmed
-                } else {
-                    break;
-                }
-            }
-            source.replace('\\', "/")
-        }
-        #[cfg(not(target_family = "windows"))]
-        {
-            source.to_string()
-        }
-    };
-    match uriparse::URIReference::try_from(source.as_str()) {
-        Err(_) => Err(SignerSourceError::UnrecognizedSource),
-        Ok(uri) => {
-            if let Some(scheme) = uri.scheme() {
-                let scheme = scheme.as_str().to_ascii_lowercase();
-                match scheme.as_str() {
-                    SIGNER_SOURCE_PROMPT => Ok(SignerSource {
-                        kind: SignerSourceKind::Prompt,
-                        derivation_path: DerivationPath::from_uri_any_query(&uri)?,
-                        legacy: false,
-                    }),
-                    SIGNER_SOURCE_FILEPATH => Ok(SignerSource::new(SignerSourceKind::Filepath(
-                        uri.path().to_string(),
-                    ))),
-                    SIGNER_SOURCE_USB => Ok(SignerSource {
-                        kind: SignerSourceKind::Usb(RemoteWalletLocator::new_from_uri(&uri)?),
-                        derivation_path: DerivationPath::from_uri_key_query(&uri)?,
-                        legacy: false,
-                    }),
-                    SIGNER_SOURCE_STDIN => Ok(SignerSource::new(SignerSourceKind::Stdin)),
-                    _ => {
-                        #[cfg(target_family = "windows")]
-                        // On Windows, an absolute path's drive letter will be parsed as the URI
-                        // scheme. Assume a filepath source in case of a single character shceme.
-                        if scheme.len() == 1 {
-                            return Ok(SignerSource::new(SignerSourceKind::Filepath(source)));
-                        }
-                        Err(SignerSourceError::UnrecognizedSource)
+    pub(crate) fn parse<S: AsRef<str>>(source: S) -> Result<SignerSource, SignerSourceError> {
+        let source = source.as_ref();
+        let source = {
+            #[cfg(target_family = "windows")]
+            {
+                // trim matched single-quotes since cmd.exe won't
+                let mut source = source;
+                while let Some(trimmed) = source.strip_prefix('\'') {
+                    source = if let Some(trimmed) = trimmed.strip_suffix('\'') {
+                        trimmed
+                    } else {
+                        break;
                     }
                 }
-            } else {
-                match source.as_str() {
-                    STDOUT_OUTFILE_TOKEN => Ok(SignerSource::new(SignerSourceKind::Stdin)),
-                    ASK_KEYWORD => Ok(SignerSource::new_legacy(SignerSourceKind::Prompt)),
-                    _ => match Pubkey::from_str(source.as_str()) {
-                        Ok(pubkey) => Ok(SignerSource::new(SignerSourceKind::Pubkey(pubkey))),
-                        Err(_) => std::fs::metadata(source.as_str())
-                            .map(|_| SignerSource::new(SignerSourceKind::Filepath(source)))
-                            .map_err(|err| err.into()),
-                    },
+                source.replace('\\', "/")
+            }
+            #[cfg(not(target_family = "windows"))]
+            {
+                source.to_string()
+            }
+        };
+        match uriparse::URIReference::try_from(source.as_str()) {
+            Err(_) => Err(SignerSourceError::UnrecognizedSource),
+            Ok(uri) => {
+                if let Some(scheme) = uri.scheme() {
+                    let scheme = scheme.as_str().to_ascii_lowercase();
+                    match scheme.as_str() {
+                        SIGNER_SOURCE_PROMPT => Ok(SignerSource {
+                            kind: SignerSourceKind::Prompt,
+                            derivation_path: DerivationPath::from_uri_any_query(&uri)?,
+                            legacy: false,
+                        }),
+                        SIGNER_SOURCE_FILEPATH => Ok(SignerSource::new(
+                            SignerSourceKind::Filepath(uri.path().to_string()),
+                        )),
+                        SIGNER_SOURCE_USB => Ok(SignerSource {
+                            kind: SignerSourceKind::Usb(RemoteWalletLocator::new_from_uri(&uri)?),
+                            derivation_path: DerivationPath::from_uri_key_query(&uri)?,
+                            legacy: false,
+                        }),
+                        SIGNER_SOURCE_STDIN => Ok(SignerSource::new(SignerSourceKind::Stdin)),
+                        _ => {
+                            #[cfg(target_family = "windows")]
+                            // On Windows, an absolute path's drive letter will be parsed as the URI
+                            // scheme. Assume a filepath source in case of a single character shceme.
+                            if scheme.len() == 1 {
+                                return Ok(SignerSource::new(SignerSourceKind::Filepath(source)));
+                            }
+                            Err(SignerSourceError::UnrecognizedSource)
+                        }
+                    }
+                } else {
+                    match source.as_str() {
+                        STDOUT_OUTFILE_TOKEN => Ok(SignerSource::new(SignerSourceKind::Stdin)),
+                        ASK_KEYWORD => Ok(SignerSource::new_legacy(SignerSourceKind::Prompt)),
+                        _ => match Pubkey::from_str(source.as_str()) {
+                            Ok(pubkey) => Ok(SignerSource::new(SignerSourceKind::Pubkey(pubkey))),
+                            Err(_) => std::fs::metadata(source.as_str())
+                                .map(|_| SignerSource::new(SignerSourceKind::Filepath(source)))
+                                .map_err(|err| err.into()),
+                        },
+                    }
                 }
             }
         }
@@ -225,7 +225,7 @@ impl SignerSourceParserBuilder {
     pub fn build(self) -> ValueParser {
         ValueParser::from(
             move |arg: &str| -> Result<SignerSource, SignerSourceError> {
-                let signer_source = parse_signer_source(arg)?;
+                let signer_source = SignerSource::parse(arg)?;
                 if !self.allow_legacy && signer_source.legacy {
                     return Err(SignerSourceError::UnsupportedSource);
                 }
