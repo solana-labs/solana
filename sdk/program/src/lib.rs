@@ -507,6 +507,7 @@ pub mod log;
 pub mod message;
 pub mod native_token;
 pub mod nonce;
+#[cfg(feature = "poseidon")]
 pub mod poseidon;
 pub mod program;
 pub mod program_error;

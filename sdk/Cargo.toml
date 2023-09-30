@@ -34,8 +34,10 @@ full = [
     "libsecp256k1",
     "sha3",
     "digest",
+    "poseidon"
 ]
 dev-context-only-utils = []
+poseidon = ["solana-program/poseidon"]
 
 [dependencies]
 assert_matches = { workspace = true, optional = true }
