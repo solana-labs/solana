@@ -11,7 +11,10 @@
 
 use {
     crate::{
-        input_parsers::{pubkeys_sigs_of, STDOUT_OUTFILE_TOKEN},
+        input_parsers::{
+            pubkeys_sigs_of,
+            signer::{parse_signer_source, SignerSource, SignerSourceKind},
+        },
         offline::{SIGNER_ARG, SIGN_ONLY_ARG},
         ArgConstant,
     },
@@ -19,12 +22,11 @@ use {
     clap::ArgMatches,
     rpassword::prompt_password,
     solana_remote_wallet::{
-        locator::{Locator as RemoteWalletLocator, LocatorError as RemoteWalletLocatorError},
         remote_keypair::generate_remote_keypair,
         remote_wallet::{maybe_wallet_manager, RemoteWalletError, RemoteWalletManager},
     },
     solana_sdk::{
-        derivation_path::{DerivationPath, DerivationPathError},
+        derivation_path::DerivationPath,
         hash::Hash,
         message::Message,
         pubkey::Pubkey,
@@ -37,15 +39,12 @@ use {
     solana_zk_token_sdk::encryption::{auth_encryption::AeKey, elgamal::ElGamalKeypair},
     std::{
         cell::RefCell,
-        convert::TryFrom,
         error,
         io::{stdin, stdout, Write},
         ops::Deref,
         process::exit,
         rc::Rc,
-        str::FromStr,
     },
-    thiserror::Error,
 };
 
 pub struct SignOnly {
@@ -368,148 +367,6 @@ impl DefaultSigner {
             wallet_manager,
             config,
         )
-    }
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct SignerSource {
-    pub kind: SignerSourceKind,
-    pub derivation_path: Option<DerivationPath>,
-    pub legacy: bool,
-}
-
-impl SignerSource {
-    fn new(kind: SignerSourceKind) -> Self {
-        Self {
-            kind,
-            derivation_path: None,
-            legacy: false,
-        }
-    }
-
-    fn new_legacy(kind: SignerSourceKind) -> Self {
-        Self {
-            kind,
-            derivation_path: None,
-            legacy: true,
-        }
-    }
-}
-
-const SIGNER_SOURCE_PROMPT: &str = "prompt";
-const SIGNER_SOURCE_FILEPATH: &str = "file";
-const SIGNER_SOURCE_USB: &str = "usb";
-const SIGNER_SOURCE_STDIN: &str = "stdin";
-const SIGNER_SOURCE_PUBKEY: &str = "pubkey";
-
-#[derive(Clone)]
-pub(crate) enum SignerSourceKind {
-    Prompt,
-    Filepath(String),
-    Usb(RemoteWalletLocator),
-    Stdin,
-    Pubkey(Pubkey),
-}
-
-impl AsRef<str> for SignerSourceKind {
-    fn as_ref(&self) -> &str {
-        match self {
-            Self::Prompt => SIGNER_SOURCE_PROMPT,
-            Self::Filepath(_) => SIGNER_SOURCE_FILEPATH,
-            Self::Usb(_) => SIGNER_SOURCE_USB,
-            Self::Stdin => SIGNER_SOURCE_STDIN,
-            Self::Pubkey(_) => SIGNER_SOURCE_PUBKEY,
-        }
-    }
-}
-
-impl std::fmt::Debug for SignerSourceKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let s: &str = self.as_ref();
-        write!(f, "{s}")
-    }
-}
-
-#[derive(Debug, Error)]
-pub(crate) enum SignerSourceError {
-    #[error("unrecognized signer source")]
-    UnrecognizedSource,
-    #[error(transparent)]
-    RemoteWalletLocatorError(#[from] RemoteWalletLocatorError),
-    #[error(transparent)]
-    DerivationPathError(#[from] DerivationPathError),
-    #[error(transparent)]
-    IoError(#[from] std::io::Error),
-    #[error("unsupported source")]
-    UnsupportedSource,
-}
-
-pub(crate) fn parse_signer_source<S: AsRef<str>>(
-    source: S,
-) -> Result<SignerSource, SignerSourceError> {
-    let source = source.as_ref();
-    let source = {
-        #[cfg(target_family = "windows")]
-        {
-            // trim matched single-quotes since cmd.exe won't
-            let mut source = source;
-            while let Some(trimmed) = source.strip_prefix('\'') {
-                source = if let Some(trimmed) = trimmed.strip_suffix('\'') {
-                    trimmed
-                } else {
-                    break;
-                }
-            }
-            source.replace('\\', "/")
-        }
-        #[cfg(not(target_family = "windows"))]
-        {
-            source.to_string()
-        }
-    };
-    match uriparse::URIReference::try_from(source.as_str()) {
-        Err(_) => Err(SignerSourceError::UnrecognizedSource),
-        Ok(uri) => {
-            if let Some(scheme) = uri.scheme() {
-                let scheme = scheme.as_str().to_ascii_lowercase();
-                match scheme.as_str() {
-                    SIGNER_SOURCE_PROMPT => Ok(SignerSource {
-                        kind: SignerSourceKind::Prompt,
-                        derivation_path: DerivationPath::from_uri_any_query(&uri)?,
-                        legacy: false,
-                    }),
-                    SIGNER_SOURCE_FILEPATH => Ok(SignerSource::new(SignerSourceKind::Filepath(
-                        uri.path().to_string(),
-                    ))),
-                    SIGNER_SOURCE_USB => Ok(SignerSource {
-                        kind: SignerSourceKind::Usb(RemoteWalletLocator::new_from_uri(&uri)?),
-                        derivation_path: DerivationPath::from_uri_key_query(&uri)?,
-                        legacy: false,
-                    }),
-                    SIGNER_SOURCE_STDIN => Ok(SignerSource::new(SignerSourceKind::Stdin)),
-                    _ => {
-                        #[cfg(target_family = "windows")]
-                        // On Windows, an absolute path's drive letter will be parsed as the URI
-                        // scheme. Assume a filepath source in case of a single character shceme.
-                        if scheme.len() == 1 {
-                            return Ok(SignerSource::new(SignerSourceKind::Filepath(source)));
-                        }
-                        Err(SignerSourceError::UnrecognizedSource)
-                    }
-                }
-            } else {
-                match source.as_str() {
-                    STDOUT_OUTFILE_TOKEN => Ok(SignerSource::new(SignerSourceKind::Stdin)),
-                    ASK_KEYWORD => Ok(SignerSource::new_legacy(SignerSourceKind::Prompt)),
-                    _ => match Pubkey::from_str(source.as_str()) {
-                        Ok(pubkey) => Ok(SignerSource::new(SignerSourceKind::Pubkey(pubkey))),
-                        Err(_) => std::fs::metadata(source.as_str())
-                            .map(|_| SignerSource::new(SignerSourceKind::Filepath(source)))
-                            .map_err(|err| err.into()),
-                    },
-                }
-            }
-        }
     }
 }
 

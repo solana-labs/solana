@@ -1,5 +1,8 @@
 use {
-    crate::keypair::{parse_signer_source, SignerSourceKind, ASK_KEYWORD},
+    crate::{
+        input_parsers::signer::{parse_signer_source, SignerSourceKind},
+        keypair::ASK_KEYWORD,
+    },
     chrono::DateTime,
     solana_sdk::{
         clock::{Epoch, Slot},
