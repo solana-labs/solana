@@ -152,7 +152,7 @@ pub enum InstructionError {
     ExecutableDataModified,
 
     /// Executable account's lamports modified
-    #[error("instruction changed the balance of a executable account")]
+    #[error("instruction changed the balance of an executable account")]
     ExecutableLamportChange,
 
     /// Executable accounts must be rent exempt
