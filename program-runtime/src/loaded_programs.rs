@@ -626,10 +626,10 @@ impl LoadedPrograms {
         self.remove_programs_with_no_entries();
     }
 
-    /// Before rerooting the blockstore this removes all programs of orphan forks
+    /// Before rerooting the blockstore this removes all superflous entries
     pub fn prune<F: ForkGraph>(&mut self, fork_graph: &F, new_root: Slot) {
-        let previous_root = self.latest_root;
-        self.entries.retain(|_key, second_level| {
+        for second_level in self.entries.values_mut() {
+            // Remove entries un/re/deployed on orphan forks
             let mut first_ancestor_found = false;
             *second_level = second_level
                 .iter()
@@ -640,7 +640,7 @@ impl LoadedPrograms {
                         matches!(relation, BlockRelation::Equal | BlockRelation::Descendant)
                     } else if !first_ancestor_found
                         && (matches!(relation, BlockRelation::Ancestor)
-                            || entry.deployment_slot <= previous_root)
+                            || entry.deployment_slot <= self.latest_root)
                     {
                         first_ancestor_found = true;
                         first_ancestor_found
@@ -649,15 +649,21 @@ impl LoadedPrograms {
                         false
                     }
                 })
+                .filter(|entry| {
+                    // Remove expired
+                    if let Some(expiration) = entry.maybe_expiration_slot {
+                        if expiration <= new_root {
+                            self.stats.expired.fetch_add(1, Ordering::Relaxed);
+                            return false;
+                        }
+                    }
+                    true
+                })
                 .cloned()
                 .collect();
             second_level.reverse();
-            !second_level.is_empty()
-        });
-
-        self.remove_expired_entries(new_root);
+        }
         self.remove_programs_with_no_entries();
-
         self.latest_root = std::cmp::max(self.latest_root, new_root);
     }
 
@@ -824,24 +830,6 @@ impl LoadedPrograms {
     pub fn remove_programs(&mut self, keys: impl Iterator<Item = Pubkey>) {
         for k in keys {
             self.entries.remove(&k);
-        }
-    }
-
-    fn remove_expired_entries(&mut self, current_slot: Slot) {
-        for entry in self.entries.values_mut() {
-            entry.retain(|program| {
-                program
-                    .maybe_expiration_slot
-                    .map(|expiration| {
-                        if expiration > current_slot {
-                            true
-                        } else {
-                            self.stats.expired.fetch_add(1, Ordering::Relaxed);
-                            false
-                        }
-                    })
-                    .unwrap_or(true)
-            });
         }
     }
 
