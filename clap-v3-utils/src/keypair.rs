@@ -554,6 +554,16 @@ pub fn signer_from_path(
     signer_from_path_with_config(matches, path, keypair_name, wallet_manager, &config)
 }
 
+pub fn signer_from_source(
+    matches: &ArgMatches,
+    source: &SignerSource,
+    keypair_name: &str,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
+) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
+    let config = SignerFromPathConfig::default();
+    signer_from_source_with_config(matches, source, keypair_name, wallet_manager, &config)
+}
+
 /// Loads a [Signer] from one of several possible sources.
 ///
 /// The `path` is not strictly a file system path, but is interpreted as various
@@ -618,11 +628,22 @@ pub fn signer_from_path_with_config(
     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     config: &SignerFromPathConfig,
 ) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
+    let source = SignerSource::parse(path)?;
+    signer_from_source_with_config(matches, &source, keypair_name, wallet_manager, config)
+}
+
+pub fn signer_from_source_with_config(
+    matches: &ArgMatches,
+    source: &SignerSource,
+    keypair_name: &str,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
+    config: &SignerFromPathConfig,
+) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
     let SignerSource {
         kind,
         derivation_path,
         legacy,
-    } = SignerSource::parse(path)?;
+    } = source;
     match kind {
         SignerSourceKind::Prompt => {
             let skip_validation = matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
@@ -630,11 +651,11 @@ pub fn signer_from_path_with_config(
                 keypair_name,
                 skip_validation,
                 false,
-                derivation_path,
-                legacy,
+                derivation_path.clone(),
+                *legacy,
             )?))
         }
-        SignerSourceKind::Filepath(path) => match read_keypair_file(&path) {
+        SignerSourceKind::Filepath(path) => match read_keypair_file(path) {
             Err(e) => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!("could not read keypair file \"{path}\". Run \"solana-keygen new\" to create a keypair file: {e}"),
@@ -652,9 +673,10 @@ pub fn signer_from_path_with_config(
             }
             if let Some(wallet_manager) = wallet_manager {
                 let confirm_key = matches.try_contains_id("confirm_key").unwrap_or(false);
+
                 Ok(Box::new(generate_remote_keypair(
-                    locator,
-                    derivation_path.unwrap_or_default(),
+                    locator.clone(),
+                    derivation_path.clone().unwrap_or_default(),
                     wallet_manager,
                     confirm_key,
                     keypair_name,
@@ -666,11 +688,11 @@ pub fn signer_from_path_with_config(
         SignerSourceKind::Pubkey(pubkey) => {
             let presigner = pubkeys_sigs_of(matches, SIGNER_ARG.name)
                 .as_ref()
-                .and_then(|presigners| presigner_from_pubkey_sigs(&pubkey, presigners));
+                .and_then(|presigners| presigner_from_pubkey_sigs(pubkey, presigners));
             if let Some(presigner) = presigner {
                 Ok(Box::new(presigner))
             } else if config.allow_null_signer || matches.try_contains_id(SIGN_ONLY_ARG.name)? {
-                Ok(Box::new(NullSigner::new(&pubkey)))
+                Ok(Box::new(NullSigner::new(pubkey)))
             } else {
                 Err(std::io::Error::new(
                     std::io::ErrorKind::Other,

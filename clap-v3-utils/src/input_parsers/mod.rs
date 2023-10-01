@@ -1,10 +1,14 @@
 use {
     crate::{
         input_validators::normalize_to_url_if_moniker,
-        keypair::{keypair_from_seed_phrase, ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG},
+        keypair::{
+            keypair_from_seed_phrase, signer_from_path, ASK_KEYWORD,
+            SKIP_SEED_PHRASE_VALIDATION_ARG,
+        },
     },
     chrono::DateTime,
     clap::ArgMatches,
+    solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_sdk::{
         clock::UnixTimestamp,
         commitment_config::CommitmentConfig,
@@ -13,7 +17,7 @@ use {
         pubkey::{Pubkey, MAX_SEED_LEN},
         signature::{read_keypair_file, Keypair, Signer},
     },
-    std::str::FromStr,
+    std::{rc::Rc, str::FromStr},
 };
 
 pub mod signer;
@@ -22,7 +26,7 @@ pub mod signer;
     note = "Please use the functions in `solana_clap_v3_utils::input_parsers::signer` directly instead"
 )]
 pub use signer::{
-    pubkey_of_signer, pubkeys_of_multiple_signers, pubkeys_sigs_of, resolve_signer, signer_of,
+    pubkey_of_signer, pubkeys_of_multiple_signers, pubkeys_sigs_of, resolve_signer,
     STDOUT_OUTFILE_TOKEN,
 };
 
@@ -300,6 +304,26 @@ pub fn pubkeys_of(matches: &ArgMatches, name: &str) -> Option<Vec<Pubkey>> {
             })
             .collect()
     })
+}
+
+// Return a signer from matches at `name`
+#[allow(clippy::type_complexity)]
+#[deprecated(
+    since = "1.17.0",
+    note = "Please use `SignerSource::try_get_signer` instead"
+)]
+pub fn signer_of(
+    matches: &ArgMatches,
+    name: &str,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
+) -> Result<(Option<Box<dyn Signer>>, Option<Pubkey>), Box<dyn std::error::Error>> {
+    if let Some(location) = matches.try_get_one::<String>(name)? {
+        let signer = signer_from_path(matches, location, name, wallet_manager)?;
+        let signer_pubkey = signer.pubkey();
+        Ok((Some(signer), Some(signer_pubkey)))
+    } else {
+        Ok((None, None))
+    }
 }
 
 #[cfg(test)]
