@@ -930,8 +930,8 @@ mod tests {
     use {
         crate::loaded_programs::{
             BlockRelation, ExtractedPrograms, ForkGraph, LoadedProgram, LoadedProgramMatchCriteria,
-            LoadedProgramType, LoadedPrograms, LoadedProgramsForTxBatch, WorkingSlot,
-            DELAY_VISIBILITY_SLOT_OFFSET,
+            LoadedProgramType, LoadedPrograms, LoadedProgramsForTxBatch, ProgramRuntimeEnvironment,
+            WorkingSlot, DELAY_VISIBILITY_SLOT_OFFSET,
         },
         assert_matches::assert_matches,
         percentage::Percentage,
@@ -945,6 +945,51 @@ mod tests {
             },
         },
     };
+
+    static MOCK_ENVIRONMENT: std::sync::OnceLock<ProgramRuntimeEnvironment> =
+        std::sync::OnceLock::<ProgramRuntimeEnvironment>::new();
+
+    fn new_mock_cache() -> LoadedPrograms {
+        let mut cache = LoadedPrograms::default();
+        cache.environments.program_runtime_v1 = MOCK_ENVIRONMENT
+            .get_or_init(|| Arc::new(BuiltinProgram::new_mock()))
+            .clone();
+        cache
+    }
+
+    fn new_test_loaded_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
+        new_test_loaded_program_with_usage(deployment_slot, effective_slot, AtomicU64::default())
+    }
+
+    fn new_test_loaded_program_with_usage(
+        deployment_slot: Slot,
+        effective_slot: Slot,
+        usage_counter: AtomicU64,
+    ) -> Arc<LoadedProgram> {
+        new_test_loaded_program_with_usage_and_expiry(
+            deployment_slot,
+            effective_slot,
+            usage_counter,
+            None,
+        )
+    }
+
+    fn new_test_loaded_program_with_usage_and_expiry(
+        deployment_slot: Slot,
+        effective_slot: Slot,
+        usage_counter: AtomicU64,
+        expiry: Option<Slot>,
+    ) -> Arc<LoadedProgram> {
+        Arc::new(LoadedProgram {
+            program: LoadedProgramType::TestLoaded(MOCK_ENVIRONMENT.get().unwrap().clone()),
+            account_size: 0,
+            deployment_slot,
+            effective_slot,
+            maybe_expiration_slot: expiry,
+            tx_usage_counter: usage_counter,
+            ix_usage_counter: AtomicU64::default(),
+        })
+    }
 
     fn new_test_builtin_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
         Arc::new(LoadedProgram {
@@ -1011,7 +1056,7 @@ mod tests {
         let mut programs = vec![];
         let mut num_total_programs: usize = 0;
 
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
 
         let program1 = Pubkey::new_unique();
         let program1_deployment_slots = [0, 10, 20];
@@ -1177,7 +1222,7 @@ mod tests {
 
     #[test]
     fn test_usage_count_of_unloaded_program() {
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
 
         let program = Pubkey::new_unique();
         let num_total_programs = 6;
@@ -1229,7 +1274,7 @@ mod tests {
 
     #[test]
     fn test_replace_tombstones() {
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
         let program1 = Pubkey::new_unique();
         let env = Arc::new(BuiltinProgram::new_mock());
         set_tombstone(
@@ -1261,7 +1306,7 @@ mod tests {
         assert_eq!(tombstone.deployment_slot, 100);
         assert_eq!(tombstone.effective_slot, 100);
 
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
         let program1 = Pubkey::new_unique();
         let tombstone = set_tombstone(
             &mut cache,
@@ -1321,7 +1366,7 @@ mod tests {
 
     #[test]
     fn test_prune_empty() {
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
         let fork_graph = TestForkGraph {
             relation: BlockRelation::Unrelated,
         };
@@ -1332,7 +1377,7 @@ mod tests {
         cache.prune(&fork_graph, 10, 0);
         assert!(cache.entries.is_empty());
 
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
         let fork_graph = TestForkGraph {
             relation: BlockRelation::Ancestor,
         };
@@ -1343,7 +1388,7 @@ mod tests {
         cache.prune(&fork_graph, 10, 0);
         assert!(cache.entries.is_empty());
 
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
         let fork_graph = TestForkGraph {
             relation: BlockRelation::Descendant,
         };
@@ -1354,7 +1399,7 @@ mod tests {
         cache.prune(&fork_graph, 10, 0);
         assert!(cache.entries.is_empty());
 
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
         let fork_graph = TestForkGraph {
             relation: BlockRelation::Unknown,
         };
@@ -1452,41 +1497,6 @@ mod tests {
         }
     }
 
-    fn new_test_loaded_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
-        new_test_loaded_program_with_usage(deployment_slot, effective_slot, AtomicU64::default())
-    }
-
-    fn new_test_loaded_program_with_usage(
-        deployment_slot: Slot,
-        effective_slot: Slot,
-        usage_counter: AtomicU64,
-    ) -> Arc<LoadedProgram> {
-        new_test_loaded_program_with_usage_and_expiry(
-            deployment_slot,
-            effective_slot,
-            usage_counter,
-            None,
-        )
-    }
-
-    fn new_test_loaded_program_with_usage_and_expiry(
-        deployment_slot: Slot,
-        effective_slot: Slot,
-        usage_counter: AtomicU64,
-        expiry: Option<Slot>,
-    ) -> Arc<LoadedProgram> {
-        let env = Arc::new(BuiltinProgram::new_mock());
-        Arc::new(LoadedProgram {
-            program: LoadedProgramType::TestLoaded(env),
-            account_size: 0,
-            deployment_slot,
-            effective_slot,
-            maybe_expiration_slot: expiry,
-            tx_usage_counter: usage_counter,
-            ix_usage_counter: AtomicU64::default(),
-        })
-    }
-
     fn match_slot(
         table: &LoadedProgramsForTxBatch,
         program: &Pubkey,
@@ -1502,7 +1512,7 @@ mod tests {
 
     #[test]
     fn test_fork_extract_and_prune() {
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
 
         // Fork graph created for the test
         //                   0
@@ -1883,7 +1893,7 @@ mod tests {
 
     #[test]
     fn test_extract_using_deployment_slot() {
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
 
         // Fork graph created for the test
         //                   0
@@ -1968,7 +1978,7 @@ mod tests {
 
     #[test]
     fn test_extract_unloaded() {
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
 
         // Fork graph created for the test
         //                   0
@@ -2081,13 +2091,12 @@ mod tests {
         assert!(match_slot(&found, &program1, 20, 22));
 
         assert!(missing.contains(&(program2, 1)));
-        assert!(missing.contains(&(program3, 1)));
-        assert!(unloaded.is_empty());
+        assert!(unloaded.contains(&(program3, 1)));
     }
 
     #[test]
     fn test_prune_expired() {
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
 
         // Fork graph created for the test
         //                   0
@@ -2206,7 +2215,7 @@ mod tests {
 
     #[test]
     fn test_fork_prune_find_first_ancestor() {
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
 
         // Fork graph created for the test
         //                   0
@@ -2252,7 +2261,7 @@ mod tests {
 
     #[test]
     fn test_prune_by_deployment_slot() {
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
 
         // Fork graph created for the test
         //                   0
@@ -2371,6 +2380,7 @@ mod tests {
 
     #[test]
     fn test_usable_entries_for_slot() {
+        new_mock_cache();
         let tombstone = Arc::new(LoadedProgram::new_tombstone(0, LoadedProgramType::Closed));
 
         assert!(LoadedPrograms::is_entry_usable(
