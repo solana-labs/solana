@@ -11,10 +11,7 @@
 
 use {
     crate::{
-        input_parsers::{
-            pubkeys_sigs_of,
-            signer::{SignerSource, SignerSourceKind},
-        },
+        input_parsers::signer::{PubkeySignature, SignerSource, SignerSourceKind},
         offline::{SIGNER_ARG, SIGN_ONLY_ARG},
         ArgConstant,
     },
@@ -686,9 +683,16 @@ pub fn signer_from_source_with_config(
             }
         }
         SignerSourceKind::Pubkey(pubkey) => {
-            let presigner = pubkeys_sigs_of(matches, SIGNER_ARG.name)
-                .as_ref()
-                .and_then(|presigners| presigner_from_pubkey_sigs(pubkey, presigners));
+            let pubkey_signatures = matches.try_get_many::<PubkeySignature>(SIGNER_ARG.name)?;
+            let presigner = if let Some(pubkey_signatures) = pubkey_signatures {
+                let pubkey_signatures_vec: Vec<_> = pubkey_signatures
+                    .map(|pubkey_signature| (pubkey_signature.pubkey, pubkey_signature.signature))
+                    .collect();
+                presigner_from_pubkey_sigs(pubkey, &pubkey_signatures_vec)
+            } else {
+                None
+            };
+
             if let Some(presigner) = presigner {
                 Ok(Box::new(presigner))
             } else if config.allow_null_signer || matches.try_contains_id(SIGN_ONLY_ARG.name)? {

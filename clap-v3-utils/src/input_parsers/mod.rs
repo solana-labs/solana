@@ -15,17 +15,15 @@ use {
         genesis_config::ClusterType,
         native_token::sol_to_lamports,
         pubkey::{Pubkey, MAX_SEED_LEN},
-        signature::{read_keypair_file, Keypair, Signer},
+        signature::{read_keypair_file, Keypair, Signature, Signer},
     },
     std::{rc::Rc, str::FromStr},
 };
 
 pub mod signer;
-#[deprecated(
-    since = "1.17.0",
-    note = "Please use the functions in `solana_clap_v3_utils::input_parsers::signer` directly instead"
-)]
-pub use signer::{pubkeys_sigs_of, resolve_signer, STDOUT_OUTFILE_TOKEN};
+
+// Sentinel value used to indicate to write to screen instead of file
+pub const STDOUT_OUTFILE_TOKEN: &str = "-";
 
 // Return parsed values from matches at `name`
 pub fn values_of<T>(matches: &ArgMatches, name: &str) -> Option<Vec<T>>
@@ -370,6 +368,24 @@ pub fn pubkeys_of_multiple_signers(
     } else {
         Ok(None)
     }
+}
+
+// Return pubkey/signature pairs for a string of the form pubkey=signature
+#[deprecated(
+    since = "1.17.0",
+    note = "Please use `clap::value_parser!(PubkeySignature)` instead"
+)]
+pub fn pubkeys_sigs_of(matches: &ArgMatches, name: &str) -> Option<Vec<(Pubkey, Signature)>> {
+    matches.values_of(name).map(|values| {
+        values
+            .map(|pubkey_signer_string| {
+                let mut signer = pubkey_signer_string.split('=');
+                let key = Pubkey::from_str(signer.next().unwrap()).unwrap();
+                let sig = Signature::from_str(signer.next().unwrap()).unwrap();
+                (key, sig)
+            })
+            .collect()
+    })
 }
 
 #[cfg(test)]

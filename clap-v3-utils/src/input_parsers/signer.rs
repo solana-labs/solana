@@ -335,33 +335,6 @@ impl SignerSourceParserBuilder {
     }
 }
 
-// Sentinel value used to indicate to write to screen instead of file
-pub const STDOUT_OUTFILE_TOKEN: &str = "-";
-
-// Return pubkey/signature pairs for a string of the form pubkey=signature
-pub fn pubkeys_sigs_of(matches: &ArgMatches, name: &str) -> Option<Vec<(Pubkey, Signature)>> {
-    matches.values_of(name).map(|values| {
-        values
-            .map(|pubkey_signer_string| {
-                let mut signer = pubkey_signer_string.split('=');
-                let key = Pubkey::from_str(signer.next().unwrap()).unwrap();
-                let sig = Signature::from_str(signer.next().unwrap()).unwrap();
-                (key, sig)
-            })
-            .collect()
-    })
-}
-
-// Return pubkey/signature pairs for a string of the form pubkey=signature wrapped inside `Result`
-#[allow(clippy::type_complexity)]
-pub fn try_pubkeys_sigs_of(
-    matches: &ArgMatches,
-    name: &str,
-) -> Result<Option<Vec<(Pubkey, Signature)>>, Box<dyn error::Error>> {
-    matches.try_contains_id(name)?;
-    Ok(pubkeys_sigs_of(matches, name))
-}
-
 pub fn resolve_signer(
     matches: &ArgMatches,
     name: &str,
@@ -377,8 +350,8 @@ pub fn resolve_signer(
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PubkeySignature {
-    pubkey: Pubkey,
-    signature: Signature,
+    pub pubkey: Pubkey,
+    pub signature: Signature,
 }
 impl FromStr for PubkeySignature {
     type Err = String;
