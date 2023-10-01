@@ -1,5 +1,5 @@
 use {
-    crate::{input_validators::*, ArgConstant},
+    crate::{input_parsers::signer::SignerSourceParserBuilder, ArgConstant},
     clap::{Arg, Command},
 };
 
@@ -23,7 +23,12 @@ fn nonce_arg<'a>() -> Arg<'a> {
         .long(NONCE_ARG.long)
         .takes_value(true)
         .value_name("PUBKEY")
-        .validator(|s| is_valid_pubkey(s))
+        .value_parser(
+            SignerSourceParserBuilder::new()
+                .allow_pubkey()
+                .allow_file_path()
+                .build(),
+        )
         .help(NONCE_ARG.help)
 }
 
@@ -32,7 +37,7 @@ pub fn nonce_authority_arg<'a>() -> Arg<'a> {
         .long(NONCE_AUTHORITY_ARG.long)
         .takes_value(true)
         .value_name("KEYPAIR")
-        .validator(|s| is_valid_signer(s))
+        .value_parser(SignerSourceParserBuilder::default().build())
         .help(NONCE_AUTHORITY_ARG.help)
 }
 

@@ -287,6 +287,7 @@ pub fn keypairs_of(matches: &ArgMatches, name: &str) -> Option<Vec<Keypair>> {
     since = "1.17.0",
     note = "Please use `SignerSource::try_get_pubkey` instead"
 )]
+#[allow(deprecated)]
 pub fn pubkey_of(matches: &ArgMatches, name: &str) -> Option<Pubkey> {
     value_of(matches, name).or_else(|| keypair_of(matches, name).map(|keypair| keypair.pubkey()))
 }
@@ -410,7 +411,9 @@ mod tests {
     use {
         super::*,
         clap::{Arg, Command},
+        solana_sdk::signature::write_keypair_file,
         solana_sdk::{hash::Hash, pubkey::Pubkey},
+        std::fs,
     };
 
     fn app<'ab>() -> Command<'ab> {
@@ -424,6 +427,13 @@ mod tests {
             )
             .arg(Arg::new("single").takes_value(true).long("single"))
             .arg(Arg::new("unit").takes_value(true).long("unit"))
+    }
+
+    fn tmp_file_path(name: &str, pubkey: &Pubkey) -> String {
+        use std::env;
+        let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
+
+        format!("{out_dir}/tmp/{name}-{pubkey}")
     }
 
     #[test]
@@ -655,5 +665,84 @@ mod tests {
                 assert_eq!(matches.get_one::<String>("derivation").unwrap(), arg);
             }
         }
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_keypair_of() {
+        let keypair = Keypair::new();
+        let outfile = tmp_file_path("test_keypair_of.json", &keypair.pubkey());
+        let _ = write_keypair_file(&keypair, &outfile).unwrap();
+
+        let matches = app().get_matches_from(vec!["test", "--single", &outfile]);
+        assert_eq!(
+            keypair_of(&matches, "single").unwrap().pubkey(),
+            keypair.pubkey()
+        );
+        assert!(keypair_of(&matches, "multiple").is_none());
+
+        let matches = app().get_matches_from(vec!["test", "--single", "random_keypair_file.json"]);
+        assert!(keypair_of(&matches, "single").is_none());
+
+        fs::remove_file(&outfile).unwrap();
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_pubkey_of() {
+        let keypair = Keypair::new();
+        let outfile = tmp_file_path("test_pubkey_of.json", &keypair.pubkey());
+        let _ = write_keypair_file(&keypair, &outfile).unwrap();
+
+        let matches = app().get_matches_from(vec!["test", "--single", &outfile]);
+        assert_eq!(pubkey_of(&matches, "single"), Some(keypair.pubkey()));
+        assert_eq!(pubkey_of(&matches, "multiple"), None);
+
+        let matches =
+            app().get_matches_from(vec!["test", "--single", &keypair.pubkey().to_string()]);
+        assert_eq!(pubkey_of(&matches, "single"), Some(keypair.pubkey()));
+
+        let matches = app().get_matches_from(vec!["test", "--single", "random_keypair_file.json"]);
+        assert_eq!(pubkey_of(&matches, "single"), None);
+
+        fs::remove_file(&outfile).unwrap();
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_pubkeys_of() {
+        let keypair = Keypair::new();
+        let outfile = tmp_file_path("test_pubkeys_of.json", &keypair.pubkey());
+        let _ = write_keypair_file(&keypair, &outfile).unwrap();
+
+        let matches = app().get_matches_from(vec![
+            "test",
+            "--multiple",
+            &keypair.pubkey().to_string(),
+            "--multiple",
+            &outfile,
+        ]);
+        assert_eq!(
+            pubkeys_of(&matches, "multiple"),
+            Some(vec![keypair.pubkey(), keypair.pubkey()])
+        );
+        fs::remove_file(&outfile).unwrap();
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_pubkeys_sigs_of() {
+        let key1 = solana_sdk::pubkey::new_rand();
+        let key2 = solana_sdk::pubkey::new_rand();
+        let sig1 = Keypair::new().sign_message(&[0u8]);
+        let sig2 = Keypair::new().sign_message(&[1u8]);
+        let signer1 = format!("{key1}={sig1}");
+        let signer2 = format!("{key2}={sig2}");
+        let matches =
+            app().get_matches_from(vec!["test", "--multiple", &signer1, "--multiple", &signer2]);
+        assert_eq!(
+            pubkeys_sigs_of(&matches, "multiple"),
+            Some(vec![(key1, sig1), (key2, sig2)])
+        );
     }
 }

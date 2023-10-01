@@ -1217,12 +1217,12 @@ fn sanitize_seed_phrase(seed_phrase: &str) -> String {
 mod tests {
     use {
         super::*,
-        crate::offline::OfflineArgs,
-        assert_matches::assert_matches,
+        crate::{input_parsers::signer::SignerSourceParserBuilder, offline::OfflineArgs},
         clap::{Arg, Command},
-        solana_remote_wallet::{locator::Manufacturer, remote_wallet::initialize_wallet_manager},
-        solana_sdk::{signer::keypair::write_keypair_file, system_instruction},
-        tempfile::{NamedTempFile, TempDir},
+        solana_remote_wallet::remote_wallet::initialize_wallet_manager,
+        solana_sdk::signature::write_keypair_file,
+        solana_sdk::system_instruction,
+        tempfile::TempDir,
     };
 
     #[test]
@@ -1266,125 +1266,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_signer_source() {
-        assert_matches!(
-            parse_signer_source(STDOUT_OUTFILE_TOKEN).unwrap(),
-            SignerSource {
-                kind: SignerSourceKind::Stdin,
-                derivation_path: None,
-                legacy: false,
-            }
-        );
-        let stdin = "stdin:".to_string();
-        assert_matches!(
-            parse_signer_source(stdin).unwrap(),
-            SignerSource {
-                kind: SignerSourceKind::Stdin,
-                derivation_path: None,
-                legacy: false,
-            }
-        );
-        assert_matches!(
-            parse_signer_source(ASK_KEYWORD).unwrap(),
-            SignerSource {
-                kind: SignerSourceKind::Prompt,
-                derivation_path: None,
-                legacy: true,
-            }
-        );
-        let pubkey = Pubkey::new_unique();
-        assert!(
-            matches!(parse_signer_source(pubkey.to_string()).unwrap(), SignerSource {
-                kind: SignerSourceKind::Pubkey(p),
-                derivation_path: None,
-                legacy: false,
-            }
-            if p == pubkey)
-        );
-
-        // Set up absolute and relative path strs
-        let file0 = NamedTempFile::new().unwrap();
-        let path = file0.path();
-        assert!(path.is_absolute());
-        let absolute_path_str = path.to_str().unwrap();
-
-        let file1 = NamedTempFile::new_in(std::env::current_dir().unwrap()).unwrap();
-        let path = file1.path().file_name().unwrap().to_str().unwrap();
-        let path = std::path::Path::new(path);
-        assert!(path.is_relative());
-        let relative_path_str = path.to_str().unwrap();
-
-        assert!(
-            matches!(parse_signer_source(absolute_path_str).unwrap(), SignerSource {
-                kind: SignerSourceKind::Filepath(p),
-                derivation_path: None,
-                legacy: false,
-            } if p == absolute_path_str)
-        );
-        assert!(
-            matches!(parse_signer_source(relative_path_str).unwrap(), SignerSource {
-                kind: SignerSourceKind::Filepath(p),
-                derivation_path: None,
-                legacy: false,
-            } if p == relative_path_str)
-        );
-
-        let usb = "usb://ledger".to_string();
-        let expected_locator = RemoteWalletLocator {
-            manufacturer: Manufacturer::Ledger,
-            pubkey: None,
-        };
-        assert_matches!(parse_signer_source(usb).unwrap(), SignerSource {
-                kind: SignerSourceKind::Usb(u),
-                derivation_path: None,
-                legacy: false,
-            } if u == expected_locator);
-        let usb = "usb://ledger?key=0/0".to_string();
-        let expected_locator = RemoteWalletLocator {
-            manufacturer: Manufacturer::Ledger,
-            pubkey: None,
-        };
-        let expected_derivation_path = Some(DerivationPath::new_bip44(Some(0), Some(0)));
-        assert_matches!(parse_signer_source(usb).unwrap(), SignerSource {
-                kind: SignerSourceKind::Usb(u),
-                derivation_path: d,
-                legacy: false,
-            } if u == expected_locator && d == expected_derivation_path);
-        // Catchall into SignerSource::Filepath fails
-        let junk = "sometextthatisnotapubkeyorfile".to_string();
-        assert!(Pubkey::from_str(&junk).is_err());
-        assert_matches!(
-            parse_signer_source(&junk),
-            Err(SignerSourceError::IoError(_))
-        );
-
-        let prompt = "prompt:".to_string();
-        assert_matches!(
-            parse_signer_source(prompt).unwrap(),
-            SignerSource {
-                kind: SignerSourceKind::Prompt,
-                derivation_path: None,
-                legacy: false,
-            }
-        );
-        assert!(
-            matches!(parse_signer_source(format!("file:{absolute_path_str}")).unwrap(), SignerSource {
-                kind: SignerSourceKind::Filepath(p),
-                derivation_path: None,
-                legacy: false,
-            } if p == absolute_path_str)
-        );
-        assert!(
-            matches!(parse_signer_source(format!("file:{relative_path_str}")).unwrap(), SignerSource {
-                kind: SignerSourceKind::Filepath(p),
-                derivation_path: None,
-                legacy: false,
-            } if p == relative_path_str)
-        );
-    }
-
-    #[test]
-    fn signer_from_path_with_file() -> Result<(), Box<dyn std::error::Error>> {
+    fn signer_from_source_with_file() -> Result<(), Box<dyn std::error::Error>> {
         let dir = TempDir::new()?;
         let dir = dir.path();
         let keypair_path = dir.join("id.json");
@@ -1399,18 +1281,19 @@ mod tests {
             .arg(
                 Arg::new("keypair")
                     .required(true)
+                    .value_parser(SignerSourceParserBuilder::default().build())
                     .help("The signing keypair"),
             )
             .offline_args();
 
         let clap_matches = clap_app.get_matches_from(args);
-        let keypair_str: String = clap_matches.value_of_t_or_exit("keypair");
+        let keypair_source = clap_matches.get_one::<SignerSource>("keypair").unwrap();
 
         let wallet_manager = initialize_wallet_manager()?;
 
-        let signer = signer_from_path(
+        let signer = signer_from_source(
             &clap_matches,
-            &keypair_str,
+            &keypair_source,
             "signer",
             &mut Some(wallet_manager),
         )?;

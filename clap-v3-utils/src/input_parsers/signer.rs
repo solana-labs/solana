@@ -381,105 +381,9 @@ mod tests {
         super::*,
         assert_matches::assert_matches,
         clap::{Arg, Command},
-        solana_sdk::signature::write_keypair_file,
-        std::fs,
+        solana_remote_wallet::locator::Manufacturer,
         tempfile::NamedTempFile,
     };
-
-    fn app<'ab>() -> Command<'ab> {
-        Command::new("test")
-            .arg(
-                Arg::new("multiple")
-                    .long("multiple")
-                    .takes_value(true)
-                    .multiple_occurrences(true)
-                    .multiple_values(true),
-            )
-            .arg(Arg::new("single").takes_value(true).long("single"))
-            .arg(Arg::new("unit").takes_value(true).long("unit"))
-    }
-
-    fn tmp_file_path(name: &str, pubkey: &Pubkey) -> String {
-        use std::env;
-        let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-
-        format!("{out_dir}/tmp/{name}-{pubkey}")
-    }
-
-    #[test]
-    fn test_keypair_of() {
-        let keypair = Keypair::new();
-        let outfile = tmp_file_path("test_keypair_of.json", &keypair.pubkey());
-        let _ = write_keypair_file(&keypair, &outfile).unwrap();
-
-        let matches = app().get_matches_from(vec!["test", "--single", &outfile]);
-        assert_eq!(
-            keypair_of(&matches, "single").unwrap().pubkey(),
-            keypair.pubkey()
-        );
-        assert!(keypair_of(&matches, "multiple").is_none());
-
-        let matches = app().get_matches_from(vec!["test", "--single", "random_keypair_file.json"]);
-        assert!(keypair_of(&matches, "single").is_none());
-
-        fs::remove_file(&outfile).unwrap();
-    }
-
-    #[test]
-    fn test_pubkey_of() {
-        let keypair = Keypair::new();
-        let outfile = tmp_file_path("test_pubkey_of.json", &keypair.pubkey());
-        let _ = write_keypair_file(&keypair, &outfile).unwrap();
-
-        let matches = app().get_matches_from(vec!["test", "--single", &outfile]);
-        assert_eq!(pubkey_of(&matches, "single"), Some(keypair.pubkey()));
-        assert_eq!(pubkey_of(&matches, "multiple"), None);
-
-        let matches =
-            app().get_matches_from(vec!["test", "--single", &keypair.pubkey().to_string()]);
-        assert_eq!(pubkey_of(&matches, "single"), Some(keypair.pubkey()));
-
-        let matches = app().get_matches_from(vec!["test", "--single", "random_keypair_file.json"]);
-        assert_eq!(pubkey_of(&matches, "single"), None);
-
-        fs::remove_file(&outfile).unwrap();
-    }
-
-    #[test]
-    fn test_pubkeys_of() {
-        let keypair = Keypair::new();
-        let outfile = tmp_file_path("test_pubkeys_of.json", &keypair.pubkey());
-        let _ = write_keypair_file(&keypair, &outfile).unwrap();
-
-        let matches = app().get_matches_from(vec![
-            "test",
-            "--multiple",
-            &keypair.pubkey().to_string(),
-            "--multiple",
-            &outfile,
-        ]);
-        assert_eq!(
-            pubkeys_of(&matches, "multiple"),
-            Some(vec![keypair.pubkey(), keypair.pubkey()])
-        );
-        fs::remove_file(&outfile).unwrap();
-    }
-
-    #[test]
-    fn test_pubkeys_sigs_of() {
-        let key1 = solana_sdk::pubkey::new_rand();
-        let key2 = solana_sdk::pubkey::new_rand();
-        let sig1 = Keypair::new().sign_message(&[0u8]);
-        let sig2 = Keypair::new().sign_message(&[1u8]);
-        let signer1 = format!("{key1}={sig1}");
-        let signer2 = format!("{key2}={sig2}");
-        let matches =
-            app().get_matches_from(vec!["test", "--multiple", &signer1, "--multiple", &signer2]);
-        assert_eq!(
-            pubkeys_sigs_of(&matches, "multiple"),
-            Some(vec![(key1, sig1), (key2, sig2)])
-        );
-    }
 
     #[test]
     fn test_parse_pubkey_signature() {
@@ -766,5 +670,123 @@ mod tests {
             .try_get_matches_from(vec!["test", "--signer", "usb::/ledger"])
             .unwrap_err();
         assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_parse_signer_source() {
+        assert_matches!(
+            SignerSource::parse(STDOUT_OUTFILE_TOKEN).unwrap(),
+            SignerSource {
+                kind: SignerSourceKind::Stdin,
+                derivation_path: None,
+                legacy: false,
+            }
+        );
+        let stdin = "stdin:".to_string();
+        assert_matches!(
+            SignerSource::parse(stdin).unwrap(),
+            SignerSource {
+                kind: SignerSourceKind::Stdin,
+                derivation_path: None,
+                legacy: false,
+            }
+        );
+        assert_matches!(
+            SignerSource::parse(ASK_KEYWORD).unwrap(),
+            SignerSource {
+                kind: SignerSourceKind::Prompt,
+                derivation_path: None,
+                legacy: true,
+            }
+        );
+        let pubkey = Pubkey::new_unique();
+        assert!(
+            matches!(SignerSource::parse(pubkey.to_string()).unwrap(), SignerSource {
+                kind: SignerSourceKind::Pubkey(p),
+                derivation_path: None,
+                legacy: false,
+            }
+            if p == pubkey)
+        );
+
+        // Set up absolute and relative path strs
+        let file0 = NamedTempFile::new().unwrap();
+        let path = file0.path();
+        assert!(path.is_absolute());
+        let absolute_path_str = path.to_str().unwrap();
+
+        let file1 = NamedTempFile::new_in(std::env::current_dir().unwrap()).unwrap();
+        let path = file1.path().file_name().unwrap().to_str().unwrap();
+        let path = std::path::Path::new(path);
+        assert!(path.is_relative());
+        let relative_path_str = path.to_str().unwrap();
+
+        assert!(
+            matches!(SignerSource::parse(absolute_path_str).unwrap(), SignerSource {
+                kind: SignerSourceKind::Filepath(p),
+                derivation_path: None,
+                legacy: false,
+            } if p == absolute_path_str)
+        );
+        assert!(
+            matches!(SignerSource::parse(relative_path_str).unwrap(), SignerSource {
+                kind: SignerSourceKind::Filepath(p),
+                derivation_path: None,
+                legacy: false,
+            } if p == relative_path_str)
+        );
+
+        let usb = "usb://ledger".to_string();
+        let expected_locator = RemoteWalletLocator {
+            manufacturer: Manufacturer::Ledger,
+            pubkey: None,
+        };
+        assert_matches!(SignerSource::parse(usb).unwrap(), SignerSource {
+                kind: SignerSourceKind::Usb(u),
+                derivation_path: None,
+                legacy: false,
+            } if u == expected_locator);
+        let usb = "usb://ledger?key=0/0".to_string();
+        let expected_locator = RemoteWalletLocator {
+            manufacturer: Manufacturer::Ledger,
+            pubkey: None,
+        };
+        let expected_derivation_path = Some(DerivationPath::new_bip44(Some(0), Some(0)));
+        assert_matches!(SignerSource::parse(usb).unwrap(), SignerSource {
+                kind: SignerSourceKind::Usb(u),
+                derivation_path: d,
+                legacy: false,
+            } if u == expected_locator && d == expected_derivation_path);
+        // Catchall into SignerSource::Filepath fails
+        let junk = "sometextthatisnotapubkeyorfile".to_string();
+        assert!(Pubkey::from_str(&junk).is_err());
+        assert_matches!(
+            SignerSource::parse(&junk),
+            Err(SignerSourceError::IoError(_))
+        );
+
+        let prompt = "prompt:".to_string();
+        assert_matches!(
+            SignerSource::parse(prompt).unwrap(),
+            SignerSource {
+                kind: SignerSourceKind::Prompt,
+                derivation_path: None,
+                legacy: false,
+            }
+        );
+        assert!(
+            matches!(SignerSource::parse(format!("file:{absolute_path_str}")).unwrap(), SignerSource {
+                kind: SignerSourceKind::Filepath(p),
+                derivation_path: None,
+                legacy: false,
+            } if p == absolute_path_str)
+        );
+        assert!(
+            matches!(SignerSource::parse(format!("file:{relative_path_str}")).unwrap(), SignerSource {
+                kind: SignerSourceKind::Filepath(p),
+                derivation_path: None,
+                legacy: false,
+            } if p == relative_path_str)
+        );
     }
 }

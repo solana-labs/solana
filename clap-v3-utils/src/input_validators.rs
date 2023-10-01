@@ -138,6 +138,7 @@ pub fn is_prompt_signer_source(string: &str) -> Result<(), String> {
     since = "1.17.0",
     note = "please use `SignerSourceParseBuilder::new().allow_pubkey().allow_path().build()` instead"
 )]
+#[allow(deprecated)]
 pub fn is_pubkey_or_keypair<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -151,6 +152,7 @@ where
     since = "1.17.0",
     note = "please use `SignerSourceParseBuilder::new().allow_pubkey().allow_path().build()` instead"
 )]
+#[allow(deprecated)]
 pub fn is_valid_pubkey<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -176,6 +178,7 @@ where
     since = "1.17.0",
     note = "please use `SignerSourceParseBuilder::new().build()` instead"
 )]
+#[allow(deprecated)]
 pub fn is_valid_signer<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,

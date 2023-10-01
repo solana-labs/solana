@@ -1,5 +1,5 @@
 use {
-    crate::{input_validators, ArgConstant},
+    crate::{input_parsers::signer::SignerSourceParserBuilder, ArgConstant},
     clap::Arg,
 };
 
@@ -16,6 +16,6 @@ pub fn fee_payer_arg<'a>() -> Arg<'a> {
         .long(FEE_PAYER_ARG.long)
         .takes_value(true)
         .value_name("KEYPAIR")
-        .validator(|s| input_validators::is_valid_signer(s))
+        .value_parser(SignerSourceParserBuilder::default().build())
         .help(FEE_PAYER_ARG.help)
 }
