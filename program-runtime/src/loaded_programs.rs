@@ -459,6 +459,12 @@ pub struct LoadedPrograms<FG: ForkGraph> {
     pub latest_root_epoch: Epoch,
     /// Environments of the current epoch
     pub environments: ProgramRuntimeEnvironments,
+    /// Anticipated replacement for `environments` at the next epoch
+    ///
+    /// This is `None` during most of an epoch, and only `Some` around the boundaries (at the end and beginning of an epoch).
+    /// More precisely, it starts with the recompilation phase a few hundred slots before the epoch boundary,
+    /// and it ends with the first rerooting after the epoch boundary.
+    pub upcoming_environments: Option<ProgramRuntimeEnvironments>,
     pub stats: Stats,
     pub fork_graph: Option<Arc<RwLock<FG>>>,
 }
@@ -481,6 +487,7 @@ impl<FG: ForkGraph> Default for LoadedPrograms<FG> {
             latest_root_slot: 0,
             latest_root_epoch: 0,
             environments: ProgramRuntimeEnvironments::default(),
+            upcoming_environments: None,
             stats: Stats::default(),
             fork_graph: None,
         }
@@ -567,7 +574,12 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
     }
 
     /// Returns the current environments depending on the given epoch
-    pub fn get_environments_for_epoch(&self, _epoch: Epoch) -> &ProgramRuntimeEnvironments {
+    pub fn get_environments_for_epoch(&self, epoch: Epoch) -> &ProgramRuntimeEnvironments {
+        if epoch != self.latest_root_epoch {
+            if let Some(upcoming_environments) = self.upcoming_environments.as_ref() {
+                return upcoming_environments;
+            }
+        }
         &self.environments
     }
 
