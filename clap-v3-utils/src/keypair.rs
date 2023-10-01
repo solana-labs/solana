@@ -1293,7 +1293,7 @@ mod tests {
 
         let signer = signer_from_source(
             &clap_matches,
-            &keypair_source,
+            keypair_source,
             "signer",
             &mut Some(wallet_manager),
         )?;
