@@ -1,7 +1,10 @@
 use {
     crate::{
-        input_parsers::{keypair_of, keypairs_of, pubkey_of, pubkeys_of},
-        keypair::{pubkey_from_path, resolve_signer_from_path, signer_from_path, ASK_KEYWORD},
+        input_parsers::{pubkey_of, pubkeys_of},
+        keypair::{
+            keypair_from_source, pubkey_from_path, resolve_signer_from_path, signer_from_path,
+            ASK_KEYWORD,
+        },
     },
     clap::{builder::ValueParser, ArgMatches},
     solana_remote_wallet::{
@@ -86,6 +89,33 @@ impl SignerSource {
             kind,
             derivation_path: None,
             legacy: true,
+        }
+    }
+
+    pub fn try_get_keypair(
+        matches: &ArgMatches,
+        name: &str,
+    ) -> Result<Option<Keypair>, Box<dyn error::Error>> {
+        let source = matches.try_get_one::<Self>(name)?;
+        if let Some(source) = source {
+            keypair_from_source(matches, source, name, true).map(Some)
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn try_get_keypairs(
+        matches: &ArgMatches,
+        name: &str,
+    ) -> Result<Option<Vec<Keypair>>, Box<dyn error::Error>> {
+        let sources = matches.try_get_many::<Self>(name)?;
+        if let Some(sources) = sources {
+            let keypairs = sources
+                .filter_map(|source| keypair_from_source(matches, source, name, true).ok())
+                .collect();
+            Ok(Some(keypairs))
+        } else {
+            Ok(None)
         }
     }
 
@@ -244,23 +274,6 @@ impl SignerSourceParserBuilder {
 
 // Sentinel value used to indicate to write to screen instead of file
 pub const STDOUT_OUTFILE_TOKEN: &str = "-";
-
-// Return the keypair for an argument with filename `name` or `None` if not present wrapped inside `Result`.
-pub fn try_keypair_of(
-    matches: &ArgMatches,
-    name: &str,
-) -> Result<Option<Keypair>, Box<dyn error::Error>> {
-    matches.try_contains_id(name)?;
-    Ok(keypair_of(matches, name))
-}
-
-pub fn try_keypairs_of(
-    matches: &ArgMatches,
-    name: &str,
-) -> Result<Option<Vec<Keypair>>, Box<dyn error::Error>> {
-    matches.try_contains_id(name)?;
-    Ok(keypairs_of(matches, name))
-}
 
 // Return a `Result` wrapped pubkey for an argument that can itself be parsed into a pubkey,
 // or is a filename that can be read as a keypair

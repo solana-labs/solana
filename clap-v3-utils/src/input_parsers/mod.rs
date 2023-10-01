@@ -246,6 +246,10 @@ pub fn parse_derived_address_seed(arg: &str) -> Result<String, String> {
 }
 
 // Return the keypair for an argument with filename `name` or None if not present.
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `SignerSource::try_get_keypair` instead"
+)]
 pub fn keypair_of(matches: &ArgMatches, name: &str) -> Option<Keypair> {
     if let Some(value) = matches.value_of(name) {
         if value == ASK_KEYWORD {
@@ -259,6 +263,10 @@ pub fn keypair_of(matches: &ArgMatches, name: &str) -> Option<Keypair> {
     }
 }
 
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `SignerSource::try_get_keypairs` instead"
+)]
 pub fn keypairs_of(matches: &ArgMatches, name: &str) -> Option<Vec<Keypair>> {
     matches.values_of(name).map(|values| {
         values

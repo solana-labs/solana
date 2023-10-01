@@ -872,6 +872,20 @@ pub fn keypair_from_path(
     Ok(keypair)
 }
 
+pub fn keypair_from_source(
+    matches: &ArgMatches,
+    source: &SignerSource,
+    keypair_name: &str,
+    confirm_pubkey: bool,
+) -> Result<Keypair, Box<dyn error::Error>> {
+    let skip_validation = matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
+    let keypair = encodable_key_from_source(source, keypair_name, skip_validation)?;
+    if confirm_pubkey {
+        confirm_encodable_keypair_pubkey(&keypair, "pubkey");
+    }
+    Ok(keypair)
+}
+
 /// Loads an [ElGamalKeypair] from one of several possible sources.
 ///
 /// If `confirm_pubkey` is `true` then after deriving the keypair, the user will
@@ -914,6 +928,20 @@ pub fn elgamal_keypair_from_path(
 ) -> Result<ElGamalKeypair, Box<dyn error::Error>> {
     let skip_validation = matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
     let elgamal_keypair = encodable_key_from_path(path, elgamal_keypair_name, skip_validation)?;
+    if confirm_pubkey {
+        confirm_encodable_keypair_pubkey(&elgamal_keypair, "ElGamal pubkey");
+    }
+    Ok(elgamal_keypair)
+}
+
+pub fn elgamal_keypair_from_source(
+    matches: &ArgMatches,
+    source: &SignerSource,
+    elgamal_keypair_name: &str,
+    confirm_pubkey: bool,
+) -> Result<ElGamalKeypair, Box<dyn error::Error>> {
+    let skip_validation = matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
+    let elgamal_keypair = encodable_key_from_source(source, elgamal_keypair_name, skip_validation)?;
     if confirm_pubkey {
         confirm_encodable_keypair_pubkey(&elgamal_keypair, "ElGamal pubkey");
     }
@@ -971,8 +999,26 @@ pub fn ae_key_from_path(
     encodable_key_from_path(path, key_name, skip_validation)
 }
 
+pub fn ae_key_from_source(
+    matches: &ArgMatches,
+    source: &SignerSource,
+    key_name: &str,
+) -> Result<AeKey, Box<dyn error::Error>> {
+    let skip_validation = matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
+    encodable_key_from_source(source, key_name, skip_validation)
+}
+
 fn encodable_key_from_path<K: EncodableKey + SeedDerivable>(
     path: &str,
+    keypair_name: &str,
+    skip_validation: bool,
+) -> Result<K, Box<dyn error::Error>> {
+    let source = SignerSource::parse(path)?;
+    encodable_key_from_source(&source, keypair_name, skip_validation)
+}
+
+fn encodable_key_from_source<K: EncodableKey + SeedDerivable>(
+    source: &SignerSource,
     keypair_name: &str,
     skip_validation: bool,
 ) -> Result<K, Box<dyn error::Error>> {
@@ -980,15 +1026,15 @@ fn encodable_key_from_path<K: EncodableKey + SeedDerivable>(
         kind,
         derivation_path,
         legacy,
-    } = SignerSource::parse(path)?;
+    } = source;
     match kind {
         SignerSourceKind::Prompt => Ok(encodable_key_from_seed_phrase(
             keypair_name,
             skip_validation,
-            derivation_path,
-            legacy,
+            derivation_path.clone(),
+            *legacy,
         )?),
-        SignerSourceKind::Filepath(path) => match K::read_from_file(&path) {
+        SignerSourceKind::Filepath(path) => match K::read_from_file(path) {
             Err(e) => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!(
