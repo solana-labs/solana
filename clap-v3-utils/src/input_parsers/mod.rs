@@ -2,8 +2,8 @@ use {
     crate::{
         input_validators::normalize_to_url_if_moniker,
         keypair::{
-            keypair_from_seed_phrase, pubkey_from_path, signer_from_path, ASK_KEYWORD,
-            SKIP_SEED_PHRASE_VALIDATION_ARG,
+            keypair_from_seed_phrase, pubkey_from_path, resolve_signer_from_path, signer_from_path,
+            ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG,
         },
     },
     chrono::DateTime,
@@ -386,6 +386,23 @@ pub fn pubkeys_sigs_of(matches: &ArgMatches, name: &str) -> Option<Vec<(Pubkey, 
             })
             .collect()
     })
+}
+
+#[deprecated(
+    since = "1.17.0",
+    note = "Please use `SignerSource::try_resolve` instead"
+)]
+pub fn resolve_signer(
+    matches: &ArgMatches,
+    name: &str,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    resolve_signer_from_path(
+        matches,
+        matches.try_get_one::<String>(name)?.unwrap(),
+        name,
+        wallet_manager,
+    )
 }
 
 #[cfg(test)]

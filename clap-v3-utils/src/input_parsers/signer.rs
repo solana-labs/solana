@@ -1,7 +1,10 @@
 use {
-    crate::keypair::{
-        keypair_from_source, pubkey_from_source, resolve_signer_from_path, signer_from_source,
-        ASK_KEYWORD,
+    crate::{
+        input_parsers::STDOUT_OUTFILE_TOKEN,
+        keypair::{
+            keypair_from_source, pubkey_from_source, resolve_signer_from_source,
+            signer_from_source, ASK_KEYWORD,
+        },
     },
     clap::{builder::ValueParser, ArgMatches},
     solana_remote_wallet::{
@@ -182,6 +185,19 @@ impl SignerSource {
         }
     }
 
+    pub fn try_resolve(
+        matches: &ArgMatches,
+        name: &str,
+        wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
+    ) -> Result<Option<String>, Box<dyn std::error::Error>> {
+        let source = matches.try_get_one::<Self>(name)?;
+        if let Some(source) = source {
+            resolve_signer_from_source(matches, source, name, wallet_manager)
+        } else {
+            Ok(None)
+        }
+    }
+
     pub(crate) fn parse<S: AsRef<str>>(source: S) -> Result<SignerSource, SignerSourceError> {
         let source = source.as_ref();
         let source = {
@@ -333,19 +349,6 @@ impl SignerSourceParserBuilder {
             },
         )
     }
-}
-
-pub fn resolve_signer(
-    matches: &ArgMatches,
-    name: &str,
-    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
-) -> Result<Option<String>, Box<dyn std::error::Error>> {
-    resolve_signer_from_path(
-        matches,
-        matches.try_get_one::<String>(name)?.unwrap(),
-        name,
-        wallet_manager,
-    )
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

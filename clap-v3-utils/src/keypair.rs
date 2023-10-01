@@ -773,11 +773,21 @@ pub fn resolve_signer_from_path(
     keypair_name: &str,
     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<Option<String>, Box<dyn error::Error>> {
+    let source = SignerSource::parse(path)?;
+    resolve_signer_from_source(matches, &source, keypair_name, wallet_manager)
+}
+
+pub fn resolve_signer_from_source(
+    matches: &ArgMatches,
+    source: &SignerSource,
+    keypair_name: &str,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
+) -> Result<Option<String>, Box<dyn error::Error>> {
     let SignerSource {
         kind,
         derivation_path,
         legacy,
-    } = SignerSource::parse(path)?;
+    } = source;
     match kind {
         SignerSourceKind::Prompt => {
             let skip_validation = matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
@@ -787,12 +797,12 @@ pub fn resolve_signer_from_path(
                 keypair_name,
                 skip_validation,
                 false,
-                derivation_path,
-                legacy,
+                derivation_path.clone(),
+                *legacy,
             )
             .map(|_| None)
         }
-        SignerSourceKind::Filepath(path) => match read_keypair_file(&path) {
+        SignerSourceKind::Filepath(path) => match read_keypair_file(path) {
             Err(e) => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!(
@@ -816,8 +826,8 @@ pub fn resolve_signer_from_path(
             if let Some(wallet_manager) = wallet_manager {
                 let confirm_key = matches.try_contains_id("confirm_key").unwrap_or(false);
                 let path = generate_remote_keypair(
-                    locator,
-                    derivation_path.unwrap_or_default(),
+                    locator.clone(),
+                    derivation_path.clone().unwrap_or_default(),
                     wallet_manager,
                     confirm_key,
                     keypair_name,
@@ -828,7 +838,7 @@ pub fn resolve_signer_from_path(
                 Err(RemoteWalletError::NoDeviceFound.into())
             }
         }
-        _ => Ok(Some(path.to_string())),
+        SignerSourceKind::Pubkey(pubkey) => Ok(Some(pubkey.to_string())),
     }
 }
 
