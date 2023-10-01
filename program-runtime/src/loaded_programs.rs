@@ -122,8 +122,9 @@ pub struct Stats {
     pub insertions: AtomicU64,
     pub replacements: AtomicU64,
     pub one_hit_wonders: AtomicU64,
-    pub prunes: AtomicU64,
-    pub expired: AtomicU64,
+    pub prunes_orphan: AtomicU64,
+    pub prunes_expired: AtomicU64,
+    pub prunes_environment: AtomicU64,
     pub empty_entries: AtomicU64,
 }
 
@@ -136,8 +137,9 @@ impl Stats {
         let replacements = self.replacements.load(Ordering::Relaxed);
         let one_hit_wonders = self.one_hit_wonders.load(Ordering::Relaxed);
         let evictions: u64 = self.evictions.values().sum();
-        let prunes = self.prunes.load(Ordering::Relaxed);
-        let expired = self.expired.load(Ordering::Relaxed);
+        let prunes_orphan = self.prunes_orphan.load(Ordering::Relaxed);
+        let prunes_expired = self.prunes_expired.load(Ordering::Relaxed);
+        let prunes_environment = self.prunes_environment.load(Ordering::Relaxed);
         let empty_entries = self.empty_entries.load(Ordering::Relaxed);
         datapoint_info!(
             "loaded-programs-cache-stats",
@@ -148,13 +150,14 @@ impl Stats {
             ("insertions", insertions, i64),
             ("replacements", replacements, i64),
             ("one_hit_wonders", one_hit_wonders, i64),
-            ("prunes", prunes, i64),
-            ("evict_expired", expired, i64),
-            ("evict_empty_entries", empty_entries, i64),
+            ("prunes_orphan", prunes_orphan, i64),
+            ("prunes_expired", prunes_expired, i64),
+            ("prunes_environment", prunes_environment, i64),
+            ("empty_entries", empty_entries, i64),
         );
         debug!(
-            "Loaded Programs Cache Stats -- Hits: {}, Misses: {}, Evictions: {}, Insertions: {}, Replacements: {}, One-Hit-Wonders: {}, Prunes: {}, Expired: {}, Empty: {}",
-            hits, misses, evictions, insertions, replacements, one_hit_wonders, prunes, expired, empty_entries
+            "Loaded Programs Cache Stats -- Hits: {}, Misses: {}, Evictions: {}, Insertions: {}, Replacements: {}, One-Hit-Wonders: {}, Prunes-Orphan: {}, Prunes-Expired: {}, Prunes-Environment: {}, Empty: {}",
+            hits, misses, evictions, insertions, replacements, one_hit_wonders, prunes_orphan, prunes_expired, prunes_environment, empty_entries
         );
         if log_enabled!(log::Level::Trace) && !self.evictions.is_empty() {
             let mut evictions = self.evictions.iter().collect::<Vec<_>>();
@@ -606,7 +609,9 @@ impl LoadedPrograms {
                     _ => false,
                 };
                 if !retain {
-                    self.stats.prunes.fetch_add(1, Ordering::Relaxed);
+                    self.stats
+                        .prunes_environment
+                        .fetch_add(1, Ordering::Relaxed);
                 }
                 retain
             });
@@ -645,7 +650,7 @@ impl LoadedPrograms {
                         first_ancestor_found = true;
                         first_ancestor_found
                     } else {
-                        self.stats.prunes.fetch_add(1, Ordering::Relaxed);
+                        self.stats.prunes_orphan.fetch_add(1, Ordering::Relaxed);
                         false
                     }
                 })
@@ -653,7 +658,7 @@ impl LoadedPrograms {
                     // Remove expired
                     if let Some(expiration) = entry.maybe_expiration_slot {
                         if expiration <= new_root {
-                            self.stats.expired.fetch_add(1, Ordering::Relaxed);
+                            self.stats.prunes_expired.fetch_add(1, Ordering::Relaxed);
                             return false;
                         }
                     }
