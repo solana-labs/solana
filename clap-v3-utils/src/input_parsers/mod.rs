@@ -2,7 +2,7 @@ use {
     crate::{
         input_validators::normalize_to_url_if_moniker,
         keypair::{
-            keypair_from_seed_phrase, signer_from_path, ASK_KEYWORD,
+            keypair_from_seed_phrase, pubkey_from_path, signer_from_path, ASK_KEYWORD,
             SKIP_SEED_PHRASE_VALIDATION_ARG,
         },
     },
@@ -25,10 +25,7 @@ pub mod signer;
     since = "1.17.0",
     note = "Please use the functions in `solana_clap_v3_utils::input_parsers::signer` directly instead"
 )]
-pub use signer::{
-    pubkey_of_signer, pubkeys_of_multiple_signers, pubkeys_sigs_of, resolve_signer,
-    STDOUT_OUTFILE_TOKEN,
-};
+pub use signer::{pubkeys_sigs_of, resolve_signer, STDOUT_OUTFILE_TOKEN};
 
 // Return parsed values from matches at `name`
 pub fn values_of<T>(matches: &ArgMatches, name: &str) -> Option<Vec<T>>
@@ -288,10 +285,18 @@ pub fn keypairs_of(matches: &ArgMatches, name: &str) -> Option<Vec<Keypair>> {
 
 // Return a pubkey for an argument that can itself be parsed into a pubkey,
 // or is a filename that can be read as a keypair
+#[deprecated(
+    since = "1.17.0",
+    note = "Please use `SignerSource::try_get_pubkey` instead"
+)]
 pub fn pubkey_of(matches: &ArgMatches, name: &str) -> Option<Pubkey> {
     value_of(matches, name).or_else(|| keypair_of(matches, name).map(|keypair| keypair.pubkey()))
 }
 
+#[deprecated(
+    since = "1.17.0",
+    note = "Please use `SignerSource::try_get_pubkeys` instead"
+)]
 pub fn pubkeys_of(matches: &ArgMatches, name: &str) -> Option<Vec<Pubkey>> {
     matches.values_of(name).map(|values| {
         values
@@ -323,6 +328,47 @@ pub fn signer_of(
         Ok((Some(signer), Some(signer_pubkey)))
     } else {
         Ok((None, None))
+    }
+}
+
+#[deprecated(
+    since = "1.17.0",
+    note = "Please use `SignerSource::try_get_pubkey` instead"
+)]
+pub fn pubkey_of_signer(
+    matches: &ArgMatches,
+    name: &str,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
+) -> Result<Option<Pubkey>, Box<dyn std::error::Error>> {
+    if let Some(location) = matches.try_get_one::<String>(name)? {
+        Ok(Some(pubkey_from_path(
+            matches,
+            location,
+            name,
+            wallet_manager,
+        )?))
+    } else {
+        Ok(None)
+    }
+}
+
+#[deprecated(
+    since = "1.17.0",
+    note = "Please use `SignerSource::try_get_pubkeys` instead"
+)]
+pub fn pubkeys_of_multiple_signers(
+    matches: &ArgMatches,
+    name: &str,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
+) -> Result<Option<Vec<Pubkey>>, Box<dyn std::error::Error>> {
+    if let Some(pubkey_matches) = matches.try_get_many::<String>(name)? {
+        let mut pubkeys: Vec<Pubkey> = vec![];
+        for signer in pubkey_matches {
+            pubkeys.push(pubkey_from_path(matches, signer, name, wallet_manager)?);
+        }
+        Ok(Some(pubkeys))
+    } else {
+        Ok(None)
     }
 }
 

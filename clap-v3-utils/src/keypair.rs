@@ -747,10 +747,19 @@ pub fn pubkey_from_path(
     keypair_name: &str,
     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<Pubkey, Box<dyn error::Error>> {
-    let SignerSource { kind, .. } = SignerSource::parse(path)?;
-    match kind {
+    let source = SignerSource::parse(path)?;
+    pubkey_from_source(matches, &source, keypair_name, wallet_manager)
+}
+
+pub fn pubkey_from_source(
+    matches: &ArgMatches,
+    source: &SignerSource,
+    keypair_name: &str,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
+) -> Result<Pubkey, Box<dyn error::Error>> {
+    match source.kind {
         SignerSourceKind::Pubkey(pubkey) => Ok(pubkey),
-        _ => Ok(signer_from_path(matches, path, keypair_name, wallet_manager)?.pubkey()),
+        _ => Ok(signer_from_source(matches, source, keypair_name, wallet_manager)?.pubkey()),
     }
 }
 

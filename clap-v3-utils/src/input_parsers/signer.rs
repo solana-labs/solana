@@ -1,10 +1,7 @@
 use {
-    crate::{
-        input_parsers::{pubkey_of, pubkeys_of},
-        keypair::{
-            keypair_from_source, pubkey_from_path, resolve_signer_from_path, signer_from_source,
-            ASK_KEYWORD,
-        },
+    crate::keypair::{
+        keypair_from_source, pubkey_from_source, resolve_signer_from_path, signer_from_source,
+        ASK_KEYWORD,
     },
     clap::{builder::ValueParser, ArgMatches},
     solana_remote_wallet::{
@@ -151,6 +148,35 @@ impl SignerSource {
                 })
                 .collect();
             Ok(Some(signers))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn try_get_pubkey(
+        matches: &ArgMatches,
+        name: &str,
+        wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
+    ) -> Result<Option<Pubkey>, Box<dyn error::Error>> {
+        let source = matches.try_get_one::<Self>(name)?;
+        if let Some(source) = source {
+            pubkey_from_source(matches, source, name, wallet_manager).map(Some)
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn try_get_pubkeys(
+        matches: &ArgMatches,
+        name: &str,
+        wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
+    ) -> Result<Option<Vec<Pubkey>>, Box<dyn std::error::Error>> {
+        let sources = matches.try_get_many::<Self>(name)?;
+        if let Some(sources) = sources {
+            let pubkeys = sources
+                .filter_map(|source| pubkey_from_source(matches, source, name, wallet_manager).ok())
+                .collect();
+            Ok(Some(pubkeys))
         } else {
             Ok(None)
         }
@@ -312,24 +338,6 @@ impl SignerSourceParserBuilder {
 // Sentinel value used to indicate to write to screen instead of file
 pub const STDOUT_OUTFILE_TOKEN: &str = "-";
 
-// Return a `Result` wrapped pubkey for an argument that can itself be parsed into a pubkey,
-// or is a filename that can be read as a keypair
-pub fn try_pubkey_of(
-    matches: &ArgMatches,
-    name: &str,
-) -> Result<Option<Pubkey>, Box<dyn error::Error>> {
-    matches.try_contains_id(name)?;
-    Ok(pubkey_of(matches, name))
-}
-
-pub fn try_pubkeys_of(
-    matches: &ArgMatches,
-    name: &str,
-) -> Result<Option<Vec<Pubkey>>, Box<dyn error::Error>> {
-    matches.try_contains_id(name)?;
-    Ok(pubkeys_of(matches, name))
-}
-
 // Return pubkey/signature pairs for a string of the form pubkey=signature
 pub fn pubkeys_sigs_of(matches: &ArgMatches, name: &str) -> Option<Vec<(Pubkey, Signature)>> {
     matches.values_of(name).map(|values| {
@@ -352,39 +360,6 @@ pub fn try_pubkeys_sigs_of(
 ) -> Result<Option<Vec<(Pubkey, Signature)>>, Box<dyn error::Error>> {
     matches.try_contains_id(name)?;
     Ok(pubkeys_sigs_of(matches, name))
-}
-
-pub fn pubkey_of_signer(
-    matches: &ArgMatches,
-    name: &str,
-    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
-) -> Result<Option<Pubkey>, Box<dyn std::error::Error>> {
-    if let Some(location) = matches.try_get_one::<String>(name)? {
-        Ok(Some(pubkey_from_path(
-            matches,
-            location,
-            name,
-            wallet_manager,
-        )?))
-    } else {
-        Ok(None)
-    }
-}
-
-pub fn pubkeys_of_multiple_signers(
-    matches: &ArgMatches,
-    name: &str,
-    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
-) -> Result<Option<Vec<Pubkey>>, Box<dyn std::error::Error>> {
-    if let Some(pubkey_matches) = matches.try_get_many::<String>(name)? {
-        let mut pubkeys: Vec<Pubkey> = vec![];
-        for signer in pubkey_matches {
-            pubkeys.push(pubkey_from_path(matches, signer, name, wallet_manager)?);
-        }
-        Ok(Some(pubkeys))
-    } else {
-        Ok(None)
-    }
 }
 
 pub fn resolve_signer(
