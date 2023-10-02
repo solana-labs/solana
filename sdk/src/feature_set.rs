@@ -557,6 +557,9 @@ pub mod enable_bpf_loader_set_authority_checked_ix {
 pub mod enable_alt_bn128_syscall {
     solana_sdk::declare_id!("A16q37opZdQMCbe5qJ6xpBB9usykfv8jZaMkxvZQi4GJ");
 }
+pub mod enable_alt_bn128_compression_syscall {
+    solana_sdk::declare_id!("EJJewYSddEEtSZHiqugnvhQHiWyZKjkFDQASd7oKSagn");
+}
 
 pub mod enable_program_redeployment_cooldown {
     solana_sdk::declare_id!("J4HFT8usBxpcF63y46t1upYobJgChmKyZPm5uTBRg25Z");
@@ -683,6 +686,18 @@ pub mod timely_vote_credits {
 
 pub mod remaining_compute_units_syscall_enabled {
     solana_sdk::declare_id!("5TuppMutoyzhUSfuYdhgzD47F92GL1g89KpCZQKqedxP");
+}
+
+pub mod enable_program_runtime_v2_and_loader_v4 {
+    solana_sdk::declare_id!("8oBxsYqnCvUTGzgEpxPcnVf7MLbWWPYddE33PftFeBBd");
+}
+
+pub mod require_rent_exempt_split_destination {
+    solana_sdk::declare_id!("D2aip4BBr8NPWtU9vLrwrBvbuaQ8w1zV38zFLxx4pfBV");
+}
+
+pub mod better_error_codes_for_tx_lamport_check {
+    solana_sdk::declare_id!("Ffswd3egL3tccB6Rv3XY6oqfdzn913vUcjCSnpvCKpfx");
 }
 
 lazy_static! {
@@ -851,6 +866,10 @@ lazy_static! {
         (enable_poseidon_syscall::id(), "Enable Poseidon syscall"),
         (timely_vote_credits::id(), "use timeliness of votes in determining credits to award"),
         (remaining_compute_units_syscall_enabled::id(), "enable the remaining_compute_units syscall"),
+        (enable_program_runtime_v2_and_loader_v4::id(), "Enable Program-Runtime-v2 and Loader-v4 #33293"),
+        (require_rent_exempt_split_destination::id(), "Require stake split destination account to be rent exempt"),
+        (better_error_codes_for_tx_lamport_check::id(), "better error codes for tx lamport check #33353"),
+        (enable_alt_bn128_compression_syscall::id(), "add alt_bn128 compression syscalls"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

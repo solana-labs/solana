@@ -322,14 +322,17 @@ impl PrioritizationFeeCache {
         // block minimum fee.
         let (result, slot_finalize_time) = measure!(
             {
+                // Only retain priority fee reported from optimistically confirmed bank
                 let pre_purge_bank_count = slot_prioritization_fee.len() as u64;
                 slot_prioritization_fee.retain(|id, _| id == bank_id);
                 let post_purge_bank_count = slot_prioritization_fee.len() as u64;
                 metrics.accumulate_total_purged_duplicated_bank_count(
                     pre_purge_bank_count.saturating_sub(post_purge_bank_count),
                 );
-                if post_purge_bank_count == 0 {
-                    warn!("Prioritization fee cache unexpected finalized on non-existing bank. slot {slot} bank id {bank_id}");
+                // It should be rare that optimistically confirmed bank had no prioritized
+                // transactions, but duplicated and unconfirmed bank had.
+                if pre_purge_bank_count > 0 && post_purge_bank_count == 0 {
+                    warn!("Finalized bank has empty prioritization fee cache. slot {slot} bank id {bank_id}");
                 }
 
                 let mut block_prioritization_fee = slot_prioritization_fee

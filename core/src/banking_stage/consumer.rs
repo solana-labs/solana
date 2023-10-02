@@ -737,7 +737,7 @@ mod tests {
             unprocessed_transaction_storage::ThreadType,
         },
         crossbeam_channel::{unbounded, Receiver},
-        solana_cost_model::cost_model::CostModel,
+        solana_cost_model::{cost_model::CostModel, transaction_cost::TransactionCost},
         solana_entry::entry::{next_entry, next_versioned_entry},
         solana_ledger::{
             blockstore::{entries_to_test_shreds, Blockstore},
@@ -1264,7 +1264,9 @@ mod tests {
                 };
 
                 let mut cost = CostModel::calculate_cost(&transactions[0], &bank.feature_set);
-                cost.bpf_execution_cost = actual_bpf_execution_cost;
+                if let TransactionCost::Transaction(ref mut usage_cost) = cost {
+                    usage_cost.bpf_execution_cost = actual_bpf_execution_cost;
+                }
 
                 block_cost + cost.sum()
             } else {

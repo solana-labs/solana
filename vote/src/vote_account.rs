@@ -54,15 +54,15 @@ pub struct VoteAccounts {
 }
 
 impl VoteAccount {
-    pub(crate) fn account(&self) -> &AccountSharedData {
+    pub fn account(&self) -> &AccountSharedData {
         &self.0.account
     }
 
-    pub(crate) fn lamports(&self) -> u64 {
+    pub fn lamports(&self) -> u64 {
         self.0.account.lamports()
     }
 
-    pub(crate) fn owner(&self) -> &Pubkey {
+    pub fn owner(&self) -> &Pubkey {
         self.0.account.owner()
     }
 
@@ -75,7 +75,7 @@ impl VoteAccount {
             .as_ref()
     }
 
-    pub(crate) fn is_deserialized(&self) -> bool {
+    pub fn is_deserialized(&self) -> bool {
         self.0.vote_state.get().is_some()
     }
 
@@ -86,8 +86,12 @@ impl VoteAccount {
 }
 
 impl VoteAccounts {
-    pub(crate) fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.vote_accounts.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.vote_accounts.is_empty()
     }
 
     pub fn staked_nodes(&self) -> Arc<HashMap</*node_pubkey:*/ Pubkey, /*stake:*/ u64>> {
@@ -109,7 +113,7 @@ impl VoteAccounts {
             .clone()
     }
 
-    pub(crate) fn get(&self, pubkey: &Pubkey) -> Option<&VoteAccount> {
+    pub fn get(&self, pubkey: &Pubkey) -> Option<&VoteAccount> {
         let (_stake, vote_account) = self.vote_accounts.get(pubkey)?;
         Some(vote_account)
     }
@@ -121,25 +125,25 @@ impl VoteAccounts {
             .unwrap_or_default()
     }
 
-    pub(crate) fn iter(&self) -> impl Iterator<Item = (&Pubkey, &VoteAccount)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&Pubkey, &VoteAccount)> {
         self.vote_accounts
             .iter()
             .map(|(vote_pubkey, (_stake, vote_account))| (vote_pubkey, vote_account))
     }
 
-    pub(crate) fn delegated_stakes(&self) -> impl Iterator<Item = (&Pubkey, u64)> {
+    pub fn delegated_stakes(&self) -> impl Iterator<Item = (&Pubkey, u64)> {
         self.vote_accounts
             .iter()
             .map(|(vote_pubkey, (stake, _vote_account))| (vote_pubkey, *stake))
     }
 
-    pub(crate) fn find_max_by_delegated_stake(&self) -> Option<&VoteAccount> {
+    pub fn find_max_by_delegated_stake(&self) -> Option<&VoteAccount> {
         let key = |(_pubkey, (stake, _vote_account)): &(_, &(u64, _))| *stake;
         let (_pubkey, (_stake, vote_account)) = self.vote_accounts.iter().max_by_key(key)?;
         Some(vote_account)
     }
 
-    pub(crate) fn insert(&mut self, pubkey: Pubkey, (stake, vote_account): (u64, VoteAccount)) {
+    pub fn insert(&mut self, pubkey: Pubkey, (stake, vote_account): (u64, VoteAccount)) {
         self.add_node_stake(stake, &vote_account);
         let vote_accounts = Arc::make_mut(&mut self.vote_accounts);
         if let Some((stake, vote_account)) = vote_accounts.insert(pubkey, (stake, vote_account)) {
@@ -147,7 +151,7 @@ impl VoteAccounts {
         }
     }
 
-    pub(crate) fn remove(&mut self, pubkey: &Pubkey) -> Option<(u64, VoteAccount)> {
+    pub fn remove(&mut self, pubkey: &Pubkey) -> Option<(u64, VoteAccount)> {
         let vote_accounts = Arc::make_mut(&mut self.vote_accounts);
         let entry = vote_accounts.remove(pubkey);
         if let Some((stake, ref vote_account)) = entry {
@@ -156,7 +160,7 @@ impl VoteAccounts {
         entry
     }
 
-    pub(crate) fn add_stake(&mut self, pubkey: &Pubkey, delta: u64) {
+    pub fn add_stake(&mut self, pubkey: &Pubkey, delta: u64) {
         let vote_accounts = Arc::make_mut(&mut self.vote_accounts);
         if let Some((stake, vote_account)) = vote_accounts.get_mut(pubkey) {
             *stake += delta;
@@ -165,7 +169,7 @@ impl VoteAccounts {
         }
     }
 
-    pub(crate) fn sub_stake(&mut self, pubkey: &Pubkey, delta: u64) {
+    pub fn sub_stake(&mut self, pubkey: &Pubkey, delta: u64) {
         let vote_accounts = Arc::make_mut(&mut self.vote_accounts);
         if let Some((stake, vote_account)) = vote_accounts.get_mut(pubkey) {
             *stake = stake

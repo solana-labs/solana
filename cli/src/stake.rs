@@ -55,7 +55,7 @@ use {
             tools::{acceptable_reference_epoch_credits, eligible_for_deactivate_delinquent},
         },
         stake_history::{Epoch, StakeHistory},
-        system_instruction::SystemError,
+        system_instruction::{self, SystemError},
         sysvar::{clock, stake_history},
         transaction::Transaction,
     },
@@ -119,6 +119,13 @@ pub struct StakeAuthorizationIndexed {
     pub new_authority_pubkey: Pubkey,
     pub authority: SignerIndex,
     pub new_authority_signer: Option<SignerIndex>,
+}
+
+struct SignOnlySplitNeedsRent {}
+impl ArgsConfig for SignOnlySplitNeedsRent {
+    fn sign_only_arg<'a, 'b>(&self, arg: Arg<'a, 'b>) -> Arg<'a, 'b> {
+        arg.requires("rent_exempt_reserve_sol")
+    }
 }
 
 pub trait StakeSubCommands {
@@ -493,11 +500,21 @@ impl StakeSubCommands for App<'_, '_> {
                                will be at a derived address of SPLIT_STAKE_ACCOUNT")
                 )
                 .arg(stake_authority_arg())
-                .offline_args()
+                .offline_args_config(&SignOnlySplitNeedsRent{})
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
                 .arg(compute_unit_price_arg())
+                .arg(
+                    Arg::with_name("rent_exempt_reserve_sol")
+                        .long("rent-exempt-reserve-sol")
+                        .value_name("AMOUNT")
+                        .takes_value(true)
+                        .validator(is_amount)
+                        .requires("sign_only")
+                        .help("Offline signing only: the rent-exempt amount to move into the new \
+                                stake account, in SOL")
+                )
         )
         .subcommand(
             SubCommand::with_name("merge-stake")
@@ -690,11 +707,17 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("Display inflation rewards"),
                 )
                 .arg(
+                    Arg::with_name("csv")
+                        .long("csv")
+                        .takes_value(false)
+                        .help("Format stake account data in csv")
+                )
+                .arg(
                     Arg::with_name("num_rewards_epochs")
                         .long("num-rewards-epochs")
                         .takes_value(true)
                         .value_name("NUM")
-                        .validator(|s| is_within_range(s, 1..=10))
+                        .validator(|s| is_within_range(s, 1..=50))
                         .default_value_if("with_rewards", None, "1")
                         .requires("with_rewards")
                         .help("Display rewards for NUM recent epochs, max 10 [default: latest epoch only]"),
@@ -1027,6 +1050,7 @@ pub fn parse_split_stake(
     let signer_info =
         default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
     let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
+    let rent_exempt_reserve = lamports_of_sol(matches, "rent_exempt_reserve_sol");
 
     Ok(CliCommandInfo {
         command: CliCommand::SplitStake {
@@ -1043,6 +1067,7 @@ pub fn parse_split_stake(
             lamports,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
             compute_unit_price,
+            rent_exempt_reserve,
         },
         signers: signer_info.signers,
     })
@@ -1274,6 +1299,7 @@ pub fn parse_show_stake_account(
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
     let use_lamports_unit = matches.is_present("lamports");
+    let use_csv = matches.is_present("csv");
     let with_rewards = if matches.is_present("with_rewards") {
         Some(value_of(matches, "num_rewards_epochs").unwrap())
     } else {
@@ -1284,6 +1310,7 @@ pub fn parse_show_stake_account(
             pubkey: stake_account_pubkey,
             use_lamports_unit,
             with_rewards,
+            use_csv,
         },
         signers: vec![],
     })
@@ -1852,6 +1879,7 @@ pub fn process_split_stake(
     lamports: u64,
     fee_payer: SignerIndex,
     compute_unit_price: Option<&u64>,
+    rent_exempt_reserve: Option<&u64>,
 ) -> ProcessResult {
     let split_stake_account = config.signers[split_stake_account];
     let fee_payer = config.signers[fee_payer];
@@ -1885,7 +1913,7 @@ pub fn process_split_stake(
         split_stake_account.pubkey()
     };
 
-    if !sign_only {
+    let rent_exempt_reserve = if !sign_only {
         if let Ok(stake_account) = rpc_client.get_account(&split_stake_account_address) {
             let err_msg = if stake_account.owner == stake::program::id() {
                 format!("Stake account {split_stake_account_address} already exists")
@@ -1906,30 +1934,44 @@ pub fn process_split_stake(
             ))
             .into());
         }
-    }
+        minimum_balance
+    } else {
+        rent_exempt_reserve
+            .cloned()
+            .expect("rent_exempt_reserve_sol is required with sign_only")
+    };
 
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
 
-    let ixs = if let Some(seed) = split_stake_account_seed {
-        stake_instruction::split_with_seed(
-            stake_account_pubkey,
-            &stake_authority.pubkey(),
-            lamports,
-            &split_stake_account_address,
-            &split_stake_account.pubkey(),
-            seed,
+    let mut ixs = vec![system_instruction::transfer(
+        &fee_payer.pubkey(),
+        &split_stake_account_address,
+        rent_exempt_reserve,
+    )];
+    if let Some(seed) = split_stake_account_seed {
+        ixs.append(
+            &mut stake_instruction::split_with_seed(
+                stake_account_pubkey,
+                &stake_authority.pubkey(),
+                lamports,
+                &split_stake_account_address,
+                &split_stake_account.pubkey(),
+                seed,
+            )
+            .with_memo(memo)
+            .with_compute_unit_price(compute_unit_price),
         )
-        .with_memo(memo)
-        .with_compute_unit_price(compute_unit_price)
     } else {
-        stake_instruction::split(
-            stake_account_pubkey,
-            &stake_authority.pubkey(),
-            lamports,
-            &split_stake_account_address,
+        ixs.append(
+            &mut stake_instruction::split(
+                stake_account_pubkey,
+                &stake_authority.pubkey(),
+                lamports,
+                &split_stake_account_address,
+            )
+            .with_memo(memo)
+            .with_compute_unit_price(compute_unit_price),
         )
-        .with_memo(memo)
-        .with_compute_unit_price(compute_unit_price)
     };
 
     let nonce_authority = config.signers[nonce_authority];
@@ -2192,6 +2234,7 @@ pub fn build_stake_state(
     stake_history: &StakeHistory,
     clock: &Clock,
     new_rate_activation_epoch: Option<Epoch>,
+    use_csv: bool,
 ) -> CliStakeState {
     match stake_state {
         StakeStateV2::Stake(
@@ -2248,6 +2291,7 @@ pub fn build_stake_state(
                 active_stake: u64_some_if_not_zero(effective),
                 activating_stake: u64_some_if_not_zero(activating),
                 deactivating_stake: u64_some_if_not_zero(deactivating),
+                use_csv,
                 ..CliStakeState::default()
             }
         }
@@ -2414,6 +2458,7 @@ pub fn process_show_stake_account(
     stake_account_address: &Pubkey,
     use_lamports_unit: bool,
     with_rewards: Option<usize>,
+    use_csv: bool,
 ) -> ProcessResult {
     let stake_account = rpc_client.get_account(stake_account_address)?;
     if stake_account.owner != stake::program::id() {
@@ -2444,6 +2489,7 @@ pub fn process_show_stake_account(
                 &stake_history,
                 &clock,
                 new_rate_activation_epoch,
+                use_csv,
             );
 
             if state.stake_type == CliStakeType::Stake && state.activation_epoch.is_some() {
@@ -4848,6 +4894,7 @@ mod tests {
                     lamports: 50_000_000_000,
                     fee_payer: 0,
                     compute_unit_price: None,
+                    rent_exempt_reserve: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -4915,6 +4962,7 @@ mod tests {
                     lamports: 50_000_000_000,
                     fee_payer: 1,
                     compute_unit_price: None,
+                    rent_exempt_reserve: None,
                 },
                 signers: vec![
                     Presigner::new(&stake_auth_pubkey, &stake_sig).into(),

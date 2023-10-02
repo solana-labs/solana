@@ -66,6 +66,7 @@ solana-sdk = { workspace = true }
 solana-stake-program = { workspace = true }
 solana-system-program = { workspace = true }
 solana-version = { workspace = true }
+solana-vote = { workspace = true }
 solana-vote-program = { workspace = true }
 solana-zk-token-proof-program = { workspace = true }
 solana-zk-token-sdk = { workspace = true }

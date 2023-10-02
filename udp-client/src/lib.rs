@@ -11,7 +11,7 @@ use {
     solana_connection_cache::{
         connection_cache::{
             BaseClientConnection, ClientError, ConnectionManager, ConnectionPool,
-            ConnectionPoolError, Protocol,
+            ConnectionPoolError, NewConnectionConfig, Protocol,
         },
         connection_cache_stats::ConnectionCacheStats,
     },
@@ -28,9 +28,11 @@ impl ConnectionPool for UdpPool {
     type BaseClientConnection = Udp;
     type NewConnectionConfig = UdpConfig;
 
-    fn add_connection(&mut self, config: &Self::NewConnectionConfig, addr: &SocketAddr) {
+    fn add_connection(&mut self, config: &Self::NewConnectionConfig, addr: &SocketAddr) -> usize {
         let connection = self.create_pool_entry(config, addr);
+        let idx = self.connections.len();
         self.connections.push(connection);
+        idx
     }
 
     fn num_connections(&self) -> usize {
@@ -57,7 +59,7 @@ pub struct UdpConfig {
     udp_socket: Arc<UdpSocket>,
 }
 
-impl UdpConfig {
+impl NewConnectionConfig for UdpConfig {
     fn new() -> Result<Self, ClientError> {
         let socket = solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::UNSPECIFIED))
             .map_err(Into::<ClientError>::into)?;

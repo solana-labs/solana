@@ -151,6 +151,8 @@ all_test_steps() {
   # Docs tests
   if affects \
              .rs$ \
+             Cargo.lock$ \
+             Cargo.toml$ \
              ^ci/rust-version.sh \
              ^ci/test-docs.sh \
       ; then

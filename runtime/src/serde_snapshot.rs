@@ -266,6 +266,7 @@ where
 
 /// used by tests to compare contents of serialized bank fields
 /// serialized format is not deterministic - likely due to randomness in structs like hashmaps
+#[cfg(feature = "dev-context-only-utils")]
 pub(crate) fn compare_two_serialized_banks(
     path1: impl AsRef<Path>,
     path2: impl AsRef<Path>,

@@ -279,6 +279,7 @@ fn test_program_sbf_sanity() {
         programs.extend_from_slice(&[
             ("alloc", true),
             ("alt_bn128", true),
+            ("alt_bn128_compression", true),
             ("sbf_to_sbf", true),
             ("float", true),
             ("multiple_static", true),
@@ -303,6 +304,7 @@ fn test_program_sbf_sanity() {
             ("solana_sbf_rust_128bit", true),
             ("solana_sbf_rust_alloc", true),
             ("solana_sbf_rust_alt_bn128", true),
+            ("solana_sbf_rust_alt_bn128_compression", true),
             ("solana_sbf_rust_curve25519", true),
             ("solana_sbf_rust_custom_heap", true),
             ("solana_sbf_rust_dep_crate", true),
@@ -3836,7 +3838,6 @@ fn test_program_fees() {
         &ComputeBudget::fee_budget_limits(
             sanitized_message.program_instructions_iter(),
             &feature_set,
-            None,
         ),
         true,
         false,
@@ -3864,7 +3865,6 @@ fn test_program_fees() {
         &ComputeBudget::fee_budget_limits(
             sanitized_message.program_instructions_iter(),
             &feature_set,
-            None,
         ),
         true,
         false,

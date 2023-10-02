@@ -22,6 +22,7 @@ use {
         elf::Executable,
         error::EbpfError,
         memory_region::{AccessType, MemoryCowCallback, MemoryMapping, MemoryRegion},
+        verifier::RequisiteVerifier,
         vm::{BuiltinProgram, ContextObject, EbpfVm, ProgramResult},
     },
     solana_sdk::{
@@ -35,7 +36,7 @@ use {
             cap_bpf_program_instruction_accounts, delay_visibility_of_program_deployment,
             enable_bpf_loader_extend_program_ix, enable_bpf_loader_set_authority_checked_ix,
             enable_program_redeployment_cooldown, limit_max_instruction_trace_length,
-            native_programs_consume_cu, remove_bpf_loader_incorrect_program_id, FeatureSet,
+            native_programs_consume_cu, remove_bpf_loader_incorrect_program_id,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -67,7 +68,7 @@ pub const UPGRADEABLE_LOADER_COMPUTE_UNITS: u64 = 2_370;
 
 #[allow(clippy::too_many_arguments)]
 pub fn load_program_from_bytes(
-    feature_set: &FeatureSet,
+    delay_visibility_of_program_deployment: bool,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     load_program_metrics: &mut LoadProgramMetrics,
     programdata: &[u8],
@@ -77,7 +78,7 @@ pub fn load_program_from_bytes(
     program_runtime_environment: Arc<BuiltinProgram<InvokeContext<'static>>>,
     reloading: bool,
 ) -> Result<LoadedProgram, InstructionError> {
-    let effective_slot = if feature_set.is_active(&delay_visibility_of_program_deployment::id()) {
+    let effective_slot = if delay_visibility_of_program_deployment {
         deployment_slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET)
     } else {
         deployment_slot
@@ -120,7 +121,7 @@ macro_rules! deploy_program {
      $account_size:expr, $slot:expr, $drop:expr, $new_programdata:expr $(,)?) => {{
         let mut load_program_metrics = LoadProgramMetrics::default();
         let mut register_syscalls_time = Measure::start("register_syscalls_time");
-        let program_runtime_environment = create_program_runtime_environment_v1(
+        let deployment_program_runtime_environment = create_program_runtime_environment_v1(
             &$invoke_context.feature_set,
             $invoke_context.get_compute_budget(),
             true, /* deployment */
@@ -131,16 +132,35 @@ macro_rules! deploy_program {
         })?;
         register_syscalls_time.stop();
         load_program_metrics.register_syscalls_us = register_syscalls_time.as_us();
+        // Verify using stricter deployment_program_runtime_environment
+        let mut load_elf_time = Measure::start("load_elf_time");
+        let executable = Executable::<InvokeContext>::load(
+            $new_programdata,
+            Arc::new(deployment_program_runtime_environment),
+        ).map_err(|err| {
+            ic_logger_msg!($invoke_context.get_log_collector(), "{}", err);
+            InstructionError::InvalidAccountData
+        })?;
+        load_elf_time.stop();
+        load_program_metrics.load_elf_us = load_elf_time.as_us();
+        let mut verify_code_time = Measure::start("verify_code_time");
+        executable.verify::<RequisiteVerifier>().map_err(|err| {
+            ic_logger_msg!($invoke_context.get_log_collector(), "{}", err);
+            InstructionError::InvalidAccountData
+        })?;
+        verify_code_time.stop();
+        load_program_metrics.verify_code_us = verify_code_time.as_us();
+        // Reload but with environments.program_runtime_v1
         let executor = load_program_from_bytes(
-            &$invoke_context.feature_set,
+            $invoke_context.feature_set.is_active(&delay_visibility_of_program_deployment::id()),
             $invoke_context.get_log_collector(),
             &mut load_program_metrics,
             $new_programdata,
             $loader_key,
             $account_size,
             $slot,
-            Arc::new(program_runtime_environment),
-            false,
+            $invoke_context.programs_modified_by_tx.environments.program_runtime_v1.clone(),
+            true,
         )?;
         if let Some(old_entry) = $invoke_context.find_program_in_cache(&$program_id) {
             executor.tx_usage_counter.store(
@@ -191,10 +211,10 @@ pub fn check_loader_id(id: &Pubkey) -> bool {
 }
 
 /// Only used in macro, do not use directly!
-pub fn calculate_heap_cost(heap_size: u64, heap_cost: u64, enable_rounding_fix: bool) -> u64 {
+pub fn calculate_heap_cost(heap_size: u32, heap_cost: u64, enable_rounding_fix: bool) -> u64 {
     const KIBIBYTE: u64 = 1024;
     const PAGE_SIZE_KB: u64 = 32;
-    let mut rounded_heap_size = heap_size;
+    let mut rounded_heap_size = u64::from(heap_size);
     if enable_rounding_fix {
         rounded_heap_size = rounded_heap_size
             .saturating_add(PAGE_SIZE_KB.saturating_mul(KIBIBYTE).saturating_sub(1));
@@ -262,15 +282,12 @@ macro_rules! create_vm {
     ($vm:ident, $program:expr, $regions:expr, $accounts_metadata:expr, $invoke_context:expr $(,)?) => {
         let invoke_context = &*$invoke_context;
         let stack_size = $program.get_config().stack_size();
-        let heap_size = invoke_context
-            .get_compute_budget()
-            .heap_size
-            .unwrap_or(solana_sdk::entrypoint::HEAP_LENGTH);
+        let heap_size = invoke_context.get_compute_budget().heap_size;
         let round_up_heap_size = invoke_context
             .feature_set
             .is_active(&solana_sdk::feature_set::round_up_heap_size::id());
         let mut heap_cost_result = invoke_context.consume_checked($crate::calculate_heap_cost(
-            heap_size as u64,
+            heap_size,
             invoke_context.get_compute_budget().heap_cost,
             round_up_heap_size,
         ));
@@ -284,7 +301,7 @@ macro_rules! create_vm {
             >::zero_filled(stack_size);
             let mut heap = solana_rbpf::aligned_memory::AlignedMemory::<
                 { solana_rbpf::ebpf::HOST_ALIGN },
-            >::zero_filled(heap_size);
+            >::zero_filled(usize::try_from(heap_size).unwrap());
             let vm = $crate::create_vm(
                 $program,
                 $regions,
@@ -1710,7 +1727,7 @@ pub mod test_utils {
                     .expect("Failed to get account key");
 
                 if let Ok(loaded_program) = load_program_from_bytes(
-                    &FeatureSet::all_enabled(),
+                    true,
                     None,
                     &mut load_program_metrics,
                     account.data(),
@@ -4036,40 +4053,31 @@ mod tests {
         // when `enable_heap_size_round_up` not enabled:
         {
             // assert less than 32K heap should cost zero unit
-            assert_eq!(0, calculate_heap_cost(31_u64 * 1024, heap_cost, false));
+            assert_eq!(0, calculate_heap_cost(31 * 1024, heap_cost, false));
 
             // assert exact 32K heap should be cost zero unit
-            assert_eq!(0, calculate_heap_cost(32_u64 * 1024, heap_cost, false));
+            assert_eq!(0, calculate_heap_cost(32 * 1024, heap_cost, false));
 
             // assert slightly more than 32K heap is mistakenly cost zero unit
-            assert_eq!(0, calculate_heap_cost(33_u64 * 1024, heap_cost, false));
+            assert_eq!(0, calculate_heap_cost(33 * 1024, heap_cost, false));
 
             // assert exact 64K heap should cost 1 * heap_cost
-            assert_eq!(
-                heap_cost,
-                calculate_heap_cost(64_u64 * 1024, heap_cost, false)
-            );
+            assert_eq!(heap_cost, calculate_heap_cost(64 * 1024, heap_cost, false));
         }
 
         // when `enable_heap_size_round_up` is enabled:
         {
             // assert less than 32K heap should cost zero unit
-            assert_eq!(0, calculate_heap_cost(31_u64 * 1024, heap_cost, true));
+            assert_eq!(0, calculate_heap_cost(31 * 1024, heap_cost, true));
 
             // assert exact 32K heap should be cost zero unit
-            assert_eq!(0, calculate_heap_cost(32_u64 * 1024, heap_cost, true));
+            assert_eq!(0, calculate_heap_cost(32 * 1024, heap_cost, true));
 
             // assert slightly more than 32K heap should cost 1 * heap_cost
-            assert_eq!(
-                heap_cost,
-                calculate_heap_cost(33_u64 * 1024, heap_cost, true)
-            );
+            assert_eq!(heap_cost, calculate_heap_cost(33 * 1024, heap_cost, true));
 
             // assert exact 64K heap should cost 1 * heap_cost
-            assert_eq!(
-                heap_cost,
-                calculate_heap_cost(64_u64 * 1024, heap_cost, true)
-            );
+            assert_eq!(heap_cost, calculate_heap_cost(64 * 1024, heap_cost, true));
         }
     }
 

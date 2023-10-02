@@ -1,9 +1,17 @@
 //! BucketMap is a mostly contention free concurrent map backed by MmapMut
 
 use {
-    crate::{bucket_api::BucketApi, bucket_stats::BucketMapStats, MaxSearch, RefCount},
+    crate::{
+        bucket_api::BucketApi, bucket_stats::BucketMapStats, restart::Restart, MaxSearch, RefCount,
+    },
     solana_sdk::pubkey::Pubkey,
-    std::{convert::TryInto, fmt::Debug, fs, path::PathBuf, sync::Arc},
+    std::{
+        convert::TryInto,
+        fmt::Debug,
+        fs::{self},
+        path::PathBuf,
+        sync::{Arc, Mutex},
+    },
     tempfile::TempDir,
 };
 
@@ -12,6 +20,9 @@ pub struct BucketMapConfig {
     pub max_buckets: usize,
     pub drives: Option<Vec<PathBuf>>,
     pub max_search: Option<MaxSearch>,
+    /// A file with a known path where the current state of the bucket files on disk is saved as the index is running.
+    /// This file can be used to restore the index files as they existed prior to the process being stopped.
+    pub restart_config_file: Option<PathBuf>,
 }
 
 impl BucketMapConfig {
@@ -31,11 +42,14 @@ pub struct BucketMap<T: Clone + Copy + Debug + PartialEq + 'static> {
     max_buckets_pow2: u8,
     pub stats: Arc<BucketMapStats>,
     pub temp_dir: Option<TempDir>,
+    /// true if dropping self removes all folders.
+    /// This is primarily for test environments.
+    pub erase_drives_on_drop: bool,
 }
 
 impl<T: Clone + Copy + Debug + PartialEq> Drop for BucketMap<T> {
     fn drop(&mut self) {
-        if self.temp_dir.is_none() {
+        if self.temp_dir.is_none() && self.erase_drives_on_drop {
             BucketMap::<T>::erase_previous_drives(&self.drives);
         }
     }
@@ -46,6 +60,9 @@ impl<T: Clone + Copy + Debug + PartialEq> Debug for BucketMap<T> {
         Ok(())
     }
 }
+
+// this should be <= 1 << DEFAULT_CAPACITY or we end up searching the same items over and over - probably not a big deal since it is so small anyway
+pub(crate) const MAX_SEARCH_DEFAULT: MaxSearch = 32;
 
 /// used to communicate resize necessary and current size.
 #[derive(Debug)]
@@ -69,13 +86,24 @@ impl<T: Clone + Copy + Debug + PartialEq> BucketMap<T> {
             config.max_buckets.is_power_of_two(),
             "Max number of buckets must be a power of two"
         );
-        // this should be <= 1 << DEFAULT_CAPACITY or we end up searching the same items over and over - probably not a big deal since it is so small anyway
-        const MAX_SEARCH: MaxSearch = 32;
-        let max_search = config.max_search.unwrap_or(MAX_SEARCH);
+        let max_search = config.max_search.unwrap_or(MAX_SEARCH_DEFAULT);
 
-        if let Some(drives) = config.drives.as_ref() {
-            Self::erase_previous_drives(drives);
+        let mut restart = Restart::get_restart_file(&config);
+
+        if restart.is_none() {
+            // If we were able to load a restart file from the previous run, then don't wipe the accounts index drives from last time.
+            // Unused files will be wiped by `get_restartable_buckets`
+            if let Some(drives) = config.drives.as_ref() {
+                Self::erase_previous_drives(drives);
+            }
         }
+
+        let stats = Arc::default();
+
+        if restart.is_none() {
+            restart = Restart::new(&config);
+        }
+
         let mut temp_dir = None;
         let drives = config.drives.unwrap_or_else(|| {
             temp_dir = Some(TempDir::new().unwrap());
@@ -83,13 +111,19 @@ impl<T: Clone + Copy + Debug + PartialEq> BucketMap<T> {
         });
         let drives = Arc::new(drives);
 
-        let stats = Arc::default();
-        let buckets = (0..config.max_buckets)
-            .map(|_| {
+        let restart = restart.map(|restart| Arc::new(Mutex::new(restart)));
+
+        let restartable_buckets =
+            Restart::get_restartable_buckets(restart.as_ref(), &drives, config.max_buckets);
+
+        let buckets = restartable_buckets
+            .into_iter()
+            .map(|restartable_bucket| {
                 Arc::new(BucketApi::new(
                     Arc::clone(&drives),
                     max_search,
                     Arc::clone(&stats),
+                    restartable_bucket,
                 ))
             })
             .collect();
@@ -103,6 +137,8 @@ impl<T: Clone + Copy + Debug + PartialEq> BucketMap<T> {
             max_buckets_pow2: log2(config.max_buckets) as u8,
             stats,
             temp_dir,
+            // if we are keeping track of restart, then don't wipe the drives on drop
+            erase_drives_on_drop: restart.is_none(),
         }
     }
 
