@@ -505,6 +505,7 @@ pub struct RestartLastVotedForkSlots {
     pub slots: CompressedSlotsVec,
     pub last_voted_slot: Slot,
     pub last_voted_hash: Hash,
+    pub total_messages: u8,
 }
 
 impl Sanitize for RestartLastVotedForkSlots {
@@ -522,6 +523,7 @@ impl RestartLastVotedForkSlots {
             slots: CompressedSlotsVec::new(),
             last_voted_slot,
             last_voted_hash,
+            total_messages: 1,
         }
     }
 
@@ -534,6 +536,7 @@ impl RestartLastVotedForkSlots {
             slots: CompressedSlotsVec::new_rand(rng),
             last_voted_slot: rng.gen_range(0..512),
             last_voted_hash: Hash::new_unique(),
+            total_messages: 1,
         }
     }
 
