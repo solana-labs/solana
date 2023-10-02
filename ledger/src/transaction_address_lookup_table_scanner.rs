@@ -45,9 +45,8 @@ pub fn scan_transaction(transaction: &SanitizedVersionedTransaction) -> ScanResu
     let mut native_only = true;
     for (program_id, instruction) in transaction.get_message().program_instructions_iter() {
         if address_lookup_table::program::check_id(program_id) {
-            if let ProgramInstruction::ExtendLookupTable { new_addresses } =
+            if let Ok(ProgramInstruction::ExtendLookupTable { new_addresses }) =
                 deserialize::<ProgramInstruction>(&instruction.data)
-                    .expect("invalid address lookup table instruction")
             {
                 accounts.extend(new_addresses);
             }
