@@ -474,7 +474,7 @@ mod tests {
                 None,
                 full_snapshot_archives_dir.path(),
                 incremental_snapshot_archives_dir.path(),
-                ArchiveFormat::TarBzip2,
+                ArchiveFormat::Tar,
                 NonZeroUsize::new(1).unwrap(),
                 NonZeroUsize::new(1).unwrap(),
             )
