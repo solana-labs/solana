@@ -14,21 +14,15 @@ lazy_static! {
     static ref SDK_IDS_SET: HashSet<Pubkey> = SDK_IDS.iter().cloned().collect();
 }
 
-pub enum ScanResult {
-    /// The address lookup table program was not used
-    NotFound,
-    /// The address lookup table program was present, with non-native programs.
-    /// If instructions extending an account lookup table were found, the list
-    /// of Pubkeys will be returned. However, this may be incomplete due to the
-    /// possibility of non-native ixs CPIing to extend.
-    NonNativeUsed(Vec<Pubkey>),
-    /// The address lookup table program was present, with only native programs.
-    /// If instructions extending an account lookup table were found, the list
-    /// of Pubkeys will be returned.
-    NativeUsed(Vec<Pubkey>),
+#[derive(Default)]
+pub struct ScannedLookupTableExtensions {
+    pub possibly_incomplete: bool,
+    pub accounts: Vec<Pubkey>, // empty if no extensions found
 }
 
-pub fn scan_transaction(transaction: &SanitizedVersionedTransaction) -> ScanResult {
+pub fn scan_transaction(
+    transaction: &SanitizedVersionedTransaction,
+) -> ScannedLookupTableExtensions {
     // If the ALT program is not present in the account keys, it was not used
     if !transaction
         .get_message()
@@ -37,7 +31,7 @@ pub fn scan_transaction(transaction: &SanitizedVersionedTransaction) -> ScanResu
         .iter()
         .any(address_lookup_table::program::check_id)
     {
-        return ScanResult::NotFound;
+        return ScannedLookupTableExtensions::default();
     }
 
     // Accumulate accounts from account lookup table extension instructions
@@ -55,9 +49,8 @@ pub fn scan_transaction(transaction: &SanitizedVersionedTransaction) -> ScanResu
         }
     }
 
-    if native_only {
-        ScanResult::NativeUsed(accounts)
-    } else {
-        ScanResult::NonNativeUsed(accounts)
+    ScannedLookupTableExtensions {
+        possibly_incomplete: !native_only,
+        accounts,
     }
 }

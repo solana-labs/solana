@@ -21,7 +21,7 @@ use {
             Shred, ShredData, ShredId, ShredType, Shredder,
         },
         slot_stats::{ShredSource, SlotsStats},
-        transaction_address_lookup_table_scanner::{scan_transaction, ScanResult},
+        transaction_address_lookup_table_scanner::scan_transaction,
     },
     assert_matches::debug_assert_matches,
     bincode::{deserialize, serialize},
@@ -2958,14 +2958,10 @@ impl Blockstore {
                                 let tx = SanitizedVersionedTransaction::try_from(tx)
                                     .expect("transaction failed to sanitize");
 
-                                let alt_scan_result = scan_transaction(&tx);
-                                match alt_scan_result {
-                                    ScanResult::NotFound => {}
-                                    ScanResult::NativeUsed(keys) => add_to_set(&result, &keys),
-                                    ScanResult::NonNativeUsed(keys) => {
-                                        add_to_set(&result, &keys);
-                                        possible_cpi_alt_extend.store(true, Ordering::Relaxed);
-                                    }
+                                let alt_scan_extensions = scan_transaction(&tx);
+                                add_to_set(&result, &alt_scan_extensions.accounts);
+                                if alt_scan_extensions.possibly_incomplete {
+                                    possible_cpi_alt_extend.store(true, Ordering::Relaxed);
                                 }
                             }
                         });
