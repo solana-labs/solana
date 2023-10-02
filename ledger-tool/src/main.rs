@@ -3251,7 +3251,7 @@ fn main() {
                                 }
 
                                 if minimize_snapshot_possibly_incomplete {
-                                    warn!("Minimized snapshot may be incomplete due to missing accounts from CPI'd address lookup table extensions. This may lead to replay failures");
+                                    warn!("Minimized snapshot may be incomplete due to missing accounts from CPI'd address lookup table extensions. This may lead to mismatched bank hashes while replaying.");
                                 }
                             }
                         }
