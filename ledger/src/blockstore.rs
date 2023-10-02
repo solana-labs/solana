@@ -21,7 +21,7 @@ use {
             Shred, ShredData, ShredId, ShredType, Shredder,
         },
         slot_stats::{ShredSource, SlotsStats},
-        transaction_address_lookup_table_scanner,
+        transaction_address_lookup_table_scanner::{scan_transaction, ScanResult},
     },
     assert_matches::debug_assert_matches,
     bincode::{deserialize, serialize},
@@ -2948,18 +2948,21 @@ impl Blockstore {
 
                             let tx = SanitizedVersionedTransaction::try_from(tx)
                                 .expect("transaction failed to sanitize");
-                            let alt_scan_result =
-                                transaction_address_lookup_table_scanner::scan_transaction(&tx);
-                                match alt_scan_result {
-                                    transaction_address_lookup_table_scanner::ScanResult::NotFound => {},
-                                    transaction_address_lookup_table_scanner::ScanResult::NativeUsed(keys) => {
-                                        keys.into_iter().for_each(|key| { result.insert(key); });
-                                    }
-                                    transaction_address_lookup_table_scanner::ScanResult::NonNativeUsed(keys) => {
-                                        keys.into_iter().for_each(|key| { result.insert(key); });
-                                        possible_cpi_alt_extend.store(true, Ordering::Relaxed);
-                                    },
+                            let alt_scan_result = scan_transaction(&tx);
+                            match alt_scan_result {
+                                ScanResult::NotFound => {}
+                                ScanResult::NativeUsed(keys) => {
+                                    keys.into_iter().for_each(|key| {
+                                        result.insert(key);
+                                    });
                                 }
+                                ScanResult::NonNativeUsed(keys) => {
+                                    keys.into_iter().for_each(|key| {
+                                        result.insert(key);
+                                    });
+                                    possible_cpi_alt_extend.store(true, Ordering::Relaxed);
+                                }
+                            }
                         });
                     });
                 }
