@@ -1,27 +1,4 @@
-use {
-    crate::prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
-    solana_sdk::{
-        borsh0_10::try_from_slice_unchecked,
-        compute_budget::{self, ComputeBudgetInstruction},
-        entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
-        feature_set::{
-            add_set_tx_loaded_accounts_data_size_instruction, remove_deprecated_request_unit_ix,
-            FeatureSet,
-        },
-        fee::FeeBudgetLimits,
-        instruction::{CompiledInstruction, InstructionError},
-        pubkey::Pubkey,
-        transaction::TransactionError,
-    },
-};
-
-/// The total accounts data a transaction can load is limited to 64MiB to not break
-/// anyone in Mainnet-beta today. It can be set by set_loaded_accounts_data_size_limit instruction
-pub const MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES: usize = 64 * 1024 * 1024;
-
-pub const DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT: u32 = 200_000;
-pub const MAX_COMPUTE_UNIT_LIMIT: u32 = 1_400_000;
-const MAX_HEAP_FRAME_BYTES: u32 = 256 * 1024;
+use crate::compute_budget_processor::{self, ComputeBudgetLimits};
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl ::solana_frozen_abi::abi_example::AbiExample for ComputeBudget {
@@ -30,6 +7,10 @@ impl ::solana_frozen_abi::abi_example::AbiExample for ComputeBudget {
         ComputeBudget::default()
     }
 }
+
+/// Roughly 0.5us/page, where page is 32K; given roughly 15CU/us, the
+/// default heap page cost = 0.5 * 15 ~= 8CU/page
+pub const DEFAULT_HEAP_COST: u64 = 8;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ComputeBudget {
@@ -118,9 +99,6 @@ pub struct ComputeBudget {
     pub alt_bn128_pairing_one_pair_cost_other: u64,
     /// Big integer modular exponentiation cost
     pub big_modular_exponentiation_cost: u64,
-    /// Maximum accounts data size, in bytes, that a transaction is allowed to load; The
-    /// value is capped by MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES to prevent overuse of memory.
-    pub loaded_accounts_data_size_limit: usize,
     /// Coefficient `a` of the quadratic function which determines the number
     /// of compute units consumed to call poseidon syscall for a given number
     /// of inputs.
@@ -143,7 +121,7 @@ pub struct ComputeBudget {
 
 impl Default for ComputeBudget {
     fn default() -> Self {
-        Self::new(MAX_COMPUTE_UNIT_LIMIT as u64)
+        Self::new(compute_budget_processor::MAX_COMPUTE_UNIT_LIMIT as u64)
     }
 }
 
@@ -180,14 +158,13 @@ impl ComputeBudget {
             curve25519_ristretto_msm_base_cost: 2303,
             curve25519_ristretto_msm_incremental_cost: 788,
             heap_size: u32::try_from(solana_sdk::entrypoint::HEAP_LENGTH).unwrap(),
-            heap_cost: 8,
+            heap_cost: DEFAULT_HEAP_COST,
             mem_op_base_cost: 10,
             alt_bn128_addition_cost: 334,
             alt_bn128_multiplication_cost: 3_840,
             alt_bn128_pairing_one_pair_cost_first: 36_364,
             alt_bn128_pairing_one_pair_cost_other: 12_121,
             big_modular_exponentiation_cost: 33,
-            loaded_accounts_data_size_limit: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
             poseidon_cost_coefficient_a: 61,
             poseidon_cost_coefficient_c: 542,
             get_remaining_compute_units_cost: 100,
@@ -198,127 +175,11 @@ impl ComputeBudget {
         }
     }
 
-    pub fn process_instructions<'a>(
-        &mut self,
-        instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
-        support_request_units_deprecated: bool,
-        support_set_loaded_accounts_data_size_limit_ix: bool,
-    ) -> Result<PrioritizationFeeDetails, TransactionError> {
-        let mut num_non_compute_budget_instructions: u32 = 0;
-        let mut updated_compute_unit_limit = None;
-        let mut requested_heap_size = None;
-        let mut prioritization_fee = None;
-        let mut updated_loaded_accounts_data_size_limit = None;
-
-        for (i, (program_id, instruction)) in instructions.enumerate() {
-            if compute_budget::check_id(program_id) {
-                let invalid_instruction_data_error = TransactionError::InstructionError(
-                    i as u8,
-                    InstructionError::InvalidInstructionData,
-                );
-                let duplicate_instruction_error = TransactionError::DuplicateInstruction(i as u8);
-
-                match try_from_slice_unchecked(&instruction.data) {
-                    Ok(ComputeBudgetInstruction::RequestUnitsDeprecated {
-                        units: compute_unit_limit,
-                        additional_fee,
-                    }) if support_request_units_deprecated => {
-                        if updated_compute_unit_limit.is_some() {
-                            return Err(duplicate_instruction_error);
-                        }
-                        if prioritization_fee.is_some() {
-                            return Err(duplicate_instruction_error);
-                        }
-                        updated_compute_unit_limit = Some(compute_unit_limit);
-                        prioritization_fee =
-                            Some(PrioritizationFeeType::Deprecated(additional_fee as u64));
-                    }
-                    Ok(ComputeBudgetInstruction::RequestHeapFrame(bytes)) => {
-                        if requested_heap_size.is_some() {
-                            return Err(duplicate_instruction_error);
-                        }
-                        requested_heap_size = Some((bytes, i as u8));
-                    }
-                    Ok(ComputeBudgetInstruction::SetComputeUnitLimit(compute_unit_limit)) => {
-                        if updated_compute_unit_limit.is_some() {
-                            return Err(duplicate_instruction_error);
-                        }
-                        updated_compute_unit_limit = Some(compute_unit_limit);
-                    }
-                    Ok(ComputeBudgetInstruction::SetComputeUnitPrice(micro_lamports)) => {
-                        if prioritization_fee.is_some() {
-                            return Err(duplicate_instruction_error);
-                        }
-                        prioritization_fee =
-                            Some(PrioritizationFeeType::ComputeUnitPrice(micro_lamports));
-                    }
-                    Ok(ComputeBudgetInstruction::SetLoadedAccountsDataSizeLimit(bytes))
-                        if support_set_loaded_accounts_data_size_limit_ix =>
-                    {
-                        if updated_loaded_accounts_data_size_limit.is_some() {
-                            return Err(duplicate_instruction_error);
-                        }
-                        updated_loaded_accounts_data_size_limit = Some(bytes as usize);
-                    }
-                    _ => return Err(invalid_instruction_data_error),
-                }
-            } else {
-                // only include non-request instructions in default max calc
-                num_non_compute_budget_instructions =
-                    num_non_compute_budget_instructions.saturating_add(1);
-            }
-        }
-
-        if let Some((bytes, i)) = requested_heap_size {
-            if bytes > MAX_HEAP_FRAME_BYTES
-                || bytes < MIN_HEAP_FRAME_BYTES as u32
-                || bytes % 1024 != 0
-            {
-                return Err(TransactionError::InstructionError(
-                    i,
-                    InstructionError::InvalidInstructionData,
-                ));
-            }
-            self.heap_size = bytes;
-        }
-
-        let compute_unit_limit = updated_compute_unit_limit
-            .unwrap_or_else(|| {
-                num_non_compute_budget_instructions
-                    .saturating_mul(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT)
-            })
-            .min(MAX_COMPUTE_UNIT_LIMIT);
-        self.compute_unit_limit = u64::from(compute_unit_limit);
-
-        self.loaded_accounts_data_size_limit = updated_loaded_accounts_data_size_limit
-            .unwrap_or(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES)
-            .min(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES);
-
-        Ok(prioritization_fee
-            .map(|fee_type| PrioritizationFeeDetails::new(fee_type, self.compute_unit_limit))
-            .unwrap_or_default())
-    }
-
-    pub fn fee_budget_limits<'a>(
-        instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
-        feature_set: &FeatureSet,
-    ) -> FeeBudgetLimits {
-        let mut compute_budget = Self::default();
-
-        let prioritization_fee_details = compute_budget
-            .process_instructions(
-                instructions,
-                !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
-                feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
-            )
-            .unwrap_or_default();
-
-        FeeBudgetLimits {
-            loaded_accounts_data_size_limit: compute_budget.loaded_accounts_data_size_limit,
-            heap_cost: compute_budget.heap_cost,
-            compute_unit_limit: compute_budget.compute_unit_limit,
-            prioritization_fee: prioritization_fee_details.get_fee(),
-        }
+    pub fn new_from_compute_budget_limits(compute_budget_limits: &ComputeBudgetLimits) -> Self {
+        let mut compute_budget =
+            ComputeBudget::new(u64::from(compute_budget_limits.compute_unit_limit));
+        compute_budget.heap_size = compute_budget_limits.updated_heap_bytes;
+        compute_budget
     }
 
     /// Returns cost of the Poseidon hash function for the given number of
