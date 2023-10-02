@@ -264,7 +264,7 @@ mod tests {
         let bank_snapshot_info =
             snapshot_utils::get_highest_bank_snapshot(&bank_snapshots_dir).unwrap();
         let snapshot_storages = bank.get_snapshot_storages(None);
-        let archive_format = ArchiveFormat::TarBzip2;
+        let archive_format = ArchiveFormat::Tar;
 
         let full_archive = snapshot_bank_utils::package_and_archive_full_snapshot(
             &bank,
