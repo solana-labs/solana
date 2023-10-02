@@ -317,6 +317,10 @@ impl CompressedSlotsVec {
         result.add(&slots);
         result
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.slots.iter().all(|s| s.num_slots() == 0)
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, PartialEq, Eq, AbiExample, Debug)]

@@ -38,8 +38,6 @@ pub const MAX_VOTES: VoteIndex = 32;
 
 pub type EpochSlotsIndex = u8;
 pub const MAX_EPOCH_SLOTS: EpochSlotsIndex = 255;
-// We now keep 81000 slots, 81000/MAX_SLOTS_PER_ENTRY = 5.
-pub(crate) const MAX_RESTART_LAST_VOTED_FORK_SLOTS: EpochSlotsIndex = 5;
 
 /// CrdsValue that is replicated across the cluster
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
@@ -96,7 +94,7 @@ pub enum CrdsData {
     DuplicateShred(DuplicateShredIndex, DuplicateShred),
     SnapshotHashes(SnapshotHashes),
     ContactInfo(ContactInfo),
-    RestartLastVotedForkSlots(EpochSlotsIndex, RestartLastVotedForkSlots),
+    RestartLastVotedForkSlots(RestartLastVotedForkSlots),
 }
 
 impl Sanitize for CrdsData {
@@ -135,12 +133,7 @@ impl Sanitize for CrdsData {
             }
             CrdsData::SnapshotHashes(val) => val.sanitize(),
             CrdsData::ContactInfo(node) => node.sanitize(),
-            CrdsData::RestartLastVotedForkSlots(ix, slots) => {
-                if *ix >= MAX_RESTART_LAST_VOTED_FORK_SLOTS {
-                    return Err(SanitizeError::ValueOutOfBounds);
-                }
-                slots.sanitize()
-            }
+            CrdsData::RestartLastVotedForkSlots(slots) => slots.sanitize(),
         }
     }
 }
@@ -166,10 +159,9 @@ impl CrdsData {
             3 => CrdsData::AccountsHashes(AccountsHashes::new_rand(rng, pubkey)),
             4 => CrdsData::Version(Version::new_rand(rng, pubkey)),
             5 => CrdsData::Vote(rng.gen_range(0..MAX_VOTES), Vote::new_rand(rng, pubkey)),
-            6 => CrdsData::RestartLastVotedForkSlots(
-                rng.gen_range(0..MAX_RESTART_LAST_VOTED_FORK_SLOTS),
-                RestartLastVotedForkSlots::new_rand(rng, pubkey),
-            ),
+            6 => CrdsData::RestartLastVotedForkSlots(RestartLastVotedForkSlots::new_rand(
+                rng, pubkey,
+            )),
             _ => CrdsData::EpochSlots(
                 rng.gen_range(0..MAX_EPOCH_SLOTS),
                 EpochSlots::new_rand(rng, pubkey),
@@ -505,11 +497,13 @@ pub struct RestartLastVotedForkSlots {
     pub slots: CompressedSlotsVec,
     pub last_voted_slot: Slot,
     pub last_voted_hash: Hash,
-    pub total_messages: u8,
 }
 
 impl Sanitize for RestartLastVotedForkSlots {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        if self.slots.is_empty() {
+            return Err(SanitizeError::InvalidValue);
+        }
         self.slots.sanitize()?;
         self.last_voted_hash.sanitize()
     }
@@ -523,7 +517,6 @@ impl RestartLastVotedForkSlots {
             slots: CompressedSlotsVec::new(),
             last_voted_slot,
             last_voted_hash,
-            total_messages: 1,
         }
     }
 
@@ -536,7 +529,6 @@ impl RestartLastVotedForkSlots {
             slots: CompressedSlotsVec::new_rand(rng),
             last_voted_slot: rng.gen_range(0..512),
             last_voted_hash: Hash::new_unique(),
-            total_messages: 1,
         }
     }
 
@@ -561,7 +553,7 @@ pub enum CrdsValueLabel {
     DuplicateShred(DuplicateShredIndex, Pubkey),
     SnapshotHashes(Pubkey),
     ContactInfo(Pubkey),
-    RestartLastVotedForkSlots(EpochSlotsIndex, Pubkey),
+    RestartLastVotedForkSlots(Pubkey),
 }
 
 impl fmt::Display for CrdsValueLabel {
@@ -585,8 +577,8 @@ impl fmt::Display for CrdsValueLabel {
                 write!(f, "SnapshotHashes({})", self.pubkey())
             }
             CrdsValueLabel::ContactInfo(_) => write!(f, "ContactInfo({})", self.pubkey()),
-            CrdsValueLabel::RestartLastVotedForkSlots(ix, _) => {
-                write!(f, "RestartLastVotedForkSlots({}, {})", ix, self.pubkey())
+            CrdsValueLabel::RestartLastVotedForkSlots(_) => {
+                write!(f, "RestartLastVotedForkSlots({})", self.pubkey())
             }
         }
     }
@@ -607,7 +599,7 @@ impl CrdsValueLabel {
             CrdsValueLabel::DuplicateShred(_, p) => *p,
             CrdsValueLabel::SnapshotHashes(p) => *p,
             CrdsValueLabel::ContactInfo(pubkey) => *pubkey,
-            CrdsValueLabel::RestartLastVotedForkSlots(_, p) => *p,
+            CrdsValueLabel::RestartLastVotedForkSlots(p) => *p,
         }
     }
 }
@@ -658,7 +650,7 @@ impl CrdsValue {
             CrdsData::DuplicateShred(_, shred) => shred.wallclock,
             CrdsData::SnapshotHashes(hash) => hash.wallclock,
             CrdsData::ContactInfo(node) => node.wallclock(),
-            CrdsData::RestartLastVotedForkSlots(_, slots) => slots.wallclock,
+            CrdsData::RestartLastVotedForkSlots(slots) => slots.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
@@ -675,7 +667,7 @@ impl CrdsValue {
             CrdsData::DuplicateShred(_, shred) => shred.from,
             CrdsData::SnapshotHashes(hash) => hash.from,
             CrdsData::ContactInfo(node) => *node.pubkey(),
-            CrdsData::RestartLastVotedForkSlots(_, slots) => slots.from,
+            CrdsData::RestartLastVotedForkSlots(slots) => slots.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -694,8 +686,8 @@ impl CrdsValue {
             CrdsData::DuplicateShred(ix, shred) => CrdsValueLabel::DuplicateShred(*ix, shred.from),
             CrdsData::SnapshotHashes(_) => CrdsValueLabel::SnapshotHashes(self.pubkey()),
             CrdsData::ContactInfo(node) => CrdsValueLabel::ContactInfo(*node.pubkey()),
-            CrdsData::RestartLastVotedForkSlots(ix, _) => {
-                CrdsValueLabel::RestartLastVotedForkSlots(*ix, self.pubkey())
+            CrdsData::RestartLastVotedForkSlots(_) => {
+                CrdsValueLabel::RestartLastVotedForkSlots(self.pubkey())
             }
         }
     }
@@ -1153,16 +1145,13 @@ mod test {
             RestartLastVotedForkSlots::new(keypair.pubkey(), timestamp(), slot, Hash::default());
         let original_slots_vec = [slot_parent, slot];
         slots.fill(&original_slots_vec);
-        let ix = 1;
-        let value = CrdsValue::new_signed(
-            CrdsData::RestartLastVotedForkSlots(ix, slots.clone()),
-            &keypair,
-        );
+        let value =
+            CrdsValue::new_signed(CrdsData::RestartLastVotedForkSlots(slots.clone()), &keypair);
         assert_eq!(value.sanitize(), Ok(()));
         let label = value.label();
         assert_eq!(
             label,
-            CrdsValueLabel::RestartLastVotedForkSlots(ix, keypair.pubkey())
+            CrdsValueLabel::RestartLastVotedForkSlots(keypair.pubkey())
         );
         assert_eq!(label.pubkey(), keypair.pubkey());
         assert_eq!(value.wallclock(), slots.wallclock);
@@ -1171,10 +1160,10 @@ mod test {
         assert_eq!(retrived_slots[0], slot_parent);
         assert_eq!(retrived_slots[1], slot);
 
-        let bad_value = CrdsValue::new_signed(
-            CrdsData::RestartLastVotedForkSlots(MAX_RESTART_LAST_VOTED_FORK_SLOTS, slots),
-            &keypair,
-        );
-        assert_eq!(bad_value.sanitize(), Err(SanitizeError::ValueOutOfBounds))
+        let empty_slots =
+            RestartLastVotedForkSlots::new(keypair.pubkey(), timestamp(), slot, Hash::default());
+        let bad_value =
+            CrdsValue::new_signed(CrdsData::RestartLastVotedForkSlots(empty_slots), &keypair);
+        assert_eq!(bad_value.sanitize(), Err(SanitizeError::InvalidValue))
     }
 }

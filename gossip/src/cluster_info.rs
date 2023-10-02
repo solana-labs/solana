@@ -272,7 +272,7 @@ pub fn make_accounts_hashes_message(
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "DxPH4Cj8QHbGb8daVf8uX3HckPkB9XqKE2AHtQzYYZLr")]
+#[frozen_abi(digest = "BNsMvqo5qaqbiKzj3XvAqxKbWhFBxNVXmhEGHFmhwhKC")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
@@ -399,7 +399,7 @@ fn retain_staked(values: &mut Vec<CrdsValue>, stakes: &HashMap<Pubkey, u64>) {
             CrdsData::LowestSlot(_, _)
             | CrdsData::LegacyVersion(_)
             | CrdsData::DuplicateShred(_, _)
-            | CrdsData::RestartLastVotedForkSlots(_, _) => {
+            | CrdsData::RestartLastVotedForkSlots(_) => {
                 let stake = stakes.get(&value.pubkey()).copied();
                 stake.unwrap_or_default() >= MIN_STAKE_FOR_GOSSIP
             }

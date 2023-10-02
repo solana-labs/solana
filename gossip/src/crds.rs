@@ -721,7 +721,7 @@ impl CrdsDataStats {
             CrdsData::DuplicateShred(_, _) => 9,
             CrdsData::SnapshotHashes(_) => 10,
             CrdsData::ContactInfo(_) => 11,
-            CrdsData::RestartLastVotedForkSlots(_, _) => 12,
+            CrdsData::RestartLastVotedForkSlots(_) => 12,
             // Update CrdsCountsArray if new items are added here.
         }
     }
