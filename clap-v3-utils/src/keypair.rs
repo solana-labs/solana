@@ -1220,8 +1220,7 @@ mod tests {
         crate::{input_parsers::signer::SignerSourceParserBuilder, offline::OfflineArgs},
         clap::{Arg, Command},
         solana_remote_wallet::remote_wallet::initialize_wallet_manager,
-        solana_sdk::signature::write_keypair_file,
-        solana_sdk::system_instruction,
+        solana_sdk::{signature::write_keypair_file, system_instruction},
         tempfile::TempDir,
     };
 

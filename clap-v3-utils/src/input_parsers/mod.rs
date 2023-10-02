@@ -411,8 +411,7 @@ mod tests {
     use {
         super::*,
         clap::{Arg, Command},
-        solana_sdk::signature::write_keypair_file,
-        solana_sdk::{hash::Hash, pubkey::Pubkey},
+        solana_sdk::{hash::Hash, pubkey::Pubkey, signature::write_keypair_file},
         std::fs,
     };
 
