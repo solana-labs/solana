@@ -419,7 +419,7 @@ impl BankForks {
             .loaded_programs_cache
             .write()
             .unwrap()
-            .prune(self, root);
+            .prune(self, root, root_bank.epoch());
         let set_root_start = Instant::now();
         let (removed_banks, set_root_metrics) = self.do_set_root_return_metrics(
             root,
