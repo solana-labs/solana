@@ -995,7 +995,8 @@ impl HeaviestSubtreeForkChoice {
         }
     }
 
-    fn parent(&self, slot_hash_key: &SlotHashKey) -> Option<SlotHashKey> {
+    // pub for tests
+    pub fn parent(&self, slot_hash_key: &SlotHashKey) -> Option<SlotHashKey> {
         self.fork_infos
             .get(slot_hash_key)
             .map(|fork_info| fork_info.parent)
@@ -1232,7 +1233,6 @@ impl<'a> Iterator for AncestorIterator<'a> {
 mod test {
     use {
         super::*,
-        crate::vote_simulator::VoteSimulator,
         itertools::Itertools,
         solana_runtime::{bank::Bank, bank_utils},
         solana_sdk::{hash::Hash, slot_history::SlotHistory},
@@ -1378,105 +1378,6 @@ mod test {
                 .map(|s| (s, Hash::default()))
                 .collect::<Vec<_>>()
         );
-    }
-
-    #[test]
-    fn test_new_from_frozen_banks() {
-        /*
-            Build fork structure:
-                 slot 0
-                   |
-                 slot 1
-                 /    \
-            slot 2    |
-               |    slot 3
-            slot 4
-        */
-        let forks = tr(0) / (tr(1) / (tr(2) / (tr(4))) / (tr(3)));
-        let mut vote_simulator = VoteSimulator::new(1);
-        vote_simulator.fill_bank_forks(forks, &HashMap::new(), true);
-        let bank_forks = vote_simulator.bank_forks;
-        let mut frozen_banks: Vec<_> = bank_forks
-            .read()
-            .unwrap()
-            .frozen_banks()
-            .values()
-            .cloned()
-            .collect();
-        frozen_banks.sort_by_key(|bank| bank.slot());
-
-        let root_bank = bank_forks.read().unwrap().root_bank();
-        let root = root_bank.slot();
-        let root_hash = root_bank.hash();
-        let heaviest_subtree_fork_choice =
-            HeaviestSubtreeForkChoice::new_from_frozen_banks((root, root_hash), &frozen_banks);
-
-        let bank0_hash = bank_forks.read().unwrap().get(0).unwrap().hash();
-        assert!(heaviest_subtree_fork_choice
-            .parent(&(0, bank0_hash))
-            .is_none());
-
-        let bank1_hash = bank_forks.read().unwrap().get(1).unwrap().hash();
-        assert_eq!(
-            (&heaviest_subtree_fork_choice)
-                .children(&(0, bank0_hash))
-                .unwrap()
-                .collect_vec(),
-            &[&(1, bank1_hash)]
-        );
-
-        assert_eq!(
-            heaviest_subtree_fork_choice.parent(&(1, bank1_hash)),
-            Some((0, bank0_hash))
-        );
-        let bank2_hash = bank_forks.read().unwrap().get(2).unwrap().hash();
-        let bank3_hash = bank_forks.read().unwrap().get(3).unwrap().hash();
-        assert_eq!(
-            (&heaviest_subtree_fork_choice)
-                .children(&(1, bank1_hash))
-                .unwrap()
-                .collect_vec(),
-            &[&(2, bank2_hash), &(3, bank3_hash)]
-        );
-        assert_eq!(
-            heaviest_subtree_fork_choice.parent(&(2, bank2_hash)),
-            Some((1, bank1_hash))
-        );
-        let bank4_hash = bank_forks.read().unwrap().get(4).unwrap().hash();
-        assert_eq!(
-            (&heaviest_subtree_fork_choice)
-                .children(&(2, bank2_hash))
-                .unwrap()
-                .collect_vec(),
-            &[&(4, bank4_hash)]
-        );
-        // Check parent and children of invalid hash don't exist
-        let invalid_hash = Hash::new_unique();
-        assert!((&heaviest_subtree_fork_choice)
-            .children(&(2, invalid_hash))
-            .is_none());
-        assert!(heaviest_subtree_fork_choice
-            .parent(&(2, invalid_hash))
-            .is_none());
-
-        assert_eq!(
-            heaviest_subtree_fork_choice.parent(&(3, bank3_hash)),
-            Some((1, bank1_hash))
-        );
-        assert!((&heaviest_subtree_fork_choice)
-            .children(&(3, bank3_hash))
-            .unwrap()
-            .collect_vec()
-            .is_empty());
-        assert_eq!(
-            heaviest_subtree_fork_choice.parent(&(4, bank4_hash)),
-            Some((2, bank2_hash))
-        );
-        assert!((&heaviest_subtree_fork_choice)
-            .children(&(4, bank4_hash))
-            .unwrap()
-            .collect_vec()
-            .is_empty());
     }
 
     #[test]

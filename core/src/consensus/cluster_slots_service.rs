@@ -1,6 +1,5 @@
-pub mod cluster_slots;
 use {
-    cluster_slots::ClusterSlots,
+    crate::consensus::cluster_slots::ClusterSlots,
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::blockstore::Blockstore,

@@ -1,7 +1,7 @@
 use {
     crate::{
         banking_trace::{BankingPacketBatch, BankingPacketSender},
-        consensus::vote_stake_tracker::VoteStakeTracker,
+        consensus::vote_stake_tracker::SlotVoteTracker,
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
         result::{Error, Result},
@@ -70,30 +70,6 @@ pub type DuplicateConfirmedSlotsReceiver = Receiver<ThresholdConfirmedSlots>;
 
 const THRESHOLDS_TO_CHECK: [f64; 2] = [DUPLICATE_THRESHOLD, VOTE_THRESHOLD_SIZE];
 const BANK_SEND_VOTES_LOOP_SLEEP_MS: u128 = 10;
-
-#[derive(Default)]
-pub struct SlotVoteTracker {
-    // Maps pubkeys that have voted for this slot
-    // to whether or not we've seen the vote on gossip.
-    // True if seen on gossip, false if only seen in replay.
-    voted: HashMap<Pubkey, bool>,
-    optimistic_votes_tracker: HashMap<Hash, VoteStakeTracker>,
-    voted_slot_updates: Option<Vec<Pubkey>>,
-    gossip_only_stake: u64,
-}
-
-impl SlotVoteTracker {
-    pub(crate) fn get_voted_slot_updates(&mut self) -> Option<Vec<Pubkey>> {
-        self.voted_slot_updates.take()
-    }
-
-    fn get_or_insert_optimistic_votes_tracker(&mut self, hash: Hash) -> &mut VoteStakeTracker {
-        self.optimistic_votes_tracker.entry(hash).or_default()
-    }
-    pub(crate) fn optimistic_votes_tracker(&self, hash: &Hash) -> Option<&VoteStakeTracker> {
-        self.optimistic_votes_tracker.get(hash)
-    }
-}
 
 #[derive(Default)]
 pub struct VoteTracker {

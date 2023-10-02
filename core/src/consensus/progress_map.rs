@@ -1,9 +1,7 @@
 use {
-    crate::{
-        cluster_info_vote_listener::SlotVoteTracker,
-        cluster_slots_service::cluster_slots::SlotPubkeys,
-        consensus::{Stake, ThresholdDecision, VotedStakes},
-        replay_stage::SUPERMINORITY_THRESHOLD,
+    crate::consensus::{
+        cluster_slots::SlotPubkeys, vote_stake_tracker::SlotVoteTracker, Stake, ThresholdDecision,
+        VotedStakes, SUPERMINORITY_THRESHOLD,
     },
     solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
     solana_program_runtime::{report_execute_timings, timings::ExecuteTimingType},

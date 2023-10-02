@@ -1,4 +1,16 @@
-use {solana_sdk::pubkey::Pubkey, std::collections::HashSet};
+use {
+    crate::consensus::{
+        fork_choice::ForkChoice,
+        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+        progress_map::{ForkProgress, ProgressMap},
+    },
+    solana_runtime::bank::Bank,
+    solana_sdk::{hash::Hash, pubkey::Pubkey, slot_history::Slot},
+    std::{
+        collections::{HashMap, HashSet},
+        sync::Arc,
+    },
+};
 
 #[derive(Default)]
 pub struct VoteStakeTracker {
@@ -44,6 +56,60 @@ impl VoteStakeTracker {
     pub fn stake(&self) -> u64 {
         self.stake
     }
+}
+
+#[derive(Default)]
+pub struct SlotVoteTracker {
+    // Maps pubkeys that have voted for this slot
+    // to whether or not we've seen the vote on gossip.
+    // True if seen on gossip, false if only seen in replay.
+    pub voted: HashMap<Pubkey, bool>,
+    optimistic_votes_tracker: HashMap<Hash, VoteStakeTracker>,
+    pub voted_slot_updates: Option<Vec<Pubkey>>,
+    pub gossip_only_stake: u64,
+}
+
+impl SlotVoteTracker {
+    pub(crate) fn get_voted_slot_updates(&mut self) -> Option<Vec<Pubkey>> {
+        self.voted_slot_updates.take()
+    }
+
+    pub fn get_or_insert_optimistic_votes_tracker(&mut self, hash: Hash) -> &mut VoteStakeTracker {
+        self.optimistic_votes_tracker.entry(hash).or_default()
+    }
+    pub(crate) fn optimistic_votes_tracker(&self, hash: &Hash) -> Option<&VoteStakeTracker> {
+        self.optimistic_votes_tracker.get(hash)
+    }
+}
+
+pub fn initialize_progress_and_fork_choice(
+    root_bank: &Bank,
+    mut frozen_banks: Vec<Arc<Bank>>,
+    my_pubkey: &Pubkey,
+    vote_account: &Pubkey,
+    duplicate_slot_hashes: Vec<(Slot, Hash)>,
+) -> (ProgressMap, HeaviestSubtreeForkChoice) {
+    let mut progress = ProgressMap::default();
+
+    frozen_banks.sort_by_key(|bank| bank.slot());
+
+    // Initialize progress map with any root banks
+    for bank in &frozen_banks {
+        let prev_leader_slot = progress.get_bank_prev_leader_slot(bank);
+        progress.insert(
+            bank.slot(),
+            ForkProgress::new_from_bank(bank, my_pubkey, vote_account, prev_leader_slot, 0, 0),
+        );
+    }
+    let root = root_bank.slot();
+    let mut heaviest_subtree_fork_choice =
+        HeaviestSubtreeForkChoice::new_from_frozen_banks((root, root_bank.hash()), &frozen_banks);
+
+    for slot_hash in duplicate_slot_hashes {
+        heaviest_subtree_fork_choice.mark_fork_invalid_candidate(&slot_hash);
+    }
+
+    (progress, heaviest_subtree_fork_choice)
 }
 
 #[cfg(test)]
