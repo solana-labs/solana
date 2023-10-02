@@ -957,6 +957,6 @@ fn process_activate(
         FEATURE_NAMES.get(&feature_id).unwrap(),
         feature_id
     );
-    rpc_client.send_and_confirm_transaction_with_spinner(&transaction)?;
-    Ok("".to_string())
+    let signature = rpc_client.send_and_confirm_transaction_with_spinner(&transaction)?;
+    Ok(format!("Signature: {signature}"))
 }
