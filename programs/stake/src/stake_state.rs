@@ -633,15 +633,56 @@ pub fn delegate(
     }
 }
 
+fn deactivate_stake(
+    invoke_context: &InvokeContext,
+    stake: &mut Stake,
+    stake_flags: &mut StakeFlags,
+    epoch: Epoch,
+) -> Result<(), InstructionError> {
+    if invoke_context
+        .feature_set
+        .is_active(&feature_set::stake_redelegate_instruction::id())
+    {
+        if stake_flags.contains(StakeFlags::MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED) {
+            let stake_history = invoke_context.get_sysvar_cache().get_stake_history()?;
+            // when MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED flag is set on stake_flags,
+            // deactivation is only permitted when the stake delegation activating amount is zero.
+            let status = stake.delegation.stake_activating_and_deactivating(
+                epoch,
+                Some(stake_history.as_ref()),
+                new_warmup_cooldown_rate_epoch(invoke_context),
+            );
+            if status.activating != 0 {
+                Err(InstructionError::from(
+                    StakeError::RedelegatedStakeMustFullyActivateBeforeDeactivationIsPermitted,
+                ))
+            } else {
+                stake.deactivate(epoch)?;
+                // After deactivation, need to clear `MustFullyActivateBeforeDeactivationIsPermitted` flag if any.
+                // So that future activation and deactivation are not subject to that restriction.
+                stake_flags
+                    .remove(StakeFlags::MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED);
+                Ok(())
+            }
+        } else {
+            stake.deactivate(epoch)?;
+            Ok(())
+        }
+    } else {
+        stake.deactivate(epoch)?;
+        Ok(())
+    }
+}
+
 pub fn deactivate(
+    invoke_context: &InvokeContext,
     stake_account: &mut BorrowedAccount,
     clock: &Clock,
     signers: &HashSet<Pubkey>,
 ) -> Result<(), InstructionError> {
-    if let StakeStateV2::Stake(meta, mut stake, stake_flags) = stake_account.get_state()? {
+    if let StakeStateV2::Stake(meta, mut stake, mut stake_flags) = stake_account.get_state()? {
         meta.authorized.check(signers, StakeAuthorize::Staker)?;
-        stake.deactivate(clock.epoch)?;
-
+        deactivate_stake(invoke_context, &mut stake, &mut stake_flags, clock.epoch)?;
         stake_account.set_state(&StakeStateV2::Stake(meta, stake, stake_flags))
     } else {
         Err(InstructionError::InvalidAccountData)
@@ -975,7 +1016,7 @@ pub fn redelegate(
     // deactivate `stake_account`
     //
     // Note: This function also ensures `signers` contains the `StakeAuthorize::Staker`
-    deactivate(stake_account, &clock, signers)?;
+    deactivate(invoke_context, stake_account, &clock, signers)?;
 
     // transfer the effective stake to the uninitialized stake account
     stake_account.checked_sub_lamports(effective_stake)?;
@@ -1001,7 +1042,7 @@ pub fn redelegate(
             &vote_state.convert_to_current(),
             clock.epoch,
         ),
-        StakeFlags::empty(),
+        StakeFlags::MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED,
     ))?;
 
     Ok(())
@@ -1115,6 +1156,7 @@ pub fn withdraw(
 }
 
 pub(crate) fn deactivate_delinquent(
+    invoke_context: &InvokeContext,
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
     stake_account: &mut BorrowedAccount,
@@ -1148,7 +1190,7 @@ pub(crate) fn deactivate_delinquent(
         return Err(StakeError::InsufficientReferenceVotes.into());
     }
 
-    if let StakeStateV2::Stake(meta, mut stake, stake_flags) = stake_account.get_state()? {
+    if let StakeStateV2::Stake(meta, mut stake, mut stake_flags) = stake_account.get_state()? {
         if stake.delegation.voter_pubkey != *delinquent_vote_account_pubkey {
             return Err(StakeError::VoteAddressMismatch.into());
         }
@@ -1156,7 +1198,7 @@ pub(crate) fn deactivate_delinquent(
         // Deactivate the stake account if its delegated vote account has never voted or has not
         // voted in the last `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION`
         if eligible_for_deactivate_delinquent(&delinquent_vote_state.epoch_credits, current_epoch) {
-            stake.deactivate(current_epoch)?;
+            deactivate_stake(invoke_context, &mut stake, &mut stake_flags, current_epoch)?;
             stake_account.set_state(&StakeStateV2::Stake(meta, stake, stake_flags))
         } else {
             Err(StakeError::MinimumDelinquentEpochsForDeactivationNotMet.into())

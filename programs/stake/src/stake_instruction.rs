@@ -267,7 +267,7 @@ declare_process_instruction!(
                 let mut me = get_stake_account()?;
                 let clock =
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
-                deactivate(&mut me, &clock, &signers)
+                deactivate(invoke_context, &mut me, &clock, &signers)
             }
             Ok(StakeInstruction::SetLockup(lockup)) => {
                 let mut me = get_stake_account()?;
@@ -413,6 +413,7 @@ declare_process_instruction!(
 
                 let clock = invoke_context.get_sysvar_cache().get_clock()?;
                 deactivate_delinquent(
+                    invoke_context,
                     transaction_context,
                     instruction_context,
                     &mut me,
@@ -7197,6 +7198,10 @@ mod tests {
                                 epoch: current_epoch,
                                 ..Clock::default()
                             }),
+                        ),
+                        (
+                            stake_history::id(),
+                            create_account_shared_data_for_test(&StakeHistory::default()),
                         ),
                     ],
                     vec![

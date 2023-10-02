@@ -6577,10 +6577,9 @@ fn test_same_program_id_uses_unqiue_executable_accounts() {
     declare_process_instruction!(process_instruction, 1, |invoke_context| {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
-        let _ = instruction_context
-            .try_borrow_program_account(transaction_context, 1)?
-            .checked_add_lamports(1);
-        Ok(())
+        instruction_context
+            .try_borrow_program_account(transaction_context, 0)?
+            .set_data_length(2)
     });
 
     let (genesis_config, mint_keypair) = create_genesis_config(50000);
@@ -6592,7 +6591,7 @@ fn test_same_program_id_uses_unqiue_executable_accounts() {
 
     // Add a new program owned by the first
     let program2_pubkey = solana_sdk::pubkey::new_rand();
-    let mut program2_account = AccountSharedData::new(42, 1, &program1_pubkey);
+    let mut program2_account = AccountSharedData::new(1, 1, &program1_pubkey);
     program2_account.set_executable(true);
     bank.store_account(&program2_pubkey, &program2_account);
 
@@ -6604,8 +6603,8 @@ fn test_same_program_id_uses_unqiue_executable_accounts() {
         bank.last_blockhash(),
     );
     assert!(bank.process_transaction(&tx).is_ok());
-    assert_eq!(1, bank.get_balance(&program1_pubkey));
-    assert_eq!(42, bank.get_balance(&program2_pubkey));
+    assert_eq!(6, bank.get_account(&program1_pubkey).unwrap().data().len());
+    assert_eq!(1, bank.get_account(&program2_pubkey).unwrap().data().len());
 }
 
 fn get_shrink_account_size() -> usize {

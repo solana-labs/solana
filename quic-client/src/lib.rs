@@ -19,7 +19,7 @@ use {
     solana_connection_cache::{
         connection_cache::{
             BaseClientConnection, ClientError, ConnectionCache, ConnectionManager, ConnectionPool,
-            ConnectionPoolError, Protocol,
+            ConnectionPoolError, NewConnectionConfig, Protocol,
         },
         connection_cache_stats::ConnectionCacheStats,
     },
@@ -53,9 +53,11 @@ impl ConnectionPool for QuicPool {
     type BaseClientConnection = Quic;
     type NewConnectionConfig = QuicConfig;
 
-    fn add_connection(&mut self, config: &Self::NewConnectionConfig, addr: &SocketAddr) {
+    fn add_connection(&mut self, config: &Self::NewConnectionConfig, addr: &SocketAddr) -> usize {
         let connection = self.create_pool_entry(config, addr);
+        let idx = self.connections.len();
         self.connections.push(connection);
+        idx
     }
 
     fn num_connections(&self) -> usize {
@@ -93,8 +95,8 @@ pub struct QuicConfig {
     client_endpoint: Option<Endpoint>,
 }
 
-impl QuicConfig {
-    pub fn new() -> Result<Self, ClientError> {
+impl NewConnectionConfig for QuicConfig {
+    fn new() -> Result<Self, ClientError> {
         let (cert, priv_key) =
             new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::UNSPECIFIED))?;
         Ok(Self {

@@ -85,6 +85,7 @@ pub struct BankingStageStats {
     pub(crate) dropped_duplicated_packets_count: AtomicUsize,
     dropped_forward_packets_count: AtomicUsize,
     newly_buffered_packets_count: AtomicUsize,
+    newly_buffered_forwarded_packets_count: AtomicUsize,
     current_buffered_packets_count: AtomicUsize,
     rebuffered_packets_count: AtomicUsize,
     consumed_buffered_packets_count: AtomicUsize,
@@ -147,109 +148,115 @@ impl BankingStageStats {
         if self.last_report.should_update(report_interval_ms) {
             datapoint_info!(
                 "banking_stage-loop-stats",
-                ("id", self.id as i64, i64),
+                ("id", self.id, i64),
                 (
                     "receive_and_buffer_packets_count",
                     self.receive_and_buffer_packets_count
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "dropped_packets_count",
-                    self.dropped_packets_count.swap(0, Ordering::Relaxed) as i64,
+                    self.dropped_packets_count.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "dropped_duplicated_packets_count",
                     self.dropped_duplicated_packets_count
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "dropped_forward_packets_count",
                     self.dropped_forward_packets_count
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "newly_buffered_packets_count",
-                    self.newly_buffered_packets_count.swap(0, Ordering::Relaxed) as i64,
+                    self.newly_buffered_packets_count.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "newly_buffered_forwarded_packets_count",
+                    self.newly_buffered_forwarded_packets_count
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "current_buffered_packets_count",
                     self.current_buffered_packets_count
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "rebuffered_packets_count",
-                    self.rebuffered_packets_count.swap(0, Ordering::Relaxed) as i64,
+                    self.rebuffered_packets_count.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "consumed_buffered_packets_count",
                     self.consumed_buffered_packets_count
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "forwarded_transaction_count",
-                    self.forwarded_transaction_count.swap(0, Ordering::Relaxed) as i64,
+                    self.forwarded_transaction_count.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "forwarded_vote_count",
-                    self.forwarded_vote_count.swap(0, Ordering::Relaxed) as i64,
+                    self.forwarded_vote_count.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "consume_buffered_packets_elapsed",
                     self.consume_buffered_packets_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "receive_and_buffer_packets_elapsed",
                     self.receive_and_buffer_packets_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "filter_pending_packets_elapsed",
                     self.filter_pending_packets_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "packet_conversion_elapsed",
-                    self.packet_conversion_elapsed.swap(0, Ordering::Relaxed) as i64,
+                    self.packet_conversion_elapsed.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "transaction_processing_elapsed",
                     self.transaction_processing_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "packet_batch_indices_len_min",
-                    self.batch_packet_indexes_len.minimum().unwrap_or(0) as i64,
+                    self.batch_packet_indexes_len.minimum().unwrap_or(0),
                     i64
                 ),
                 (
                     "packet_batch_indices_len_max",
-                    self.batch_packet_indexes_len.maximum().unwrap_or(0) as i64,
+                    self.batch_packet_indexes_len.maximum().unwrap_or(0),
                     i64
                 ),
                 (
                     "packet_batch_indices_len_mean",
-                    self.batch_packet_indexes_len.mean().unwrap_or(0) as i64,
+                    self.batch_packet_indexes_len.mean().unwrap_or(0),
                     i64
                 ),
                 (
                     "packet_batch_indices_len_90pct",
-                    self.batch_packet_indexes_len.percentile(90.0).unwrap_or(0) as i64,
+                    self.batch_packet_indexes_len.percentile(90.0).unwrap_or(0),
                     i64
                 )
             );
