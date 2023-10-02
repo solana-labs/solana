@@ -638,7 +638,7 @@ impl LoadedPrograms {
         self.remove_programs_with_no_entries();
     }
 
-    /// Before rerooting the blockstore this removes all superflous entries
+    /// Before rerooting the blockstore this removes all superfluous entries
     pub fn prune<F: ForkGraph>(
         &mut self,
         fork_graph: &F,
