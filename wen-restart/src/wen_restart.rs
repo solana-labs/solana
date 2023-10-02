@@ -20,7 +20,7 @@ use {
 // The number of ancestor slots sent is hard coded at 81000, because that's
 // 400ms * 81000 = 9 hours, we assume most restart decisions to be made in 9
 // hours.
-const MAX_SLOTS_ON_VOTED_FORKS: u32 = 81000;
+const MAX_SLOTS_ON_VOTED_FORKS: u64 = 81000;
 
 pub fn wait_for_wen_restart(
     wen_restart_path: &PathBuf,
@@ -41,6 +41,9 @@ pub fn wait_for_wen_restart(
                     Some(parent_slot) => {
                         last_vote_fork.push(parent_slot);
                         slot = parent_slot;
+                        if last_vote_slot.saturating_sub(slot) > MAX_SLOTS_ON_VOTED_FORKS {
+                            break;
+                        }
                     }
                     None => break,
                 };
@@ -114,19 +117,37 @@ mod tests {
         let mut wen_restart_proto_path = ledger_path.path().to_path_buf();
         wen_restart_proto_path.push("wen_restart_status.proto");
         let blockstore = Arc::new(blockstore::Blockstore::open(ledger_path.path()).unwrap());
-        let last_vote_slot = 400;
-        for i in 0..last_vote_slot {
+        let expected_slots = 400;
+        let last_vote_slot = MAX_SLOTS_ON_VOTED_FORKS + expected_slots;
+        let last_parent = MAX_SLOTS_ON_VOTED_FORKS - (std::u16::MAX as u64) + 1;
+        for i in 0..expected_slots {
             let entries = entry::create_ticks(1, 0, Hash::default());
+            let parent_slot = if i > 0 {
+                MAX_SLOTS_ON_VOTED_FORKS + i
+            } else {
+                last_parent
+            };
             let shreds = blockstore::entries_to_test_shreds(
                 &entries,
-                i + 1,
-                i,
+                MAX_SLOTS_ON_VOTED_FORKS + i + 1,
+                parent_slot,
                 false,
                 0,
                 true, // merkle_variant
             );
             blockstore.insert_shreds(shreds, None, false).unwrap();
         }
+        // link directly to slot 1 whose distance to last_vote > MAX_SLOTS_ON_VOTED_FORKS so it will not be included.
+        let entries = entry::create_ticks(1, 0, Hash::default());
+        let shreds = blockstore::entries_to_test_shreds(
+            &entries,
+            last_parent,
+            1,
+            false,
+            0,
+            true, // merkle_variant
+        );
+        blockstore.insert_shreds(shreds, None, false).unwrap();
         let last_vote_bankhash = Hash::new_unique();
         assert!(wait_for_wen_restart(
             &wen_restart_proto_path,
