@@ -2930,37 +2930,42 @@ impl Blockstore {
         let lookup_tables = DashSet::new();
         let possible_cpi_alt_extend = AtomicBool::new(false);
 
+        fn add_to_set<'a>(set: &DashSet<Pubkey>, iter: impl IntoIterator<Item = &'a Pubkey>) {
+            iter.into_iter().for_each(|key| {
+                set.insert(*key);
+            });
+        }
+
         (starting_slot..=ending_slot)
             .into_par_iter()
             .for_each(|slot| {
                 if let Ok(entries) = self.get_slot_entries(slot, 0) {
                     entries.into_par_iter().for_each(|entry| {
                         entry.transactions.into_iter().for_each(|tx| {
-                            for account in tx.message.static_account_keys() {
-                                result.insert(*account);
-                            }
-
-                            if let Some(lookups) = tx.message.address_table_lookups() {
-                                lookups.iter().for_each(|lookup| {
-                                    lookup_tables.insert(lookup.account_key);
-                                });
-                            }
-
-                            let tx = SanitizedVersionedTransaction::try_from(tx)
-                                .expect("transaction failed to sanitize");
-                            let alt_scan_result = scan_transaction(&tx);
-                            match alt_scan_result {
-                                ScanResult::NotFound => {}
-                                ScanResult::NativeUsed(keys) => {
-                                    keys.into_iter().for_each(|key| {
-                                        result.insert(key);
-                                    });
+                            // Attempt to verify transaction and load addresses from the current bank,
+                            // or manually scan the transaction for addresses if the transaction.
+                            if let Ok(tx) = bank.fully_verify_transaction(tx.clone()) {
+                                add_to_set(&result, tx.message().account_keys().iter());
+                            } else {
+                                add_to_set(&result, tx.message.static_account_keys());
+                                if let Some(lookups) = tx.message.address_table_lookups() {
+                                    add_to_set(
+                                        &lookup_tables,
+                                        lookups.iter().map(|lookup| &lookup.account_key),
+                                    );
                                 }
-                                ScanResult::NonNativeUsed(keys) => {
-                                    keys.into_iter().for_each(|key| {
-                                        result.insert(key);
-                                    });
-                                    possible_cpi_alt_extend.store(true, Ordering::Relaxed);
+
+                                let tx = SanitizedVersionedTransaction::try_from(tx)
+                                    .expect("transaction failed to sanitize");
+
+                                let alt_scan_result = scan_transaction(&tx);
+                                match alt_scan_result {
+                                    ScanResult::NotFound => {}
+                                    ScanResult::NativeUsed(keys) => add_to_set(&result, &keys),
+                                    ScanResult::NonNativeUsed(keys) => {
+                                        add_to_set(&result, &keys);
+                                        possible_cpi_alt_extend.store(true, Ordering::Relaxed);
+                                    }
                                 }
                             }
                         });
@@ -2970,18 +2975,12 @@ impl Blockstore {
 
         // For each unique lookup table add all accounts to the minimized set.
         lookup_tables.into_par_iter().for_each(|lookup_table_key| {
-            let Some(lookup_table_account) = bank.get_account(&lookup_table_key) else {
-                return;
-            };
-
-            let Ok(lookup_table) = AddressLookupTable::deserialize(lookup_table_account.data())
-            else {
-                return;
-            };
-
-            for address in lookup_table.addresses.iter() {
-                result.insert(*address);
-            }
+            bank.get_account(&lookup_table_key)
+                .map(|lookup_table_account| {
+                    AddressLookupTable::deserialize(lookup_table_account.data()).map(|t| {
+                        add_to_set(&result, &t.addresses[..]);
+                    })
+                });
         });
 
         (result, possible_cpi_alt_extend.into_inner())

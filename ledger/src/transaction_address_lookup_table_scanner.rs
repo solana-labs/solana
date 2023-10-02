@@ -29,7 +29,7 @@ pub enum ScanResult {
 }
 
 pub fn scan_transaction(transaction: &SanitizedVersionedTransaction) -> ScanResult {
-    // If the program is not present in the account keys, it was not used
+    // If the ALT program is not present in the account keys, it was not used
     if !transaction
         .get_message()
         .message
