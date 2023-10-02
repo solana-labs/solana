@@ -7,16 +7,18 @@ use {
         cluster_info_vote_listener::{
             GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VoteTracker,
         },
-        cluster_slots_service::{cluster_slots::ClusterSlots, ClusterSlotsUpdateSender},
         commitment_service::{AggregateCommitmentService, CommitmentAggregationData},
         consensus::{
-            fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
+            cluster_slots::ClusterSlots,
+            cluster_slots_service::ClusterSlotsUpdateSender,
+            fork_choice::{ForkChoice, HeaviestForkFailures, SelectVoteAndResetForkResult},
             heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
             latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
             progress_map::{ForkProgress, ProgressMap, PropagatedStats, ReplaySlotStats},
             tower_storage::{SavedTower, SavedTowerVersions, TowerStorage},
+            vote_stake_tracker::initialize_progress_and_fork_choice,
             ComputedBankState, Stake, SwitchForkDecision, ThresholdDecision, Tower, VotedStakes,
-            SWITCH_FORK_THRESHOLD,
+            SUPERMINORITY_THRESHOLD, SWITCH_FORK_THRESHOLD,
         },
         cost_update_service::CostUpdate,
         repair::{
@@ -89,7 +91,6 @@ use {
 };
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
-pub const SUPERMINORITY_THRESHOLD: f64 = 1f64 / 3f64;
 pub const MAX_UNCONFIRMED_SLOTS: usize = 5;
 pub const DUPLICATE_LIVENESS_THRESHOLD: f64 = 0.1;
 pub const DUPLICATE_THRESHOLD: f64 = 1.0 - SWITCH_FORK_THRESHOLD - DUPLICATE_LIVENESS_THRESHOLD;
@@ -106,26 +107,6 @@ lazy_static! {
         .thread_name(|i| format!("solReplay{i:02}"))
         .build()
         .unwrap();
-}
-
-#[derive(PartialEq, Eq, Debug)]
-pub enum HeaviestForkFailures {
-    LockedOut(u64),
-    FailedThreshold(
-        Slot,
-        /* Observed stake */ u64,
-        /* Total stake */ u64,
-    ),
-    FailedSwitchThreshold(
-        Slot,
-        /* Observed stake */ u64,
-        /* Total stake */ u64,
-    ),
-    NoPropagatedConfirmation(
-        Slot,
-        /* Observed stake */ u64,
-        /* Total stake */ u64,
-    ),
 }
 
 // Implement a destructor for the ReplayStage thread to signal it exited
@@ -1247,45 +1228,13 @@ impl ReplayStage {
             )
         };
 
-        Self::initialize_progress_and_fork_choice(
+        initialize_progress_and_fork_choice(
             &root_bank,
             frozen_banks,
             my_pubkey,
             vote_account,
             duplicate_slot_hashes,
         )
-    }
-
-    pub fn initialize_progress_and_fork_choice(
-        root_bank: &Bank,
-        mut frozen_banks: Vec<Arc<Bank>>,
-        my_pubkey: &Pubkey,
-        vote_account: &Pubkey,
-        duplicate_slot_hashes: Vec<(Slot, Hash)>,
-    ) -> (ProgressMap, HeaviestSubtreeForkChoice) {
-        let mut progress = ProgressMap::default();
-
-        frozen_banks.sort_by_key(|bank| bank.slot());
-
-        // Initialize progress map with any root banks
-        for bank in &frozen_banks {
-            let prev_leader_slot = progress.get_bank_prev_leader_slot(bank);
-            progress.insert(
-                bank.slot(),
-                ForkProgress::new_from_bank(bank, my_pubkey, vote_account, prev_leader_slot, 0, 0),
-            );
-        }
-        let root = root_bank.slot();
-        let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_frozen_banks(
-            (root, root_bank.hash()),
-            &frozen_banks,
-        );
-
-        for slot_hash in duplicate_slot_hashes {
-            heaviest_subtree_fork_choice.mark_fork_invalid_candidate(&slot_hash);
-        }
-
-        (progress, heaviest_subtree_fork_choice)
     }
 
     #[allow(clippy::too_many_arguments)]

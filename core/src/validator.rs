@@ -12,7 +12,7 @@ use {
         consensus::{
             reconcile_blockstore_roots_with_external_source,
             tower_storage::{NullTowerStorage, TowerStorage},
-            ExternalRootSource, Tower,
+            ExternalRootSource, Result as ConsensusResult, Tower, TowerError,
         },
         ledger_metric_report_service::LedgerMetricReportService,
         poh_timing_report_service::PohTimingReportService,
@@ -1552,7 +1552,7 @@ fn maybe_cluster_restart_with_hard_fork(config: &ValidatorConfig, root_slot: Slo
 }
 
 fn post_process_restored_tower(
-    restored_tower: crate::consensus::Result<Tower>,
+    restored_tower: ConsensusResult<Tower>,
     validator_identity: &Pubkey,
     vote_account: &Pubkey,
     config: &ValidatorConfig,
@@ -1580,16 +1580,14 @@ fn post_process_restored_tower(
             // unconditionally relax tower requirement so that we can always restore tower
             // from root bank.
             should_require_tower = false;
-            return Err(crate::consensus::TowerError::HardFork(
-                hard_fork_restart_slot,
-            ));
+            return Err(TowerError::HardFork(hard_fork_restart_slot));
         }
 
         if let Some(warp_slot) = config.warp_slot {
             // unconditionally relax tower requirement so that we can always restore tower
             // from root bank after the warp
             should_require_tower = false;
-            return Err(crate::consensus::TowerError::HardFork(warp_slot));
+            return Err(TowerError::HardFork(warp_slot));
         }
 
         tower

@@ -1,6 +1,6 @@
 use {
     crate::{
-        cluster_slots_service::cluster_slots::ClusterSlots,
+        consensus::cluster_slots::ClusterSlots,
         repair::{
             duplicate_repair_status::get_ancestor_hash_repair_sample_size,
             quic_endpoint::{LocalRequest, RemoteRequest},

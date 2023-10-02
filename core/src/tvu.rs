@@ -9,9 +9,11 @@ use {
             GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver,
             VerifiedVoteReceiver, VoteTracker,
         },
-        cluster_slots_service::{cluster_slots::ClusterSlots, ClusterSlotsService},
         completed_data_sets_service::CompletedDataSetsSender,
-        consensus::tower_storage::TowerStorage,
+        consensus::{
+            cluster_slots::ClusterSlots, cluster_slots_service::ClusterSlotsService,
+            tower_storage::TowerStorage,
+        },
         cost_update_service::CostUpdateService,
         drop_bank_service::DropBankService,
         ledger_cleanup_service::LedgerCleanupService,
