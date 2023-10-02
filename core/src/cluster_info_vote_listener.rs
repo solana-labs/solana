@@ -1,7 +1,6 @@
 use {
     crate::{
         banking_trace::{BankingPacketBatch, BankingPacketSender},
-        consensus::vote_stake_tracker::SlotVoteTracker,
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
         result::{Error, Result},
@@ -12,6 +11,7 @@ use {
     },
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Select, Sender},
     log::*,
+    solana_consensus::vote_stake_tracker::SlotVoteTracker,
     solana_gossip::{
         cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
         crds::Cursor,

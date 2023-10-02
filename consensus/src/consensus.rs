@@ -1,17 +1,5 @@
-pub mod cluster_slots;
-pub mod cluster_slots_service;
-pub mod fork_choice;
-pub mod heaviest_subtree_fork_choice;
-pub(crate) mod latest_validator_votes_for_frozen_banks;
-pub mod progress_map;
-mod tower1_14_11;
-mod tower1_7_14;
-pub mod tower_storage;
-pub mod tree_diff;
-pub mod vote_stake_tracker;
-
 use {
-    crate::consensus::{
+    crate::{
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
         progress_map::{LockoutIntervals, ProgressMap},
@@ -155,7 +143,7 @@ pub type Stake = u64;
 pub type VotedStakes = HashMap<Slot, Stake>;
 pub type PubkeyVotes = Vec<(Pubkey, Slot)>;
 
-pub(crate) struct ComputedBankState {
+pub struct ComputedBankState {
     pub voted_stakes: VotedStakes,
     pub total_stake: Stake,
     #[allow(dead_code)]
@@ -219,7 +207,7 @@ pub struct Tower {
     pub node_pubkey: Pubkey,
     threshold_depth: usize,
     threshold_size: f64,
-    pub(crate) vote_state: VoteState,
+    pub vote_state: VoteState,
     last_vote: VoteTransaction,
     #[serde(skip)]
     // The blockhash used in the last vote transaction, may or may not equal the
@@ -275,7 +263,7 @@ impl Tower {
         tower
     }
 
-    #[cfg(test)]
+    // pub for tests
     pub fn new_for_tests(threshold_depth: usize, threshold_size: f64) -> Self {
         Self {
             threshold_depth,
@@ -309,7 +297,7 @@ impl Tower {
         Self::new(node_pubkey, vote_account, root, &heaviest_bank)
     }
 
-    pub(crate) fn collect_vote_lockouts(
+    pub fn collect_vote_lockouts(
         vote_account_pubkey: &Pubkey,
         bank_slot: Slot,
         vote_accounts: &VoteAccountsHashMap,
@@ -524,7 +512,7 @@ impl Tower {
 
     /// If we've recently updated the vote state by applying a new vote
     /// or syncing from a bank, generate the proper last_vote.
-    pub(crate) fn update_last_vote_from_vote_state(&mut self, vote_hash: Hash) {
+    pub fn update_last_vote_from_vote_state(&mut self, vote_hash: Hash) {
         let mut new_vote = VoteTransaction::from(VoteStateUpdate::new(
             self.vote_state
                 .votes
@@ -571,7 +559,7 @@ impl Tower {
         }
     }
 
-    #[cfg(test)]
+    // Used for tests
     pub fn record_vote(&mut self, slot: Slot, hash: Hash) -> Option<Slot> {
         self.record_bank_vote_and_update_lockouts(slot, hash)
     }
@@ -1009,7 +997,7 @@ impl Tower {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn check_switch_threshold(
+    pub fn check_switch_threshold(
         &mut self,
         switch_slot: Slot,
         ancestors: &HashMap<Slot, HashSet<u64>>,
@@ -1514,9 +1502,7 @@ pub fn reconcile_blockstore_roots_with_external_source(
 pub mod test {
     use {
         super::*,
-        crate::consensus::{
-            heaviest_subtree_fork_choice::SlotHashKey, tower_storage::FileTowerStorage,
-        },
+        crate::{heaviest_subtree_fork_choice::SlotHashKey, tower_storage::FileTowerStorage},
         itertools::Itertools,
         solana_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path},
         solana_sdk::{

@@ -16,7 +16,6 @@ pub mod cache_block_meta_service;
 pub mod cluster_info_vote_listener;
 pub mod commitment_service;
 pub mod completed_data_sets_service;
-pub mod consensus;
 pub mod cost_update_service;
 pub mod drop_bank_service;
 pub mod fetch_stage;
@@ -50,9 +49,6 @@ pub mod vote_simulator;
 pub mod voting_service;
 pub mod warm_quic_cache_service;
 pub mod window_service;
-
-#[macro_use]
-extern crate eager;
 
 #[macro_use]
 extern crate log;

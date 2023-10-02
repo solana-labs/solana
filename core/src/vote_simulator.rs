@@ -1,14 +1,6 @@
 use {
     crate::{
         cluster_info_vote_listener::VoteTracker,
-        consensus::{
-            cluster_slots::ClusterSlots,
-            fork_choice::{HeaviestForkFailures, SelectVoteAndResetForkResult},
-            heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
-            latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
-            progress_map::{ForkProgress, ProgressMap},
-            Tower,
-        },
         repair::cluster_slot_state_verifier::{
             DuplicateSlotsTracker, EpochSlotsFrozenSlots, GossipDuplicateConfirmedSlots,
         },
@@ -16,6 +8,14 @@ use {
         unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
     },
     crossbeam_channel::unbounded,
+    solana_consensus::{
+        cluster_slots::ClusterSlots,
+        consensus::Tower,
+        fork_choice::{HeaviestForkFailures, SelectVoteAndResetForkResult},
+        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+        latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
+        progress_map::{ForkProgress, ProgressMap},
+    },
     solana_runtime::{
         accounts_background_service::AbsRequestSender,
         bank::Bank,
@@ -375,11 +375,11 @@ pub fn initialize_state(
 mod test {
     use {
         super::*,
-        crate::{
-            consensus::{fork_choice::ForkChoice, tree_diff::TreeDiff, SwitchForkDecision},
-            vote_simulator::VoteSimulator,
-        },
+        crate::vote_simulator::VoteSimulator,
         itertools::Itertools,
+        solana_consensus::{
+            consensus::SwitchForkDecision, fork_choice::ForkChoice, tree_diff::TreeDiff,
+        },
         solana_sdk::{hash::Hash, slot_history::SlotHistory},
         trees::tr,
     };

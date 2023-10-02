@@ -1,7 +1,7 @@
 use {
-    crate::{
-        consensus::{heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice, tree_diff::TreeDiff},
-        repair::{repair_service::RepairService, serve_repair::ShredRepairType},
+    crate::repair::{repair_service::RepairService, serve_repair::ShredRepairType},
+    solana_consensus::{
+        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice, tree_diff::TreeDiff,
     },
     solana_ledger::{blockstore::Blockstore, blockstore_meta::SlotMeta},
     solana_sdk::{clock::Slot, hash::Hash},

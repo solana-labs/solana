@@ -1,5 +1,5 @@
 use {
-    crate::consensus::{
+    crate::{
         fork_choice::ForkChoice,
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         progress_map::{ForkProgress, ProgressMap},
@@ -70,14 +70,14 @@ pub struct SlotVoteTracker {
 }
 
 impl SlotVoteTracker {
-    pub(crate) fn get_voted_slot_updates(&mut self) -> Option<Vec<Pubkey>> {
+    pub fn get_voted_slot_updates(&mut self) -> Option<Vec<Pubkey>> {
         self.voted_slot_updates.take()
     }
 
     pub fn get_or_insert_optimistic_votes_tracker(&mut self, hash: Hash) -> &mut VoteStakeTracker {
         self.optimistic_votes_tracker.entry(hash).or_default()
     }
-    pub(crate) fn optimistic_votes_tracker(&self, hash: &Hash) -> Option<&VoteStakeTracker> {
+    pub fn optimistic_votes_tracker(&self, hash: &Hash) -> Option<&VoteStakeTracker> {
         self.optimistic_votes_tracker.get(hash)
     }
 }

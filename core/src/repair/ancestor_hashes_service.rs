@@ -1,6 +1,5 @@
 use {
     crate::{
-        consensus::cluster_slots::ClusterSlots,
         repair::{
             duplicate_repair_status::{
                 AncestorRequestDecision, AncestorRequestStatus, AncestorRequestType,
@@ -20,6 +19,7 @@ use {
     bincode::serialize,
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     dashmap::{mapref::entry::Entry::Occupied, DashMap},
+    solana_consensus::cluster_slots::ClusterSlots,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::Protocol, ping_pong::Pong},
     solana_ledger::blockstore::Blockstore,
     solana_perf::{

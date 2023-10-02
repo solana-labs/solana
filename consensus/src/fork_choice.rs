@@ -1,7 +1,8 @@
 use {
-    crate::consensus::{
+    crate::{
+        consensus::{SwitchForkDecision, Tower},
         latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
-        progress_map::ProgressMap, SwitchForkDecision, Tower,
+        progress_map::ProgressMap,
     },
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::slot_history::Slot,

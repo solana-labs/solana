@@ -8,7 +8,6 @@ use {
 use {
     crate::{
         cluster_info_vote_listener::VerifiedVoteReceiver,
-        consensus::cluster_slots::ClusterSlots,
         repair::{
             ancestor_hashes_service::{AncestorHashesReplayUpdateReceiver, AncestorHashesService},
             duplicate_repair_status::AncestorDuplicateSlotToRepair,
@@ -20,6 +19,7 @@ use {
     },
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
     lru::LruCache,
+    solana_consensus::cluster_slots::ClusterSlots,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         blockstore::{Blockstore, SlotMeta},

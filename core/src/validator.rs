@@ -9,11 +9,6 @@ use {
         cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
         cluster_info_vote_listener::VoteTracker,
         completed_data_sets_service::CompletedDataSetsService,
-        consensus::{
-            reconcile_blockstore_roots_with_external_source,
-            tower_storage::{NullTowerStorage, TowerStorage},
-            ExternalRootSource, Result as ConsensusResult, Tower, TowerError,
-        },
         ledger_metric_report_service::LedgerMetricReportService,
         poh_timing_report_service::PohTimingReportService,
         repair::{self, serve_repair::ServeRepair, serve_repair_service::ServeRepairService},
@@ -38,6 +33,13 @@ use {
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     },
     solana_client::connection_cache::{ConnectionCache, Protocol},
+    solana_consensus::{
+        consensus::{
+            reconcile_blockstore_roots_with_external_source, ExternalRootSource,
+            Result as ConsensusResult, Tower, TowerError,
+        },
+        tower_storage::{NullTowerStorage, TowerStorage},
+    },
     solana_entry::poh::compute_hash_time_ns,
     solana_geyser_plugin_manager::{
         geyser_plugin_service::GeyserPluginService, GeyserPluginManagerRequest,

@@ -1,10 +1,8 @@
-#[cfg(test)]
-use trees::{Tree, TreeWalk};
 use {
-    crate::consensus::{
-        fork_choice::ForkChoice,
+    crate::{
+        consensus::Tower, fork_choice::ForkChoice,
         latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
-        progress_map::ProgressMap, tree_diff::TreeDiff, Tower,
+        progress_map::ProgressMap, tree_diff::TreeDiff,
     },
     solana_measure::measure::Measure,
     solana_runtime::{bank::Bank, bank_forks::BankForks, epoch_stakes::EpochStakes},
@@ -22,6 +20,7 @@ use {
         sync::{Arc, RwLock},
         time::Instant,
     },
+    trees::{Tree, TreeWalk},
 };
 
 pub type ForkWeight = u64;
@@ -164,7 +163,6 @@ impl ForkInfo {
     }
 }
 
-#[cfg(test)]
 impl PartialEq for ForkInfo {
     // Basic fork structure equality
     fn eq(&self, other: &Self) -> bool {
@@ -180,7 +178,6 @@ pub struct HeaviestSubtreeForkChoice {
     last_root_time: Instant,
 }
 
-#[cfg(test)]
 impl PartialEq for HeaviestSubtreeForkChoice {
     // Basic fork structure equality
     fn eq(&self, other: &Self) -> bool {
@@ -196,7 +193,6 @@ impl PartialOrd for HeaviestSubtreeForkChoice {
     }
 }
 
-#[cfg(test)]
 impl Eq for HeaviestSubtreeForkChoice {}
 #[cfg(test)]
 impl Ord for HeaviestSubtreeForkChoice {
@@ -252,7 +248,7 @@ impl HeaviestSubtreeForkChoice {
         Self::new_from_frozen_banks((root_bank.slot(), root_bank.hash()), &frozen_banks)
     }
 
-    #[cfg(test)]
+    // pub for tests
     pub fn new_from_tree<T: GetSlotHash>(forks: Tree<T>) -> Self {
         let root = forks.root().data().slot_hash();
         let mut walk = TreeWalk::from(forks);
@@ -568,7 +564,7 @@ impl HeaviestSubtreeForkChoice {
         }
     }
 
-    #[cfg(test)]
+    // pub for tests
     pub fn ancestors(&self, start_slot_hash_key: SlotHashKey) -> Vec<SlotHashKey> {
         AncestorIterator::new(start_slot_hash_key, &self.fork_infos).collect()
     }

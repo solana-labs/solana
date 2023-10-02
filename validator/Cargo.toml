@@ -36,6 +36,7 @@ serde_yaml = { workspace = true }
 solana-accounts-db = { workspace = true }
 solana-clap-utils = { workspace = true }
 solana-cli-config = { workspace = true }
+solana-consensus = { workspace = true }
 solana-core = { workspace = true }
 solana-download-utils = { workspace = true }
 solana-entry = { workspace = true }

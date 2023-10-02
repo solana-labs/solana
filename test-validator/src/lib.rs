@@ -10,9 +10,9 @@ use {
     },
     solana_cli_output::CliAccount,
     solana_client::rpc_request::MAX_MULTIPLE_ACCOUNTS,
+    solana_consensus::tower_storage::TowerStorage,
     solana_core::{
         admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
-        consensus::tower_storage::TowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_geyser_plugin_manager::{

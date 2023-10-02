@@ -19,6 +19,7 @@ serde_json = { workspace = true }
 solana-accounts-db = { workspace = true }
 solana-cli-output = { workspace = true }
 solana-client = { workspace = true }
+solana-consensus = { workspace = true }
 solana-core = { workspace = true }
 solana-geyser-plugin-manager = { workspace = true }
 solana-gossip = { workspace = true }
