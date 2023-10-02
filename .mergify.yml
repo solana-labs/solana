@@ -73,38 +73,14 @@ pull_request_rules:
           - automerge
       comment:
         message: automerge label removed due to a CI failure
-  - name: v1.14 feature-gate backport
-    conditions:
-      - label=v1.14
-      - label=feature-gate
-    actions:
-      backport:
-        assignees: &BackportAssignee
-          - "{{ merged_by|replace('mergify[bot]', label|select('equalto', 'community')|first|default(author)|replace('community', '@solana-labs/community-pr-subscribers')) }}"
-        title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
-        ignore_conflicts: true
-        labels:
-          - feature-gate
-        branches:
-          - v1.14
-  - name: v1.14 non-feature-gate backport
-    conditions:
-      - label=v1.14
-      - label!=feature-gate
-    actions:
-      backport:
-        assignees: *BackportAssignee
-        title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
-        ignore_conflicts: true
-        branches:
-          - v1.14
   - name: v1.16 feature-gate backport
     conditions:
       - label=v1.16
       - label=feature-gate
     actions:
       backport:
-        assignees: *BackportAssignee
+        assignees: &BackportAssignee
+          - "{{ merged_by|replace('mergify[bot]', label|select('equalto', 'community')|first|default(author)|replace('community', '@solana-labs/community-pr-subscribers')) }}"
         title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
         ignore_conflicts: true
         labels:
@@ -122,6 +98,30 @@ pull_request_rules:
         ignore_conflicts: true
         branches:
           - v1.16
+  - name: v1.17 feature-gate backport
+    conditions:
+      - label=v1.17
+      - label=feature-gate
+    actions:
+      backport:
+        assignees: *BackportAssignee
+        title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
+        ignore_conflicts: true
+        labels:
+          - feature-gate
+        branches:
+          - v1.17
+  - name: v1.17 non-feature-gate backport
+    conditions:
+      - label=v1.17
+      - label!=feature-gate
+    actions:
+      backport:
+        assignees: *BackportAssignee
+        title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
+        ignore_conflicts: true
+        branches:
+          - v1.17
 
 commands_restrictions:
   # The author of copied PRs is the Mergify user.
