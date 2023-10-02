@@ -933,6 +933,10 @@ impl WorkingSlot for Bank {
         self.slot
     }
 
+    fn current_epoch(&self) -> Epoch {
+        self.epoch
+    }
+
     fn is_ancestor(&self, other: Slot) -> bool {
         self.ancestors.contains_key(&other)
     }
@@ -4675,12 +4679,8 @@ impl Bank {
     }
 
     pub fn load_program(&self, pubkey: &Pubkey, reload: bool) -> Arc<LoadedProgram> {
-        let environments = self
-            .loaded_programs_cache
-            .read()
-            .unwrap()
-            .environments
-            .clone();
+        let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
+        let environments = loaded_programs_cache.get_environments_for_epoch(self.epoch);
 
         let mut load_program_metrics = LoadProgramMetrics {
             program_id: pubkey.to_string(),
@@ -4773,20 +4773,22 @@ impl Bank {
                     })
                     .unwrap_or(LoadedProgram::new_tombstone(
                         self.slot,
-                        LoadedProgramType::FailedVerification(environments.program_runtime_v2),
+                        LoadedProgramType::FailedVerification(
+                            environments.program_runtime_v2.clone(),
+                        ),
                     ));
                 Ok(loaded_program)
             }
 
             ProgramAccountLoadResult::InvalidV4Program => Ok(LoadedProgram::new_tombstone(
                 self.slot,
-                LoadedProgramType::FailedVerification(environments.program_runtime_v2),
+                LoadedProgramType::FailedVerification(environments.program_runtime_v2.clone()),
             )),
         }
         .unwrap_or_else(|_| {
             LoadedProgram::new_tombstone(
                 self.slot,
-                LoadedProgramType::FailedVerification(environments.program_runtime_v1),
+                LoadedProgramType::FailedVerification(environments.program_runtime_v1.clone()),
             )
         });
 

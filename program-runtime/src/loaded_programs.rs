@@ -56,8 +56,11 @@ pub trait ForkGraph {
 
 /// Provides information about current working slot, and its ancestors
 pub trait WorkingSlot {
-    /// Returns the current slot value
+    /// Returns the current slot
     fn current_slot(&self) -> Slot;
+
+    /// Returns the epoch of the current slot
+    fn current_epoch(&self) -> Epoch;
 
     /// Returns true if the `other` slot is an ancestor of self, false otherwise
     fn is_ancestor(&self, other: Slot) -> bool;
@@ -529,6 +532,11 @@ pub enum LoadedProgramMatchCriteria {
 }
 
 impl LoadedPrograms {
+    /// Returns the current environments depending on the given epoch
+    pub fn get_environments_for_epoch(&self, _epoch: Epoch) -> &ProgramRuntimeEnvironments {
+        &self.environments
+    }
+
     /// Refill the cache with a single entry. It's typically called during transaction loading,
     /// when the cache doesn't contain the entry corresponding to program `key`.
     /// The function dedupes the cache, in case some other thread replenished the entry in parallel.
@@ -716,6 +724,7 @@ impl LoadedPrograms {
         working_slot: &S,
         keys: impl Iterator<Item = (Pubkey, (LoadedProgramMatchCriteria, u64))>,
     ) -> ExtractedPrograms {
+        let environments = self.get_environments_for_epoch(working_slot.current_epoch());
         let mut missing = Vec::new();
         let mut unloaded = Vec::new();
         let found = keys
@@ -733,7 +742,7 @@ impl LoadedPrograms {
                                     return None;
                                 }
 
-                                if !Self::matches_environment(entry, &self.environments) {
+                                if !Self::matches_environment(entry, environments) {
                                     missing.push((key, count));
                                     return None;
                                 }
@@ -778,7 +787,7 @@ impl LoadedPrograms {
             loaded: LoadedProgramsForTxBatch {
                 entries: found,
                 slot: working_slot.current_slot(),
-                environments: self.environments.clone(),
+                environments: environments.clone(),
             },
             missing,
             unloaded,
@@ -920,7 +929,10 @@ mod tests {
         assert_matches::assert_matches,
         percentage::Percentage,
         solana_rbpf::vm::BuiltinProgram,
-        solana_sdk::{clock::Slot, pubkey::Pubkey},
+        solana_sdk::{
+            clock::{Epoch, Slot},
+            pubkey::Pubkey,
+        },
         std::{
             ops::ControlFlow,
             sync::{
@@ -1470,6 +1482,10 @@ mod tests {
     impl WorkingSlot for TestWorkingSlot {
         fn current_slot(&self) -> Slot {
             self.slot
+        }
+
+        fn current_epoch(&self) -> Epoch {
+            0
         }
 
         fn is_ancestor(&self, other: Slot) -> bool {
