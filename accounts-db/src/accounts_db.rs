@@ -7800,14 +7800,20 @@ impl AccountsDb {
             }
 
             // convert mmapped cache files into slices of data
-            let cache_hash_intermediates = cache_hash_data_files
-                .iter()
-                .map(|d| d.as_ref().unwrap().get_cache_hash_data())
-                .collect::<Vec<_>>();
+            let mut cache_hash_intermediates = vec![];
+            let mut cache_hash_bin_offsets = vec![];
+            cache_hash_data_files.iter().for_each(|d| {
+                let cache_file = d.as_ref().unwrap();
+                cache_hash_intermediates.push(cache_file.get_cache_hash_data());
+                cache_hash_bin_offsets.push(cache_file.get_bin_offsets());
+            });
 
             // turn raw data into merkle tree hashes and sum of lamports
-            let (accounts_hash, capitalization) =
-                accounts_hasher.rest_of_hash_calculation(&cache_hash_intermediates, &mut stats);
+            let (accounts_hash, capitalization) = accounts_hasher.rest_of_hash_calculation(
+                &cache_hash_intermediates,
+                &cache_hash_bin_offsets,
+                &mut stats,
+            );
             let accounts_hash = match kind {
                 CalcAccountsHashKind::Full => AccountsHashKind::Full(AccountsHash(accounts_hash)),
                 CalcAccountsHashKind::Incremental => {

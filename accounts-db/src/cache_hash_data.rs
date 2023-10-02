@@ -22,14 +22,20 @@ pub type SavedTypeSlice = [Vec<EntryType>];
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct Header {
+    /// count of accounts' hashes in the file
     count: usize,
+
+    /// offset for the first pubkey in each bin
+    /// For `N` bins, there will be `N+1` offsets. The boundaries for each bin `i` are from offsets[i] to offsets[i+1].
+    /// The one extra element in offsets help to avoid the need to special case i=0 for offset look up by `bin`, which makes the lookup code faster.
+    number_offsets: usize,
 }
 
 // In order to safely guarantee Header is Pod, it cannot have any padding
 // This is obvious by inspection, but this will also catch any inadvertent
 // changes in the future (i.e. it is a test).
 const _: () = assert!(
-    std::mem::size_of::<Header>() == std::mem::size_of::<usize>(),
+    std::mem::size_of::<Header>() == 2 * std::mem::size_of::<usize>(),
     "Header cannot have any padding"
 );
 
@@ -46,6 +52,7 @@ pub(crate) struct CacheHashDataFile {
     cell_size: u64,
     mmap: MmapMut,
     capacity: u64,
+    element_start_offset: u64,
 }
 
 impl CacheHashDataFileReference {
@@ -74,11 +81,14 @@ impl CacheHashDataFileReference {
             mmap,
             cell_size,
             capacity: 0,
+            element_start_offset: 0,
         };
         let header = cache_file.get_header_mut();
         let entries = header.count;
+        let num_offsets = header.number_offsets;
+        let offset_bytes = CacheHashDataFile::get_bin_offsets_bytes(num_offsets);
 
-        let capacity = cell_size * (entries as u64) + header_size;
+        let capacity = cell_size * (entries as u64) + offset_bytes as u64 + header_size;
         if file_len < capacity {
             return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
         }
@@ -87,6 +97,8 @@ impl CacheHashDataFileReference {
             capacity, file_len,
             "expected: {capacity}, len on disk: {file_len} {}, entries: {entries}, cell_size: {cell_size}", self.path.display(),
         );
+        cache_file.element_start_offset =
+            offset_bytes as u64 + std::mem::size_of::<Header>() as u64;
 
         self.stats
             .total_entries
@@ -111,6 +123,13 @@ impl CacheHashDataFile {
     /// return a slice of a reference to all the cache hash data from the mmapped file
     pub fn get_cache_hash_data(&self) -> &[EntryType] {
         self.get_slice(0)
+    }
+
+    pub fn get_bin_offsets(&self) -> &[u64] {
+        let start = std::mem::size_of::<Header>();
+        let end = self.get_element_offset_byte(0);
+        let bytes = &self.mmap[start..end];
+        bytemuck::cast_slice(bytes)
     }
 
     #[cfg(test)]
@@ -161,9 +180,29 @@ impl CacheHashDataFile {
 
     /// return byte offset of entry 'ix' into a slice which contains a header and at least ix elements
     fn get_element_offset_byte(&self, ix: u64) -> usize {
-        let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
+        let start = (ix * self.cell_size) as usize + self.element_start_offset as usize;
         debug_assert_eq!(start % std::mem::align_of::<EntryType>(), 0);
         start
+    }
+
+    /// Return the number of bytes need to store the offset of first pubkey in the bins with padding
+    fn get_bin_offsets_bytes(n: usize) -> usize {
+        let bytes = n * std::mem::size_of::<usize>();
+        let align_offset =
+            (std::mem::size_of::<Header>() + bytes) % std::mem::align_of::<EntryType>();
+        let padding = if align_offset == 0 {
+            0
+        } else {
+            std::mem::align_of::<EntryType>() - align_offset
+        };
+        bytes + padding
+    }
+
+    fn get_bin_offset_mut(&mut self, ix: usize) -> &mut u64 {
+        let start = std::mem::size_of::<Header>() + ix * std::mem::size_of::<u64>();
+        let end = start + std::mem::size_of::<u64>();
+        let bytes = &mut self.mmap[start..end];
+        bytemuck::from_bytes_mut(bytes)
     }
 
     fn get_header_mut(&mut self) -> &mut Header {
@@ -316,7 +355,10 @@ impl CacheHashData {
             .map(|x: &Vec<EntryType>| x.len())
             .collect::<Vec<_>>();
         let entries = entries.iter().sum::<usize>();
-        let capacity = cell_size * (entries as u64) + std::mem::size_of::<Header>() as u64;
+
+        let offsets_bytes = CacheHashDataFile::get_bin_offsets_bytes(data.len() + 1);
+        let element_start_offset = offsets_bytes as u64 + std::mem::size_of::<Header>() as u64;
+        let capacity = cell_size * (entries as u64) + element_start_offset;
 
         let mmap = CacheHashDataFile::new_map(&cache_path, capacity)?;
         m1.stop();
@@ -327,10 +369,12 @@ impl CacheHashData {
             mmap,
             cell_size,
             capacity,
+            element_start_offset,
         };
 
         let header = cache_file.get_header_mut();
         header.count = entries;
+        header.number_offsets = data.len() + 1;
 
         self.stats
             .cache_file_size
@@ -341,14 +385,23 @@ impl CacheHashData {
 
         let mut m2 = Measure::start("write_to_mmap");
         let mut i = 0;
+        // push a zero at beginning to make bin range look up uniform
+        *cache_file.get_bin_offset_mut(0) = 0;
+        let mut bin = 1;
+
         data.iter().for_each(|x| {
             x.iter().for_each(|item| {
-                let d = cache_file.get_mut(i as u64);
+                //
+                let d = cache_file.get_mut(i);
                 i += 1;
                 *d = *item;
-            })
+            });
+
+            // end of current bin --> slice range for bin x: offset(x), offset(x+1)
+            *cache_file.get_bin_offset_mut(bin) = i;
+            bin += 1;
         });
-        assert_eq!(i, entries);
+        assert_eq!(i as usize, entries);
         m2.stop();
         self.stats
             .write_to_mmap_us
@@ -516,5 +569,13 @@ mod tests {
                 .collect::<Vec<_>>(),
             ct,
         )
+    }
+
+    #[test]
+    fn test_bin_offsets_bytes() {
+        let b1 = CacheHashDataFile::get_bin_offsets_bytes(1);
+        let b2 = CacheHashDataFile::get_bin_offsets_bytes(2);
+        assert!(b1 == 8);
+        assert!(b2 == 16);
     }
 }

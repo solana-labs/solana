@@ -766,6 +766,7 @@ impl<'a> AccountsHasher<'a> {
     fn de_dup_accounts(
         &self,
         sorted_data_by_pubkey: &[&[CalculateHashIntermediate]],
+        pubkey_bin_offsets: &[&[u64]],
         stats: &mut HashStats,
         max_bin: usize,
     ) -> (Vec<AccountHashesFile>, u64) {
@@ -792,8 +793,13 @@ impl<'a> AccountsHasher<'a> {
         } = (0..max_bin)
             .into_par_iter()
             .fold(DedupResult::default, |mut accum, bin| {
-                let (hashes_file, lamports_bin) =
-                    self.de_dup_accounts_in_parallel(sorted_data_by_pubkey, bin, max_bin, stats);
+                let (hashes_file, lamports_bin) = self.de_dup_accounts_in_parallel(
+                    sorted_data_by_pubkey,
+                    pubkey_bin_offsets,
+                    bin,
+                    max_bin,
+                    stats,
+                );
 
                 accum.lamports_sum = accum
                     .lamports_sum
@@ -865,6 +871,7 @@ impl<'a> AccountsHasher<'a> {
         (&division_data[index - 1], next)
     }
 
+    #[allow(dead_code)]
     /// `hash_data` must be sorted by `binner.bin_from_pubkey()`
     /// return index in `hash_data` of first pubkey that is in `bin`, based on `binner`
     fn binary_search_for_first_pubkey_in_bin(
@@ -901,6 +908,7 @@ impl<'a> AccountsHasher<'a> {
         })
     }
 
+    #[allow(dead_code)]
     /// `hash_data` must be sorted by `binner.bin_from_pubkey()`
     /// return index in `hash_data` of first pubkey that is in `bin`, based on `binner`
     fn find_first_pubkey_in_bin(
@@ -945,10 +953,11 @@ impl<'a> AccountsHasher<'a> {
     /// `working_set` holds SlotGroupPointer {slot_group_index, offset} for items in account's pubkey descending order.
     fn initialize_dedup_working_set(
         sorted_data_by_pubkey: &[&[CalculateHashIntermediate]],
+        pubkey_bin_offsets: &[&[u64]],
         pubkey_bin: usize,
-        bins: usize,
+        _bins: usize,
         binner: &PubkeyBinCalculator24,
-        stats: &HashStats,
+        _stats: &HashStats,
     ) -> (
         Vec<SlotGroupPointer>, /* working_set */
         usize,                 /* max_inclusive_num_pubkeys */
@@ -970,8 +979,16 @@ impl<'a> AccountsHasher<'a> {
             .enumerate()
             .rev()
             .map(|(i, hash_data)| {
-                let first_pubkey_in_bin =
-                    Self::find_first_pubkey_in_bin(hash_data, pubkey_bin, bins, binner, stats);
+                let pubkey_bin_offset = pubkey_bin_offsets[i];
+
+                let pubkey_bin_offset_start = pubkey_bin_offset[pubkey_bin];
+                let pubkey_bin_offset_end = pubkey_bin_offset[pubkey_bin + 1];
+
+                let first_pubkey_in_bin = if pubkey_bin_offset_start == pubkey_bin_offset_end {
+                    None
+                } else {
+                    Some(pubkey_bin_offset_start as usize)
+                };
 
                 if let Some(first_pubkey_in_bin) = first_pubkey_in_bin {
                     let mut next = Some(ItemLocation {
@@ -990,16 +1007,7 @@ impl<'a> AccountsHasher<'a> {
                         binner,
                     );
 
-                    let mut first_pubkey_in_next_bin = first_pubkey_in_bin + 1;
-                    while first_pubkey_in_next_bin < hash_data.len() {
-                        if binner.bin_from_pubkey(&hash_data[first_pubkey_in_next_bin].pubkey)
-                            != pubkey_bin
-                        {
-                            break;
-                        }
-                        first_pubkey_in_next_bin += 1;
-                    }
-                    first_pubkey_in_next_bin - first_pubkey_in_bin
+                    (pubkey_bin_offset_end - pubkey_bin_offset_start) as usize
                 } else {
                     0
                 }
@@ -1089,6 +1097,7 @@ impl<'a> AccountsHasher<'a> {
     fn de_dup_accounts_in_parallel(
         &self,
         sorted_data_by_pubkey: &[&[CalculateHashIntermediate]],
+        pubkey_bin_offsets: &[&[u64]],
         pubkey_bin: usize,
         bins: usize,
         stats: &HashStats,
@@ -1098,6 +1107,7 @@ impl<'a> AccountsHasher<'a> {
         // working_set hold the lowest items for each slot_group sorted by pubkey descending (min_key is the last)
         let (mut working_set, max_inclusive_num_pubkeys) = Self::initialize_dedup_working_set(
             sorted_data_by_pubkey,
+            pubkey_bin_offsets,
             pubkey_bin,
             bins,
             &binner,
@@ -1169,10 +1179,12 @@ impl<'a> AccountsHasher<'a> {
     pub fn rest_of_hash_calculation(
         &self,
         sorted_data_by_pubkey: &[&[CalculateHashIntermediate]],
+        pubkey_bin_offsets: &[&[u64]],
         stats: &mut HashStats,
     ) -> (Hash, u64) {
         let (hashes, total_lamports) = self.de_dup_accounts(
             sorted_data_by_pubkey,
+            pubkey_bin_offsets,
             stats,
             PUBKEY_BINS_FOR_CALCULATING_HASHES,
         );
@@ -1516,8 +1528,34 @@ mod tests {
         assert_eq!(AccountsHasher::div_ceil(10, 0), 0);
     }
 
-    fn for_rest(original: &[CalculateHashIntermediate]) -> Vec<&[CalculateHashIntermediate]> {
+    fn for_rest<T>(original: &[T]) -> Vec<&[T]> {
         vec![original]
+    }
+
+    fn calc_bin_offset(data: &[CalculateHashIntermediate], bins: usize) -> Vec<u64> {
+        let mut v = vec![0_u64; bins];
+        let binner = PubkeyBinCalculator24::new(bins);
+
+        for h in data {
+            let bin = binner.bin_from_pubkey(&h.pubkey);
+            v[bin] += 1;
+        }
+
+        v.iter_mut().fold(0, |acc, x| {
+            *x += acc;
+            *x
+        });
+        v.insert(0, 0);
+        v
+    }
+
+    fn get_bin_offsets(data: &[&[CalculateHashIntermediate]], bins: usize) -> Vec<Vec<u64>> {
+        let mut result = vec![];
+        for d in data {
+            let v = calc_bin_offset(d, bins);
+            result.push(v);
+        }
+        result
     }
 
     #[test]
@@ -1546,9 +1584,13 @@ mod tests {
         account_maps.push(val);
 
         let dir_for_temp_cache_files = tempdir().unwrap();
+        let bin_offsets = calc_bin_offset(&account_maps, PUBKEY_BINS_FOR_CALCULATING_HASHES);
         let accounts_hash = AccountsHasher::new(dir_for_temp_cache_files.path().to_path_buf());
-        let result = accounts_hash
-            .rest_of_hash_calculation(&for_rest(&account_maps), &mut HashStats::default());
+        let result = accounts_hash.rest_of_hash_calculation(
+            &for_rest(&account_maps),
+            &for_rest(&bin_offsets),
+            &mut HashStats::default(),
+        );
         let expected_hash = Hash::from_str("8j9ARGFv4W2GfML7d3sVJK2MePwrikqYnu6yqer28cCa").unwrap();
         assert_eq!((result.0, result.1), (expected_hash, 88));
 
@@ -1562,8 +1604,12 @@ mod tests {
         };
         account_maps.insert(0, val);
 
-        let result = accounts_hash
-            .rest_of_hash_calculation(&for_rest(&account_maps), &mut HashStats::default());
+        let bin_offsets = calc_bin_offset(&account_maps, PUBKEY_BINS_FOR_CALCULATING_HASHES);
+        let result = accounts_hash.rest_of_hash_calculation(
+            &for_rest(&account_maps),
+            &for_rest(&bin_offsets),
+            &mut HashStats::default(),
+        );
         let expected_hash = Hash::from_str("EHv9C5vX7xQjjMpsJMzudnDTzoTSRwYkqLzY8tVMihGj").unwrap();
         assert_eq!((result.0, result.1), (expected_hash, 108));
 
@@ -1577,8 +1623,12 @@ mod tests {
         };
         account_maps.insert(1, val);
 
-        let result = accounts_hash
-            .rest_of_hash_calculation(&for_rest(&account_maps), &mut HashStats::default());
+        let bin_offsets = calc_bin_offset(&account_maps, PUBKEY_BINS_FOR_CALCULATING_HASHES);
+        let result = accounts_hash.rest_of_hash_calculation(
+            &for_rest(&account_maps),
+            &for_rest(&bin_offsets),
+            &mut HashStats::default(),
+        );
         let expected_hash = Hash::from_str("7NNPg5A8Xsg1uv4UFm6KZNwsipyyUnmgCrznP6MBWoBZ").unwrap();
         assert_eq!((result.0, result.1), (expected_hash, 118));
     }
@@ -1601,8 +1651,16 @@ mod tests {
         let slice = convert_to_slice(&temp_vec);
         let dir_for_temp_cache_files = tempdir().unwrap();
         let accounts_hasher = AccountsHasher::new(dir_for_temp_cache_files.path().to_path_buf());
-        let (mut hashes, lamports) =
-            accounts_hasher.de_dup_accounts_in_parallel(&slice, 0, 1, &HashStats::default());
+
+        let offsets = get_bin_offsets(&slice, 1);
+        let offsets = convert_to_slice(&offsets);
+        let (mut hashes, lamports) = accounts_hasher.de_dup_accounts_in_parallel(
+            &slice,
+            &offsets,
+            0,
+            1,
+            &HashStats::default(),
+        );
         assert_eq!(&[Hash::default()], hashes.get_reader().unwrap().read(0));
         assert_eq!(lamports, 1);
     }
@@ -1625,8 +1683,12 @@ mod tests {
 
         let empty = [];
         let vec = &empty;
+
+        let offsets = get_bin_offsets(vec, PUBKEY_BINS_FOR_CALCULATING_HASHES);
+        let offsets = convert_to_slice(&offsets);
+
         let (hashes, lamports) =
-            accounts_hash.de_dup_accounts(vec, &mut HashStats::default(), one_range());
+            accounts_hash.de_dup_accounts(vec, &offsets, &mut HashStats::default(), one_range());
         assert_eq!(
             vec![Hash::default(); 0],
             get_vec_vec(hashes)
@@ -1637,18 +1699,18 @@ mod tests {
         assert_eq!(lamports, 0);
         let vec = vec![];
         let (hashes, lamports) =
-            accounts_hash.de_dup_accounts(&vec, &mut HashStats::default(), zero_range());
+            accounts_hash.de_dup_accounts(&vec, &[], &mut HashStats::default(), zero_range());
         let empty: Vec<Vec<Hash>> = Vec::default();
         assert_eq!(empty, get_vec_vec(hashes));
         assert_eq!(lamports, 0);
 
         let (hashes, lamports) =
-            accounts_hash.de_dup_accounts_in_parallel(&[], 1, 1, &HashStats::default());
+            accounts_hash.de_dup_accounts_in_parallel(&[], &[], 1, 1, &HashStats::default());
         assert_eq!(vec![Hash::default(); 0], get_vec(hashes));
         assert_eq!(lamports, 0);
 
         let (hashes, lamports) =
-            accounts_hash.de_dup_accounts_in_parallel(&[], 2, 1, &HashStats::default());
+            accounts_hash.de_dup_accounts_in_parallel(&[], &[], 2, 1, &HashStats::default());
         assert_eq!(vec![Hash::default(); 0], get_vec(hashes));
         assert_eq!(lamports, 0);
     }
@@ -1736,11 +1798,27 @@ mod tests {
                     let slice2 = vec![slice.to_vec()];
                     let slice = &slice2[..];
                     let slice_temp = convert_to_slice(&slice2);
-                    let (hashes2, lamports2) =
-                        hash.de_dup_accounts_in_parallel(&slice_temp, 0, 1, &HashStats::default());
+
+                    let offsets = get_bin_offsets(&slice_temp, 1);
+                    let offsets = convert_to_slice(&offsets);
+                    let (hashes2, lamports2) = hash.de_dup_accounts_in_parallel(
+                        &slice_temp,
+                        &offsets,
+                        0,
+                        1,
+                        &HashStats::default(),
+                    );
                     let slice3 = convert_to_slice(&slice2);
-                    let (hashes3, lamports3) =
-                        hash.de_dup_accounts_in_parallel(&slice3, 0, 1, &HashStats::default());
+
+                    let offsets = get_bin_offsets(&slice3, 1);
+                    let offsets = convert_to_slice(&offsets);
+                    let (hashes3, lamports3) = hash.de_dup_accounts_in_parallel(
+                        &slice3,
+                        &offsets,
+                        0,
+                        1,
+                        &HashStats::default(),
+                    );
                     let vec = slice.to_vec();
                     let slice4 = convert_to_slice(&vec);
                     let mut max_bin = end - start;
@@ -1748,16 +1826,24 @@ mod tests {
                         max_bin = 1;
                     }
 
+                    let offsets = get_bin_offsets(&slice4, max_bin);
+                    let offsets = convert_to_slice(&offsets);
                     let (hashes4, lamports4) =
-                        hash.de_dup_accounts(&slice4, &mut HashStats::default(), max_bin);
+                        hash.de_dup_accounts(&slice4, &offsets, &mut HashStats::default(), max_bin);
                     let vec = slice.to_vec();
                     let slice5 = convert_to_slice(&vec);
+
+                    let offsets = get_bin_offsets(&slice5, max_bin);
+                    let offsets = convert_to_slice(&offsets);
                     let (hashes5, lamports5) =
-                        hash.de_dup_accounts(&slice5, &mut HashStats::default(), max_bin);
+                        hash.de_dup_accounts(&slice5, &offsets, &mut HashStats::default(), max_bin);
                     let vec = slice.to_vec();
                     let slice5 = convert_to_slice(&vec);
+
+                    let offsets = get_bin_offsets(&slice5, max_bin);
+                    let offsets = convert_to_slice(&offsets);
                     let (hashes6, lamports6) =
-                        hash.de_dup_accounts(&slice5, &mut HashStats::default(), max_bin);
+                        hash.de_dup_accounts(&slice5, &offsets, &mut HashStats::default(), max_bin);
 
                     let hashes2 = get_vec(hashes2);
                     let hashes3 = get_vec(hashes3);
@@ -1886,7 +1972,17 @@ mod tests {
     ) -> (AccountHashesFile, u64) {
         let dir_for_temp_cache_files = tempdir().unwrap();
         let accounts_hasher = AccountsHasher::new(dir_for_temp_cache_files.path().to_path_buf());
-        accounts_hasher.de_dup_accounts_in_parallel(account_maps, 0, 1, &HashStats::default())
+
+        let offsets = get_bin_offsets(account_maps, 1);
+        let offsets = convert_to_slice(&offsets);
+
+        accounts_hasher.de_dup_accounts_in_parallel(
+            account_maps,
+            &offsets,
+            0,
+            1,
+            &HashStats::default(),
+        )
     }
 
     #[test]
@@ -2380,17 +2476,20 @@ mod tests {
         ];
         let dir_for_temp_cache_files = tempdir().unwrap();
         let accounts_hasher = AccountsHasher::new(dir_for_temp_cache_files.path().to_path_buf());
+
+        let offsets = get_bin_offsets(&convert_to_slice(&[input.clone()]), 1);
+        let offsets = convert_to_slice(&offsets);
+
         accounts_hasher.de_dup_accounts_in_parallel(
             &convert_to_slice(&[input]),
+            &offsets,
             0,
             1,
             &HashStats::default(),
         );
     }
 
-    fn convert_to_slice(
-        input: &[Vec<CalculateHashIntermediate>],
-    ) -> Vec<&[CalculateHashIntermediate]> {
+    fn convert_to_slice<T>(input: &[Vec<T>]) -> Vec<&[T]> {
         input.iter().map(|v| &v[..]).collect::<Vec<_>>()
     }
 
@@ -2414,8 +2513,13 @@ mod tests {
         ];
         let dir_for_temp_cache_files = tempdir().unwrap();
         let accounts_hasher = AccountsHasher::new(dir_for_temp_cache_files.path().to_path_buf());
+        let accounts_map = &convert_to_slice(&input);
+        let offsets = get_bin_offsets(accounts_map, 2);
+        let offsets = convert_to_slice(&offsets);
+
         accounts_hasher.de_dup_accounts(
-            &convert_to_slice(&input),
+            accounts_map,
+            &offsets,
             &mut HashStats::default(),
             2, // accounts above are in 2 groups
         );
