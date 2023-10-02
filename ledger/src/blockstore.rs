@@ -2984,7 +2984,7 @@ impl Blockstore {
             }
         });
 
-        (result, possible_cpi_alt_extend.load(Ordering::Relaxed))
+        (result, possible_cpi_alt_extend.into_inner())
     }
 
     fn get_completed_ranges(
