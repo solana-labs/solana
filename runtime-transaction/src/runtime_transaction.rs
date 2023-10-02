@@ -3,7 +3,9 @@ use {
         simple_vote_transaction_checker::is_simple_vote_transaction,
         transaction_meta::{DynamicMeta, StaticMeta, TransactionMeta},
     },
+    solana_program_runtime::compute_budget_processor::process_compute_budget_instructions,
     solana_sdk::{
+        feature_set::FeatureSet,
         hash::Hash,
         message::{AddressLoader, SanitizedMessage, SanitizedVersionedMessage},
         signature::Signature,
@@ -50,9 +52,10 @@ impl RuntimeTransactionStatic {
         sanitized_versioned_tx: SanitizedVersionedTransaction,
         message_hash: Option<Hash>,
         is_simple_vote_tx: Option<bool>,
+        feature_set: &FeatureSet,
     ) -> Result<Self> {
         let meta =
-            Self::load_static_metadata(&sanitized_versioned_tx, message_hash, is_simple_vote_tx)?;
+            Self::load_static_metadata(&sanitized_versioned_tx, message_hash, is_simple_vote_tx, feature_set)?;
 
         Ok(Self {
             signatures: sanitized_versioned_tx.signatures,
@@ -66,6 +69,7 @@ impl RuntimeTransactionStatic {
         sanitized_versioned_tx: &SanitizedVersionedTransaction,
         message_hash: Option<Hash>,
         is_simple_vote_tx: Option<bool>,
+        feature_set: &FeatureSet,
     ) -> Result<TransactionMeta> {
         let mut meta = TransactionMeta::default();
         meta.set_is_simple_vote_tx(
@@ -74,6 +78,10 @@ impl RuntimeTransactionStatic {
         meta.set_message_hash(
             message_hash.unwrap_or_else(|| sanitized_versioned_tx.message.message.hash()),
         );
+
+        let compute_budget_limits: ComputeBudgetLimits
+         = process_compute_budget_instructions(sanitized_versioned_transaction.message.program_instructions_iter(), feature_set)?;
+        meta.set_compute_budget_limits(compute_budget_limits);
 
         Ok(meta)
     }

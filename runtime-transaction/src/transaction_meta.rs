@@ -15,6 +15,10 @@ use solana_sdk::hash::Hash;
 pub trait StaticMeta {
     fn message_hash(&self) -> &Hash;
     fn is_simple_vote_tx(&self) -> bool;
+    fn updated_heap_bytes(&self) -> usize;
+    fn compute_unit_limit(&self) -> u32;
+    fn compute_unit_price(&self) -> u64;
+    fn loaded_accounts_bytes(&self) -> usize;
 }
 
 /// Statically loaded meta is a supertrait of Dynamically loaded meta, when
@@ -28,6 +32,10 @@ pub trait DynamicMeta: StaticMeta {}
 pub struct TransactionMeta {
     pub message_hash: Hash,
     pub is_simple_vote_tx: bool,
+    pub updated_heap_bytes: usize,
+    pub compute_unit_limit: u32,
+    pub compute_unit_price: u64,
+    pub loaded_accounts_bytes: usize,
 }
 
 impl TransactionMeta {
@@ -37,5 +45,12 @@ impl TransactionMeta {
 
     pub fn set_is_simple_vote_tx(&mut self, is_simple_vote_tx: bool) {
         self.is_simple_vote_tx = is_simple_vote_tx;
+    }
+
+    pub fn set_compute_budget_limits(&mut self, compute_budget_limits: &ComputeBudgetLimits) {
+        self.updated_heap_bytes = compute_budget_limits.updated_heap_bytes;
+        self.compute_unit_limit = compute_budget_limits.compute_unit_limit;
+        self.compute_unit_price = compute_budget_limits.compute_unit_price;
+        self.loaded_accounts_bytes = compute_budget_limits.loaded_accounts_bytes;
     }
 }
