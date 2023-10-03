@@ -691,4 +691,12 @@ mod tests {
             Variant2(u8, u16, #[serde(skip)] u32),
         }
     }
+
+    #[frozen_abi(digest = "B1PcwZdUfGnxaRid9e6ZwkST3NZ2KUEYobA1DkxWrYLP")]
+    #[derive(Serialize, AbiExample)]
+    struct TestArcWeak(std::sync::Weak<u64>);
+
+    #[frozen_abi(digest = "4R8uCLR1BVU1aFgkSaNyKcFD1FeM6rGdsjbJBFpnqx4v")]
+    #[derive(Serialize, AbiExample)]
+    struct TestRcWeak(std::rc::Weak<u64>);
 }

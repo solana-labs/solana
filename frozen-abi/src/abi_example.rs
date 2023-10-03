@@ -316,10 +316,20 @@ impl<T: AbiExample> AbiExample for std::sync::Arc<T> {
     }
 }
 
+// When T is weakly owned by the likes of `std::{sync, rc}::Weak`s, we need to uphold the ownership
+// of T in some way at least during abi digesting... However, there's no easy way. Stashing them
+// into static is confronted with Send/Sync issue. Stashing them into thread_local is confronted
+// with not enough (T + 'static) lifetime bound..  So, just leak the examples. This should be
+// tolerated, considering ::example() should ever be called inside tests, not in production code...
+fn leak_and_inhibit_drop<'a, T>(t: T) -> &'a mut T {
+    Box::leak(Box::new(t))
+}
+
 impl<T: AbiExample> AbiExample for std::sync::Weak<T> {
     fn example() -> Self {
-        info!("AbiExample for (Weak<T>): {}", type_name::<Self>());
-        std::sync::Arc::downgrade(&std::sync::Arc::new(T::example()))
+        info!("AbiExample for (Arc's Weak<T>): {}", type_name::<Self>());
+        // leaking is needed otherwise Arc::upgrade() will always return None...
+        std::sync::Arc::downgrade(leak_and_inhibit_drop(std::sync::Arc::new(T::example())))
     }
 }
 
@@ -327,6 +337,14 @@ impl<T: AbiExample> AbiExample for std::rc::Rc<T> {
     fn example() -> Self {
         info!("AbiExample for (Rc<T>): {}", type_name::<Self>());
         std::rc::Rc::new(T::example())
+    }
+}
+
+impl<T: AbiExample> AbiExample for std::rc::Weak<T> {
+    fn example() -> Self {
+        info!("AbiExample for (Rc's Weak<T>): {}", type_name::<Self>());
+        // leaking is needed otherwise Rc::upgrade() will always return None...
+        std::rc::Rc::downgrade(leak_and_inhibit_drop(std::rc::Rc::new(T::example())))
     }
 }
 
