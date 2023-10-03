@@ -9,7 +9,8 @@ use {
     crate::{
         accounts_background_service::{PrunedBanksRequestHandler, SendDroppedBankCallback},
         bank::replace_account::{
-            replace_empty_account_with_upgradeable_program, replace_non_upgradeable_program_account,
+            replace_empty_account_with_upgradeable_program,
+            replace_non_upgradeable_program_account, ReplaceAccountError,
         },
         bank_client::BankClient,
         epoch_rewards_hasher::hash_rewards_into_partitions,
@@ -8071,7 +8072,8 @@ fn test_replace_non_upgradeable_program_account() {
         &source,
         &destination,
         "bank-apply_program_replacement",
-    );
+    )
+    .unwrap();
 
     // Destination program account balance is now the source program account's balance
     assert_eq!(bank.get_balance(&destination), source_lamports);
@@ -8188,7 +8190,8 @@ fn test_replace_empty_account_with_upgradeable_program_success(
         &source,
         &destination,
         "bank-apply_empty_account_replacement_for_program",
-    );
+    )
+    .unwrap();
 
     // Destination program account was created and funded to pay for minimum rent
     // for the PDA
@@ -8314,11 +8317,15 @@ fn test_replace_empty_account_with_upgradeable_program_fail_when_account_exists(
     let original_capitalization = bank.capitalization();
 
     // Attempt the replacement
-    replace_empty_account_with_upgradeable_program(
-        &mut bank,
-        &source,
-        &destination,
-        "bank-apply_empty_account_replacement_for_program",
+    assert_eq!(
+        replace_empty_account_with_upgradeable_program(
+            &mut bank,
+            &source,
+            &destination,
+            "bank-apply_empty_account_replacement_for_program",
+        )
+        .unwrap_err(),
+        ReplaceAccountError::DestinationAccountExists
     );
 
     // Everything should be unchanged

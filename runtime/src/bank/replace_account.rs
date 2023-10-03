@@ -8,7 +8,31 @@ use {
         pubkey::Pubkey,
     },
     std::sync::atomic::Ordering::Relaxed,
+    thiserror::Error,
 };
+
+/// Errors returned by `replace_account` methods
+#[derive(Debug, Error, PartialEq)]
+pub enum ReplaceAccountError {
+    /// Source account not found
+    #[error("Source account not found")]
+    SourceAccountNotFound,
+    /// Source data account not found
+    #[error("Source data account not found")]
+    SourceDataAccountNotFound,
+    /// Destination account not found
+    #[error("Destination account not found")]
+    DestinationAccountNotFound,
+    /// Destination account exists
+    #[error("Destination account exists")]
+    DestinationAccountExists,
+    /// Unable to serialize program account state
+    #[error("Unable to serialize program account state")]
+    UnableToSerializeProgramAccountState,
+    /// Not an upgradeable program
+    #[error("Not an upgradeable program")]
+    NotAnUpgradeableProgram,
+}
 
 /// Moves one account in place of another
 /// `source`: the account to replace with
@@ -55,7 +79,7 @@ pub(crate) fn replace_non_upgradeable_program_account(
     source_address: &Pubkey,
     destination_address: &Pubkey,
     datapoint_name: &'static str,
-) {
+) -> Result<(), ReplaceAccountError> {
     if let Some(destination_account) = bank.get_account_with_fixed_root(destination_address) {
         if let Some(source_account) = bank.get_account_with_fixed_root(source_address) {
             datapoint_info!(datapoint_name, ("slot", bank.slot, i64));
@@ -73,16 +97,13 @@ pub(crate) fn replace_non_upgradeable_program_account(
                 .write()
                 .unwrap()
                 .remove_programs([*destination_address].into_iter());
+
+            Ok(())
         } else {
-            warn!(
-                "Unable to find source program {}. Destination: {}",
-                source_address, destination_address
-            );
-            datapoint_warn!(datapoint_name, ("slot", bank.slot(), i64),);
+            Err(ReplaceAccountError::SourceAccountNotFound)
         }
     } else {
-        warn!("Unable to find destination program {}", destination_address);
-        datapoint_warn!(datapoint_name, ("slot", bank.slot(), i64),);
+        Err(ReplaceAccountError::DestinationAccountNotFound)
     }
 }
 
@@ -97,7 +118,7 @@ pub(crate) fn replace_empty_account_with_upgradeable_program(
     source_address: &Pubkey,
     destination_address: &Pubkey,
     datapoint_name: &'static str,
-) {
+) -> Result<(), ReplaceAccountError> {
     // Must be attempting to replace an empty account with a program
     // account _and_ data account
     if let Some(source_account) = bank.get_account_with_fixed_root(source_address) {
@@ -171,52 +192,24 @@ pub(crate) fn replace_empty_account_with_upgradeable_program(
                                 // Any remaining lamports in the source program account are burnt
                                 bank.capitalization
                                     .fetch_sub(change_in_capitalization, Relaxed);
+
+                                Ok(())
                             } else {
-                                error!(
-                                    "Unable to serialize program account state. \
-                                    Source program: {} Source data account: {} \
-                                    Destination program: {} Destination data account: {}",
-                                    source_address,
-                                    source_data_address,
-                                    destination_address,
-                                    destination_data_address,
-                                );
-                                datapoint_error!(datapoint_name, ("slot", bank.slot(), i64),);
+                                Err(ReplaceAccountError::UnableToSerializeProgramAccountState)
                             }
+                        } else {
+                            Err(ReplaceAccountError::DestinationAccountExists)
                         }
                     } else {
-                        warn!(
-                            "Unable to find data account for source program. \
-                            Source program: {} Source data account: {} \
-                            Destination program: {} Destination data account: {}",
-                            source_address,
-                            source_data_address,
-                            destination_address,
-                            destination_data_address,
-                        );
-                        datapoint_warn!(datapoint_name, ("slot", bank.slot(), i64),);
+                        Err(ReplaceAccountError::SourceDataAccountNotFound)
                     }
                 }
-                _ => {
-                    warn!(
-                        "Source program account is not an upgradeable program. \
-                        Source program: {} Source data account: {} \
-                        Destination program: {} Destination data account: {}",
-                        source_address,
-                        source_data_address,
-                        destination_address,
-                        destination_data_address,
-                    );
-                    datapoint_warn!(datapoint_name, ("slot", bank.slot(), i64),);
-                    return;
-                }
+                _ => Err(ReplaceAccountError::NotAnUpgradeableProgram),
             }
+        } else {
+            Err(ReplaceAccountError::NotAnUpgradeableProgram)
         }
     } else {
-        warn!(
-            "Unable to find source program {}. Destination: {}",
-            source_address, destination_address
-        );
-        datapoint_warn!(datapoint_name, ("slot", bank.slot(), i64),);
+        Err(ReplaceAccountError::SourceAccountNotFound)
     }
 }

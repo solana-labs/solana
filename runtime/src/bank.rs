@@ -8058,12 +8058,21 @@ impl Bank {
         }
 
         if new_feature_activations.contains(&feature_set::programify_feature_gate_program::id()) {
-            replace_account::replace_empty_account_with_upgradeable_program(
+            let datapoint_name = "bank-progamify_feature_gate_program";
+            if let Err(e) = replace_account::replace_empty_account_with_upgradeable_program(
                 self,
                 &feature::id(),
                 &inline_feature_gate_program::noop_program::id(),
-                "bank-apply_feature_gate_program",
-            );
+                datapoint_name,
+            ) {
+                warn!(
+                    "{}: Failed to replace empty account {} with upgradeable program: {}",
+                    datapoint_name,
+                    feature::id(),
+                    e
+                );
+                datapoint_warn!(datapoint_name, ("slot", self.slot(), i64),);
+            }
         }
     }
 
