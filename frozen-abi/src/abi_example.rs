@@ -228,7 +228,6 @@ pub(crate) fn normalize_type_name(type_name: &str) -> String {
 type Placeholder = ();
 
 impl<T: Sized> AbiExample for T {
-    #[track_caller]
     default fn example() -> Self {
         <Placeholder>::type_erased_example()
     }
@@ -240,7 +239,6 @@ trait TypeErasedExample<T> {
 }
 
 impl<T: Sized> TypeErasedExample<T> for Placeholder {
-    #[track_caller]
     default fn type_erased_example() -> T {
         panic!(
             "derive or implement AbiExample/AbiEnumVisitor for {}",
@@ -250,7 +248,6 @@ impl<T: Sized> TypeErasedExample<T> for Placeholder {
 }
 
 impl<T: Default + Serialize> TypeErasedExample<T> for Placeholder {
-    #[track_caller]
     default fn type_erased_example() -> T {
         let original_type_name = type_name::<T>();
         let normalized_type_name = normalize_type_name(original_type_name);
