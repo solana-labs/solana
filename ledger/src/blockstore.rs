@@ -2127,14 +2127,27 @@ impl Blockstore {
             .put(0, &TransactionStatusIndexMeta::default())?;
         self.transaction_status_index_cf
             .put(1, &TransactionStatusIndexMeta::default())?;
-        // This dummy status improves compaction performance
-        let default_status = TransactionStatusMeta::default().into();
-        self.transaction_status_cf
-            .put_protobuf(cf::TransactionStatus::as_index(2), &default_status)?;
-        self.address_signatures_cf.put(
-            cf::AddressSignatures::as_index(2),
-            &AddressSignatureMeta::default(),
-        )
+
+        // If present, delete dummy entries inserted by old software
+        // https://github.com/solana-labs/solana/blob/bc2b372/ledger/src/blockstore.rs#L2130-L2137
+        let transaction_status_dummy_key = cf::TransactionStatus::as_index(2);
+        if let Some(_) = self
+            .transaction_status_cf
+            .get_protobuf_or_bincode::<StoredTransactionStatusMeta>(transaction_status_dummy_key)?
+        {
+            self.transaction_status_cf
+                .delete(transaction_status_dummy_key)?;
+        };
+        let address_signatures_dummy_key = cf::AddressSignatures::as_index(2);
+        if let Some(_) = self
+            .address_signatures_cf
+            .get(address_signatures_dummy_key)?
+        {
+            self.address_signatures_cf
+                .delete(address_signatures_dummy_key)?;
+        };
+
+        Ok(())
     }
 
     /// Toggles the active primary index between `0` and `1`, and clears the
