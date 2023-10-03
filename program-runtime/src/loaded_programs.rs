@@ -727,27 +727,22 @@ impl LoadedPrograms {
                             || entry.deployment_slot == current_slot
                             || working_slot.is_ancestor(entry.deployment_slot)
                         {
-                            if !Self::is_entry_usable(entry, current_slot, &match_criteria) {
-                                missing.push((key, count));
-                                return None;
-                            }
-
-                            if let LoadedProgramType::Unloaded(environment) = &entry.program {
-                                if Arc::ptr_eq(environment, &self.environments.program_runtime_v1)
-                                    || Arc::ptr_eq(
-                                        environment,
-                                        &self.environments.program_runtime_v2,
-                                    )
-                                {
-                                    // if the environment hasn't changed since the entry was unloaded.
-                                    unloaded.push((key, count));
-                                } else {
-                                    missing.push((key, count));
-                                }
-                                return None;
-                            }
-
                             if current_slot >= entry.effective_slot {
+                                if !Self::is_entry_usable(entry, current_slot, &match_criteria) {
+                                    missing.push((key, count));
+                                    return None;
+                                }
+
+                                if !Self::matches_environment(entry, &self.environments) {
+                                    missing.push((key, count));
+                                    return None;
+                                }
+
+                                if let LoadedProgramType::Unloaded(_environment) = &entry.program {
+                                    unloaded.push((key, count));
+                                    return None;
+                                }
+
                                 let mut usage_count =
                                     entry.tx_usage_counter.load(Ordering::Relaxed);
                                 saturating_add_assign!(usage_count, count);
