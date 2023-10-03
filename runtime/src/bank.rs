@@ -33,8 +33,6 @@
 //! It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
-use std::sync::Mutex;
-
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
 pub use solana_sdk::reward_type::RewardType;
@@ -92,7 +90,7 @@ use {
         sysvar_cache::SysvarCache,
         timings::{ExecuteTimingType, ExecuteTimings},
     },
-    solana_receipt_tree::ReceiptTree,
+    solana_receipt_tree::{fd_bmtree32_commit_append, fd_bmtree32_node, hash_leaf, ReceiptTree},
     solana_sdk::{
         account::{
             create_account_shared_data_with_fields as create_account, from_account, Account,
@@ -165,7 +163,7 @@ use {
                 AtomicBool, AtomicI64, AtomicU64, AtomicUsize,
                 Ordering::{AcqRel, Acquire, Relaxed},
             },
-            Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard,
+            Arc, LockResult, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
         thread::Builder,
         time::{Duration, Instant},
@@ -839,7 +837,8 @@ impl PartialEq for Bank {
             accounts_data_size_delta_off_chain: _,
             fee_structure: _,
             incremental_snapshot_persistence: _,
-            receipt_tree: _,
+            // receipt_tree: _,
+            transaction_indexes: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this ParitalEq is accordingly updated.
@@ -1095,7 +1094,10 @@ pub struct Bank {
 
     pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
 
-    pub receipt_tree: Arc<Mutex<ReceiptTree>>,
+    // pub receipt_tree: Arc<RwLock<im::HashMap<usize, Hash>>>,
+
+    /// entryid, number of txns
+    pub transaction_indexes: Arc<RwLock<Vec<Signature>>>,
 }
 
 struct VoteWithStakeDelegations {
@@ -1284,7 +1286,8 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            receipt_tree: Arc::new(Mutex::new(ReceiptTree::new())),
+            // receipt_tree: Arc::new(RwLock::new(im::HashMap::new())),
+            transaction_indexes: Arc::new(RwLock::new(Vec::new())),
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1611,7 +1614,8 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
-            receipt_tree: Arc::new(Mutex::new(ReceiptTree::default())),
+            // receipt_tree: Arc::new(RwLock::new(im::HashMap::new())),
+            transaction_indexes: Arc::new(RwLock::new(Vec::new())),
         };
 
         let (_, ancestors_time) = measure!(
@@ -1955,7 +1959,8 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            receipt_tree: Arc::new(Mutex::new(ReceiptTree::default())),
+            // receipt_tree: Arc::new(RwLock::new(im::HashMap::new())),
+            transaction_indexes: Arc::new(RwLock::new(Vec::new())),
         };
         bank.finish_init(
             genesis_config,
@@ -4250,9 +4255,30 @@ impl Bank {
         };
 
         let status_code: u8 = if status.is_ok() { 1 } else { 0 };
-       if let Ok(mut receipt_tree) =  self.receipt_tree.lock(){
-        receipt_tree.append_leaf(&[tx.signature().as_ref(), status_code.to_be_bytes().as_ref()]);
-       }
+        // if let Ok(mut receipt_tree) = self.receipt_tree.write() {
+        //     let mut leaf = fd_bmtree32_node { hash: [0u8; 32] };
+        //     hash_leaf(
+        //         &mut leaf,
+        //         &mut [
+        //             tx.signature().as_ref(),
+        //             status_code.clone().to_be_bytes().as_ref(),
+        //         ]
+        //         .clone()
+        //         .as_slice(),
+        //     );
+
+        //     if let Ok(txn_idxs) = self.transaction_indexes.read() {
+        //         let txn_position = txn_idxs
+        //             .iter()
+        //             .position(|&sig| sig == *tx.signature())
+        //             .unwrap_or_else(|| {
+        //                 panic!("Transaction signature not found in transaction_indexes")
+        //             });
+        //         receipt_tree.insert(txn_position, Hash::new_from_array(leaf.hash.clone()));
+        //     } else {
+        //         info!("lock poisoned");
+        //     };
+        // }
 
         TransactionExecutionResult::Executed {
             details: TransactionExecutionDetails {
@@ -6627,15 +6653,33 @@ impl Bank {
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
         let mut receipt_root = [0u8; 32];
-        if let Ok(mut receipt_tree) = self.receipt_tree.lock() {
-            receipt_root = receipt_tree.get_root_mutable().unwrap().to_bytes();
-        }
+        // if let Ok(mut receipt_tree) = self.receipt_tree.lock() {
+        //     receipt_root = receipt_tree.get().unwrap().to_bytes();
+        // }
+        // if let Ok(hashed_txs) = self.receipt_tree.read() {
+        //     let mut state = ReceiptTree::new();
+        //     info!(
+        //         "hashed_txs: {:?}",
+        //         hashed_txs.keys().zip(hashed_txs.values()).collect_vec()
+        //     );
+        //     let leaves = hashed_txs
+        //         .keys()
+        //         .zip(hashed_txs.values())
+        //         .sorted_by(|a, b| a.0.cmp(b.0))
+        //         .map(|hash| hash.1.to_bytes())
+        //         .collect::<Vec<[u8; 32]>>();
+        //     info!("leaves: {:?}", leaves);
+        //     if leaves.len() > 0 {
+        //         state.append_leaves_raw(&leaves);
+        //         receipt_root = state.get_root_mutable().unwrap().to_bytes();
+        //     }
+        // }
         let mut hash = hashv(&[
             self.parent_hash.as_ref(),
             accounts_delta_hash.hash.as_ref(),
             &signature_count_buf,
             self.last_blockhash().as_ref(),
-            receipt_root.as_ref()
+            receipt_root.as_ref(),
         ]);
 
         let buf = self
@@ -6760,7 +6804,11 @@ impl Bank {
             result
         }
     }
-
+    pub fn set_block_signatures(&self, block_signatures: Vec<Signature>) {
+        if let Ok(mut transaction_indexes) = self.transaction_indexes.write() {
+            *transaction_indexes = block_signatures;
+        }
+    }
     /// Specify that initial verification has completed.
     /// Called internally when verification runs in the foreground thread.
     /// Also has to be called by some tests which don't do verification on startup.

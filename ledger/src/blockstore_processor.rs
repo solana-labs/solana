@@ -1,3 +1,5 @@
+
+
 use {
     crate::{
         block_error::BlockError, blockstore::Blockstore, blockstore_db::BlockstoreError,
@@ -376,7 +378,7 @@ fn execute_batches(
     } else {
         batches
     };
-
+  
     let execute_batches_internal_metrics = execute_batches_internal(
         bank,
         rebatched_txs,
@@ -464,12 +466,19 @@ fn process_entries_with_callback(
     let mut tick_hashes = vec![];
     let mut rng = thread_rng();
     let cost_model = CostModel::new();
-
+    let block_signatures = entries.iter().filter_map(|e| match &e.entry {
+        EntryType::Transactions(txs) => Some(txs),
+        _ => None,
+    }).flatten()
+    .map(|tx| *tx.signature())
+    .collect::<Vec<Signature>>();
+    bank.set_block_signatures(block_signatures.to_vec());
     for ReplayEntry {
         entry,
         starting_index,
     } in entries
     {
+        // bank.set_transaction_indexes(entr, transaction_count)
         match entry {
             EntryType::Tick(hash) => {
                 // If it's a tick, save it for later
@@ -486,6 +495,7 @@ fn process_entries_with_callback(
                         confirmation_timing,
                         &cost_model,
                         log_messages_bytes_limit,
+                       
                     )?;
                     batches.clear();
                     for hash in &tick_hashes {
@@ -554,6 +564,7 @@ fn process_entries_with_callback(
                             confirmation_timing,
                             &cost_model,
                             log_messages_bytes_limit,
+                          
                         )?;
                         batches.clear();
                     }
@@ -570,6 +581,7 @@ fn process_entries_with_callback(
         confirmation_timing,
         &cost_model,
         log_messages_bytes_limit,
+       
     )?;
     for hash in tick_hashes {
         bank.register_tick(hash);
