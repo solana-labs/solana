@@ -507,6 +507,7 @@ pub mod tests {
             message::Message,
             transaction::Transaction,
         },
+        test_case::test_case,
     };
 
     #[test]
@@ -764,6 +765,159 @@ pub mod tests {
             .iter::<cf::TransactionStatus>(IteratorMode::Start)
             .unwrap();
         assert_eq!(status_entry_iterator.next(), None);
+    }
+
+    fn get_index_bounds(blockstore: &Blockstore) -> (Box<[u8]>, Box<[u8]>) {
+        let first_index = {
+            let mut status_entry_iterator = blockstore
+                .transaction_status_cf
+                .iterator_cf_raw_key(IteratorMode::Start);
+            status_entry_iterator.next().unwrap().unwrap().0
+        };
+        let last_index = {
+            let mut status_entry_iterator = blockstore
+                .transaction_status_cf
+                .iterator_cf_raw_key(IteratorMode::End);
+            status_entry_iterator.next().unwrap().unwrap().0
+        };
+        (first_index, last_index)
+    }
+
+    fn purge_exact(blockstore: &Blockstore, oldest_slot: Slot) {
+        blockstore
+            .run_purge(0, oldest_slot - 1, PurgeType::Exact)
+            .unwrap();
+    }
+
+    fn purge_compaction_filter(blockstore: &Blockstore, oldest_slot: Slot) {
+        let (first_index, last_index) = get_index_bounds(blockstore);
+        blockstore.db.set_oldest_slot(oldest_slot);
+        blockstore
+            .db
+            .compact_range_cf::<cf::TransactionStatus>(&first_index, &last_index);
+    }
+
+    #[test_case(purge_exact; "exact")]
+    #[test_case(purge_compaction_filter; "compaction_filter")]
+    fn test_purge_special_columns_with_old_data(purge: impl Fn(&Blockstore, Slot)) {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        populate_deprecated_transaction_statuses_for_test(&blockstore, 0, 0, 4);
+        populate_deprecated_transaction_statuses_for_test(&blockstore, 1, 5, 9);
+        populate_transaction_statuses_for_test(&blockstore, 10, 14);
+
+        let mut index0 = blockstore
+            .transaction_status_index_cf
+            .get(0)
+            .unwrap()
+            .unwrap();
+        index0.frozen = true;
+        index0.max_slot = 4;
+        blockstore
+            .transaction_status_index_cf
+            .put(0, &index0)
+            .unwrap();
+        let mut index1 = blockstore
+            .transaction_status_index_cf
+            .get(1)
+            .unwrap()
+            .unwrap();
+        index1.frozen = false;
+        index1.max_slot = 9;
+        blockstore
+            .transaction_status_index_cf
+            .put(1, &index1)
+            .unwrap();
+
+        let statuses: Vec<_> = blockstore
+            .transaction_status_cf
+            .iterator_cf_raw_key(IteratorMode::Start)
+            .collect();
+        assert_eq!(statuses.len(), 15);
+
+        // Delete some of primary-index 0
+        let oldest_slot = 3;
+        purge(&blockstore, oldest_slot);
+        let status_entry_iterator = blockstore
+            .transaction_status_cf
+            .iterator_cf_raw_key(IteratorMode::Start);
+        let mut count = 0;
+        for entry in status_entry_iterator {
+            let (key, _value) = entry.unwrap();
+            let (_signature, slot) = <cf::TransactionStatus as Column>::index(&key);
+            assert!(slot >= oldest_slot);
+            count += 1;
+        }
+        assert_eq!(count, 12);
+
+        // Delete the rest of primary-index 0
+        let oldest_slot = 5;
+        purge(&blockstore, oldest_slot);
+        let status_entry_iterator = blockstore
+            .transaction_status_cf
+            .iterator_cf_raw_key(IteratorMode::Start);
+        let mut count = 0;
+        for entry in status_entry_iterator {
+            let (key, _value) = entry.unwrap();
+            let (_signature, slot) = <cf::TransactionStatus as Column>::index(&key);
+            assert!(slot >= oldest_slot);
+            count += 1;
+        }
+        assert_eq!(count, 10);
+
+        // Delete some of primary-index 1
+        let oldest_slot = 8;
+        purge(&blockstore, oldest_slot);
+        let status_entry_iterator = blockstore
+            .transaction_status_cf
+            .iterator_cf_raw_key(IteratorMode::Start);
+        let mut count = 0;
+        for entry in status_entry_iterator {
+            let (key, _value) = entry.unwrap();
+            let (_signature, slot) = <cf::TransactionStatus as Column>::index(&key);
+            assert!(slot >= oldest_slot);
+            count += 1;
+        }
+        assert_eq!(count, 7);
+
+        // Delete the rest of primary-index 1
+        let oldest_slot = 10;
+        purge(&blockstore, oldest_slot);
+        let status_entry_iterator = blockstore
+            .transaction_status_cf
+            .iterator_cf_raw_key(IteratorMode::Start);
+        let mut count = 0;
+        for entry in status_entry_iterator {
+            let (key, _value) = entry.unwrap();
+            let (_signature, slot) = <cf::TransactionStatus as Column>::index(&key);
+            assert!(slot >= oldest_slot);
+            count += 1;
+        }
+        assert_eq!(count, 5);
+
+        // Delete some of new-style entries
+        let oldest_slot = 13;
+        purge(&blockstore, oldest_slot);
+        let status_entry_iterator = blockstore
+            .transaction_status_cf
+            .iterator_cf_raw_key(IteratorMode::Start);
+        let mut count = 0;
+        for entry in status_entry_iterator {
+            let (key, _value) = entry.unwrap();
+            let (_signature, slot) = <cf::TransactionStatus as Column>::index(&key);
+            assert!(slot >= oldest_slot);
+            count += 1;
+        }
+        assert_eq!(count, 2);
+
+        // Delete the rest of the new-style entries
+        let oldest_slot = 20;
+        purge(&blockstore, oldest_slot);
+        let mut status_entry_iterator = blockstore
+            .transaction_status_cf
+            .iterator_cf_raw_key(IteratorMode::Start);
+        assert!(status_entry_iterator.next().is_none());
     }
 
     #[test]
