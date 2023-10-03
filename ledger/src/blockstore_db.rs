@@ -2177,4 +2177,17 @@ pub mod tests {
                 .put_cf(self.handle(), &C::deprecated_key(key), &serialized_value)
         }
     }
+
+    impl<C> LedgerColumn<C>
+    where
+        C: ColumnIndexDeprecation + ColumnName,
+    {
+        pub(crate) fn iterator_cf_raw_key(
+            &self,
+            iterator_mode: IteratorMode<Vec<u8>>,
+        ) -> DBIterator {
+            let cf = self.handle();
+            self.backend.iterator_cf_raw_key(cf, iterator_mode)
+        }
+    }
 }

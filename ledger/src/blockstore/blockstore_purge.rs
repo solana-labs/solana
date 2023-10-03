@@ -574,7 +574,15 @@ pub mod tests {
             .unwrap();
         assert_eq!(iter.next(), None);
 
-        for x in 0..=max_slot {
+        populate_transaction_statuses_for_test(blockstore, 0, max_slot);
+    }
+
+    fn populate_transaction_statuses_for_test(
+        blockstore: &Blockstore,
+        min_slot: u64,
+        max_slot: u64,
+    ) {
+        for x in min_slot..=max_slot {
             let entries = make_slot_entries_with_transactions(1);
             let shreds = entries_to_test_shreds(
                 &entries,
@@ -601,6 +609,44 @@ pub mod tests {
                     vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
                     TransactionStatusMeta::default(),
                     0,
+                )
+                .unwrap();
+        }
+    }
+
+    fn populate_deprecated_transaction_statuses_for_test(
+        blockstore: &Blockstore,
+        primary_index: u64,
+        min_slot: u64,
+        max_slot: u64,
+    ) {
+        for x in min_slot..=max_slot {
+            let entries = make_slot_entries_with_transactions(1);
+            let shreds = entries_to_test_shreds(
+                &entries,
+                x,                   // slot
+                x.saturating_sub(1), // parent_slot
+                true,                // is_full_slot
+                0,                   // version
+                true,                // merkle_variant
+            );
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+            let signature = entries
+                .iter()
+                .filter(|entry| !entry.is_tick())
+                .cloned()
+                .flat_map(|entry| entry.transactions)
+                .map(|transaction| transaction.signatures[0])
+                .collect::<Vec<Signature>>()[0];
+            let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
+            blockstore
+                .write_deprecated_transaction_status(
+                    primary_index,
+                    x,
+                    signature,
+                    vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
+                    vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
+                    TransactionStatusMeta::default(),
                 )
                 .unwrap();
         }
