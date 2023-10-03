@@ -1,6 +1,9 @@
 //! Process compute_budget instructions to extract and sanitize limits.
 use {
-    crate::compute_budget::DEFAULT_HEAP_COST,
+    crate::{
+        compute_budget::DEFAULT_HEAP_COST,
+        prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
+    },
     solana_sdk::{
         borsh0_10::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
@@ -43,15 +46,19 @@ impl Default for ComputeBudgetLimits {
     }
 }
 
-impl Into<FeeBudgetLimits> for ComputeBudgetLimits {
-    fn into(self) -> FeeBudgetLimits {
+impl From<ComputeBudgetLimits> for FeeBudgetLimits {
+    fn from(val: ComputeBudgetLimits) -> Self {
+        let prioritization_fee_details = PrioritizationFeeDetails::new(
+            PrioritizationFeeType::ComputeUnitPrice(val.compute_unit_price),
+            u64::from(val.compute_unit_limit),
+        );
         FeeBudgetLimits {
             // NOTE - usize::from(u32).unwrap() may fail if target is 16-bit and
             // `loaded_accounts_bytes` is greater than u16::MAX. In that case, panic is proper.
-            loaded_accounts_data_size_limit: usize::try_from(self.loaded_accounts_bytes).unwrap(),
+            loaded_accounts_data_size_limit: usize::try_from(val.loaded_accounts_bytes).unwrap(),
             heap_cost: DEFAULT_HEAP_COST,
-            compute_unit_limit: u64::from(self.compute_unit_limit),
-            prioritization_fee: self.compute_unit_price,
+            compute_unit_limit: u64::from(val.compute_unit_limit),
+            prioritization_fee: prioritization_fee_details.get_fee(),
         }
     }
 }
@@ -180,4 +187,434 @@ fn support_deprecated_requested_units(additional_fee: u32, compute_unit_limit: u
     micro_lamport_fee
         .checked_div(compute_unit_limit as u128)
         .map(|cu_price| u64::try_from(cu_price).unwrap_or(u64::MAX))
+}
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        solana_sdk::{
+            hash::Hash,
+            instruction::Instruction,
+            message::Message,
+            pubkey::Pubkey,
+            signature::Keypair,
+            signer::Signer,
+            system_instruction::{self},
+            transaction::{SanitizedTransaction, Transaction},
+        },
+    };
+
+    macro_rules! test {
+        ( $instructions: expr, $expected_result: expr, $support_set_loaded_accounts_data_size_limit_ix: expr ) => {
+            let payer_keypair = Keypair::new();
+            let tx = SanitizedTransaction::from_transaction_for_tests(Transaction::new(
+                &[&payer_keypair],
+                Message::new($instructions, Some(&payer_keypair.pubkey())),
+                Hash::default(),
+            ));
+            let mut feature_set = FeatureSet::default();
+            feature_set.activate(&remove_deprecated_request_unit_ix::id(), 0);
+            if $support_set_loaded_accounts_data_size_limit_ix {
+                feature_set.activate(&add_set_tx_loaded_accounts_data_size_instruction::id(), 0);
+            }
+            let result = process_compute_budget_instructions(
+                tx.message().program_instructions_iter(),
+                &feature_set,
+            );
+            assert_eq!($expected_result, result);
+        };
+        ( $instructions: expr, $expected_result: expr ) => {
+            test!($instructions, $expected_result, false);
+        };
+    }
+
+    #[test]
+    fn test_process_instructions() {
+        // Units
+        test!(
+            &[],
+            Ok(ComputeBudgetLimits {
+                compute_unit_limit: 0,
+                ..ComputeBudgetLimits::default()
+            })
+        );
+        test!(
+            &[
+                ComputeBudgetInstruction::set_compute_unit_limit(1),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+            ],
+            Ok(ComputeBudgetLimits {
+                compute_unit_limit: 1,
+                ..ComputeBudgetLimits::default()
+            })
+        );
+        test!(
+            &[
+                ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT + 1),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+            ],
+            Ok(ComputeBudgetLimits {
+                compute_unit_limit: MAX_COMPUTE_UNIT_LIMIT,
+                ..ComputeBudgetLimits::default()
+            })
+        );
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT),
+            ],
+            Ok(ComputeBudgetLimits {
+                compute_unit_limit: MAX_COMPUTE_UNIT_LIMIT,
+                ..ComputeBudgetLimits::default()
+            })
+        );
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                ComputeBudgetInstruction::set_compute_unit_limit(1),
+            ],
+            Ok(ComputeBudgetLimits {
+                compute_unit_limit: 1,
+                ..ComputeBudgetLimits::default()
+            })
+        );
+        test!(
+            &[
+                ComputeBudgetInstruction::set_compute_unit_limit(1),
+                ComputeBudgetInstruction::set_compute_unit_price(42)
+            ],
+            Ok(ComputeBudgetLimits {
+                compute_unit_limit: 1,
+                compute_unit_price: 42,
+                ..ComputeBudgetLimits::default()
+            })
+        );
+
+        // HeapFrame
+        test!(
+            &[],
+            Ok(ComputeBudgetLimits {
+                compute_unit_limit: 0,
+                ..ComputeBudgetLimits::default()
+            })
+        );
+        test!(
+            &[
+                ComputeBudgetInstruction::request_heap_frame(40 * 1024),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+            ],
+            Ok(ComputeBudgetLimits {
+                compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
+                updated_heap_bytes: 40 * 1024,
+                ..ComputeBudgetLimits::default()
+            })
+        );
+        test!(
+            &[
+                ComputeBudgetInstruction::request_heap_frame(40 * 1024 + 1),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+            ],
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::InvalidInstructionData,
+            ))
+        );
+        test!(
+            &[
+                ComputeBudgetInstruction::request_heap_frame(31 * 1024),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+            ],
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::InvalidInstructionData,
+            ))
+        );
+        test!(
+            &[
+                ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES + 1),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+            ],
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::InvalidInstructionData,
+            ))
+        );
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
+            ],
+            Ok(ComputeBudgetLimits {
+                compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
+                updated_heap_bytes: MAX_HEAP_FRAME_BYTES,
+                ..ComputeBudgetLimits::default()
+            })
+        );
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                ComputeBudgetInstruction::request_heap_frame(1),
+            ],
+            Err(TransactionError::InstructionError(
+                3,
+                InstructionError::InvalidInstructionData,
+            ))
+        );
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+            ],
+            Ok(ComputeBudgetLimits {
+                compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT * 7,
+                ..ComputeBudgetLimits::default()
+            })
+        );
+
+        // Combined
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
+                ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT),
+                ComputeBudgetInstruction::set_compute_unit_price(u64::MAX),
+            ],
+            Ok(ComputeBudgetLimits {
+                compute_unit_price: u64::MAX,
+                compute_unit_limit: MAX_COMPUTE_UNIT_LIMIT,
+                updated_heap_bytes: MAX_HEAP_FRAME_BYTES,
+                ..ComputeBudgetLimits::default()
+            })
+        );
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                ComputeBudgetInstruction::set_compute_unit_limit(1),
+                ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
+                ComputeBudgetInstruction::set_compute_unit_price(u64::MAX),
+            ],
+            Ok(ComputeBudgetLimits {
+                compute_unit_price: u64::MAX,
+                compute_unit_limit: 1,
+                updated_heap_bytes: MAX_HEAP_FRAME_BYTES,
+                ..ComputeBudgetLimits::default()
+            })
+        );
+
+        // Duplicates
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT),
+                ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT - 1),
+            ],
+            Err(TransactionError::DuplicateInstruction(2))
+        );
+
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                ComputeBudgetInstruction::request_heap_frame(MIN_HEAP_FRAME_BYTES as u32),
+                ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
+            ],
+            Err(TransactionError::DuplicateInstruction(2))
+        );
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                ComputeBudgetInstruction::set_compute_unit_price(0),
+                ComputeBudgetInstruction::set_compute_unit_price(u64::MAX),
+            ],
+            Err(TransactionError::DuplicateInstruction(2))
+        );
+
+        // deprecated
+        test!(
+            &[Instruction::new_with_borsh(
+                compute_budget::id(),
+                &compute_budget::ComputeBudgetInstruction::RequestUnitsDeprecated {
+                    units: 1_000,
+                    additional_fee: 10
+                },
+                vec![]
+            )],
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::InvalidInstructionData,
+            ))
+        );
+    }
+
+    #[test]
+    fn test_process_loaded_accounts_data_size_limit_instruction() {
+        // Assert for empty instructions, change value of support_set_loaded_accounts_data_size_limit_ix
+        // will not change results, which should all be default
+        for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
+            test!(
+                &[],
+                Ok(ComputeBudgetLimits {
+                    compute_unit_limit: 0,
+                    ..ComputeBudgetLimits::default()
+                }),
+                support_set_loaded_accounts_data_size_limit_ix
+            );
+        }
+
+        // Assert when set_loaded_accounts_data_size_limit presents,
+        // if support_set_loaded_accounts_data_size_limit_ix then
+        //     budget is set with data_size
+        // else
+        //     return InstructionError
+        let data_size = 1;
+        for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
+            let expected_result = if support_set_loaded_accounts_data_size_limit_ix {
+                Ok(ComputeBudgetLimits {
+                    compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
+                    loaded_accounts_bytes: data_size,
+                    ..ComputeBudgetLimits::default()
+                })
+            } else {
+                Err(TransactionError::InstructionError(
+                    0,
+                    InstructionError::InvalidInstructionData,
+                ))
+            };
+
+            test!(
+                &[
+                    ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size),
+                    Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                ],
+                expected_result,
+                support_set_loaded_accounts_data_size_limit_ix
+            );
+        }
+
+        // Assert when set_loaded_accounts_data_size_limit presents, with greater than max value
+        // if support_set_loaded_accounts_data_size_limit_ix then
+        //     budget is set to max data size
+        // else
+        //     return InstructionError
+        let data_size = MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES + 1;
+        for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
+            let expected_result = if support_set_loaded_accounts_data_size_limit_ix {
+                Ok(ComputeBudgetLimits {
+                    compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
+                    loaded_accounts_bytes: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
+                    ..ComputeBudgetLimits::default()
+                })
+            } else {
+                Err(TransactionError::InstructionError(
+                    0,
+                    InstructionError::InvalidInstructionData,
+                ))
+            };
+
+            test!(
+                &[
+                    ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size),
+                    Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                ],
+                expected_result,
+                support_set_loaded_accounts_data_size_limit_ix
+            );
+        }
+
+        // Assert when set_loaded_accounts_data_size_limit is not presented
+        // if support_set_loaded_accounts_data_size_limit_ix then
+        //     budget is set to default data size
+        // else
+        //     return
+        for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
+            let expected_result = Ok(ComputeBudgetLimits {
+                compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
+                loaded_accounts_bytes: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
+                ..ComputeBudgetLimits::default()
+            });
+
+            test!(
+                &[Instruction::new_with_bincode(
+                    Pubkey::new_unique(),
+                    &0_u8,
+                    vec![]
+                ),],
+                expected_result,
+                support_set_loaded_accounts_data_size_limit_ix
+            );
+        }
+
+        // Assert when set_loaded_accounts_data_size_limit presents more than once,
+        // if support_set_loaded_accounts_data_size_limit_ix then
+        //     return DuplicateInstruction
+        // else
+        //     return InstructionError
+        let data_size = MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES;
+        for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
+            let expected_result = if support_set_loaded_accounts_data_size_limit_ix {
+                Err(TransactionError::DuplicateInstruction(2))
+            } else {
+                Err(TransactionError::InstructionError(
+                    1,
+                    InstructionError::InvalidInstructionData,
+                ))
+            };
+
+            test!(
+                &[
+                    Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                    ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size),
+                    ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size),
+                ],
+                expected_result,
+                support_set_loaded_accounts_data_size_limit_ix
+            );
+        }
+    }
+
+    #[test]
+    fn test_process_mixed_instructions_without_compute_budget() {
+        let payer_keypair = Keypair::new();
+
+        let transaction =
+            SanitizedTransaction::from_transaction_for_tests(Transaction::new_signed_with_payer(
+                &[
+                    Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                    system_instruction::transfer(&payer_keypair.pubkey(), &Pubkey::new_unique(), 2),
+                ],
+                Some(&payer_keypair.pubkey()),
+                &[&payer_keypair],
+                Hash::default(),
+            ));
+
+        let mut feature_set = FeatureSet::default();
+        feature_set.activate(&remove_deprecated_request_unit_ix::id(), 0);
+        feature_set.activate(&add_set_tx_loaded_accounts_data_size_instruction::id(), 0);
+
+        let result = process_compute_budget_instructions(
+            transaction.message().program_instructions_iter(),
+            &feature_set,
+        );
+
+        // assert process_instructions will be successful with default,
+        // and the default compute_unit_limit is 2 times default: one for bpf ix, one for
+        // builtin ix.
+        assert_eq!(
+            result,
+            Ok(ComputeBudgetLimits {
+                compute_unit_limit: 2 * DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
+                ..ComputeBudgetLimits::default()
+            })
+        );
+    }
 }

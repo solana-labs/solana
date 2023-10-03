@@ -543,7 +543,8 @@ mod tests {
         // default loaded_accounts_data_size_limit
         const DEFAULT_PAGE_COST: u64 = 8;
         let expected_loaded_accounts_data_size_cost =
-            solana_program_runtime::compute_budget::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES as u64
+            solana_program_runtime::compute_budget_processor::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES
+                as u64
                 / ACCOUNT_DATA_COST_PAGE_SIZE
                 * DEFAULT_PAGE_COST;
 
@@ -661,36 +662,36 @@ mod tests {
     #[allow(clippy::field_reassign_with_default)]
     #[test]
     fn test_calculate_loaded_accounts_data_size_cost() {
-        let mut compute_budget = ComputeBudget::default();
+        let mut compute_budget_limits = ComputeBudgetLimits::default();
 
         // accounts data size are priced in block of 32K, ...
 
         // ... requesting less than 32K should still be charged as one block
-        compute_budget.loaded_accounts_data_size_limit = 31_usize * 1024;
+        compute_budget_limits.loaded_accounts_bytes = 31 * 1024;
         assert_eq!(
-            compute_budget.heap_cost,
-            CostModel::calculate_loaded_accounts_data_size_cost(&compute_budget)
+            DEFAULT_HEAP_COST,
+            CostModel::calculate_loaded_accounts_data_size_cost(&compute_budget_limits)
         );
 
         // ... requesting exact 32K should be charged as one block
-        compute_budget.loaded_accounts_data_size_limit = 32_usize * 1024;
+        compute_budget_limits.loaded_accounts_bytes = 32 * 1024;
         assert_eq!(
-            compute_budget.heap_cost,
-            CostModel::calculate_loaded_accounts_data_size_cost(&compute_budget)
+            DEFAULT_HEAP_COST,
+            CostModel::calculate_loaded_accounts_data_size_cost(&compute_budget_limits)
         );
 
         // ... requesting slightly above 32K should be charged as 2 block
-        compute_budget.loaded_accounts_data_size_limit = 33_usize * 1024;
+        compute_budget_limits.loaded_accounts_bytes = 33 * 1024;
         assert_eq!(
-            compute_budget.heap_cost * 2,
-            CostModel::calculate_loaded_accounts_data_size_cost(&compute_budget)
+            DEFAULT_HEAP_COST * 2,
+            CostModel::calculate_loaded_accounts_data_size_cost(&compute_budget_limits)
         );
 
         // ... requesting exact 64K should be charged as 2 block
-        compute_budget.loaded_accounts_data_size_limit = 64_usize * 1024;
+        compute_budget_limits.loaded_accounts_bytes = 64 * 1024;
         assert_eq!(
-            compute_budget.heap_cost * 2,
-            CostModel::calculate_loaded_accounts_data_size_cost(&compute_budget)
+            DEFAULT_HEAP_COST * 2,
+            CostModel::calculate_loaded_accounts_data_size_cost(&compute_budget_limits)
         );
     }
 

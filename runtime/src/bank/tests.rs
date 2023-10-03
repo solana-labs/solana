@@ -39,7 +39,8 @@ use {
     },
     solana_logger,
     solana_program_runtime::{
-        compute_budget::{self, ComputeBudget, MAX_COMPUTE_UNIT_LIMIT},
+        compute_budget::ComputeBudget,
+        compute_budget_processor::{self, MAX_COMPUTE_UNIT_LIMIT},
         declare_process_instruction,
         invoke_context::mock_process_instruction,
         loaded_programs::{LoadedProgram, LoadedProgramType, DELAY_VISIBILITY_SLOT_OFFSET},
@@ -9748,7 +9749,9 @@ fn test_compute_budget_program_noop() {
         assert_eq!(
             *compute_budget,
             ComputeBudget {
-                compute_unit_limit: compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
+                compute_unit_limit: u64::from(
+                    compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
+                ),
                 heap_size: 48 * 1024,
                 ..ComputeBudget::default()
             }
@@ -9761,7 +9764,7 @@ fn test_compute_budget_program_noop() {
     let message = Message::new(
         &[
             ComputeBudgetInstruction::set_compute_unit_limit(
-                compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
+                compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
             ),
             ComputeBudgetInstruction::request_heap_frame(48 * 1024),
             Instruction::new_with_bincode(program_id, &0, vec![]),
@@ -9791,7 +9794,9 @@ fn test_compute_request_instruction() {
         assert_eq!(
             *compute_budget,
             ComputeBudget {
-                compute_unit_limit: compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
+                compute_unit_limit: u64::from(
+                    compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
+                ),
                 heap_size: 48 * 1024,
                 ..ComputeBudget::default()
             }
@@ -9804,7 +9809,7 @@ fn test_compute_request_instruction() {
     let message = Message::new(
         &[
             ComputeBudgetInstruction::set_compute_unit_limit(
-                compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
+                compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
             ),
             ComputeBudgetInstruction::request_heap_frame(48 * 1024),
             Instruction::new_with_bincode(program_id, &0, vec![]),
@@ -9841,7 +9846,9 @@ fn test_failed_compute_request_instruction() {
         assert_eq!(
             *compute_budget,
             ComputeBudget {
-                compute_unit_limit: compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
+                compute_unit_limit: u64::from(
+                    compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
+                ),
                 heap_size: 48 * 1024,
                 ..ComputeBudget::default()
             }
@@ -10072,14 +10079,19 @@ fn calculate_test_fee(
     remove_congestion_multiplier: bool,
 ) -> u64 {
     let mut feature_set = FeatureSet::all_enabled();
-    feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
+    feature_set.deactivate(&solana_sdk::feature_set::remove_deprecated_request_unit_ix::id());
 
     if !support_set_accounts_data_size_limit_ix {
-        feature_set.deactivate(&include_loaded_accounts_data_size_in_fee_calculation::id());
+        feature_set.deactivate(
+            &solana_sdk::feature_set::include_loaded_accounts_data_size_in_fee_calculation::id(),
+        );
     }
 
     let budget_limits =
-        ComputeBudget::fee_budget_limits(message.program_instructions_iter(), &feature_set);
+        process_compute_budget_instructions(message.program_instructions_iter(), &feature_set)
+            .unwrap_or_default()
+            .into();
+
     fee_structure.calculate_fee(
         message,
         lamports_per_signature,
@@ -11106,7 +11118,9 @@ fn test_rent_state_list_len() {
     );
 
     let compute_budget = bank.runtime_config.compute_budget.unwrap_or_else(|| {
-        ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64)
+        ComputeBudget::new(u64::from(
+            compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
+        ))
     });
     let transaction_context = TransactionContext::new(
         loaded_txs[0].0.as_ref().unwrap().accounts.clone(),
