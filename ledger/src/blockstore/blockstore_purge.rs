@@ -1190,4 +1190,88 @@ pub mod tests {
             .purge_special_columns_exact(&mut write_batch, slot, slot + 1)
             .unwrap();
     }
+
+    #[test]
+    fn test_purge_special_columns_compaction_filter() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+        let index0_max_slot = 9;
+        let index1_max_slot = 19;
+
+        clear_and_repopulate_transaction_statuses_for_test(
+            &blockstore,
+            index0_max_slot,
+            index1_max_slot,
+        );
+        let first_index = {
+            let mut status_entry_iterator = blockstore
+                .db
+                .iter::<cf::TransactionStatus>(IteratorMode::Start)
+                .unwrap();
+            status_entry_iterator.next().unwrap().0
+        };
+        let last_index = {
+            let mut status_entry_iterator = blockstore
+                .db
+                .iter::<cf::TransactionStatus>(IteratorMode::End)
+                .unwrap();
+            status_entry_iterator.next().unwrap().0
+        };
+
+        let oldest_slot = 3;
+        blockstore.db.set_oldest_slot(oldest_slot);
+        blockstore.db.compact_range_cf::<cf::TransactionStatus>(
+            &cf::TransactionStatus::key(first_index),
+            &cf::TransactionStatus::key(last_index),
+        );
+
+        let status_entry_iterator = blockstore
+            .db
+            .iter::<cf::TransactionStatus>(IteratorMode::Start)
+            .unwrap();
+        let mut count = 0;
+        for ((_primary_index, _signature, slot), _value) in status_entry_iterator {
+            assert!(slot >= oldest_slot);
+            count += 1;
+        }
+        assert_eq!(count, index1_max_slot - (oldest_slot - 1));
+
+        clear_and_repopulate_transaction_statuses_for_test(
+            &blockstore,
+            index0_max_slot,
+            index1_max_slot,
+        );
+        let first_index = {
+            let mut status_entry_iterator = blockstore
+                .db
+                .iter::<cf::TransactionStatus>(IteratorMode::Start)
+                .unwrap();
+            status_entry_iterator.next().unwrap().0
+        };
+        let last_index = {
+            let mut status_entry_iterator = blockstore
+                .db
+                .iter::<cf::TransactionStatus>(IteratorMode::End)
+                .unwrap();
+            status_entry_iterator.next().unwrap().0
+        };
+
+        let oldest_slot = 12;
+        blockstore.db.set_oldest_slot(oldest_slot);
+        blockstore.db.compact_range_cf::<cf::TransactionStatus>(
+            &cf::TransactionStatus::key(first_index),
+            &cf::TransactionStatus::key(last_index),
+        );
+
+        let status_entry_iterator = blockstore
+            .db
+            .iter::<cf::TransactionStatus>(IteratorMode::Start)
+            .unwrap();
+        let mut count = 0;
+        for ((_primary_index, _signature, slot), _value) in status_entry_iterator {
+            assert!(slot >= oldest_slot);
+            count += 1;
+        }
+        assert_eq!(count, index1_max_slot - (oldest_slot - 1));
+    }
 }
