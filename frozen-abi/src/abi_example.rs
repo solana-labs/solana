@@ -137,24 +137,11 @@ tuple_example_impls! {
     }
 }
 
-// Source: https://github.com/rust-lang/rust/blob/ba18875557aabffe386a2534a1aa6118efb6ab88/src/libcore/array/mod.rs#L417
-macro_rules! array_example_impls {
-    {$n:expr, $t:ident $($ts:ident)*} => {
-        impl<T> AbiExample for [T; $n] where T: AbiExample {
-            fn example() -> Self {
-                [$t::example(), $($ts::example()),*]
-            }
-        }
-        array_example_impls!{($n - 1), $($ts)*}
-    };
-    {$n:expr,} => {
-        impl<T> AbiExample for [T; $n] {
-        fn example() -> Self { [] }
-        }
-    };
+impl<const N: usize, T: AbiExample> AbiExample for [T; N] {
+    fn example() -> Self {
+        std::array::from_fn(|_| T::example())
+    }
 }
-
-array_example_impls! {32, T T T T T T T T T T T T T T T T T T T T T T T T T T T T T T T T}
 
 // Source: https://github.com/rust-lang/rust/blob/ba18875557aabffe386a2534a1aa6118efb6ab88/src/libcore/default.rs#L137
 macro_rules! example_impls {
@@ -241,6 +228,7 @@ pub(crate) fn normalize_type_name(type_name: &str) -> String {
 type Placeholder = ();
 
 impl<T: Sized> AbiExample for T {
+    #[track_caller]
     default fn example() -> Self {
         <Placeholder>::type_erased_example()
     }
@@ -252,6 +240,7 @@ trait TypeErasedExample<T> {
 }
 
 impl<T: Sized> TypeErasedExample<T> for Placeholder {
+    #[track_caller]
     default fn type_erased_example() -> T {
         panic!(
             "derive or implement AbiExample/AbiEnumVisitor for {}",
@@ -261,6 +250,7 @@ impl<T: Sized> TypeErasedExample<T> for Placeholder {
 }
 
 impl<T: Default + Serialize> TypeErasedExample<T> for Placeholder {
+    #[track_caller]
     default fn type_erased_example() -> T {
         let original_type_name = type_name::<T>();
         let normalized_type_name = normalize_type_name(original_type_name);
@@ -326,6 +316,13 @@ impl<T: AbiExample> AbiExample for std::sync::Arc<T> {
     fn example() -> Self {
         info!("AbiExample for (Arc<T>): {}", type_name::<Self>());
         std::sync::Arc::new(T::example())
+    }
+}
+
+impl<T: AbiExample> AbiExample for std::sync::Weak<T> {
+    fn example() -> Self {
+        info!("AbiExample for (Arc<T>): {}", type_name::<Self>());
+        std::sync::Arc::downgrade(&std::sync::Arc::new(T::example()))
     }
 }
 
@@ -457,6 +454,13 @@ impl AbiExample for std::path::PathBuf {
     }
 }
 
+#[cfg(not(target_os = "solana"))]
+impl AbiExample for std::time::SystemTime {
+    fn example() -> Self {
+        std::time::SystemTime::now()
+    }
+}
+
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 impl AbiExample for SocketAddr {
     fn example() -> Self {
@@ -490,8 +494,7 @@ impl<T: Serialize + ?Sized> AbiEnumVisitor for T {
 impl<T: Serialize + ?Sized + AbiExample> AbiEnumVisitor for T {
     default fn visit_for_abi(&self, digester: &mut AbiDigester) -> DigestResult {
         info!("AbiEnumVisitor for (default): {}", type_name::<T>());
-        T::example()
-            .serialize(digester.create_new())
+        self.serialize(digester.create_new())
             .map_err(DigestError::wrap_by_type::<T>)
     }
 }

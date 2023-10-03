@@ -36,13 +36,20 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, AbiExample)]
 #[repr(C)]
 pub struct Meta {
     pub size: usize,
     pub addr: IpAddr,
     pub port: u16,
     pub flags: PacketFlags,
+}
+
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl ::solana_frozen_abi::abi_example::AbiExample for PacketFlags {
+    fn example() -> Self {
+        Self::empty()
+    }
 }
 
 // serde_as is used as a work around because array isn't supported by serde
@@ -71,7 +78,7 @@ pub struct Meta {
 // ryoqun's dirty experiments:
 //   https://github.com/ryoqun/serde-array-comparisons
 #[serde_as]
-#[derive(Clone, Eq, Serialize, Deserialize)]
+#[derive(Clone, Eq, Serialize, Deserialize, AbiExample)]
 #[repr(C)]
 pub struct Packet {
     // Bytes past Packet.meta.size are not valid to read from.
