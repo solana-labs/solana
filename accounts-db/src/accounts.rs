@@ -1470,8 +1470,9 @@ mod tests {
             transaction_results::{DurableNonceFee, TransactionExecutionDetails},
         },
         assert_matches::assert_matches,
-        solana_program_runtime::prioritization_fee::{
-            PrioritizationFeeDetails, PrioritizationFeeType,
+        solana_program_runtime::{
+            compute_budget_processor,
+            prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
         },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
@@ -1747,13 +1748,15 @@ mod tests {
         );
 
         let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
+        feature_set.deactivate(&solana_sdk::feature_set::remove_deprecated_request_unit_ix::id());
 
         let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
         let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,
-            &ComputeBudget::fee_budget_limits(message.program_instructions_iter(), &feature_set),
+            &process_compute_budget_instructions(message.program_instructions_iter(), &feature_set)
+                .unwrap_or_default()
+                .into(),
             true,
             false,
         );
@@ -4249,7 +4252,11 @@ mod tests {
 
         let result_no_limit = Ok(None);
         let result_default_limit = Ok(Some(
-            NonZeroUsize::new(compute_budget::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES).unwrap(),
+            NonZeroUsize::new(
+                usize::try_from(compute_budget_processor::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES)
+                    .unwrap(),
+            )
+            .unwrap(),
         ));
         let result_requested_limit: Result<Option<NonZeroUsize>> =
             Ok(Some(NonZeroUsize::new(99).unwrap()));
@@ -4277,7 +4284,10 @@ mod tests {
         //    if tx doesn't set limit, then default limit (64MiB)
         //    if tx sets limit, then requested limit
         //    if tx sets limit to zero, then TransactionError::InvalidLoadedAccountsDataSizeLimit
-        feature_set.activate(&add_set_tx_loaded_accounts_data_size_instruction::id(), 0);
+        feature_set.activate(
+            &solana_sdk::feature_set::add_set_tx_loaded_accounts_data_size_instruction::id(),
+            0,
+        );
         test(tx_not_set_limit, &feature_set, &result_default_limit);
         test(tx_set_limit_99, &feature_set, &result_requested_limit);
         test(tx_set_limit_0, &feature_set, &result_invalid_limit);
@@ -4312,13 +4322,15 @@ mod tests {
         );
 
         let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
+        feature_set.deactivate(&solana_sdk::feature_set::remove_deprecated_request_unit_ix::id());
 
         let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
         let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,
-            &ComputeBudget::fee_budget_limits(message.program_instructions_iter(), &feature_set),
+            &process_compute_budget_instructions(message.program_instructions_iter(), &feature_set)
+                .unwrap_or_default()
+                .into(),
             true,
             false,
         );
