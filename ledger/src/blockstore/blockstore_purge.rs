@@ -354,15 +354,32 @@ impl Blockstore {
     ) -> Result<()> {
         let mut index0 = self.transaction_status_index_cf.get(0)?.unwrap_or_default();
         let mut index1 = self.transaction_status_index_cf.get(1)?.unwrap_or_default();
+        let slot_indexes = |slot: Slot| -> Vec<u64> {
+            let mut indexes = vec![];
+            if slot <= index0.max_slot && (index0.frozen || slot >= index1.max_slot) {
+                indexes.push(0);
+            }
+            if slot <= index1.max_slot && (index1.frozen || slot >= index0.max_slot) {
+                indexes.push(1);
+            }
+            indexes
+        };
+
         for slot in from_slot..=to_slot {
+            let primary_indexes = slot_indexes(slot);
+            if primary_indexes.is_empty() {
+                continue;
+            }
+
             let slot_entries = self.get_any_valid_slot_entries(slot, 0);
             let transactions = slot_entries
                 .into_iter()
                 .flat_map(|entry| entry.transactions);
             for transaction in transactions {
                 if let Some(&signature) = transaction.signatures.get(0) {
-                    batch.delete::<cf::TransactionStatus>((0, signature, slot))?;
-                    batch.delete::<cf::TransactionStatus>((1, signature, slot))?;
+                    for primary_index in &primary_indexes {
+                        batch.delete::<cf::TransactionStatus>((*primary_index, signature, slot))?;
+                    }
 
                     let meta = self.read_transaction_status((signature, slot))?;
                     let loaded_addresses = meta.map(|meta| meta.loaded_addresses);
@@ -372,8 +389,14 @@ impl Blockstore {
                     );
 
                     for pubkey in account_keys.iter() {
-                        batch.delete::<cf::AddressSignatures>((0, *pubkey, slot, signature))?;
-                        batch.delete::<cf::AddressSignatures>((1, *pubkey, slot, signature))?;
+                        for primary_index in &primary_indexes {
+                            batch.delete::<cf::AddressSignatures>((
+                                *primary_index,
+                                *pubkey,
+                                slot,
+                                signature,
+                            ))?;
+                        }
                     }
                 }
             }
@@ -733,9 +756,9 @@ pub mod tests {
             &entries,
             index0_max_slot,                   // slot
             index0_max_slot.saturating_sub(1), // parent_slot
-            true,                // is_full_slot
-            0,                   // version
-            true,                // merkle_variant
+            true,                              // is_full_slot
+            0,                                 // version
+            true,                              // merkle_variant
         );
         blockstore.insert_shreds(shreds, None, false).unwrap();
         let signatures = entries
