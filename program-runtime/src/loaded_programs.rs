@@ -99,6 +99,20 @@ impl Debug for LoadedProgramType {
     }
 }
 
+impl LoadedProgramType {
+    /// Returns a reference to its environment if it has one
+    pub fn get_environment(&self) -> Option<&ProgramRuntimeEnvironment> {
+        match self {
+            LoadedProgramType::LegacyV0(program)
+            | LoadedProgramType::LegacyV1(program)
+            | LoadedProgramType::Typed(program) => Some(program.get_loader()),
+            #[cfg(test)]
+            LoadedProgramType::TestLoaded(environment) => Some(environment),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct LoadedProgram {
     /// The program of this entry
@@ -338,16 +352,8 @@ impl LoadedProgram {
     }
 
     pub fn to_unloaded(&self) -> Option<Self> {
-        let env = match &self.program {
-            LoadedProgramType::LegacyV0(program)
-            | LoadedProgramType::LegacyV1(program)
-            | LoadedProgramType::Typed(program) => program.get_loader().clone(),
-            #[cfg(test)]
-            LoadedProgramType::TestLoaded(env) => env.clone(),
-            _ => return None,
-        };
         Some(Self {
-            program: LoadedProgramType::Unloaded(env),
+            program: LoadedProgramType::Unloaded(self.program.get_environment()?.clone()),
             account_size: self.account_size,
             deployment_slot: self.deployment_slot,
             effective_slot: self.effective_slot,
@@ -586,41 +592,13 @@ impl LoadedPrograms {
     pub fn prune_feature_set_transition(&mut self) {
         for second_level in self.entries.values_mut() {
             second_level.retain(|entry| {
-                let retain = match &entry.program {
-                    LoadedProgramType::Builtin(_)
-                    | LoadedProgramType::DelayVisibility
-                    | LoadedProgramType::Closed => true,
-                    LoadedProgramType::LegacyV0(program) | LoadedProgramType::LegacyV1(program)
-                        if Arc::ptr_eq(
-                            program.get_loader(),
-                            &self.environments.program_runtime_v1,
-                        ) =>
-                    {
-                        true
-                    }
-                    LoadedProgramType::Unloaded(environment)
-                    | LoadedProgramType::FailedVerification(environment)
-                        if Arc::ptr_eq(environment, &self.environments.program_runtime_v1)
-                            || Arc::ptr_eq(environment, &self.environments.program_runtime_v2) =>
-                    {
-                        true
-                    }
-                    LoadedProgramType::Typed(program)
-                        if Arc::ptr_eq(
-                            program.get_loader(),
-                            &self.environments.program_runtime_v2,
-                        ) =>
-                    {
-                        true
-                    }
-                    _ => false,
-                };
-                if !retain {
-                    self.stats
-                        .prunes_environment
-                        .fetch_add(1, Ordering::Relaxed);
+                if Self::matches_environment(entry, &self.environments) {
+                    return true;
                 }
-                retain
+                self.stats
+                    .prunes_environment
+                    .fetch_add(1, Ordering::Relaxed);
+                false
             });
         }
         self.remove_programs_with_no_entries();
@@ -686,6 +664,17 @@ impl LoadedPrograms {
         if self.latest_root_epoch < new_root_epoch {
             self.latest_root_epoch = new_root_epoch;
         }
+    }
+
+    fn matches_environment(
+        entry: &Arc<LoadedProgram>,
+        environments: &ProgramRuntimeEnvironments,
+    ) -> bool {
+        let Some(environment) = entry.program.get_environment() else {
+            return true;
+        };
+        Arc::ptr_eq(environment, &environments.program_runtime_v1)
+            || Arc::ptr_eq(environment, &environments.program_runtime_v2)
     }
 
     fn matches_loaded_program_criteria(
