@@ -754,16 +754,9 @@ pub mod tests {
     fn test_purge_special_columns_compaction_filter() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-        let index0_max_slot = 9;
-        let index1_max_slot = 19;
-        // includes slot 0, and slot 9 has 2 transactions
-        let num_total_transactions = index1_max_slot + 2;
+        let max_slot = 19;
 
-        clear_and_repopulate_transaction_statuses_for_test(
-            &blockstore,
-            index0_max_slot,
-            index1_max_slot,
-        );
+        clear_and_repopulate_transaction_statuses_for_test(&blockstore, max_slot);
         let first_index = {
             let mut status_entry_iterator = blockstore
                 .db
@@ -791,17 +784,13 @@ pub mod tests {
             .iter::<cf::TransactionStatus>(IteratorMode::Start)
             .unwrap();
         let mut count = 0;
-        for ((_primary_index, _signature, slot), _value) in status_entry_iterator {
+        for ((_signature, slot), _value) in status_entry_iterator {
             assert!(slot >= oldest_slot);
             count += 1;
         }
-        assert_eq!(count, num_total_transactions - oldest_slot);
+        assert_eq!(count, max_slot - (oldest_slot - 1));
 
-        clear_and_repopulate_transaction_statuses_for_test(
-            &blockstore,
-            index0_max_slot,
-            index1_max_slot,
-        );
+        clear_and_repopulate_transaction_statuses_for_test(&blockstore, max_slot);
         let first_index = {
             let mut status_entry_iterator = blockstore
                 .db
@@ -829,10 +818,10 @@ pub mod tests {
             .iter::<cf::TransactionStatus>(IteratorMode::Start)
             .unwrap();
         let mut count = 0;
-        for ((_primary_index, _signature, slot), _value) in status_entry_iterator {
+        for ((_signature, slot), _value) in status_entry_iterator {
             assert!(slot >= oldest_slot);
             count += 1;
         }
-        assert_eq!(count, num_total_transactions - oldest_slot - 1); // Extra transaction in slot 9
+        assert_eq!(count, max_slot - (oldest_slot - 1));
     }
 }
