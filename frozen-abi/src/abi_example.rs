@@ -318,7 +318,7 @@ impl<T: AbiExample> AbiExample for std::sync::Arc<T> {
 
 impl<T: AbiExample> AbiExample for std::sync::Weak<T> {
     fn example() -> Self {
-        info!("AbiExample for (Arc<T>): {}", type_name::<Self>());
+        info!("AbiExample for (Weak<T>): {}", type_name::<Self>());
         std::sync::Arc::downgrade(&std::sync::Arc::new(T::example()))
     }
 }
