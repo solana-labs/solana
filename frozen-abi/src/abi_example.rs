@@ -480,7 +480,9 @@ pub trait AbiEnumVisitor: Serialize {
 }
 
 pub trait IgnoreAsHelper {}
-pub trait EvenAsOpaque {}
+pub trait EvenAsOpaque {
+    const SCOPE: Option<&'static str> = None;
+}
 
 impl<T: Serialize + ?Sized> AbiEnumVisitor for T {
     default fn visit_for_abi(&self, _digester: &mut AbiDigester) -> DigestResult {
@@ -493,8 +495,11 @@ impl<T: Serialize + ?Sized> AbiEnumVisitor for T {
 
 impl<T: Serialize + ?Sized + AbiExample> AbiEnumVisitor for T {
     default fn visit_for_abi(&self, digester: &mut AbiDigester) -> DigestResult {
-        info!("AbiEnumVisitor for (default): {}", type_name::<T>());
-        self.serialize(digester.create_new())
+        info!("AbiEnumVisitor for T: {}", type_name::<T>());
+        // not calling self.serialize(...) is intentional here as the most generic impl
+        // consider IgnoreAsHelper and EvenAsOpaque if you're stuck on this....
+        T::example()
+            .serialize(digester.create_new())
             .map_err(DigestError::wrap_by_type::<T>)
     }
 }
@@ -504,7 +509,7 @@ impl<T: Serialize + ?Sized + AbiExample> AbiEnumVisitor for T {
 // relevant test: TestVecEnum
 impl<T: Serialize + ?Sized + AbiEnumVisitor> AbiEnumVisitor for &T {
     default fn visit_for_abi(&self, digester: &mut AbiDigester) -> DigestResult {
-        info!("AbiEnumVisitor for (&default): {}", type_name::<T>());
+        info!("AbiEnumVisitor for &T: {}", type_name::<T>());
         // Don't call self.visit_for_abi(...) to avoid the infinite recursion!
         T::visit_for_abi(self, digester)
     }
@@ -524,9 +529,17 @@ impl<T: Serialize + IgnoreAsHelper> AbiEnumVisitor for &T {
 // inability of implementing AbiExample for private structs from other crates
 impl<T: Serialize + IgnoreAsHelper + EvenAsOpaque> AbiEnumVisitor for &T {
     default fn visit_for_abi(&self, digester: &mut AbiDigester) -> DigestResult {
-        info!("AbiEnumVisitor for (IgnoreAsOpaque): {}", type_name::<T>());
-        let top_scope = type_name::<T>().split("::").next().unwrap();
-        self.serialize(digester.create_new_opaque(top_scope))
+        let type_name = type_name::<T>();
+        let scope = if let Some(scope) = T::SCOPE {
+            scope
+        } else {
+            type_name.split("::").next().unwrap()
+        };
+        info!(
+            "AbiEnumVisitor for (EvenAsOpaque): {}: scope: {}",
+            type_name, scope
+        );
+        self.serialize(digester.create_new_opaque(scope))
             .map_err(DigestError::wrap_by_type::<T>)
     }
 }

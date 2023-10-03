@@ -85,12 +85,12 @@ impl AbiDigester {
         }
     }
 
-    pub fn create_new_opaque(&self, top_scope: &str) -> Self {
+    pub fn create_new_opaque(&self, scope: &str) -> Self {
         Self {
             data_types: self.data_types.clone(),
             depth: self.depth,
             for_enum: false,
-            opaque_scope: Some(top_scope.to_owned()),
+            opaque_scope: Some(scope.to_owned()),
         }
     }
 
@@ -124,7 +124,7 @@ impl AbiDigester {
         let type_name = normalize_type_name(type_name::<T>());
         if type_name.ends_with("__SerializeWith")
             || (self.opaque_scope.is_some()
-                && type_name.starts_with(self.opaque_scope.as_ref().unwrap()))
+                && type_name.contains(self.opaque_scope.as_ref().unwrap()))
         {
             // we can't use the AbiEnumVisitor trait for these cases.
             value.serialize(self.create_new())
