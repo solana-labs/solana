@@ -2131,17 +2131,19 @@ impl Blockstore {
         // If present, delete dummy entries inserted by old software
         // https://github.com/solana-labs/solana/blob/bc2b372/ledger/src/blockstore.rs#L2130-L2137
         let transaction_status_dummy_key = cf::TransactionStatus::as_index(2);
-        if let Some(_) = self
+        if self
             .transaction_status_cf
             .get_protobuf_or_bincode::<StoredTransactionStatusMeta>(transaction_status_dummy_key)?
+            .is_some()
         {
             self.transaction_status_cf
                 .delete(transaction_status_dummy_key)?;
         };
         let address_signatures_dummy_key = cf::AddressSignatures::as_index(2);
-        if let Some(_) = self
+        if self
             .address_signatures_cf
             .get(address_signatures_dummy_key)?
+            .is_some()
         {
             self.address_signatures_cf
                 .delete(address_signatures_dummy_key)?;
