@@ -121,12 +121,12 @@ mod test {
     use {
         super::*,
         solana_sdk::{account::Account, genesis_config::create_genesis_config},
+        spl_pod::optional_keys::OptionalNonZeroPubkey,
         spl_token_2022::{
             extension::{
                 immutable_owner::ImmutableOwner, memo_transfer::MemoTransfer,
                 mint_close_authority::MintCloseAuthority, ExtensionType, StateWithExtensionsMut,
             },
-            pod::OptionalNonZeroPubkey,
             solana_program::{program_option::COption, program_pack::Pack},
         },
         std::collections::BTreeMap,
@@ -291,7 +291,8 @@ mod test {
 
         let mint_authority = Pubkey::new_unique();
         let mint_size =
-            ExtensionType::get_account_len::<Mint>(&[ExtensionType::MintCloseAuthority]);
+            ExtensionType::try_calculate_account_len::<Mint>(&[ExtensionType::MintCloseAuthority])
+                .unwrap();
         let mint_base = Mint {
             mint_authority: COption::None,
             supply: 4242,
@@ -339,10 +340,11 @@ mod test {
             delegated_amount: 0,
             close_authority: COption::None,
         };
-        let account_size = ExtensionType::get_account_len::<TokenAccount>(&[
+        let account_size = ExtensionType::try_calculate_account_len::<TokenAccount>(&[
             ExtensionType::ImmutableOwner,
             ExtensionType::MemoTransfer,
-        ]);
+        ])
+        .unwrap();
         let mut account_data = vec![0; account_size];
         let mut account_state =
             StateWithExtensionsMut::<TokenAccount>::unpack_uninitialized(&mut account_data)
@@ -381,10 +383,11 @@ mod test {
             delegated_amount: 0,
             close_authority: COption::None,
         };
-        let account_size = ExtensionType::get_account_len::<TokenAccount>(&[
+        let account_size = ExtensionType::try_calculate_account_len::<TokenAccount>(&[
             ExtensionType::ImmutableOwner,
             ExtensionType::MemoTransfer,
-        ]);
+        ])
+        .unwrap();
         let mut account_data = vec![0; account_size];
         let mut account_state =
             StateWithExtensionsMut::<TokenAccount>::unpack_uninitialized(&mut account_data)
