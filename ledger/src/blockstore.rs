@@ -2127,14 +2127,29 @@ impl Blockstore {
             .put(0, &TransactionStatusIndexMeta::default())?;
         self.transaction_status_index_cf
             .put(1, &TransactionStatusIndexMeta::default())?;
-        // This dummy status improves compaction performance
-        let default_status = TransactionStatusMeta::default().into();
-        self.transaction_status_cf
-            .put_protobuf(cf::TransactionStatus::as_index(2), &default_status)?;
-        self.address_signatures_cf.put(
-            cf::AddressSignatures::as_index(2),
-            &AddressSignatureMeta::default(),
-        )
+
+        // If present, delete dummy entries inserted by old software
+        // https://github.com/solana-labs/solana/blob/bc2b372/ledger/src/blockstore.rs#L2130-L2137
+        let transaction_status_dummy_key = cf::TransactionStatus::as_index(2);
+        if self
+            .transaction_status_cf
+            .get_protobuf_or_bincode::<StoredTransactionStatusMeta>(transaction_status_dummy_key)?
+            .is_some()
+        {
+            self.transaction_status_cf
+                .delete(transaction_status_dummy_key)?;
+        };
+        let address_signatures_dummy_key = cf::AddressSignatures::as_index(2);
+        if self
+            .address_signatures_cf
+            .get(address_signatures_dummy_key)?
+            .is_some()
+        {
+            self.address_signatures_cf
+                .delete(address_signatures_dummy_key)?;
+        };
+
+        Ok(())
     }
 
     /// Toggles the active primary index between `0` and `1`, and clears the
@@ -7669,8 +7684,6 @@ pub mod tests {
     fn test_get_transaction_status() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-
-        // TransactionStatus column opens initialized with one entry at index 2
         let transaction_status_cf = &blockstore.transaction_status_cf;
 
         let pre_balances_vec = vec![1, 2, 3];
@@ -7849,13 +7862,13 @@ pub mod tests {
             .get_transaction_status_with_counter(signature7, &[].into())
             .unwrap();
         assert_eq!(status, None);
-        assert_eq!(counter, 2);
+        assert_eq!(counter, 1);
 
         let (status, counter) = blockstore
             .get_transaction_status_with_counter(signature7, &[3].into())
             .unwrap();
         assert_eq!(status, None);
-        assert_eq!(counter, 2);
+        assert_eq!(counter, 1);
     }
 
     fn do_test_lowest_cleanup_slot_and_special_cfs(simulate_ledger_cleanup_service: bool) {
@@ -7863,8 +7876,6 @@ pub mod tests {
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-
-        // TransactionStatus column opens initialized with one entry at index 2
         let transaction_status_cf = &blockstore.transaction_status_cf;
 
         let pre_balances_vec = vec![1, 2, 3];

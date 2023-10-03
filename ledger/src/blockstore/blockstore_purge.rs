@@ -649,9 +649,6 @@ pub mod tests {
                 IteratorDirection::Forward,
             ))
             .unwrap();
-        let padding_entry = status_entry_iterator.next().unwrap().0;
-        assert_eq!(padding_entry.0, 2);
-        assert_eq!(padding_entry.2, 0);
         assert!(status_entry_iterator.next().is_none());
         let mut address_transactions_iterator = blockstore
             .db
@@ -660,10 +657,8 @@ pub mod tests {
                 IteratorDirection::Forward,
             ))
             .unwrap();
-        let padding_entry = address_transactions_iterator.next().unwrap().0;
-        assert_eq!(padding_entry.0, 2);
-        assert_eq!(padding_entry.2, 0);
         assert!(address_transactions_iterator.next().is_none());
+
         assert_eq!(
             transaction_status_index_cf.get(0).unwrap().unwrap(),
             TransactionStatusIndexMeta {
@@ -1095,8 +1090,6 @@ pub mod tests {
                 frozen: false,
             }
         );
-        let entry = status_entry_iterator.next().unwrap().0;
-        assert_eq!(entry.0, 2); // Buffer entry, no index 1 entries remaining
         drop(status_entry_iterator);
 
         // Purge up to but not including index0_max_slot
@@ -1135,6 +1128,8 @@ pub mod tests {
                 IteratorDirection::Forward,
             ))
             .unwrap();
+        assert!(status_entry_iterator.next().is_none());
+
         assert_eq!(
             blockstore
                 .transaction_status_index_cf
@@ -1157,8 +1152,6 @@ pub mod tests {
                 frozen: false,
             }
         );
-        let entry = status_entry_iterator.next().unwrap().0;
-        assert_eq!(entry.0, 2); // Buffer entry, no index 0 or index 1 entries remaining
     }
 
     #[test]
