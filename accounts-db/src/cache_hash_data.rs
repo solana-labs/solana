@@ -423,12 +423,19 @@ mod tests {
             &self,
             file_name: impl AsRef<Path>,
             accumulator: &mut SavedType,
+            offsets: &mut Vec<u64>,
             start_bin_index: usize,
             bin_calculator: &PubkeyBinCalculator24,
         ) -> Result<(), std::io::Error> {
             let mut m = Measure::start("overall");
-            let cache_file = self.load_map(file_name)?;
+            let mut cache_file = self.load_map(file_name)?;
             cache_file.load_all(accumulator, start_bin_index, bin_calculator);
+
+            let n = cache_file.get_header_mut().number_offsets;
+            *offsets = vec![0_u64; n];
+            for (i, offset) in offsets.iter_mut().enumerate().take(n) {
+                *offset = *cache_file.get_bin_offset_mut(i);
+            }
             m.stop();
             self.stats.load_us.fetch_add(m.as_us(), Ordering::Relaxed);
             Ok(())
@@ -483,6 +490,19 @@ mod tests {
                         let cache = CacheHashData::new(cache_dir.clone(), true);
                         let file_name = PathBuf::from("test");
                         cache.save(&file_name, &data_this_pass).unwrap();
+
+                        let get_offsets = |data: &Vec<Vec<CalculateHashIntermediate>>| -> Vec<u64> {
+                            let mut offsets = vec![];
+                            offsets.push(0_u64);
+                            let mut n = 0_u64;
+                            for x in data.iter() {
+                                n += x.len() as u64;
+                                offsets.push(n);
+                            }
+                            offsets
+                        };
+                        let expected_offsets = get_offsets(&data_this_pass);
+
                         cache.get_cache_files();
                         assert_eq!(
                             cache
@@ -494,8 +514,15 @@ mod tests {
                             vec![&file_name],
                         );
                         let mut accum = (0..bins_per_pass).map(|_| vec![]).collect();
+                        let mut offsets = vec![];
                         cache
-                            .load(&file_name, &mut accum, start_bin_this_pass, &bin_calculator)
+                            .load(
+                                &file_name,
+                                &mut accum,
+                                &mut offsets,
+                                start_bin_this_pass,
+                                &bin_calculator,
+                            )
                             .unwrap();
                         if flatten_data {
                             bin_data(
@@ -509,6 +536,7 @@ mod tests {
                             accum, data_this_pass,
                             "bins: {bins}, start_bin_this_pass: {start_bin_this_pass}, pass: {pass}, flatten: {flatten_data}, passes: {passes}"
                         );
+                        assert_eq!(offsets, expected_offsets);
                     }
                 }
             }
