@@ -1256,6 +1256,8 @@ pub mod tests {
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let index0_max_slot = 9;
         let index1_max_slot = 19;
+        // includes slot 0, and slot 9 has 2 transactions
+        let num_total_transactions = index1_max_slot + 2;
 
         clear_and_repopulate_transaction_statuses_for_test(
             &blockstore,
@@ -1293,7 +1295,7 @@ pub mod tests {
             assert!(slot >= oldest_slot);
             count += 1;
         }
-        assert_eq!(count, index1_max_slot - (oldest_slot - 1));
+        assert_eq!(count, num_total_transactions - oldest_slot);
 
         clear_and_repopulate_transaction_statuses_for_test(
             &blockstore,
@@ -1331,6 +1333,6 @@ pub mod tests {
             assert!(slot >= oldest_slot);
             count += 1;
         }
-        assert_eq!(count, index1_max_slot - (oldest_slot - 1));
+        assert_eq!(count, num_total_transactions - oldest_slot - 1); // Extra transaction in slot 9
     }
 }
