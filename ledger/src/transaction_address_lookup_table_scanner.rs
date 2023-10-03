@@ -14,7 +14,6 @@ lazy_static! {
     static ref SDK_IDS_SET: HashSet<Pubkey> = SDK_IDS.iter().cloned().collect();
 }
 
-#[derive(Default)]
 pub struct ScannedLookupTableExtensions {
     pub possibly_incomplete: bool,
     pub accounts: Vec<Pubkey>, // empty if no extensions found
@@ -23,17 +22,6 @@ pub struct ScannedLookupTableExtensions {
 pub fn scan_transaction(
     transaction: &SanitizedVersionedTransaction,
 ) -> ScannedLookupTableExtensions {
-    // If the ALT program is not present in the account keys, it was not used
-    if !transaction
-        .get_message()
-        .message
-        .static_account_keys()
-        .iter()
-        .any(address_lookup_table::program::check_id)
-    {
-        return ScannedLookupTableExtensions::default();
-    }
-
     // Accumulate accounts from account lookup table extension instructions
     let mut accounts = Vec::new();
     let mut native_only = true;
