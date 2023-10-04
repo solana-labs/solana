@@ -2816,7 +2816,7 @@ impl AccountsDb {
         // Another pass to check if there are some filtered accounts which
         // do not match the criteria of deleting all appendvecs which contain them
         // then increment their storage count.
-        let mut already_counted = HashSet::new();
+        let mut already_counted = IntSet::default();
         for (pubkey, (account_infos, ref_count_from_storage)) in purges.iter() {
             let mut failed_slot = None;
             let all_stores_being_deleted =
@@ -2861,7 +2861,7 @@ impl AccountsDb {
             }
 
             // increment store_counts to non-zero for all stores that can not be deleted.
-            let mut pending_stores = HashSet::new();
+            let mut pending_stores = IntSet::default();
             for (slot, _account_info) in account_infos {
                 if !already_counted.contains(slot) {
                     pending_stores.insert(*slot);
