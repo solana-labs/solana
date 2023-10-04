@@ -48,6 +48,7 @@ solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
 solana-measure = { workspace = true }
 solana-metrics = { workspace = true }
+solana-nohash-hasher = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
 solana-sdk = { workspace = true }
