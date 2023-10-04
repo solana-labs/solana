@@ -132,7 +132,7 @@ license = "Apache-2.0"
 edition = "2021"
 
 [workspace.dependencies]
-aes-gcm-siv = { git = "https://github.com/gregcusack/AEADs.git", rev = "0b291255b5e71a86b68c21c7b2f2ecba943baabd" }
+aes-gcm-siv = "0.10.3"
 ahash = "0.8.3"
 anyhow = "1.0.75"
 ark-bn254 = "0.4.0"
@@ -178,7 +178,7 @@ criterion-stats = "0.3.0"
 crossbeam-channel = "0.5.8"
 csv = "1.2.2"
 ctrlc = "3.4.1"
-curve25519-dalek = { git = "https://github.com/gregcusack/curve25519-dalek.git", rev = "9d82dab8048cf0a62ea20ea376461be3b10a8a39" }
+curve25519-dalek = "3.2.1"
 dashmap = "4.0.2"
 derivation-path = { version = "0.2.0", default-features = false }
 dialoguer = "0.10.4"
@@ -415,6 +415,7 @@ wasm-bindgen = "0.2"
 winapi = "0.3.8"
 winreg = "0.50"
 x509-parser = "0.14.0"
+# See "zeroize versioning issues" below if you are updating this version.
 zeroize = { version = "1.3", default-features = false }
 zstd = "0.11.2"
 
@@ -445,3 +446,66 @@ crossbeam-epoch = { git = "https://github.com/solana-labs/crossbeam", rev = "fd2
 # overrides in sync.
 solana-program = { path = "sdk/program" }
 solana-zk-token-sdk = { path = "zk-token-sdk" }
+#
+# === zeroize versioning issues ===
+#
+# A number of packages used explicit upper bound on the `zeroize` package, such
+# as `>=1, <1.4`.  The problem is that cargo still does not duplicate `zeroize`
+# if a newer version is available and requested by another package and just
+# fails the whole dependency resolution process.  Why? :'(
+#
+# This is described in
+#
+# https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#multiple-requirements
+#
+# So we have to patch `zeroize` dependency specifications in the projects that
+# introduce these constraints.  They have already removed these constraints in
+# newer versions, but we have not updated yet.  As we update, we need to remove
+# these patch requests.
+
+# Our dependency tree has `aes-gcm-siv` v0.10.3 and the `zeroize` restriction
+# was removed in the next commit just after the release.  So it seems safe to
+# patch to this commit.
+#
+# `aes-gcm-siv` v0.10.3 release:
+#
+# https://github.com/RustCrypto/AEADs/releases/tag/aes-gcm-siv-v0.10.3
+#
+# Corresponds to commit
+#
+# https://github.com/RustCrypto/AEADs/commit/6f16f4577a1fc839a2346cf8c5531c85a44bf5c0
+#
+# Comparison with `6105d7a5591aefa646a95d12b5e8d3f55a9214ef` pinned here:
+#
+# https://github.com/RustCrypto/AEADs/compare/aes-gcm-siv-v0.10.3..6105d7a5591aefa646a95d12b5e8d3f55a9214ef
+#
+[patch.crates-io.aes-gcm-siv]
+git = "https://github.com/RustCrypto/AEADs"
+rev = "6105d7a5591aefa646a95d12b5e8d3f55a9214ef"
+
+# Our dependency tree has `curve25519-dalek` v3.2.1.  They have removed the
+# constrain in the next major release.  Commit that removes `zeroize` constrain
+# was added to multiple release branches.  Though 3.2 release was never updated.
+# So we have a separate repo with a patched v3.2.1 release.  Commit that removed
+# `zeroize` constrain on the `main` branch cherry picked on top of the v3.2.1
+# release.
+#
+# `curve25519-dalek` v3.2.1 release:
+#
+# https://github.com/dalek-cryptography/curve25519-dalek/releases/tag/3.2.1
+#
+# Corresponds to commit
+#
+# https://github.com/dalek-cryptography/curve25519-dalek/commit/29e5c29b0e5c6821e4586af58b0d0891dd2ec639
+#
+# Comparison with `c14774464c4d38de553c6ef2f48a10982c1b4801`:
+#
+# https://github.com/dalek-cryptography/curve25519-dalek/compare/3.2.1...ilya-bobyr:curve25519-dalek:c14774464c4d38de553c6ef2f48a10982c1b4801
+#
+# Alternatively:
+#
+# https://github.com/dalek-cryptography/curve25519-dalek/compare/3.2.1...ilya-bobyr:curve25519-dalek:3.2.1-unpin-zeroize
+#
+[patch.crates-io.curve25519-dalek]
+git = "https://github.com/ilya-bobyr/curve25519-dalek.git"
+rev = "c14774464c4d38de553c6ef2f48a10982c1b4801"
