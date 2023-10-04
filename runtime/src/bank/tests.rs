@@ -8008,7 +8008,7 @@ fn test_compute_active_feature_set() {
 }
 
 fn test_program_replace_set_up_account<T: serde::Serialize>(
-    bank: &mut Bank,
+    bank: &Bank,
     pubkey: &Pubkey,
     lamports: u64,
     state: &T,
@@ -8038,13 +8038,13 @@ fn test_replace_non_upgradeable_program_account() {
     // Should replace the destination program account with the source program account:
     // - Destination:       [*Source program data]
     let bpf_id = bpf_loader::id();
-    let mut bank = create_simple_test_bank(0);
+    let bank = create_simple_test_bank(0);
 
     let destination = Pubkey::new_unique();
     let destination_state = vec![0u8; 4];
     let destination_lamports = bank.get_minimum_balance_for_rent_exemption(destination_state.len());
     test_program_replace_set_up_account(
-        &mut bank,
+        &bank,
         &destination,
         destination_lamports,
         &destination_state,
@@ -8056,7 +8056,7 @@ fn test_replace_non_upgradeable_program_account() {
     let source_state = vec![6; 30];
     let source_lamports = bank.get_minimum_balance_for_rent_exemption(source_state.len());
     let check_source_account = test_program_replace_set_up_account(
-        &mut bank,
+        &bank,
         &source,
         source_lamports,
         &source_state,
@@ -8068,7 +8068,7 @@ fn test_replace_non_upgradeable_program_account() {
     let original_capitalization = bank.capitalization();
 
     replace_non_upgradeable_program_account(
-        &mut bank,
+        &bank,
         &source,
         &destination,
         "bank-apply_program_replacement",
@@ -8128,7 +8128,7 @@ fn test_replace_empty_account_with_upgradeable_program_success(
     //
     // If the destination data account exists, it will be overwritten
     let bpf_upgradeable_id = bpf_loader_upgradeable::id();
-    let mut bank = create_simple_test_bank(0);
+    let bank = create_simple_test_bank(0);
 
     // Create the test source accounts, one for program and one for data
     let source = Pubkey::new_unique();
@@ -8141,7 +8141,7 @@ fn test_replace_empty_account_with_upgradeable_program_success(
     let source_data_state = vec![6; 30];
     let source_data_lamports = bank.get_minimum_balance_for_rent_exemption(source_data_state.len());
     test_program_replace_set_up_account(
-        &mut bank,
+        &bank,
         &source,
         source_lamports,
         &source_state,
@@ -8149,7 +8149,7 @@ fn test_replace_empty_account_with_upgradeable_program_success(
         true,
     );
     let check_source_data_account = test_program_replace_set_up_account(
-        &mut bank,
+        &bank,
         &source_data,
         source_data_lamports,
         &source_data_state,
@@ -8168,7 +8168,7 @@ fn test_replace_empty_account_with_upgradeable_program_success(
         let destination_data_lamports =
             bank.get_minimum_balance_for_rent_exemption(destination_data_state.len());
         test_program_replace_set_up_account(
-            &mut bank,
+            &bank,
             &destination_data,
             destination_data_lamports,
             &destination_data_state,
@@ -8186,7 +8186,7 @@ fn test_replace_empty_account_with_upgradeable_program_success(
 
     // Do the replacement
     replace_empty_account_with_upgradeable_program(
-        &mut bank,
+        &bank,
         &source,
         &destination,
         "bank-apply_empty_account_replacement_for_program",
@@ -8250,14 +8250,14 @@ fn test_replace_empty_account_with_upgradeable_program_fail_when_account_exists(
 ) {
     // Should not be allowed to execute replacement
     let bpf_upgradeable_id = bpf_loader_upgradeable::id();
-    let mut bank = create_simple_test_bank(0);
+    let bank = create_simple_test_bank(0);
 
     // Create the test destination account with some arbitrary data and lamports balance
     let destination = Pubkey::new_unique();
     let destination_state = vec![0, 0, 0, 0]; // Arbitrary bytes, doesn't matter
     let destination_lamports = bank.get_minimum_balance_for_rent_exemption(destination_state.len());
     let destination_account = test_program_replace_set_up_account(
-        &mut bank,
+        &bank,
         &destination,
         destination_lamports,
         &destination_state,
@@ -8276,7 +8276,7 @@ fn test_replace_empty_account_with_upgradeable_program_fail_when_account_exists(
     let source_data_state = vec![6; 30];
     let source_data_lamports = bank.get_minimum_balance_for_rent_exemption(source_data_state.len());
     let source_account = test_program_replace_set_up_account(
-        &mut bank,
+        &bank,
         &source,
         source_lamports,
         &source_state,
@@ -8284,7 +8284,7 @@ fn test_replace_empty_account_with_upgradeable_program_fail_when_account_exists(
         true,
     );
     let source_data_account = test_program_replace_set_up_account(
-        &mut bank,
+        &bank,
         &source_data,
         source_data_lamports,
         &source_data_state,
@@ -8302,7 +8302,7 @@ fn test_replace_empty_account_with_upgradeable_program_fail_when_account_exists(
             let destination_data_lamports =
                 bank.get_minimum_balance_for_rent_exemption(destination_data_state.len());
             let destination_data_account = test_program_replace_set_up_account(
-                &mut bank,
+                &bank,
                 &destination_data,
                 destination_data_lamports,
                 &destination_data_state,
@@ -8317,15 +8317,15 @@ fn test_replace_empty_account_with_upgradeable_program_fail_when_account_exists(
     let original_capitalization = bank.capitalization();
 
     // Attempt the replacement
-    assert_eq!(
+    assert_matches!(
         replace_empty_account_with_upgradeable_program(
-            &mut bank,
+            &bank,
             &source,
             &destination,
             "bank-apply_empty_account_replacement_for_program",
         )
         .unwrap_err(),
-        ReplaceAccountError::DestinationAccountExists
+        ReplaceAccountError::AccountExists(..)
     );
 
     // Everything should be unchanged
