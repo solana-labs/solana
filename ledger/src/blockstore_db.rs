@@ -106,34 +106,48 @@ const OPTIMISTIC_SLOTS_CF: &str = "optimistic_slots";
 
 #[derive(Error, Debug)]
 pub enum BlockstoreError {
+    #[error("shred for index exists")]
     ShredForIndexExists,
+    #[error("invalid shred data")]
     InvalidShredData(Box<bincode::ErrorKind>),
+    #[error("RocksDB error: {0}")]
     RocksDb(#[from] rocksdb::Error),
+    #[error("slot is not rooted")]
     SlotNotRooted,
+    #[error("dead slot")]
     DeadSlot,
+    #[error("io error: {0}")]
     Io(#[from] std::io::Error),
+    #[error("serialization error: {0}")]
     Serialize(#[from] Box<bincode::ErrorKind>),
+    #[error("fs extra error: {0}")]
     FsExtraError(#[from] fs_extra::error::Error),
+    #[error("slot cleaned up")]
     SlotCleanedUp,
+    #[error("unpack error: {0}")]
     UnpackError(#[from] UnpackError),
+    #[error("unable to set open file descriptor limit")]
     UnableToSetOpenFileDescriptorLimit,
+    #[error("transaction status slot mismatch")]
     TransactionStatusSlotMismatch,
+    #[error("empty epoch stakes")]
     EmptyEpochStakes,
+    #[error("no vote timestamps in range")]
     NoVoteTimestampsInRange,
+    #[error("protobuf encode error: {0}")]
     ProtobufEncodeError(#[from] prost::EncodeError),
+    #[error("protobuf decode error: {0}")]
     ProtobufDecodeError(#[from] prost::DecodeError),
+    #[error("parent entries unavailable")]
     ParentEntriesUnavailable,
+    #[error("slot unavailable")]
     SlotUnavailable,
+    #[error("unsupported transaction version")]
     UnsupportedTransactionVersion,
+    #[error("missing transaction metadata")]
     MissingTransactionMetadata,
 }
 pub type Result<T> = std::result::Result<T, BlockstoreError>;
-
-impl std::fmt::Display for BlockstoreError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "blockstore error")
-    }
-}
 
 pub enum IteratorMode<Index> {
     Start,
