@@ -85,12 +85,12 @@ impl AbiDigester {
         }
     }
 
-    pub fn create_new_opaque(&self, scope: &str) -> Self {
+    pub fn create_new_opaque(&self, type_matcher: &str) -> Self {
         Self {
             data_types: self.data_types.clone(),
             depth: self.depth,
             for_enum: false,
-            opaque_type_matcher: Some(scope.to_owned()),
+            opaque_type_matcher: Some(type_matcher.to_owned()),
         }
     }
 
@@ -661,11 +661,11 @@ mod tests {
     #[frozen_abi(digest = "9PMdHRb49BpkywrmPoJyZWMsEmf5E1xgmsFGkGmea5RW")]
     type TestBitVec = bv::BitVec<u64>;
 
-    mod bitflags {
+    mod bitflags_abi {
         use crate::abi_example::{AbiExample, EvenAsOpaque, IgnoreAsHelper};
 
         bitflags::bitflags! {
-            #[frozen_abi(digest = "HYjQ8oiYirTnQoLeRHbq66i8VYfcxPA4QTT3gdUQBgyV")]
+            #[frozen_abi(digest = "HhKNkaeAd7AohTb8S8sPKjAWwzxWY2DPz5FvkWmx5bSH")]
             #[derive(Serialize, Deserialize)]
             struct TestFlags: u8 {
                 const TestBit = 0b0000_0001;
@@ -680,8 +680,7 @@ mod tests {
 
         impl IgnoreAsHelper for TestFlags {}
         // This (EvenAsOpaque) marker trait is needed for bitflags-generated types because we can't
-        // impl AbiExample for its
-        // private type:
+        // impl AbiExample for its private type:
         // thread '...TestFlags_frozen_abi...' panicked at ...:
         //   derive or implement AbiExample/AbiEnumVisitor for
         //   solana_frozen_abi::abi_digester::tests::_::InternalBitFlags
