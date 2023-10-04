@@ -339,6 +339,26 @@ impl Blockstore {
                 .is_ok()
     }
 
+    /// Returns true if the special columns, TransactionStatus and
+    /// AddressSignatures, are both empty.
+    ///
+    /// It should not be the case that one is empty and the other is not, but
+    /// just return false in this case.
+    fn special_columns_empty(&self) -> Result<bool> {
+        let transaction_status_empty = self
+            .transaction_status_cf
+            .iter(IteratorMode::Start)?
+            .next()
+            .is_none();
+        let address_signatures_empty = self
+            .address_signatures_cf
+            .iter(IteratorMode::Start)?
+            .next()
+            .is_none();
+
+        Ok(transaction_status_empty && address_signatures_empty)
+    }
+
     /// Purges special columns (using a non-Slot primary-index) exactly, by
     /// deserializing each slot being purged and iterating through all
     /// transactions to determine the keys of individual records.
@@ -352,6 +372,10 @@ impl Blockstore {
         from_slot: Slot,
         to_slot: Slot,
     ) -> Result<()> {
+        if self.special_columns_empty()? {
+            return Ok(());
+        }
+
         let mut index0 = self.transaction_status_index_cf.get(0)?.unwrap_or_default();
         let mut index1 = self.transaction_status_index_cf.get(1)?.unwrap_or_default();
         let slot_indexes = |slot: Slot| -> Vec<u64> {
