@@ -1416,7 +1416,7 @@ impl RecycleStores {
 #[derive(Debug, Default)]
 struct RemoveUnrootedSlotsSynchronization {
     // slots being flushed from the cache or being purged
-    slots_under_contention: Mutex<HashSet<Slot>>,
+    slots_under_contention: Mutex<IntSet<Slot>>,
     signal: Condvar,
 }
 
