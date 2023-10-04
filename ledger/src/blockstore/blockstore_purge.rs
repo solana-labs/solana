@@ -884,6 +884,54 @@ pub mod tests {
     }
 
     #[test]
+    fn test_special_columns_empty() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        // Nothing has been inserted yet
+        assert!(blockstore.special_columns_empty().unwrap());
+
+        let num_entries = 1;
+        let max_slot = 9;
+        for slot in 0..=max_slot {
+            let entries = make_slot_entries_with_transactions(num_entries);
+            let shreds = entries_to_test_shreds(
+                &entries,
+                slot,
+                slot.saturating_sub(1),
+                true, // is_full_slot
+                0,    // version
+                true, // merkle_variant
+            );
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+
+            for transaction in entries.into_iter().flat_map(|entry| entry.transactions) {
+                assert_eq!(transaction.signatures.len(), 1);
+                blockstore
+                    .write_transaction_status(
+                        slot,
+                        transaction.signatures[0],
+                        transaction.message.static_account_keys().iter().collect(),
+                        vec![],
+                        TransactionStatusMeta::default(),
+                    )
+                    .unwrap();
+            }
+        }
+        assert!(!blockstore.special_columns_empty().unwrap());
+
+        // Partially purge and ensure special columns are non-empty
+        blockstore
+            .run_purge(0, max_slot - 5, PurgeType::Exact)
+            .unwrap();
+        assert!(!blockstore.special_columns_empty().unwrap());
+
+        // Purge the rest and ensure the special columns are empty once again
+        blockstore.run_purge(0, max_slot, PurgeType::Exact).unwrap();
+        assert!(blockstore.special_columns_empty().unwrap());
+    }
+
+    #[test]
     #[allow(clippy::cognitive_complexity)]
     fn test_purge_transaction_status_exact() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
