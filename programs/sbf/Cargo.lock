@@ -6131,11 +6131,11 @@ dependencies = [
 
 [[package]]
 name = "solana-scheduler"
-version = "1.17.0"
+version = "1.18.0"
 
 [[package]]
 name = "solana-scheduler-pool"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "rand 0.8.5",
  "solana-ledger",
@@ -6143,6 +6143,7 @@ dependencies = [
  "solana-runtime",
  "solana-scheduler",
  "solana-sdk",
+ "solana-vote",
 ]
 
 [[package]]
