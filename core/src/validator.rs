@@ -561,6 +561,10 @@ impl Validator {
             ));
         }
 
+        let genesis_config =
+            open_genesis_config(ledger_path, config.max_genesis_archive_unpacked_size);
+        metrics_config_sanity_check(genesis_config.cluster_type)?;
+
         if let Some(expected_shred_version) = config.expected_shred_version {
             if let Some(wait_for_supermajority_slot) = config.wait_for_supermajority {
                 *start_progress.write().unwrap() = ValidatorStartProgress::CleaningBlockStore;
@@ -1334,14 +1338,11 @@ impl Validator {
             config.generator_config.clone(),
         );
 
-        let cluster_type = bank_forks.read().unwrap().root_bank().cluster_type();
-        metrics_config_sanity_check(cluster_type)?;
-
         datapoint_info!(
             "validator-new",
             ("id", id.to_string(), String),
             ("version", solana_version::version!(), String),
-            ("cluster_type", cluster_type as u32, i64),
+            ("cluster_type", genesis_config.cluster_type as u32, i64),
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
