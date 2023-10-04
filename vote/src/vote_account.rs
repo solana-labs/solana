@@ -1,5 +1,3 @@
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-use solana_frozen_abi::abi_example::AbiExample;
 use {
     itertools::Itertools,
     serde::ser::{Serialize, Serializer},
@@ -30,7 +28,7 @@ pub enum Error {
     InvalidOwner(/*owner:*/ Pubkey),
 }
 
-#[derive(Debug)]
+#[derive(Debug, AbiExample)]
 struct VoteAccountInner {
     account: AccountSharedData,
     vote_state: OnceLock<Result<VoteState, Error>>,
@@ -38,7 +36,7 @@ struct VoteAccountInner {
 
 pub type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, AbiExample)]
 #[serde(from = "Arc<VoteAccountsHashMap>")]
 pub struct VoteAccounts {
     vote_accounts: Arc<VoteAccountsHashMap>,
@@ -318,26 +316,6 @@ impl Serialize for VoteAccounts {
         S: Serializer,
     {
         self.vote_accounts.serialize(serializer)
-    }
-}
-
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl AbiExample for VoteAccountInner {
-    fn example() -> Self {
-        Self {
-            account: AccountSharedData::example(),
-            vote_state: OnceLock::from(Result::<VoteState, Error>::example()),
-        }
-    }
-}
-
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl AbiExample for VoteAccounts {
-    fn example() -> Self {
-        Self {
-            vote_accounts: Arc::<VoteAccountsHashMap>::example(),
-            staked_nodes: OnceLock::from(Arc::<HashMap<Pubkey, u64>>::example()),
-        }
     }
 }
 
