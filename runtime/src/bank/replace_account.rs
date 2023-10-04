@@ -116,7 +116,7 @@ pub(crate) fn replace_empty_account_with_upgradeable_program(
     let source_account = bank
         .get_account_with_fixed_root(source_address)
         .ok_or(ReplaceAccountError::AccountNotFound(*source_address))?;
-    
+
     let (destination_data_address, _) = Pubkey::find_program_address(
         &[destination_address.as_ref()],
         &bpf_loader_upgradeable::id(),

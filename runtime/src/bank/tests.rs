@@ -8341,6 +8341,71 @@ fn test_replace_empty_account_with_upgradeable_program_fail_when_account_exists(
     assert_eq!(bank.capitalization(), original_capitalization);
 }
 
+#[test]
+fn test_replace_empty_account_with_upgradeable_program_fail_when_not_upgradeable_program() {
+    // Should not be allowed to execute replacement
+    let bpf_upgradeable_id = bpf_loader_upgradeable::id();
+    let bank = create_simple_test_bank(0);
+
+    // Create the test destination account with some arbitrary data and lamports balance
+    let destination = Pubkey::new_unique();
+    let destination_state = vec![0, 0, 0, 0]; // Arbitrary bytes, doesn't matter
+    let destination_lamports = bank.get_minimum_balance_for_rent_exemption(destination_state.len());
+    let destination_account = test_program_replace_set_up_account(
+        &bank,
+        &destination,
+        destination_lamports,
+        &destination_state,
+        &bpf_upgradeable_id,
+        true,
+    );
+
+    // Create the test source accounts, one for program and one for data
+    let source = Pubkey::new_unique();
+    let (source_data, _) = Pubkey::find_program_address(&[source.as_ref()], &bpf_upgradeable_id);
+    let source_state = [0, 0, 0, 0]; // Arbitrary bytes, NOT an upgradeable program
+    let source_lamports =
+        bank.get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_program());
+    let source_data_state = vec![6; 30];
+    let source_data_lamports = bank.get_minimum_balance_for_rent_exemption(source_data_state.len());
+    let source_account = test_program_replace_set_up_account(
+        &bank,
+        &source,
+        source_lamports,
+        &source_state,
+        &bpf_upgradeable_id,
+        true,
+    );
+    let source_data_account = test_program_replace_set_up_account(
+        &bank,
+        &source_data,
+        source_data_lamports,
+        &source_data_state,
+        &bpf_upgradeable_id,
+        false,
+    );
+
+    let original_capitalization = bank.capitalization();
+
+    // Attempt the replacement
+    assert_matches!(
+        replace_empty_account_with_upgradeable_program(
+            &bank,
+            &source,
+            &destination,
+            "bank-apply_empty_account_replacement_for_program",
+        )
+        .unwrap_err(),
+        ReplaceAccountError::NotAnUpgradeableProgram
+    );
+
+    // Everything should be unchanged
+    assert_eq!(bank.get_account(&destination).unwrap(), destination_account);
+    assert_eq!(bank.get_account(&source).unwrap(), source_account);
+    assert_eq!(bank.get_account(&source_data).unwrap(), source_data_account);
+    assert_eq!(bank.capitalization(), original_capitalization);
+}
+
 fn min_rent_exempt_balance_for_sysvars(bank: &Bank, sysvar_ids: &[Pubkey]) -> u64 {
     sysvar_ids
         .iter()
