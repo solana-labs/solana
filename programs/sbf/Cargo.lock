@@ -4921,13 +4921,9 @@ dependencies = [
 name = "solana-frozen-abi"
 version = "1.18.0"
 dependencies = [
- "ahash 0.8.3",
- "blake3",
  "block-buffer 0.10.4",
  "bs58",
  "bv",
- "byteorder 1.4.3",
- "cc",
  "either",
  "generic-array 0.14.7",
  "im",
@@ -4938,7 +4934,6 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_derive",
- "serde_json",
  "sha2 0.10.7",
  "solana-frozen-abi-macro",
  "subtle",
