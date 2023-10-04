@@ -1351,9 +1351,17 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 // explicitly given, similar to --limit-ledger-size.
                 // see configure_banking_trace_dir_byte_limit() for this.
                 .default_value(&default_args.banking_trace_dir_byte_limit)
-                .help("Write trace files for simulate-leader-blocks, retaining \
-                       up to the default or specified total bytes in the \
-                       ledger")
+                .help("Enables the banking trace explicitly, which is enabled by default and \
+                       writes trace files for simulate-leader-blocks, retaining up to the default \
+                       or specified total bytes in the ledger. This flag can be used to override \
+                       its byte limit.")
+        )
+        .arg(
+            Arg::with_name("disable_banking_trace")
+                .long("disable-banking-trace")
+                .conflicts_with("banking_trace_dir_byte_limit")
+                .takes_value(false)
+                .help("Disables the banking trace")
         )
         .arg(
             Arg::with_name("block_verification_method")
