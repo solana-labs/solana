@@ -472,6 +472,11 @@ impl AbiExample for std::path::PathBuf {
 #[cfg(not(target_os = "solana"))]
 impl AbiExample for std::time::SystemTime {
     fn example() -> Self {
+        // Returning ever-changing value here will still produce consistent digest, because ABI
+        // digest only cares about the type hierarchy of construsted object graph of the ABI
+        // example. It doesn't care about the actual values/contents of the graph not much, because
+        // it's not relevant for the _interface_ of given binary data.
+        // That said, ::now() is the only way to construct SystemTime safely.
         std::time::SystemTime::now()
     }
 }
