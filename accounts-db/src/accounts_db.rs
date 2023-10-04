@@ -3793,7 +3793,7 @@ impl AccountsDb {
     ///    and should not be unref'd. If they exist in the accounts index, they are NEW.
     fn process_dead_slots(
         &self,
-        dead_slots: &HashSet<Slot>,
+        dead_slots: &IntSet<Slot>,
         purged_account_slots: Option<&mut AccountSlots>,
         purge_stats: &PurgeStats,
         pubkeys_removed_from_accounts_index: &PubkeysRemovedFromAccountsIndex,
@@ -8170,13 +8170,13 @@ impl AccountsDb {
         expected_slot: Option<Slot>,
         mut reclaimed_offsets: Option<&mut SlotOffsets>,
         reset_accounts: bool,
-    ) -> HashSet<Slot>
+    ) -> IntSet<Slot>
     where
         I: Iterator<Item = &'a (Slot, AccountInfo)>,
     {
         assert!(self.storage.no_shrink_in_progress());
 
-        let mut dead_slots = HashSet::new();
+        let mut dead_slots = IntSet::default();
         let mut new_shrink_candidates = ShrinkCandidates::default();
         let mut measure = Measure::start("remove");
         for (slot, account_info) in reclaims {
@@ -8394,7 +8394,7 @@ impl AccountsDb {
     ///    and should not be unref'd. If they exist in the accounts index, they are NEW.
     fn clean_stored_dead_slots(
         &self,
-        dead_slots: &HashSet<Slot>,
+        dead_slots: &IntSet<Slot>,
         purged_account_slots: Option<&mut AccountSlots>,
         pubkeys_removed_from_accounts_index: &PubkeysRemovedFromAccountsIndex,
     ) {
@@ -13242,7 +13242,7 @@ pub mod tests {
     #[test]
     fn test_clean_stored_dead_slots_empty() {
         let accounts = AccountsDb::new_single_for_tests();
-        let mut dead_slots = HashSet::new();
+        let mut dead_slots = IntSet::default();
         dead_slots.insert(10);
         accounts.clean_stored_dead_slots(&dead_slots, None, &HashSet::default());
     }
