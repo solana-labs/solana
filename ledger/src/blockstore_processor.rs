@@ -13,7 +13,6 @@ use {
     crossbeam_channel::Sender,
     itertools::Itertools,
     log::*,
-    rand::{seq::SliceRandom, thread_rng},
     rayon::{prelude::*, ThreadPool},
     scopeguard::defer,
     solana_accounts_db::{
@@ -44,8 +43,6 @@ use {
         prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
-        vote_account::VoteAccountsHashMap,
-        vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
         clock::{Slot, MAX_PROCESSING_AGE},
@@ -62,6 +59,7 @@ use {
         },
     },
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
+    solana_vote::{vote_account::VoteAccountsHashMap, vote_sender_types::ReplayVoteSender},
     std::{
         borrow::Cow,
         collections::{HashMap, HashSet},
@@ -485,7 +483,6 @@ fn rebatch_and_execute_batches(
 pub fn process_entries_for_tests(
     bank: &BankWithScheduler,
     entries: Vec<Entry>,
-    randomize: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
@@ -517,7 +514,6 @@ pub fn process_entries_for_tests(
     let result = process_entries(
         bank,
         &mut replay_entries,
-        randomize,
         transaction_status_sender,
         replay_vote_sender,
         &mut batch_timing,
@@ -532,22 +528,18 @@ pub fn process_entries_for_tests(
 pub fn process_entries_for_tests_without_scheduler(
     bank: &Arc<Bank>,
     entries: Vec<Entry>,
-    randomize: bool,
 ) -> Result<()> {
     process_entries_for_tests(
         &BankWithScheduler::new_without_scheduler(bank.clone()),
         entries,
-        randomize,
         None,
         None,
     )
 }
 
-// Note: If randomize is true this will shuffle entries' transactions in-place.
 fn process_entries(
     bank: &BankWithScheduler,
     entries: &mut [ReplayEntry],
-    randomize: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     batch_timing: &mut BatchExecutionTiming,
@@ -557,7 +549,6 @@ fn process_entries(
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
     let mut tick_hashes = vec![];
-    let mut rng = thread_rng();
 
     for ReplayEntry {
         entry,
@@ -589,18 +580,8 @@ fn process_entries(
             }
             EntryType::Transactions(transactions) => {
                 let starting_index = *starting_index;
-                let transaction_indexes = if randomize {
-                    let mut transactions_and_indexes: Vec<(SanitizedTransaction, usize)> =
-                        transactions.drain(..).zip(starting_index..).collect();
-                    transactions_and_indexes.shuffle(&mut rng);
-                    let (txs, indexes): (Vec<_>, Vec<_>) =
-                        transactions_and_indexes.into_iter().unzip();
-                    *transactions = txs;
-                    indexes
-                } else {
-                    (starting_index..starting_index.saturating_add(transactions.len())).collect()
-                };
-
+                let transaction_indexes =
+                    (starting_index..starting_index.saturating_add(transactions.len())).collect();
                 loop {
                     // try to lock the accounts
                     let batch = bank.prepare_sanitized_batch(transactions);
@@ -1332,11 +1313,9 @@ fn confirm_slot_entries(
             starting_index: tx_starting_index,
         })
         .collect();
-    // Note: This will shuffle entries' transactions in-place.
     let process_result = process_entries(
         bank,
         &mut replay_entries,
-        true, // shuffle transactions.
         transaction_status_sender,
         replay_vote_sender,
         batch_execute_timing,
@@ -1956,7 +1935,6 @@ pub mod tests {
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
             },
             installed_scheduler_pool::{MockInstalledScheduler, MockInstalledSchedulerPool},
-            vote_account::VoteAccount,
         },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
@@ -1970,6 +1948,7 @@ pub mod tests {
             system_transaction,
             transaction::{Transaction, TransactionError},
         },
+        solana_vote::vote_account::VoteAccount,
         solana_vote_program::{
             self,
             vote_state::{VoteState, VoteStateVersions, MAX_LOCKOUT_HISTORY},
@@ -2706,7 +2685,7 @@ pub mod tests {
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
-        process_entries_for_tests_without_scheduler(&bank, slot_entries, true).unwrap();
+        process_entries_for_tests_without_scheduler(&bank, slot_entries).unwrap();
         assert_eq!(bank.process_transaction(&tx), Ok(()));
     }
 
@@ -2841,7 +2820,7 @@ pub mod tests {
         assert_eq!(bank.tick_height(), 0);
         let tick = next_entry(&genesis_config.hash(), 1, vec![]);
         assert_eq!(
-            process_entries_for_tests_without_scheduler(&bank, vec![tick], true),
+            process_entries_for_tests_without_scheduler(&bank, vec![tick]),
             Ok(())
         );
         assert_eq!(bank.tick_height(), 1);
@@ -2876,7 +2855,7 @@ pub mod tests {
         );
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries_for_tests_without_scheduler(&bank, vec![entry_1, entry_2], true),
+            process_entries_for_tests_without_scheduler(&bank, vec![entry_1, entry_2]),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair1.pubkey()), 2);
@@ -2935,7 +2914,6 @@ pub mod tests {
             process_entries_for_tests_without_scheduler(
                 &bank,
                 vec![entry_1_to_mint, entry_2_to_3_mint_to_1],
-                false,
             ),
             Ok(())
         );
@@ -3005,7 +2983,6 @@ pub mod tests {
         assert!(process_entries_for_tests_without_scheduler(
             &bank,
             vec![entry_1_to_mint.clone(), entry_2_to_3_mint_to_1.clone()],
-            false,
         )
         .is_err());
 
@@ -3119,7 +3096,7 @@ pub mod tests {
 
         let entry = next_entry(&bank.last_blockhash(), 1, vec![tx]);
         let bank = Arc::new(bank);
-        let result = process_entries_for_tests_without_scheduler(&bank, vec![entry], false);
+        let result = process_entries_for_tests_without_scheduler(&bank, vec![entry]);
         bank.freeze();
         let blockhash_ok = bank.last_blockhash();
         let bankhash_ok = bank.hash();
@@ -3160,7 +3137,7 @@ pub mod tests {
 
             let entry = next_entry(&bank.last_blockhash(), 1, vec![tx]);
             let bank = Arc::new(bank);
-            let _result = process_entries_for_tests_without_scheduler(&bank, vec![entry], false);
+            let _result = process_entries_for_tests_without_scheduler(&bank, vec![entry]);
             bank.freeze();
 
             assert_eq!(blockhash_ok, bank.last_blockhash());
@@ -3259,7 +3236,6 @@ pub mod tests {
                 entry_2_to_3_and_1_to_mint,
                 entry_conflict_itself,
             ],
-            false,
         )
         .is_err());
 
@@ -3307,7 +3283,7 @@ pub mod tests {
             system_transaction::transfer(&keypair2, &keypair4.pubkey(), 1, bank.last_blockhash());
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries_for_tests_without_scheduler(&bank, vec![entry_1, entry_2], true),
+            process_entries_for_tests_without_scheduler(&bank, vec![entry_1, entry_2]),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
@@ -3368,7 +3344,7 @@ pub mod tests {
             })
             .collect();
         assert_eq!(
-            process_entries_for_tests_without_scheduler(&bank, entries, true),
+            process_entries_for_tests_without_scheduler(&bank, entries),
             Ok(())
         );
     }
@@ -3431,7 +3407,7 @@ pub mod tests {
         // Transfer lamports to each other
         let entry = next_entry(&bank.last_blockhash(), 1, tx_vector);
         assert_eq!(
-            process_entries_for_tests_without_scheduler(&bank, vec![entry], true),
+            process_entries_for_tests_without_scheduler(&bank, vec![entry]),
             Ok(())
         );
         bank.squash();
@@ -3494,7 +3470,6 @@ pub mod tests {
             process_entries_for_tests_without_scheduler(
                 &bank,
                 vec![entry_1, tick, entry_2.clone()],
-                true,
             ),
             Ok(())
         );
@@ -3506,7 +3481,7 @@ pub mod tests {
             system_transaction::transfer(&keypair2, &keypair3.pubkey(), 1, bank.last_blockhash());
         let entry_3 = next_entry(&entry_2.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries_for_tests_without_scheduler(&bank, vec![entry_3], true),
+            process_entries_for_tests_without_scheduler(&bank, vec![entry_3]),
             Err(TransactionError::AccountNotFound)
         );
     }
@@ -3586,7 +3561,7 @@ pub mod tests {
         );
 
         assert_eq!(
-            process_entries_for_tests_without_scheduler(&bank, vec![entry_1_to_mint], false),
+            process_entries_for_tests_without_scheduler(&bank, vec![entry_1_to_mint]),
             Err(TransactionError::AccountInUse)
         );
 
@@ -3793,7 +3768,7 @@ pub mod tests {
                 })
                 .collect();
             info!("paying iteration {}", i);
-            process_entries_for_tests_without_scheduler(&bank, entries, true)
+            process_entries_for_tests_without_scheduler(&bank, entries)
                 .expect("paying failed");
 
             let entries: Vec<_> = (0..NUM_TRANSFERS)
@@ -3817,7 +3792,7 @@ pub mod tests {
                 .collect();
 
             info!("refunding iteration {}", i);
-            process_entries_for_tests_without_scheduler(&bank, entries, true)
+            process_entries_for_tests_without_scheduler(&bank, entries)
                 .expect("refunding failed");
 
             // advance to next block
@@ -3826,7 +3801,6 @@ pub mod tests {
                 (0..bank.ticks_per_slot())
                     .map(|_| next_entry_mut(&mut hash, 1, vec![]))
                     .collect::<Vec<_>>(),
-                true,
             )
             .expect("process ticks failed");
 
@@ -3866,7 +3840,7 @@ pub mod tests {
         let entry = next_entry(&new_blockhash, 1, vec![tx]);
         entries.push(entry);
 
-        process_entries_for_tests_without_scheduler(&bank0, entries, true).unwrap();
+        process_entries_for_tests_without_scheduler(&bank0, entries).unwrap();
         assert_eq!(bank0.get_balance(&keypair.pubkey()), 1)
     }
 
@@ -4035,7 +4009,6 @@ pub mod tests {
         let _ = process_entries_for_tests(
             &BankWithScheduler::new_without_scheduler(bank1),
             vec![entry],
-            true,
             None,
             Some(&replay_vote_sender),
         );
@@ -4436,9 +4409,7 @@ pub mod tests {
         if let TransactionStatusMessage::Batch(batch) = batch {
             assert_eq!(batch.transactions.len(), 2);
             assert_eq!(batch.transaction_indexes.len(), 2);
-            // Assert contains instead of the actual vec due to randomize
-            assert!(batch.transaction_indexes.contains(&0));
-            assert!(batch.transaction_indexes.contains(&1));
+            assert_eq!(batch.transaction_indexes, [0, 1]);
         } else {
             panic!("batch should have been sent");
         }
@@ -4482,10 +4453,7 @@ pub mod tests {
         if let TransactionStatusMessage::Batch(batch) = batch {
             assert_eq!(batch.transactions.len(), 3);
             assert_eq!(batch.transaction_indexes.len(), 3);
-            // Assert contains instead of the actual vec due to randomize
-            assert!(batch.transaction_indexes.contains(&2));
-            assert!(batch.transaction_indexes.contains(&3));
-            assert!(batch.transaction_indexes.contains(&4));
+            assert_eq!(batch.transaction_indexes, [2, 3, 4]);
         } else {
             panic!("batch should have been sent");
         }

@@ -745,7 +745,9 @@ mod tests {
         assert!(!rrm.is_file_get_path("//genesis.tar.bz2"));
         assert!(!rrm.is_file_get_path("/../genesis.tar.bz2"));
 
-        assert!(!rrm.is_file_get_path("/snapshot.tar.bz2")); // This is a redirect
+        // These two are redirects
+        assert!(!rrm.is_file_get_path("/snapshot.tar.bz2"));
+        assert!(!rrm.is_file_get_path("/incremental-snapshot.tar.bz2"));
 
         assert!(!rrm.is_file_get_path(
             "/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"

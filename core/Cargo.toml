@@ -42,7 +42,6 @@ serde = { workspace = true }
 serde_bytes = { workspace = true }
 serde_derive = { workspace = true }
 solana-accounts-db = { workspace = true }
-solana-address-lookup-table-program = { workspace = true }
 solana-bloom = { workspace = true }
 solana-client = { workspace = true }
 solana-cost-model = { workspace = true }
@@ -71,6 +70,7 @@ solana-tpu-client = { workspace = true }
 solana-transaction-status = { workspace = true }
 solana-turbine = { workspace = true }
 solana-version = { workspace = true }
+solana-vote = { workspace = true }
 solana-vote-program = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 strum_macros = { workspace = true }

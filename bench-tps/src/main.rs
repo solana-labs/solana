@@ -345,6 +345,7 @@ fn main() {
         *num_lamports_per_account,
         client_ids_and_stake_file,
         *read_from_client_file,
+        instruction_padding_config.is_some(),
     );
 
     let nonce_keypairs = if *use_durable_nonce {

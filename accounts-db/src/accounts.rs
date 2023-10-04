@@ -24,7 +24,6 @@ use {
     dashmap::DashMap,
     itertools::Itertools,
     log::*,
-    solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
     solana_program_runtime::{
         compute_budget::{self, ComputeBudget},
         loaded_programs::LoadedProgramsForTxBatch,
@@ -32,6 +31,7 @@ use {
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
+        address_lookup_table::{self, error::AddressLookupError, state::AddressLookupTable},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
         feature_set::{
@@ -252,7 +252,6 @@ impl Accounts {
             let _process_transaction_result = compute_budget.process_instructions(
                 tx.message().program_instructions_iter(),
                 !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
-                true, // don't reject txs that use request heap size ix
                 feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
             );
             // sanitize against setting size limit to zero
@@ -648,7 +647,7 @@ impl Accounts {
         ancestors: &Ancestors,
         txs: &[SanitizedTransaction],
         lock_results: &mut [TransactionCheckResult],
-        program_owners: &[&'a Pubkey],
+        program_owners: &'a [Pubkey],
         hash_queue: &BlockhashQueue,
     ) -> HashMap<Pubkey, (&'a Pubkey, u64)> {
         let mut result: HashMap<Pubkey, (&'a Pubkey, u64)> = HashMap::new();
@@ -678,7 +677,7 @@ impl Accounts {
                                 ) {
                                     program_owners
                                         .get(index)
-                                        .map(|owner| entry.insert((*owner, 1)));
+                                        .map(|owner| entry.insert((owner, 1)));
                                 }
                             }
                         });
@@ -723,7 +722,7 @@ impl Accounts {
                         fee_structure.calculate_fee(
                             tx.message(),
                             lamports_per_signature,
-                            &ComputeBudget::fee_budget_limits(tx.message().program_instructions_iter(), feature_set, Some(self.accounts_db.expected_cluster_type())),
+                            &ComputeBudget::fee_budget_limits(tx.message().program_instructions_iter(), feature_set),
                             feature_set.is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
                             feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                         )
@@ -781,7 +780,7 @@ impl Accounts {
             .map(|(account, _rent)| account)
             .ok_or(AddressLookupError::LookupTableAccountNotFound)?;
 
-        if table_account.owner() == &solana_address_lookup_table_program::id() {
+        if table_account.owner() == &address_lookup_table::program::id() {
             let current_slot = ancestors.max_slot();
             let lookup_table = AddressLookupTable::deserialize(table_account.data())
                 .map_err(|_ix_err| AddressLookupError::InvalidAccountData)?;
@@ -1475,12 +1474,12 @@ mod tests {
             transaction_results::{DurableNonceFee, TransactionExecutionDetails},
         },
         assert_matches::assert_matches,
-        solana_address_lookup_table_program::state::LookupTableMeta,
         solana_program_runtime::prioritization_fee::{
             PrioritizationFeeDetails, PrioritizationFeeType,
         },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
+            address_lookup_table::state::LookupTableMeta,
             compute_budget::ComputeBudgetInstruction,
             epoch_schedule::EpochSchedule,
             genesis_config::ClusterType,
@@ -1758,11 +1757,7 @@ mod tests {
         let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,
-            &ComputeBudget::fee_budget_limits(
-                message.program_instructions_iter(),
-                &feature_set,
-                None,
-            ),
+            &ComputeBudget::fee_budget_limits(message.program_instructions_iter(), &feature_set),
             true,
             false,
         );
@@ -2090,11 +2085,12 @@ mod tests {
         let sanitized_tx2 = SanitizedTransaction::from_transaction_for_tests(tx2);
 
         let ancestors = vec![(0, 0)].into_iter().collect();
+        let owners = &[program1_pubkey, program2_pubkey];
         let programs = accounts.filter_executable_program_accounts(
             &ancestors,
             &[sanitized_tx1, sanitized_tx2],
             &mut [(Ok(()), None), (Ok(()), None)],
-            &[&program1_pubkey, &program2_pubkey],
+            owners,
             &hash_queue,
         );
 
@@ -2198,12 +2194,13 @@ mod tests {
         let sanitized_tx2 = SanitizedTransaction::from_transaction_for_tests(tx2);
 
         let ancestors = vec![(0, 0)].into_iter().collect();
+        let owners = &[program1_pubkey, program2_pubkey];
         let mut lock_results = vec![(Ok(()), None), (Ok(()), None)];
         let programs = accounts.filter_executable_program_accounts(
             &ancestors,
             &[sanitized_tx1, sanitized_tx2],
             &mut lock_results,
-            &[&program1_pubkey, &program2_pubkey],
+            owners,
             &hash_queue,
         );
 
@@ -2356,7 +2353,7 @@ mod tests {
 
         let invalid_table_key = Pubkey::new_unique();
         let invalid_table_account =
-            AccountSharedData::new(1, 0, &solana_address_lookup_table_program::id());
+            AccountSharedData::new(1, 0, &address_lookup_table::program::id());
         accounts.store_slow_uncached(0, &invalid_table_key, &invalid_table_account);
 
         let address_table_lookup = MessageAddressTableLookup {
@@ -2395,7 +2392,7 @@ mod tests {
             AccountSharedData::create(
                 1,
                 table_state.serialize_for_tests().unwrap(),
-                solana_address_lookup_table_program::id(),
+                address_lookup_table::program::id(),
                 false,
                 0,
             )
@@ -4325,11 +4322,7 @@ mod tests {
         let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,
-            &ComputeBudget::fee_budget_limits(
-                message.program_instructions_iter(),
-                &feature_set,
-                None,
-            ),
+            &ComputeBudget::fee_budget_limits(message.program_instructions_iter(), &feature_set),
             true,
             false,
         );

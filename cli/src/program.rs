@@ -1175,7 +1175,6 @@ fn process_set_authority(
             &tx,
             config.commitment,
             RpcSendTransactionConfig {
-                skip_preflight: true,
                 preflight_commitment: Some(config.commitment.commitment),
                 ..RpcSendTransactionConfig::default()
             },
@@ -1226,7 +1225,6 @@ fn process_set_authority_checked(
             &tx,
             config.commitment,
             RpcSendTransactionConfig {
-                skip_preflight: false,
                 preflight_commitment: Some(config.commitment.commitment),
                 ..RpcSendTransactionConfig::default()
             },
@@ -1562,7 +1560,6 @@ fn close(
         &tx,
         config.commitment,
         RpcSendTransactionConfig {
-            skip_preflight: true,
             preflight_commitment: Some(config.commitment.commitment),
             ..RpcSendTransactionConfig::default()
         },
@@ -1719,7 +1716,7 @@ fn process_close(
     }
 }
 
-fn calculate_max_chunk_size<F>(create_msg: &F) -> usize
+pub fn calculate_max_chunk_size<F>(create_msg: &F) -> usize
 where
     F: Fn(u32, Vec<u8>) -> Message,
 {
@@ -2232,7 +2229,6 @@ fn send_deploy_messages(
                     &final_tx,
                     config.commitment,
                     RpcSendTransactionConfig {
-                        skip_preflight: true,
                         preflight_commitment: Some(config.commitment.commitment),
                         ..RpcSendTransactionConfig::default()
                     },

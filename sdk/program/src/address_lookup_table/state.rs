@@ -1,8 +1,8 @@
 use {
-    crate::error::AddressLookupError,
     serde::{Deserialize, Serialize},
     solana_frozen_abi_macro::{AbiEnumVisitor, AbiExample},
     solana_program::{
+        address_lookup_table::error::AddressLookupError,
         clock::Slot,
         instruction::InstructionError,
         pubkey::Pubkey,
@@ -16,16 +16,6 @@ pub const LOOKUP_TABLE_MAX_ADDRESSES: usize = 256;
 
 /// The serialized size of lookup table metadata
 pub const LOOKUP_TABLE_META_SIZE: usize = 56;
-
-/// Program account states
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample, AbiEnumVisitor)]
-#[allow(clippy::large_enum_variant)]
-pub enum ProgramState {
-    /// Account is not initialized.
-    Uninitialized,
-    /// Initialized `LookupTable` account.
-    LookupTable(LookupTableMeta),
-}
 
 /// Activation status of a lookup table
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -110,6 +100,16 @@ impl LookupTableMeta {
             LookupTableStatus::Deactivated
         }
     }
+}
+
+/// Program account states
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample, AbiEnumVisitor)]
+#[allow(clippy::large_enum_variant)]
+pub enum ProgramState {
+    /// Account is not initialized.
+    Uninitialized,
+    /// Initialized `LookupTable` account.
+    LookupTable(LookupTableMeta),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, AbiExample)]
@@ -218,7 +218,7 @@ impl<'a> AddressLookupTable<'a> {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, solana_sdk::hash::Hash};
+    use {super::*, crate::hash::Hash};
 
     impl AddressLookupTable<'_> {
         fn new_for_tests(meta: LookupTableMeta, num_addresses: usize) -> Self {

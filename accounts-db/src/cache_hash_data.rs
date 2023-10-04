@@ -3,6 +3,7 @@
 use crate::pubkey_bins::PubkeyBinCalculator24;
 use {
     crate::{accounts_hash::CalculateHashIntermediate, cache_hash_data_stats::CacheHashDataStats},
+    bytemuck::{Pod, Zeroable},
     memmap2::MmapMut,
     solana_measure::measure::Measure,
     std::{
@@ -19,9 +20,18 @@ pub type SavedType = Vec<Vec<EntryType>>;
 pub type SavedTypeSlice = [Vec<EntryType>];
 
 #[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct Header {
     count: usize,
 }
+
+// In order to safely guarantee Header is Pod, it cannot have any padding
+// This is obvious by inspection, but this will also catch any inadvertent
+// changes in the future (i.e. it is a test).
+const _: () = assert!(
+    std::mem::size_of::<Header>() == std::mem::size_of::<usize>(),
+    "Header cannot have any padding"
+);
 
 /// cache hash data file to be mmapped later
 pub(crate) struct CacheHashDataFileReference {
@@ -120,7 +130,7 @@ impl CacheHashDataFile {
                 "{pubkey_to_bin_index}, {start_bin_index}"
             ); // this would indicate we put a pubkey in too high of a bin
             pubkey_to_bin_index -= start_bin_index;
-            accumulator[pubkey_to_bin_index].push(d.clone()); // may want to avoid clone here
+            accumulator[pubkey_to_bin_index].push(*d); // may want to avoid copy here
         }
 
         m2.stop();
@@ -128,22 +138,25 @@ impl CacheHashDataFile {
 
     /// get '&mut EntryType' from cache file [ix]
     fn get_mut(&mut self, ix: u64) -> &mut EntryType {
-        let item_slice = self.get_slice_internal(ix);
-        unsafe {
-            let item = item_slice.as_ptr() as *mut EntryType;
-            &mut *item
-        }
+        let start = self.get_element_offset_byte(ix);
+        let end = start + std::mem::size_of::<EntryType>();
+        assert!(
+            end <= self.capacity as usize,
+            "end: {end}, capacity: {}, ix: {ix}, cell size: {}",
+            self.capacity,
+            self.cell_size,
+        );
+        let bytes = &mut self.mmap[start..end];
+        bytemuck::from_bytes_mut(bytes)
     }
 
     /// get '&[EntryType]' from cache file [ix..]
     fn get_slice(&self, ix: u64) -> &[EntryType] {
         let start = self.get_element_offset_byte(ix);
-        let item_slice: &[u8] = &self.mmap[start..];
-        let remaining_elements = item_slice.len() / std::mem::size_of::<EntryType>();
-        unsafe {
-            let item = item_slice.as_ptr() as *const EntryType;
-            std::slice::from_raw_parts(item, remaining_elements)
-        }
+        let bytes = &self.mmap[start..];
+        // the `bytes` slice *must* contain whole `EntryType`s
+        debug_assert_eq!(bytes.len() % std::mem::size_of::<EntryType>(), 0);
+        bytemuck::cast_slice(bytes)
     }
 
     /// return byte offset of entry 'ix' into a slice which contains a header and at least ix elements
@@ -153,29 +166,9 @@ impl CacheHashDataFile {
         start
     }
 
-    /// get the bytes representing cache file [ix]
-    fn get_slice_internal(&self, ix: u64) -> &[u8] {
-        let start = self.get_element_offset_byte(ix);
-        let end = start + std::mem::size_of::<EntryType>();
-        assert!(
-            end <= self.capacity as usize,
-            "end: {}, capacity: {}, ix: {}, cell size: {}",
-            end,
-            self.capacity,
-            ix,
-            self.cell_size
-        );
-        &self.mmap[start..end]
-    }
-
     fn get_header_mut(&mut self) -> &mut Header {
-        let start = 0_usize;
-        let end = start + std::mem::size_of::<Header>();
-        let item_slice: &[u8] = &self.mmap[start..end];
-        unsafe {
-            let item = item_slice.as_ptr() as *mut Header;
-            &mut *item
-        }
+        let bytes = &mut self.mmap[..std::mem::size_of::<Header>()];
+        bytemuck::from_bytes_mut(bytes)
     }
 
     fn new_map(file: impl AsRef<Path>, capacity: u64) -> Result<MmapMut, std::io::Error> {
@@ -196,29 +189,35 @@ impl CacheHashDataFile {
     }
 }
 
-pub type PreExistingCacheFiles = HashSet<PathBuf>;
-pub struct CacheHashData {
+pub(crate) struct CacheHashData {
     cache_dir: PathBuf,
-    pre_existing_cache_files: Arc<Mutex<PreExistingCacheFiles>>,
+    pre_existing_cache_files: Arc<Mutex<HashSet<PathBuf>>>,
+    should_delete_old_cache_files_on_drop: bool,
     pub stats: Arc<CacheHashDataStats>,
 }
 
 impl Drop for CacheHashData {
     fn drop(&mut self) {
-        self.delete_old_cache_files();
+        if self.should_delete_old_cache_files_on_drop {
+            self.delete_old_cache_files();
+        }
         self.stats.report();
     }
 }
 
 impl CacheHashData {
-    pub fn new(cache_dir: PathBuf) -> CacheHashData {
+    pub(crate) fn new(
+        cache_dir: PathBuf,
+        should_delete_old_cache_files_on_drop: bool,
+    ) -> CacheHashData {
         std::fs::create_dir_all(&cache_dir).unwrap_or_else(|err| {
             panic!("error creating cache dir {}: {err}", cache_dir.display())
         });
 
         let result = CacheHashData {
             cache_dir,
-            pre_existing_cache_files: Arc::new(Mutex::new(PreExistingCacheFiles::default())),
+            pre_existing_cache_files: Arc::new(Mutex::new(HashSet::default())),
+            should_delete_old_cache_files_on_drop,
             stats: Arc::default(),
         };
 
@@ -281,7 +280,7 @@ impl CacheHashData {
         })
     }
 
-    pub(crate) fn pre_existing_cache_file_will_be_used(&self, file_name: impl AsRef<Path>) {
+    fn pre_existing_cache_file_will_be_used(&self, file_name: impl AsRef<Path>) {
         self.pre_existing_cache_files
             .lock()
             .unwrap()
@@ -289,7 +288,7 @@ impl CacheHashData {
     }
 
     /// save 'data' to 'file_name'
-    pub fn save(
+    pub(crate) fn save(
         &self,
         file_name: impl AsRef<Path>,
         data: &SavedTypeSlice,
@@ -342,7 +341,7 @@ impl CacheHashData {
             x.iter().for_each(|item| {
                 let d = cache_file.get_mut(i as u64);
                 i += 1;
-                *d = item.clone();
+                *d = *item;
             })
         });
         assert_eq!(i, entries);
@@ -424,7 +423,7 @@ mod tests {
                                 data_this_pass.push(this_bin_data);
                             }
                         }
-                        let cache = CacheHashData::new(cache_dir.clone());
+                        let cache = CacheHashData::new(cache_dir.clone(), true);
                         let file_name = PathBuf::from("test");
                         cache.save(&file_name, &data_this_pass).unwrap();
                         cache.get_cache_files();
@@ -499,11 +498,11 @@ mod tests {
                                     }
                                 }
 
-                                CalculateHashIntermediate::new(
-                                    solana_sdk::hash::Hash::new_unique(),
-                                    ct as u64,
-                                    pk,
-                                )
+                                CalculateHashIntermediate {
+                                    hash: solana_sdk::hash::Hash::new_unique(),
+                                    lamports: ct as u64,
+                                    pubkey: pk,
+                                }
                             })
                             .collect::<Vec<_>>()
                     } else {

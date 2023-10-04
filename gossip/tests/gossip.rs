@@ -99,9 +99,8 @@ where
     let exit = Arc::new(AtomicBool::new(false));
     let listen: Vec<_> = (0..num).map(|_| test_node(exit.clone())).collect();
     topo(&listen);
-    let mut done = true;
+    let mut done = false;
     for i in 0..(num * 32) {
-        done = true;
         let total: usize = listen.iter().map(|v| v.0.gossip_peers().len()).sum();
         if (total + num) * 10 > num * num * 9 {
             done = true;

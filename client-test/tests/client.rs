@@ -1,5 +1,6 @@
 use {
     futures_util::StreamExt,
+    rand::Rng,
     serde_json::{json, Value},
     solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path},
     solana_pubsub_client::{nonblocking, pubsub_client::PubsubClient},
@@ -28,7 +29,6 @@ use {
         commitment_config::{CommitmentConfig, CommitmentLevel},
         native_token::sol_to_lamports,
         pubkey::Pubkey,
-        rpc_port,
         signature::{Keypair, Signer},
         system_program, system_transaction,
     },
@@ -41,7 +41,7 @@ use {
         collections::HashSet,
         net::{IpAddr, SocketAddr},
         sync::{
-            atomic::{AtomicBool, AtomicU16, AtomicU64, Ordering},
+            atomic::{AtomicBool, AtomicU64, Ordering},
             Arc, RwLock,
         },
         thread::sleep,
@@ -51,12 +51,10 @@ use {
     tungstenite::connect,
 };
 
-static NEXT_RPC_PUBSUB_PORT: AtomicU16 = AtomicU16::new(rpc_port::DEFAULT_RPC_PUBSUB_PORT);
-
 fn pubsub_addr() -> SocketAddr {
     SocketAddr::new(
         IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-        NEXT_RPC_PUBSUB_PORT.fetch_add(1, Ordering::Relaxed),
+        rand::thread_rng().gen_range(1024..65535),
     )
 }
 

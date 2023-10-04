@@ -247,8 +247,10 @@ fn install_if_missing(
         let source_base = config.sbf_sdk.join("dependencies");
         if source_base.exists() {
             let source_path = source_base.join(package);
-            debug!("Remove file {:?}", source_path);
-            fs::remove_file(source_path).map_err(|err| err.to_string())?;
+            if source_path.exists() {
+                debug!("Remove file {:?}", source_path);
+                fs::remove_file(source_path).map_err(|err| err.to_string())?;
+            }
         }
     }
     // Check whether the target path is an empty directory. This can

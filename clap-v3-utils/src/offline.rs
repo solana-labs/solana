@@ -1,6 +1,7 @@
 use {
-    crate::{input_validators::*, ArgConstant},
-    clap::{Arg, Command},
+    crate::{input_parsers::signer::PubkeySignature, ArgConstant},
+    clap::{value_parser, Arg, Command},
+    solana_sdk::hash::Hash,
 };
 
 pub const BLOCKHASH_ARG: ArgConstant<'static> = ArgConstant {
@@ -32,7 +33,7 @@ pub fn blockhash_arg<'a>() -> Arg<'a> {
         .long(BLOCKHASH_ARG.long)
         .takes_value(true)
         .value_name("BLOCKHASH")
-        .validator(|s| is_hash(s))
+        .value_parser(value_parser!(Hash))
         .help(BLOCKHASH_ARG.help)
 }
 
@@ -49,7 +50,7 @@ fn signer_arg<'a>() -> Arg<'a> {
         .long(SIGNER_ARG.long)
         .takes_value(true)
         .value_name("PUBKEY=SIGNATURE")
-        .validator(|s| is_pubkey_sig(s))
+        .value_parser(value_parser!(PubkeySignature))
         .requires(BLOCKHASH_ARG.name)
         .multiple_occurrences(true)
         .multiple_values(true)

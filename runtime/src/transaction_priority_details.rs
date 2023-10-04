@@ -28,7 +28,6 @@ pub trait GetTransactionPriorityDetails {
             .process_instructions(
                 instructions,
                 true, // supports prioritization by request_units_deprecated instruction
-                true, // enable request heap frame instruction
                 true, // enable support set accounts data size instruction
                       // TODO: round_compute_unit_price_enabled: bool
             )

@@ -2127,14 +2127,29 @@ impl Blockstore {
             .put(0, &TransactionStatusIndexMeta::default())?;
         self.transaction_status_index_cf
             .put(1, &TransactionStatusIndexMeta::default())?;
-        // This dummy status improves compaction performance
-        let default_status = TransactionStatusMeta::default().into();
-        self.transaction_status_cf
-            .put_protobuf(cf::TransactionStatus::as_index(2), &default_status)?;
-        self.address_signatures_cf.put(
-            cf::AddressSignatures::as_index(2),
-            &AddressSignatureMeta::default(),
-        )
+
+        // If present, delete dummy entries inserted by old software
+        // https://github.com/solana-labs/solana/blob/bc2b372/ledger/src/blockstore.rs#L2130-L2137
+        let transaction_status_dummy_key = cf::TransactionStatus::as_index(2);
+        if self
+            .transaction_status_cf
+            .get_protobuf_or_bincode::<StoredTransactionStatusMeta>(transaction_status_dummy_key)?
+            .is_some()
+        {
+            self.transaction_status_cf
+                .delete(transaction_status_dummy_key)?;
+        };
+        let address_signatures_dummy_key = cf::AddressSignatures::as_index(2);
+        if self
+            .address_signatures_cf
+            .get(address_signatures_dummy_key)?
+            .is_some()
+        {
+            self.address_signatures_cf
+                .delete(address_signatures_dummy_key)?;
+        };
+
+        Ok(())
     }
 
     /// Toggles the active primary index between `0` and `1`, and clears the
@@ -2304,7 +2319,7 @@ impl Blockstore {
     fn get_transaction_status_with_counter(
         &self,
         signature: Signature,
-        confirmed_unrooted_slots: &[Slot],
+        confirmed_unrooted_slots: &HashSet<Slot>,
     ) -> Result<(Option<(Slot, TransactionStatusMeta)>, u64)> {
         let mut counter = 0;
         let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
@@ -2348,14 +2363,14 @@ impl Blockstore {
             "blockstore-rpc-api",
             ("method", "get_rooted_transaction_status", String)
         );
-        self.get_transaction_status(signature, &[])
+        self.get_transaction_status(signature, &HashSet::default())
     }
 
     /// Returns a transaction status
     pub fn get_transaction_status(
         &self,
         signature: Signature,
-        confirmed_unrooted_slots: &[Slot],
+        confirmed_unrooted_slots: &HashSet<Slot>,
     ) -> Result<Option<(Slot, TransactionStatusMeta)>> {
         datapoint_info!(
             "blockstore-rpc-api",
@@ -2374,7 +2389,7 @@ impl Blockstore {
             "blockstore-rpc-api",
             ("method", "get_rooted_transaction", String)
         );
-        self.get_transaction_with_status(signature, &[])
+        self.get_transaction_with_status(signature, &HashSet::default())
     }
 
     /// Returns a complete transaction
@@ -2388,7 +2403,7 @@ impl Blockstore {
             ("method", "get_complete_transaction", String)
         );
         let last_root = self.last_root();
-        let confirmed_unrooted_slots: Vec<_> =
+        let confirmed_unrooted_slots: HashSet<_> =
             AncestorIterator::new_inclusive(highest_confirmed_slot, self)
                 .take_while(|&slot| slot > last_root)
                 .collect();
@@ -2398,7 +2413,7 @@ impl Blockstore {
     fn get_transaction_with_status(
         &self,
         signature: Signature,
-        confirmed_unrooted_slots: &[Slot],
+        confirmed_unrooted_slots: &HashSet<Slot>,
     ) -> Result<Option<ConfirmedTransactionWithStatusMeta>> {
         if let Some((slot, meta)) =
             self.get_transaction_status(signature, confirmed_unrooted_slots)?
@@ -2575,9 +2590,10 @@ impl Blockstore {
             ("method", "get_confirmed_signatures_for_address2", String)
         );
         let last_root = self.last_root();
-        let confirmed_unrooted_slots: Vec<_> = AncestorIterator::new_inclusive(highest_slot, self)
-            .take_while(|&slot| slot > last_root)
-            .collect();
+        let confirmed_unrooted_slots: HashSet<_> =
+            AncestorIterator::new_inclusive(highest_slot, self)
+                .take_while(|&slot| slot > last_root)
+                .collect();
 
         // Figure the `slot` to start listing signatures at, based on the ledger location of the
         // `before` signature if present.  Also generate a HashSet of signatures that should
@@ -7134,8 +7150,8 @@ pub mod tests {
 
         let expected_transactions: Vec<VersionedTransactionWithStatusMeta> = entries
             .iter()
-            .cloned()
             .filter(|entry| !entry.is_tick())
+            .cloned()
             .flat_map(|entry| entry.transactions)
             .map(|transaction| {
                 let mut pre_balances: Vec<u64> = vec![];
@@ -7668,8 +7684,6 @@ pub mod tests {
     fn test_get_transaction_status() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-
-        // TransactionStatus column opens initialized with one entry at index 2
         let transaction_status_cf = &blockstore.transaction_status_cf;
 
         let pre_balances_vec = vec![1, 2, 3];
@@ -7767,7 +7781,7 @@ pub mod tests {
 
         // Signature exists, root found in index 0
         if let (Some((slot, _status)), counter) = blockstore
-            .get_transaction_status_with_counter(signature2, &[])
+            .get_transaction_status_with_counter(signature2, &[].into())
             .unwrap()
         {
             assert_eq!(slot, 2);
@@ -7776,7 +7790,7 @@ pub mod tests {
 
         // Signature exists, root found although not required
         if let (Some((slot, _status)), counter) = blockstore
-            .get_transaction_status_with_counter(signature2, &[3])
+            .get_transaction_status_with_counter(signature2, &[3].into())
             .unwrap()
         {
             assert_eq!(slot, 2);
@@ -7785,7 +7799,7 @@ pub mod tests {
 
         // Signature exists, root found in index 1
         if let (Some((slot, _status)), counter) = blockstore
-            .get_transaction_status_with_counter(signature4, &[])
+            .get_transaction_status_with_counter(signature4, &[].into())
             .unwrap()
         {
             assert_eq!(slot, 2);
@@ -7794,7 +7808,7 @@ pub mod tests {
 
         // Signature exists, root found although not required, in index 1
         if let (Some((slot, _status)), counter) = blockstore
-            .get_transaction_status_with_counter(signature4, &[3])
+            .get_transaction_status_with_counter(signature4, &[3].into())
             .unwrap()
         {
             assert_eq!(slot, 2);
@@ -7803,14 +7817,14 @@ pub mod tests {
 
         // Signature exists, no root found
         let (status, counter) = blockstore
-            .get_transaction_status_with_counter(signature5, &[])
+            .get_transaction_status_with_counter(signature5, &[].into())
             .unwrap();
         assert_eq!(status, None);
         assert_eq!(counter, 6);
 
         // Signature exists, root not required
         if let (Some((slot, _status)), counter) = blockstore
-            .get_transaction_status_with_counter(signature5, &[3])
+            .get_transaction_status_with_counter(signature5, &[3].into())
             .unwrap()
         {
             assert_eq!(slot, 3);
@@ -7819,42 +7833,42 @@ pub mod tests {
 
         // Signature does not exist, smaller than existing entries
         let (status, counter) = blockstore
-            .get_transaction_status_with_counter(signature1, &[])
+            .get_transaction_status_with_counter(signature1, &[].into())
             .unwrap();
         assert_eq!(status, None);
         assert_eq!(counter, 2);
 
         let (status, counter) = blockstore
-            .get_transaction_status_with_counter(signature1, &[3])
+            .get_transaction_status_with_counter(signature1, &[3].into())
             .unwrap();
         assert_eq!(status, None);
         assert_eq!(counter, 2);
 
         // Signature does not exist, between existing entries
         let (status, counter) = blockstore
-            .get_transaction_status_with_counter(signature3, &[])
+            .get_transaction_status_with_counter(signature3, &[].into())
             .unwrap();
         assert_eq!(status, None);
         assert_eq!(counter, 2);
 
         let (status, counter) = blockstore
-            .get_transaction_status_with_counter(signature3, &[3])
+            .get_transaction_status_with_counter(signature3, &[3].into())
             .unwrap();
         assert_eq!(status, None);
         assert_eq!(counter, 2);
 
         // Signature does not exist, larger than existing entries
         let (status, counter) = blockstore
-            .get_transaction_status_with_counter(signature7, &[])
+            .get_transaction_status_with_counter(signature7, &[].into())
             .unwrap();
         assert_eq!(status, None);
-        assert_eq!(counter, 2);
+        assert_eq!(counter, 1);
 
         let (status, counter) = blockstore
-            .get_transaction_status_with_counter(signature7, &[3])
+            .get_transaction_status_with_counter(signature7, &[3].into())
             .unwrap();
         assert_eq!(status, None);
-        assert_eq!(counter, 2);
+        assert_eq!(counter, 1);
     }
 
     fn do_test_lowest_cleanup_slot_and_special_cfs(simulate_ledger_cleanup_service: bool) {
@@ -7862,8 +7876,6 @@ pub mod tests {
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-
-        // TransactionStatus column opens initialized with one entry at index 2
         let transaction_status_cf = &blockstore.transaction_status_cf;
 
         let pre_balances_vec = vec![1, 2, 3];
@@ -7934,7 +7946,7 @@ pub mod tests {
         let check_for_missing = || {
             (
                 blockstore
-                    .get_transaction_status_with_counter(signature1, &[])
+                    .get_transaction_status_with_counter(signature1, &[].into())
                     .unwrap()
                     .0
                     .is_none(),
@@ -7952,7 +7964,7 @@ pub mod tests {
         let assert_existing_always = || {
             let are_existing_always = (
                 blockstore
-                    .get_transaction_status_with_counter(signature2, &[])
+                    .get_transaction_status_with_counter(signature2, &[].into())
                     .unwrap()
                     .0
                     .is_some(),
@@ -8018,8 +8030,8 @@ pub mod tests {
 
         let expected_transactions: Vec<VersionedTransactionWithStatusMeta> = entries
             .iter()
-            .cloned()
             .filter(|entry| !entry.is_tick())
+            .cloned()
             .flat_map(|entry| entry.transactions)
             .map(|transaction| {
                 let mut pre_balances: Vec<u64> = vec![];
@@ -8138,8 +8150,8 @@ pub mod tests {
 
         let expected_transactions: Vec<VersionedTransactionWithStatusMeta> = entries
             .iter()
-            .cloned()
             .filter(|entry| !entry.is_tick())
+            .cloned()
             .flat_map(|entry| entry.transactions)
             .map(|transaction| {
                 let mut pre_balances: Vec<u64> = vec![];

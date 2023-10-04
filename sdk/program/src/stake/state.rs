@@ -823,6 +823,45 @@ mod test {
         );
     }
 
+    #[test]
+    fn stake_flag_member_offset() {
+        const FLAG_OFFSET: usize = 196;
+        let check_flag = |flag, expected| {
+            let stake = StakeStateV2::Stake(
+                Meta {
+                    rent_exempt_reserve: 1,
+                    authorized: Authorized {
+                        staker: Pubkey::new_unique(),
+                        withdrawer: Pubkey::new_unique(),
+                    },
+                    lockup: Lockup::default(),
+                },
+                Stake {
+                    delegation: Delegation {
+                        voter_pubkey: Pubkey::new_unique(),
+                        stake: u64::MAX,
+                        activation_epoch: Epoch::MAX,
+                        deactivation_epoch: Epoch::MAX,
+                        warmup_cooldown_rate: f64::MAX,
+                    },
+                    credits_observed: 1,
+                },
+                flag,
+            );
+
+            let bincode_serialized = serialize(&stake).unwrap();
+            let borsh_serialized = StakeStateV2::try_to_vec(&stake).unwrap();
+
+            assert_eq!(bincode_serialized[FLAG_OFFSET], expected);
+            assert_eq!(borsh_serialized[FLAG_OFFSET], expected);
+        };
+        check_flag(
+            StakeFlags::MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED,
+            1,
+        );
+        check_flag(StakeFlags::empty(), 0);
+    }
+
     mod deprecated {
         use super::*;
         fn check_borsh_deserialization(stake: StakeState) {

@@ -5,7 +5,7 @@ use {
         ancestors::Ancestors,
         bucket_map_holder::{Age, BucketMapHolder},
         contains::Contains,
-        in_mem_accounts_index::{InMemAccountsIndex, InsertNewEntryResults},
+        in_mem_accounts_index::{InMemAccountsIndex, InsertNewEntryResults, StartupStats},
         inline_spl_token::{self, GenericTokenAccount},
         inline_spl_token_2022,
         pubkey_bins::PubkeyBinCalculator24,
@@ -70,6 +70,14 @@ pub type SlotList<T> = Vec<(Slot, T)>;
 pub type SlotSlice<'s, T> = &'s [(Slot, T)];
 pub type RefCount = u64;
 pub type AccountMap<T, U> = Arc<InMemAccountsIndex<T, U>>;
+
+#[derive(Default, Debug, PartialEq, Eq)]
+pub(crate) struct GenerateIndexResult<T: IndexValue> {
+    /// number of accounts inserted in the index
+    pub count: usize,
+    /// pubkeys which were present multiple times in the insertion request.
+    pub duplicates: Option<Vec<(Pubkey, (Slot, T))>>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// how accounts index 'upsert' should handle reclaims
@@ -1336,6 +1344,11 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         iter.hold_range_in_memory(range, start_holding, thread_pool);
     }
 
+    /// get stats related to startup
+    pub(crate) fn get_startup_stats(&self) -> &StartupStats {
+        &self.storage.storage.startup_stats
+    }
+
     pub fn set_startup(&self, value: Startup) {
         self.storage.set_startup(value);
     }
@@ -1575,57 +1588,108 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         self.account_maps.len()
     }
 
+    /// remove the earlier instances of each pubkey when the pubkey exists later in the `Vec`.
+    /// Could also be done with HashSet.
+    /// Returns `HashSet` of duplicate pubkeys.
+    fn remove_older_duplicate_pubkeys(
+        items: &mut Vec<(Pubkey, (Slot, T))>,
+    ) -> Option<Vec<(Pubkey, (Slot, T))>> {
+        if items.len() < 2 {
+            return None;
+        }
+        // stable sort by pubkey.
+        // Earlier entries are overwritten by later entries
+        items.sort_by(|a, b| a.0.cmp(&b.0));
+        let mut duplicates = None::<Vec<(Pubkey, (Slot, T))>>;
+
+        // Iterate the items vec from the end to the beginning. Adjacent duplicated items will be
+        // written to the front of the vec.
+        let n = items.len();
+        let mut last_key = items[n - 1].0;
+        let mut write = n - 1;
+        let mut curr = write;
+
+        while curr > 0 {
+            let curr_item = items[curr - 1];
+
+            if curr_item.0 == last_key {
+                let mut duplicates_insert = duplicates.unwrap_or_default();
+                duplicates_insert.push(curr_item);
+                duplicates = Some(duplicates_insert);
+                curr -= 1;
+            } else {
+                if curr < write {
+                    items[write - 1] = curr_item;
+                }
+                curr -= 1;
+                write -= 1;
+                last_key = curr_item.0;
+            }
+        }
+
+        items.drain(..(write - curr));
+
+        duplicates
+    }
+
     // Same functionally to upsert, but:
     // 1. operates on a batch of items
     // 2. holds the write lock for the duration of adding the items
     // Can save time when inserting lots of new keys.
     // But, does NOT update secondary index
     // This is designed to be called at startup time.
+    // returns (dirty_pubkeys, insertion_time_us, GenerateIndexResult)
     #[allow(clippy::needless_collect)]
     pub(crate) fn insert_new_if_missing_into_primary_index(
         &self,
         slot: Slot,
-        item_len: usize,
+        approx_items_len: usize,
         items: impl Iterator<Item = (Pubkey, T)>,
-    ) -> (Vec<Pubkey>, u64) {
+    ) -> (Vec<Pubkey>, u64, GenerateIndexResult<T>) {
         // big enough so not likely to re-allocate, small enough to not over-allocate by too much
         // this assumes the largest bin contains twice the expected amount of the average size per bin
         let bins = self.bins();
-        let expected_items_per_bin = item_len * 2 / bins;
-        // offset bin 0 in the 'binned' array by a random amount.
-        // This results in calls to insert_new_entry_if_missing_with_lock from different threads starting at different bins.
-        let random_offset = thread_rng().gen_range(0..bins);
+        let expected_items_per_bin = approx_items_len * 2 / bins;
         let use_disk = self.storage.storage.disk.is_some();
         let mut binned = (0..bins)
-            .map(|mut pubkey_bin| {
-                // opposite of (pubkey_bin + random_offset) % bins
-                pubkey_bin = if pubkey_bin < random_offset {
-                    pubkey_bin + bins - random_offset
-                } else {
-                    pubkey_bin - random_offset
-                };
-                (pubkey_bin, Vec::with_capacity(expected_items_per_bin))
-            })
+            .map(|_| Vec::with_capacity(expected_items_per_bin))
             .collect::<Vec<_>>();
+        let mut count = 0;
         let mut dirty_pubkeys = items
             .filter_map(|(pubkey, account_info)| {
                 let pubkey_bin = self.bin_calculator.bin_from_pubkey(&pubkey);
-                let binned_index = (pubkey_bin + random_offset) % bins;
                 // this value is equivalent to what update() below would have created if we inserted a new item
                 let is_zero_lamport = account_info.is_zero_lamport();
                 let result = if is_zero_lamport { Some(pubkey) } else { None };
 
-                binned[binned_index].1.push((pubkey, (slot, account_info)));
+                binned[pubkey_bin].push((pubkey, (slot, account_info)));
                 result
             })
             .collect::<Vec<_>>();
-        binned.retain(|x| !x.1.is_empty());
 
         let insertion_time = AtomicU64::new(0);
 
-        binned.into_iter().for_each(|(pubkey_bin, items)| {
+        // offset bin processing in the 'binned' array by a random amount.
+        // This results in calls to insert_new_entry_if_missing_with_lock from different threads starting at different bins to avoid
+        // lock contention.
+        let random_offset = thread_rng().gen_range(0..bins);
+        let mut duplicates = Vec::default();
+        (0..bins).for_each(|pubkey_bin| {
+            let pubkey_bin = (pubkey_bin + random_offset) % bins;
+            let mut items = std::mem::take(&mut binned[pubkey_bin]);
+            if items.is_empty() {
+                return;
+            }
+
+            let these_duplicates = Self::remove_older_duplicate_pubkeys(&mut items);
+            if let Some(mut these_duplicates) = these_duplicates {
+                duplicates.append(&mut these_duplicates);
+            }
+
             let r_account_maps = &self.account_maps[pubkey_bin];
             let mut insert_time = Measure::start("insert_into_primary_index");
+            // count only considers non-duplicate accounts
+            count += items.len();
             if use_disk {
                 r_account_maps.startup_insert_only(items.into_iter());
             } else {
@@ -1655,7 +1719,14 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
             insertion_time.fetch_add(insert_time.as_us(), Ordering::Relaxed);
         });
 
-        (dirty_pubkeys, insertion_time.load(Ordering::Relaxed))
+        (
+            dirty_pubkeys,
+            insertion_time.load(Ordering::Relaxed),
+            GenerateIndexResult {
+                count,
+                duplicates: (!duplicates.is_empty()).then_some(duplicates),
+            },
+        )
     }
 
     /// use Vec<> because the internal vecs are already allocated per bin
@@ -2088,6 +2159,57 @@ pub mod tests {
     }
 
     #[test]
+    fn test_remove_older_duplicate_pubkeys() {
+        let pk1 = Pubkey::new_from_array([0; 32]);
+        let pk2 = Pubkey::new_from_array([1; 32]);
+        let slot0 = 0;
+        let info2 = 55;
+        let mut items = vec![];
+        let removed = AccountsIndex::<u64, u64>::remove_older_duplicate_pubkeys(&mut items);
+        assert!(items.is_empty());
+        assert!(removed.is_none());
+        let mut items = vec![(pk1, (slot0, 1u64)), (pk2, (slot0, 2))];
+        let expected = items.clone();
+        let removed = AccountsIndex::<u64, u64>::remove_older_duplicate_pubkeys(&mut items);
+        assert_eq!(items, expected);
+        assert!(removed.is_none());
+
+        for dup in 0..3 {
+            for other in 0..dup + 2 {
+                let first_info = 10u64;
+                let mut items = vec![(pk1, (slot0, first_info))];
+                let mut expected_dups = items.clone();
+                for i in 0..dup {
+                    let this_dup = (pk1, (slot0, i + 10u64 + 1));
+                    if i < dup.saturating_sub(1) {
+                        expected_dups.push(this_dup);
+                    }
+                    items.push(this_dup);
+                }
+                let mut expected = vec![*items.last().unwrap()];
+                let other_item = (pk2, (slot0, info2));
+                if other == dup + 1 {
+                    // don't insert
+                } else if other == dup {
+                    expected.push(other_item);
+                    items.push(other_item);
+                } else {
+                    expected.push(other_item);
+                    items.insert(other as usize, other_item);
+                }
+                let result = AccountsIndex::<u64, u64>::remove_older_duplicate_pubkeys(&mut items);
+                assert_eq!(items, expected);
+                if dup != 0 {
+                    expected_dups.reverse();
+                    assert_eq!(result.unwrap(), expected_dups);
+                } else {
+                    assert!(result.is_none());
+                }
+            }
+        }
+    }
+
+    #[test]
     fn test_secondary_index_include_exclude() {
         let pk1 = Pubkey::new_unique();
         let pk2 = Pubkey::new_unique();
@@ -2180,6 +2302,44 @@ pub mod tests {
             true
         }
     }
+
+    #[test]
+    fn test_insert_duplicates() {
+        let key = solana_sdk::pubkey::new_rand();
+        let pubkey = &key;
+        let slot = 0;
+        let mut ancestors = Ancestors::default();
+        ancestors.insert(slot, 0);
+
+        let account_info = true;
+        let index = AccountsIndex::<bool, bool>::default_for_tests();
+        let account_info2: bool = !account_info;
+        let items = vec![(*pubkey, account_info), (*pubkey, account_info2)];
+        index.set_startup(Startup::Startup);
+        let (_, _, result) =
+            index.insert_new_if_missing_into_primary_index(slot, items.len(), items.into_iter());
+        assert_eq!(result.count, 1);
+        index.set_startup(Startup::Normal);
+        if let AccountIndexGetResult::Found(entry, index) =
+            // the entry for
+            index.get_for_tests(pubkey, Some(&ancestors), None)
+        {
+            // make sure the one with the correct info is added
+            assert_eq!(entry.slot_list()[index], (slot, account_info2));
+            // make sure it wasn't inserted twice
+            assert_eq!(
+                entry
+                    .slot_list()
+                    .iter()
+                    .filter_map(|(entry_slot, _)| (entry_slot == &slot).then_some(true))
+                    .count(),
+                1
+            );
+        } else {
+            panic!("failed");
+        }
+    }
+
     #[test]
     fn test_insert_new_with_lock_no_ancestors() {
         let key = solana_sdk::pubkey::new_rand();
@@ -2190,7 +2350,10 @@ pub mod tests {
         let account_info = true;
         let items = vec![(*pubkey, account_info)];
         index.set_startup(Startup::Startup);
-        index.insert_new_if_missing_into_primary_index(slot, items.len(), items.into_iter());
+        let expected_len = items.len();
+        let (_, _, result) =
+            index.insert_new_if_missing_into_primary_index(slot, items.len(), items.into_iter());
+        assert_eq!(result.count, expected_len);
         index.set_startup(Startup::Normal);
 
         let mut ancestors = Ancestors::default();
@@ -2225,7 +2388,10 @@ pub mod tests {
         let account_info = false;
         let items = vec![(*pubkey, account_info)];
         index.set_startup(Startup::Startup);
-        index.insert_new_if_missing_into_primary_index(slot, items.len(), items.into_iter());
+        let expected_len = items.len();
+        let (_, _, result) =
+            index.insert_new_if_missing_into_primary_index(slot, items.len(), items.into_iter());
+        assert_eq!(result.count, expected_len);
         index.set_startup(Startup::Normal);
 
         let mut ancestors = Ancestors::default();
@@ -2332,7 +2498,10 @@ pub mod tests {
 
         index.set_startup(Startup::Startup);
         let items = vec![(key0, account_infos[0]), (key1, account_infos[1])];
-        index.insert_new_if_missing_into_primary_index(slot0, items.len(), items.into_iter());
+        let expected_len = items.len();
+        let (_, _, result) =
+            index.insert_new_if_missing_into_primary_index(slot0, items.len(), items.into_iter());
+        assert_eq!(result.count, expected_len);
         index.set_startup(Startup::Normal);
 
         for (i, key) in [key0, key1].iter().enumerate() {
@@ -2383,7 +2552,13 @@ pub mod tests {
         } else {
             let items = vec![(key, account_infos[0])];
             index.set_startup(Startup::Startup);
-            index.insert_new_if_missing_into_primary_index(slot0, items.len(), items.into_iter());
+            let expected_len = items.len();
+            let (_, _, result) = index.insert_new_if_missing_into_primary_index(
+                slot0,
+                items.len(),
+                items.into_iter(),
+            );
+            assert_eq!(result.count, expected_len);
             index.set_startup(Startup::Normal);
         }
         assert!(gc.is_empty());
@@ -2428,7 +2603,13 @@ pub mod tests {
 
             let items = vec![(key, account_infos[1])];
             index.set_startup(Startup::Startup);
-            index.insert_new_if_missing_into_primary_index(slot1, items.len(), items.into_iter());
+            let expected_len = items.len();
+            let (_, _, result) = index.insert_new_if_missing_into_primary_index(
+                slot1,
+                items.len(),
+                items.into_iter(),
+            );
+            assert_eq!(result.count, expected_len);
             index.set_startup(Startup::Normal);
         }
         assert!(gc.is_empty());

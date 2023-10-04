@@ -15,7 +15,10 @@ use {
         unprocessed_packet_batches::*,
         unprocessed_transaction_storage::{ThreadType, UnprocessedTransactionStorage},
     },
-    crate::{banking_trace::BankingPacketReceiver, tracer_packet_stats::TracerPacketStats},
+    crate::{
+        banking_trace::BankingPacketReceiver, tracer_packet_stats::TracerPacketStats,
+        validator::BlockProductionMethod,
+    },
     crossbeam_channel::RecvTimeoutError,
     histogram::Histogram,
     solana_client::connection_cache::ConnectionCache,
@@ -24,11 +27,9 @@ use {
     solana_measure::{measure, measure_us},
     solana_perf::{data_budget::DataBudget, packet::PACKETS_PER_BATCH},
     solana_poh::poh_recorder::PohRecorder,
-    solana_runtime::{
-        bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
-        vote_sender_types::ReplayVoteSender,
-    },
+    solana_runtime::{bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache},
     solana_sdk::timing::AtomicInterval,
+    solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
         cmp, env,
         sync::{
@@ -84,6 +85,7 @@ pub struct BankingStageStats {
     pub(crate) dropped_duplicated_packets_count: AtomicUsize,
     dropped_forward_packets_count: AtomicUsize,
     newly_buffered_packets_count: AtomicUsize,
+    newly_buffered_forwarded_packets_count: AtomicUsize,
     current_buffered_packets_count: AtomicUsize,
     rebuffered_packets_count: AtomicUsize,
     consumed_buffered_packets_count: AtomicUsize,
@@ -146,109 +148,115 @@ impl BankingStageStats {
         if self.last_report.should_update(report_interval_ms) {
             datapoint_info!(
                 "banking_stage-loop-stats",
-                ("id", self.id as i64, i64),
+                ("id", self.id, i64),
                 (
                     "receive_and_buffer_packets_count",
                     self.receive_and_buffer_packets_count
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "dropped_packets_count",
-                    self.dropped_packets_count.swap(0, Ordering::Relaxed) as i64,
+                    self.dropped_packets_count.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "dropped_duplicated_packets_count",
                     self.dropped_duplicated_packets_count
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "dropped_forward_packets_count",
                     self.dropped_forward_packets_count
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "newly_buffered_packets_count",
-                    self.newly_buffered_packets_count.swap(0, Ordering::Relaxed) as i64,
+                    self.newly_buffered_packets_count.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "newly_buffered_forwarded_packets_count",
+                    self.newly_buffered_forwarded_packets_count
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "current_buffered_packets_count",
                     self.current_buffered_packets_count
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "rebuffered_packets_count",
-                    self.rebuffered_packets_count.swap(0, Ordering::Relaxed) as i64,
+                    self.rebuffered_packets_count.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "consumed_buffered_packets_count",
                     self.consumed_buffered_packets_count
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "forwarded_transaction_count",
-                    self.forwarded_transaction_count.swap(0, Ordering::Relaxed) as i64,
+                    self.forwarded_transaction_count.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "forwarded_vote_count",
-                    self.forwarded_vote_count.swap(0, Ordering::Relaxed) as i64,
+                    self.forwarded_vote_count.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "consume_buffered_packets_elapsed",
                     self.consume_buffered_packets_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "receive_and_buffer_packets_elapsed",
                     self.receive_and_buffer_packets_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "filter_pending_packets_elapsed",
                     self.filter_pending_packets_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "packet_conversion_elapsed",
-                    self.packet_conversion_elapsed.swap(0, Ordering::Relaxed) as i64,
+                    self.packet_conversion_elapsed.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "transaction_processing_elapsed",
                     self.transaction_processing_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "packet_batch_indices_len_min",
-                    self.batch_packet_indexes_len.minimum().unwrap_or(0) as i64,
+                    self.batch_packet_indexes_len.minimum().unwrap_or(0),
                     i64
                 ),
                 (
                     "packet_batch_indices_len_max",
-                    self.batch_packet_indexes_len.maximum().unwrap_or(0) as i64,
+                    self.batch_packet_indexes_len.maximum().unwrap_or(0),
                     i64
                 ),
                 (
                     "packet_batch_indices_len_mean",
-                    self.batch_packet_indexes_len.mean().unwrap_or(0) as i64,
+                    self.batch_packet_indexes_len.mean().unwrap_or(0),
                     i64
                 ),
                 (
                     "packet_batch_indices_len_90pct",
-                    self.batch_packet_indexes_len.percentile(90.0).unwrap_or(0) as i64,
+                    self.batch_packet_indexes_len.percentile(90.0).unwrap_or(0),
                     i64
                 )
             );
@@ -307,6 +315,7 @@ impl BankingStage {
     /// Create the stage using `bank`. Exit when `verified_receiver` is dropped.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        block_production_method: BlockProductionMethod,
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         non_vote_receiver: BankingPacketReceiver,
@@ -320,6 +329,7 @@ impl BankingStage {
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
     ) -> Self {
         Self::new_num_threads(
+            block_production_method,
             cluster_info,
             poh_recorder,
             non_vote_receiver,
@@ -337,6 +347,42 @@ impl BankingStage {
 
     #[allow(clippy::too_many_arguments)]
     pub fn new_num_threads(
+        block_production_method: BlockProductionMethod,
+        cluster_info: &Arc<ClusterInfo>,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
+        non_vote_receiver: BankingPacketReceiver,
+        tpu_vote_receiver: BankingPacketReceiver,
+        gossip_vote_receiver: BankingPacketReceiver,
+        num_threads: u32,
+        transaction_status_sender: Option<TransactionStatusSender>,
+        replay_vote_sender: ReplayVoteSender,
+        log_messages_bytes_limit: Option<usize>,
+        connection_cache: Arc<ConnectionCache>,
+        bank_forks: Arc<RwLock<BankForks>>,
+        prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
+    ) -> Self {
+        match block_production_method {
+            BlockProductionMethod::ThreadLocalMultiIterator => {
+                Self::new_thread_local_multi_iterator(
+                    cluster_info,
+                    poh_recorder,
+                    non_vote_receiver,
+                    tpu_vote_receiver,
+                    gossip_vote_receiver,
+                    num_threads,
+                    transaction_status_sender,
+                    replay_vote_sender,
+                    log_messages_bytes_limit,
+                    connection_cache,
+                    bank_forks,
+                    prioritization_fee_cache,
+                )
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_thread_local_multi_iterator(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         non_vote_receiver: BankingPacketReceiver,
@@ -644,6 +690,7 @@ mod tests {
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let banking_stage = BankingStage::new(
+                BlockProductionMethod::ThreadLocalMultiIterator,
                 &cluster_info,
                 &poh_recorder,
                 non_vote_receiver,
@@ -700,6 +747,7 @@ mod tests {
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let banking_stage = BankingStage::new(
+                BlockProductionMethod::ThreadLocalMultiIterator,
                 &cluster_info,
                 &poh_recorder,
                 non_vote_receiver,
@@ -781,6 +829,7 @@ mod tests {
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let banking_stage = BankingStage::new(
+                BlockProductionMethod::ThreadLocalMultiIterator,
                 &cluster_info,
                 &poh_recorder,
                 non_vote_receiver,
@@ -941,7 +990,7 @@ mod tests {
                     create_test_recorder(bank.clone(), blockstore, Some(poh_config), None);
                 let (_, cluster_info) = new_test_cluster_info(/*keypair:*/ None);
                 let cluster_info = Arc::new(cluster_info);
-                let _banking_stage = BankingStage::new_num_threads(
+                let _banking_stage = BankingStage::new_thread_local_multi_iterator(
                     &cluster_info,
                     &poh_recorder,
                     non_vote_receiver,
@@ -1136,6 +1185,7 @@ mod tests {
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let banking_stage = BankingStage::new(
+                BlockProductionMethod::ThreadLocalMultiIterator,
                 &cluster_info,
                 &poh_recorder,
                 non_vote_receiver,

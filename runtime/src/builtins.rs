@@ -91,7 +91,7 @@ pub static BUILTINS: &[BuiltinPrototype] = &[
     },
     BuiltinPrototype {
         feature_id: None,
-        program_id: solana_address_lookup_table_program::id(),
+        program_id: solana_sdk::address_lookup_table::program::id(),
         name: "address_lookup_table_program",
         entrypoint: solana_address_lookup_table_program::processor::process_instruction,
     },
@@ -100,5 +100,11 @@ pub static BUILTINS: &[BuiltinPrototype] = &[
         program_id: solana_zk_token_sdk::zk_token_proof_program::id(),
         name: "zk_token_proof_program",
         entrypoint: solana_zk_token_proof_program::process_instruction,
+    },
+    BuiltinPrototype {
+        feature_id: Some(feature_set::enable_program_runtime_v2_and_loader_v4::id()),
+        program_id: solana_sdk::loader_v4::id(),
+        name: "loader_v4",
+        entrypoint: solana_loader_v4_program::process_instruction,
     },
 ];

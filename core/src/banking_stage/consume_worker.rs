@@ -138,14 +138,12 @@ mod tests {
             get_tmp_ledger_path_auto_delete, leader_schedule_cache::LeaderScheduleCache,
         },
         solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
-        solana_runtime::{
-            bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
-            vote_sender_types::ReplayVoteReceiver,
-        },
+        solana_runtime::{bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache},
         solana_sdk::{
             genesis_config::GenesisConfig, poh_config::PohConfig, pubkey::Pubkey,
             signature::Keypair, system_transaction,
         },
+        solana_vote::vote_sender_types::ReplayVoteReceiver,
         std::{
             sync::{atomic::AtomicBool, RwLock},
             thread::JoinHandle,

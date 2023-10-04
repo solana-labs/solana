@@ -14,12 +14,12 @@ use {
         bank_utils,
         prioritization_fee_cache::PrioritizationFeeCache,
         transaction_batch::TransactionBatch,
-        vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{pubkey::Pubkey, saturating_add_assign},
     solana_transaction_status::{
         token_balances::TransactionTokenBalancesSet, TransactionTokenBalance,
     },
+    solana_vote::vote_sender_types::ReplayVoteSender,
     std::{collections::HashMap, sync::Arc},
 };
 

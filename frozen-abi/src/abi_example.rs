@@ -555,3 +555,10 @@ impl<O: AbiEnumVisitor, E: AbiEnumVisitor> AbiEnumVisitor for Result<O, E> {
         digester.create_child()
     }
 }
+
+#[cfg(not(target_os = "solana"))]
+impl<T: AbiExample> AbiExample for std::sync::OnceLock<T> {
+    fn example() -> Self {
+        Self::from(T::example())
+    }
+}

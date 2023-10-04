@@ -2,7 +2,7 @@ use {
     crate::{
         accounts_index::{AccountsIndexConfig, DiskIndexValue, IndexLimitMb, IndexValue},
         bucket_map_holder_stats::BucketMapHolderStats,
-        in_mem_accounts_index::InMemAccountsIndex,
+        in_mem_accounts_index::{InMemAccountsIndex, StartupStats},
         waitable_condvar::WaitableCondvar,
     },
     solana_bucket_map::bucket_map::{BucketMap, BucketMapConfig},
@@ -68,6 +68,8 @@ pub struct BucketMapHolder<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>>
     /// Note startup is an optimization and is not required for correctness.
     startup: AtomicBool,
     _phantom: PhantomData<T>,
+
+    pub(crate) startup_stats: Arc<StartupStats>,
 }
 
 impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> Debug for BucketMapHolder<T, U> {
@@ -202,7 +204,15 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> BucketMapHolder<T, U>
             .unwrap_or(DEFAULT_AGE_TO_STAY_IN_CACHE);
 
         let mut bucket_config = BucketMapConfig::new(bins);
-        bucket_config.drives = config.as_ref().and_then(|config| config.drives.clone());
+        bucket_config.drives = config.as_ref().and_then(|config| {
+            bucket_config.restart_config_file = config.drives.as_ref().and_then(|drives| {
+                drives
+                    .first()
+                    .map(|drive| drive.join("accounts_index_restart"))
+            });
+            config.drives.clone()
+        });
+
         let mem_budget_mb = match config
             .as_ref()
             .map(|config| &config.index_limit_mb)
@@ -259,6 +269,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> BucketMapHolder<T, U>
             mem_budget_mb,
             threads,
             _phantom: PhantomData,
+            startup_stats: Arc::default(),
         }
     }
 

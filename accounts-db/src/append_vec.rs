@@ -519,7 +519,7 @@ impl AppendVec {
     pub fn account_matches_owners(
         &self,
         offset: usize,
-        owners: &[&Pubkey],
+        owners: &[Pubkey],
     ) -> std::result::Result<usize, MatchAccountOwnerError> {
         let account_meta = self
             .get_account_meta(offset)
@@ -529,7 +529,7 @@ impl AppendVec {
         } else {
             owners
                 .iter()
-                .position(|entry| &&account_meta.owner == entry)
+                .position(|entry| &account_meta.owner == entry)
                 .ok_or(MatchAccountOwnerError::NoMatch)
         }
     }
@@ -1022,37 +1022,36 @@ pub mod tests {
         let path = get_append_vec_path("test_append_data");
         let av = AppendVec::new(&path.path, true, 1024 * 1024);
         let owners: Vec<Pubkey> = (0..2).map(|_| Pubkey::new_unique()).collect();
-        let owners_refs: Vec<&Pubkey> = owners.iter().collect();
 
         let mut account = create_test_account(5);
         account.1.set_owner(owners[0]);
         let index = av.append_account_test(&account).unwrap();
-        assert_eq!(av.account_matches_owners(index, &owners_refs), Ok(0));
+        assert_eq!(av.account_matches_owners(index, &owners), Ok(0));
 
         let mut account1 = create_test_account(6);
         account1.1.set_owner(owners[1]);
         let index1 = av.append_account_test(&account1).unwrap();
-        assert_eq!(av.account_matches_owners(index1, &owners_refs), Ok(1));
-        assert_eq!(av.account_matches_owners(index, &owners_refs), Ok(0));
+        assert_eq!(av.account_matches_owners(index1, &owners), Ok(1));
+        assert_eq!(av.account_matches_owners(index, &owners), Ok(0));
 
         let mut account2 = create_test_account(6);
         account2.1.set_owner(Pubkey::new_unique());
         let index2 = av.append_account_test(&account2).unwrap();
         assert_eq!(
-            av.account_matches_owners(index2, &owners_refs),
+            av.account_matches_owners(index2, &owners),
             Err(MatchAccountOwnerError::NoMatch)
         );
 
         // tests for overflow
         assert_eq!(
-            av.account_matches_owners(usize::MAX - mem::size_of::<StoredMeta>(), &owners_refs),
+            av.account_matches_owners(usize::MAX - mem::size_of::<StoredMeta>(), &owners),
             Err(MatchAccountOwnerError::UnableToLoad)
         );
 
         assert_eq!(
             av.account_matches_owners(
                 usize::MAX - mem::size_of::<StoredMeta>() - mem::size_of::<AccountMeta>() + 1,
-                &owners_refs
+                &owners
             ),
             Err(MatchAccountOwnerError::UnableToLoad)
         );

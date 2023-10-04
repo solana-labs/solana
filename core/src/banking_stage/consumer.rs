@@ -737,8 +737,7 @@ mod tests {
             unprocessed_transaction_storage::ThreadType,
         },
         crossbeam_channel::{unbounded, Receiver},
-        solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
-        solana_cost_model::cost_model::CostModel,
+        solana_cost_model::{cost_model::CostModel, transaction_cost::TransactionCost},
         solana_entry::entry::{next_entry, next_versioned_entry},
         solana_ledger::{
             blockstore::{entries_to_test_shreds, Blockstore},
@@ -754,6 +753,10 @@ mod tests {
         solana_runtime::prioritization_fee_cache::PrioritizationFeeCache,
         solana_sdk::{
             account::AccountSharedData,
+            address_lookup_table::{
+                self,
+                state::{AddressLookupTable, LookupTableMeta},
+            },
             instruction::InstructionError,
             message::{v0, v0::MessageAddressTableLookup, MessageHeader, VersionedMessage},
             poh_config::PohConfig,
@@ -847,7 +850,7 @@ mod tests {
     ) -> AccountSharedData {
         let data = address_lookup_table.serialize_for_tests().unwrap();
         let mut account =
-            AccountSharedData::new(1, data.len(), &solana_address_lookup_table_program::id());
+            AccountSharedData::new(1, data.len(), &address_lookup_table::program::id());
         account.set_data(data);
         bank.store_account(&account_address, &account);
 
@@ -1273,7 +1276,9 @@ mod tests {
                 };
 
                 let mut cost = CostModel::calculate_cost(&transactions[0], &bank.feature_set);
-                cost.bpf_execution_cost = actual_bpf_execution_cost;
+                if let TransactionCost::Transaction(ref mut usage_cost) = cost {
+                    usage_cost.bpf_execution_cost = actual_bpf_execution_cost;
+                }
 
                 block_cost + cost.sum()
             } else {

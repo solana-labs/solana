@@ -113,7 +113,7 @@ pub mod solana_rpc_client_nonce_utils {
 /// programs.
 pub mod solana_sdk {
     pub use crate::{
-        address_lookup_table_account, hash, instruction, keccak, message, nonce,
+        hash, instruction, keccak, message, nonce,
         pubkey::{self, Pubkey},
         system_instruction, system_program,
         sysvar::{
@@ -273,10 +273,20 @@ pub mod solana_sdk {
             }
         }
     }
+
+    #[deprecated(
+        since = "1.17.0",
+        note = "Please use `solana_sdk::address_lookup_table` instead"
+    )]
+    pub use crate::address_lookup_table as address_lookup_table_account;
 }
 
+#[deprecated(
+    since = "1.17.0",
+    note = "Please use `solana_sdk::address_lookup_table` instead"
+)]
 pub mod solana_address_lookup_table_program {
-    crate::declare_id!("AddressLookupTab1e1111111111111111111111111");
+    pub use crate::address_lookup_table::program::{check_id, id, ID};
 
     pub mod state {
         use {

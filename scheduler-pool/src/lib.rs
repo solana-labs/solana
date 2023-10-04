@@ -22,10 +22,10 @@ use {
             SchedulingContext, WaitReason, WithTransactionAndIndex,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
-        vote_sender_types::ReplayVoteSender,
     },
     solana_scheduler::{SchedulingMode, WithSchedulingMode},
     solana_sdk::transaction::{Result, SanitizedTransaction},
+    solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
         fmt::Debug,
         marker::PhantomData,

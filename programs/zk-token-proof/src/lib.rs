@@ -16,6 +16,22 @@ use {
     std::result::Result,
 };
 
+pub const CLOSE_CONTEXT_STATE_COMPUTE_UNITS: u64 = 3_300;
+pub const VERIFY_ZERO_BALANCE_COMPUTE_UNITS: u64 = 6012;
+pub const VERIFY_WITHDRAW_COMPUTE_UNITS: u64 = 112_454;
+pub const VERIFY_CIPHERTEXT_CIPHERTEXT_EQUALITY_COMPUTE_UNITS: u64 = 7_943;
+pub const VERIFY_TRANSFER_COMPUTE_UNITS: u64 = 219_290;
+pub const VERIFY_TRANSFER_WITH_FEE_COMPUTE_UNITS: u64 = 407_121;
+pub const VERIFY_PUBKEY_VALIDITY_COMPUTE_UNITS: u64 = 2_619;
+pub const VERIFY_RANGE_PROOF_U64_COMPUTE_UNITS: u64 = 105_066;
+pub const VERIFY_BATCHED_RANGE_PROOF_U64_COMPUTE_UNITS: u64 = 111_478;
+pub const VERIFY_BATCHED_RANGE_PROOF_U128_COMPUTE_UNITS: u64 = 204_512;
+pub const VERIFY_BATCHED_RANGE_PROOF_U256_COMPUTE_UNITS: u64 = 368_000;
+pub const VERIFY_CIPHERTEXT_COMMITMENT_EQUALITY_COMPUTE_UNITS: u64 = 6_424;
+pub const VERIFY_GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_COMPUTE_UNITS: u64 = 6_440;
+pub const VERIFY_BATCHED_GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_COMPUTE_UNITS: u64 = 12_575;
+pub const VERIFY_FEE_SIGMA_COMPUTE_UNITS: u64 = 6_547;
+
 fn process_verify_proof<T, U>(invoke_context: &mut InvokeContext) -> Result<(), InstructionError>
 where
     T: Pod + ZkProofData<U>,
@@ -136,7 +152,7 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
         ProofInstruction::CloseContextState => {
             if native_programs_consume_cu {
                 invoke_context
-                    .consume_checked(3_300)
+                    .consume_checked(CLOSE_CONTEXT_STATE_COMPUTE_UNITS)
                     .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
             ic_msg!(invoke_context, "CloseContextState");
@@ -145,7 +161,7 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
         ProofInstruction::VerifyZeroBalance => {
             if native_programs_consume_cu {
                 invoke_context
-                    .consume_checked(6_012)
+                    .consume_checked(VERIFY_ZERO_BALANCE_COMPUTE_UNITS)
                     .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
             ic_msg!(invoke_context, "VerifyZeroBalance");
@@ -154,7 +170,7 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
         ProofInstruction::VerifyWithdraw => {
             if native_programs_consume_cu {
                 invoke_context
-                    .consume_checked(112_454)
+                    .consume_checked(VERIFY_WITHDRAW_COMPUTE_UNITS)
                     .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
             ic_msg!(invoke_context, "VerifyWithdraw");
@@ -163,7 +179,7 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
         ProofInstruction::VerifyCiphertextCiphertextEquality => {
             if native_programs_consume_cu {
                 invoke_context
-                    .consume_checked(7_943)
+                    .consume_checked(VERIFY_CIPHERTEXT_CIPHERTEXT_EQUALITY_COMPUTE_UNITS)
                     .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
             ic_msg!(invoke_context, "VerifyCiphertextCiphertextEquality");
@@ -175,7 +191,7 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
         ProofInstruction::VerifyTransfer => {
             if native_programs_consume_cu {
                 invoke_context
-                    .consume_checked(219_290)
+                    .consume_checked(VERIFY_TRANSFER_COMPUTE_UNITS)
                     .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
             ic_msg!(invoke_context, "VerifyTransfer");
@@ -184,7 +200,7 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
         ProofInstruction::VerifyTransferWithFee => {
             if native_programs_consume_cu {
                 invoke_context
-                    .consume_checked(407_121)
+                    .consume_checked(VERIFY_TRANSFER_WITH_FEE_COMPUTE_UNITS)
                     .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
             ic_msg!(invoke_context, "VerifyTransferWithFee");
@@ -193,7 +209,7 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
         ProofInstruction::VerifyPubkeyValidity => {
             if native_programs_consume_cu {
                 invoke_context
-                    .consume_checked(2_619)
+                    .consume_checked(VERIFY_PUBKEY_VALIDITY_COMPUTE_UNITS)
                     .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
             ic_msg!(invoke_context, "VerifyPubkeyValidity");
@@ -202,7 +218,7 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
         ProofInstruction::VerifyRangeProofU64 => {
             if native_programs_consume_cu {
                 invoke_context
-                    .consume_checked(105_066)
+                    .consume_checked(VERIFY_RANGE_PROOF_U64_COMPUTE_UNITS)
                     .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
             ic_msg!(invoke_context, "VerifyRangeProof");
@@ -211,7 +227,7 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
         ProofInstruction::VerifyBatchedRangeProofU64 => {
             if native_programs_consume_cu {
                 invoke_context
-                    .consume_checked(111_478)
+                    .consume_checked(VERIFY_BATCHED_RANGE_PROOF_U64_COMPUTE_UNITS)
                     .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
             ic_msg!(invoke_context, "VerifyBatchedRangeProof64");
@@ -222,7 +238,7 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
         ProofInstruction::VerifyBatchedRangeProofU128 => {
             if native_programs_consume_cu {
                 invoke_context
-                    .consume_checked(204_512)
+                    .consume_checked(VERIFY_BATCHED_RANGE_PROOF_U128_COMPUTE_UNITS)
                     .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
             ic_msg!(invoke_context, "VerifyBatchedRangeProof128");
@@ -233,7 +249,7 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
         ProofInstruction::VerifyBatchedRangeProofU256 => {
             if native_programs_consume_cu {
                 invoke_context
-                    .consume_checked(368_000)
+                    .consume_checked(VERIFY_BATCHED_RANGE_PROOF_U256_COMPUTE_UNITS)
                     .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
             ic_msg!(invoke_context, "VerifyBatchedRangeProof256");
@@ -243,7 +259,7 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
         }
         ProofInstruction::VerifyCiphertextCommitmentEquality => {
             invoke_context
-                .consume_checked(6_424)
+                .consume_checked(VERIFY_CIPHERTEXT_COMMITMENT_EQUALITY_COMPUTE_UNITS)
                 .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyCiphertextCommitmentEquality");
             process_verify_proof::<
@@ -253,7 +269,7 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
         }
         ProofInstruction::VerifyGroupedCiphertext2HandlesValidity => {
             invoke_context
-                .consume_checked(6_440)
+                .consume_checked(VERIFY_GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_COMPUTE_UNITS)
                 .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyGroupedCiphertext2HandlesValidity");
             process_verify_proof::<
@@ -263,7 +279,7 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
         }
         ProofInstruction::VerifyBatchedGroupedCiphertext2HandlesValidity => {
             invoke_context
-                .consume_checked(12_575)
+                .consume_checked(VERIFY_BATCHED_GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_COMPUTE_UNITS)
                 .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(
                 invoke_context,
@@ -276,7 +292,7 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
         }
         ProofInstruction::VerifyFeeSigma => {
             invoke_context
-                .consume_checked(6_547)
+                .consume_checked(VERIFY_FEE_SIGMA_COMPUTE_UNITS)
                 .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyFeeSigma");
             process_verify_proof::<FeeSigmaProofData, FeeSigmaProofContext>(invoke_context)

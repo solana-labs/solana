@@ -125,7 +125,7 @@ impl StandardBroadcastRun {
             None => {
                 // If the blockstore has shreds for the slot, it should not
                 // recreate the slot:
-                // https://github.com/solana-labs/solana/blob/ff68bf6c2/ledger/src/leader_schedule_cache.rs#L142-L146
+                // https://github.com/solana-labs/solana/blob/92a0b310c/ledger/src/leader_schedule_cache.rs##L139-L148
                 if let Some(slot_meta) = blockstore.meta(slot).unwrap() {
                     if slot_meta.received > 0 || slot_meta.consumed > 0 {
                         process_stats.num_extant_slots += 1;
@@ -252,9 +252,13 @@ impl StandardBroadcastRun {
             .unwrap();
         // Insert the first data shred synchronously so that blockstore stores
         // that the leader started this block. This must be done before the
-        // blocks are sent out over the wire. By contrast Self::insert skips
-        // the 1st data shred with index zero.
-        // https://github.com/solana-labs/solana/blob/53695ecd2/core/src/broadcast_stage/standard_broadcast_run.rs#L334-L339
+        // blocks are sent out over the wire, so that the slots we have already
+        // sent a shred for are skipped (even if the node reboots):
+        // https://github.com/solana-labs/solana/blob/92a0b310c/ledger/src/leader_schedule_cache.rs#L139-L148
+        // preventing the node from broadcasting duplicate blocks:
+        // https://github.com/solana-labs/solana/blob/92a0b310c/turbine/src/broadcast_stage/standard_broadcast_run.rs#L132-L142
+        // By contrast Self::insert skips the 1st data shred with index zero:
+        // https://github.com/solana-labs/solana/blob/92a0b310c/turbine/src/broadcast_stage/standard_broadcast_run.rs#L367-L373
         if let Some(shred) = data_shreds.first() {
             if shred.index() == 0 {
                 blockstore
@@ -350,7 +354,7 @@ impl StandardBroadcastRun {
         let insert_shreds_start = Instant::now();
         let mut shreds = Arc::try_unwrap(shreds).unwrap_or_else(|shreds| (*shreds).clone());
         // The first data shred is inserted synchronously.
-        // https://github.com/solana-labs/solana/blob/53695ecd2/core/src/broadcast_stage/standard_broadcast_run.rs#L239-L246
+        // https://github.com/solana-labs/solana/blob/92a0b310c/turbine/src/broadcast_stage/standard_broadcast_run.rs#L268-L283
         if let Some(shred) = shreds.first() {
             if shred.is_data() && shred.index() == 0 {
                 shreds.swap_remove(0);

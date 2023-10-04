@@ -197,7 +197,7 @@ impl OptimisticallyConfirmedBankTracker {
                 );
 
                 // finalize block's minimum prioritization fee cache for this bank
-                prioritization_fee_cache.finalize_priority_fee(bank.slot());
+                prioritization_fee_cache.finalize_priority_fee(bank.slot(), bank.bank_id());
             }
         } else if bank.slot() > bank_forks.read().unwrap().root() {
             pending_optimistically_confirmed_banks.insert(bank.slot());
@@ -314,6 +314,9 @@ impl OptimisticallyConfirmedBankTracker {
                     slot,
                     timestamp: timestamp(),
                 });
+                // NOTE: replay of `slot` may or may not be complete. Therefore, most new
+                // functionality to be triggered on optimistic confirmation should go in
+                // `notify_or_defer()` under the `bank.is_frozen()` case instead of here.
             }
             BankNotification::Frozen(bank) => {
                 let frozen_slot = bank.slot();

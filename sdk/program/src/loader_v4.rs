@@ -77,16 +77,27 @@ pub fn create_buffer(
 ) -> Vec<Instruction> {
     vec![
         system_instruction::create_account(payer_address, buffer_address, lamports, 0, &id()),
-        Instruction::new_with_bincode(
-            id(),
-            &LoaderV4Instruction::Truncate { new_size },
-            vec![
-                AccountMeta::new(*buffer_address, true),
-                AccountMeta::new_readonly(*authority, true),
-                AccountMeta::new(*recipient_address, false),
-            ],
-        ),
+        truncate_uninitialized(buffer_address, authority, new_size, recipient_address),
     ]
+}
+
+/// Returns the instructions required to set the length of an uninitialized program account.
+/// This instruction will require the program account to also sign the transaction.
+pub fn truncate_uninitialized(
+    program_address: &Pubkey,
+    authority: &Pubkey,
+    new_size: u32,
+    recipient_address: &Pubkey,
+) -> Instruction {
+    Instruction::new_with_bincode(
+        id(),
+        &LoaderV4Instruction::Truncate { new_size },
+        vec![
+            AccountMeta::new(*program_address, true),
+            AccountMeta::new_readonly(*authority, true),
+            AccountMeta::new(*recipient_address, false),
+        ],
+    )
 }
 
 /// Returns the instructions required to set the length of the program account.

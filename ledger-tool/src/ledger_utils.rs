@@ -35,7 +35,6 @@ use {
             self, clean_orphaned_account_snapshot_dirs, create_all_accounts_run_and_snapshot_dirs,
             move_and_async_delete_path_contents,
         },
-        vote_sender_types::ReplayVoteSender,
     },
     solana_scheduler_pool::DefaultSchedulerPool,
     solana_sdk::{
@@ -43,6 +42,7 @@ use {
         timing::timestamp,
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
         path::{Path, PathBuf},
         process::exit,
