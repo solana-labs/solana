@@ -42,6 +42,7 @@ use {
         builtins::{BuiltinPrototype, BUILTINS},
         epoch_rewards_hasher::hash_rewards_into_partitions,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
+        inline_feature_gate_program,
         runtime_config::RuntimeConfig,
         serde_snapshot::BankIncrementalSnapshotPersistence,
         snapshot_hash::SnapshotHash,
@@ -215,6 +216,7 @@ pub mod bank_hash_details;
 mod builtin_programs;
 pub mod epoch_accounts_hash_utils;
 mod metrics;
+mod replace_account;
 mod serde_snapshot;
 mod sysvar_cache;
 #[cfg(test)]
@@ -236,7 +238,7 @@ struct RentMetrics {
 }
 
 pub type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "3FiwE61TtjxHenszm3oFTzmHtGQGohJz3YN3TSTwcbUM")]
+#[frozen_abi(digest = "EzAXfE2xG3ZqdAj8KMC8CeqoSxjo5hxrEaP7fta8LT9u")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
@@ -4684,7 +4686,8 @@ impl Bank {
 
             ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account) => {
                 solana_bpf_loader_program::load_program_from_bytes(
-                    &self.feature_set,
+                    self.feature_set
+                        .is_active(&feature_set::delay_visibility_of_program_deployment::id()),
                     None,
                     &mut load_program_metrics,
                     program_account.data(),
@@ -4706,7 +4709,8 @@ impl Bank {
                 .ok_or(InstructionError::InvalidAccountData)
                 .and_then(|programdata| {
                     solana_bpf_loader_program::load_program_from_bytes(
-                        &self.feature_set,
+                        self.feature_set
+                            .is_active(&feature_set::delay_visibility_of_program_deployment::id()),
                         None,
                         &mut load_program_metrics,
                         programdata,
@@ -4804,6 +4808,24 @@ impl Bank {
     ) -> TransactionExecutionResult {
         let prev_accounts_data_len = self.load_accounts_data_size();
         let transaction_accounts = std::mem::take(&mut loaded_transaction.accounts);
+
+        fn transaction_accounts_lamports_sum(
+            accounts: &[(Pubkey, AccountSharedData)],
+            message: &SanitizedMessage,
+        ) -> Option<u128> {
+            let mut lamports_sum = 0u128;
+            for i in 0..message.account_keys().len() {
+                let Some((_, account)) = accounts.get(i) else {
+                    return None;
+                };
+                lamports_sum = lamports_sum.checked_add(u128::from(account.lamports()))?;
+            }
+            Some(lamports_sum)
+        }
+
+        let lamports_before_tx =
+            transaction_accounts_lamports_sum(&transaction_accounts, tx.message()).unwrap_or(0);
+
         let mut transaction_context = TransactionContext::new(
             transaction_accounts,
             if self
@@ -4884,7 +4906,7 @@ impl Bank {
             process_message_time.as_us()
         );
 
-        let status = process_result
+        let mut status = process_result
             .and_then(|info| {
                 let post_account_state_info =
                     self.get_transaction_account_state_info(&transaction_context, tx.message());
@@ -4910,10 +4932,6 @@ impl Bank {
                 }
                 err
             });
-        let mut accounts_data_len_delta = status
-            .as_ref()
-            .map_or(0, |info| info.accounts_data_len_delta);
-        let status = status.map(|_| ());
 
         let log_messages: Option<TransactionLogMessages> =
             log_collector.and_then(|log_collector| {
@@ -4936,6 +4954,19 @@ impl Bank {
             touched_account_count,
             accounts_resize_delta,
         } = transaction_context.into();
+
+        if status.is_ok()
+            && transaction_accounts_lamports_sum(&accounts, tx.message())
+                .filter(|lamports_after_tx| lamports_before_tx == *lamports_after_tx)
+                .is_none()
+        {
+            status = Err(TransactionError::UnbalancedTransaction);
+        }
+        let mut accounts_data_len_delta = status
+            .as_ref()
+            .map_or(0, |info| info.accounts_data_len_delta);
+        let status = status.map(|_| ());
+
         loaded_transaction.accounts = accounts;
         if self
             .feature_set
@@ -7225,9 +7256,7 @@ impl Bank {
                 Builder::new()
                     .name("solBgHashVerify".into())
                     .spawn(move || {
-                        info!(
-                            "running initial verification accounts hash calculation in background"
-                        );
+                        info!("Initial background accounts hash verification has started");
                         let result = accounts_.verify_accounts_hash_and_lamports(
                             slot,
                             cap,
@@ -7247,6 +7276,7 @@ impl Bank {
                             .accounts_db
                             .verify_accounts_hash_in_bg
                             .background_finished();
+                        info!("Initial background accounts hash verification has stopped");
                         result
                     })
                     .unwrap()
@@ -8026,6 +8056,24 @@ impl Bank {
         if new_feature_activations.contains(&feature_set::update_hashes_per_tick::id()) {
             self.apply_updated_hashes_per_tick(DEFAULT_HASHES_PER_TICK);
         }
+
+        if new_feature_activations.contains(&feature_set::programify_feature_gate_program::id()) {
+            let datapoint_name = "bank-progamify_feature_gate_program";
+            if let Err(e) = replace_account::replace_empty_account_with_upgradeable_program(
+                self,
+                &feature::id(),
+                &inline_feature_gate_program::noop_program::id(),
+                datapoint_name,
+            ) {
+                warn!(
+                    "{}: Failed to replace empty account {} with upgradeable program: {}",
+                    datapoint_name,
+                    feature::id(),
+                    e
+                );
+                datapoint_warn!(datapoint_name, ("slot", self.slot(), i64),);
+            }
+        }
     }
 
     fn apply_updated_hashes_per_tick(&mut self, hashes_per_tick: u64) {
@@ -8102,6 +8150,7 @@ impl Bank {
             feature_set::switch_to_new_elf_parser::id(),
             feature_set::bpf_account_data_direct_mapping::id(),
             feature_set::enable_alt_bn128_syscall::id(),
+            feature_set::enable_alt_bn128_compression_syscall::id(),
             feature_set::enable_big_mod_exp_syscall::id(),
             feature_set::blake3_syscall_enabled::id(),
             feature_set::curve25519_syscall_enabled::id(),
@@ -8163,42 +8212,6 @@ impl Bank {
                 self.feature_set.is_active(feature_id)
             }) {
                 self.add_precompile(&precompile.program_id);
-            }
-        }
-    }
-
-    /// Use to replace programs by feature activation
-    #[allow(dead_code)]
-    fn replace_program_account(
-        &mut self,
-        old_address: &Pubkey,
-        new_address: &Pubkey,
-        datapoint_name: &'static str,
-    ) {
-        if let Some(old_account) = self.get_account_with_fixed_root(old_address) {
-            if let Some(new_account) = self.get_account_with_fixed_root(new_address) {
-                datapoint_info!(datapoint_name, ("slot", self.slot, i64));
-
-                // Burn lamports in the old account
-                self.capitalization
-                    .fetch_sub(old_account.lamports(), Relaxed);
-
-                // Transfer new account to old account
-                self.store_account(old_address, &new_account);
-
-                // Clear new account
-                self.store_account(new_address, &AccountSharedData::default());
-
-                // Unload a program from the bank's cache
-                self.loaded_programs_cache
-                    .write()
-                    .unwrap()
-                    .remove_programs([*old_address].into_iter());
-
-                self.calculate_and_update_accounts_data_size_delta_off_chain(
-                    old_account.data().len(),
-                    new_account.data().len(),
-                );
             }
         }
     }

@@ -1,73 +1,19 @@
 use {
-    crate::keypair::{
-        keypair_from_seed_phrase, pubkey_from_path, resolve_signer_from_path, signer_from_path,
-        ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG,
+    crate::{
+        input_parsers::{keypair_of, keypairs_of, pubkey_of, pubkeys_of},
+        keypair::{pubkey_from_path, resolve_signer_from_path, signer_from_path},
     },
-    chrono::DateTime,
     clap::ArgMatches,
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_sdk::{
-        clock::UnixTimestamp,
-        commitment_config::CommitmentConfig,
-        genesis_config::ClusterType,
-        native_token::sol_to_lamports,
         pubkey::Pubkey,
-        signature::{read_keypair_file, Keypair, Signature, Signer},
+        signature::{Keypair, Signature, Signer},
     },
     std::{error, rc::Rc, str::FromStr},
 };
 
 // Sentinel value used to indicate to write to screen instead of file
 pub const STDOUT_OUTFILE_TOKEN: &str = "-";
-
-// Return parsed values from matches at `name`
-pub fn values_of<T>(matches: &ArgMatches, name: &str) -> Option<Vec<T>>
-where
-    T: std::str::FromStr,
-    <T as std::str::FromStr>::Err: std::fmt::Debug,
-{
-    matches
-        .values_of(name)
-        .map(|xs| xs.map(|x| x.parse::<T>().unwrap()).collect())
-}
-
-// Return a parsed value from matches at `name`
-pub fn value_of<T>(matches: &ArgMatches, name: &str) -> Option<T>
-where
-    T: std::str::FromStr,
-    <T as std::str::FromStr>::Err: std::fmt::Debug,
-{
-    if let Some(value) = matches.value_of(name) {
-        value.parse::<T>().ok()
-    } else {
-        None
-    }
-}
-
-pub fn unix_timestamp_from_rfc3339_datetime(
-    matches: &ArgMatches,
-    name: &str,
-) -> Option<UnixTimestamp> {
-    matches.value_of(name).and_then(|value| {
-        DateTime::parse_from_rfc3339(value)
-            .ok()
-            .map(|date_time| date_time.timestamp())
-    })
-}
-
-// Return the keypair for an argument with filename `name` or None if not present.
-pub fn keypair_of(matches: &ArgMatches, name: &str) -> Option<Keypair> {
-    if let Some(value) = matches.value_of(name) {
-        if value == ASK_KEYWORD {
-            let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-            keypair_from_seed_phrase(name, skip_validation, true, None, true).ok()
-        } else {
-            read_keypair_file(value).ok()
-        }
-    } else {
-        None
-    }
-}
 
 // Return the keypair for an argument with filename `name` or `None` if not present wrapped inside `Result`.
 pub fn try_keypair_of(
@@ -78,33 +24,12 @@ pub fn try_keypair_of(
     Ok(keypair_of(matches, name))
 }
 
-pub fn keypairs_of(matches: &ArgMatches, name: &str) -> Option<Vec<Keypair>> {
-    matches.values_of(name).map(|values| {
-        values
-            .filter_map(|value| {
-                if value == ASK_KEYWORD {
-                    let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-                    keypair_from_seed_phrase(name, skip_validation, true, None, true).ok()
-                } else {
-                    read_keypair_file(value).ok()
-                }
-            })
-            .collect()
-    })
-}
-
 pub fn try_keypairs_of(
     matches: &ArgMatches,
     name: &str,
 ) -> Result<Option<Vec<Keypair>>, Box<dyn error::Error>> {
     matches.try_contains_id(name)?;
     Ok(keypairs_of(matches, name))
-}
-
-// Return a pubkey for an argument that can itself be parsed into a pubkey,
-// or is a filename that can be read as a keypair
-pub fn pubkey_of(matches: &ArgMatches, name: &str) -> Option<Pubkey> {
-    value_of(matches, name).or_else(|| keypair_of(matches, name).map(|keypair| keypair.pubkey()))
 }
 
 // Return a `Result` wrapped pubkey for an argument that can itself be parsed into a pubkey,
@@ -115,20 +40,6 @@ pub fn try_pubkey_of(
 ) -> Result<Option<Pubkey>, Box<dyn error::Error>> {
     matches.try_contains_id(name)?;
     Ok(pubkey_of(matches, name))
-}
-
-pub fn pubkeys_of(matches: &ArgMatches, name: &str) -> Option<Vec<Pubkey>> {
-    matches.values_of(name).map(|values| {
-        values
-            .map(|value| {
-                value.parse::<Pubkey>().unwrap_or_else(|_| {
-                    read_keypair_file(value)
-                        .expect("read_keypair_file failed")
-                        .pubkey()
-                })
-            })
-            .collect()
-    })
 }
 
 pub fn try_pubkeys_of(
@@ -225,18 +136,28 @@ pub fn resolve_signer(
     )
 }
 
-pub fn lamports_of_sol(matches: &ArgMatches, name: &str) -> Option<u64> {
-    value_of(matches, name).map(sol_to_lamports)
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PubkeySignature {
+    pubkey: Pubkey,
+    signature: Signature,
 }
+impl FromStr for PubkeySignature {
+    type Err = String;
 
-pub fn cluster_type_of(matches: &ArgMatches, name: &str) -> Option<ClusterType> {
-    value_of(matches, name)
-}
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut signer = s.split('=');
+        let pubkey = signer
+            .next()
+            .ok_or_else(|| String::from("Malformed signer string"))?;
+        let pubkey = Pubkey::from_str(pubkey).map_err(|err| format!("{err}"))?;
 
-pub fn commitment_of(matches: &ArgMatches, name: &str) -> Option<CommitmentConfig> {
-    matches
-        .value_of(name)
-        .map(|value| CommitmentConfig::from_str(value).unwrap_or_default())
+        let signature = signer
+            .next()
+            .ok_or_else(|| String::from("Malformed signer string"))?;
+        let signature = Signature::from_str(signature).map_err(|err| format!("{err}"))?;
+
+        Ok(Self { pubkey, signature })
+    }
 }
 
 #[cfg(test)]
@@ -266,38 +187,6 @@ mod tests {
         let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
 
         format!("{out_dir}/tmp/{name}-{pubkey}")
-    }
-
-    #[test]
-    fn test_values_of() {
-        let matches = app().get_matches_from(vec!["test", "--multiple", "50", "--multiple", "39"]);
-        assert_eq!(values_of(&matches, "multiple"), Some(vec![50, 39]));
-        assert_eq!(values_of::<u64>(&matches, "single"), None);
-
-        let pubkey0 = solana_sdk::pubkey::new_rand();
-        let pubkey1 = solana_sdk::pubkey::new_rand();
-        let matches = app().get_matches_from(vec![
-            "test",
-            "--multiple",
-            &pubkey0.to_string(),
-            "--multiple",
-            &pubkey1.to_string(),
-        ]);
-        assert_eq!(
-            values_of(&matches, "multiple"),
-            Some(vec![pubkey0, pubkey1])
-        );
-    }
-
-    #[test]
-    fn test_value_of() {
-        let matches = app().get_matches_from(vec!["test", "--single", "50"]);
-        assert_eq!(value_of(&matches, "single"), Some(50));
-        assert_eq!(value_of::<u64>(&matches, "multiple"), None);
-
-        let pubkey = solana_sdk::pubkey::new_rand();
-        let matches = app().get_matches_from(vec!["test", "--single", &pubkey.to_string()]);
-        assert_eq!(value_of(&matches, "single"), Some(pubkey));
     }
 
     #[test]
@@ -376,14 +265,40 @@ mod tests {
     }
 
     #[test]
-    fn test_lamports_of_sol() {
-        let matches = app().get_matches_from(vec!["test", "--single", "50"]);
-        assert_eq!(lamports_of_sol(&matches, "single"), Some(50_000_000_000));
-        assert_eq!(lamports_of_sol(&matches, "multiple"), None);
-        let matches = app().get_matches_from(vec!["test", "--single", "1.5"]);
-        assert_eq!(lamports_of_sol(&matches, "single"), Some(1_500_000_000));
-        assert_eq!(lamports_of_sol(&matches, "multiple"), None);
-        let matches = app().get_matches_from(vec!["test", "--single", "0.03"]);
-        assert_eq!(lamports_of_sol(&matches, "single"), Some(30_000_000));
+    fn test_parse_pubkey_signature() {
+        let command = Command::new("test").arg(
+            Arg::new("pubkeysig")
+                .long("pubkeysig")
+                .takes_value(true)
+                .value_parser(clap::value_parser!(PubkeySignature)),
+        );
+
+        // success case
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec![
+                "test",
+                "--pubkeysig",
+                "11111111111111111111111111111111=4TpFuec1u4BZfxgHg2VQXwvBHANZuNSJHmgrU34GViLAM5uYZ8t7uuhWMHN4k9r41B2p9mwnHjPGwTmTxyvCZw63"
+                ]
+            )
+            .unwrap();
+
+        let expected = PubkeySignature {
+            pubkey: Pubkey::from_str("11111111111111111111111111111111").unwrap(),
+            signature: Signature::from_str("4TpFuec1u4BZfxgHg2VQXwvBHANZuNSJHmgrU34GViLAM5uYZ8t7uuhWMHN4k9r41B2p9mwnHjPGwTmTxyvCZw63").unwrap(),
+        };
+
+        assert_eq!(
+            *matches.get_one::<PubkeySignature>("pubkeysig").unwrap(),
+            expected,
+        );
+
+        // validation fails
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--pubkeysig", "this_is_an_invalid_arg"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
     }
 }

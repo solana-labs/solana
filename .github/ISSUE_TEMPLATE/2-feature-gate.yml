@@ -24,6 +24,14 @@ body:
         `solana_sdk::declare_id!()` within the module. Additionally, add an entry to `FEATURE_NAMES` map.
 
         3. Add desired logic to check for and switch on feature availability.
+  - type: input
+    id: simd
+    attributes:
+      label: SIMD
+      description: Solana IMprovement Document (SIMD)
+      placeholder: Link to the https://github.com/solana-foundation/solana-improvement-documents document for this feature
+    validations:
+      required: true
   - type: textarea
     id: description
     attributes:

@@ -1134,11 +1134,11 @@ impl Validator {
             .map_err(|err| format!("{} [{:?}]", &err, &err))?;
         if banking_tracer.is_enabled() {
             info!(
-                "Enabled banking tracer (dir_byte_limit: {})",
+                "Enabled banking trace (dir_byte_limit: {})",
                 config.banking_trace_dir_byte_limit
             );
         } else {
-            info!("Disabled banking tracer");
+            info!("Disabled banking trace");
         }
 
         let entry_notification_sender = entry_notifier_service

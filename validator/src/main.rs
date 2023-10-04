@@ -448,15 +448,16 @@ fn configure_banking_trace_dir_byte_limit(
     validator_config: &mut ValidatorConfig,
     matches: &ArgMatches,
 ) {
-    validator_config.banking_trace_dir_byte_limit =
-        if matches.occurrences_of("banking_trace_dir_byte_limit") == 0 {
-            // disable with no explicit flag; then, this effectively becomes `opt-in` even if we're
-            // specifying a default value in clap configuration.
-            DISABLED_BAKING_TRACE_DIR
-        } else {
-            // BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT or user-supplied override value
-            value_t_or_exit!(matches, "banking_trace_dir_byte_limit", u64)
-        };
+    validator_config.banking_trace_dir_byte_limit = if matches.is_present("disable_banking_trace") {
+        // disable with an explicit flag; This effectively becomes `opt-out` by reseting to
+        // DISABLED_BAKING_TRACE_DIR, while allowing us to specify a default sensible limit in clap
+        // configuration for cli help.
+        DISABLED_BAKING_TRACE_DIR
+    } else {
+        // a default value in clap configuration (BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT) or
+        // explicit user-supplied override value
+        value_t_or_exit!(matches, "banking_trace_dir_byte_limit", u64)
+    };
 }
 
 pub fn main() {
