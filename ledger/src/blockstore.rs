@@ -7705,6 +7705,131 @@ pub mod tests {
         assert_eq!(counter, 0);
     }
 
+    #[test]
+    fn test_get_transaction_status_with_old_data() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+        let transaction_status_cf = &blockstore.transaction_status_cf;
+
+        let pre_balances_vec = vec![1, 2, 3];
+        let post_balances_vec = vec![3, 2, 1];
+        let status = TransactionStatusMeta {
+            status: solana_sdk::transaction::Result::<()>::Ok(()),
+            fee: 42u64,
+            pre_balances: pre_balances_vec,
+            post_balances: post_balances_vec,
+            inner_instructions: Some(vec![]),
+            log_messages: Some(vec![]),
+            pre_token_balances: Some(vec![]),
+            post_token_balances: Some(vec![]),
+            rewards: Some(vec![]),
+            loaded_addresses: LoadedAddresses::default(),
+            return_data: Some(TransactionReturnData::default()),
+            compute_units_consumed: Some(42u64),
+        }
+        .into();
+
+        let signature1 = Signature::from([1u8; 64]);
+        let signature2 = Signature::from([2u8; 64]);
+        let signature3 = Signature::from([3u8; 64]);
+        let signature4 = Signature::from([4u8; 64]);
+        let signature5 = Signature::from([5u8; 64]);
+        let signature6 = Signature::from([6u8; 64]);
+
+        // Insert slots with fork
+        //   0 (root)
+        //  / \
+        // 1  |
+        //    2 (root)
+        //  / |
+        // 3  |
+        //    4 (root)
+        //    |
+        //    5
+        let meta0 = SlotMeta::new(0, Some(0));
+        blockstore.meta_cf.put(0, &meta0).unwrap();
+        let meta1 = SlotMeta::new(1, Some(0));
+        blockstore.meta_cf.put(1, &meta1).unwrap();
+        let meta2 = SlotMeta::new(2, Some(0));
+        blockstore.meta_cf.put(2, &meta2).unwrap();
+        let meta3 = SlotMeta::new(3, Some(2));
+        blockstore.meta_cf.put(3, &meta3).unwrap();
+        let meta4 = SlotMeta::new(4, Some(2));
+        blockstore.meta_cf.put(4, &meta4).unwrap();
+        let meta5 = SlotMeta::new(5, Some(4));
+        blockstore.meta_cf.put(5, &meta5).unwrap();
+
+        blockstore.set_roots([0, 2, 4].iter()).unwrap();
+
+        // Initialize statuses:
+        //   signature1 in skipped slot and root (2), both index 1
+        //   signature2 in skipped slot and root (4), both index 0
+        //   signature3 in root
+        //   signature4 in non-root,
+        //   signature5 extra entries
+        transaction_status_cf
+            .put_deprecated_protobuf((1, signature1, 1), &status)
+            .unwrap();
+
+        transaction_status_cf
+            .put_deprecated_protobuf((1, signature1, 2), &status)
+            .unwrap();
+
+        transaction_status_cf
+            .put_deprecated_protobuf((0, signature2, 3), &status)
+            .unwrap();
+
+        transaction_status_cf
+            .put_deprecated_protobuf((0, signature2, 4), &status)
+            .unwrap();
+
+        transaction_status_cf
+            .put_protobuf((signature3, 4), &status)
+            .unwrap();
+
+        transaction_status_cf
+            .put_protobuf((signature4, 5), &status)
+            .unwrap();
+
+        transaction_status_cf
+            .put_protobuf((signature5, 5), &status)
+            .unwrap();
+
+        // Signature exists, root found in index 1
+        if let (Some((slot, _status)), counter) = blockstore
+            .get_transaction_status_with_counter(signature1, &[].into())
+            .unwrap()
+        {
+            assert_eq!(slot, 2);
+            assert_eq!(counter, 4);
+        }
+
+        // Signature exists, root found in index 0
+        if let (Some((slot, _status)), counter) = blockstore
+            .get_transaction_status_with_counter(signature2, &[].into())
+            .unwrap()
+        {
+            assert_eq!(slot, 4);
+            assert_eq!(counter, 3);
+        }
+
+        // Signature exists
+        if let (Some((slot, _status)), counter) = blockstore
+            .get_transaction_status_with_counter(signature3, &[].into())
+            .unwrap()
+        {
+            assert_eq!(slot, 4);
+            assert_eq!(counter, 1);
+        }
+
+        // Signature does not exist
+        let (status, counter) = blockstore
+            .get_transaction_status_with_counter(signature6, &[].into())
+            .unwrap();
+        assert_eq!(status, None);
+        assert_eq!(counter, 1);
+    }
+
     fn do_test_lowest_cleanup_slot_and_special_cfs(simulate_ledger_cleanup_service: bool) {
         solana_logger::setup();
 
