@@ -338,6 +338,7 @@ solana-measure = { path = "measure", version = "=1.18.0" }
 solana-merkle-tree = { path = "merkle-tree", version = "=1.18.0" }
 solana-metrics = { path = "metrics", version = "=1.18.0" }
 solana-net-utils = { path = "net-utils", version = "=1.18.0" }
+solana-nohash-hasher = "0.2.1"
 solana-notifier = { path = "notifier", version = "=1.18.0" }
 solana-perf = { path = "perf", version = "=1.18.0" }
 solana-poh = { path = "poh", version = "=1.18.0" }
