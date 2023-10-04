@@ -556,6 +556,7 @@ impl<O: AbiEnumVisitor, E: AbiEnumVisitor> AbiEnumVisitor for Result<O, E> {
     }
 }
 
+#[cfg(not(target_os = "solana"))]
 impl<T: AbiExample> AbiExample for std::sync::OnceLock<T> {
     fn example() -> Self {
         Self::from(T::example())
