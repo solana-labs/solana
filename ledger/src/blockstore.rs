@@ -7460,6 +7460,76 @@ pub mod tests {
     }
 
     #[test]
+    fn test_read_transaction_status_with_old_data() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+        let signature = Signature::from([1; 64]);
+
+        let index0_slot = 2;
+        blockstore
+            .write_deprecated_transaction_status(
+                0,
+                index0_slot,
+                signature,
+                vec![&Pubkey::new_unique()],
+                vec![&Pubkey::new_unique()],
+                TransactionStatusMeta {
+                    fee: index0_slot * 1_000,
+                    ..TransactionStatusMeta::default()
+                },
+            )
+            .unwrap();
+
+        let index1_slot = 1;
+        blockstore
+            .write_deprecated_transaction_status(
+                1,
+                index1_slot,
+                signature,
+                vec![&Pubkey::new_unique()],
+                vec![&Pubkey::new_unique()],
+                TransactionStatusMeta {
+                    fee: index1_slot * 1_000,
+                    ..TransactionStatusMeta::default()
+                },
+            )
+            .unwrap();
+
+        let slot = 3;
+        blockstore
+            .write_transaction_status(
+                slot,
+                signature,
+                vec![&Pubkey::new_unique()],
+                vec![&Pubkey::new_unique()],
+                TransactionStatusMeta {
+                    fee: slot * 1_000,
+                    ..TransactionStatusMeta::default()
+                },
+                0,
+            )
+            .unwrap();
+
+        let meta = blockstore
+            .read_transaction_status((signature, slot))
+            .unwrap()
+            .unwrap();
+        assert_eq!(meta.fee, slot * 1000);
+
+        let meta = blockstore
+            .read_transaction_status((signature, index0_slot))
+            .unwrap()
+            .unwrap();
+        assert_eq!(meta.fee, index0_slot * 1000);
+
+        let meta = blockstore
+            .read_transaction_status((signature, index1_slot))
+            .unwrap()
+            .unwrap();
+        assert_eq!(meta.fee, index1_slot * 1000);
+    }
+
+    #[test]
     fn test_get_transaction_status() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
