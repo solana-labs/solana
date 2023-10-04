@@ -57,7 +57,7 @@ impl ::solana_frozen_abi::abi_example::IgnoreAsHelper for PacketFlags {}
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl ::solana_frozen_abi::abi_example::EvenAsOpaque for PacketFlags {
-    const SCOPE: Option<&'static str> = Some("InternalBitFlags");
+    const TYPE_NAME_MATCHER: &'static str = "::_::InternalBitFlags";
 }
 
 // serde_as is used as a work around because array isn't supported by serde

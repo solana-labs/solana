@@ -219,7 +219,14 @@ impl<T: BlockType> AbiExample for BitVec<T> {
 }
 
 impl<T: BlockType> IgnoreAsHelper for BitVec<T> {}
-impl<T: BlockType> EvenAsOpaque for BitVec<T> {}
+// This (EvenAsOpaque) marker trait is needed for BitVec because we can't impl AbiExample for its
+// private type:
+// thread '...TestBitVec_frozen_abi...' panicked at ...:
+//   derive or implement AbiExample/AbiEnumVisitor for
+//   bv::bit_vec::inner::Inner<u64>
+impl<T: BlockType> EvenAsOpaque for BitVec<T> {
+    const TYPE_NAME_MATCHER: &'static str = "bv::bit_vec::inner::";
+}
 
 pub(crate) fn normalize_type_name(type_name: &str) -> String {
     type_name.chars().filter(|c| *c != '&').collect()
@@ -494,14 +501,21 @@ impl AbiExample for IpAddr {
     }
 }
 
-// This is a control flow indirection needed for digesting all variants of an enum
+// This is a control flow indirection needed for digesting all variants of an enum.
+//
+// All of types (including non-enums) will be processed by this trait, albeit the
+// name of this trait.
+// User-defined enums usually just need to impl this with namesake derive macro (AbiEnumVisitor).
+//
+// Note that sometimes this indirection doesn't work for various reasons. For that end, there are
+// hacks with marker traits (IgnoreAsHelper/EvenAsOpaque).
 pub trait AbiEnumVisitor: Serialize {
     fn visit_for_abi(&self, digester: &mut AbiDigester) -> DigestResult;
 }
 
 pub trait IgnoreAsHelper {}
 pub trait EvenAsOpaque {
-    const SCOPE: Option<&'static str> = None;
+    const TYPE_NAME_MATCHER: &'static str;
 }
 
 impl<T: Serialize + ?Sized> AbiEnumVisitor for T {
@@ -550,16 +564,12 @@ impl<T: Serialize + IgnoreAsHelper> AbiEnumVisitor for &T {
 impl<T: Serialize + IgnoreAsHelper + EvenAsOpaque> AbiEnumVisitor for &T {
     default fn visit_for_abi(&self, digester: &mut AbiDigester) -> DigestResult {
         let type_name = type_name::<T>();
-        let scope = if let Some(scope) = T::SCOPE {
-            scope
-        } else {
-            type_name.split("::").next().unwrap()
-        };
+        let matcher = T::TYPE_NAME_MATCHER;
         info!(
-            "AbiEnumVisitor for (EvenAsOpaque): {}: scope: {}",
-            type_name, scope
+            "AbiEnumVisitor for (EvenAsOpaque): {}: matcher: {}",
+            type_name, matcher
         );
-        self.serialize(digester.create_new_opaque(scope))
+        self.serialize(digester.create_new_opaque(matcher))
             .map_err(DigestError::wrap_by_type::<T>)
     }
 }
