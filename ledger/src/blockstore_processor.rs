@@ -3768,8 +3768,7 @@ pub mod tests {
                 })
                 .collect();
             info!("paying iteration {}", i);
-            process_entries_for_tests_without_scheduler(&bank, entries)
-                .expect("paying failed");
+            process_entries_for_tests_without_scheduler(&bank, entries).expect("paying failed");
 
             let entries: Vec<_> = (0..NUM_TRANSFERS)
                 .step_by(NUM_TRANSFERS_PER_ENTRY)
@@ -3792,8 +3791,7 @@ pub mod tests {
                 .collect();
 
             info!("refunding iteration {}", i);
-            process_entries_for_tests_without_scheduler(&bank, entries)
-                .expect("refunding failed");
+            process_entries_for_tests_without_scheduler(&bank, entries).expect("refunding failed");
 
             // advance to next block
             process_entries_for_tests_without_scheduler(
