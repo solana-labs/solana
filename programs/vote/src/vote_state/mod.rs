@@ -1095,8 +1095,6 @@ pub fn do_process_vote_state_update(
 // a. In many tests.
 // b. In the genesis tool that initializes a cluster to create the bootstrap validator.
 // c. In the ledger tool when creating bootstrap vote accounts.
-// In all cases, initializing with the 1_14_11 version of VoteState is safest, as this version will in-place upgrade
-// the first time it is altered by a vote transaction.
 pub fn create_account_with_authorized(
     node_pubkey: &Pubkey,
     authorized_voter: &Pubkey,
@@ -1104,7 +1102,7 @@ pub fn create_account_with_authorized(
     commission: u8,
     lamports: u64,
 ) -> AccountSharedData {
-    let mut vote_account = AccountSharedData::new(lamports, VoteState1_14_11::size_of(), &id());
+    let mut vote_account = AccountSharedData::new(lamports, VoteState::size_of(), &id());
 
     let vote_state = VoteState::new(
         &VoteInit {
@@ -1116,8 +1114,11 @@ pub fn create_account_with_authorized(
         &Clock::default(),
     );
 
-    let version1_14_11 = VoteStateVersions::V1_14_11(Box::new(VoteState1_14_11::from(vote_state)));
-    VoteState::serialize(&version1_14_11, vote_account.data_as_mut_slice()).unwrap();
+    VoteState::serialize(
+        &VoteStateVersions::Current(Box::new(vote_state)),
+        vote_account.data_as_mut_slice(),
+    )
+    .unwrap();
 
     vote_account
 }
