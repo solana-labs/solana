@@ -5187,7 +5187,7 @@ impl Bank {
                         } else {
                             let mut compute_budget_process_transaction_time =
                                 Measure::start("compute_budget_process_transaction_time");
-                            let process_transaction_result = process_compute_budget_instructions(
+                            let maybe_compute_budget = ComputeBudget::try_new_from(
                                 tx.message().program_instructions_iter(),
                                 &self.feature_set,
                             );
@@ -5198,12 +5198,10 @@ impl Bank {
                                     .compute_budget_process_transaction_us,
                                 compute_budget_process_transaction_time.as_us()
                             );
-                            if let Err(err) = process_transaction_result {
+                            if let Err(err) = maybe_compute_budget {
                                 return TransactionExecutionResult::NotExecuted(err);
                             }
-                            ComputeBudget::new_from_compute_budget_limits(
-                                &process_transaction_result.unwrap(),
-                            )
+                            maybe_compute_budget.unwrap()
                         };
 
                     let result = self.execute_loaded_transaction(

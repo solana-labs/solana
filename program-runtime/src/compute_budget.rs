@@ -1,4 +1,10 @@
-use crate::compute_budget_processor::{self, ComputeBudgetLimits};
+use {
+    crate::compute_budget_processor::{self, process_compute_budget_instructions},
+    solana_sdk::{
+        feature_set::FeatureSet, instruction::CompiledInstruction, pubkey::Pubkey,
+        transaction::Result,
+    },
+};
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl ::solana_frozen_abi::abi_example::AbiExample for ComputeBudget {
@@ -175,11 +181,15 @@ impl ComputeBudget {
         }
     }
 
-    pub fn new_from_compute_budget_limits(compute_budget_limits: &ComputeBudgetLimits) -> Self {
+    pub fn try_new_from<'a>(
+        instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
+        feature_set: &FeatureSet,
+    ) -> Result<Self> {
+        let compute_budget_limits = process_compute_budget_instructions(instructions, feature_set)?;
         let mut compute_budget =
             ComputeBudget::new(u64::from(compute_budget_limits.compute_unit_limit));
         compute_budget.heap_size = compute_budget_limits.updated_heap_bytes;
-        compute_budget
+        Ok(compute_budget)
     }
 
     /// Returns cost of the Poseidon hash function for the given number of
