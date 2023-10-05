@@ -1,5 +1,5 @@
 use {
-    crate::{boxed_error, SOLANA_ROOT, LEDGER_DIR},
+    crate::{boxed_error, LEDGER_DIR, SOLANA_ROOT},
     base64::{engine::general_purpose, Engine as _},
     k8s_openapi::{
         api::{
@@ -104,7 +104,10 @@ impl<'a> Kubernetes<'a> {
         }
 
         if let Some(bank_hash) = self.runtime_config.bank_hash.clone() {
-            flags.extend(vec!["--expected-bank-hash".to_string(), bank_hash.to_string()])
+            flags.extend(vec![
+                "--expected-bank-hash".to_string(),
+                bank_hash.to_string(),
+            ])
         }
 
         flags

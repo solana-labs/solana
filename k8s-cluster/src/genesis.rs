@@ -2,7 +2,7 @@
 #![allow(clippy::arithmetic_side_effects)]
 
 use {
-    crate::{boxed_error, initialize_globals, SOLANA_ROOT, LEDGER_DIR},
+    crate::{boxed_error, initialize_globals, LEDGER_DIR, SOLANA_ROOT},
     base64::{engine::general_purpose, Engine as _},
     bip39::{Language, Mnemonic, MnemonicType, Seed},
     bzip2::{write::BzEncoder, Compression},
@@ -14,13 +14,7 @@ use {
         pubkey::Pubkey,
         signature::{keypair_from_seed, write_keypair, write_keypair_file, Keypair, Signer},
     },
-    std::{
-        error::Error,
-        fs::File,
-        io::Read,
-        path::PathBuf,
-        process::Command,
-    },
+    std::{error::Error, fs::File, io::Read, path::PathBuf, process::Command},
     tar::Builder,
 };
 
