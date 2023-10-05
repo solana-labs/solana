@@ -159,7 +159,7 @@ borsh = "0.10.3"
 bs58 = "0.4.0"
 bv = "0.11.1"
 byte-unit = "4.0.19"
-bytecount = "0.6.3"
+bytecount = "0.6.4"
 bytemuck = "1.14.0"
 byteorder = "1.4.3"
 bytes = "1.5"
@@ -277,7 +277,7 @@ rand = "0.8.5"
 rand_chacha = "0.3.1"
 rand_core = "0.6.4"
 raptorq = "1.7.0"
-rayon = "1.7.0"
+rayon = "1.8.0"
 rcgen = "0.10.0"
 reed-solomon-erasure = "6.0.0"
 regex = "1.9.6"
@@ -343,6 +343,7 @@ solana-measure = { path = "measure", version = "=1.18.0" }
 solana-merkle-tree = { path = "merkle-tree", version = "=1.18.0" }
 solana-metrics = { path = "metrics", version = "=1.18.0" }
 solana-net-utils = { path = "net-utils", version = "=1.18.0" }
+solana-nohash-hasher = "0.2.1"
 solana-notifier = { path = "notifier", version = "=1.18.0" }
 solana-perf = { path = "perf", version = "=1.18.0" }
 solana-poh = { path = "poh", version = "=1.18.0" }

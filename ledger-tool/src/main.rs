@@ -1024,13 +1024,14 @@ fn get_latest_optimistic_slots(
 /// Finds the accounts needed to replay slots `snapshot_slot` to `ending_slot`.
 /// Removes all other accounts from accounts_db, and updates the accounts hash
 /// and capitalization. This is used by the --minimize option in create-snapshot
+/// Returns true if the minimized snapshot may be incomplete.
 fn minimize_bank_for_snapshot(
     blockstore: &Blockstore,
     bank: &Bank,
     snapshot_slot: Slot,
     ending_slot: Slot,
-) {
-    let (transaction_account_set, transaction_accounts_measure) = measure!(
+) -> bool {
+    let ((transaction_account_set, possibly_incomplete), transaction_accounts_measure) = measure!(
         blockstore.get_accounts_used_in_range(bank, snapshot_slot, ending_slot),
         "get transaction accounts"
     );
@@ -1038,6 +1039,7 @@ fn minimize_bank_for_snapshot(
     info!("Added {total_accounts_len} accounts from transactions. {transaction_accounts_measure}");
 
     SnapshotMinimizer::minimize(bank, snapshot_slot, ending_slot, transaction_account_set);
+    possibly_incomplete
 }
 
 fn assert_capitalization(bank: &Bank) {
@@ -3158,14 +3160,16 @@ fn main() {
                             bank
                         };
 
-                        if is_minimized {
+                        let minimize_snapshot_possibly_incomplete = if is_minimized {
                             minimize_bank_for_snapshot(
                                 &blockstore,
                                 &bank,
                                 snapshot_slot,
                                 ending_slot.unwrap(),
-                            );
-                        }
+                            )
+                        } else {
+                            false
+                        };
 
                         println!(
                             "Creating a version {} {}snapshot of slot {}",
@@ -3244,6 +3248,10 @@ fn main() {
                                 if starting_epoch != ending_epoch {
                                     warn!("Minimized snapshot range crosses epoch boundary ({} to {}). Bank hashes after {} will not match replays from a full snapshot",
                                         starting_epoch, ending_epoch, bank.epoch_schedule().get_last_slot_in_epoch(starting_epoch));
+                                }
+
+                                if minimize_snapshot_possibly_incomplete {
+                                    warn!("Minimized snapshot may be incomplete due to missing accounts from CPI'd address lookup table extensions. This may lead to mismatched bank hashes while replaying.");
                                 }
                             }
                         }

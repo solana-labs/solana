@@ -564,9 +564,9 @@ pub mod config {
 pub mod sdk_ids {
     use {
         crate::{
-            bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, config, ed25519_program,
-            feature, incinerator, secp256k1_program, solana_program::pubkey::Pubkey, stake,
-            system_program, sysvar, vote,
+            address_lookup_table, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
+            config, ed25519_program, feature, incinerator, loader_v4, secp256k1_program,
+            solana_program::pubkey::Pubkey, stake, system_program, sysvar, vote,
         },
         lazy_static::lazy_static,
     };
@@ -585,6 +585,9 @@ pub mod sdk_ids {
                 vote::program::id(),
                 feature::id(),
                 bpf_loader_deprecated::id(),
+                address_lookup_table::program::id(),
+                loader_v4::id(),
+                stake::program::id(),
                 #[allow(deprecated)]
                 stake::config::id(),
             ];

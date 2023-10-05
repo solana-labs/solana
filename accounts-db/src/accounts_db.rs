@@ -80,6 +80,7 @@ use {
     rayon::{prelude::*, ThreadPool},
     serde::{Deserialize, Serialize},
     solana_measure::{measure::Measure, measure_us},
+    solana_nohash_hasher::IntSet,
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -767,7 +768,7 @@ type AccountSlots = HashMap<Pubkey, HashSet<Slot>>;
 type SlotOffsets = HashMap<Slot, HashSet<usize>>;
 type ReclaimResult = (AccountSlots, SlotOffsets);
 type PubkeysRemovedFromAccountsIndex = HashSet<Pubkey>;
-type ShrinkCandidates = HashSet<Slot>;
+type ShrinkCandidates = IntSet<Slot>;
 
 // Some hints for applicability of additional sanity checks for the do_load fast-path;
 // Slower fallback code path will be taken if the fast path has failed over the retry
@@ -1415,7 +1416,7 @@ impl RecycleStores {
 #[derive(Debug, Default)]
 struct RemoveUnrootedSlotsSynchronization {
     // slots being flushed from the cache or being purged
-    slots_under_contention: Mutex<HashSet<Slot>>,
+    slots_under_contention: Mutex<IntSet<Slot>>,
     signal: Condvar,
 }
 
@@ -2488,7 +2489,7 @@ impl AccountsDb {
             recycle_stores: RwLock::new(RecycleStores::default()),
             uncleaned_pubkeys: DashMap::new(),
             next_id: AtomicAppendVecId::new(0),
-            shrink_candidate_slots: Mutex::new(ShrinkCandidates::new()),
+            shrink_candidate_slots: Mutex::new(ShrinkCandidates::default()),
             write_cache_limit_bytes: None,
             write_version: AtomicU64::new(0),
             paths: vec![],
@@ -2815,7 +2816,7 @@ impl AccountsDb {
         // Another pass to check if there are some filtered accounts which
         // do not match the criteria of deleting all appendvecs which contain them
         // then increment their storage count.
-        let mut already_counted = HashSet::new();
+        let mut already_counted = IntSet::default();
         for (pubkey, (account_infos, ref_count_from_storage)) in purges.iter() {
             let mut failed_slot = None;
             let all_stores_being_deleted =
@@ -2860,7 +2861,7 @@ impl AccountsDb {
             }
 
             // increment store_counts to non-zero for all stores that can not be deleted.
-            let mut pending_stores = HashSet::new();
+            let mut pending_stores = IntSet::default();
             for (slot, _account_info) in account_infos {
                 if !already_counted.contains(slot) {
                     pending_stores.insert(*slot);
@@ -3792,7 +3793,7 @@ impl AccountsDb {
     ///    and should not be unref'd. If they exist in the accounts index, they are NEW.
     fn process_dead_slots(
         &self,
-        dead_slots: &HashSet<Slot>,
+        dead_slots: &IntSet<Slot>,
         purged_account_slots: Option<&mut AccountSlots>,
         purge_stats: &PurgeStats,
         pubkeys_removed_from_accounts_index: &PubkeysRemovedFromAccountsIndex,
@@ -4323,7 +4324,7 @@ impl AccountsDb {
         // Working from the beginning of store_usage which are the most sparse and see when we can stop
         // shrinking while still achieving the overall goals.
         let mut shrink_slots = HashMap::new();
-        let mut shrink_slots_next_batch = ShrinkCandidates::new();
+        let mut shrink_slots_next_batch = ShrinkCandidates::default();
         for usage in &store_usage {
             let store = &usage.store;
             let alive_ratio = (total_alive_bytes as f64) / (total_bytes as f64);
@@ -8169,14 +8170,14 @@ impl AccountsDb {
         expected_slot: Option<Slot>,
         mut reclaimed_offsets: Option<&mut SlotOffsets>,
         reset_accounts: bool,
-    ) -> HashSet<Slot>
+    ) -> IntSet<Slot>
     where
         I: Iterator<Item = &'a (Slot, AccountInfo)>,
     {
         assert!(self.storage.no_shrink_in_progress());
 
-        let mut dead_slots = HashSet::new();
-        let mut new_shrink_candidates = ShrinkCandidates::new();
+        let mut dead_slots = IntSet::default();
+        let mut new_shrink_candidates = ShrinkCandidates::default();
         let mut measure = Measure::start("remove");
         for (slot, account_info) in reclaims {
             // No cached accounts should make it here
@@ -8393,7 +8394,7 @@ impl AccountsDb {
     ///    and should not be unref'd. If they exist in the accounts index, they are NEW.
     fn clean_stored_dead_slots(
         &self,
-        dead_slots: &HashSet<Slot>,
+        dead_slots: &IntSet<Slot>,
         purged_account_slots: Option<&mut AccountSlots>,
         pubkeys_removed_from_accounts_index: &PubkeysRemovedFromAccountsIndex,
     ) {
@@ -13241,7 +13242,7 @@ pub mod tests {
     #[test]
     fn test_clean_stored_dead_slots_empty() {
         let accounts = AccountsDb::new_single_for_tests();
-        let mut dead_slots = HashSet::new();
+        let mut dead_slots = IntSet::default();
         dead_slots.insert(10);
         accounts.clean_stored_dead_slots(&dead_slots, None, &HashSet::default());
     }
@@ -13325,7 +13326,7 @@ pub mod tests {
     fn test_select_candidates_by_total_usage_no_candidates() {
         // no input candidates -- none should be selected
         solana_logger::setup();
-        let candidates: ShrinkCandidates = ShrinkCandidates::new();
+        let candidates = ShrinkCandidates::default();
         let db = AccountsDb::new_single_for_tests();
 
         let (selected_candidates, next_candidates) =
@@ -13339,7 +13340,7 @@ pub mod tests {
     fn test_select_candidates_by_total_usage_3_way_split_condition() {
         // three candidates, one selected for shrink, one is put back to the candidate list and one is ignored
         solana_logger::setup();
-        let mut candidates = ShrinkCandidates::new();
+        let mut candidates = ShrinkCandidates::default();
         let db = AccountsDb::new_single_for_tests();
 
         let common_store_path = Path::new("");
@@ -13413,7 +13414,7 @@ pub mod tests {
         // three candidates, 2 are selected for shrink, one is ignored
         solana_logger::setup();
         let db = AccountsDb::new_single_for_tests();
-        let mut candidates = ShrinkCandidates::new();
+        let mut candidates = ShrinkCandidates::default();
 
         let common_store_path = Path::new("");
         let slot_id_1 = 12;
@@ -13479,7 +13480,7 @@ pub mod tests {
         // 2 candidates, they must be selected to achieve the target alive ratio
         solana_logger::setup();
         let db = AccountsDb::new_single_for_tests();
-        let mut candidates = ShrinkCandidates::new();
+        let mut candidates = ShrinkCandidates::default();
 
         let slot1 = 12;
         let common_store_path = Path::new("");
