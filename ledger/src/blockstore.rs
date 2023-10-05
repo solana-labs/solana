@@ -2474,8 +2474,10 @@ impl Blockstore {
         end_slot: Slot,
     ) -> Result<Vec<(Slot, Signature)>> {
         let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
-
         let mut signatures: Vec<(Slot, Signature)> = vec![];
+        if end_slot < lowest_available_slot {
+            return Ok(signatures);
+        }
         for transaction_status_cf_primary_index in 0..=1 {
             let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
                 (
@@ -2511,12 +2513,15 @@ impl Blockstore {
     ) -> Result<Vec<(Slot, Signature)>> {
         let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
         let mut signatures: Vec<(Slot, Signature)> = vec![];
+        if slot < lowest_available_slot {
+            return Ok(signatures);
+        }
         for transaction_status_cf_primary_index in 0..=1 {
             let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
                 (
                     transaction_status_cf_primary_index,
                     pubkey,
-                    slot.max(lowest_available_slot),
+                    slot,
                     Signature::default(),
                 ),
                 IteratorDirection::Forward,
