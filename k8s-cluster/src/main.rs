@@ -300,7 +300,7 @@ async fn main() {
                     .parse()
                     .expect("Invalid value for max_genesis_archive_unpacked_size")
             }),
-            cluster_type: matches
+        cluster_type: matches
             .value_of("cluster_type")
             .unwrap_or_default()
             .to_string(),
