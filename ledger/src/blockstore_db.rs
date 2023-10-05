@@ -750,7 +750,7 @@ impl Column for columns::TransactionStatus {
     fn key((index, signature, slot): (u64, Signature, Slot)) -> Vec<u8> {
         let mut key = vec![0; 8 + 64 + 8]; // size_of u64 + size_of Signature + size_of Slot
         BigEndian::write_u64(&mut key[0..8], index);
-        key[8..72].clone_from_slice(&signature.as_ref()[0..64]);
+        key[8..72].copy_from_slice(&signature.as_ref()[0..64]);
         BigEndian::write_u64(&mut key[72..80], slot);
         key
     }
@@ -791,9 +791,9 @@ impl Column for columns::AddressSignatures {
     fn key((index, pubkey, slot, signature): (u64, Pubkey, Slot, Signature)) -> Vec<u8> {
         let mut key = vec![0; 8 + 32 + 8 + 64]; // size_of u64 + size_of Pubkey + size_of Slot + size_of Signature
         BigEndian::write_u64(&mut key[0..8], index);
-        key[8..40].clone_from_slice(&pubkey.as_ref()[0..32]);
+        key[8..40].copy_from_slice(&pubkey.as_ref()[0..32]);
         BigEndian::write_u64(&mut key[40..48], slot);
-        key[48..112].clone_from_slice(&signature.as_ref()[0..64]);
+        key[48..112].copy_from_slice(&signature.as_ref()[0..64]);
         key
     }
 
@@ -826,7 +826,7 @@ impl Column for columns::TransactionMemos {
 
     fn key(signature: Signature) -> Vec<u8> {
         let mut key = vec![0; 64]; // size_of Signature
-        key[0..64].clone_from_slice(&signature.as_ref()[0..64]);
+        key[0..64].copy_from_slice(&signature.as_ref()[0..64]);
         key
     }
 
@@ -919,7 +919,7 @@ impl Column for columns::ProgramCosts {
 
     fn key(pubkey: Pubkey) -> Vec<u8> {
         let mut key = vec![0; 32]; // size_of Pubkey
-        key[0..32].clone_from_slice(&pubkey.as_ref()[0..32]);
+        key[0..32].copy_from_slice(&pubkey.as_ref()[0..32]);
         key
     }
 
