@@ -339,6 +339,26 @@ impl Blockstore {
                 .is_ok()
     }
 
+    /// Returns true if the special columns, TransactionStatus and
+    /// AddressSignatures, are both empty.
+    ///
+    /// It should not be the case that one is empty and the other is not, but
+    /// just return false in this case.
+    fn special_columns_empty(&self) -> Result<bool> {
+        let transaction_status_empty = self
+            .transaction_status_cf
+            .iter(IteratorMode::Start)?
+            .next()
+            .is_none();
+        let address_signatures_empty = self
+            .address_signatures_cf
+            .iter(IteratorMode::Start)?
+            .next()
+            .is_none();
+
+        Ok(transaction_status_empty && address_signatures_empty)
+    }
+
     /// Purges special columns (using a non-Slot primary-index) exactly, by
     /// deserializing each slot being purged and iterating through all
     /// transactions to determine the keys of individual records.
@@ -352,6 +372,10 @@ impl Blockstore {
         from_slot: Slot,
         to_slot: Slot,
     ) -> Result<()> {
+        if self.special_columns_empty()? {
+            return Ok(());
+        }
+
         let mut index0 = self.transaction_status_index_cf.get(0)?.unwrap_or_default();
         let mut index1 = self.transaction_status_index_cf.get(1)?.unwrap_or_default();
         let slot_indexes = |slot: Slot| -> Vec<u64> {
@@ -857,6 +881,54 @@ pub mod tests {
                 frozen: false,
             }
         );
+    }
+
+    #[test]
+    fn test_special_columns_empty() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        // Nothing has been inserted yet
+        assert!(blockstore.special_columns_empty().unwrap());
+
+        let num_entries = 1;
+        let max_slot = 9;
+        for slot in 0..=max_slot {
+            let entries = make_slot_entries_with_transactions(num_entries);
+            let shreds = entries_to_test_shreds(
+                &entries,
+                slot,
+                slot.saturating_sub(1),
+                true, // is_full_slot
+                0,    // version
+                true, // merkle_variant
+            );
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+
+            for transaction in entries.into_iter().flat_map(|entry| entry.transactions) {
+                assert_eq!(transaction.signatures.len(), 1);
+                blockstore
+                    .write_transaction_status(
+                        slot,
+                        transaction.signatures[0],
+                        transaction.message.static_account_keys().iter().collect(),
+                        vec![],
+                        TransactionStatusMeta::default(),
+                    )
+                    .unwrap();
+            }
+        }
+        assert!(!blockstore.special_columns_empty().unwrap());
+
+        // Partially purge and ensure special columns are non-empty
+        blockstore
+            .run_purge(0, max_slot - 5, PurgeType::Exact)
+            .unwrap();
+        assert!(!blockstore.special_columns_empty().unwrap());
+
+        // Purge the rest and ensure the special columns are empty once again
+        blockstore.run_purge(0, max_slot, PurgeType::Exact).unwrap();
+        assert!(blockstore.special_columns_empty().unwrap());
     }
 
     #[test]
