@@ -513,15 +513,6 @@ async fn main() {
         }
     }
 
-    // load genesis (test -> this should run in pod)
-    // match genesis.verify_genesis_from_file() {
-    //     Ok(_) => (),
-    //     Err(err) => {
-    //         error!("Failed verify genesis from file! err: {}", err);
-    //         return;
-    //     }
-    // }
-
     match LedgerHelper::get_shred_version() {
         Ok(shred_version) => kub_controller.set_shred_version(shred_version),
         Err(err) => {
@@ -529,9 +520,15 @@ async fn main() {
             return;
         }
     }
-    if let Some(slot) = warp_slot {
-        //TODO: this needs to be mounted as a file in the bootstrap pod
-        match LedgerHelper::create_snapshot(slot) {
+
+    let actual_warp_slot = if warp_slot.is_none() && wait_for_supermajority.is_some() {
+        wait_for_supermajority
+    } else {
+        warp_slot
+    };
+
+    if let Some(warp_slot) = actual_warp_slot {
+        match LedgerHelper::create_snapshot(warp_slot) {
             Ok(_) => (),
             Err(err) => {
                 error!("Failed to create snapshot: {}", err);
@@ -539,14 +536,15 @@ async fn main() {
             }
         }
     }
-    if wait_for_supermajority.is_some() {
+
+     if let Some(_) = wait_for_supermajority {
         match LedgerHelper::create_bank_hash() {
             Ok(bank_hash) => kub_controller.set_bank_hash(bank_hash),
             Err(err) => {
                 error!("Failed to get bank hash: {}", err);
                 return;
             }
-        }
+        };
     }
 
     match genesis.package_up() {
