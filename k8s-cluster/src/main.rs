@@ -495,7 +495,7 @@ async fn main() {
         }
     }
 
-    if let Some(_) = wait_for_supermajority {
+    if wait_for_supermajority.is_some() {
         match LedgerHelper::create_bank_hash() {
             Ok(bank_hash) => kub_controller.set_bank_hash(bank_hash),
             Err(err) => {
