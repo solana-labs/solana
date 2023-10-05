@@ -180,7 +180,7 @@ fn test_race_register_tick_freeze() {
         let register_tick_thread = Builder::new()
             .name("register_tick".to_string())
             .spawn(move || {
-                bank0_.register_tick(&hash);
+                bank0_.register_tick_for_test(&hash);
             })
             .unwrap();
 
@@ -4204,7 +4204,7 @@ fn test_is_delta_true() {
     assert!(!bank1.is_delta.load(Relaxed));
     assert_ne!(hash1, bank.hash());
     // ticks don't make a bank into a delta or change its state unless a block boundary is crossed
-    bank1.register_tick(&Hash::default());
+    bank1.register_default_tick_for_test();
     assert!(!bank1.is_delta.load(Relaxed));
     assert_eq!(bank1.hash_internal_state(), hash1);
 }
@@ -4928,7 +4928,7 @@ fn test_hash_internal_state_unchanged_with_ticks() {
     // because blockhashes are only recorded at block boundaries
     for _ in 0..genesis_config.ticks_per_slot {
         assert_eq!(bank1.hash_internal_state(), hash1);
-        bank1.register_tick(&Hash::default());
+        bank1.register_default_tick_for_test();
     }
     assert_eq!(bank1.hash_internal_state(), hash1);
 }

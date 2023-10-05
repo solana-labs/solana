@@ -696,7 +696,7 @@ mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let mut bank_forks = BankForks::new(bank);
         let child_bank = Bank::new_from_parent(bank_forks[0].clone(), &Pubkey::default(), 1);
-        child_bank.register_tick(&Hash::default());
+        child_bank.register_default_tick_for_test();
         bank_forks.insert(child_bank);
         assert_eq!(bank_forks[1u64].tick_height(), 1);
         assert_eq!(bank_forks.working_bank().tick_height(), 1);

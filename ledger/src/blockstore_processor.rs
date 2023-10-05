@@ -3373,7 +3373,7 @@ pub mod tests {
 
         let blockhash = bank.last_blockhash();
         while blockhash == bank.last_blockhash() {
-            bank.register_tick(&Hash::default());
+            bank.register_default_tick_for_test();
         }
 
         // ensure bank can process 2 entries that do not have a common account and tick is registered
