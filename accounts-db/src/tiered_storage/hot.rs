@@ -2,16 +2,25 @@
 //! The account meta and related structs for hot accounts.
 
 use {
-    crate::tiered_storage::{
-        byte_block,
-        footer::{AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat, TieredStorageFooter},
-        index::AccountIndexFormat,
-        meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
-        TieredStorageFormat, TieredStorageResult,
+    crate::{
+        account_storage::meta::{StoredAccountMeta},
+        accounts_file::ALIGN_BOUNDARY_OFFSET,
+        append_vec::MatchAccountOwnerError,
+        tiered_storage::{
+            byte_block,
+            footer::{
+                AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat, TieredStorageFooter,
+            },
+            index::AccountIndexFormat,
+            meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
+            mmap_utils::{get_slice, get_type},
+            readable::TieredReadableAccount,
+            TieredStorageFormat, TieredStorageResult,
+        },
     },
     memmap2::{Mmap, MmapOptions},
     modular_bitfield::prelude::*,
-    solana_sdk::{hash::Hash, stake_history::Epoch},
+    solana_sdk::{hash::Hash, pubkey::Pubkey, stake_history::Epoch},
     std::{fs::OpenOptions, option::Option, path::Path},
 };
 
@@ -214,6 +223,158 @@ impl HotStorageReader {
     /// accounts file.
     pub fn num_accounts(&self) -> usize {
         self.footer.account_entry_count as usize
+    }
+
+    /// Finds and returns the index to the specified owners that matches the
+    /// owner of the account associated with the specified multiplied_index.
+    ///
+    /// Err(MatchAccountOwnerError::NoMatch) will be returned if the specified
+    /// owners do not contain account owner.
+    /// Err(MatchAccountOwnerError::UnableToLoad) will be returned if the
+    /// specified multiplied_index causes a data overrun.
+    pub fn account_matches_owners(
+        &self,
+        multiplied_index: usize,
+        owners: &[&Pubkey],
+    ) -> Result<usize, MatchAccountOwnerError> {
+        let index = Self::multiplied_index_to_index(multiplied_index);
+        if index >= self.num_accounts() {
+            return Err(MatchAccountOwnerError::UnableToLoad);
+        }
+
+        let owner = self.get_owner_address(index).unwrap();
+        owners
+            .iter()
+            .position(|entry| &owner == entry)
+            .ok_or(MatchAccountOwnerError::NoMatch)
+    }
+
+    /// Converts a multiplied index to an index.
+    ///
+    /// This is a temporary workaround to work with existing AccountInfo
+    /// implementation that ties to AppendVec with the assumption that the offset
+    /// is a multiple of ALIGN_BOUNDARY_OFFSET, while tiered storage actually talks
+    /// about index instead of offset.
+    fn multiplied_index_to_index(multiplied_index: usize) -> usize {
+        multiplied_index / ALIGN_BOUNDARY_OFFSET
+    }
+
+    /// Returns the account meta associated with the specified index.
+    ///
+    /// Note that this function takes an index instead of a multiplied_index.
+    fn get_account_meta(&self, index: usize) -> TieredStorageResult<&HotAccountMeta> {
+        let offset = self.footer.account_index_format.get_account_block_offset(
+            &self.mmap,
+            &self.footer,
+            index,
+        )? as usize;
+        self.get_account_meta_from_offset(offset)
+    }
+
+    /// Returns the account meta located at the specified offset.
+    fn get_account_meta_from_offset<'a>(
+        &'a self,
+        offset: usize,
+    ) -> TieredStorageResult<&'a HotAccountMeta> {
+        let (meta, _): (&'a HotAccountMeta, _) = get_type(&self.mmap, offset)?;
+        Ok(meta)
+    }
+
+    /// Returns the address of the account associated with the specified index.
+    ///
+    /// Note that this function takes an index instead of a multiplied_index.
+    fn get_account_address(&self, index: usize) -> TieredStorageResult<&Pubkey> {
+        self.footer
+            .account_index_format
+            .get_account_address(&self.mmap, &self.footer, index)
+    }
+
+    /// Returns the address of the account owner associated with the specified index.
+    ///
+    /// Note that this function takes an index instead of a multiplied_index.
+    fn get_owner_address<'a>(&'a self, index: usize) -> TieredStorageResult<&'a Pubkey> {
+        let meta = self.get_account_meta(index)?;
+        let offset = self.footer.owners_offset as usize
+            + (std::mem::size_of::<Pubkey>() * (meta.owner_index() as usize));
+        let (pubkey, _): (&'a Pubkey, _) = get_type(&self.mmap, offset)?;
+        Ok(pubkey)
+    }
+
+    /// Computes and returns the size of the acount block that contains
+    /// the account associated with the specified index given the offset
+    /// to the account meta and its index.
+    ///
+    /// Note that this function takes an index instead of a multiplied_index.
+    fn get_account_block_size(&self, meta_offset: usize, index: usize) -> usize {
+        if (index + 1) as u32 == self.footer.account_entry_count {
+            assert!(self.footer.account_index_offset as usize > meta_offset);
+            return self.footer.account_index_offset as usize
+                - meta_offset
+                - std::mem::size_of::<HotAccountMeta>();
+        }
+
+        let next_meta_offset = self
+            .footer
+            .account_index_format
+            .get_account_block_offset(&self.mmap, &self.footer, index + 1)
+            .unwrap() as usize;
+
+        next_meta_offset
+            .saturating_sub(meta_offset)
+            .saturating_sub(std::mem::size_of::<HotAccountMeta>())
+    }
+
+    /// Returns the account block that contains the account associated with
+    /// the specified index given the offset to the account meta and its index.
+    ///
+    /// Note that this function takes an index instead of a multiplied_index.
+    fn get_account_block<'a>(
+        &'a self,
+        meta_offset: usize,
+        index: usize,
+    ) -> TieredStorageResult<&'a [u8]> {
+        let (data, _): (&'a [u8], _) = get_slice(
+            &self.mmap,
+            meta_offset + std::mem::size_of::<HotAccountMeta>(),
+            self.get_account_block_size(meta_offset, index),
+        )?;
+
+        Ok(data)
+    }
+
+    /// Returns the account associated with the specified multiplied_index
+    /// or None if the specified multiplied_index causes a data overrun.
+    ///
+    /// See [`multiplied_index_to_index`].
+    pub fn get_account<'a>(
+        &'a self,
+        multiplied_index: usize,
+    ) -> Option<(StoredAccountMeta<'a>, usize)> {
+        let index = Self::multiplied_index_to_index(multiplied_index);
+        if index >= self.footer.account_entry_count as usize {
+            return None;
+        }
+
+        let meta_offset = self
+            .footer
+            .account_index_format
+            .get_account_block_offset(&self.mmap, &self.footer, index)
+            .unwrap() as usize;
+        let meta: &'a HotAccountMeta = self.get_account_meta_from_offset(meta_offset).unwrap();
+        let address: &'a Pubkey = self.get_account_address(index).unwrap();
+        let owner: &'a Pubkey = self.get_owner_address(index).unwrap();
+        let account_block: &'a [u8] = self.get_account_block(meta_offset, index).unwrap();
+
+        Some((
+            StoredAccountMeta::Hot(TieredReadableAccount {
+                meta,
+                address,
+                owner,
+                index: multiplied_index,
+                account_block,
+            }),
+            multiplied_index + ALIGN_BOUNDARY_OFFSET,
+        ))
     }
 }
 
