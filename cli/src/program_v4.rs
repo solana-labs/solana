@@ -689,7 +689,7 @@ fn send_messages(
         let transaction_errors = match connection_cache {
             ConnectionCache::Udp(cache) => TpuClient::new_with_connection_cache(
                 rpc_client.clone(),
-                &config.websocket_url,
+                config.websocket_url,
                 TpuClientConfig::default(),
                 cache,
             )?
