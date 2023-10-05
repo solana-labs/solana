@@ -9,7 +9,7 @@ use {
     log::*,
     solana_clap_v3_utils::{input_parsers::STDOUT_OUTFILE_TOKEN, keygen},
     solana_sdk::{
-        genesis_config::{ClusterType, GenesisConfig, DEFAULT_GENESIS_FILE},
+        genesis_config::{GenesisConfig, DEFAULT_GENESIS_FILE},
         native_token::sol_to_lamports,
         pubkey::Pubkey,
         signature::{keypair_from_seed, write_keypair, write_keypair_file, Keypair, Signer},
@@ -21,7 +21,6 @@ use {
 pub const DEFAULT_WORD_COUNT: usize = 12;
 pub const DEFAULT_FAUCET_LAMPORTS: u64 = 500000000000000000;
 pub const DEFAULT_MAX_GENESIS_ARCHIVE_UNPACKED_SIZE: u64 = 1073741824;
-pub const DEFAULT_CLUSTER_TYPE: ClusterType = ClusterType::Development;
 pub const DEFAULT_COMMISSION: u8 = 100;
 pub const DEFAULT_INTERNAL_NODE_STAKE_SOL: f64 = 10.0; // 10000000000 lamports
 pub const DEFAULT_INTERNAL_NODE_SOL: f64 = 500.0; // 500000000000 lamports
@@ -54,7 +53,7 @@ pub struct GenesisFlags {
     pub faucet_lamports: Option<u64>,
     pub enable_warmup_epochs: bool,
     pub max_genesis_archive_unpacked_size: Option<u64>,
-    pub cluster_type: ClusterType,
+    pub cluster_type: String,
     pub bootstrap_validator_sol: Option<f64>,
     pub bootstrap_validator_stake_sol: Option<f64>,
 }
@@ -70,7 +69,7 @@ impl std::fmt::Display for GenesisFlags {
              faucet_lamports: {:?},\n\
              enable_warmup_epochs: {},\n\
              max_genesis_archive_unpacked_size: {:?},\n\
-             cluster_type: {:?}\n\
+             cluster_type: {}\n\
              bootstrap_validator_sol: {:?},\n\
              bootstrap_validator_stake_sol: {:?},\n\
              }}",

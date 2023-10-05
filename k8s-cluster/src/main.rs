@@ -12,7 +12,6 @@ use {
         ledger_helper::LedgerHelper,
         release::{BuildConfig, Deploy},
     },
-    solana_sdk::genesis_config::ClusterType,
     std::{thread, time::Duration},
 };
 
@@ -208,12 +207,11 @@ fn parse_matches() -> ArgMatches<'static> {
         .arg(
             Arg::with_name("cluster_type")
                 .long("cluster-type")
-                .possible_values(&ClusterType::STRINGS)
+                .possible_values(&["development", "devnet", "testnet", "mainnet-beta"])
                 .takes_value(true)
                 .default_value("development")
                 .help(
-                    "Selects the features that will be enabled for the cluster. \
-                    possible values: development, devnet, testnet, mainnet-beta"
+                    "Selects the features that will be enabled for the cluster"
                 ),
         )
         .arg(
@@ -233,45 +231,6 @@ fn parse_matches() -> ArgMatches<'static> {
                 .possible_values(&["on", "off", "auto", "cuda"])
                 .default_value("auto")
                 .help("Not supported yet. Specify GPU mode to launch validators with (default: auto)."),
-        )
-        .arg(
-            Arg::with_name("limit_ledger_size")
-                .long("limit-ledger-size")
-                .takes_value(true)
-                .help("Keep this amount of shreds in root slots"),
-        )
-        .arg(
-            Arg::with_name("full_rpc")
-                .long("full-rpc")
-                .help("Support full RPC services on all nodes"),
-        )
-        .arg(
-            Arg::with_name("skip_poh_verify")
-                .long("skip-poh-verify")
-                .help("If set, validators will skip verifying \
-                    the ledger they already have saved to disk at \
-                    boot (results in a much faster boot)"),
-        )
-        .arg(
-            Arg::with_name("tmpfs_accounts")
-                .long("tmpfs-accounts")
-                .help("Put accounts directory on a swap-backed tmpfs volume. from gce.sh \
-                tbh i have no idea if this is going to be supported out of box. TODO"),
-        )
-        .arg(
-            Arg::with_name("no_snapshot_fetch")
-                .long("no-snapshot-fetch")
-                .help("If set, disables booting validators from a snapshot"),
-        )
-        .arg(
-            Arg::with_name("accounts_db_skip_shrink")
-                .long("accounts-db-skip-shrink")
-                .help("not full sure what this does. TODO"),
-        )
-        .arg(
-            Arg::with_name("skip_require_tower")
-                .long("skip-require-tower")
-                .help("Skips require tower"),
         )
         .arg(
             Arg::with_name("wait_for_supermajority")
@@ -341,11 +300,10 @@ async fn main() {
                     .parse()
                     .expect("Invalid value for max_genesis_archive_unpacked_size")
             }),
-        cluster_type: matches
+            cluster_type: matches
             .value_of("cluster_type")
             .unwrap_or_default()
-            .parse()
-            .expect("Invalid ClusterType"),
+            .to_string(),
         bootstrap_validator_sol: matches
             .value_of("bootstrap_validator_sol")
             .map(|value_str| {
