@@ -17,9 +17,9 @@ pub struct LoadedGeyserPlugin {
 }
 
 impl LoadedGeyserPlugin {
-    pub fn new(plugin: Box<dyn GeyserPlugin>, name: Option<&str>) -> Self {
+    pub fn new(plugin: Box<dyn GeyserPlugin>, name: Option<String>) -> Self {
         Self {
-            name: name.unwrap_or_else(|| plugin.name()).to_owned(),
+            name: name.unwrap_or_else(|| plugin.name().to_owned()),
             plugin,
         }
     }
@@ -343,7 +343,7 @@ pub(crate) fn load_plugin_from_config(
         libpath = config_dir.join(libpath);
     }
 
-    let libname = result["libname"].as_str();
+    let libname = result["libname"].as_str().map(|s| s.to_owned());
 
     let config_file = geyser_plugin_config_file
         .as_os_str()
