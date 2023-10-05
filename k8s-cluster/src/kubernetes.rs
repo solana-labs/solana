@@ -103,7 +103,7 @@ impl<'a> Kubernetes<'a> {
             ])
         }
 
-        if let Some(bank_hash) = self.runtime_config.bank_hash.clone() {
+        if let Some(bank_hash) = self.runtime_config.bank_hash {
             flags.extend(vec![
                 "--expected-bank-hash".to_string(),
                 bank_hash.to_string(),
