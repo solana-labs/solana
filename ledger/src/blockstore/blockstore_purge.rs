@@ -50,7 +50,7 @@ impl Blockstore {
             ("write_batch_us", purge_stats.write_batch as i64, i64),
             (
                 "delete_files_in_range_us",
-                purge_stats.write_batch as i64,
+                purge_stats.delete_files_in_range as i64,
                 i64
             )
         );
