@@ -2696,7 +2696,7 @@ impl Blockstore {
                 IteratorDirection::Reverse,
             ))?;
 
-        // Iterate through starting_iterator until limit is reached
+        // Iterate until limit is reached
         while address_signatures.len() < limit {
             if let Some(((key_address, slot, _transaction_index, signature), _)) = iterator.next() {
                 if slot < lowest_slot {

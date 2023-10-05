@@ -696,6 +696,9 @@ pub trait Column {
 
     fn key(index: Self::Index) -> Vec<u8>;
     fn index(key: &[u8]) -> Self::Index;
+    // This trait method is primarily used by `Database::delete_range_cf()`, and is therefore only
+    // relevant for columns keyed by Slot: ie. SlotColumns and columns that feature a Slot as the
+    // first item in the key.
     fn as_index(slot: Slot) -> Self::Index;
     fn slot(index: Self::Index) -> Slot;
 }
@@ -791,8 +794,8 @@ pub trait ColumnIndexDeprecation: Column {
 impl Column for columns::TransactionStatus {
     type Index = (Signature, Slot);
 
-    fn key((signature, slot): (Signature, Slot)) -> Vec<u8> {
-        let mut key = vec![0; Self::CURRENT_INDEX_LEN]; // size_of Signature + size_of Slot
+    fn key((signature, slot): Self::Index) -> Vec<u8> {
+        let mut key = vec![0; Self::CURRENT_INDEX_LEN];
         key[0..64].copy_from_slice(&signature.as_ref()[0..64]);
         BigEndian::write_u64(&mut key[64..72], slot);
         key
