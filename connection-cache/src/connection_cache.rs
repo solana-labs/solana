@@ -81,6 +81,7 @@ where
         connection_config: C,
         connection_manager: M,
     ) -> Self {
+        info!("Creating ConnectionCache {name}, pool size: {connection_pool_size}");
         let (sender, receiver) = crossbeam_channel::unbounded();
 
         let map = Arc::new(RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)));
