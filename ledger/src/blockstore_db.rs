@@ -663,12 +663,8 @@ pub trait Column {
 
     fn key(index: Self::Index) -> Vec<u8>;
     fn index(key: &[u8]) -> Self::Index;
-    // this return Slot or some u64
-    fn primary_index(index: Self::Index) -> u64;
     fn as_index(slot: Slot) -> Self::Index;
-    fn slot(index: Self::Index) -> Slot {
-        Self::primary_index(index)
-    }
+    fn slot(index: Self::Index) -> Slot;
 }
 
 pub trait ColumnName {
@@ -719,8 +715,7 @@ impl<T: SlotColumn> Column for T {
         BigEndian::read_u64(&key[..8])
     }
 
-    /// Obtains the primary index from the specified index.
-    fn primary_index(index: u64) -> Slot {
+    fn slot(index: Self::Index) -> Slot {
         index
     }
 
@@ -750,10 +745,6 @@ impl Column for columns::TransactionStatus {
             let slot = BigEndian::read_u64(&key[72..80]);
             (index, signature, slot)
         }
-    }
-
-    fn primary_index(index: Self::Index) -> u64 {
-        index.0
     }
 
     fn slot(index: Self::Index) -> Slot {
@@ -791,10 +782,6 @@ impl Column for columns::AddressSignatures {
         (index, pubkey, slot, signature)
     }
 
-    fn primary_index(index: Self::Index) -> u64 {
-        index.0
-    }
-
     fn slot(index: Self::Index) -> Slot {
         index.2
     }
@@ -820,10 +807,6 @@ impl Column for columns::TransactionMemos {
         Signature::try_from(&key[..64]).unwrap()
     }
 
-    fn primary_index(_index: Self::Index) -> u64 {
-        unimplemented!()
-    }
-
     fn slot(_index: Self::Index) -> Slot {
         unimplemented!()
     }
@@ -847,10 +830,6 @@ impl Column for columns::TransactionStatusIndex {
 
     fn index(key: &[u8]) -> u64 {
         BigEndian::read_u64(&key[..8])
-    }
-
-    fn primary_index(index: u64) -> u64 {
-        index
     }
 
     fn slot(_index: Self::Index) -> Slot {
@@ -913,10 +892,6 @@ impl Column for columns::ProgramCosts {
         Pubkey::try_from(&key[..32]).unwrap()
     }
 
-    fn primary_index(_index: Self::Index) -> u64 {
-        unimplemented!()
-    }
-
     fn slot(_index: Self::Index) -> Slot {
         unimplemented!()
     }
@@ -937,7 +912,7 @@ impl Column for columns::ShredCode {
         columns::ShredData::index(key)
     }
 
-    fn primary_index(index: Self::Index) -> Slot {
+    fn slot(index: Self::Index) -> Slot {
         index.0
     }
 
@@ -965,7 +940,7 @@ impl Column for columns::ShredData {
         (slot, index)
     }
 
-    fn primary_index(index: Self::Index) -> Slot {
+    fn slot(index: Self::Index) -> Slot {
         index.0
     }
 
@@ -1050,7 +1025,7 @@ impl Column for columns::ErasureMeta {
         key
     }
 
-    fn primary_index(index: Self::Index) -> Slot {
+    fn slot(index: Self::Index) -> Slot {
         index.0
     }
 
