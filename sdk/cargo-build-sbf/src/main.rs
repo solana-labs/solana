@@ -1,3 +1,4 @@
+use cargo_metadata::camino::Utf8PathBuf;
 use {
     bzip2::bufread::BzDecoder,
     clap::{crate_description, crate_name, crate_version, Arg},
@@ -864,9 +865,21 @@ fn build_solana(config: Config, manifest_path: Option<PathBuf>) {
         exit(1);
     });
 
+    let target_arg = config
+        .cargo_args
+        .as_ref()
+        .and_then(|args| {
+            let position = args.iter().position(|x| x == &"--target-dir")?;
+            Some(args.get(position + 1))
+        })
+        .flatten()
+        .map(Utf8PathBuf::from);
+
+    let target_dir = target_arg.unwrap_or(metadata.target_directory.clone());
+
     if let Some(root_package) = metadata.root_package() {
         if !config.workspace {
-            build_solana_package(&config, metadata.target_directory.as_ref(), root_package);
+            build_solana_package(&config, target_dir.as_ref(), root_package);
             return;
         }
     }
@@ -887,7 +900,7 @@ fn build_solana(config: Config, manifest_path: Option<PathBuf>) {
         .collect::<Vec<_>>();
 
     for package in all_sbf_packages {
-        build_solana_package(&config, metadata.target_directory.as_ref(), package);
+        build_solana_package(&config, target_dir.as_ref(), package);
     }
 }
 
