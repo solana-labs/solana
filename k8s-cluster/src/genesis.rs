@@ -361,7 +361,6 @@ impl Genesis {
         let encoder = BzEncoder::new(tar_bz2_file, Compression::best());
         let mut tar_builder = Builder::new(encoder);
         tar_builder.append_dir_all(".", &*LEDGER_DIR)?;
-
         Ok(())
     }
 }
