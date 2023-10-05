@@ -700,6 +700,10 @@ pub mod better_error_codes_for_tx_lamport_check {
     solana_sdk::declare_id!("Ffswd3egL3tccB6Rv3XY6oqfdzn913vUcjCSnpvCKpfx");
 }
 
+pub mod programify_feature_gate_program {
+    solana_sdk::declare_id!("8GdovDzVwWU5edz2G697bbB7GZjrUc6aQZLWyNNAtHdg");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -870,6 +874,7 @@ lazy_static! {
         (require_rent_exempt_split_destination::id(), "Require stake split destination account to be rent exempt"),
         (better_error_codes_for_tx_lamport_check::id(), "better error codes for tx lamport check #33353"),
         (enable_alt_bn128_compression_syscall::id(), "add alt_bn128 compression syscalls"),
+        (programify_feature_gate_program::id(), "move feature gate activation logic to an on-chain program #32783"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
