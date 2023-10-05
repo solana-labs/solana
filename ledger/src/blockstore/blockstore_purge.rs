@@ -927,6 +927,7 @@ pub mod tests {
                         transaction.message.static_account_keys().iter().collect(),
                         vec![],
                         TransactionStatusMeta::default(),
+                        0,
                     )
                     .unwrap();
             }
