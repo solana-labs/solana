@@ -1361,40 +1361,6 @@ where
         }))
     }
 
-    pub fn delete_slot(
-        &self,
-        batch: &mut WriteBatch,
-        from: Option<Slot>,
-        to: Option<Slot>,
-    ) -> Result<bool>
-    where
-        C::Index: PartialOrd + Copy + ColumnName,
-    {
-        let mut end = true;
-        let iter_config = match from {
-            Some(s) => IteratorMode::From(C::as_index(s), IteratorDirection::Forward),
-            None => IteratorMode::Start,
-        };
-        let iter = self.iter(iter_config)?;
-        for (index, _) in iter {
-            if let Some(to) = to {
-                if C::primary_index(index) > to {
-                    end = false;
-                    break;
-                }
-            };
-            if let Err(e) = batch.delete::<C>(index) {
-                error!(
-                    "Error: {:?} while adding delete from_slot {:?} to batch {:?}",
-                    e,
-                    from,
-                    C::NAME
-                )
-            }
-        }
-        Ok(end)
-    }
-
     pub fn compact_range(&self, from: Slot, to: Slot) -> Result<bool>
     where
         C::Index: PartialOrd + Copy,
