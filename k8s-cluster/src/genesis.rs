@@ -2,9 +2,10 @@
 #![allow(clippy::arithmetic_side_effects)]
 
 use {
-    crate::{boxed_error, initialize_globals, SOLANA_ROOT},
+    crate::{boxed_error, initialize_globals, SOLANA_ROOT, LEDGER_DIR},
     base64::{engine::general_purpose, Engine as _},
     bip39::{Language, Mnemonic, MnemonicType, Seed},
+    bzip2::{write::BzEncoder, Compression},
     log::*,
     solana_clap_v3_utils::{input_parsers::STDOUT_OUTFILE_TOKEN, keygen},
     solana_entry::poh::compute_hashes_per_tick,
@@ -39,6 +40,7 @@ use {
         process::{self, Command},
         time::Duration,
     },
+    tar::Builder,
 };
 
 pub const DEFAULT_WORD_COUNT: usize = 12;
@@ -48,7 +50,7 @@ pub const DEFAULT_CLUSTER_TYPE: ClusterType = ClusterType::Development;
 pub const DEFAULT_COMMISSION: u8 = 100;
 pub const DEFAULT_INTERNAL_NODE_STAKE_SOL: f64 = 10.0; // 10000000000 lamports
 pub const DEFAULT_INTERNAL_NODE_SOL: f64 = 500.0; // 500000000000 lamports
-pub const DEFAULT_BOOTSTRAP_NODE_STAKE_SOL: f64 = 1.0;
+pub const DEFAULT_BOOTSTRAP_NODE_STAKE_SOL: f64 = 10.0;
 pub const DEFAULT_BOOTSTRAP_NODE_SOL: f64 = 500.0;
 
 fn output_keypair(keypair: &Keypair, outfile: &str, source: &str) -> Result<(), Box<dyn Error>> {
@@ -162,13 +164,13 @@ enum SPLGenesisArgType {
 }
 
 pub struct GenesisFlags {
-    pub hashes_per_tick: Option<u64>,
+    pub hashes_per_tick: String,
     pub slots_per_epoch: Option<u64>,
     pub target_lamports_per_signature: Option<u64>,
     pub faucet_lamports: Option<u64>,
     pub enable_warmup_epochs: bool,
     pub max_genesis_archive_unpacked_size: Option<u64>,
-    pub cluster_type: Option<ClusterType>,
+    pub cluster_type: ClusterType,
     pub bootstrap_validator_sol: Option<f64>,
     pub bootstrap_validator_stake_sol: Option<f64>,
 }
@@ -331,6 +333,7 @@ impl Genesis {
         }
 
         if validator_type == "bootstrap" {
+            info!("adding bootstrap to validator account keypairs");
             self.validator_keypairs.push(ValidatorAccountKeypairs {
                 vote_account: vote
                     .ok_or_else(|| boxed_error!("vote-account keypair not initialized"))?,
@@ -341,6 +344,130 @@ impl Genesis {
             });
         }
 
+        Ok(())
+    }
+
+    fn setup_genesis_flags(&self) -> Vec<String> {
+        let mut args: Vec<String> = Vec::new();
+
+        args.push("--bootstrap-validator-lamports".to_string());
+        let bootstrap_validator_lamports = match self.flags.bootstrap_validator_sol {
+            Some(sol) => sol_to_lamports(sol),
+            None => sol_to_lamports(DEFAULT_BOOTSTRAP_NODE_SOL),
+        };
+        args.push(bootstrap_validator_lamports.to_string());
+
+        args.push("--bootstrap-validator-stake-lamports".to_string());
+        let bootstrap_validator_stake_lamports = match self.flags.bootstrap_validator_stake_sol {
+            Some(sol) => sol_to_lamports(sol),
+            None => sol_to_lamports(DEFAULT_BOOTSTRAP_NODE_STAKE_SOL),
+        };
+        args.push(bootstrap_validator_stake_lamports.to_string());
+
+        // match self.flags.bootstrap_validator_stake_lamports {
+        //     Some(lamports) => args.push(lamports.to_string()),
+        //     None => args.push(DEFAULT_BOOTSTRAP_NODE_STAKE_LAMPORTS.to_string()),
+        // }
+        // args.push("--bootstrap-validator-lamports".to_string());
+        // match self.flags.bootstrap_validator_lamports {
+        //     Some(lamports) => args.push(lamports.to_string()),
+        //     None => args.push(DEFAULT_BOOTSTRAP_NODE_LAMPORTS.to_string()),
+        // }
+
+        args.extend(vec![
+            "--hashes-per-tick".to_string(),
+            self.flags.hashes_per_tick.clone(),
+        ]);
+
+        args.push("--max-genesis-archive-unpacked-size".to_string());
+        match self.flags.max_genesis_archive_unpacked_size {
+            Some(size) => args.push(size.to_string()),
+            None => args.push(DEFAULT_MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string()),
+        }
+
+        if self.flags.enable_warmup_epochs {
+            args.push("--enable-warmup-epochs".to_string());
+        }
+
+        args.push("--faucet-lamports".to_string());
+        match self.flags.faucet_lamports {
+            Some(lamports) => args.push(lamports.to_string()),
+            None => args.push(DEFAULT_FAUCET_LAMPORTS.to_string()),
+        }
+
+        args.extend(vec![
+            "--faucet-pubkey".to_string(),
+            self.config_dir
+                .join("faucet.json")
+                .to_string_lossy()
+                .to_string(),
+        ]);
+        args.extend(vec![
+            "--cluster-type".to_string(),
+            self.flags.cluster_type.to_string(),
+        ]);
+        args.extend(vec![
+            "--ledger".to_string(),
+            self.config_dir
+                .join("bootstrap-validator")
+                .to_string_lossy()
+                .to_string(),
+        ]);
+
+        // Order of accounts matters here!!
+        args.extend(vec![
+            "--bootstrap-validator".to_string(),
+            self.config_dir
+                .join("bootstrap-validator/identity.json")
+                .to_string_lossy()
+                .to_string(),
+            self.config_dir
+                .join("bootstrap-validator/vote-account.json")
+                .to_string_lossy()
+                .to_string(),
+            self.config_dir
+                .join("bootstrap-validator/stake-account.json")
+                .to_string_lossy()
+                .to_string(),
+        ]);
+
+        if let Some(slots_per_epoch) = self.flags.slots_per_epoch {
+            args.extend(vec![
+                "--slots-per-epoch".to_string(),
+                slots_per_epoch.to_string(),
+            ]);
+        }
+
+        if let Some(lamports_per_signature) = self.flags.target_lamports_per_signature {
+            args.extend(vec![
+                "--target-lamports-per-signature".to_string(),
+                lamports_per_signature.to_string(),
+            ]);
+        }
+
+        args
+
+        //TODO see multinode-demo.sh. we need spl-genesis-args.sh
+    }
+
+    pub fn generate_v2(&mut self) -> Result<(), Box<dyn Error>> {
+        let args = self.setup_genesis_flags();
+        debug!("genesis args: ");
+        for arg in &args {
+            debug!("{}", arg);
+        }
+
+        let output = Command::new("solana-genesis")
+            .args(&args)
+            .output()
+            .expect("Failed to execute solana-genesis");
+
+        if !output.status.success() {
+            return Err(boxed_error!(format!(
+                "Failed to create genesis. err: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )));
+        }
         Ok(())
     }
 
@@ -373,24 +500,22 @@ impl Genesis {
             ..PohConfig::default()
         };
 
-        let cluster_type = match self.flags.cluster_type {
-            Some(cluster_type) => cluster_type,
-            None => DEFAULT_CLUSTER_TYPE,
-        };
-
-        match self.flags.hashes_per_tick {
-            Some(hashes_per_tick) => poh_config.hashes_per_tick = Some(hashes_per_tick),
-            None => {
-                match cluster_type {
-                    ClusterType::Development => {
-                        let hashes_per_tick =
-                            compute_hashes_per_tick(poh_config.target_tick_duration, 1_000_000);
-                        poh_config.hashes_per_tick = Some(hashes_per_tick / 2); // use 50% of peak ability
-                    }
-                    ClusterType::Devnet | ClusterType::Testnet | ClusterType::MainnetBeta => {
-                        poh_config.hashes_per_tick = Some(clock::DEFAULT_HASHES_PER_TICK);
-                    }
+        match self.flags.hashes_per_tick.as_str() {
+            "auto" => match self.flags.cluster_type {
+                ClusterType::Development => {
+                    let hashes_per_tick =
+                        compute_hashes_per_tick(poh_config.target_tick_duration, 1_000_000);
+                    poh_config.hashes_per_tick = Some(hashes_per_tick / 2); // use 50% of peak ability
                 }
+                ClusterType::Devnet | ClusterType::Testnet | ClusterType::MainnetBeta => {
+                    poh_config.hashes_per_tick = Some(clock::DEFAULT_HASHES_PER_TICK);
+                }
+            },
+            "sleep" => {
+                poh_config.hashes_per_tick = None;
+            }
+            _ => {
+                poh_config.hashes_per_tick = Some(self.flags.hashes_per_tick.clone().parse::<u64>().expect("Failed to parse hashes_per_tick_string"));
             }
         }
 
@@ -401,7 +526,7 @@ impl Genesis {
 
         let slots_per_epoch = match self.flags.slots_per_epoch {
             Some(slots_per_epoch) => slots_per_epoch,
-            None => match cluster_type {
+            None => match self.flags.cluster_type {
                 ClusterType::Development => clock::DEFAULT_DEV_SLOTS_PER_EPOCH,
                 ClusterType::Devnet | ClusterType::Testnet | ClusterType::MainnetBeta => {
                     clock::DEFAULT_SLOTS_PER_EPOCH
@@ -434,18 +559,6 @@ impl Genesis {
             ..GenesisConfig::default()
         };
 
-        if let Some(faucet_keypair) = &self.faucet_keypair {
-            genesis_config.add_account(
-                faucet_keypair.pubkey(),
-                AccountSharedData::new(faucet_lamports, 0, &system_program::id()),
-            );
-        }
-
-        solana_stake_program::add_genesis_accounts(&mut genesis_config);
-        if genesis_config.cluster_type == ClusterType::Development {
-            solana_runtime::genesis_utils::activate_all_features(&mut genesis_config);
-        }
-
         // Based off of genesis/src/main.rs
         // loop through this. we only excpect to loop through once for bootstrap.
         // but when we add in other validators, we should add these other validator accounts to genesis here
@@ -475,6 +588,19 @@ impl Genesis {
             );
 
             genesis_config.add_account(account.vote_account.pubkey(), vote_account);
+        }
+
+        if let Some(faucet_keypair) = &self.faucet_keypair {
+            genesis_config.add_account(
+                faucet_keypair.pubkey(),
+                AccountSharedData::new(faucet_lamports, 0, &system_program::id()),
+            );
+        }
+
+        solana_stake_program::add_genesis_accounts(&mut genesis_config);
+        if genesis_config.cluster_type == ClusterType::Development {
+            info!("cluster_type: development");
+            solana_runtime::genesis_utils::activate_all_features(&mut genesis_config);
         }
 
         let issued_lamports = genesis_config
@@ -669,6 +795,20 @@ impl Genesis {
         if v.len() != self.all_pubkeys.len() {
             panic!("Error: validator pubkeys have duplicates!");
         }
+    }
+
+    // solana-genesis creates a genesis.tar.bz2 but if we need to create snapshots, these
+    // are not included in the genesis.tar.bz2. So we package everything including genesis.tar.bz2
+    // snapshots, etc into genesis-package.tar.bz2 and we use this as our genesis in the bootstrap
+    // validator
+    pub fn package_up(&mut self) -> Result<(), Box<dyn Error>> {
+        info!("Packaging genesis");
+        let tar_bz2_file = File::create(LEDGER_DIR.join("genesis-package.tar.bz2"))?;
+        let encoder = BzEncoder::new(tar_bz2_file, Compression::best());
+        let mut tar_builder = Builder::new(encoder);
+        tar_builder.append_dir_all(".", &*LEDGER_DIR)?;
+
+        Ok(())
     }
 }
 

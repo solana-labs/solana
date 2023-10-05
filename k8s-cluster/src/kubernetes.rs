@@ -1,5 +1,5 @@
 use {
-    crate::{boxed_error, SOLANA_ROOT},
+    crate::{boxed_error, SOLANA_ROOT, LEDGER_DIR},
     base64::{engine::general_purpose, Engine as _},
     k8s_openapi::{
         api::{
@@ -28,13 +28,6 @@ pub struct RuntimeConfig<'a> {
     pub gpu_mode: &'a str, // TODO: this is not implemented yet
     pub internal_node_sol: f64,
     pub internal_node_stake_sol: f64,
-    pub limit_ledger_size: Option<u64>,
-    pub full_rpc: bool,
-    pub skip_poh_verify: bool,
-    pub tmpfs_accounts: bool,
-    pub no_snapshot_fetch: bool,
-    pub accounts_db_skip_shrink: bool,
-    pub skip_require_tower: bool,
     pub wait_for_supermajority: Option<u64>,
     pub warp_slot: Option<u64>,
     pub shred_version: Option<u16>,
@@ -51,13 +44,6 @@ impl<'a> std::fmt::Display for RuntimeConfig<'a> {
              gpu_mode: {}\n\
              internal_node_sol: {}\n\
              internal_node_stake_sol: {}\n\
-             limit_ledger_size: {:?}\n\
-             full_rpc: {}\n\
-             skip_poh_verify: {}\n\
-             tmpfs_accounts: {}\n\
-             no_snapshot_fetch: {}\n\
-             accounts_db_skip_shrink: {}\n\
-             skip_require_tower: {}\n\
              wait_for_supermajority: {:?}\n\
              warp_slot: {:?}\n\
              shred_version: {:?}\n\
@@ -67,13 +53,6 @@ impl<'a> std::fmt::Display for RuntimeConfig<'a> {
             self.gpu_mode,
             self.internal_node_sol,
             self.internal_node_stake_sol,
-            self.limit_ledger_size,
-            self.full_rpc,
-            self.skip_poh_verify,
-            self.tmpfs_accounts,
-            self.no_snapshot_fetch,
-            self.accounts_db_skip_shrink,
-            self.skip_require_tower,
             self.wait_for_supermajority,
             self.warp_slot,
             self.shred_version,
@@ -116,44 +95,18 @@ impl<'a> Kubernetes<'a> {
         if self.runtime_config.disable_quic {
             flags.push("--tpu-disable-quic".to_string());
         }
-        flags.extend(vec![
-            "--init-complete-file".to_string(),
-            "logs/init-complete-node.log".to_string(),
-        ]);
-        if let Some(size) = self.runtime_config.limit_ledger_size {
-            flags.extend(vec!["--limit-ledger-size".to_string(), size.to_string()])
-        }
+
         if let Some(slot) = self.runtime_config.wait_for_supermajority {
             flags.extend(vec![
                 "--wait-for-supermajority".to_string(),
                 slot.to_string(),
             ])
         }
-        if let Some(slot) = self.runtime_config.warp_slot {
-            flags.extend(vec!["--warp-slot".to_string(), slot.to_string()])
+
+        if let Some(bank_hash) = self.runtime_config.bank_hash.clone() {
+            flags.extend(vec!["--expected-bank-hash".to_string(), bank_hash.to_string()])
         }
-        if self.runtime_config.full_rpc {
-            flags.push("--enable-rpc-transaction-history".to_string());
-            flags.push("--enable-extended-tx-metadata-storage".to_string());
-        }
-        if self.runtime_config.skip_poh_verify {
-            flags.push("--skip-poh-verify".to_string());
-        }
-        if self.runtime_config.tmpfs_accounts {
-            flags.extend(vec![
-                "--accounts".to_string(),
-                "/mnt/solana-accounts".to_string(),
-            ]);
-        }
-        if self.runtime_config.no_snapshot_fetch {
-            flags.push("--no-snapshot-fetch".to_string());
-        }
-        if self.runtime_config.accounts_db_skip_shrink {
-            flags.push("--accounts-db-skip-shrink".to_string());
-        }
-        if self.runtime_config.skip_require_tower {
-            flags.push("--skip-require-tower".to_string());
-        }
+
         flags
     }
 
@@ -187,18 +140,18 @@ impl<'a> Kubernetes<'a> {
             name: Some("genesis-config".to_string()),
             ..Default::default()
         };
-        let genesis_tar_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator/genesis.tar.bz2");
+        let genesis_tar_path = LEDGER_DIR.join("genesis-package.tar.bz2");
         let mut genesis_tar_file = File::open(genesis_tar_path).unwrap();
         let mut buffer = Vec::new();
 
         match genesis_tar_file.read_to_end(&mut buffer) {
             Ok(_) => (),
-            Err(err) => panic!("failed to read genesis.tar.bz: {}", err),
+            Err(err) => panic!("failed to read genesis-package.tar.bz: {}", err),
         }
 
         // Define the data for the ConfigMap
         let mut data = BTreeMap::<String, ByteString>::new();
-        data.insert("genesis.tar.bz2".to_string(), ByteString(buffer));
+        data.insert("genesis-package.tar.bz2".to_string(), ByteString(buffer));
 
         // Create the ConfigMap
         let config_map = ConfigMap {

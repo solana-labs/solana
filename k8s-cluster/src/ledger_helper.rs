@@ -31,6 +31,11 @@ impl LedgerHelper {
 
     pub fn create_snapshot(warp_slot: u64) -> Result<(), Box<dyn Error>> {
         ledger_directory_exists()?;
+        let config_dir = LEDGER_DIR.join("accounts_hash_cache");
+        if config_dir.exists() {
+            std::fs::remove_dir_all(&config_dir).unwrap();
+        }
+        std::fs::create_dir_all(&config_dir).unwrap();
         let output = Command::new("solana-ledger-tool")
             .arg("-l")
             .arg(LEDGER_DIR.as_os_str())
@@ -43,9 +48,10 @@ impl LedgerHelper {
             .expect("Failed to execute create-snapshot command");
 
         if !output.status.success() {
-            return Err(boxed_error!(
-                "Error in solana-ledger-tool create-snapshot command"
-            ));
+            return Err(boxed_error!(format!(
+                "Error in solana-ledger-tool create-snapshot command. err: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )));
         }
         Ok(())
     }

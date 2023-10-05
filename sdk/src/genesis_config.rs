@@ -67,6 +67,15 @@ impl ClusterType {
             Self::Development => None,
         }
     }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            ClusterType::Testnet => "testnet".to_string(),
+            ClusterType::MainnetBeta => "mainnet-beta".to_string(),
+            ClusterType::Devnet => "devnet".to_string(),
+            ClusterType::Development => "development".to_string(),
+        }
+    }
 }
 
 impl FromStr for ClusterType {

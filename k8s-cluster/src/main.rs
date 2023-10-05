@@ -74,8 +74,8 @@ fn parse_matches() -> ArgMatches<'static> {
             Arg::with_name("release_channel")
                 .long("release-channel")
                 .takes_value(true)
-                .default_value("")
-                .help("Optional: release version. e.g. v1.16.5"),
+                .required_if("deploy_method", "tar") // Require if deploy_method is "tar"
+                .help("release version. e.g. v1.16.5. Required if '--deploy-method tar'"),
         )
         .arg(
             Arg::with_name("deploy_method")
@@ -104,7 +104,7 @@ fn parse_matches() -> ArgMatches<'static> {
             Arg::with_name("docker_build")
                 .long("docker-build")
                 .requires("registry_name")
-                .help("Build Docker images. If not set, will assume local docker image should be used"),
+                .help("Build Docker images. If not set, will assume docker image with whatever tag is specified should be used"),
         )
         .arg(
             Arg::with_name("registry_name")
@@ -146,13 +146,14 @@ fn parse_matches() -> ArgMatches<'static> {
             Arg::with_name("hashes_per_tick")
                 .long("hashes-per-tick")
                 .takes_value(true)
-                .help("Genesis config. hashes per tick"),
+                .default_value("auto")
+                .help("NUM_HASHES|sleep|auto - Override the default --hashes-per-tick for the cluster"),
         )
         .arg(
             Arg::with_name("slots_per_epoch")
                 .long("slots-per-epoch")
                 .takes_value(true)
-                .help("Genesis config. slots per epoch"),
+                .help("override the number of slots in an epoch"),
         )
         .arg(
             Arg::with_name("target_lamports_per_signature")
@@ -209,8 +210,10 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("cluster-type")
                 .possible_values(&ClusterType::STRINGS)
                 .takes_value(true)
+                .default_value("development")
                 .help(
-                    "Selects the features that will be enabled for the cluster"
+                    "Selects the features that will be enabled for the cluster. \
+                    possible values: development, devnet, testnet, mainnet-beta"
                 ),
         )
         .arg(
@@ -309,11 +312,10 @@ async fn main() {
     };
 
     let genesis_flags = GenesisFlags {
-        hashes_per_tick: matches.value_of("hashes_per_tick").map(|value_str| {
-            value_str
-                .parse()
-                .expect("Invalid value for hashes_per_tick")
-        }),
+        hashes_per_tick: matches
+            .value_of("hashes_per_tick")
+            .unwrap_or_default()
+            .to_string(),
         slots_per_epoch: matches.value_of("slots_per_epoch").map(|value_str| {
             value_str
                 .parse()
@@ -341,7 +343,9 @@ async fn main() {
             }),
         cluster_type: matches
             .value_of("cluster_type")
-            .map(|value_str| value_str.parse().expect("Invalid value for cluster_type")),
+            .unwrap_or_default()
+            .parse()
+            .expect("Invalid ClusterType"),
         bootstrap_validator_sol: matches
             .value_of("bootstrap_validator_sol")
             .map(|value_str| {
@@ -373,17 +377,6 @@ async fn main() {
             .parse::<f64>()
             .expect("Invalid value for internal_node_stake_sol")
             as f64,
-        limit_ledger_size: matches.value_of("limit_ledger_size").map(|value_str| {
-            value_str
-                .parse()
-                .expect("Invalid value for limit_ledger_size")
-        }),
-        full_rpc: matches.is_present("full_rpc"),
-        skip_poh_verify: matches.is_present("skip_poh_verify"),
-        tmpfs_accounts: matches.is_present("tmps_accounts"),
-        no_snapshot_fetch: matches.is_present("no_snapshot_fetch"),
-        accounts_db_skip_shrink: matches.is_present("accounts_db_skip_shrink"),
-        skip_require_tower: matches.is_present("skip_require_tower"),
         wait_for_supermajority: matches.value_of("wait_for_supermajority").map(|value_str| {
             value_str
                 .parse()
@@ -458,7 +451,7 @@ async fn main() {
         let docker = DockerConfig::new(config, build_config.deploy_method);
         let image_types = vec!["bootstrap", "validator"];
         for image_type in image_types {
-            match docker.build_image(image_type).await {
+            match docker.build_image(image_type) {
                 Ok(_) => info!("Docker image built successfully"),
                 Err(err) => {
                     error!("Exiting........ {}", err);
@@ -468,7 +461,7 @@ async fn main() {
         }
 
         // Need to push image to registry so Monogon nodes can pull image from registry to local
-        match docker.push_image("bootstrap").await {
+        match docker.push_image("bootstrap") {
             Ok(_) => info!("Bootstrap Image pushed successfully to registry"),
             Err(err) => {
                 error!("{}", err);
@@ -477,7 +470,7 @@ async fn main() {
         }
 
         // Need to push image to registry so Monogon nodes can pull image from registry to local
-        match docker.push_image("validator").await {
+        match docker.push_image("validator") {
             Ok(_) => info!("Validator Image pushed successfully to registry"),
             Err(err) => {
                 error!("{}", err);
@@ -521,13 +514,13 @@ async fn main() {
     }
 
     // load genesis (test -> this should run in pod)
-    match genesis.verify_genesis_from_file() {
-        Ok(_) => (),
-        Err(err) => {
-            error!("Failed verify genesis from file! err: {}", err);
-            return;
-        }
-    }
+    // match genesis.verify_genesis_from_file() {
+    //     Ok(_) => (),
+    //     Err(err) => {
+    //         error!("Failed verify genesis from file! err: {}", err);
+    //         return;
+    //     }
+    // }
 
     match LedgerHelper::get_shred_version() {
         Ok(shred_version) => kub_controller.set_shred_version(shred_version),
@@ -553,6 +546,14 @@ async fn main() {
                 error!("Failed to get bank hash: {}", err);
                 return;
             }
+        }
+    }
+
+    match genesis.package_up() {
+        Ok(_) => (),
+        Err(err) => {
+            error!("package genesis error! {}", err);
+            return;
         }
     }
 

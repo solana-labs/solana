@@ -82,25 +82,10 @@ solana -ul validators # should see `--num-validators`+1 current validators (incl
 ```
 ^ if you ran the tar deployment, you should see the Stake by Version as well read `<release-channel>` in the `solana -ul validators` output.
 
-Important Notes: this isn't designed the best way currently.
-- bootstrap and validator docker images are build exactly the same although the pods they run in are not build the same
-- `--bootstrap-image` and `--validator-image` must match the format outlined above. The pods in the replicasets pull the exact `--bootstrap-image` and `--validator-image` images from dockerhub.
-    - The docker container that is build is named based off of `--registry`, `--image-name`, `--base-image`, and `--tag`
-    - Whenever image name you give will be prepended with either `bootstrap-` or `validator-`. not the best design currently but that's currently how it's build.
-    So make sure when you set `--boostrap-image` you make sure to prepend the `image-name` with `boostrap-` and same thing for `--validator-image` w/ `validator-`
-
-Other Notes:
-- Def some hardcoded stuff in here still
-- genesis creation is hardcoded for the most part in terms of stakes, lamports, etc.
-- genesis includes bootstrap accounts and SPL args.
-- Registry needs to be remotely accessible by all monogon nodes
-- Must ensure your solana-cli on your host can run `solana-ledger-tool -l <ledger-dir> bank-hash --halt-at-slot 0`
-    - Older CLI versions do not support the `--halt-at-slot` option
-
 TODO:
 - we currently write binary to file for genesis, then read it back to verify it. and then read it again to convert into a base64 string and then converted into binrary and then converted into a GenesisConfig lol. So need to fix
 
 ### Notes
-- Have tested deployments of up to 200 validators
+- Have tested deployments of up to 500 validators
 - Additional validator commandline flags are coming....stay tuned
 - Once again, we assume you are logged into docker and you are pulling from a public repo (Monogon hosts need to access)

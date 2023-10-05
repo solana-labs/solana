@@ -7,8 +7,6 @@ set -e
 nohup solana-faucet --keypair faucet.json >logs/faucet.log 2>&1 &
 
 # Start the bootstrap validator node
-#
-here=$(dirname "$0")
 # shellcheck disable=SC1091
 source /home/solana/k8s-cluster-scripts/common.sh
 
@@ -49,7 +47,7 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --limit-ledger-size ]]; then # Done
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --no-rocksdb-compaction ]]; then 
+    elif [[ $1 = --no-rocksdb-compaction ]]; then
       args+=("$1")
       shift
     elif [[ $1 = --enable-rpc-transaction-history ]]; then
@@ -153,7 +151,7 @@ args+=(
   --no-poh-speed-test \
   --no-incremental-snapshots \
   --full-rpc-api \
-  --allow-private-addr 
+  --allow-private-addr
 )
 
 echo "Bootstrap Args"

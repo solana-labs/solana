@@ -55,10 +55,6 @@ macro_rules! boxed_error {
     };
 }
 
-pub fn load_env_variable_by_name(name: &str) -> Result<String, env::VarError> {
-    env::var(name)
-}
-
 static TRUCK: Emoji = Emoji("🚚 ", "");
 static PACKAGE: Emoji = Emoji("📦 ", "");
 
