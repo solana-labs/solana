@@ -1682,7 +1682,7 @@ pub fn request_and_confirm_airdrop(
     Ok(signature)
 }
 
-fn common_error_adapter<E>(ix_error: &InstructionError) -> Option<E>
+pub fn common_error_adapter<E>(ix_error: &InstructionError) -> Option<E>
 where
     E: 'static + std::error::Error + DecodeError<E> + FromPrimitive,
 {
@@ -1700,12 +1700,12 @@ pub fn log_instruction_custom_error<E>(
 where
     E: 'static + std::error::Error + DecodeError<E> + FromPrimitive,
 {
-    log_instruction_custom_error_ex::<E, _>(result, config, common_error_adapter)
+    log_instruction_custom_error_ex::<E, _>(result, &config.output_format, common_error_adapter)
 }
 
 pub fn log_instruction_custom_error_ex<E, F>(
     result: ClientResult<Signature>,
-    config: &CliConfig,
+    output_format: &OutputFormat,
     error_adapter: F,
 ) -> ProcessResult
 where
@@ -1726,7 +1726,7 @@ where
             let signature = CliSignature {
                 signature: sig.clone().to_string(),
             };
-            Ok(config.output_format.formatted_string(&signature))
+            Ok(output_format.formatted_string(&signature))
         }
     }
 }
