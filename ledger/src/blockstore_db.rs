@@ -828,11 +828,11 @@ impl ColumnIndexDeprecation for columns::TransactionStatus {
     const CURRENT_INDEX_LEN: usize = 72;
     type DeprecatedIndex = (u64, Signature, Slot);
 
-    fn deprecated_key(index: Self::DeprecatedIndex) -> Vec<u8> {
-        let (index, signature, slot) = index;
-        let mut key = vec![0; 8];
+    fn deprecated_key((index, signature, slot): Self::DeprecatedIndex) -> Vec<u8> {
+        let mut key = vec![0; Self::DEPRECATED_INDEX_LEN];
         BigEndian::write_u64(&mut key[0..8], index);
-        key.extend_from_slice(&Self::key((signature, slot)));
+        key[8..72].copy_from_slice(&signature.as_ref()[0..64]);
+        BigEndian::write_u64(&mut key[72..80], slot);
         key
     }
 
@@ -897,8 +897,7 @@ impl ColumnIndexDeprecation for columns::AddressSignatures {
     const CURRENT_INDEX_LEN: usize = 108;
     type DeprecatedIndex = (u64, Pubkey, Slot, Signature);
 
-    fn deprecated_key(index: Self::DeprecatedIndex) -> Vec<u8> {
-        let (primary_index, pubkey, slot, signature) = index;
+    fn deprecated_key((primary_index, pubkey, slot, signature): Self::DeprecatedIndex) -> Vec<u8> {
         let mut key = vec![0; Self::DEPRECATED_INDEX_LEN];
         BigEndian::write_u64(&mut key[0..8], primary_index);
         key[8..40].clone_from_slice(&pubkey.as_ref()[0..32]);
