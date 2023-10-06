@@ -240,71 +240,58 @@ impl Genesis {
     }
 
     fn setup_genesis_flags(&self) -> Vec<String> {
-        let mut args = vec![..];
-
-        args.push("--bootstrap-validator-lamports".to_string());
-        args.push(
+        let mut args = vec![
+            "--bootstrap-validator-lamports".to_string(),
             sol_to_lamports(
                 self.flags
                     .bootstrap_validator_sol
                     .unwrap_or(DEFAULT_BOOTSTRAP_NODE_SOL),
             )
             .to_string(),
-        );
-
-        args.push("--bootstrap-validator-stake-lamports".to_string());
-        args.push(
+            
+            "--bootstrap-validator-stake-lamports".to_string(),
             sol_to_lamports(
                 self.flags
                     .bootstrap_validator_stake_sol
                     .unwrap_or(DEFAULT_BOOTSTRAP_NODE_STAKE_SOL),
             )
             .to_string(),
-        );
 
-        args.push("--hashes-per-tick".to_string());
-        args.push(self.flags.hashes_per_tick.clone());
+            "--hashes-per-tick".to_string(),
+            self.flags.hashes_per_tick.clone(),
 
-        args.push("--max-genesis-archive-unpacked-size".to_string());
-        args.push(
+            "--max-genesis-archive-unpacked-size".to_string(),
             self.flags
                 .max_genesis_archive_unpacked_size
                 .unwrap_or(DEFAULT_MAX_GENESIS_ARCHIVE_UNPACKED_SIZE)
                 .to_string(),
-        );
 
-        if self.flags.enable_warmup_epochs {
-            args.push("--enable-warmup-epochs".to_string());
-        }
-
-        args.push("--faucet-lamports".to_string());
-        args.push(
+            "--faucet-lamports".to_string(),
             self.flags
                 .faucet_lamports
                 .unwrap_or(DEFAULT_FAUCET_LAMPORTS)
                 .to_string(),
-        );
 
-        args.push("--faucet-pubkey".to_string());
-        args.push(
+            "--faucet-pubkey".to_string(),
             self.config_dir
                 .join("faucet.json")
                 .to_string_lossy()
                 .to_string(),
-        );
 
-        args.push("--cluster-type".to_string());
-        args.push(self.flags.cluster_type.to_string());
+            "--cluster-type".to_string(),
+            self.flags.cluster_type.to_string(),
 
-        args.push("--ledger".to_string());
-        args.push(
+            "--ledger".to_string(),
             self.config_dir
                 .join("bootstrap-validator")
                 .to_string_lossy()
                 .to_string(),
-        );
-
-        // Order of accounts matters here!!
+        ];
+    
+        if self.flags.enable_warmup_epochs {
+            args.push("--enable-warmup-epochs".to_string());
+        }
+    
         args.push("--bootstrap-validator".to_string());
         ["identity", "vote-account", "stake-account"]
             .iter()
@@ -316,17 +303,17 @@ impl Genesis {
                         .to_string(),
                 );
             });
-
+    
         if let Some(slots_per_epoch) = self.flags.slots_per_epoch {
             args.push("--slots-per-epoch".to_string());
             args.push(slots_per_epoch.to_string());
         }
-
+    
         if let Some(lamports_per_signature) = self.flags.target_lamports_per_signature {
             args.push("--target-lamports-per-signature".to_string());
             args.push(lamports_per_signature.to_string());
         }
-
+    
         args
     }
 
