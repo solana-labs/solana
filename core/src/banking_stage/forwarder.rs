@@ -323,7 +323,7 @@ mod tests {
         };
 
         let (exit, poh_recorder, poh_service, _entry_receiver) =
-            create_test_recorder(&bank, blockstore, Some(poh_config), None);
+            create_test_recorder(bank, blockstore, Some(poh_config), None);
 
         let (local_node, cluster_info) = new_test_cluster_info(Some(validator_keypair));
         let cluster_info = Arc::new(cluster_info);
@@ -441,10 +441,7 @@ mod tests {
         };
 
         let mut unprocessed_packet_batches = UnprocessedTransactionStorage::new_transaction_storage(
-            UnprocessedPacketBatches::from_iter(
-                vec![forwarded_packet, normal_packet].into_iter(),
-                2,
-            ),
+            UnprocessedPacketBatches::from_iter(vec![forwarded_packet, normal_packet], 2),
             ThreadType::Transactions,
         );
         let connection_cache = ConnectionCache::new("connection_cache_test");

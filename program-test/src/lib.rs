@@ -1,5 +1,5 @@
 //! The solana-program-test provides a BanksClient-based test framework SBF programs
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 // Export tokio for test clients
 pub use tokio;
@@ -17,7 +17,7 @@ use {
         loaded_programs::LoadedProgram, stable_log, timings::ExecuteTimings,
     },
     solana_runtime::{
-        accounts_background_service::{AbsRequestSender, SnapshotRequestType},
+        accounts_background_service::{AbsRequestSender, SnapshotRequestKind},
         bank::Bank,
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
@@ -25,7 +25,7 @@ use {
         runtime_config::RuntimeConfig,
     },
     solana_sdk::{
-        account::{Account, AccountSharedData},
+        account::{create_account_shared_data_for_test, Account, AccountSharedData},
         account_info::AccountInfo,
         clock::Slot,
         entrypoint::{deserialize, ProgramResult, SUCCESS},
@@ -334,8 +334,8 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             let new_data = borrowed_account.get_data();
             let new_len = new_data.len();
 
-            // Resize account_info data (grow-only)
-            if account_info.data_len() < new_len {
+            // Resize account_info data
+            if account_info.data_len() != new_len {
                 account_info.realloc(new_len, false)?;
             }
 
@@ -521,6 +521,10 @@ impl ProgramTest {
 
     /// Override the default maximum compute units
     pub fn set_compute_max_units(&mut self, compute_max_units: u64) {
+        debug_assert!(
+            compute_max_units <= i64::MAX as u64,
+            "Compute unit limit must fit in `i64::MAX`"
+        );
         self.compute_max_units = Some(compute_max_units);
     }
 
@@ -533,7 +537,7 @@ impl ProgramTest {
     #[allow(deprecated)]
     #[deprecated(since = "1.8.0", note = "please use `set_compute_max_units` instead")]
     pub fn set_bpf_compute_max_units(&mut self, bpf_compute_max_units: u64) {
-        self.compute_max_units = Some(bpf_compute_max_units);
+        self.set_compute_max_units(bpf_compute_max_units);
     }
 
     /// Add an account to the test environment
@@ -585,6 +589,11 @@ impl ProgramTest {
                 rent_epoch: 0,
             },
         );
+    }
+
+    pub fn add_sysvar_account<S: Sysvar>(&mut self, address: Pubkey, sysvar: &S) {
+        let account = create_account_shared_data_for_test(sysvar);
+        self.add_account(address, account.into());
     }
 
     /// Add a SBF program to the test environment.
@@ -824,7 +833,7 @@ impl ProgramTest {
         let bank = {
             let bank = Arc::new(bank);
             bank.fill_bank_with_ticks_for_tests();
-            let bank = Bank::new_from_parent(&bank, bank.collector_id(), bank.slot() + 1);
+            let bank = Bank::new_from_parent(bank.clone(), bank.collector_id(), bank.slot() + 1);
             debug!("Bank slot: {}", bank.slot());
             bank
         };
@@ -1114,7 +1123,7 @@ impl ProgramTestContext {
             bank
         } else {
             bank_forks.insert(Bank::warp_from_parent(
-                &bank,
+                bank,
                 &Pubkey::default(),
                 pre_warp_slot,
                 // some warping tests cannot use the append vecs because of the sequence of adding roots and flushing
@@ -1133,7 +1142,7 @@ impl ProgramTestContext {
         snapshot_request_receiver
             .try_iter()
             .filter(|snapshot_request| {
-                snapshot_request.request_type == SnapshotRequestType::EpochAccountsHash
+                snapshot_request.request_kind == SnapshotRequestKind::EpochAccountsHash
             })
             .for_each(|snapshot_request| {
                 snapshot_request
@@ -1150,7 +1159,7 @@ impl ProgramTestContext {
 
         // warp_bank is frozen so go forward to get unfrozen bank at warp_slot
         bank_forks.insert(Bank::new_from_parent(
-            &warp_bank,
+            warp_bank,
             &Pubkey::default(),
             warp_slot,
         ));
@@ -1187,7 +1196,7 @@ impl ProgramTestContext {
 
         // warp_bank is frozen so go forward to get unfrozen bank at warp_slot
         let warp_slot = pre_warp_slot + 1;
-        let mut warp_bank = Bank::new_from_parent(&bank, &Pubkey::default(), warp_slot);
+        let mut warp_bank = Bank::new_from_parent(bank, &Pubkey::default(), warp_slot);
 
         warp_bank.force_reward_interval_end_for_tests();
         bank_forks.insert(warp_bank);

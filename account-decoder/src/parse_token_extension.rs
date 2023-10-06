@@ -6,6 +6,7 @@ use {
         solana_program::pubkey::Pubkey,
         solana_zk_token_sdk::zk_token_elgamal::pod::ElGamalPubkey,
     },
+    spl_token_metadata_interface::state::TokenMetadata,
 };
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -24,15 +25,21 @@ pub enum UiExtension {
     InterestBearingConfig(UiInterestBearingConfig),
     CpiGuard(UiCpiGuard),
     PermanentDelegate(UiPermanentDelegate),
-    UnparseableExtension,
     NonTransferableAccount,
+    ConfidentialTransferFeeConfig(UiConfidentialTransferFeeConfig),
+    ConfidentialTransferFeeAmount(UiConfidentialTransferFeeAmount),
+    TransferHook(UiTransferHook),
+    TransferHookAccount(UiTransferHookAccount),
+    MetadataPointer(UiMetadataPointer),
+    TokenMetadata(UiTokenMetadata),
+    UnparseableExtension,
 }
 
 pub fn parse_extension<S: BaseState>(
     extension_type: &ExtensionType,
     account: &StateWithExtensions<S>,
 ) -> UiExtension {
-    match &extension_type {
+    match extension_type {
         ExtensionType::Uninitialized => UiExtension::Uninitialized,
         ExtensionType::TransferFeeConfig => account
             .get_extension::<extension::transfer_fee::TransferFeeConfig>()
@@ -50,9 +57,17 @@ pub fn parse_extension<S: BaseState>(
             .get_extension::<extension::confidential_transfer::ConfidentialTransferMint>()
             .map(|&extension| UiExtension::ConfidentialTransferMint(extension.into()))
             .unwrap_or(UiExtension::UnparseableExtension),
+        ExtensionType::ConfidentialTransferFeeConfig => account
+            .get_extension::<extension::confidential_transfer_fee::ConfidentialTransferFeeConfig>()
+            .map(|&extension| UiExtension::ConfidentialTransferFeeConfig(extension.into()))
+            .unwrap_or(UiExtension::UnparseableExtension),
         ExtensionType::ConfidentialTransferAccount => account
             .get_extension::<extension::confidential_transfer::ConfidentialTransferAccount>()
             .map(|&extension| UiExtension::ConfidentialTransferAccount(extension.into()))
+            .unwrap_or(UiExtension::UnparseableExtension),
+        ExtensionType::ConfidentialTransferFeeAmount => account
+            .get_extension::<extension::confidential_transfer_fee::ConfidentialTransferFeeAmount>()
+            .map(|&extension| UiExtension::ConfidentialTransferFeeAmount(extension.into()))
             .unwrap_or(UiExtension::UnparseableExtension),
         ExtensionType::DefaultAccountState => account
             .get_extension::<extension::default_account_state::DefaultAccountState>()
@@ -77,6 +92,22 @@ pub fn parse_extension<S: BaseState>(
             .map(|&extension| UiExtension::PermanentDelegate(extension.into()))
             .unwrap_or(UiExtension::UnparseableExtension),
         ExtensionType::NonTransferableAccount => UiExtension::NonTransferableAccount,
+        ExtensionType::MetadataPointer => account
+            .get_extension::<extension::metadata_pointer::MetadataPointer>()
+            .map(|&extension| UiExtension::MetadataPointer(extension.into()))
+            .unwrap_or(UiExtension::UnparseableExtension),
+        ExtensionType::TokenMetadata => account
+            .get_variable_len_extension::<TokenMetadata>()
+            .map(|extension| UiExtension::TokenMetadata(extension.into()))
+            .unwrap_or(UiExtension::UnparseableExtension),
+        ExtensionType::TransferHook => account
+            .get_extension::<extension::transfer_hook::TransferHook>()
+            .map(|&extension| UiExtension::TransferHook(extension.into()))
+            .unwrap_or(UiExtension::UnparseableExtension),
+        ExtensionType::TransferHookAccount => account
+            .get_extension::<extension::transfer_hook::TransferHookAccount>()
+            .map(|&extension| UiExtension::TransferHookAccount(extension.into()))
+            .unwrap_or(UiExtension::UnparseableExtension),
     }
 }
 
@@ -251,9 +282,7 @@ impl From<extension::permanent_delegate::PermanentDelegate> for UiPermanentDeleg
 pub struct UiConfidentialTransferMint {
     pub authority: Option<String>,
     pub auto_approve_new_accounts: bool,
-    pub auditor_encryption_pubkey: Option<String>,
-    pub withdraw_withheld_authority_encryption_pubkey: Option<String>,
-    pub withheld_amount: String,
+    pub auditor_elgamal_pubkey: Option<String>,
 }
 
 impl From<extension::confidential_transfer::ConfidentialTransferMint>
@@ -263,19 +292,44 @@ impl From<extension::confidential_transfer::ConfidentialTransferMint>
         confidential_transfer_mint: extension::confidential_transfer::ConfidentialTransferMint,
     ) -> Self {
         let authority: Option<Pubkey> = confidential_transfer_mint.authority.into();
-        let auditor_encryption_pubkey: Option<ElGamalPubkey> =
-            confidential_transfer_mint.auditor_encryption_pubkey.into();
-        let withdraw_withheld_authority_encryption_pubkey: Option<ElGamalPubkey> =
-            confidential_transfer_mint
-                .withdraw_withheld_authority_encryption_pubkey
-                .into();
+        let auditor_elgamal_pubkey: Option<ElGamalPubkey> =
+            confidential_transfer_mint.auditor_elgamal_pubkey.into();
         Self {
             authority: authority.map(|pubkey| pubkey.to_string()),
             auto_approve_new_accounts: confidential_transfer_mint.auto_approve_new_accounts.into(),
-            auditor_encryption_pubkey: auditor_encryption_pubkey.map(|pubkey| pubkey.to_string()),
-            withdraw_withheld_authority_encryption_pubkey:
-                withdraw_withheld_authority_encryption_pubkey.map(|pubkey| pubkey.to_string()),
-            withheld_amount: format!("{}", confidential_transfer_mint.withheld_amount),
+            auditor_elgamal_pubkey: auditor_elgamal_pubkey.map(|pubkey| pubkey.to_string()),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UiConfidentialTransferFeeConfig {
+    pub authority: Option<String>,
+    pub withdraw_withheld_authority_elgamal_pubkey: Option<String>,
+    pub harvest_to_mint_enabled: bool,
+    pub withheld_amount: String,
+}
+
+impl From<extension::confidential_transfer_fee::ConfidentialTransferFeeConfig>
+    for UiConfidentialTransferFeeConfig
+{
+    fn from(
+        confidential_transfer_fee_config: extension::confidential_transfer_fee::ConfidentialTransferFeeConfig,
+    ) -> Self {
+        let authority: Option<Pubkey> = confidential_transfer_fee_config.authority.into();
+        let withdraw_withheld_authority_elgamal_pubkey: Option<ElGamalPubkey> =
+            confidential_transfer_fee_config
+                .withdraw_withheld_authority_elgamal_pubkey
+                .into();
+        Self {
+            authority: authority.map(|pubkey| pubkey.to_string()),
+            withdraw_withheld_authority_elgamal_pubkey: withdraw_withheld_authority_elgamal_pubkey
+                .map(|pubkey| pubkey.to_string()),
+            harvest_to_mint_enabled: confidential_transfer_fee_config
+                .harvest_to_mint_enabled
+                .into(),
+            withheld_amount: format!("{}", confidential_transfer_fee_config.withheld_amount),
         }
     }
 }
@@ -284,7 +338,7 @@ impl From<extension::confidential_transfer::ConfidentialTransferMint>
 #[serde(rename_all = "camelCase")]
 pub struct UiConfidentialTransferAccount {
     pub approved: bool,
-    pub encryption_pubkey: String,
+    pub elgamal_pubkey: String,
     pub pending_balance_lo: String,
     pub pending_balance_hi: String,
     pub available_balance: String,
@@ -295,7 +349,6 @@ pub struct UiConfidentialTransferAccount {
     pub maximum_pending_balance_credit_counter: u64,
     pub expected_pending_balance_credit_counter: u64,
     pub actual_pending_balance_credit_counter: u64,
-    pub withheld_amount: String,
 }
 
 impl From<extension::confidential_transfer::ConfidentialTransferAccount>
@@ -306,7 +359,7 @@ impl From<extension::confidential_transfer::ConfidentialTransferAccount>
     ) -> Self {
         Self {
             approved: confidential_transfer_account.approved.into(),
-            encryption_pubkey: format!("{}", confidential_transfer_account.encryption_pubkey),
+            elgamal_pubkey: format!("{}", confidential_transfer_account.elgamal_pubkey),
             pending_balance_lo: format!("{}", confidential_transfer_account.pending_balance_lo),
             pending_balance_hi: format!("{}", confidential_transfer_account.pending_balance_hi),
             available_balance: format!("{}", confidential_transfer_account.available_balance),
@@ -332,7 +385,99 @@ impl From<extension::confidential_transfer::ConfidentialTransferAccount>
             actual_pending_balance_credit_counter: confidential_transfer_account
                 .actual_pending_balance_credit_counter
                 .into(),
-            withheld_amount: format!("{}", confidential_transfer_account.withheld_amount),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UiConfidentialTransferFeeAmount {
+    pub withheld_amount: String,
+}
+
+impl From<extension::confidential_transfer_fee::ConfidentialTransferFeeAmount>
+    for UiConfidentialTransferFeeAmount
+{
+    fn from(
+        confidential_transfer_fee_amount: extension::confidential_transfer_fee::ConfidentialTransferFeeAmount,
+    ) -> Self {
+        Self {
+            withheld_amount: format!("{}", confidential_transfer_fee_amount.withheld_amount),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UiMetadataPointer {
+    pub authority: Option<String>,
+    pub metadata_address: Option<String>,
+}
+
+impl From<extension::metadata_pointer::MetadataPointer> for UiMetadataPointer {
+    fn from(metadata_pointer: extension::metadata_pointer::MetadataPointer) -> Self {
+        let authority: Option<Pubkey> = metadata_pointer.authority.into();
+        let metadata_address: Option<Pubkey> = metadata_pointer.metadata_address.into();
+        Self {
+            authority: authority.map(|pubkey| pubkey.to_string()),
+            metadata_address: metadata_address.map(|pubkey| pubkey.to_string()),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UiTokenMetadata {
+    pub update_authority: Option<String>,
+    pub mint: String,
+    pub name: String,
+    pub symbol: String,
+    pub uri: String,
+    pub additional_metadata: Vec<(String, String)>,
+}
+
+impl From<TokenMetadata> for UiTokenMetadata {
+    fn from(token_metadata: TokenMetadata) -> Self {
+        let update_authority: Option<Pubkey> = token_metadata.update_authority.into();
+        Self {
+            update_authority: update_authority.map(|pubkey| pubkey.to_string()),
+            mint: token_metadata.mint.to_string(),
+            name: token_metadata.name,
+            symbol: token_metadata.symbol,
+            uri: token_metadata.uri,
+            additional_metadata: token_metadata.additional_metadata,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UiTransferHook {
+    pub authority: Option<String>,
+    pub program_id: Option<String>,
+}
+
+impl From<extension::transfer_hook::TransferHook> for UiTransferHook {
+    fn from(transfer_hook: extension::transfer_hook::TransferHook) -> Self {
+        let authority: Option<Pubkey> = transfer_hook.authority.into();
+        let program_id: Option<Pubkey> = transfer_hook.program_id.into();
+        Self {
+            authority: authority.map(|pubkey| pubkey.to_string()),
+            program_id: program_id.map(|pubkey| pubkey.to_string()),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UiTransferHookAccount {
+    pub transferring: bool,
+}
+
+impl From<extension::transfer_hook::TransferHookAccount> for UiTransferHookAccount {
+    fn from(transfer_hook: extension::transfer_hook::TransferHookAccount) -> Self {
+        Self {
+            transferring: transfer_hook.transferring.into(),
         }
     }
 }

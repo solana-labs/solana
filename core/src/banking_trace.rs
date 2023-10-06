@@ -63,10 +63,10 @@ pub struct BankingTracer {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct TimedTracedEvent(std::time::SystemTime, TracedEvent);
+pub struct TimedTracedEvent(pub std::time::SystemTime, pub TracedEvent);
 
 #[derive(Serialize, Deserialize, Debug)]
-enum TracedEvent {
+pub enum TracedEvent {
     PacketBatch(ChannelLabel, BankingPacketBatch),
     BlockAndBankHash(Slot, Hash, Hash),
 }

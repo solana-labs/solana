@@ -10,7 +10,7 @@ use {
     clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
     log::*,
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
-    solana_bpf_loader_program::syscalls::create_program_runtime_environment,
+    solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1,
     solana_clap_utils::{
         self, hidden_unless_forced, input_parsers::*, input_validators::*, keypair::*,
     },
@@ -21,13 +21,13 @@ use {
     },
     solana_client::{
         connection_cache::ConnectionCache,
+        send_and_confirm_transactions_in_parallel::{
+            send_and_confirm_transactions_in_parallel_blocking, SendAndConfirmConfig,
+        },
         tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
-    solana_rbpf::{
-        elf::Executable,
-        verifier::{RequisiteVerifier, TautologyVerifier},
-    },
+    solana_rbpf::{elf::Executable, verifier::RequisiteVerifier},
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{
@@ -57,6 +57,7 @@ use {
         io::{Read, Write},
         mem::size_of,
         path::PathBuf,
+        rc::Rc,
         str::FromStr,
         sync::Arc,
     },
@@ -428,7 +429,7 @@ impl ProgramSubCommands for App<'_, '_> {
 pub fn parse_program_subcommand(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let (subcommand, sub_matches) = matches.subcommand();
     let matches_skip_fee_check = matches.is_present("skip_fee_check");
@@ -1174,7 +1175,6 @@ fn process_set_authority(
             &tx,
             config.commitment,
             RpcSendTransactionConfig {
-                skip_preflight: true,
                 preflight_commitment: Some(config.commitment.commitment),
                 ..RpcSendTransactionConfig::default()
             },
@@ -1225,7 +1225,6 @@ fn process_set_authority_checked(
             &tx,
             config.commitment,
             RpcSendTransactionConfig {
-                skip_preflight: false,
                 preflight_commitment: Some(config.commitment.commitment),
                 ..RpcSendTransactionConfig::default()
             },
@@ -1561,7 +1560,6 @@ fn close(
         &tx,
         config.commitment,
         RpcSendTransactionConfig {
-            skip_preflight: true,
             preflight_commitment: Some(config.commitment.commitment),
             ..RpcSendTransactionConfig::default()
         },
@@ -1718,7 +1716,7 @@ fn process_close(
     }
 }
 
-fn calculate_max_chunk_size<F>(create_msg: &F) -> usize
+pub fn calculate_max_chunk_size<F>(create_msg: &F) -> usize
 where
     F: Fn(u32, Vec<u8>) -> Message,
 {
@@ -2022,20 +2020,19 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
         .map_err(|err| format!("Unable to read program file: {err}"))?;
 
     // Verify the program
-    let program_runtime_environment = create_program_runtime_environment(
+    let program_runtime_environment = create_program_runtime_environment_v1(
         &FeatureSet::all_enabled(),
         &ComputeBudget::default(),
         true,
         false,
     )
     .unwrap();
-    let executable = Executable::<TautologyVerifier, InvokeContext>::from_elf(
-        &program_data,
-        Arc::new(program_runtime_environment),
-    )
-    .map_err(|err| format!("ELF error: {err}"))?;
+    let executable =
+        Executable::<InvokeContext>::from_elf(&program_data, Arc::new(program_runtime_environment))
+            .map_err(|err| format!("ELF error: {err}"))?;
 
-    let _ = Executable::<RequisiteVerifier, InvokeContext>::verified(executable)
+    executable
+        .verify::<RequisiteVerifier>()
         .map_err(|err| format!("ELF error: {err}"))?;
 
     Ok(program_data)
@@ -2178,16 +2175,29 @@ fn send_deploy_messages(
                     write_messages,
                     &[payer_signer, write_signer],
                 ),
-                ConnectionCache::Quic(cache) => TpuClient::new_with_connection_cache(
-                    rpc_client.clone(),
-                    &config.websocket_url,
-                    TpuClientConfig::default(),
-                    cache,
-                )?
-                .send_and_confirm_messages_with_spinner(
-                    write_messages,
-                    &[payer_signer, write_signer],
-                ),
+                ConnectionCache::Quic(cache) => {
+                    let tpu_client_fut = solana_client::nonblocking::tpu_client::TpuClient::new_with_connection_cache(
+                        rpc_client.get_inner_client().clone(),
+                        config.websocket_url.as_str(),
+                        solana_client::tpu_client::TpuClientConfig::default(),
+                        cache,
+                    );
+                    let tpu_client = rpc_client
+                        .runtime()
+                        .block_on(tpu_client_fut)
+                        .expect("Should return a valid tpu client");
+
+                    send_and_confirm_transactions_in_parallel_blocking(
+                        rpc_client.clone(),
+                        Some(tpu_client),
+                        write_messages,
+                        &[payer_signer, write_signer],
+                        SendAndConfirmConfig {
+                            resign_txs_count: Some(5),
+                            with_spinner: true,
+                        },
+                    )
+                },
             }
             .map_err(|err| format!("Data writes to account failed: {err}"))?
             .into_iter()
@@ -2219,7 +2229,6 @@ fn send_deploy_messages(
                     &final_tx,
                     config.commitment,
                     RpcSendTransactionConfig {
-                        skip_preflight: true,
                         preflight_commitment: Some(config.commitment.commitment),
                         ..RpcSendTransactionConfig::default()
                     },

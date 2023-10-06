@@ -1,5 +1,7 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 #![feature(test)]
+
+use solana_core::validator::BlockProductionMethod;
 
 extern crate test;
 
@@ -86,7 +88,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
         let (exit, poh_recorder, poh_service, _signal_receiver) =
-            create_test_recorder(&bank, blockstore, None, None);
+            create_test_recorder(bank, blockstore, None, None);
 
         let recorder = poh_recorder.read().unwrap().new_recorder();
         let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
@@ -102,7 +104,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
             .collect::<Vec<_>>();
         let batches_len = batches.len();
         let mut transaction_buffer = UnprocessedTransactionStorage::new_transaction_storage(
-            UnprocessedPacketBatches::from_iter(batches.into_iter(), 2 * batches_len),
+            UnprocessedPacketBatches::from_iter(batches, 2 * batches_len),
             ThreadType::Transactions,
         );
         let (s, _r) = unbounded();
@@ -282,7 +284,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
         let (exit, poh_recorder, poh_service, signal_receiver) =
-            create_test_recorder(&bank, blockstore, None, None);
+            create_test_recorder(bank.clone(), blockstore, None, None);
         let cluster_info = {
             let keypair = Arc::new(Keypair::new());
             let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
@@ -291,6 +293,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         let cluster_info = Arc::new(cluster_info);
         let (s, _r) = unbounded();
         let _banking_stage = BankingStage::new(
+            BlockProductionMethod::ThreadLocalMultiIterator,
             &cluster_info,
             &poh_recorder,
             non_vote_receiver,
@@ -387,7 +390,6 @@ fn bench_banking_stage_multi_programs_with_voting(bencher: &mut Bencher) {
 }
 
 fn simulate_process_entries(
-    randomize_txs: bool,
     mint_keypair: &Keypair,
     mut tx_vector: Vec<VersionedTransaction>,
     genesis_config: &GenesisConfig,
@@ -420,10 +422,11 @@ fn simulate_process_entries(
         hash: next_hash(&bank.last_blockhash(), 1, &tx_vector),
         transactions: tx_vector,
     };
-    process_entries_for_tests(&bank, vec![entry], randomize_txs, None, None).unwrap();
+    process_entries_for_tests(&bank, vec![entry], None, None).unwrap();
 }
 
-fn bench_process_entries(randomize_txs: bool, bencher: &mut Bencher) {
+#[bench]
+fn bench_process_entries(bencher: &mut Bencher) {
     // entropy multiplier should be big enough to provide sufficient entropy
     // but small enough to not take too much time while executing the test.
     let entropy_multiplier: usize = 25;
@@ -443,7 +446,6 @@ fn bench_process_entries(randomize_txs: bool, bencher: &mut Bencher) {
 
     bencher.iter(|| {
         simulate_process_entries(
-            randomize_txs,
             &mint_keypair,
             tx_vector.clone(),
             &genesis_config,
@@ -452,14 +454,4 @@ fn bench_process_entries(randomize_txs: bool, bencher: &mut Bencher) {
             num_accounts,
         );
     });
-}
-
-#[bench]
-fn bench_process_entries_without_order_shuffeling(bencher: &mut Bencher) {
-    bench_process_entries(false, bencher);
-}
-
-#[bench]
-fn bench_process_entries_with_order_shuffeling(bencher: &mut Bencher) {
-    bench_process_entries(true, bencher);
 }

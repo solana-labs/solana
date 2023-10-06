@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 //! Utilities for the [borsh] serialization format, version 0.10.
 //!
 //! [borsh]: https://borsh.io/

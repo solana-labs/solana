@@ -179,24 +179,22 @@ impl Message {
     ///
     /// # Examples
     ///
-    /// This example uses the [`solana_address_lookup_table_program`], [`solana_rpc_client`], [`solana_sdk`], and [`anyhow`] crates.
+    /// This example uses the [`solana_rpc_client`], [`solana_sdk`], and [`anyhow`] crates.
     ///
-    /// [`solana_address_lookup_table_program`]: https://docs.rs/solana-address-lookup-table-program
     /// [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
     /// [`solana_sdk`]: https://docs.rs/solana-sdk
     /// [`anyhow`]: https://docs.rs/anyhow
     ///
     /// ```
     /// # use solana_program::example_mocks::{
-    /// #     solana_address_lookup_table_program,
     /// #     solana_rpc_client,
     /// #     solana_sdk,
     /// # };
     /// # use std::borrow::Cow;
     /// # use solana_sdk::account::Account;
     /// use anyhow::Result;
-    /// use solana_address_lookup_table_program::state::AddressLookupTable;
     /// use solana_rpc_client::rpc_client::RpcClient;
+    /// use solana_program::address_lookup_table::{self, state::{AddressLookupTable, LookupTableMeta}};
     /// use solana_sdk::{
     ///      address_lookup_table_account::AddressLookupTableAccount,
     ///      instruction::{AccountMeta, Instruction},
@@ -215,9 +213,10 @@ impl Message {
     ///     # client.set_get_account_response(address_lookup_table_key, Account {
     ///     #   lamports: 1,
     ///     #   data: AddressLookupTable {
+    ///     #     meta: LookupTableMeta::default(),
     ///     #     addresses: Cow::Owned(instruction.accounts.iter().map(|meta| meta.pubkey).collect()),
     ///     #   }.serialize_for_tests().unwrap(),
-    ///     #   owner: solana_address_lookup_table_program::ID,
+    ///     #   owner: address_lookup_table::program::id(),
     ///     #   executable: false,
     ///     #   rent_epoch: 1,
     ///     # });

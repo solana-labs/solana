@@ -32,13 +32,13 @@ use {
         crds_value::{CrdsData, CrdsValue, CrdsValueLabel},
         legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
+    assert_matches::debug_assert_matches,
     bincode::serialize,
     indexmap::{
         map::{rayon::ParValues, Entry, IndexMap},
         set::IndexSet,
     },
     lru::LruCache,
-    matches::debug_assert_matches,
     rayon::{prelude::*, ThreadPool},
     solana_sdk::{
         clock::Slot,
@@ -549,9 +549,8 @@ impl Crds {
         self.entries.remove(&value.ordinal);
         // Remove the index from records associated with the value's pubkey.
         let pubkey = value.value.pubkey();
-        let mut records_entry = match self.records.entry(pubkey) {
-            hash_map::Entry::Vacant(_) => panic!("this should not happen!"),
-            hash_map::Entry::Occupied(entry) => entry,
+        let hash_map::Entry::Occupied(mut records_entry) = self.records.entry(pubkey) else {
+            panic!("this should not happen!");
         };
         records_entry.get_mut().swap_remove(&index);
         if records_entry.get().is_empty() {
@@ -905,10 +904,7 @@ mod tests {
             let other = NodeInstance::new(&mut rng, pubkey, now + k);
             let other = other.with_wallclock(now - 1);
             let other = make_crds_value(other);
-            match crds.insert(other, now, GossipRoute::LocalMessage) {
-                Ok(()) => (),
-                _ => panic!(),
-            }
+            assert_matches!(crds.insert(other, now, GossipRoute::LocalMessage), Ok(()));
         }
     }
 
@@ -1091,7 +1087,7 @@ mod tests {
         let mut rng = thread_rng();
         let mut num_inserts = 0;
         for _ in 0..4096 {
-            let keypair = &keypairs[rng.gen_range(0, keypairs.len())];
+            let keypair = &keypairs[rng.gen_range(0..keypairs.len())];
             let value = CrdsValue::new_rand(&mut rng, Some(keypair));
             let local_timestamp = new_rand_timestamp(&mut rng);
             if let Ok(()) = crds.insert(value, local_timestamp, GossipRoute::LocalMessage) {
@@ -1108,7 +1104,7 @@ mod tests {
         check_crds_shards(&crds);
         // Remove values one by one and assert that shards stay valid.
         while !crds.table.is_empty() {
-            let index = rng.gen_range(0, crds.table.len());
+            let index = rng.gen_range(0..crds.table.len());
             let key = crds.table.get_index(index).unwrap().0.clone();
             crds.remove(&key, /*now=*/ 0);
             check_crds_shards(&crds);
@@ -1125,9 +1121,9 @@ mod tests {
     ) {
         let size = crds.table.len();
         let since = if size == 0 || rng.gen() {
-            rng.gen_range(0, crds.cursor.0 + 1)
+            rng.gen_range(0..crds.cursor.0 + 1)
         } else {
-            crds.table[rng.gen_range(0, size)].ordinal
+            crds.table[rng.gen_range(0..size)].ordinal
         };
         let num_epoch_slots = crds
             .table
@@ -1148,10 +1144,7 @@ mod tests {
         );
         for value in crds.get_epoch_slots(&mut Cursor(since)) {
             assert!(value.ordinal >= since);
-            match value.value.data {
-                CrdsData::EpochSlots(_, _) => (),
-                _ => panic!("not an epoch-slot!"),
-            }
+            assert_matches!(value.value.data, CrdsData::EpochSlots(_, _));
         }
         let num_votes = crds
             .table
@@ -1174,10 +1167,7 @@ mod tests {
         );
         for value in crds.get_votes(&mut Cursor(since)) {
             assert!(value.ordinal >= since);
-            match value.value.data {
-                CrdsData::Vote(_, _) => (),
-                _ => panic!("not a vote!"),
-            }
+            assert_matches!(value.value.data, CrdsData::Vote(_, _));
         }
         let num_entries = crds
             .table
@@ -1224,16 +1214,10 @@ mod tests {
             crds.get_epoch_slots(&mut Cursor::default()).count()
         );
         for vote in crds.get_votes(&mut Cursor::default()) {
-            match vote.value.data {
-                CrdsData::Vote(_, _) => (),
-                _ => panic!("not a vote!"),
-            }
+            assert_matches!(vote.value.data, CrdsData::Vote(_, _));
         }
         for epoch_slots in crds.get_epoch_slots(&mut Cursor::default()) {
-            match epoch_slots.value.data {
-                CrdsData::EpochSlots(_, _) => (),
-                _ => panic!("not an epoch-slot!"),
-            }
+            assert_matches!(epoch_slots.value.data, CrdsData::EpochSlots(_, _));
         }
         (num_nodes, num_votes, num_epoch_slots)
     }
@@ -1245,7 +1229,7 @@ mod tests {
         let mut crds = Crds::default();
         let mut num_inserts = 0;
         for k in 0..4096 {
-            let keypair = &keypairs[rng.gen_range(0, keypairs.len())];
+            let keypair = &keypairs[rng.gen_range(0..keypairs.len())];
             let value = CrdsValue::new_rand(&mut rng, Some(keypair));
             let local_timestamp = new_rand_timestamp(&mut rng);
             if let Ok(()) = crds.insert(value, local_timestamp, GossipRoute::LocalMessage) {
@@ -1268,7 +1252,7 @@ mod tests {
         assert!(num_epoch_slots > 100, "num epoch slots: {num_epoch_slots}");
         // Remove values one by one and assert that nodes indices stay valid.
         while !crds.table.is_empty() {
-            let index = rng.gen_range(0, crds.table.len());
+            let index = rng.gen_range(0..crds.table.len());
             let key = crds.table.get_index(index).unwrap().0.clone();
             crds.remove(&key, /*now=*/ 0);
             if crds.table.len() % 16 == 0 {
@@ -1295,7 +1279,7 @@ mod tests {
         let keypairs: Vec<_> = repeat_with(Keypair::new).take(128).collect();
         let mut crds = Crds::default();
         for k in 0..4096 {
-            let keypair = &keypairs[rng.gen_range(0, keypairs.len())];
+            let keypair = &keypairs[rng.gen_range(0..keypairs.len())];
             let value = CrdsValue::new_rand(&mut rng, Some(keypair));
             let local_timestamp = new_rand_timestamp(&mut rng);
             let _ = crds.insert(value, local_timestamp, GossipRoute::LocalMessage);
@@ -1307,7 +1291,7 @@ mod tests {
         assert!(crds.records.len() <= keypairs.len());
         // Remove values one by one and assert that records stay valid.
         while !crds.table.is_empty() {
-            let index = rng.gen_range(0, crds.table.len());
+            let index = rng.gen_range(0..crds.table.len());
             let key = crds.table.get_index(index).unwrap().0.clone();
             crds.remove(&key, /*now=*/ 0);
             if crds.table.len() % 64 == 0 {
@@ -1393,11 +1377,11 @@ mod tests {
         let keypairs: Vec<_> = repeat_with(Keypair::new).take(64).collect();
         let stakes = keypairs
             .iter()
-            .map(|k| (k.pubkey(), rng.gen_range(0, 1000)))
+            .map(|k| (k.pubkey(), rng.gen_range(0..1000)))
             .collect();
         let mut crds = Crds::default();
         for _ in 0..2048 {
-            let keypair = &keypairs[rng.gen_range(0, keypairs.len())];
+            let keypair = &keypairs[rng.gen_range(0..keypairs.len())];
             let value = CrdsValue::new_rand(&mut rng, Some(keypair));
             let local_timestamp = new_rand_timestamp(&mut rng);
             let _ = crds.insert(value, local_timestamp, GossipRoute::LocalMessage);

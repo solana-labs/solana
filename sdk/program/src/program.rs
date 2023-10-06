@@ -392,7 +392,7 @@ pub fn get_return_data() -> Option<(Pubkey, Vec<u8>)> {
 
 /// Do sanity checks of type layout.
 #[doc(hidden)]
-#[allow(clippy::integer_arithmetic)]
+#[allow(clippy::arithmetic_side_effects)]
 pub fn check_type_assumptions() {
     extern crate memoffset;
     use {

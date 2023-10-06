@@ -1,6 +1,6 @@
 //! Helper types and functions for handling and dealing with snapshot hashes.
 use {
-    solana_accounts_db::{accounts_hash::AccountsHashEnum, epoch_accounts_hash::EpochAccountsHash},
+    solana_accounts_db::{accounts_hash::AccountsHashKind, epoch_accounts_hash::EpochAccountsHash},
     solana_sdk::{
         clock::Slot,
         hash::{Hash, Hasher},
@@ -35,7 +35,7 @@ impl SnapshotHash {
     /// Make a snapshot hash from an accounts hash and epoch accounts hash
     #[must_use]
     pub fn new(
-        accounts_hash: &AccountsHashEnum,
+        accounts_hash: &AccountsHashKind,
         epoch_accounts_hash: Option<&EpochAccountsHash>,
     ) -> Self {
         let snapshot_hash = match epoch_accounts_hash {

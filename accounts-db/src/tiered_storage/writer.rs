@@ -38,14 +38,20 @@ impl<'format> TieredStorageWriter<'format> {
         V: Borrow<Hash>,
     >(
         &self,
-        _accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
-        _skip: usize,
+        accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
+        skip: usize,
     ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
         let footer = TieredStorageFooter {
             account_meta_format: self.format.account_meta_format,
             owners_block_format: self.format.owners_block_format,
             account_block_format: self.format.account_block_format,
             account_index_format: self.format.account_index_format,
+            account_entry_count: accounts
+                .accounts
+                .len()
+                .saturating_sub(skip)
+                .try_into()
+                .expect("num accounts <= u32::MAX"),
             ..TieredStorageFooter::default()
         };
 

@@ -8,14 +8,15 @@ use {
     inflector::Inflector,
     serde_json::Value,
     solana_sdk::{
-        instruction::InstructionError, pubkey::Pubkey, stake, system_program, sysvar, vote,
+        address_lookup_table, instruction::InstructionError, pubkey::Pubkey, stake, system_program,
+        sysvar, vote,
     },
     std::collections::HashMap,
     thiserror::Error,
 };
 
 lazy_static! {
-    static ref ADDRESS_LOOKUP_PROGRAM_ID: Pubkey = solana_address_lookup_table_program::id();
+    static ref ADDRESS_LOOKUP_PROGRAM_ID: Pubkey = address_lookup_table::program::id();
     static ref BPF_UPGRADEABLE_LOADER_PROGRAM_ID: Pubkey = solana_sdk::bpf_loader_upgradeable::id();
     static ref CONFIG_PROGRAM_ID: Pubkey = solana_config_program::id();
     static ref STAKE_PROGRAM_ID: Pubkey = stake::program::id();

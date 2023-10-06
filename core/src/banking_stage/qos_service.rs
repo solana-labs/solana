@@ -14,10 +14,7 @@ use {
         saturating_add_assign,
         transaction::{self, SanitizedTransaction, TransactionError},
     },
-    std::sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
+    std::sync::atomic::{AtomicU64, Ordering},
 };
 
 // QosService is local to each banking thread, each instance of QosService provides services to
@@ -137,7 +134,7 @@ impl QosService {
     pub fn update_costs<'a>(
         transaction_cost_results: impl Iterator<Item = &'a transaction::Result<TransactionCost>>,
         transaction_committed_status: Option<&Vec<CommitTransactionDetails>>,
-        bank: &Arc<Bank>,
+        bank: &Bank,
     ) {
         if let Some(transaction_committed_status) = transaction_committed_status {
             Self::update_committed_transaction_costs(
@@ -152,7 +149,7 @@ impl QosService {
     pub fn remove_costs<'a>(
         transaction_cost_results: impl Iterator<Item = &'a transaction::Result<TransactionCost>>,
         transaction_committed_status: Option<&Vec<CommitTransactionDetails>>,
-        bank: &Arc<Bank>,
+        bank: &Bank,
     ) {
         match transaction_committed_status {
             Some(transaction_committed_status) => Self::remove_uncommitted_transaction_costs(
@@ -167,7 +164,7 @@ impl QosService {
     fn remove_uncommitted_transaction_costs<'a>(
         transaction_cost_results: impl Iterator<Item = &'a transaction::Result<TransactionCost>>,
         transaction_committed_status: &Vec<CommitTransactionDetails>,
-        bank: &Arc<Bank>,
+        bank: &Bank,
     ) {
         let mut cost_tracker = bank.write_cost_tracker().unwrap();
         transaction_cost_results
@@ -186,7 +183,7 @@ impl QosService {
     fn update_committed_transaction_costs<'a>(
         transaction_cost_results: impl Iterator<Item = &'a transaction::Result<TransactionCost>>,
         transaction_committed_status: &Vec<CommitTransactionDetails>,
-        bank: &Arc<Bank>,
+        bank: &Bank,
     ) {
         let mut cost_tracker = bank.write_cost_tracker().unwrap();
         transaction_cost_results
@@ -206,7 +203,7 @@ impl QosService {
 
     fn remove_transaction_costs<'a>(
         transaction_cost_results: impl Iterator<Item = &'a transaction::Result<TransactionCost>>,
-        bank: &Arc<Bank>,
+        bank: &Bank,
     ) {
         let mut cost_tracker = bank.write_cost_tracker().unwrap();
         transaction_cost_results.for_each(|tx_cost| {
@@ -321,25 +318,25 @@ impl QosService {
             Ok(cost) => {
                 saturating_add_assign!(
                     batched_transaction_details.costs.batched_signature_cost,
-                    cost.signature_cost
+                    cost.signature_cost()
                 );
                 saturating_add_assign!(
                     batched_transaction_details.costs.batched_write_lock_cost,
-                    cost.write_lock_cost
+                    cost.write_lock_cost()
                 );
                 saturating_add_assign!(
                     batched_transaction_details.costs.batched_data_bytes_cost,
-                    cost.data_bytes_cost
+                    cost.data_bytes_cost()
                 );
                 saturating_add_assign!(
                     batched_transaction_details
                         .costs
                         .batched_builtins_execute_cost,
-                    cost.builtins_execution_cost
+                    cost.builtins_execution_cost()
                 );
                 saturating_add_assign!(
                     batched_transaction_details.costs.batched_bpf_execute_cost,
-                    cost.bpf_execution_cost
+                    cost.bpf_execution_cost()
                 );
             }
             Err(transaction_error) => match transaction_error {
@@ -592,6 +589,7 @@ mod tests {
     use {
         super::*,
         itertools::Itertools,
+        solana_cost_model::transaction_cost::UsageCostDetails,
         solana_runtime::genesis_utils::{create_genesis_config, GenesisConfigInfo},
         solana_sdk::{
             hash::Hash,
@@ -599,6 +597,7 @@ mod tests {
             system_transaction,
         },
         solana_vote_program::vote_transaction,
+        std::sync::Arc,
     };
 
     #[test]
@@ -736,7 +735,7 @@ mod tests {
             let commited_status: Vec<CommitTransactionDetails> = qos_cost_results
                 .iter()
                 .map(|tx_cost| CommitTransactionDetails::Committed {
-                    compute_units: tx_cost.as_ref().unwrap().bpf_execution_cost
+                    compute_units: tx_cost.as_ref().unwrap().bpf_execution_cost()
                         + execute_units_adjustment,
                 })
                 .collect();
@@ -863,7 +862,7 @@ mod tests {
                         CommitTransactionDetails::NotCommitted
                     } else {
                         CommitTransactionDetails::Committed {
-                            compute_units: tx_cost.as_ref().unwrap().bpf_execution_cost
+                            compute_units: tx_cost.as_ref().unwrap().bpf_execution_cost()
                                 + execute_units_adjustment,
                         }
                     }
@@ -906,14 +905,14 @@ mod tests {
         let tx_cost_results: Vec<_> = (0..num_txs)
             .map(|n| {
                 if n % 2 == 0 {
-                    Ok(TransactionCost {
+                    Ok(TransactionCost::Transaction(UsageCostDetails {
                         signature_cost,
                         write_lock_cost,
                         data_bytes_cost,
                         builtins_execution_cost,
                         bpf_execution_cost,
-                        ..TransactionCost::default()
-                    })
+                        ..UsageCostDetails::default()
+                    }))
                 } else {
                     Err(TransactionError::WouldExceedMaxBlockCostLimit)
                 }

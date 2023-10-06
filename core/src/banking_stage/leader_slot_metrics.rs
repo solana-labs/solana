@@ -868,7 +868,7 @@ mod tests {
 
         // Create a child descended from the first bank
         let next_bank = Arc::new(Bank::new_from_parent(
-            &first_bank,
+            first_bank.clone(),
             &Pubkey::new_unique(),
             first_bank.slot() + 1,
         ));

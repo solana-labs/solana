@@ -93,7 +93,7 @@ impl BanksServer {
                 // has been processed
                 let lock = bank.freeze_lock();
                 if *lock == Hash::default() {
-                    let _ = bank.try_process_transactions(transactions.iter());
+                    let _ = bank.try_process_entry_transactions(transactions);
                     // break out of inner loop and release bank freeze lock
                     break;
                 }

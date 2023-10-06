@@ -153,6 +153,10 @@ pub struct SyscallContext {
 #[derive(Debug, Clone)]
 pub struct SerializedAccountMetadata {
     pub original_data_len: usize,
+    pub vm_data_addr: u64,
+    pub vm_key_addr: u64,
+    pub vm_lamports_addr: u64,
+    pub vm_owner_addr: u64,
 }
 
 pub struct InvokeContext<'a> {
@@ -212,6 +216,14 @@ impl<'a> InvokeContext<'a> {
             syscall_context: Vec::new(),
             traces: Vec::new(),
         }
+    }
+
+    pub fn find_program_in_cache(&self, pubkey: &Pubkey) -> Option<Arc<LoadedProgram>> {
+        // First lookup the cache of the programs modified by the current transaction. If not found, lookup
+        // the cache of the cache of the programs that are loaded for the transaction batch.
+        self.programs_modified_by_tx
+            .find(pubkey)
+            .or_else(|| self.programs_loaded_for_tx_batch.find(pubkey))
     }
 
     /// Push a stack frame onto the invocation stack
@@ -736,7 +748,8 @@ impl<'a> InvokeContext<'a> {
             .ok_or(InstructionError::UnsupportedProgramId)?;
         let process_instruction = match &entry.program {
             LoadedProgramType::Builtin(program) => program
-                .lookup_function(ENTRYPOINT_KEY)
+                .get_function_registry()
+                .lookup_by_key(ENTRYPOINT_KEY)
                 .map(|(_name, process_instruction)| process_instruction),
             _ => None,
         }

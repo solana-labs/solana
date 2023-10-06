@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 use {
     clap::{crate_description, crate_name, value_t, values_t_or_exit, App, Arg},
     log::*,
@@ -136,7 +136,7 @@ fn make_create_message(
     maybe_space: Option<u64>,
     mint: Option<Pubkey>,
 ) -> Message {
-    let space = maybe_space.unwrap_or_else(|| thread_rng().gen_range(0, 1000));
+    let space = maybe_space.unwrap_or_else(|| thread_rng().gen_range(0..1000));
 
     let instructions: Vec<_> = (0..num_instructions)
         .flat_map(|_| {

@@ -212,6 +212,7 @@ impl std::ops::AddAssign for CollectedInfo {
 mod tests {
     use {
         super::*,
+        assert_matches::assert_matches,
         solana_sdk::{account::Account, sysvar},
     };
 
@@ -244,10 +245,10 @@ mod tests {
             let mut rent_collector = RentCollector::default();
 
             let mut account = AccountSharedData::default();
-            assert!(matches!(
-                rent_collector.calculate_rent_result(&Pubkey::default(), &account, None,),
-                RentResult::NoRentCollectionNow,
-            ));
+            assert_matches!(
+                rent_collector.calculate_rent_result(&Pubkey::default(), &account, None),
+                RentResult::NoRentCollectionNow
+            );
             {
                 let mut account_clone = account.clone();
                 assert_eq!(
@@ -263,10 +264,10 @@ mod tests {
             }
 
             account.set_executable(true);
-            assert!(matches!(
-                rent_collector.calculate_rent_result(&Pubkey::default(), &account, None,),
+            assert_matches!(
+                rent_collector.calculate_rent_result(&Pubkey::default(), &account, None),
                 RentResult::Exempt
-            ));
+            );
             {
                 let mut account_clone = account.clone();
                 let mut account_expected = account.clone();
@@ -286,10 +287,10 @@ mod tests {
             }
 
             account.set_executable(false);
-            assert!(matches!(
-                rent_collector.calculate_rent_result(&incinerator::id(), &account, None,),
+            assert_matches!(
+                rent_collector.calculate_rent_result(&incinerator::id(), &account, None),
                 RentResult::Exempt
-            ));
+            );
             {
                 let mut account_clone = account.clone();
                 let mut account_expected = account.clone();
@@ -377,10 +378,10 @@ mod tests {
             // but, our rent_epoch is set in the future, so we can't know if we are exempt yet or not.
             // We don't calculate rent amount vs data if the rent_epoch is already in the future.
             account.set_rent_epoch(1_000_000);
-            assert!(matches!(
-                rent_collector.calculate_rent_result(&Pubkey::default(), &account, None,),
-                RentResult::NoRentCollectionNow,
-            ));
+            assert_matches!(
+                rent_collector.calculate_rent_result(&Pubkey::default(), &account, None),
+                RentResult::NoRentCollectionNow
+            );
             {
                 let mut account_clone = account.clone();
                 assert_eq!(
@@ -398,14 +399,14 @@ mod tests {
             // filler accounts are exempt
             account.set_rent_epoch(1);
             account.set_lamports(10);
-            assert!(matches!(
+            assert_matches!(
                 rent_collector.calculate_rent_result(
                     &filler_account,
                     &account,
                     Some(&filler_account),
                 ),
-                RentResult::Exempt,
-            ));
+                RentResult::Exempt
+            );
             {
                 let mut account_clone = account.clone();
                 let mut account_expected = account.clone();

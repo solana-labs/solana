@@ -50,7 +50,7 @@ impl Blockstore {
             ("write_batch_us", purge_stats.write_batch as i64, i64),
             (
                 "delete_files_in_range_us",
-                purge_stats.write_batch as i64,
+                purge_stats.delete_files_in_range as i64,
                 i64
             )
         );
@@ -339,6 +339,26 @@ impl Blockstore {
                 .is_ok()
     }
 
+    /// Returns true if the special columns, TransactionStatus and
+    /// AddressSignatures, are both empty.
+    ///
+    /// It should not be the case that one is empty and the other is not, but
+    /// just return false in this case.
+    fn special_columns_empty(&self) -> Result<bool> {
+        let transaction_status_empty = self
+            .transaction_status_cf
+            .iter(IteratorMode::Start)?
+            .next()
+            .is_none();
+        let address_signatures_empty = self
+            .address_signatures_cf
+            .iter(IteratorMode::Start)?
+            .next()
+            .is_none();
+
+        Ok(transaction_status_empty && address_signatures_empty)
+    }
+
     /// Purges special columns (using a non-Slot primary-index) exactly, by
     /// deserializing each slot being purged and iterating through all
     /// transactions to determine the keys of individual records.
@@ -352,18 +372,38 @@ impl Blockstore {
         from_slot: Slot,
         to_slot: Slot,
     ) -> Result<()> {
+        if self.special_columns_empty()? {
+            return Ok(());
+        }
+
         let mut index0 = self.transaction_status_index_cf.get(0)?.unwrap_or_default();
         let mut index1 = self.transaction_status_index_cf.get(1)?.unwrap_or_default();
-        let to_slot = to_slot.saturating_add(1);
-        for slot in from_slot..to_slot {
+        let slot_indexes = |slot: Slot| -> Vec<u64> {
+            let mut indexes = vec![];
+            if slot <= index0.max_slot && (index0.frozen || slot >= index1.max_slot) {
+                indexes.push(0);
+            }
+            if slot <= index1.max_slot && (index1.frozen || slot >= index0.max_slot) {
+                indexes.push(1);
+            }
+            indexes
+        };
+
+        for slot in from_slot..=to_slot {
+            let primary_indexes = slot_indexes(slot);
+            if primary_indexes.is_empty() {
+                continue;
+            }
+
             let slot_entries = self.get_any_valid_slot_entries(slot, 0);
             let transactions = slot_entries
                 .into_iter()
                 .flat_map(|entry| entry.transactions);
             for transaction in transactions {
                 if let Some(&signature) = transaction.signatures.get(0) {
-                    batch.delete::<cf::TransactionStatus>((0, signature, slot))?;
-                    batch.delete::<cf::TransactionStatus>((1, signature, slot))?;
+                    for primary_index in &primary_indexes {
+                        batch.delete::<cf::TransactionStatus>((*primary_index, signature, slot))?;
+                    }
 
                     let meta = self.read_transaction_status((signature, slot))?;
                     let loaded_addresses = meta.map(|meta| meta.loaded_addresses);
@@ -373,8 +413,14 @@ impl Blockstore {
                     );
 
                     for pubkey in account_keys.iter() {
-                        batch.delete::<cf::AddressSignatures>((0, *pubkey, slot, signature))?;
-                        batch.delete::<cf::AddressSignatures>((1, *pubkey, slot, signature))?;
+                        for primary_index in &primary_indexes {
+                            batch.delete::<cf::AddressSignatures>((
+                                *primary_index,
+                                *pubkey,
+                                slot,
+                                signature,
+                            ))?;
+                        }
                     }
                 }
             }
@@ -650,9 +696,6 @@ pub mod tests {
                 IteratorDirection::Forward,
             ))
             .unwrap();
-        let padding_entry = status_entry_iterator.next().unwrap().0;
-        assert_eq!(padding_entry.0, 2);
-        assert_eq!(padding_entry.2, 0);
         assert!(status_entry_iterator.next().is_none());
         let mut address_transactions_iterator = blockstore
             .db
@@ -661,10 +704,8 @@ pub mod tests {
                 IteratorDirection::Forward,
             ))
             .unwrap();
-        let padding_entry = address_transactions_iterator.next().unwrap().0;
-        assert_eq!(padding_entry.0, 2);
-        assert_eq!(padding_entry.2, 0);
         assert!(address_transactions_iterator.next().is_none());
+
         assert_eq!(
             transaction_status_index_cf.get(0).unwrap().unwrap(),
             TransactionStatusIndexMeta {
@@ -682,7 +723,7 @@ pub mod tests {
     }
 
     fn clear_and_repopulate_transaction_statuses_for_test(
-        blockstore: &mut Blockstore,
+        blockstore: &Blockstore,
         index0_max_slot: u64,
         index1_max_slot: u64,
     ) {
@@ -703,7 +744,7 @@ pub mod tests {
         blockstore.initialize_transaction_status_index().unwrap();
         *blockstore.active_transaction_status_index.write().unwrap() = 0;
 
-        for x in 0..index0_max_slot + 1 {
+        for x in 0..index0_max_slot {
             let entries = make_slot_entries_with_transactions(1);
             let shreds = entries_to_test_shreds(
                 &entries,
@@ -716,8 +757,8 @@ pub mod tests {
             blockstore.insert_shreds(shreds, None, false).unwrap();
             let signature = entries
                 .iter()
-                .cloned()
                 .filter(|entry| !entry.is_tick())
+                .cloned()
                 .flat_map(|entry| entry.transactions)
                 .map(|transaction| transaction.signatures[0])
                 .collect::<Vec<Signature>>()[0];
@@ -732,6 +773,36 @@ pub mod tests {
                 )
                 .unwrap();
         }
+
+        // Add slot that crosses primary indexes
+        let entries = make_slot_entries_with_transactions(2);
+        let shreds = entries_to_test_shreds(
+            &entries,
+            index0_max_slot,                   // slot
+            index0_max_slot.saturating_sub(1), // parent_slot
+            true,                              // is_full_slot
+            0,                                 // version
+            true,                              // merkle_variant
+        );
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        let signatures = entries
+            .iter()
+            .filter(|entry| !entry.is_tick())
+            .cloned()
+            .flat_map(|entry| entry.transactions)
+            .map(|transaction| transaction.signatures[0])
+            .collect::<Vec<Signature>>();
+        let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
+        blockstore
+            .write_transaction_status(
+                index0_max_slot,
+                signatures[0],
+                vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
+                vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
+                TransactionStatusMeta::default(),
+            )
+            .unwrap();
+
         // Freeze index 0
         let mut write_batch = blockstore.db.batch().unwrap();
         let mut w_active_transaction_status_index =
@@ -746,6 +817,19 @@ pub mod tests {
         drop(w_active_transaction_status_index);
         blockstore.db.write(write_batch).unwrap();
 
+        let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
+        blockstore
+            .write_transaction_status(
+                index0_max_slot,
+                signatures[1],
+                vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
+                vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
+                TransactionStatusMeta::default(),
+            )
+            .unwrap();
+
+        // Note: index0_max_slot exists in both indexes
+
         for x in index0_max_slot + 1..index1_max_slot + 1 {
             let entries = make_slot_entries_with_transactions(1);
             let shreds = entries_to_test_shreds(
@@ -759,8 +843,8 @@ pub mod tests {
             blockstore.insert_shreds(shreds, None, false).unwrap();
             let signature: Signature = entries
                 .iter()
-                .cloned()
                 .filter(|entry| !entry.is_tick())
+                .cloned()
                 .flat_map(|entry| entry.transactions)
                 .map(|transaction| transaction.signatures[0])
                 .collect::<Vec<Signature>>()[0];
@@ -800,17 +884,65 @@ pub mod tests {
     }
 
     #[test]
+    fn test_special_columns_empty() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        // Nothing has been inserted yet
+        assert!(blockstore.special_columns_empty().unwrap());
+
+        let num_entries = 1;
+        let max_slot = 9;
+        for slot in 0..=max_slot {
+            let entries = make_slot_entries_with_transactions(num_entries);
+            let shreds = entries_to_test_shreds(
+                &entries,
+                slot,
+                slot.saturating_sub(1),
+                true, // is_full_slot
+                0,    // version
+                true, // merkle_variant
+            );
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+
+            for transaction in entries.into_iter().flat_map(|entry| entry.transactions) {
+                assert_eq!(transaction.signatures.len(), 1);
+                blockstore
+                    .write_transaction_status(
+                        slot,
+                        transaction.signatures[0],
+                        transaction.message.static_account_keys().iter().collect(),
+                        vec![],
+                        TransactionStatusMeta::default(),
+                    )
+                    .unwrap();
+            }
+        }
+        assert!(!blockstore.special_columns_empty().unwrap());
+
+        // Partially purge and ensure special columns are non-empty
+        blockstore
+            .run_purge(0, max_slot - 5, PurgeType::Exact)
+            .unwrap();
+        assert!(!blockstore.special_columns_empty().unwrap());
+
+        // Purge the rest and ensure the special columns are empty once again
+        blockstore.run_purge(0, max_slot, PurgeType::Exact).unwrap();
+        assert!(blockstore.special_columns_empty().unwrap());
+    }
+
+    #[test]
     #[allow(clippy::cognitive_complexity)]
     fn test_purge_transaction_status_exact() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
-        let mut blockstore = Blockstore::open(ledger_path.path()).unwrap();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         let index0_max_slot = 9;
         let index1_max_slot = 19;
 
         // Test purge outside bounds
         clear_and_repopulate_transaction_statuses_for_test(
-            &mut blockstore,
+            &blockstore,
             index0_max_slot,
             index1_max_slot,
         );
@@ -857,7 +989,7 @@ pub mod tests {
 
         // Test purge inside index 0
         clear_and_repopulate_transaction_statuses_for_test(
-            &mut blockstore,
+            &blockstore,
             index0_max_slot,
             index1_max_slot,
         );
@@ -906,7 +1038,7 @@ pub mod tests {
 
         // Test purge inside index 0 at upper boundary
         clear_and_repopulate_transaction_statuses_for_test(
-            &mut blockstore,
+            &blockstore,
             index0_max_slot,
             index1_max_slot,
         );
@@ -957,7 +1089,7 @@ pub mod tests {
 
         // Test purge inside index 1 at lower boundary
         clear_and_repopulate_transaction_statuses_for_test(
-            &mut blockstore,
+            &blockstore,
             index0_max_slot,
             index1_max_slot,
         );
@@ -999,13 +1131,13 @@ pub mod tests {
         for _ in 13..index1_max_slot + 1 {
             let entry = status_entry_iterator.next().unwrap().0;
             assert_eq!(entry.0, 1);
-            assert!(entry.2 > 12);
+            assert!(entry.2 == index0_max_slot || entry.2 > 12);
         }
         drop(status_entry_iterator);
 
         // Test purge across index boundaries
         clear_and_repopulate_transaction_statuses_for_test(
-            &mut blockstore,
+            &blockstore,
             index0_max_slot,
             index1_max_slot,
         );
@@ -1055,7 +1187,7 @@ pub mod tests {
 
         // Test purge include complete index 1
         clear_and_repopulate_transaction_statuses_for_test(
-            &mut blockstore,
+            &blockstore,
             index0_max_slot,
             index1_max_slot,
         );
@@ -1096,13 +1228,32 @@ pub mod tests {
                 frozen: false,
             }
         );
-        let entry = status_entry_iterator.next().unwrap().0;
-        assert_eq!(entry.0, 2); // Buffer entry, no index 1 entries remaining
         drop(status_entry_iterator);
+
+        // Purge up to but not including index0_max_slot
+        clear_and_repopulate_transaction_statuses_for_test(
+            &blockstore,
+            index0_max_slot,
+            index1_max_slot,
+        );
+        blockstore
+            .run_purge(0, index0_max_slot - 1, PurgeType::Exact)
+            .unwrap();
+        assert_eq!(
+            blockstore
+                .transaction_status_index_cf
+                .get(0)
+                .unwrap()
+                .unwrap(),
+            TransactionStatusIndexMeta {
+                max_slot: index0_max_slot,
+                frozen: true,
+            }
+        );
 
         // Test purge all
         clear_and_repopulate_transaction_statuses_for_test(
-            &mut blockstore,
+            &blockstore,
             index0_max_slot,
             index1_max_slot,
         );
@@ -1115,6 +1266,8 @@ pub mod tests {
                 IteratorDirection::Forward,
             ))
             .unwrap();
+        assert!(status_entry_iterator.next().is_none());
+
         assert_eq!(
             blockstore
                 .transaction_status_index_cf
@@ -1137,8 +1290,6 @@ pub mod tests {
                 frozen: false,
             }
         );
-        let entry = status_entry_iterator.next().unwrap().0;
-        assert_eq!(entry.0, 2); // Buffer entry, no index 0 or index 1 entries remaining
     }
 
     #[test]
@@ -1169,5 +1320,91 @@ pub mod tests {
         blockstore
             .purge_special_columns_exact(&mut write_batch, slot, slot + 1)
             .unwrap();
+    }
+
+    #[test]
+    fn test_purge_special_columns_compaction_filter() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+        let index0_max_slot = 9;
+        let index1_max_slot = 19;
+        // includes slot 0, and slot 9 has 2 transactions
+        let num_total_transactions = index1_max_slot + 2;
+
+        clear_and_repopulate_transaction_statuses_for_test(
+            &blockstore,
+            index0_max_slot,
+            index1_max_slot,
+        );
+        let first_index = {
+            let mut status_entry_iterator = blockstore
+                .db
+                .iter::<cf::TransactionStatus>(IteratorMode::Start)
+                .unwrap();
+            status_entry_iterator.next().unwrap().0
+        };
+        let last_index = {
+            let mut status_entry_iterator = blockstore
+                .db
+                .iter::<cf::TransactionStatus>(IteratorMode::End)
+                .unwrap();
+            status_entry_iterator.next().unwrap().0
+        };
+
+        let oldest_slot = 3;
+        blockstore.db.set_oldest_slot(oldest_slot);
+        blockstore.db.compact_range_cf::<cf::TransactionStatus>(
+            &cf::TransactionStatus::key(first_index),
+            &cf::TransactionStatus::key(last_index),
+        );
+
+        let status_entry_iterator = blockstore
+            .db
+            .iter::<cf::TransactionStatus>(IteratorMode::Start)
+            .unwrap();
+        let mut count = 0;
+        for ((_primary_index, _signature, slot), _value) in status_entry_iterator {
+            assert!(slot >= oldest_slot);
+            count += 1;
+        }
+        assert_eq!(count, num_total_transactions - oldest_slot);
+
+        clear_and_repopulate_transaction_statuses_for_test(
+            &blockstore,
+            index0_max_slot,
+            index1_max_slot,
+        );
+        let first_index = {
+            let mut status_entry_iterator = blockstore
+                .db
+                .iter::<cf::TransactionStatus>(IteratorMode::Start)
+                .unwrap();
+            status_entry_iterator.next().unwrap().0
+        };
+        let last_index = {
+            let mut status_entry_iterator = blockstore
+                .db
+                .iter::<cf::TransactionStatus>(IteratorMode::End)
+                .unwrap();
+            status_entry_iterator.next().unwrap().0
+        };
+
+        let oldest_slot = 12;
+        blockstore.db.set_oldest_slot(oldest_slot);
+        blockstore.db.compact_range_cf::<cf::TransactionStatus>(
+            &cf::TransactionStatus::key(first_index),
+            &cf::TransactionStatus::key(last_index),
+        );
+
+        let status_entry_iterator = blockstore
+            .db
+            .iter::<cf::TransactionStatus>(IteratorMode::Start)
+            .unwrap();
+        let mut count = 0;
+        for ((_primary_index, _signature, slot), _value) in status_entry_iterator {
+            assert!(slot >= oldest_slot);
+            count += 1;
+        }
+        assert_eq!(count, num_total_transactions - oldest_slot - 1); // Extra transaction in slot 9
     }
 }

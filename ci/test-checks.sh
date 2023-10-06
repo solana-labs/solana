@@ -13,24 +13,6 @@ source ci/rust-version.sh nightly
 eval "$(ci/channel-info.sh)"
 cargoNightly="$(readlink -f "./cargo") nightly"
 
-scripts/increment-cargo-version.sh check
-
-if [ -n "$CI" ] ; then
-# Disallow uncommitted Cargo.lock changes
-(
-  _ scripts/cargo-for-all-lock-files.sh tree >/dev/null
-  set +e
-  if ! _ git diff --exit-code; then
-    cat <<EOF 1>&2
-
-Error: Uncommitted Cargo.lock changes.
-Run './scripts/cargo-for-all-lock-files.sh tree' and commit the result.
-EOF
-    exit 1
-  fi
-)
-fi
-
 echo --- build environment
 (
   set -x
@@ -91,7 +73,7 @@ nightly_clippy_allows=(--allow=clippy::redundant_clone)
 _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy --workspace --all-targets --features dummy-for-ci-check -- \
   --deny=warnings \
   --deny=clippy::default_trait_access \
-  --deny=clippy::integer_arithmetic \
+  --deny=clippy::arithmetic_side_effects \
   --deny=clippy::manual_let_else \
   --deny=clippy::used_underscore_binding \
   "${nightly_clippy_allows[@]}"
@@ -105,7 +87,7 @@ _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy --workspace -
 _ scripts/cargo-for-all-lock-files.sh -- clippy --workspace  --tests --bins --examples --features dummy-for-ci-check -- \
   --deny=warnings \
   --deny=clippy::default_trait_access \
-  --deny=clippy::integer_arithmetic \
+  --deny=clippy::arithmetic_side_effects \
   --deny=clippy::manual_let_else \
   --deny=clippy::used_underscore_binding
 

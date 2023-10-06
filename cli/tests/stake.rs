@@ -1,6 +1,7 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::redundant_closure)]
 use {
+    assert_matches::assert_matches,
     solana_cli::{
         check_balance,
         cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
@@ -11,7 +12,10 @@ use {
     solana_cli_output::{parse_sign_only_reply_string, OutputFormat},
     solana_faucet::faucet::run_local_faucet,
     solana_rpc_client::rpc_client::RpcClient,
-    solana_rpc_client_api::response::{RpcStakeActivation, StakeActivationState},
+    solana_rpc_client_api::{
+        request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
+        response::{RpcStakeActivation, StakeActivationState},
+    },
     solana_rpc_client_nonce_utils::blockhash_query::{self, BlockhashQuery},
     solana_sdk::{
         account_utils::StateMut,
@@ -295,8 +299,23 @@ fn test_stake_delegation_force() {
     let mint_pubkey = mint_keypair.pubkey();
     let authorized_withdrawer = Keypair::new().pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator =
-        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
+    let slots_per_epoch = 32;
+    let test_validator = TestValidatorGenesis::default()
+        .fee_rate_governor(FeeRateGovernor::new(0, 0))
+        .rent(Rent {
+            lamports_per_byte_year: 1,
+            exemption_threshold: 1.0,
+            ..Rent::default()
+        })
+        .epoch_schedule(EpochSchedule::custom(
+            slots_per_epoch,
+            slots_per_epoch,
+            /* enable_warmup_epochs = */ false,
+        ))
+        .faucet_addr(Some(faucet_addr))
+        .warp_slot(DELINQUENT_VALIDATOR_SLOT_DISTANCE * 2) // get out in front of the cli voter delinquency check
+        .start_with_mint_address(mint_pubkey, SocketAddrSpace::Unspecified)
+        .expect("validator start failed");
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -345,7 +364,7 @@ fn test_stake_delegation_force() {
         withdrawer: None,
         withdrawer_signer: None,
         lockup: Lockup::default(),
-        amount: SpendAmount::Some(50_000_000_000),
+        amount: SpendAmount::Some(25_000_000_000),
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
@@ -358,10 +377,54 @@ fn test_stake_delegation_force() {
     };
     process_command(&config).unwrap();
 
-    // Delegate stake fails (vote account had never voted)
+    // Delegate stake succeeds despite no votes, because voter has zero stake
     config.signers = vec![&default_signer];
     config.command = CliCommand::DelegateStake {
         stake_account_pubkey: stake_keypair.pubkey(),
+        vote_account_pubkey: vote_keypair.pubkey(),
+        stake_authority: 0,
+        force: false,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::default(),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        fee_payer: 0,
+        redelegation_stake_account: None,
+        compute_unit_price: None,
+    };
+    process_command(&config).unwrap();
+
+    // Create a second stake account
+    let stake_keypair2 = Keypair::new();
+    config.signers = vec![&default_signer, &stake_keypair2];
+    config.command = CliCommand::CreateStakeAccount {
+        stake_account: 1,
+        seed: None,
+        staker: None,
+        withdrawer: None,
+        withdrawer_signer: None,
+        lockup: Lockup::default(),
+        amount: SpendAmount::Some(25_000_000_000),
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        fee_payer: 0,
+        from: 0,
+        compute_unit_price: None,
+    };
+    process_command(&config).unwrap();
+
+    wait_for_next_epoch_plus_n_slots(&rpc_client, 1);
+
+    // Delegate stake2 fails because voter has not voted, but is now staked
+    config.signers = vec![&default_signer];
+    config.command = CliCommand::DelegateStake {
+        stake_account_pubkey: stake_keypair2.pubkey(),
         vote_account_pubkey: vote_keypair.pubkey(),
         stake_authority: 0,
         force: false,
@@ -379,7 +442,7 @@ fn test_stake_delegation_force() {
 
     // But if we force it, it works anyway!
     config.command = CliCommand::DelegateStake {
-        stake_account_pubkey: stake_keypair.pubkey(),
+        stake_account_pubkey: stake_keypair2.pubkey(),
         vote_account_pubkey: vote_keypair.pubkey(),
         stake_authority: 0,
         force: true,
@@ -1406,6 +1469,10 @@ fn test_stake_split() {
     config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&default_signer];
 
+    let minimum_balance = rpc_client
+        .get_minimum_balance_for_rent_exemption(StakeStateV2::size_of())
+        .unwrap();
+
     let mut config_offline = CliConfig::recent_for_tests();
     config_offline.json_rpc_url = String::default();
     config_offline.signers = vec![&offline_signer];
@@ -1433,10 +1500,7 @@ fn test_stake_split() {
     check_balance!(1_000_000_000_000, &rpc_client, &offline_pubkey);
 
     // Create stake account, identity is authority
-    let stake_balance = rpc_client
-        .get_minimum_balance_for_rent_exemption(StakeStateV2::size_of())
-        .unwrap()
-        + 10_000_000_000;
+    let stake_balance = minimum_balance + 10_000_000_000;
     let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     let stake_account_pubkey = stake_keypair.pubkey();
     config.signers.push(&stake_keypair);
@@ -1506,6 +1570,7 @@ fn test_stake_split() {
         lamports: 2 * stake_balance,
         fee_payer: 0,
         compute_unit_price: None,
+        rent_exempt_reserve: Some(minimum_balance),
     };
     config_offline.output_format = OutputFormat::JsonCompact;
     let sig_response = process_command(&config_offline).unwrap();
@@ -1530,10 +1595,15 @@ fn test_stake_split() {
         lamports: 2 * stake_balance,
         fee_payer: 0,
         compute_unit_price: None,
+        rent_exempt_reserve: None,
     };
     process_command(&config).unwrap();
-    check_balance!(8 * stake_balance, &rpc_client, &stake_account_pubkey,);
-    check_balance!(2 * stake_balance, &rpc_client, &split_account.pubkey(),);
+    check_balance!(8 * stake_balance, &rpc_client, &stake_account_pubkey);
+    check_balance!(
+        2 * stake_balance + minimum_balance,
+        &rpc_client,
+        &split_account.pubkey()
+    );
 }
 
 #[test]
@@ -2318,5 +2388,5 @@ fn test_stake_minimum_delegation() {
     };
 
     let result = process_command(&config);
-    assert!(matches!(result, Ok(..)));
+    assert_matches!(result, Ok(..));
 }

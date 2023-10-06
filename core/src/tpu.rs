@@ -15,7 +15,7 @@ use {
         sigverify_stage::SigVerifyStage,
         staked_nodes_updater_service::StakedNodesUpdaterService,
         tpu_entry_notifier::TpuEntryNotifier,
-        validator::GeneratorConfig,
+        validator::{BlockProductionMethod, GeneratorConfig},
     },
     bytes::Bytes,
     crossbeam_channel::{unbounded, Receiver},
@@ -30,11 +30,7 @@ use {
         optimistically_confirmed_bank_tracker::BankNotificationSender,
         rpc_subscriptions::RpcSubscriptions,
     },
-    solana_runtime::{
-        bank_forks::BankForks,
-        prioritization_fee_cache::PrioritizationFeeCache,
-        vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
-    },
+    solana_runtime::{bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache},
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
     solana_streamer::{
         nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
@@ -42,6 +38,7 @@ use {
         streamer::StakedNodes,
     },
     solana_turbine::broadcast_stage::{BroadcastStage, BroadcastStageType},
+    solana_vote::vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     std::{
         collections::HashMap,
         net::{SocketAddr, UdpSocket},
@@ -112,6 +109,7 @@ impl Tpu {
         tracer_thread_hdl: TracerThread,
         tpu_enable_udp: bool,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
+        block_production_method: BlockProductionMethod,
         _generator_config: Option<GeneratorConfig>, /* vestigial code for replay invalidator */
     ) -> Self {
         let TpuSockets {
@@ -221,6 +219,7 @@ impl Tpu {
         );
 
         let banking_stage = BankingStage::new(
+            block_production_method,
             cluster_info,
             poh_recorder,
             non_vote_receiver,

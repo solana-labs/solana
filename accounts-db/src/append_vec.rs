@@ -427,7 +427,7 @@ impl AppendVec {
         Some((
             //UNSAFE: This unsafe creates a slice that represents a chunk of self.map memory
             //The lifetime of this slice is tied to &self, since it points to self.map memory
-            unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, size) },
+            unsafe { std::slice::from_raw_parts(data.as_ptr(), size) },
             next,
         ))
     }
@@ -519,7 +519,7 @@ impl AppendVec {
     pub fn account_matches_owners(
         &self,
         offset: usize,
-        owners: &[&Pubkey],
+        owners: &[Pubkey],
     ) -> std::result::Result<usize, MatchAccountOwnerError> {
         let account_meta = self
             .get_account_meta(offset)
@@ -529,7 +529,7 @@ impl AppendVec {
         } else {
             owners
                 .iter()
-                .position(|entry| &&account_meta.owner == entry)
+                .position(|entry| &account_meta.owner == entry)
                 .ok_or(MatchAccountOwnerError::NoMatch)
         }
     }
@@ -615,7 +615,7 @@ impl AppendVec {
             let ptrs = [
                 (meta_ptr as *const u8, mem::size_of::<StoredMeta>()),
                 (account_meta_ptr as *const u8, mem::size_of::<AccountMeta>()),
-                (hash_ptr as *const u8, mem::size_of::<Hash>()),
+                (hash_ptr, mem::size_of::<Hash>()),
                 (data_ptr, data_len),
             ];
             if let Some(res) = self.append_ptrs_locked(&mut offset, &ptrs) {
@@ -694,6 +694,7 @@ pub mod tests {
         fn set_data_len_unsafe(&self, new_data_len: u64) {
             // UNSAFE: cast away & (= const ref) to &mut to force to mutate append-only (=read-only) AppendVec
             unsafe {
+                #[allow(invalid_reference_casting)]
                 std::ptr::write(
                     std::mem::transmute::<*const u64, *mut u64>(&self.meta.data_len),
                     new_data_len,
@@ -711,6 +712,7 @@ pub mod tests {
         fn set_executable_as_byte(&self, new_executable_byte: u8) {
             // UNSAFE: Force to interpret mmap-backed &bool as &u8 to write some crafted value;
             unsafe {
+                #[allow(invalid_reference_casting)]
                 std::ptr::write(
                     std::mem::transmute::<*const bool, *mut u8>(&self.account_meta.executable),
                     new_executable_byte,
@@ -730,7 +732,7 @@ pub mod tests {
     static_assertions::assert_eq_align!(u64, StoredMeta, AccountMeta);
 
     #[test]
-    #[should_panic(expected = "assertion failed: accounts.has_hash_and_write_version()")]
+    #[should_panic(expected = "accounts.has_hash_and_write_version()")]
     fn test_storable_accounts_with_hashes_and_write_versions_new() {
         let account = AccountSharedData::default();
         // for (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash)
@@ -765,19 +767,25 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed:")]
+    // rust 1.73+ (our as-of-writing nightly version) changed panic message. we're stuck with this
+    // short common substring until the monorepo is fully 1.73+ including stable.
+    #[should_panic(expected = "left == right")]
     fn test_storable_accounts_with_hashes_and_write_versions_new2() {
         test_mismatch(false, false);
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed:")]
+    // rust 1.73+ (our as-of-writing nightly version) changed panic message. we're stuck with this
+    // short common substring until the monorepo is fully 1.73+ including stable.
+    #[should_panic(expected = "left == right")]
     fn test_storable_accounts_with_hashes_and_write_versions_new3() {
         test_mismatch(false, true);
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed:")]
+    // rust 1.73+ (our as-of-writing nightly version) changed panic message. we're stuck with this
+    // short common substring until the monorepo is fully 1.73+ including stable.
+    #[should_panic(expected = "left == right")]
     fn test_storable_accounts_with_hashes_and_write_versions_new4() {
         test_mismatch(true, false);
     }
@@ -787,7 +795,7 @@ pub mod tests {
         // for (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash)
         let account = AccountSharedData::default();
         let slot = 0 as Slot;
-        let pubkeys = vec![Pubkey::default()];
+        let pubkeys = [Pubkey::default()];
         let hashes = Vec::<Hash>::default();
         let write_versions = Vec::default();
         let mut accounts = vec![(&pubkeys[0], &account)];
@@ -808,10 +816,10 @@ pub mod tests {
         // for (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash)
         let account = AccountSharedData::default();
         let slot = 0 as Slot;
-        let pubkeys = vec![Pubkey::from([5; 32]), Pubkey::from([6; 32])];
+        let pubkeys = [Pubkey::from([5; 32]), Pubkey::from([6; 32])];
         let hashes = vec![Hash::new(&[3; 32]), Hash::new(&[4; 32])];
         let write_versions = vec![42, 43];
-        let accounts = vec![(&pubkeys[0], &account), (&pubkeys[1], &account)];
+        let accounts = [(&pubkeys[0], &account), (&pubkeys[1], &account)];
         let accounts2 = (slot, &accounts[..], INCLUDE_SLOT_IN_HASH_TESTS);
         let storable =
             StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
@@ -842,7 +850,7 @@ pub mod tests {
         let pubkey = Pubkey::default();
         let hashes = vec![Hash::default()];
         let write_versions = vec![0];
-        let accounts = vec![(&pubkey, &account)];
+        let accounts = [(&pubkey, &account)];
         let accounts2 = (slot, &accounts[..], INCLUDE_SLOT_IN_HASH_TESTS);
         let storable =
             StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
@@ -861,7 +869,7 @@ pub mod tests {
         }
         .to_account_shared_data();
         // for (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash)
-        let accounts = vec![(&pubkey, &account)];
+        let accounts = [(&pubkey, &account)];
         let accounts2 = (slot, &accounts[..], INCLUDE_SLOT_IN_HASH_TESTS);
         let storable =
             StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
@@ -1014,37 +1022,36 @@ pub mod tests {
         let path = get_append_vec_path("test_append_data");
         let av = AppendVec::new(&path.path, true, 1024 * 1024);
         let owners: Vec<Pubkey> = (0..2).map(|_| Pubkey::new_unique()).collect();
-        let owners_refs: Vec<&Pubkey> = owners.iter().collect();
 
         let mut account = create_test_account(5);
         account.1.set_owner(owners[0]);
         let index = av.append_account_test(&account).unwrap();
-        assert_eq!(av.account_matches_owners(index, &owners_refs), Ok(0));
+        assert_eq!(av.account_matches_owners(index, &owners), Ok(0));
 
         let mut account1 = create_test_account(6);
         account1.1.set_owner(owners[1]);
         let index1 = av.append_account_test(&account1).unwrap();
-        assert_eq!(av.account_matches_owners(index1, &owners_refs), Ok(1));
-        assert_eq!(av.account_matches_owners(index, &owners_refs), Ok(0));
+        assert_eq!(av.account_matches_owners(index1, &owners), Ok(1));
+        assert_eq!(av.account_matches_owners(index, &owners), Ok(0));
 
         let mut account2 = create_test_account(6);
         account2.1.set_owner(Pubkey::new_unique());
         let index2 = av.append_account_test(&account2).unwrap();
         assert_eq!(
-            av.account_matches_owners(index2, &owners_refs),
+            av.account_matches_owners(index2, &owners),
             Err(MatchAccountOwnerError::NoMatch)
         );
 
         // tests for overflow
         assert_eq!(
-            av.account_matches_owners(usize::MAX - mem::size_of::<StoredMeta>(), &owners_refs),
+            av.account_matches_owners(usize::MAX - mem::size_of::<StoredMeta>(), &owners),
             Err(MatchAccountOwnerError::UnableToLoad)
         );
 
         assert_eq!(
             av.account_matches_owners(
                 usize::MAX - mem::size_of::<StoredMeta>() - mem::size_of::<AccountMeta>() + 1,
-                &owners_refs
+                &owners
             ),
             Err(MatchAccountOwnerError::UnableToLoad)
         );
@@ -1067,7 +1074,7 @@ pub mod tests {
 
         let now = Instant::now();
         for _ in 0..size {
-            let sample = thread_rng().gen_range(0, indexes.len());
+            let sample = thread_rng().gen_range(0..indexes.len());
             let account = create_test_account(sample);
             assert_eq!(av.get_account_test(indexes[sample]).unwrap(), account);
         }

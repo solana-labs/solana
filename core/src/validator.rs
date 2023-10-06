@@ -16,7 +16,7 @@ use {
         },
         ledger_metric_report_service::LedgerMetricReportService,
         poh_timing_report_service::PohTimingReportService,
-        repair::{serve_repair::ServeRepair, serve_repair_service::ServeRepairService},
+        repair::{self, serve_repair::ServeRepair, serve_repair_service::ServeRepairService},
         rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
         sample_performance_service::SamplePerformanceService,
         sigverify,
@@ -65,7 +65,9 @@ use {
         use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
     solana_measure::measure::Measure,
-    solana_metrics::{datapoint_info, poh_timing_point::PohTimingSender},
+    solana_metrics::{
+        datapoint_info, metrics::metrics_config_sanity_check, poh_timing_point::PohTimingSender,
+    },
     solana_poh::{
         poh_recorder::PohRecorder,
         poh_service::{self, PohService},
@@ -130,6 +132,7 @@ use {
     },
     strum::VariantNames,
     strum_macros::{Display, EnumString, EnumVariantNames, IntoStaticStr},
+    tokio::runtime::Runtime as TokioRuntime,
 };
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
@@ -461,8 +464,11 @@ pub struct Validator {
     accounts_background_service: AccountsBackgroundService,
     accounts_hash_verifier: AccountsHashVerifier,
     turbine_quic_endpoint: Endpoint,
-    turbine_quic_endpoint_runtime: Option<tokio::runtime::Runtime>,
+    turbine_quic_endpoint_runtime: Option<TokioRuntime>,
     turbine_quic_endpoint_join_handle: solana_turbine::quic_endpoint::AsyncTryJoinHandle,
+    repair_quic_endpoint: Endpoint,
+    repair_quic_endpoint_runtime: Option<TokioRuntime>,
+    repair_quic_endpoint_join_handle: repair::quic_endpoint::AsyncTryJoinHandle,
 }
 
 impl Validator {
@@ -564,7 +570,7 @@ impl Validator {
                 .map_err(|err| {
                     format!(
                         "Failed to backup and clear shreds with incorrect \
-                        shred version from blockstore: {err}"
+                        shred version from blockstore: {err:?}"
                     )
                 })?;
             }
@@ -592,10 +598,23 @@ impl Validator {
         timer.stop();
         info!("Cleaning orphaned account snapshot directories done. {timer}");
 
-        // The accounts hash cache dir was renamed, so cleanup the old dir if it exists.
-        let old_accounts_hash_cache_dir = ledger_path.join("calculate_accounts_hash_cache");
-        if old_accounts_hash_cache_dir.exists() {
-            snapshot_utils::move_and_async_delete_path(old_accounts_hash_cache_dir);
+        // The accounts hash cache dir was renamed, so cleanup any old dirs that exist.
+        let accounts_hash_cache_path = config
+            .accounts_db_config
+            .as_ref()
+            .and_then(|config| config.accounts_hash_cache_path.as_ref())
+            .map(PathBuf::as_path)
+            .unwrap_or(ledger_path);
+        let old_accounts_hash_cache_dirs = [
+            ledger_path.join("calculate_accounts_hash_cache"),
+            accounts_hash_cache_path.join("full"),
+            accounts_hash_cache_path.join("incremental"),
+            accounts_hash_cache_path.join("transient"),
+        ];
+        for old_accounts_hash_cache_dir in old_accounts_hash_cache_dirs {
+            if old_accounts_hash_cache_dir.exists() {
+                snapshot_utils::move_and_async_delete_path(old_accounts_hash_cache_dir);
+            }
         }
 
         {
@@ -1041,8 +1060,13 @@ impl Validator {
             bank_forks.clone(),
             config.repair_whitelist.clone(),
         );
+        let (repair_quic_endpoint_sender, repair_quic_endpoint_receiver) = unbounded();
         let serve_repair_service = ServeRepairService::new(
             serve_repair,
+            // Incoming UDP repair requests are adapted into RemoteRequest
+            // and also sent through the same channel.
+            repair_quic_endpoint_sender.clone(),
+            repair_quic_endpoint_receiver,
             blockstore.clone(),
             node.sockets.serve_repair,
             socket_addr_space,
@@ -1110,11 +1134,11 @@ impl Validator {
             .map_err(|err| format!("{} [{:?}]", &err, &err))?;
         if banking_tracer.is_enabled() {
             info!(
-                "Enabled banking tracer (dir_byte_limit: {})",
+                "Enabled banking trace (dir_byte_limit: {})",
                 config.banking_trace_dir_byte_limit
             );
         } else {
-            info!("Disabled banking tracer");
+            info!("Disabled banking trace");
         }
 
         let entry_notification_sender = entry_notifier_service
@@ -1142,7 +1166,7 @@ impl Validator {
         ) = solana_turbine::quic_endpoint::new_quic_endpoint(
             turbine_quic_endpoint_runtime
                 .as_ref()
-                .map(tokio::runtime::Runtime::handle)
+                .map(TokioRuntime::handle)
                 .unwrap_or_else(|| current_runtime_handle.as_ref().unwrap()),
             &identity_keypair,
             node.sockets.tvu_quic,
@@ -1153,6 +1177,30 @@ impl Validator {
             turbine_quic_endpoint_sender,
         )
         .unwrap();
+
+        // Repair quic endpoint.
+        let repair_quic_endpoint_runtime = current_runtime_handle.is_err().then(|| {
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .thread_name("solRepairQuic")
+                .build()
+                .unwrap()
+        });
+        let (repair_quic_endpoint, repair_quic_endpoint_sender, repair_quic_endpoint_join_handle) =
+            repair::quic_endpoint::new_quic_endpoint(
+                repair_quic_endpoint_runtime
+                    .as_ref()
+                    .map(TokioRuntime::handle)
+                    .unwrap_or_else(|| current_runtime_handle.as_ref().unwrap()),
+                &identity_keypair,
+                node.sockets.serve_repair_quic,
+                node.info
+                    .serve_repair(Protocol::QUIC)
+                    .expect("Operator must spin up node with valid QUIC serve-repair address")
+                    .ip(),
+                repair_quic_endpoint_sender,
+            )
+            .unwrap();
 
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
@@ -1206,6 +1254,7 @@ impl Validator {
             banking_tracer.clone(),
             turbine_quic_endpoint_sender.clone(),
             turbine_quic_endpoint_receiver,
+            repair_quic_endpoint_sender,
         )?;
 
         let tpu = Tpu::new(
@@ -1247,13 +1296,18 @@ impl Validator {
             tracer_thread,
             tpu_enable_udp,
             &prioritization_fee_cache,
+            config.block_production_method.clone(),
             config.generator_config.clone(),
         );
+
+        let cluster_type = bank_forks.read().unwrap().root_bank().cluster_type();
+        metrics_config_sanity_check(cluster_type)?;
 
         datapoint_info!(
             "validator-new",
             ("id", id.to_string(), String),
-            ("version", solana_version::version!(), String)
+            ("version", solana_version::version!(), String),
+            ("cluster_type", cluster_type as u32, i64),
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
@@ -1290,6 +1344,9 @@ impl Validator {
             turbine_quic_endpoint,
             turbine_quic_endpoint_runtime,
             turbine_quic_endpoint_join_handle,
+            repair_quic_endpoint,
+            repair_quic_endpoint_runtime,
+            repair_quic_endpoint_join_handle,
         })
     }
 
@@ -1399,9 +1456,14 @@ impl Validator {
         }
 
         self.gossip_service.join().expect("gossip_service");
+        repair::quic_endpoint::close_quic_endpoint(&self.repair_quic_endpoint);
         self.serve_repair_service
             .join()
             .expect("serve_repair_service");
+        self.repair_quic_endpoint_runtime
+            .map(|runtime| runtime.block_on(self.repair_quic_endpoint_join_handle))
+            .transpose()
+            .unwrap();
         self.stats_reporter_service
             .join()
             .expect("stats_reporter_service");
@@ -1438,7 +1500,7 @@ impl Validator {
     }
 }
 
-fn active_vote_account_exists_in_bank(bank: &Arc<Bank>, vote_account: &Pubkey) -> bool {
+fn active_vote_account_exists_in_bank(bank: &Bank, vote_account: &Pubkey) -> bool {
     if let Some(account) = &bank.get_account(vote_account) {
         if let Some(vote_state) = vote_state::from(account) {
             return !vote_state.votes.is_empty();
@@ -1916,7 +1978,7 @@ fn maybe_warp_slot(
         root_bank.force_flush_accounts_cache();
 
         bank_forks.insert(Bank::warp_from_parent(
-            &root_bank,
+            root_bank,
             &Pubkey::default(),
             warp_slot,
             solana_accounts_db::accounts_db::CalcAccountsHashDataSource::Storages,
@@ -2548,7 +2610,7 @@ mod tests {
 
         // bank=1, wait=0, should pass, bank is past the wait slot
         let bank_forks = RwLock::new(BankForks::new(Bank::new_from_parent(
-            &bank_forks.read().unwrap().root_bank(),
+            bank_forks.read().unwrap().root_bank(),
             &Pubkey::default(),
             1,
         )));

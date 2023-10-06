@@ -16,7 +16,6 @@ use {
     fs_err,
     lazy_static::lazy_static,
     log::*,
-    rayon::prelude::*,
     regex::Regex,
     solana_accounts_db::{
         account_storage::AccountStorageMap,
@@ -25,10 +24,7 @@ use {
         },
         accounts_file::AccountsFileError,
         append_vec::AppendVec,
-        hardened_unpack::{
-            streaming_unpack_snapshot, unpack_snapshot, ParallelSelector, UnpackError,
-            UnpackedAppendVecMap,
-        },
+        hardened_unpack::{self, ParallelSelector, UnpackError},
         shared_buffer_reader::{SharedBuffer, SharedBufferReader},
     },
     solana_measure::{measure, measure::Measure},
@@ -49,6 +45,8 @@ use {
     tempfile::TempDir,
     thiserror::Error,
 };
+#[cfg(feature = "dev-context-only-utils")]
+use {hardened_unpack::UnpackedAppendVecMap, rayon::prelude::*};
 
 mod archive_format;
 pub mod snapshot_storage_rebuilder;
@@ -846,7 +844,7 @@ pub fn archive_snapshot_package(
         ),
         ("duration_ms", timer.as_ms(), i64),
         (
-            if snapshot_package.snapshot_type.is_full_snapshot() {
+            if snapshot_package.snapshot_kind.is_full_snapshot() {
                 "full-snapshot-archive-size"
             } else {
                 "incremental-snapshot-archive-size"
@@ -1293,7 +1291,7 @@ fn spawn_unpack_snapshot_thread(
     Builder::new()
         .name(format!("solUnpkSnpsht{thread_index:02}"))
         .spawn(move || {
-            streaming_unpack_snapshot(
+            hardened_unpack::streaming_unpack_snapshot(
                 &mut archive,
                 ledger_dir.as_path(),
                 &account_paths,
@@ -1471,7 +1469,7 @@ pub fn build_storage_from_snapshot_dir(
     let accounts_hardlinks = bank_snapshot_dir.join(SNAPSHOT_ACCOUNTS_HARDLINKS);
     let account_run_paths: HashSet<_> = HashSet::from_iter(account_paths);
 
-    for dir_entry in fs_err::read_dir(&accounts_hardlinks)? {
+    for dir_entry in fs_err::read_dir(accounts_hardlinks)? {
         let symlink_path = dir_entry?.path();
         // The symlink point to <account_path>/snapshot/<slot> which contain the account files hardlinks
         // The corresponding run path should be <account_path>/run/
@@ -1872,6 +1870,7 @@ pub fn purge_old_snapshot_archives(
     }
 }
 
+#[cfg(feature = "dev-context-only-utils")]
 fn unpack_snapshot_local(
     shared_buffer: SharedBuffer,
     ledger_dir: &Path,
@@ -1895,7 +1894,12 @@ fn unpack_snapshot_local(
                 divisions: parallel_divisions,
             });
             let mut archive = Archive::new(reader);
-            unpack_snapshot(&mut archive, ledger_dir, account_paths, parallel_selector)
+            hardened_unpack::unpack_snapshot(
+                &mut archive,
+                ledger_dir,
+                account_paths,
+                parallel_selector,
+            )
         })
         .collect::<Vec<_>>();
 
@@ -1925,6 +1929,7 @@ fn untar_snapshot_create_shared_buffer(
     }
 }
 
+#[cfg(feature = "dev-context-only-utils")]
 fn untar_snapshot_in(
     snapshot_tar: impl AsRef<Path>,
     unpack_dir: &Path,
@@ -1983,6 +1988,7 @@ pub enum VerifyBank {
     NonDeterministic,
 }
 
+#[cfg(feature = "dev-context-only-utils")]
 pub fn verify_snapshot_archive(
     snapshot_archive: impl AsRef<Path>,
     snapshots_to_verify: impl AsRef<Path>,
@@ -3115,9 +3121,9 @@ mod tests {
             accounts_hardlinks_dir,
         );
 
-        assert!(matches!(
+        assert_matches!(
             ret,
             Err(GetSnapshotAccountsHardLinkDirError::GetAccountPath(_))
-        ));
+        );
     }
 }

@@ -996,10 +996,12 @@ impl ConnectionTable {
     // If the stakes of all the sampled connections are higher than the
     // threshold_stake, rejects the pruning attempt, and returns 0.
     fn prune_random(&mut self, sample_size: usize, threshold_stake: u64) -> usize {
-        let mut rng = thread_rng();
         let num_pruned = std::iter::once(self.table.len())
             .filter(|&size| size > 0)
-            .flat_map(|size| repeat_with(move || rng.gen_range(0, size)))
+            .flat_map(|size| {
+                let mut rng = thread_rng();
+                repeat_with(move || rng.gen_range(0..size))
+            })
             .map(|index| {
                 let connection = self.table[index].first();
                 let stake = connection.map(|connection| connection.stake);
@@ -1024,7 +1026,7 @@ impl ConnectionTable {
         last_update: u64,
         max_connections_per_peer: usize,
     ) -> Option<(Arc<AtomicU64>, Arc<AtomicBool>)> {
-        let connection_entry = self.table.entry(key).or_insert_with(Vec::new);
+        let connection_entry = self.table.entry(key).or_default();
         let has_connection_capacity = connection_entry
             .len()
             .checked_add(1)
@@ -1094,6 +1096,7 @@ pub mod test {
             quic::{MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
             tls_certificates::new_self_signed_tls_certificate,
         },
+        assert_matches::assert_matches,
         async_channel::unbounded as async_unbounded,
         crossbeam_channel::{unbounded, Receiver},
         quinn::{ClientConfig, IdleTimeout, TransportConfig},
@@ -1241,14 +1244,7 @@ pub mod test {
         let conn2 = make_client_endpoint(&server_address, None).await;
         let mut s1 = conn1.open_uni().await.unwrap();
         let s2 = conn2.open_uni().await;
-        if s2.is_err() {
-            // It has been noticed if there is already connection open against the server, this open_uni can fail
-            // with ApplicationClosed(ApplicationClose) error due to CONNECTION_CLOSE_CODE_TOO_MANY before writing to
-            // the stream -- expect it.
-            let s2 = s2.err().unwrap();
-            assert!(matches!(s2, quinn::ConnectionError::ApplicationClosed(_)));
-        } else {
-            let mut s2 = s2.unwrap();
+        if let Ok(mut s2) = s2 {
             s1.write_all(&[0u8]).await.unwrap();
             s1.finish().await.unwrap();
             // Send enough data to create more than 1 chunks.
@@ -1261,6 +1257,11 @@ pub mod test {
             s2.finish()
                 .await
                 .expect_err("shouldn't be able to open 2 connections");
+        } else {
+            // It has been noticed if there is already connection open against the server, this open_uni can fail
+            // with ApplicationClosed(ApplicationClose) error due to CONNECTION_CLOSE_CODE_TOO_MANY before writing to
+            // the stream -- expect it.
+            assert_matches!(s2, Err(quinn::ConnectionError::ApplicationClosed(_)));
         }
     }
 
@@ -1934,7 +1935,8 @@ pub mod test {
         );
         assert_eq!(
             compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 100, 10000),
-            (delta / (100_f64)) as usize + QUIC_MIN_STAKED_CONCURRENT_STREAMS
+            ((delta / (100_f64)) as usize + QUIC_MIN_STAKED_CONCURRENT_STREAMS)
+                .min(QUIC_MAX_STAKED_CONCURRENT_STREAMS)
         );
         assert_eq!(
             compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 0, 10000),

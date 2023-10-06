@@ -15,12 +15,12 @@ use {
 };
 
 pub fn get_parsed_token_account(
-    bank: Arc<Bank>,
+    bank: &Bank,
     pubkey: &Pubkey,
     account: AccountSharedData,
 ) -> UiAccount {
     let additional_data = get_token_account_mint(account.data())
-        .and_then(|mint_pubkey| get_mint_owner_and_decimals(&bank, &mint_pubkey).ok())
+        .and_then(|mint_pubkey| get_mint_owner_and_decimals(bank, &mint_pubkey).ok())
         .map(|(_, decimals)| AccountAdditionalData {
             spl_token_decimals: Some(decimals),
         });
@@ -72,7 +72,7 @@ where
 
 /// Analyze a mint Pubkey that may be the native_mint and get the mint-account owner (token
 /// program_id) and decimals
-pub fn get_mint_owner_and_decimals(bank: &Arc<Bank>, mint: &Pubkey) -> Result<(Pubkey, u8)> {
+pub fn get_mint_owner_and_decimals(bank: &Bank, mint: &Pubkey) -> Result<(Pubkey, u8)> {
     if mint == &spl_token::native_mint::id() {
         Ok((spl_token::id(), spl_token::native_mint::DECIMALS))
     } else {

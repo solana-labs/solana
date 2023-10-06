@@ -15,7 +15,7 @@ use {
         cost_update_service::CostUpdateService,
         drop_bank_service::DropBankService,
         ledger_cleanup_service::LedgerCleanupService,
-        repair::repair_service::RepairInfo,
+        repair::{quic_endpoint::LocalRequest, repair_service::RepairInfo},
         replay_stage::{ReplayStage, ReplayStageConfig},
         rewards_recorder_service::RewardsRecorderSender,
         shred_fetch_stage::ShredFetchStage,
@@ -44,10 +44,10 @@ use {
     solana_runtime::{
         accounts_background_service::AbsRequestSender, bank_forks::BankForks,
         commitment::BlockCommitmentCache, prioritization_fee_cache::PrioritizationFeeCache,
-        vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
     solana_turbine::retransmit_stage::RetransmitStage,
+    solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
         collections::HashSet,
         net::{SocketAddr, UdpSocket},
@@ -138,6 +138,7 @@ impl Tvu {
         banking_tracer: Arc<BankingTracer>,
         turbine_quic_endpoint_sender: AsyncSender<(SocketAddr, Bytes)>,
         turbine_quic_endpoint_receiver: Receiver<(Pubkey, SocketAddr, Bytes)>,
+        repair_quic_endpoint_sender: AsyncSender<LocalRequest>,
     ) -> Result<Self, String> {
         let TvuSockets {
             repair: repair_socket,
@@ -151,10 +152,13 @@ impl Tvu {
         let repair_socket = Arc::new(repair_socket);
         let ancestor_hashes_socket = Arc::new(ancestor_hashes_socket);
         let fetch_sockets: Vec<Arc<UdpSocket>> = fetch_sockets.into_iter().map(Arc::new).collect();
+        let (repair_quic_endpoint_response_sender, repair_quic_endpoint_response_receiver) =
+            unbounded();
         let fetch_stage = ShredFetchStage::new(
             fetch_sockets,
             turbine_quic_endpoint_receiver,
             repair_socket.clone(),
+            repair_quic_endpoint_response_receiver,
             fetch_sender,
             tvu_config.shred_version,
             bank_forks.clone(),
@@ -209,6 +213,8 @@ impl Tvu {
                 retransmit_sender,
                 repair_socket,
                 ancestor_hashes_socket,
+                repair_quic_endpoint_sender,
+                repair_quic_endpoint_response_sender,
                 exit.clone(),
                 repair_info,
                 leader_schedule_cache.clone(),
@@ -401,6 +407,8 @@ pub mod tests {
         let (turbine_quic_endpoint_sender, _turbine_quic_endpoint_receiver) =
             tokio::sync::mpsc::channel(/*capacity:*/ 128);
         let (_turbine_quic_endpoint_sender, turbine_quic_endpoint_receiver) = unbounded();
+        let (repair_quic_endpoint_sender, _repair_quic_endpoint_receiver) =
+            tokio::sync::mpsc::channel(/*buffer:*/ 128);
         //start cluster_info1
         let cluster_info1 =
             ClusterInfo::new(target1.info.clone(), keypair, SocketAddrSpace::Unspecified);
@@ -417,7 +425,7 @@ pub mod tests {
         let blockstore = Arc::new(blockstore);
         let bank = bank_forks.working_bank();
         let (exit, poh_recorder, poh_service, _entry_receiver) =
-            create_test_recorder(&bank, blockstore.clone(), None, None);
+            create_test_recorder(bank.clone(), blockstore.clone(), None, None);
         let vote_keypair = Keypair::new();
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
@@ -484,6 +492,7 @@ pub mod tests {
             BankingTracer::new_disabled(),
             turbine_quic_endpoint_sender,
             turbine_quic_endpoint_receiver,
+            repair_quic_endpoint_sender,
         )
         .expect("assume success");
         exit.store(true, Ordering::Relaxed);

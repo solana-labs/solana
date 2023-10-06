@@ -21,7 +21,6 @@ use {
         gossip_service::{self, discover_cluster, GossipService},
     },
     solana_ledger::blockstore::Blockstore,
-    solana_runtime::vote_transaction::VoteTransaction,
     solana_sdk::{
         client::SyncClient,
         clock::{self, Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
@@ -38,6 +37,7 @@ use {
         transport::TransportError,
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_vote::vote_transaction::VoteTransaction,
     solana_vote_program::vote_transaction,
     std::{
         borrow::Borrow,
@@ -156,7 +156,7 @@ pub fn send_many_transactions(
         let (blockhash, _) = client
             .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
             .unwrap();
-        let transfer_amount = thread_rng().gen_range(1, max_tokens_per_transfer);
+        let transfer_amount = thread_rng().gen_range(1..max_tokens_per_transfer);
 
         let mut transaction = system_transaction::transfer(
             funding_keypair,
@@ -516,7 +516,7 @@ pub fn start_gossip_voter(
                 let (labels, votes) = cluster_info.get_votes_with_labels(&mut cursor);
                 let mut parsed_vote_iter: Vec<_> = labels
                     .into_iter()
-                    .zip(votes.into_iter())
+                    .zip(votes)
                     .filter_map(&vote_filter)
                     .collect();
 

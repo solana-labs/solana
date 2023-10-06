@@ -1,6 +1,6 @@
 use {
     crate::crds_value::MAX_WALLCLOCK,
-    matches::{assert_matches, debug_assert_matches},
+    assert_matches::{assert_matches, debug_assert_matches},
     serde::{Deserialize, Deserializer, Serialize},
     solana_sdk::{
         pubkey::Pubkey,
@@ -26,18 +26,18 @@ pub const SOCKET_ADDR_UNSPECIFIED: SocketAddr =
     SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), /*port:*/ 0u16);
 
 const SOCKET_TAG_GOSSIP: u8 = 0;
-const SOCKET_TAG_REPAIR: u8 = 1;
 const SOCKET_TAG_RPC: u8 = 2;
 const SOCKET_TAG_RPC_PUBSUB: u8 = 3;
 const SOCKET_TAG_SERVE_REPAIR: u8 = 4;
+const SOCKET_TAG_SERVE_REPAIR_QUIC: u8 = 1;
 const SOCKET_TAG_TPU: u8 = 5;
 const SOCKET_TAG_TPU_FORWARDS: u8 = 6;
 const SOCKET_TAG_TPU_FORWARDS_QUIC: u8 = 7;
 const SOCKET_TAG_TPU_QUIC: u8 = 8;
 const SOCKET_TAG_TPU_VOTE: u8 = 9;
 const SOCKET_TAG_TVU: u8 = 10;
-const SOCKET_TAG_TVU_QUIC: u8 = 12;
-const_assert_eq!(SOCKET_CACHE_SIZE, 13);
+const SOCKET_TAG_TVU_QUIC: u8 = 11;
+const_assert_eq!(SOCKET_CACHE_SIZE, 12);
 const SOCKET_CACHE_SIZE: usize = SOCKET_TAG_TVU_QUIC as usize + 1usize;
 
 #[derive(Debug, Error)]
@@ -223,10 +223,13 @@ impl ContactInfo {
     }
 
     get_socket!(gossip, SOCKET_TAG_GOSSIP);
-    get_socket!(repair, SOCKET_TAG_REPAIR);
     get_socket!(rpc, SOCKET_TAG_RPC);
     get_socket!(rpc_pubsub, SOCKET_TAG_RPC_PUBSUB);
-    get_socket!(serve_repair, SOCKET_TAG_SERVE_REPAIR);
+    get_socket!(
+        serve_repair,
+        SOCKET_TAG_SERVE_REPAIR,
+        SOCKET_TAG_SERVE_REPAIR_QUIC
+    );
     get_socket!(tpu, SOCKET_TAG_TPU, SOCKET_TAG_TPU_QUIC);
     get_socket!(
         tpu_forwards,
@@ -237,10 +240,10 @@ impl ContactInfo {
     get_socket!(tvu, SOCKET_TAG_TVU, SOCKET_TAG_TVU_QUIC);
 
     set_socket!(set_gossip, SOCKET_TAG_GOSSIP);
-    set_socket!(set_repair, SOCKET_TAG_REPAIR);
     set_socket!(set_rpc, SOCKET_TAG_RPC);
     set_socket!(set_rpc_pubsub, SOCKET_TAG_RPC_PUBSUB);
     set_socket!(set_serve_repair, SOCKET_TAG_SERVE_REPAIR);
+    set_socket!(set_serve_repair_quic, SOCKET_TAG_SERVE_REPAIR_QUIC);
     set_socket!(set_tpu, SOCKET_TAG_TPU, SOCKET_TAG_TPU_QUIC);
     set_socket!(
         set_tpu_forwards,
@@ -251,7 +254,11 @@ impl ContactInfo {
     set_socket!(set_tvu, SOCKET_TAG_TVU);
     set_socket!(set_tvu_quic, SOCKET_TAG_TVU_QUIC);
 
-    remove_socket!(remove_serve_repair, SOCKET_TAG_SERVE_REPAIR);
+    remove_socket!(
+        remove_serve_repair,
+        SOCKET_TAG_SERVE_REPAIR,
+        SOCKET_TAG_SERVE_REPAIR_QUIC
+    );
     remove_socket!(remove_tpu, SOCKET_TAG_TPU, SOCKET_TAG_TPU_QUIC);
     remove_socket!(
         remove_tpu_forwards,
@@ -365,7 +372,6 @@ impl ContactInfo {
         node.set_gossip((Ipv4Addr::LOCALHOST, 8000)).unwrap();
         node.set_tvu((Ipv4Addr::LOCALHOST, 8001)).unwrap();
         node.set_tvu_quic((Ipv4Addr::LOCALHOST, 8002)).unwrap();
-        node.set_repair((Ipv4Addr::LOCALHOST, 8007)).unwrap();
         node.set_tpu((Ipv4Addr::LOCALHOST, 8003)).unwrap(); // quic: 8009
         node.set_tpu_forwards((Ipv4Addr::LOCALHOST, 8004)).unwrap(); // quic: 8010
         node.set_tpu_vote((Ipv4Addr::LOCALHOST, 8005)).unwrap();
@@ -374,6 +380,8 @@ impl ContactInfo {
         node.set_rpc_pubsub((Ipv4Addr::LOCALHOST, DEFAULT_RPC_PUBSUB_PORT))
             .unwrap();
         node.set_serve_repair((Ipv4Addr::LOCALHOST, 8008)).unwrap();
+        node.set_serve_repair_quic((Ipv4Addr::LOCALHOST, 8006))
+            .unwrap();
         node
     }
 
@@ -389,7 +397,6 @@ impl ContactInfo {
         node.set_gossip((addr, port + 1)).unwrap();
         node.set_tvu((addr, port + 2)).unwrap();
         node.set_tvu_quic((addr, port + 3)).unwrap();
-        node.set_repair((addr, port + 4)).unwrap();
         node.set_tpu((addr, port)).unwrap(); // quic: port + 6
         node.set_tpu_forwards((addr, port + 5)).unwrap(); // quic: port + 11
         node.set_tpu_vote((addr, port + 7)).unwrap();
@@ -397,6 +404,7 @@ impl ContactInfo {
         node.set_rpc_pubsub((addr, DEFAULT_RPC_PUBSUB_PORT))
             .unwrap();
         node.set_serve_repair((addr, port + 8)).unwrap();
+        node.set_serve_repair_quic((addr, port + 4)).unwrap();
         node
     }
 }
@@ -519,9 +527,7 @@ fn sanitize_entries(addrs: &[IpAddr], sockets: &[SocketEntry]) -> Result<(), Err
     // Verify that port offsets don't overflow.
     if sockets
         .iter()
-        .fold(Some(0u16), |offset, entry| {
-            offset?.checked_add(entry.offset)
-        })
+        .try_fold(0u16, |offset, entry| offset.checked_add(entry.offset))
         .is_none()
     {
         return Err(Error::PortOffsetsOverflow);
@@ -603,7 +609,7 @@ mod tests {
     fn new_rand_port<R: Rng>(rng: &mut R) -> u16 {
         let port = rng.gen::<u16>();
         let bits = u16::BITS - port.leading_zeros();
-        let shift = rng.gen_range(0u32, bits + 1u32);
+        let shift = rng.gen_range(0u32..bits + 1u32);
         port.checked_shr(shift).unwrap_or_default()
     }
 
@@ -671,8 +677,8 @@ mod tests {
                 .iter()
                 .map(|&key| SocketEntry {
                     key,
-                    index: rng.gen_range(0u8, addrs.len() as u8),
-                    offset: rng.gen_range(0u16, u16::MAX / 64),
+                    index: rng.gen_range(0u8..addrs.len() as u8),
+                    offset: rng.gen_range(0u16..u16::MAX / 64),
                 })
                 .collect();
             assert_matches!(
@@ -685,8 +691,8 @@ mod tests {
                 .iter()
                 .map(|&key| SocketEntry {
                     key,
-                    index: rng.gen_range(0u8, addrs.len() as u8),
-                    offset: rng.gen_range(0u16, u16::MAX / 256),
+                    index: rng.gen_range(0u8..addrs.len() as u8),
+                    offset: rng.gen_range(0u16..u16::MAX / 256),
                 })
                 .collect();
             assert_matches!(sanitize_entries(&addrs, &sockets), Ok(()));
@@ -713,7 +719,7 @@ mod tests {
         for _ in 0..1 << 14 {
             let addr = addrs.choose(&mut rng).unwrap();
             let socket = SocketAddr::new(*addr, new_rand_port(&mut rng));
-            let key = rng.gen_range(KEYS.start, KEYS.end);
+            let key = rng.gen_range(KEYS.start..KEYS.end);
             if sanitize_socket(&socket).is_ok() {
                 sockets.insert(key, socket);
                 assert_matches!(node.set_socket(key, socket), Ok(()));
@@ -732,15 +738,18 @@ mod tests {
                 }
             }
             assert_eq!(node.gossip().ok().as_ref(), sockets.get(&SOCKET_TAG_GOSSIP));
-            assert_eq!(node.repair().ok().as_ref(), sockets.get(&SOCKET_TAG_REPAIR));
             assert_eq!(node.rpc().ok().as_ref(), sockets.get(&SOCKET_TAG_RPC));
             assert_eq!(
                 node.rpc_pubsub().ok().as_ref(),
                 sockets.get(&SOCKET_TAG_RPC_PUBSUB)
             );
             assert_eq!(
-                node.serve_repair().ok().as_ref(),
+                node.serve_repair(Protocol::UDP).ok().as_ref(),
                 sockets.get(&SOCKET_TAG_SERVE_REPAIR)
+            );
+            assert_eq!(
+                node.serve_repair(Protocol::QUIC).ok().as_ref(),
+                sockets.get(&SOCKET_TAG_SERVE_REPAIR_QUIC)
             );
             assert_eq!(
                 node.tpu(Protocol::UDP).ok().as_ref(),
@@ -817,10 +826,16 @@ mod tests {
     fn cross_verify_with_legacy(node: &ContactInfo) {
         let old = LegacyContactInfo::try_from(node).unwrap();
         assert_eq!(old.gossip().unwrap(), node.gossip().unwrap());
-        assert_eq!(old.repair().unwrap(), node.repair().unwrap());
         assert_eq!(old.rpc().unwrap(), node.rpc().unwrap());
         assert_eq!(old.rpc_pubsub().unwrap(), node.rpc_pubsub().unwrap());
-        assert_eq!(old.serve_repair().unwrap(), node.serve_repair().unwrap());
+        assert_eq!(
+            old.serve_repair(Protocol::QUIC).unwrap(),
+            node.serve_repair(Protocol::QUIC).unwrap()
+        );
+        assert_eq!(
+            old.serve_repair(Protocol::UDP).unwrap(),
+            node.serve_repair(Protocol::UDP).unwrap()
+        );
         assert_eq!(
             old.tpu(Protocol::QUIC).unwrap(),
             node.tpu(Protocol::QUIC).unwrap()

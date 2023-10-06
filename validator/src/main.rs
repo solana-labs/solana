@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
 use {
@@ -448,15 +448,16 @@ fn configure_banking_trace_dir_byte_limit(
     validator_config: &mut ValidatorConfig,
     matches: &ArgMatches,
 ) {
-    validator_config.banking_trace_dir_byte_limit =
-        if matches.occurrences_of("banking_trace_dir_byte_limit") == 0 {
-            // disable with no explicit flag; then, this effectively becomes `opt-in` even if we're
-            // specifying a default value in clap configuration.
-            DISABLED_BAKING_TRACE_DIR
-        } else {
-            // BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT or user-supplied override value
-            value_t_or_exit!(matches, "banking_trace_dir_byte_limit", u64)
-        };
+    validator_config.banking_trace_dir_byte_limit = if matches.is_present("disable_banking_trace") {
+        // disable with an explicit flag; This effectively becomes `opt-out` by reseting to
+        // DISABLED_BAKING_TRACE_DIR, while allowing us to specify a default sensible limit in clap
+        // configuration for cli help.
+        DISABLED_BAKING_TRACE_DIR
+    } else {
+        // a default value in clap configuration (BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT) or
+        // explicit user-supplied override value
+        value_t_or_exit!(matches, "banking_trace_dir_byte_limit", u64)
+    };
 }
 
 pub fn main() {
@@ -978,6 +979,18 @@ pub fn main() {
         .pop()
         .unwrap();
 
+    let accounts_hash_cache_path = matches
+        .value_of("accounts_hash_cache_path")
+        .map(Into::into)
+        .unwrap_or_else(|| ledger_path.join(AccountsDb::DEFAULT_ACCOUNTS_HASH_CACHE_DIR));
+    let accounts_hash_cache_path = create_and_canonicalize_directories(&[accounts_hash_cache_path])
+        .unwrap_or_else(|err| {
+            eprintln!("Unable to access accounts hash cache path: {err}");
+            exit(1);
+        })
+        .pop()
+        .unwrap();
+
     let debug_keys: Option<Arc<HashSet<_>>> = if matches.is_present("debug_key") {
         Some(Arc::new(
             values_t_or_exit!(matches, "debug_key", Pubkey)
@@ -1175,7 +1188,8 @@ pub fn main() {
 
     let accounts_db_config = AccountsDbConfig {
         index: Some(accounts_index_config),
-        accounts_hash_cache_path: Some(ledger_path.join(AccountsDb::ACCOUNTS_HASH_CACHE_DIR)),
+        base_working_path: Some(ledger_path.clone()),
+        accounts_hash_cache_path: Some(accounts_hash_cache_path),
         filler_accounts_config,
         write_cache_limit_bytes: value_t!(matches, "accounts_db_cache_limit_mb", u64)
             .ok()
@@ -1451,7 +1465,7 @@ pub fn main() {
         if let Some(account_shrink_snapshot_paths) = account_shrink_snapshot_paths {
             account_snapshot_paths
                 .into_iter()
-                .chain(account_shrink_snapshot_paths.into_iter())
+                .chain(account_shrink_snapshot_paths)
                 .collect()
         } else {
             account_snapshot_paths

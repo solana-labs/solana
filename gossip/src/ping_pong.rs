@@ -1,7 +1,7 @@
 use {
     bincode::{serialize, Error},
     lru::LruCache,
-    rand::{AsByteSliceMut, CryptoRng, Rng},
+    rand::{CryptoRng, Fill, Rng},
     serde::Serialize,
     solana_sdk::{
         hash::{self, Hash},
@@ -64,7 +64,7 @@ impl<T: Serialize> Ping<T> {
 
 impl<T> Ping<T>
 where
-    T: Serialize + AsByteSliceMut + Default,
+    T: Serialize + Fill + Default,
 {
     pub fn new_rand<R>(rng: &mut R, keypair: &Keypair) -> Result<Self, Error>
     where
@@ -296,8 +296,8 @@ mod tests {
         .take(8)
         .collect();
         let remote_nodes: Vec<(&Keypair, SocketAddr)> = repeat_with(|| {
-            let keypair = &keypairs[rng.gen_range(0, keypairs.len())];
-            let socket = sockets[rng.gen_range(0, sockets.len())];
+            let keypair = &keypairs[rng.gen_range(0..keypairs.len())];
+            let socket = sockets[rng.gen_range(0..sockets.len())];
             (keypair, socket)
         })
         .take(128)

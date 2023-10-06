@@ -15,7 +15,10 @@ use {
         unprocessed_packet_batches::*,
         unprocessed_transaction_storage::{ThreadType, UnprocessedTransactionStorage},
     },
-    crate::{banking_trace::BankingPacketReceiver, tracer_packet_stats::TracerPacketStats},
+    crate::{
+        banking_trace::BankingPacketReceiver, tracer_packet_stats::TracerPacketStats,
+        validator::BlockProductionMethod,
+    },
     crossbeam_channel::RecvTimeoutError,
     histogram::Histogram,
     solana_client::connection_cache::ConnectionCache,
@@ -24,11 +27,9 @@ use {
     solana_measure::{measure, measure_us},
     solana_perf::{data_budget::DataBudget, packet::PACKETS_PER_BATCH},
     solana_poh::poh_recorder::PohRecorder,
-    solana_runtime::{
-        bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
-        vote_sender_types::ReplayVoteSender,
-    },
-    solana_sdk::{feature_set::allow_votes_to_directly_update_vote_state, timing::AtomicInterval},
+    solana_runtime::{bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache},
+    solana_sdk::timing::AtomicInterval,
+    solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
         cmp, env,
         sync::{
@@ -84,6 +85,7 @@ pub struct BankingStageStats {
     pub(crate) dropped_duplicated_packets_count: AtomicUsize,
     dropped_forward_packets_count: AtomicUsize,
     newly_buffered_packets_count: AtomicUsize,
+    newly_buffered_forwarded_packets_count: AtomicUsize,
     current_buffered_packets_count: AtomicUsize,
     rebuffered_packets_count: AtomicUsize,
     consumed_buffered_packets_count: AtomicUsize,
@@ -146,109 +148,115 @@ impl BankingStageStats {
         if self.last_report.should_update(report_interval_ms) {
             datapoint_info!(
                 "banking_stage-loop-stats",
-                ("id", self.id as i64, i64),
+                ("id", self.id, i64),
                 (
                     "receive_and_buffer_packets_count",
                     self.receive_and_buffer_packets_count
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "dropped_packets_count",
-                    self.dropped_packets_count.swap(0, Ordering::Relaxed) as i64,
+                    self.dropped_packets_count.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "dropped_duplicated_packets_count",
                     self.dropped_duplicated_packets_count
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "dropped_forward_packets_count",
                     self.dropped_forward_packets_count
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "newly_buffered_packets_count",
-                    self.newly_buffered_packets_count.swap(0, Ordering::Relaxed) as i64,
+                    self.newly_buffered_packets_count.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "newly_buffered_forwarded_packets_count",
+                    self.newly_buffered_forwarded_packets_count
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "current_buffered_packets_count",
                     self.current_buffered_packets_count
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "rebuffered_packets_count",
-                    self.rebuffered_packets_count.swap(0, Ordering::Relaxed) as i64,
+                    self.rebuffered_packets_count.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "consumed_buffered_packets_count",
                     self.consumed_buffered_packets_count
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "forwarded_transaction_count",
-                    self.forwarded_transaction_count.swap(0, Ordering::Relaxed) as i64,
+                    self.forwarded_transaction_count.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "forwarded_vote_count",
-                    self.forwarded_vote_count.swap(0, Ordering::Relaxed) as i64,
+                    self.forwarded_vote_count.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "consume_buffered_packets_elapsed",
                     self.consume_buffered_packets_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "receive_and_buffer_packets_elapsed",
                     self.receive_and_buffer_packets_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "filter_pending_packets_elapsed",
                     self.filter_pending_packets_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "packet_conversion_elapsed",
-                    self.packet_conversion_elapsed.swap(0, Ordering::Relaxed) as i64,
+                    self.packet_conversion_elapsed.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "transaction_processing_elapsed",
                     self.transaction_processing_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
                     "packet_batch_indices_len_min",
-                    self.batch_packet_indexes_len.minimum().unwrap_or(0) as i64,
+                    self.batch_packet_indexes_len.minimum().unwrap_or(0),
                     i64
                 ),
                 (
                     "packet_batch_indices_len_max",
-                    self.batch_packet_indexes_len.maximum().unwrap_or(0) as i64,
+                    self.batch_packet_indexes_len.maximum().unwrap_or(0),
                     i64
                 ),
                 (
                     "packet_batch_indices_len_mean",
-                    self.batch_packet_indexes_len.mean().unwrap_or(0) as i64,
+                    self.batch_packet_indexes_len.mean().unwrap_or(0),
                     i64
                 ),
                 (
                     "packet_batch_indices_len_90pct",
-                    self.batch_packet_indexes_len.percentile(90.0).unwrap_or(0) as i64,
+                    self.batch_packet_indexes_len.percentile(90.0).unwrap_or(0),
                     i64
                 )
             );
@@ -307,6 +315,7 @@ impl BankingStage {
     /// Create the stage using `bank`. Exit when `verified_receiver` is dropped.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        block_production_method: BlockProductionMethod,
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         non_vote_receiver: BankingPacketReceiver,
@@ -320,6 +329,7 @@ impl BankingStage {
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
     ) -> Self {
         Self::new_num_threads(
+            block_production_method,
             cluster_info,
             poh_recorder,
             non_vote_receiver,
@@ -337,6 +347,42 @@ impl BankingStage {
 
     #[allow(clippy::too_many_arguments)]
     pub fn new_num_threads(
+        block_production_method: BlockProductionMethod,
+        cluster_info: &Arc<ClusterInfo>,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
+        non_vote_receiver: BankingPacketReceiver,
+        tpu_vote_receiver: BankingPacketReceiver,
+        gossip_vote_receiver: BankingPacketReceiver,
+        num_threads: u32,
+        transaction_status_sender: Option<TransactionStatusSender>,
+        replay_vote_sender: ReplayVoteSender,
+        log_messages_bytes_limit: Option<usize>,
+        connection_cache: Arc<ConnectionCache>,
+        bank_forks: Arc<RwLock<BankForks>>,
+        prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
+    ) -> Self {
+        match block_production_method {
+            BlockProductionMethod::ThreadLocalMultiIterator => {
+                Self::new_thread_local_multi_iterator(
+                    cluster_info,
+                    poh_recorder,
+                    non_vote_receiver,
+                    tpu_vote_receiver,
+                    gossip_vote_receiver,
+                    num_threads,
+                    transaction_status_sender,
+                    replay_vote_sender,
+                    log_messages_bytes_limit,
+                    connection_cache,
+                    bank_forks,
+                    prioritization_fee_cache,
+                )
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_thread_local_multi_iterator(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         non_vote_receiver: BankingPacketReceiver,
@@ -359,55 +405,32 @@ impl BankingStage {
             TOTAL_BUFFERED_PACKETS / ((num_threads - NUM_VOTE_PROCESSING_THREADS) as usize);
         // Keeps track of extraneous vote transactions for the vote threads
         let latest_unprocessed_votes = Arc::new(LatestUnprocessedVotes::new());
-        let should_split_voting_threads = bank_forks
-            .read()
-            .map(|bank_forks| {
-                let bank = bank_forks.root_bank();
-                bank.feature_set
-                    .is_active(&allow_votes_to_directly_update_vote_state::id())
-            })
-            .unwrap_or(false);
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
             .map(|id| {
-                let (packet_receiver, unprocessed_transaction_storage) =
-                    match (id, should_split_voting_threads) {
-                        (0, false) => (
-                            gossip_vote_receiver.clone(),
-                            UnprocessedTransactionStorage::new_transaction_storage(
-                                UnprocessedPacketBatches::with_capacity(batch_limit),
-                                ThreadType::Voting(VoteSource::Gossip),
-                            ),
+                let (packet_receiver, unprocessed_transaction_storage) = match id {
+                    0 => (
+                        gossip_vote_receiver.clone(),
+                        UnprocessedTransactionStorage::new_vote_storage(
+                            latest_unprocessed_votes.clone(),
+                            VoteSource::Gossip,
                         ),
-                        (0, true) => (
-                            gossip_vote_receiver.clone(),
-                            UnprocessedTransactionStorage::new_vote_storage(
-                                latest_unprocessed_votes.clone(),
-                                VoteSource::Gossip,
-                            ),
+                    ),
+                    1 => (
+                        tpu_vote_receiver.clone(),
+                        UnprocessedTransactionStorage::new_vote_storage(
+                            latest_unprocessed_votes.clone(),
+                            VoteSource::Tpu,
                         ),
-                        (1, false) => (
-                            tpu_vote_receiver.clone(),
-                            UnprocessedTransactionStorage::new_transaction_storage(
-                                UnprocessedPacketBatches::with_capacity(batch_limit),
-                                ThreadType::Voting(VoteSource::Tpu),
-                            ),
+                    ),
+                    _ => (
+                        non_vote_receiver.clone(),
+                        UnprocessedTransactionStorage::new_transaction_storage(
+                            UnprocessedPacketBatches::with_capacity(batch_limit),
+                            ThreadType::Transactions,
                         ),
-                        (1, true) => (
-                            tpu_vote_receiver.clone(),
-                            UnprocessedTransactionStorage::new_vote_storage(
-                                latest_unprocessed_votes.clone(),
-                                VoteSource::Tpu,
-                            ),
-                        ),
-                        _ => (
-                            non_vote_receiver.clone(),
-                            UnprocessedTransactionStorage::new_transaction_storage(
-                                UnprocessedPacketBatches::with_capacity(batch_limit),
-                                ThreadType::Transactions,
-                            ),
-                        ),
-                    };
+                    ),
+                };
 
                 let mut packet_receiver =
                     PacketReceiver::new(id, packet_receiver, bank_forks.clone());
@@ -609,9 +632,7 @@ mod tests {
             poh_service::PohService,
         },
         solana_runtime::{
-            bank::Bank,
-            bank_forks::BankForks,
-            genesis_utils::{activate_feature, bootstrap_validator_stake_lamports},
+            bank::Bank, bank_forks::BankForks, genesis_utils::bootstrap_validator_stake_lamports,
         },
         solana_sdk::{
             hash::Hash,
@@ -650,7 +671,7 @@ mod tests {
         let genesis_config = create_genesis_config(2).genesis_config;
         let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let bank = Arc::new(bank_forks.read().unwrap().get(0).unwrap());
+        let bank = bank_forks.read().unwrap().get(0).unwrap();
         let banking_tracer = BankingTracer::new_disabled();
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
         let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
@@ -663,12 +684,13 @@ mod tests {
                     .expect("Expected to be able to open database ledger"),
             );
             let (exit, poh_recorder, poh_service, _entry_receiever) =
-                create_test_recorder(&bank, blockstore, None, None);
+                create_test_recorder(bank, blockstore, None, None);
             let (_, cluster_info) = new_test_cluster_info(/*keypair:*/ None);
             let cluster_info = Arc::new(cluster_info);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let banking_stage = BankingStage::new(
+                BlockProductionMethod::ThreadLocalMultiIterator,
                 &cluster_info,
                 &poh_recorder,
                 non_vote_receiver,
@@ -701,7 +723,7 @@ mod tests {
         let num_extra_ticks = 2;
         let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let bank = Arc::new(bank_forks.read().unwrap().get(0).unwrap());
+        let bank = bank_forks.read().unwrap().get(0).unwrap();
         let start_hash = bank.last_blockhash();
         let banking_tracer = BankingTracer::new_disabled();
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
@@ -719,12 +741,13 @@ mod tests {
                 ..PohConfig::default()
             };
             let (exit, poh_recorder, poh_service, entry_receiver) =
-                create_test_recorder(&bank, blockstore, Some(poh_config), None);
+                create_test_recorder(bank.clone(), blockstore, Some(poh_config), None);
             let (_, cluster_info) = new_test_cluster_info(/*keypair:*/ None);
             let cluster_info = Arc::new(cluster_info);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let banking_stage = BankingStage::new(
+                BlockProductionMethod::ThreadLocalMultiIterator,
                 &cluster_info,
                 &poh_recorder,
                 non_vote_receiver,
@@ -780,7 +803,7 @@ mod tests {
         } = create_slow_genesis_config(10);
         let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let bank = Arc::new(bank_forks.read().unwrap().get(0).unwrap());
+        let bank = bank_forks.read().unwrap().get(0).unwrap();
         let start_hash = bank.last_blockhash();
         let banking_tracer = BankingTracer::new_disabled();
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
@@ -800,12 +823,13 @@ mod tests {
                 ..PohConfig::default()
             };
             let (exit, poh_recorder, poh_service, entry_receiver) =
-                create_test_recorder(&bank, blockstore, Some(poh_config), None);
+                create_test_recorder(bank.clone(), blockstore, Some(poh_config), None);
             let (_, cluster_info) = new_test_cluster_info(/*keypair:*/ None);
             let cluster_info = Arc::new(cluster_info);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let banking_stage = BankingStage::new(
+                BlockProductionMethod::ThreadLocalMultiIterator,
                 &cluster_info,
                 &poh_recorder,
                 non_vote_receiver,
@@ -951,7 +975,7 @@ mod tests {
                 // start a banking_stage to eat verified receiver
                 let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
                 let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-                let bank = Arc::new(bank_forks.read().unwrap().get(0).unwrap());
+                let bank = bank_forks.read().unwrap().get(0).unwrap();
                 let blockstore = Arc::new(
                     Blockstore::open(ledger_path.path())
                         .expect("Expected to be able to open database ledger"),
@@ -963,10 +987,10 @@ mod tests {
                     ..PohConfig::default()
                 };
                 let (exit, poh_recorder, poh_service, entry_receiver) =
-                    create_test_recorder(&bank, blockstore, Some(poh_config), None);
+                    create_test_recorder(bank.clone(), blockstore, Some(poh_config), None);
                 let (_, cluster_info) = new_test_cluster_info(/*keypair:*/ None);
                 let cluster_info = Arc::new(cluster_info);
-                let _banking_stage = BankingStage::new_num_threads(
+                let _banking_stage = BankingStage::new_thread_local_multi_iterator(
                     &cluster_info,
                     &poh_recorder,
                     non_vote_receiver,
@@ -1126,17 +1150,13 @@ mod tests {
     fn test_unprocessed_transaction_storage_full_send() {
         solana_logger::setup();
         let GenesisConfigInfo {
-            mut genesis_config,
+            genesis_config,
             mint_keypair,
             ..
         } = create_slow_genesis_config(10000);
-        activate_feature(
-            &mut genesis_config,
-            allow_votes_to_directly_update_vote_state::id(),
-        );
         let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let bank = Arc::new(bank_forks.read().unwrap().get(0).unwrap());
+        let bank = bank_forks.read().unwrap().get(0).unwrap();
         let start_hash = bank.last_blockhash();
         let banking_tracer = BankingTracer::new_disabled();
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
@@ -1156,12 +1176,13 @@ mod tests {
                 ..PohConfig::default()
             };
             let (exit, poh_recorder, poh_service, _entry_receiver) =
-                create_test_recorder(&bank, blockstore, Some(poh_config), None);
+                create_test_recorder(bank.clone(), blockstore, Some(poh_config), None);
             let (_, cluster_info) = new_test_cluster_info(/*keypair:*/ None);
             let cluster_info = Arc::new(cluster_info);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let banking_stage = BankingStage::new(
+                BlockProductionMethod::ThreadLocalMultiIterator,
                 &cluster_info,
                 &poh_recorder,
                 non_vote_receiver,

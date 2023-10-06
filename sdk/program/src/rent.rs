@@ -2,7 +2,7 @@
 //!
 //! [rent]: https://docs.solana.com/implemented-proposals/rent
 
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use {crate::clock::DEFAULT_SLOTS_PER_EPOCH, solana_sdk_macro::CloneZeroed};
 

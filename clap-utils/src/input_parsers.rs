@@ -14,7 +14,7 @@ use {
         pubkey::Pubkey,
         signature::{read_keypair_file, Keypair, Signature, Signer},
     },
-    std::{str::FromStr, sync::Arc},
+    std::{rc::Rc, str::FromStr},
 };
 
 // Sentinel value used to indicate to write to screen instead of file
@@ -123,7 +123,7 @@ pub fn pubkeys_sigs_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<(Pubk
 pub fn signer_of(
     matches: &ArgMatches<'_>,
     name: &str,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<(Option<Box<dyn Signer>>, Option<Pubkey>), Box<dyn std::error::Error>> {
     if let Some(location) = matches.value_of(name) {
         let signer = signer_from_path(matches, location, name, wallet_manager)?;
@@ -137,7 +137,7 @@ pub fn signer_of(
 pub fn pubkey_of_signer(
     matches: &ArgMatches<'_>,
     name: &str,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<Option<Pubkey>, Box<dyn std::error::Error>> {
     if let Some(location) = matches.value_of(name) {
         Ok(Some(pubkey_from_path(
@@ -154,7 +154,7 @@ pub fn pubkey_of_signer(
 pub fn pubkeys_of_multiple_signers(
     matches: &ArgMatches<'_>,
     name: &str,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<Option<Vec<Pubkey>>, Box<dyn std::error::Error>> {
     if let Some(pubkey_matches) = matches.values_of(name) {
         let mut pubkeys: Vec<Pubkey> = vec![];
@@ -170,7 +170,7 @@ pub fn pubkeys_of_multiple_signers(
 pub fn resolve_signer(
     matches: &ArgMatches<'_>,
     name: &str,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<Option<String>, Box<dyn std::error::Error>> {
     resolve_signer_from_path(
         matches,

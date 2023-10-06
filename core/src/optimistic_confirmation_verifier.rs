@@ -288,7 +288,7 @@ mod test {
             .bank_forks
             .write()
             .unwrap()
-            .insert(Bank::new_from_parent(&bank6, &Pubkey::default(), 7));
+            .insert(Bank::new_from_parent(bank6, &Pubkey::default(), 7));
         let bank7 = vote_simulator.bank_forks.read().unwrap().get(7).unwrap();
         assert!(!bank7.ancestors.contains_key(&3));
 
@@ -304,7 +304,7 @@ mod test {
         assert!(optimistic_confirmation_verifier.unchecked_slots.is_empty());
 
         // If we know set the root in blockstore, should return nothing
-        blockstore.set_roots(vec![1, 3].iter()).unwrap();
+        blockstore.set_roots([1, 3].iter()).unwrap();
         optimistic_confirmation_verifier
             .add_new_optimistic_confirmed_slots(optimistic_slots, &blockstore);
         assert!(optimistic_confirmation_verifier

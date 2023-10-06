@@ -1,7 +1,7 @@
 #![feature(test)]
 #![cfg(feature = "sbf_c")]
 #![allow(clippy::uninlined_format_args)]
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use {
     solana_rbpf::memory_region::MemoryState,
@@ -14,16 +14,13 @@ use {
     byteorder::{ByteOrder, LittleEndian, WriteBytesExt},
     solana_bpf_loader_program::{
         create_vm, serialization::serialize_parameters,
-        syscalls::create_program_runtime_environment,
+        syscalls::create_program_runtime_environment_v1,
     },
     solana_measure::measure::Measure,
     solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
     solana_rbpf::{
-        ebpf::MM_INPUT_START,
-        elf::Executable,
-        memory_region::MemoryRegion,
-        verifier::{RequisiteVerifier, TautologyVerifier},
-        vm::ContextObject,
+        ebpf::MM_INPUT_START, elf::Executable, memory_region::MemoryRegion,
+        verifier::RequisiteVerifier, vm::ContextObject,
     },
     solana_runtime::{
         bank::Bank,
@@ -90,7 +87,7 @@ macro_rules! with_mock_invoke_context {
 fn bench_program_create_executable(bencher: &mut Bencher) {
     let elf = load_program_from_file("bench_alu");
 
-    let program_runtime_environment = create_program_runtime_environment(
+    let program_runtime_environment = create_program_runtime_environment_v1(
         &FeatureSet::default(),
         &ComputeBudget::default(),
         true,
@@ -98,11 +95,8 @@ fn bench_program_create_executable(bencher: &mut Bencher) {
     );
     let program_runtime_environment = Arc::new(program_runtime_environment.unwrap());
     bencher.iter(|| {
-        let _ = Executable::<TautologyVerifier, InvokeContext>::from_elf(
-            &elf,
-            program_runtime_environment.clone(),
-        )
-        .unwrap();
+        let _ = Executable::<InvokeContext>::from_elf(&elf, program_runtime_environment.clone())
+            .unwrap();
     });
 }
 
@@ -118,25 +112,22 @@ fn bench_program_alu(bencher: &mut Bencher) {
     let elf = load_program_from_file("bench_alu");
     with_mock_invoke_context!(invoke_context, bpf_loader::id(), 10000001);
 
-    let program_runtime_environment = create_program_runtime_environment(
+    let program_runtime_environment = create_program_runtime_environment_v1(
         &invoke_context.feature_set,
         &ComputeBudget::default(),
         true,
         false,
     );
-    let executable = Executable::<TautologyVerifier, InvokeContext>::from_elf(
-        &elf,
-        Arc::new(program_runtime_environment.unwrap()),
-    )
-    .unwrap();
+    let mut executable =
+        Executable::<InvokeContext>::from_elf(&elf, Arc::new(program_runtime_environment.unwrap()))
+            .unwrap();
 
-    let mut verified_executable =
-        Executable::<RequisiteVerifier, InvokeContext>::verified(executable).unwrap();
+    executable.verify::<RequisiteVerifier>().unwrap();
 
-    verified_executable.jit_compile().unwrap();
+    executable.jit_compile().unwrap();
     create_vm!(
         vm,
-        &verified_executable,
+        &executable,
         vec![MemoryRegion::new_writable(&mut inner_iter, MM_INPUT_START)],
         vec![],
         &mut invoke_context,
@@ -146,7 +137,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
     println!("Interpreted:");
     vm.context_object_pointer
         .mock_set_remaining(std::i64::MAX as u64);
-    let (instructions, result) = vm.execute_program(&verified_executable, true);
+    let (instructions, result) = vm.execute_program(&executable, true);
     assert_eq!(SUCCESS, result.unwrap());
     assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
     assert_eq!(
@@ -157,7 +148,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
     bencher.iter(|| {
         vm.context_object_pointer
             .mock_set_remaining(std::i64::MAX as u64);
-        vm.execute_program(&verified_executable, true).1.unwrap();
+        vm.execute_program(&executable, true).1.unwrap();
     });
     let summary = bencher.bench(|_bencher| Ok(())).unwrap().unwrap();
     println!("  {:?} instructions", instructions);
@@ -168,10 +159,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
     println!("{{ \"type\": \"bench\", \"name\": \"bench_program_alu_interpreted_mips\", \"median\": {:?}, \"deviation\": 0 }}", mips);
 
     println!("JIT to native:");
-    assert_eq!(
-        SUCCESS,
-        vm.execute_program(&verified_executable, false).1.unwrap()
-    );
+    assert_eq!(SUCCESS, vm.execute_program(&executable, false).1.unwrap());
     assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
     assert_eq!(
         ARMSTRONG_EXPECTED,
@@ -181,7 +169,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
     bencher.iter(|| {
         vm.context_object_pointer
             .mock_set_remaining(std::i64::MAX as u64);
-        vm.execute_program(&verified_executable, false).1.unwrap();
+        vm.execute_program(&executable, false).1.unwrap();
     });
     let summary = bencher.bench(|_bencher| Ok(())).unwrap().unwrap();
     println!("  {:?} instructions", instructions);
@@ -201,7 +189,7 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
     } = create_genesis_config(50);
     let bank = Bank::new_for_benches(&genesis_config);
     let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(bank.clone());
 
     let invoke_program_id = load_program(&bank_client, &bpf_loader::id(), &mint_keypair, "noop");
     let bank = bank_client
@@ -237,20 +225,17 @@ fn bench_create_vm(bencher: &mut Bencher) {
     let direct_mapping = invoke_context
         .feature_set
         .is_active(&bpf_account_data_direct_mapping::id());
-    let program_runtime_environment = create_program_runtime_environment(
+    let program_runtime_environment = create_program_runtime_environment_v1(
         &invoke_context.feature_set,
         &ComputeBudget::default(),
         true,
         false,
     );
-    let executable = Executable::<TautologyVerifier, InvokeContext>::from_elf(
-        &elf,
-        Arc::new(program_runtime_environment.unwrap()),
-    )
-    .unwrap();
+    let executable =
+        Executable::<InvokeContext>::from_elf(&elf, Arc::new(program_runtime_environment.unwrap()))
+            .unwrap();
 
-    let verified_executable =
-        Executable::<RequisiteVerifier, InvokeContext>::verified(executable).unwrap();
+    executable.verify::<RequisiteVerifier>().unwrap();
 
     // Serialize account data
     let (_serialized, regions, account_lengths) = serialize_parameters(
@@ -267,7 +252,7 @@ fn bench_create_vm(bencher: &mut Bencher) {
     bencher.iter(|| {
         create_vm!(
             vm,
-            &verified_executable,
+            &executable,
             clone_regions(&regions),
             account_lengths.clone(),
             &mut invoke_context,
@@ -299,24 +284,21 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     )
     .unwrap();
 
-    let program_runtime_environment = create_program_runtime_environment(
+    let program_runtime_environment = create_program_runtime_environment_v1(
         &invoke_context.feature_set,
         &ComputeBudget::default(),
         true,
         false,
     );
-    let executable = Executable::<TautologyVerifier, InvokeContext>::from_elf(
-        &elf,
-        Arc::new(program_runtime_environment.unwrap()),
-    )
-    .unwrap();
+    let executable =
+        Executable::<InvokeContext>::from_elf(&elf, Arc::new(program_runtime_environment.unwrap()))
+            .unwrap();
 
-    let verified_executable =
-        Executable::<RequisiteVerifier, InvokeContext>::verified(executable).unwrap();
+    executable.verify::<RequisiteVerifier>().unwrap();
 
     create_vm!(
         vm,
-        &verified_executable,
+        &executable,
         regions,
         account_lengths,
         &mut invoke_context,
@@ -324,7 +306,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     let mut vm = vm.unwrap();
 
     let mut measure = Measure::start("tune");
-    let (instructions, _result) = vm.execute_program(&verified_executable, true);
+    let (instructions, _result) = vm.execute_program(&executable, true);
     measure.stop();
 
     assert_eq!(

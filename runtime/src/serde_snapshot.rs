@@ -176,7 +176,7 @@ impl<T> SnapshotAccountsDbFields<T> {
                     })?;
 
                 let mut combined_storages = full_snapshot_storages;
-                combined_storages.extend(incremental_snapshot_storages.into_iter());
+                combined_storages.extend(incremental_snapshot_storages);
 
                 Ok(AccountsDbFields(
                     combined_storages,
@@ -266,6 +266,7 @@ where
 
 /// used by tests to compare contents of serialized bank fields
 /// serialized format is not deterministic - likely due to randomness in structs like hashmaps
+#[cfg(feature = "dev-context-only-utils")]
 pub(crate) fn compare_two_serialized_banks(
     path1: impl AsRef<Path>,
     path2: impl AsRef<Path>,
@@ -516,7 +517,7 @@ where
     (SerializableBankAndStorage::<newer::Context> {
         bank,
         snapshot_storages: storage,
-        phantom: std::marker::PhantomData::default(),
+        phantom: std::marker::PhantomData,
     })
     .serialize(s)
 }

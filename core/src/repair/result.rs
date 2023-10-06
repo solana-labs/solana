@@ -26,11 +26,13 @@ pub enum Error {
     #[error(transparent)]
     InvalidContactInfo(#[from] contact_info::Error),
     #[error(transparent)]
+    RepairVerify(#[from] RepairVerifyError),
+    #[error("Send Error")]
+    SendError,
+    #[error(transparent)]
     Serialize(#[from] std::boxed::Box<bincode::ErrorKind>),
     #[error(transparent)]
     WeightedIndex(#[from] rand::distributions::weighted::WeightedError),
-    #[error(transparent)]
-    RepairVerify(#[from] RepairVerifyError),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

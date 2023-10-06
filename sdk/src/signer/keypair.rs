@@ -10,7 +10,7 @@ use {
     ed25519_dalek::Signer as DalekSigner,
     ed25519_dalek_bip32::Error as Bip32Error,
     hmac::Hmac,
-    rand::{rngs::OsRng, CryptoRng, RngCore},
+    rand0_7::{rngs::OsRng, CryptoRng, RngCore},
     std::{
         error,
         io::{Read, Write},
@@ -25,6 +25,9 @@ use {
 pub struct Keypair(ed25519_dalek::Keypair);
 
 impl Keypair {
+    /// Can be used for generating a Keypair without a dependency on `rand` types
+    pub const SECRET_KEY_LENGTH: usize = 32;
+
     /// Constructs a new, random `Keypair` using a caller-provided RNG
     pub fn generate<R>(csprng: &mut R) -> Self
     where
@@ -41,7 +44,16 @@ impl Keypair {
 
     /// Recovers a `Keypair` from a byte array
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ed25519_dalek::SignatureError> {
-        ed25519_dalek::Keypair::from_bytes(bytes).map(Self)
+        let secret =
+            ed25519_dalek::SecretKey::from_bytes(&bytes[..ed25519_dalek::SECRET_KEY_LENGTH])?;
+        let public =
+            ed25519_dalek::PublicKey::from_bytes(&bytes[ed25519_dalek::SECRET_KEY_LENGTH..])?;
+        let expected_public = ed25519_dalek::PublicKey::from(&secret);
+        (public == expected_public)
+            .then_some(Self(ed25519_dalek::Keypair { secret, public }))
+            .ok_or(ed25519_dalek::SignatureError::from_source(String::from(
+                "keypair bytes do not specify same pubkey as derived from their secret key",
+            )))
     }
 
     /// Returns this `Keypair` as a byte array
@@ -79,6 +91,9 @@ impl Keypair {
         })
     }
 }
+
+#[cfg(test)]
+static_assertions::const_assert_eq!(Keypair::SECRET_KEY_LENGTH, ed25519_dalek::SECRET_KEY_LENGTH);
 
 impl Signer for Keypair {
     #[inline]
@@ -155,9 +170,8 @@ impl EncodableKeypair for Keypair {
 /// Reads a JSON-encoded `Keypair` from a `Reader` implementor
 pub fn read_keypair<R: Read>(reader: &mut R) -> Result<Keypair, Box<dyn error::Error>> {
     let bytes: Vec<u8> = serde_json::from_reader(reader)?;
-    let dalek_keypair = ed25519_dalek::Keypair::from_bytes(&bytes)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-    Ok(Keypair(dalek_keypair))
+    Keypair::from_bytes(&bytes)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()).into())
 }
 
 /// Reads a `Keypair` from a file

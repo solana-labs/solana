@@ -1,5 +1,5 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 pub mod bank_forks_utils;
 pub mod bigtable_delete;
@@ -28,6 +28,7 @@ pub mod sigverify_shreds;
 pub mod slot_stats;
 mod staking_utils;
 pub mod token_balances;
+mod transaction_address_lookup_table_scanner;
 pub mod use_snapshot_archives_at_startup;
 
 #[macro_use]

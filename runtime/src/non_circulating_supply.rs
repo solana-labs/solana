@@ -8,7 +8,7 @@ use {
         stake::{self, state::StakeStateV2},
     },
     solana_stake_program::stake_state,
-    std::{collections::HashSet, sync::Arc},
+    std::collections::HashSet,
 };
 
 pub struct NonCirculatingSupply {
@@ -16,7 +16,7 @@ pub struct NonCirculatingSupply {
     pub accounts: Vec<Pubkey>,
 }
 
-pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> ScanResult<NonCirculatingSupply> {
+pub fn calculate_non_circulating_supply(bank: &Bank) -> ScanResult<NonCirculatingSupply> {
     debug!("Updating Bank supply, epoch: {}", bank.epoch());
     let mut non_circulating_accounts_set: HashSet<Pubkey> = HashSet::new();
 
@@ -228,8 +228,10 @@ mod tests {
         std::{collections::BTreeMap, sync::Arc},
     };
 
-    fn new_from_parent(parent: &Arc<Bank>) -> Bank {
-        Bank::new_from_parent(parent, &Pubkey::default(), parent.slot() + 1)
+    fn new_from_parent(parent: Arc<Bank>) -> Bank {
+        let slot = parent.slot() + 1;
+        let collector_id = Pubkey::default();
+        Bank::new_from_parent(parent, &collector_id, slot)
     }
 
     #[test]
@@ -294,7 +296,7 @@ mod tests {
             num_non_circulating_accounts as usize + num_stake_accounts as usize
         );
 
-        bank = Arc::new(new_from_parent(&bank));
+        bank = Arc::new(new_from_parent(bank));
         let new_balance = 11;
         for key in non_circulating_accounts {
             bank.store_account(
@@ -314,7 +316,7 @@ mod tests {
 
         // Advance bank an epoch, which should unlock stakes
         for _ in 0..slots_per_epoch {
-            bank = Arc::new(new_from_parent(&bank));
+            bank = Arc::new(new_from_parent(bank));
         }
         assert_eq!(bank.epoch(), 1);
         let non_circulating_supply = calculate_non_circulating_supply(&bank).unwrap();

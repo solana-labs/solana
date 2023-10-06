@@ -670,12 +670,23 @@ mod tests {
         let mut transaction_context =
             TransactionContext::new(accounts, Some(Rent::default()), 1, 2);
 
+        // Since libsecp256k1 is still using the old version of rand, this test
+        // copies the `random` implementation at:
+        // https://docs.rs/libsecp256k1/latest/src/libsecp256k1/lib.rs.html#430
+        let secret_key = {
+            use rand::RngCore;
+            let mut rng = rand::thread_rng();
+            loop {
+                let mut ret = [0u8; libsecp256k1::util::SECRET_KEY_SIZE];
+                rng.fill_bytes(&mut ret);
+                if let Ok(key) = libsecp256k1::SecretKey::parse(&ret) {
+                    break key;
+                }
+            }
+        };
         let message = SanitizedMessage::Legacy(LegacyMessage::new(Message::new(
             &[
-                new_secp256k1_instruction(
-                    &libsecp256k1::SecretKey::random(&mut rand::thread_rng()),
-                    b"hello",
-                ),
+                new_secp256k1_instruction(&secret_key, b"hello"),
                 Instruction::new_with_bytes(mock_program_id, &[], vec![]),
             ],
             None,

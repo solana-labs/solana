@@ -19,13 +19,13 @@ use {
     error::TieredStorageError,
     footer::{AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat},
     index::AccountIndexFormat,
-    once_cell::sync::OnceCell,
     readable::TieredStorageReader,
     solana_sdk::{account::ReadableAccount, hash::Hash},
     std::{
         borrow::Borrow,
         fs::OpenOptions,
         path::{Path, PathBuf},
+        sync::OnceLock,
     },
     writer::TieredStorageWriter,
 };
@@ -45,8 +45,7 @@ pub struct TieredStorageFormat {
 
 #[derive(Debug)]
 pub struct TieredStorage {
-    reader: OnceCell<TieredStorageReader>,
-    format: Option<TieredStorageFormat>,
+    reader: OnceLock<TieredStorageReader>,
     path: PathBuf,
 }
 
@@ -64,10 +63,9 @@ impl TieredStorage {
     ///
     /// Note that the actual file will not be created until write_accounts
     /// is called.
-    pub fn new_writable(path: impl Into<PathBuf>, format: TieredStorageFormat) -> Self {
+    pub fn new_writable(path: impl Into<PathBuf>) -> Self {
         Self {
-            reader: OnceCell::<TieredStorageReader>::new(),
-            format: Some(format),
+            reader: OnceLock::<TieredStorageReader>::new(),
             path: path.into(),
         }
     }
@@ -77,8 +75,7 @@ impl TieredStorage {
     pub fn new_readonly(path: impl Into<PathBuf>) -> TieredStorageResult<Self> {
         let path = path.into();
         Ok(Self {
-            reader: OnceCell::with_value(TieredStorageReader::new_from_path(&path)?),
-            format: None,
+            reader: TieredStorageReader::new_from_path(&path).map(OnceLock::from)?,
             path,
         })
     }
@@ -104,6 +101,7 @@ impl TieredStorage {
         &self,
         accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
         skip: usize,
+        format: &TieredStorageFormat,
     ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
         if self.is_read_only() {
             return Err(TieredStorageError::AttemptToUpdateReadOnly(
@@ -112,10 +110,7 @@ impl TieredStorage {
         }
 
         let result = {
-            // self.format must be Some as write_accounts can only be called on a
-            // TieredStorage instance created via new_writable() where its format
-            // field is required.
-            let writer = TieredStorageWriter::new(&self.path, self.format.as_ref().unwrap())?;
+            let writer = TieredStorageWriter::new(&self.path, format)?;
             writer.write_accounts(accounts, skip)
         };
 
@@ -155,10 +150,16 @@ impl TieredStorage {
 mod tests {
     use {
         super::*,
-        crate::account_storage::meta::StoredMetaWriteVersion,
+        crate::account_storage::meta::{StoredMeta, StoredMetaWriteVersion},
         footer::{TieredStorageFooter, TieredStorageMagicNumber},
         hot::HOT_FORMAT,
-        solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey},
+        solana_accounts_db::rent_collector::RENT_EXEMPT_RENT_EPOCH,
+        solana_sdk::{
+            account::{Account, AccountSharedData},
+            clock::Slot,
+            pubkey::Pubkey,
+            system_instruction::MAX_PERMITTED_DATA_LENGTH,
+        },
         std::mem::ManuallyDrop,
         tempfile::tempdir,
     };
@@ -185,7 +186,7 @@ mod tests {
                 Vec::<StoredMetaWriteVersion>::new(),
             );
 
-        let result = tiered_storage.write_accounts(&storable_accounts, 0);
+        let result = tiered_storage.write_accounts(&storable_accounts, 0, &HOT_FORMAT);
 
         match (&result, &expected_result) {
             (
@@ -214,10 +215,8 @@ mod tests {
         let tiered_storage_path = temp_dir.path().join("test_new_meta_file_only");
 
         {
-            let tiered_storage = ManuallyDrop::new(TieredStorage::new_writable(
-                &tiered_storage_path,
-                HOT_FORMAT.clone(),
-            ));
+            let tiered_storage =
+                ManuallyDrop::new(TieredStorage::new_writable(&tiered_storage_path));
 
             assert!(!tiered_storage.is_read_only());
             assert_eq!(tiered_storage.path(), tiered_storage_path);
@@ -250,7 +249,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let tiered_storage_path = temp_dir.path().join("test_write_accounts_twice");
 
-        let tiered_storage = TieredStorage::new_writable(&tiered_storage_path, HOT_FORMAT.clone());
+        let tiered_storage = TieredStorage::new_writable(&tiered_storage_path);
         // Expect the result to be TieredStorageError::Unsupported as the feature
         // is not yet fully supported, but we can still check its partial results
         // in the test.
@@ -271,18 +270,15 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let tiered_storage_path = temp_dir.path().join("test_remove_on_drop");
         {
-            let tiered_storage =
-                TieredStorage::new_writable(&tiered_storage_path, HOT_FORMAT.clone());
+            let tiered_storage = TieredStorage::new_writable(&tiered_storage_path);
             write_zero_accounts(&tiered_storage, Err(TieredStorageError::Unsupported()));
         }
         // expect the file does not exists as it has been removed on drop
         assert!(!tiered_storage_path.try_exists().unwrap());
 
         {
-            let tiered_storage = ManuallyDrop::new(TieredStorage::new_writable(
-                &tiered_storage_path,
-                HOT_FORMAT.clone(),
-            ));
+            let tiered_storage =
+                ManuallyDrop::new(TieredStorage::new_writable(&tiered_storage_path));
             write_zero_accounts(&tiered_storage, Err(TieredStorageError::Unsupported()));
         }
         // expect the file exists as we have ManuallyDrop this time.
@@ -301,5 +297,128 @@ mod tests {
         }
         // expect the file does not exist as the file has been removed on drop
         assert!(!tiered_storage_path.try_exists().unwrap());
+    }
+
+    /// Create a test account based on the specified seed.
+    /// The created test account might have default rent_epoch
+    /// and write_version.
+    fn create_account(seed: u64) -> (StoredMeta, AccountSharedData) {
+        let data_byte = seed as u8;
+        let account = Account {
+            lamports: seed,
+            data: std::iter::repeat(data_byte).take(seed as usize).collect(),
+            owner: Pubkey::new_unique(),
+            executable: seed % 2 > 0,
+            rent_epoch: if seed % 3 > 0 {
+                seed
+            } else {
+                RENT_EXEMPT_RENT_EPOCH
+            },
+        };
+
+        let stored_meta = StoredMeta {
+            write_version_obsolete: u64::MAX,
+            pubkey: Pubkey::new_unique(),
+            data_len: seed,
+        };
+        (stored_meta, AccountSharedData::from(account))
+    }
+
+    /// The helper function for all write_accounts tests.
+    /// Currently only supports hot accounts.
+    fn do_test_write_accounts(
+        path_suffix: &str,
+        account_data_sizes: &[u64],
+        format: TieredStorageFormat,
+    ) {
+        let accounts: Vec<_> = account_data_sizes
+            .iter()
+            .map(|size| create_account(*size))
+            .collect();
+
+        let account_refs: Vec<_> = accounts
+            .iter()
+            .map(|account| (&account.0.pubkey, &account.1))
+            .collect();
+
+        // Slot information is not used here
+        let account_data = (Slot::MAX, &account_refs[..]);
+        let hashes: Vec<_> = std::iter::repeat_with(Hash::new_unique)
+            .take(account_data_sizes.len())
+            .collect();
+        let write_versions: Vec<_> = accounts
+            .iter()
+            .map(|account| account.0.write_version_obsolete)
+            .collect();
+
+        let storable_accounts =
+            StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
+                &account_data,
+                hashes,
+                write_versions,
+            );
+
+        let temp_dir = tempdir().unwrap();
+        let tiered_storage_path = temp_dir.path().join(path_suffix);
+        let tiered_storage = TieredStorage::new_writable(tiered_storage_path);
+        _ = tiered_storage.write_accounts(&storable_accounts, 0, &format);
+
+        verify_hot_storage(&tiered_storage, &accounts, format);
+    }
+
+    /// Verify the generated tiered storage in the test.
+    fn verify_hot_storage(
+        tiered_storage: &TieredStorage,
+        expected_accounts: &[(StoredMeta, AccountSharedData)],
+        expected_format: TieredStorageFormat,
+    ) {
+        let reader = tiered_storage.reader().unwrap();
+        assert_eq!(reader.num_accounts(), expected_accounts.len());
+
+        let footer = reader.footer();
+        let expected_footer = TieredStorageFooter {
+            account_meta_format: expected_format.account_meta_format,
+            owners_block_format: expected_format.owners_block_format,
+            account_index_format: expected_format.account_index_format,
+            account_block_format: expected_format.account_block_format,
+            account_entry_count: expected_accounts.len() as u32,
+            // Hash is not yet implemented, so we bypass the check
+            hash: footer.hash,
+            ..TieredStorageFooter::default()
+        };
+
+        // TODO(yhchiang): verify account meta and data once the reader side
+        // is implemented in a separate PR.
+
+        assert_eq!(*footer, expected_footer);
+    }
+
+    #[test]
+    fn test_write_accounts_small_accounts() {
+        do_test_write_accounts(
+            "test_write_accounts_small_accounts",
+            &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            HOT_FORMAT.clone(),
+        );
+    }
+
+    #[test]
+    fn test_write_accounts_one_max_len() {
+        do_test_write_accounts(
+            "test_write_accounts_one_max_len",
+            &[MAX_PERMITTED_DATA_LENGTH],
+            HOT_FORMAT.clone(),
+        );
+    }
+
+    #[test]
+    fn test_write_accounts_mixed_size() {
+        do_test_write_accounts(
+            "test_write_accounts_mixed_size",
+            &[
+                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1000, 2000, 3000, 4000, 9, 8, 7, 6, 5, 4, 3, 2, 1,
+            ],
+            HOT_FORMAT.clone(),
+        );
     }
 }

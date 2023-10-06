@@ -151,18 +151,22 @@ mod tests {
         let ledger_path = temp_dir();
         let blockstore = Arc::new(Blockstore::open(ledger_path.as_path()).unwrap());
         let (exit, poh_recorder, poh_service, _entry_receiver) =
-            create_test_recorder(&bank, blockstore, None, None);
+            create_test_recorder(bank.clone(), blockstore, None, None);
+        // Drop the poh service immediately to avoid potential ticking
+        exit.store(true, Ordering::Relaxed);
+        poh_service.join().unwrap();
 
         let my_pubkey = Pubkey::new_unique();
         let decision_maker = DecisionMaker::new(my_pubkey, poh_recorder.clone());
         poh_recorder.write().unwrap().reset(bank.clone(), None);
-        let bank = Arc::new(Bank::new_from_parent(&bank, &my_pubkey, bank.slot() + 1));
+        let slot = bank.slot() + 1;
+        let bank = Arc::new(Bank::new_from_parent(bank, &my_pubkey, slot));
 
         // Currently Leader - Consume
         {
             poh_recorder.write().unwrap().set_bank(bank.clone(), false);
             let decision = decision_maker.make_consume_or_forward_decision();
-            assert!(matches!(decision, BufferedPacketsDecision::Consume(_)));
+            assert_matches!(decision, BufferedPacketsDecision::Consume(_));
         }
 
         // Will be leader shortly - Hold
@@ -203,11 +207,8 @@ mod tests {
         {
             poh_recorder.write().unwrap().reset(bank, None);
             let decision = decision_maker.make_consume_or_forward_decision();
-            assert!(matches!(decision, BufferedPacketsDecision::Forward));
+            assert_matches!(decision, BufferedPacketsDecision::Forward);
         }
-
-        exit.store(true, Ordering::Relaxed);
-        poh_service.join().unwrap();
     }
 
     #[test]

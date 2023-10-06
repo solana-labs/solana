@@ -1,5 +1,5 @@
 //! The `net_utils` module assists with networking
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 use {
     crossbeam_channel::unbounded,
     log::*,
@@ -558,7 +558,7 @@ pub fn bind_two_in_range_with_offset(
 pub fn find_available_port_in_range(ip_addr: IpAddr, range: PortRange) -> io::Result<u16> {
     let (start, end) = range;
     let mut tries_left = end - start;
-    let mut rand_port = thread_rng().gen_range(start, end);
+    let mut rand_port = thread_rng().gen_range(start..end);
     loop {
         match bind_common(ip_addr, rand_port, false) {
             Ok(_) => {
