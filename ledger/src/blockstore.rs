@@ -2277,8 +2277,13 @@ impl Blockstore {
         self.transaction_memos_cf.get(signature)
     }
 
-    pub fn write_transaction_memos(&self, signature: &Signature, memos: String) -> Result<()> {
-        self.transaction_memos_cf.put(*signature, &memos)
+    pub fn write_transaction_memos(
+        &self,
+        signature: &Signature,
+        slot: Slot,
+        memos: String,
+    ) -> Result<()> {
+        self.transaction_memos_cf.put((*signature, slot), &memos)
     }
 
     /// Acquires the `lowest_cleanup_slot` lock and returns a tuple of the held lock

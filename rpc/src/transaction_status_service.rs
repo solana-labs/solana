@@ -188,7 +188,7 @@ impl TransactionStatusService {
                         if enable_rpc_transaction_history {
                             if let Some(memos) = extract_and_fmt_memos(transaction.message()) {
                                 blockstore
-                                    .write_transaction_memos(transaction.signature(), memos)
+                                    .write_transaction_memos(transaction.signature(), slot, memos)
                                     .expect("Expect database write to succeed: TransactionMemos");
                             }
 
