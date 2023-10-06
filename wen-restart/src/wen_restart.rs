@@ -7,7 +7,7 @@ use {
     log::*,
     prost::Message,
     solana_gossip::{cluster_info::ClusterInfo, epoch_slots::MAX_SLOTS_PER_ENTRY},
-    solana_ledger::blockstore::Blockstore,
+    solana_ledger::{ancestor_iterator::AncestorIterator, blockstore::Blockstore},
     solana_vote_program::vote_state::VoteTransaction,
     std::{
         fs::File,
@@ -27,27 +27,9 @@ pub fn wait_for_wen_restart(
     let last_vote_slot = last_vote
         .last_voted_slot()
         .expect("wen_restart doesn't work if local tower is wiped");
-    let mut last_vote_fork = vec![last_vote_slot];
-    let mut slot = last_vote_slot;
-    for _ in 0..MAX_SLOTS_PER_ENTRY {
-        match blockstore.meta(slot) {
-            Ok(Some(slot_meta)) => {
-                match slot_meta.parent_slot {
-                    Some(parent_slot) => {
-                        last_vote_fork.push(parent_slot);
-                        slot = parent_slot;
-                        if last_vote_slot.saturating_sub(slot)
-                            > MAX_SLOTS_PER_ENTRY.try_into().unwrap()
-                        {
-                            break;
-                        }
-                    }
-                    None => break,
-                };
-            }
-            _ => break,
-        }
-    }
+    let mut last_vote_fork: Vec<u64> = AncestorIterator::new_inclusive(last_vote_slot, &blockstore)
+        .take(MAX_SLOTS_PER_ENTRY)
+        .collect();
     info!(
         "wen_restart last voted fork {} {:?}",
         last_vote_slot, last_vote_fork
