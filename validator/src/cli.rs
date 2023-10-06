@@ -468,7 +468,8 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("NUMBER")
                 .takes_value(true)
                 .default_value(&default_args.full_snapshot_archive_interval_slots)
-                .help("Number of slots between generating full snapshots")
+                .help("Number of slots between generating full snapshots. \
+                    Must be a multiple of the incremental snapshot interval.")
         )
         .arg(
             Arg::with_name("maximum_full_snapshots_to_retain")
