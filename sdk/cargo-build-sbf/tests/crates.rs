@@ -1,9 +1,9 @@
-use std::path::PathBuf;
-use std::str::FromStr;
 use {
     predicates::prelude::*,
     std::{
         env, fs,
+        path::PathBuf,
+        str::FromStr,
         sync::atomic::{AtomicBool, Ordering},
     },
 };

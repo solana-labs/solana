@@ -1,6 +1,6 @@
-use cargo_metadata::camino::Utf8PathBuf;
 use {
     bzip2::bufread::BzDecoder,
+    cargo_metadata::camino::Utf8PathBuf,
     clap::{crate_description, crate_name, crate_version, Arg},
     itertools::Itertools,
     log::*,
