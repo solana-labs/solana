@@ -77,7 +77,8 @@ fn parse_spl_genesis_file(spl_file: &PathBuf) -> Result<Vec<String>, Box<dyn Err
         args.push(token.to_string());
         if token.starts_with("--") {
             // Step 3 & 4: Split further and add to Vec
-            while let Some(next_token) = tokens_iter.next() {
+            for next_token in tokens_iter.by_ref() {
+            // while let Some(next_token) = tokens_iter.next() {
                 if next_token.starts_with("--") {
                     args.push(next_token.to_string());
                 } else {
