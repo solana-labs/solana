@@ -22,7 +22,8 @@ use {
 
 #[derive(Debug)]
 struct Config<'a> {
-    cargo_args: Option<Vec<&'a str>>,
+    cargo_args: Vec<&'a str>,
+    target_directory: Option<Utf8PathBuf>,
     sbf_out_dir: Option<PathBuf>,
     sbf_sdk: PathBuf,
     platform_tools_version: &'a str,
@@ -43,7 +44,8 @@ struct Config<'a> {
 impl Default for Config<'_> {
     fn default() -> Self {
         Self {
-            cargo_args: None,
+            cargo_args: vec![],
+            target_directory: None,
             sbf_sdk: env::current_exe()
                 .expect("Unable to get current executable")
                 .parent()
@@ -722,11 +724,7 @@ fn build_solana_package(
         cargo_build_args.push("--jobs");
         cargo_build_args.push(jobs);
     }
-    if let Some(args) = &config.cargo_args {
-        for arg in args {
-            cargo_build_args.push(arg);
-        }
-    }
+    cargo_build_args.append(&mut config.cargo_args.clone());
     let output = spawn(
         &cargo_build,
         &cargo_build_args,
@@ -865,17 +863,10 @@ fn build_solana(config: Config, manifest_path: Option<PathBuf>) {
         exit(1);
     });
 
-    let target_arg = config
-        .cargo_args
-        .as_ref()
-        .and_then(|args| {
-            let position = args.iter().position(|x| x == &"--target-dir")?;
-            Some(args.get(position + 1))
-        })
-        .flatten()
-        .map(Utf8PathBuf::from);
-
-    let target_dir = target_arg.unwrap_or(metadata.target_directory.clone());
+    let target_dir = config
+        .target_directory
+        .clone()
+        .unwrap_or(metadata.target_directory.clone());
 
     if let Some(root_package) = metadata.root_package() {
         if !config.workspace {
@@ -1063,10 +1054,39 @@ fn main() {
     } else {
         platform_tools_version
     };
+
+    let mut cargo_args = matches
+        .values_of("cargo_args")
+        .map(|vals| vals.collect::<Vec<_>>())
+        .unwrap_or_default();
+
+    let target_dir_string;
+    let target_directory = if let Some(target_dir) = cargo_args
+        .iter_mut()
+        .skip_while(|x| x != &&"--target-dir")
+        .nth(1)
+    {
+        let target_path = Utf8PathBuf::from(*target_dir);
+        // Directory needs to exist in order to canonicalize it
+        fs::create_dir_all(&target_path).unwrap_or_else(|err| {
+            error!("Unable to create target-dir directory {target_dir}: {err}");
+            exit(1);
+        });
+        // Canonicalize the path to avoid issues with relative paths
+        let canonicalized = target_path.canonicalize_utf8().unwrap_or_else(|err| {
+            error!("Unable to canonicalize provided target-dir directory {target_path}: {err}");
+            exit(1);
+        });
+        target_dir_string = canonicalized.to_string();
+        *target_dir = &target_dir_string;
+        Some(canonicalized)
+    } else {
+        None
+    };
+
     let config = Config {
-        cargo_args: matches
-            .values_of("cargo_args")
-            .map(|vals| vals.collect::<Vec<_>>()),
+        cargo_args,
+        target_directory,
         sbf_sdk: fs::canonicalize(&sbf_sdk).unwrap_or_else(|err| {
             error!(
                 "Solana SDK path does not exist: {}: {}",
