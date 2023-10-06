@@ -513,6 +513,8 @@ async fn main() {
         }
     }
 
+    // std::process::exit(-1);
+
     // Begin Kubernetes Setup and Deployment
     let config_map = match kub_controller.create_genesis_config_map().await {
         Ok(config_map) => {

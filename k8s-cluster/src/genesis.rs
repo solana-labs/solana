@@ -27,13 +27,13 @@ pub const DEFAULT_INTERNAL_NODE_SOL: f64 = 500.0; // 500000000000 lamports
 pub const DEFAULT_BOOTSTRAP_NODE_STAKE_SOL: f64 = 10.0;
 pub const DEFAULT_BOOTSTRAP_NODE_SOL: f64 = 500.0;
 
-fn output_keypair(keypair: &Keypair, outfile: &str, source: &str) -> Result<(), Box<dyn Error>> {
+fn output_keypair(keypair: &Keypair, outfile: &str) -> Result<(), Box<dyn Error>> {
     if outfile == STDOUT_OUTFILE_TOKEN {
         let mut stdout = std::io::stdout();
         write_keypair(keypair, &mut stdout)?;
     } else {
         write_keypair_file(keypair, outfile)?;
-        println!("Wrote {source} keypair to {outfile}");
+        // println!("Wrote {source} keypair to {outfile}");
     }
     Ok(())
 }
@@ -44,6 +44,53 @@ fn generate_keypair() -> Result<Keypair, Box<dyn Error>> {
     let mnemonic = Mnemonic::new(mnemonic_type, Language::English);
     let seed = Seed::new(&mnemonic, &passphrase);
     keypair_from_seed(seed.as_bytes())
+}
+
+fn fetch_spl(fetch_spl_file: &PathBuf) -> Result<(), Box<dyn Error>> {
+    let output = Command::new("bash")
+        .arg(fetch_spl_file)
+        .output() // Capture the output of the script
+        .expect("Failed to run fetch-spl.sh script");
+
+    // Check if the script execution was successful
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(boxed_error!(format!(
+            "Failed to fun fetch-spl.sh script: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )))
+    }
+}
+
+fn parse_spl_genesis_file(
+    spl_file: &PathBuf,
+) -> Result<Vec<String>, Box<dyn Error>> {
+    // Step 1: Read entire file into a String
+    let mut file = File::open(spl_file)?;
+    let mut content = String::new();
+    file.read_to_string(&mut content)?;
+
+    // Step 2: Split by " --" to get groups
+    let mut args = Vec::new();
+    let mut tokens_iter = content.split_whitespace();
+
+    while let Some(token) = tokens_iter.next() {
+        args.push(token.to_string());
+        if token.starts_with("--") {
+            // Step 3 & 4: Split further and add to Vec
+            while let Some(next_token) = tokens_iter.next() {
+                if next_token.starts_with("--") {
+                    args.push(next_token.to_string());
+                } else {
+                    args.push(next_token.to_string());
+                    break;
+                }
+            }
+        }
+    }
+
+    Ok(args)
 }
 
 pub struct GenesisFlags {
@@ -127,6 +174,7 @@ impl Genesis {
     }
 
     pub fn generate_faucet(&mut self) -> Result<(), Box<dyn Error>> {
+        info!("generating faucet keypair");
         let outfile = self.config_dir.join("faucet.json");
         let keypair = match generate_keypair() {
             Ok(keypair) => keypair,
@@ -134,7 +182,7 @@ impl Genesis {
         };
 
         if let Some(outfile) = outfile.to_str() {
-            output_keypair(&keypair, outfile, "new")
+            output_keypair(&keypair, outfile)
                 .map_err(|err| format!("Unable to write {outfile}: {err}"))?;
         }
         self.faucet_keypair = Some(keypair);
@@ -172,6 +220,11 @@ impl Genesis {
         filename_prefix: &str,
         i: i32,
     ) -> Result<(), Box<dyn Error>> {
+        if validator_type == "bootstrap" {
+            info!("generating {} account", validator_type);
+        } else {
+            info!("generating {} account: {}", validator_type, i);
+        }
         let account_types = vec!["identity", "vote-account", "stake-account"];
         for account in account_types {
             let filename: String;
@@ -196,7 +249,7 @@ impl Genesis {
             self.all_pubkeys.push(keypair.pubkey());
 
             if let Some(outfile) = outfile.to_str() {
-                output_keypair(&keypair, outfile, "new")
+                output_keypair(&keypair, outfile)
                     .map_err(|err| format!("Unable to write {outfile}: {err}"))?;
             }
         }
@@ -293,12 +346,22 @@ impl Genesis {
         }
 
         args
+    }
 
-        //TODO see multinode-demo.sh. we need spl-genesis-args.sh
+    pub fn setup_spl_args(&self) -> Result<Vec<String>, Box<dyn Error>> {
+        let fetch_spl_file = SOLANA_ROOT.join("fetch-spl.sh");
+        fetch_spl(&fetch_spl_file)?;
+
+        // add in spl stuff
+        let spl_file = SOLANA_ROOT.join("spl-genesis-args.sh");
+        parse_spl_genesis_file(&spl_file)
     }
 
     pub fn generate(&mut self) -> Result<(), Box<dyn Error>> {
-        let args = self.setup_genesis_flags();
+        let mut args = self.setup_genesis_flags();
+        let mut spl_args = self.setup_spl_args()?;
+        args.append(&mut spl_args);
+
         debug!("genesis args: ");
         for arg in &args {
             debug!("{}", arg);
@@ -352,15 +415,24 @@ impl Genesis {
     }
 
     // solana-genesis creates a genesis.tar.bz2 but if we need to create snapshots, these
-    // are not included in the genesis.tar.bz2. So we package everything including genesis.tar.bz2
-    // snapshots, etc into genesis-package.tar.bz2 and we use this as our genesis in the bootstrap
-    // validator
+    // are not included in the genesis.tar.bz2. So we package everything including genesis,
+    // snapshots, etc into genesis-package.tar.bz2 and we use this as our genesis in the 
+    // bootstrap validator
     pub fn package_up(&mut self) -> Result<(), Box<dyn Error>> {
+        // delete the genesis.tar.bz2 since its contents will be included in the
+        // tar we're about to create
+        let genesis_path = LEDGER_DIR.join("genesis.tar.bz2");
+        if std::fs::metadata(&genesis_path).is_ok() {
+            std::fs::remove_file(&genesis_path)?;
+        }
+
         info!("Packaging genesis");
-        let tar_bz2_file = File::create(LEDGER_DIR.join("genesis-package.tar.bz2"))?;
+        let folder_to_tar = LEDGER_DIR.join("");
+        let tar_bz2_file = File::create(SOLANA_ROOT.join("config-k8s/genesis-package.tar.bz2"))?;
         let encoder = BzEncoder::new(tar_bz2_file, Compression::best());
         let mut tar_builder = Builder::new(encoder);
-        tar_builder.append_dir_all(".", &*LEDGER_DIR)?;
+        tar_builder.append_dir_all("ledger", folder_to_tar)?;
+        
         Ok(())
     }
 }

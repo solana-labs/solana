@@ -60,5 +60,5 @@ for i in "${!SECRET_FILES[@]}"; do
 done
 
 mkdir -p /home/solana/logs
-mkdir -p /home/solana/ledger
-tar -xvf /home/solana/genesis/genesis-package.tar.bz2 -C /home/solana/ledger
+# mkdir -p /home/solana/ledger
+tar -xvf /home/solana/genesis/genesis-package.tar.bz2 -C /home/solana/
