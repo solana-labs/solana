@@ -240,7 +240,7 @@ impl Genesis {
     }
 
     fn setup_genesis_flags(&self) -> Vec<String> {
-        let mut args: Vec<String> = Vec::new();
+        let mut args = vec![..];
 
         args.push("--bootstrap-validator-lamports".to_string());
         args.push(
