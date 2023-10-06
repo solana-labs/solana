@@ -1,5 +1,5 @@
 use {
-    crate::{boxed_error, initialize_globals, SOLANA_ROOT},
+    crate::{boxed_error, initialize_globals, SOLANA_ROOT, ValidatorType},
     log::*,
     std::{
         error::Error,
@@ -31,7 +31,7 @@ impl<'a> DockerConfig<'a> {
         }
     }
 
-    pub fn build_image(&self, validator_type: &str) -> Result<(), Box<dyn Error>> {
+    pub fn build_image(&self, validator_type: &ValidatorType) -> Result<(), Box<dyn Error>> {
         match self.create_base_image(validator_type) {
             Ok(res) => {
                 if res.status.success() {
@@ -46,7 +46,7 @@ impl<'a> DockerConfig<'a> {
         }
     }
 
-    pub fn create_base_image(&self, validator_type: &str) -> Result<Output, Box<dyn Error>> {
+    pub fn create_base_image(&self, validator_type: &ValidatorType) -> Result<Output, Box<dyn Error>> {
         let image_name = format!("{}-{}", validator_type, self.image_config.image_name);
         let docker_path = SOLANA_ROOT.join(format!("{}/{}", "docker-build", validator_type));
 
@@ -83,11 +83,11 @@ impl<'a> DockerConfig<'a> {
 
     pub fn create_dockerfile(
         &self,
-        validator_type: &str,
+        validator_type: &ValidatorType,
         docker_path: PathBuf,
         content: Option<&str>,
     ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        if !(validator_type != "validator" || validator_type != "bootstrap") {
+        if !(validator_type != &ValidatorType::Bootstrap || validator_type != &ValidatorType::Standard) {
             return Err(boxed_error!(format!(
                 "Invalid validator type: {}. Exiting...",
                 validator_type
@@ -146,7 +146,7 @@ WORKDIR /home/solana
         Ok(docker_path)
     }
 
-    pub fn push_image(&self, validator_type: &str) -> Result<(), Box<dyn Error>> {
+    pub fn push_image(&self, validator_type: &ValidatorType) -> Result<(), Box<dyn Error>> {
         let image = format!(
             "{}/{}-{}:{}",
             self.image_config.registry,

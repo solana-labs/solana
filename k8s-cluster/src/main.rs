@@ -11,6 +11,7 @@ use {
         kubernetes::{Kubernetes, RuntimeConfig},
         ledger_helper::LedgerHelper,
         release::{BuildConfig, Deploy},
+        ValidatorType,
     },
     std::{thread, time::Duration},
 };
@@ -407,8 +408,8 @@ async fn main() {
 
     if let Some(config) = docker_image_config {
         let docker = DockerConfig::new(config, build_config.deploy_method);
-        let image_types = vec!["bootstrap", "validator"];
-        for image_type in image_types {
+        let image_types = vec![ValidatorType::Bootstrap, ValidatorType::Standard];
+        for image_type in &image_types {
             match docker.build_image(image_type) {
                 Ok(_) => info!("Docker image built successfully"),
                 Err(err) => {
@@ -419,7 +420,7 @@ async fn main() {
         }
 
         // Need to push image to registry so Monogon nodes can pull image from registry to local
-        match docker.push_image("bootstrap") {
+        match docker.push_image(&ValidatorType::Bootstrap) {
             Ok(_) => info!("Bootstrap Image pushed successfully to registry"),
             Err(err) => {
                 error!("{}", err);
@@ -428,7 +429,7 @@ async fn main() {
         }
 
         // Need to push image to registry so Monogon nodes can pull image from registry to local
-        match docker.push_image("validator") {
+        match docker.push_image(&ValidatorType::Standard) {
             Ok(_) => info!("Validator Image pushed successfully to registry"),
             Err(err) => {
                 error!("{}", err);
@@ -446,7 +447,7 @@ async fn main() {
             return;
         }
     }
-    match genesis.generate_accounts("bootstrap", 1) {
+    match genesis.generate_accounts(ValidatorType::Bootstrap, 1) {
         Ok(_) => (),
         Err(err) => {
             error!("generate accounts error! {}", err);
@@ -454,7 +455,7 @@ async fn main() {
         }
     }
 
-    match genesis.generate_accounts("validator", setup_config.num_validators) {
+    match genesis.generate_accounts(ValidatorType::Standard, setup_config.num_validators) {
         Ok(_) => (),
         Err(err) => {
             error!("generate accounts error! {}", err);
