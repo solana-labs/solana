@@ -1612,12 +1612,16 @@ where
     }
 
     pub fn get(&self, key: C::Index) -> Result<Option<C::Type>> {
+        self.get_raw(&C::key(key))
+    }
+
+    pub fn get_raw(&self, key: &[u8]) -> Result<Option<C::Type>> {
         let mut result = Ok(None);
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
             &self.read_perf_status,
         );
-        if let Some(pinnable_slice) = self.backend.get_pinned_cf(self.handle(), &C::key(key))? {
+        if let Some(pinnable_slice) = self.backend.get_pinned_cf(self.handle(), key)? {
             let value = deserialize(pinnable_slice.as_ref())?;
             result = Ok(Some(value))
         }
