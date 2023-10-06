@@ -4543,7 +4543,7 @@ fn test_vote_refresh_outside_slothash() {
         35 * DEFAULT_NODE_STAKE,
         28 * DEFAULT_NODE_STAKE,
     ];
-    let node_vote_keys = vec![
+    let node_vote_keys = [
         "3NDQ3ud86RTVg8hTy2dDWnS4P8NfjhZ2gDgQAJbr3heaKaUVS1FW3sTLKA1GmDrY9aySzsa4QxpDkbLv47yHxzr3",
         "46ZHpHE6PEvXYPu3hf9iQqjBk2ZNDaJ9ejqKWHEjxaQjpAGasKaWKbKHbP3646oZhfgDRzx95DH9PCBKKsoCVngk",
         "3zsEPEDsjfEay7te9XqNjRTCE7vwuT6u4DHzBJC19yp7GS8BuNRMRjnpVrKCBzb3d44kxc4KPGSHkCmk6tEfswCg",
@@ -4609,7 +4609,8 @@ fn test_vote_refresh_outside_slothash() {
     let now = Instant::now();
     let mut last_vote_on_a;
     loop {
-        last_vote_on_a = wait_for_last_vote_in_tower_to_land_in_ledger(&a_ledger_path, &a_pubkey);
+        last_vote_on_a =
+            wait_for_last_vote_in_tower_to_land_in_ledger(&a_ledger_path, &a_pubkey).unwrap();
         if last_vote_on_a > common_ancestor_slot {
             let rpc_client =
                 RpcClient::new_socket(cluster.get_contact_info(&a_pubkey).unwrap().rpc().unwrap());
@@ -4672,7 +4673,7 @@ fn test_vote_refresh_outside_slothash() {
         );
     }
     let last_vote_on_b_before_shutdown =
-        wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
+        wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey).unwrap();
     let blockstore = open_blockstore(&b_ledger_path);
     info!(
         "B last vote: {} minority fork: {:?}",
@@ -4703,7 +4704,8 @@ fn test_vote_refresh_outside_slothash() {
     cluster.restart_node(&a_pubkey, a_info, SocketAddrSpace::Unspecified);
     cluster.restart_node(&b_pubkey, b_info, SocketAddrSpace::Unspecified);
 
-    let vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
+    let vote_on_b =
+        wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey).unwrap();
     assert!(
         vote_on_b == last_vote_on_b_before_shutdown,
         "B should not have new votes immediately"
@@ -4719,7 +4721,8 @@ fn test_vote_refresh_outside_slothash() {
     let mut vote_on_b;
     loop {
         sleep(Duration::from_millis(500));
-        vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
+        vote_on_b =
+            wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey).unwrap();
         if vote_on_b > last_vote_on_b_before_shutdown {
             info!(
                 "B has voted again: {} last vote {} elapsed time {:?}",
