@@ -17,7 +17,7 @@ pub struct StoredAccountInfo {
 }
 
 lazy_static! {
-    pub static ref DEFAULT_ACCOUNT_HASH: Hash = Hash::default();
+    static ref DEFAULT_ACCOUNT_HASH: Hash = Hash::default();
 }
 
 /// Goal is to eliminate copies and data reshaping given various code paths that store accounts.
