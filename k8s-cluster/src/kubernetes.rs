@@ -1,5 +1,5 @@
 use {
-    crate::{boxed_error, LEDGER_DIR, SOLANA_ROOT},
+    crate::{boxed_error, SOLANA_ROOT},
     base64::{engine::general_purpose, Engine as _},
     k8s_openapi::{
         api::{
@@ -143,7 +143,9 @@ impl<'a> Kubernetes<'a> {
             name: Some("genesis-config".to_string()),
             ..Default::default()
         };
-        let genesis_tar_path = LEDGER_DIR.join("genesis-package.tar.bz2");
+        // let genesis_tar_path = LEDGER_DIR.join("genesis-package.tar.bz2");
+        let genesis_tar_path = SOLANA_ROOT.join("config-k8s/genesis-package.tar.bz2");
+
         let mut genesis_tar_file = File::open(genesis_tar_path).unwrap();
         let mut buffer = Vec::new();
 
