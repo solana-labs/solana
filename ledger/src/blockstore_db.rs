@@ -935,28 +935,58 @@ impl ColumnIndexDeprecation for columns::AddressSignatures {
 }
 
 impl Column for columns::TransactionMemos {
-    type Index = Signature;
+    type Index = (Signature, Slot);
 
-    fn key(signature: Signature) -> Vec<u8> {
-        let mut key = vec![0; 64]; // size_of Signature
+    fn key((signature, slot): Self::Index) -> Vec<u8> {
+        let mut key = vec![0; Self::CURRENT_INDEX_LEN];
         key[0..64].copy_from_slice(&signature.as_ref()[0..64]);
+        BigEndian::write_u64(&mut key[64..72], slot);
         key
     }
 
-    fn index(key: &[u8]) -> Signature {
-        Signature::try_from(&key[..64]).unwrap()
+    fn index(key: &[u8]) -> Self::Index {
+        <columns::TransactionMemos as ColumnIndexDeprecation>::index(key)
     }
 
-    fn slot(_index: Self::Index) -> Slot {
-        unimplemented!()
+    fn slot(index: Self::Index) -> Slot {
+        index.1
     }
 
-    fn as_index(_index: u64) -> Self::Index {
-        Signature::default()
+    fn as_index(index: u64) -> Self::Index {
+        (Signature::default(), index)
     }
 }
 impl ColumnName for columns::TransactionMemos {
     const NAME: &'static str = TRANSACTION_MEMOS_CF;
+}
+
+impl ColumnIndexDeprecation for columns::TransactionMemos {
+    const DEPRECATED_INDEX_LEN: usize = 64;
+    const CURRENT_INDEX_LEN: usize = 72;
+    type DeprecatedIndex = Signature;
+
+    fn deprecated_key(signature: Self::DeprecatedIndex) -> Vec<u8> {
+        let mut key = vec![0; Self::DEPRECATED_INDEX_LEN];
+        key[0..64].copy_from_slice(&signature.as_ref()[0..64]);
+        key
+    }
+
+    fn try_deprecated_index(key: &[u8]) -> std::result::Result<Self::DeprecatedIndex, IndexError> {
+        Signature::try_from(&key[..64]).map_err(|_| IndexError::UnpackError)
+    }
+
+    fn try_current_index(key: &[u8]) -> std::result::Result<Self::Index, IndexError> {
+        if key.len() != Self::CURRENT_INDEX_LEN {
+            return Err(IndexError::UnpackError);
+        }
+        let signature = Signature::try_from(&key[0..64]).unwrap();
+        let slot = BigEndian::read_u64(&key[64..72]);
+        Ok((signature, slot))
+    }
+
+    fn convert_index(deprecated_index: Self::DeprecatedIndex) -> Self::Index {
+        (deprecated_index, 0)
+    }
 }
 
 impl Column for columns::TransactionStatusIndex {
