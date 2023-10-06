@@ -1285,10 +1285,7 @@ impl Validator {
                 cluster_info.clone(),
             ) {
                 Ok(()) => {
-                    return Err(
-                        "wen_restart phase one completed, will restart to wait for supermajority"
-                            .to_string(),
-                    );
+                    return Err("wen_restart phase one completedy".to_string());
                 }
                 Err(e) => return Err(format!("wait_for_wen_restart failed: {e:?}")),
             };

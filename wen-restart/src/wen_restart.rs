@@ -6,7 +6,7 @@ use {
     },
     log::*,
     prost::Message,
-    solana_gossip::cluster_info::ClusterInfo,
+    solana_gossip::{cluster_info::ClusterInfo, epoch_slots::MAX_SLOTS_PER_ENTRY},
     solana_ledger::blockstore::Blockstore,
     solana_vote_program::vote_state::VoteTransaction,
     std::{
@@ -16,11 +16,6 @@ use {
         sync::Arc,
     },
 };
-
-// The number of ancestor slots sent is hard coded at 81000, because that's
-// 400ms * 81000 = 9 hours, we assume most restart decisions to be made in 9
-// hours.
-const MAX_SLOTS_ON_VOTED_FORKS: u64 = 81000;
 
 pub fn wait_for_wen_restart(
     wen_restart_path: &PathBuf,
@@ -34,14 +29,16 @@ pub fn wait_for_wen_restart(
         .expect("wen_restart doesn't work if local tower is wiped");
     let mut last_vote_fork = vec![last_vote_slot];
     let mut slot = last_vote_slot;
-    for _ in 0..MAX_SLOTS_ON_VOTED_FORKS {
+    for _ in 0..MAX_SLOTS_PER_ENTRY {
         match blockstore.meta(slot) {
             Ok(Some(slot_meta)) => {
                 match slot_meta.parent_slot {
                     Some(parent_slot) => {
                         last_vote_fork.push(parent_slot);
                         slot = parent_slot;
-                        if last_vote_slot.saturating_sub(slot) > MAX_SLOTS_ON_VOTED_FORKS {
+                        if last_vote_slot.saturating_sub(slot)
+                            > MAX_SLOTS_PER_ENTRY.try_into().unwrap()
+                        {
                             break;
                         }
                     }
@@ -118,18 +115,18 @@ mod tests {
         wen_restart_proto_path.push("wen_restart_status.proto");
         let blockstore = Arc::new(blockstore::Blockstore::open(ledger_path.path()).unwrap());
         let expected_slots = 400;
-        let last_vote_slot = MAX_SLOTS_ON_VOTED_FORKS + expected_slots;
-        let last_parent = MAX_SLOTS_ON_VOTED_FORKS - (std::u16::MAX as u64) + 1;
+        let last_vote_slot = (MAX_SLOTS_PER_ENTRY + expected_slots).try_into().unwrap();
+        let last_parent = (MAX_SLOTS_PER_ENTRY >> 1).try_into().unwrap();
         for i in 0..expected_slots {
             let entries = entry::create_ticks(1, 0, Hash::default());
             let parent_slot = if i > 0 {
-                MAX_SLOTS_ON_VOTED_FORKS + i
+                (MAX_SLOTS_PER_ENTRY + i).try_into().unwrap()
             } else {
                 last_parent
             };
             let shreds = blockstore::entries_to_test_shreds(
                 &entries,
-                MAX_SLOTS_ON_VOTED_FORKS + i + 1,
+                (MAX_SLOTS_PER_ENTRY + i + 1).try_into().unwrap(),
                 parent_slot,
                 false,
                 0,
@@ -137,7 +134,7 @@ mod tests {
             );
             blockstore.insert_shreds(shreds, None, false).unwrap();
         }
-        // link directly to slot 1 whose distance to last_vote > MAX_SLOTS_ON_VOTED_FORKS so it will not be included.
+        // link directly to slot 1 whose distance to last_vote > MAX_SLOTS_PER_ENTRY so it will not be included.
         let entries = entry::create_ticks(1, 0, Hash::default());
         let shreds = blockstore::entries_to_test_shreds(
             &entries,
