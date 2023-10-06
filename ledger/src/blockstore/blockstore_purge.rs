@@ -407,6 +407,12 @@ impl Blockstore {
                 if let Some(&signature) = transaction.signatures.get(0) {
                     if delete_new_column_key {
                         batch.delete::<cf::TransactionStatus>((signature, slot))?;
+                        batch.delete::<cf::TransactionMemos>((signature, slot))?;
+                    }
+                    if !primary_indexes.is_empty() {
+                        batch.delete_raw::<cf::TransactionMemos>(
+                            &cf::TransactionMemos::deprecated_key(signature),
+                        )?;
                     }
                     for primary_index in &primary_indexes {
                         batch.delete_raw::<cf::TransactionStatus>(
