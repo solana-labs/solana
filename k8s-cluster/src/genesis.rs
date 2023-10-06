@@ -211,11 +211,12 @@ impl Genesis {
         filename_prefix: &str,
         i: i32,
     ) -> Result<(), Box<dyn Error>> {
-        if validator_type == "bootstrap" {
-            info!("generating {} account", validator_type);
-        } else {
-            info!("generating {} account: {}", validator_type, i);
-        }
+        let log_msg = match validator_type {
+            ValidatorType::Bootstrap => format!("generating {} account", validator_type),
+            ValidatorType::Standard => format!("generating {} account: {}", validator_type, i),
+        };
+        info!("{}", log_msg);
+        
         let account_types = vec!["identity", "vote-account", "stake-account"];
         for account in account_types {
             let filename = match validator_type {
