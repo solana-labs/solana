@@ -39,6 +39,16 @@ pub enum ValidatorType {
     Standard,
 }
 
+
+impl std::fmt::Display for ValidatorType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            ValidatorType::Bootstrap => write!(f, "bootstrap"),
+            ValidatorType::Standard => write!(f, "validator"),
+        }
+    }
+}
+
 pub fn get_solana_root() -> PathBuf {
     let solana_root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("$CARGO_MANIFEST_DIR"))
         .parent()

@@ -2,7 +2,7 @@
 #![allow(clippy::arithmetic_side_effects)]
 
 use {
-    crate::{boxed_error, initialize_globals, LEDGER_DIR, SOLANA_ROOT},
+    crate::{boxed_error, initialize_globals, LEDGER_DIR, SOLANA_ROOT, ValidatorType},
     base64::{engine::general_purpose, Engine as _},
     bip39::{Language, Mnemonic, MnemonicType, Seed},
     bzip2::{write::BzEncoder, Compression},
@@ -189,23 +189,16 @@ impl Genesis {
 
     pub fn generate_accounts(
         &mut self,
-        validator_type: &str,
+        validator_type: ValidatorType,
         number_of_accounts: i32,
     ) -> Result<(), Box<dyn Error>> {
-        let mut filename_prefix = "validator".to_string();
-        if validator_type == "bootstrap" {
-            filename_prefix = format!("{}-{}", validator_type, filename_prefix);
-        } else if validator_type == "validator" {
-            filename_prefix = "validator".to_string();
-        } else {
-            return Err(boxed_error!(format!(
-                "Invalid validator type: {}",
-                validator_type
-            )));
-        }
+        let filename_prefix = match validator_type {
+            ValidatorType::Bootstrap => format!("{}-validator", validator_type),
+            ValidatorType::Standard => "validator".to_string(),
+        };
 
         for i in 0..number_of_accounts {
-            self.generate_account(validator_type, filename_prefix.as_str(), i)?;
+            self.generate_account(validator_type, &filename_prefix, i)?;
         }
 
         Ok(())
@@ -214,7 +207,7 @@ impl Genesis {
     // Create identity, stake, and vote accounts
     fn generate_account(
         &mut self,
-        validator_type: &str,
+        validator_type: ValidatorType,
         filename_prefix: &str,
         i: i32,
     ) -> Result<(), Box<dyn Error>> {
@@ -225,25 +218,15 @@ impl Genesis {
         }
         let account_types = vec!["identity", "vote-account", "stake-account"];
         for account in account_types {
-            let filename: String;
-            if validator_type == "bootstrap" {
-                filename = format!("{}/{}.json", filename_prefix, account);
-            } else if validator_type == "validator" {
-                filename = format!("{}-{}-{}.json", filename_prefix, account, i);
-            } else {
-                return Err(boxed_error!(format!(
-                    "Invalid validator type: {}",
-                    validator_type
-                )));
-            }
+            let filename = match validator_type {
+                ValidatorType::Bootstrap => format!("{}/{}.json", filename_prefix, account),
+                ValidatorType::Standard => format!("{}-{}-{}.json", filename_prefix, account, i),
+            };
 
-            let outfile = self.config_dir.join(filename);
+            let outfile = self.config_dir.join(&filename);
             trace!("outfile: {:?}", outfile);
 
-            let keypair = match generate_keypair() {
-                Ok(keypair) => keypair,
-                Err(err) => return Err(err),
-            };
+            let keypair = generate_keypair()?;
             self.all_pubkeys.push(keypair.pubkey());
 
             if let Some(outfile) = outfile.to_str() {
@@ -259,89 +242,60 @@ impl Genesis {
         let mut args: Vec<String> = Vec::new();
 
         args.push("--bootstrap-validator-lamports".to_string());
-        let bootstrap_validator_lamports = match self.flags.bootstrap_validator_sol {
-            Some(sol) => sol_to_lamports(sol),
-            None => sol_to_lamports(DEFAULT_BOOTSTRAP_NODE_SOL),
-        };
-        args.push(bootstrap_validator_lamports.to_string());
+        args.push(sol_to_lamports(self.flags.bootstrap_validator_sol.unwrap_or(DEFAULT_BOOTSTRAP_NODE_SOL)).to_string());
 
         args.push("--bootstrap-validator-stake-lamports".to_string());
-        let bootstrap_validator_stake_lamports = match self.flags.bootstrap_validator_stake_sol {
-            Some(sol) => sol_to_lamports(sol),
-            None => sol_to_lamports(DEFAULT_BOOTSTRAP_NODE_STAKE_SOL),
-        };
-        args.push(bootstrap_validator_stake_lamports.to_string());
+        args.push(sol_to_lamports(self.flags.bootstrap_validator_stake_sol.unwrap_or(DEFAULT_BOOTSTRAP_NODE_STAKE_SOL)).to_string());
 
-        args.extend(vec![
-            "--hashes-per-tick".to_string(),
-            self.flags.hashes_per_tick.clone(),
-        ]);
+        args.push("--hashes-per-tick".to_string());
+        args.push(self.flags.hashes_per_tick.clone());
+        
 
         args.push("--max-genesis-archive-unpacked-size".to_string());
-        match self.flags.max_genesis_archive_unpacked_size {
-            Some(size) => args.push(size.to_string()),
-            None => args.push(DEFAULT_MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string()),
-        }
+        args.push(
+            self.flags
+                .max_genesis_archive_unpacked_size
+                .unwrap_or(DEFAULT_MAX_GENESIS_ARCHIVE_UNPACKED_SIZE)
+                .to_string(),
+        );
 
         if self.flags.enable_warmup_epochs {
             args.push("--enable-warmup-epochs".to_string());
         }
 
         args.push("--faucet-lamports".to_string());
-        match self.flags.faucet_lamports {
-            Some(lamports) => args.push(lamports.to_string()),
-            None => args.push(DEFAULT_FAUCET_LAMPORTS.to_string()),
-        }
+        args.push(
+            self.flags
+                .faucet_lamports
+                .unwrap_or(DEFAULT_FAUCET_LAMPORTS)
+                .to_string(),
+        );
 
-        args.extend(vec![
-            "--faucet-pubkey".to_string(),
-            self.config_dir
-                .join("faucet.json")
-                .to_string_lossy()
-                .to_string(),
-        ]);
-        args.extend(vec![
-            "--cluster-type".to_string(),
-            self.flags.cluster_type.to_string(),
-        ]);
-        args.extend(vec![
-            "--ledger".to_string(),
-            self.config_dir
-                .join("bootstrap-validator")
-                .to_string_lossy()
-                .to_string(),
-        ]);
+        args.push("--faucet-pubkey".to_string());
+        args.push(self.config_dir.join("faucet.json").to_string_lossy().to_string());
+
+        args.push("--cluster-type".to_string());
+        args.push(self.flags.cluster_type.to_string());
+
+        args.push("--ledger".to_string());
+        args.push(self.config_dir.join("bootstrap-validator").to_string_lossy().to_string());
+
 
         // Order of accounts matters here!!
-        args.extend(vec![
-            "--bootstrap-validator".to_string(),
-            self.config_dir
-                .join("bootstrap-validator/identity.json")
-                .to_string_lossy()
-                .to_string(),
-            self.config_dir
-                .join("bootstrap-validator/vote-account.json")
-                .to_string_lossy()
-                .to_string(),
-            self.config_dir
-                .join("bootstrap-validator/stake-account.json")
-                .to_string_lossy()
-                .to_string(),
-        ]);
+        args.push("--bootstrap-validator".to_string());
+        ["identity", "vote-account", "stake-account"].iter().for_each(|account_type| {
+            args.push(self.config_dir.join(format!("bootstrap-validator/{}.json", account_type)).to_string_lossy().to_string());
+        });
 
         if let Some(slots_per_epoch) = self.flags.slots_per_epoch {
-            args.extend(vec![
-                "--slots-per-epoch".to_string(),
-                slots_per_epoch.to_string(),
-            ]);
+            args.push("--slots-per-epoch".to_string());
+            args.push(slots_per_epoch.to_string());
         }
-
+        
         if let Some(lamports_per_signature) = self.flags.target_lamports_per_signature {
-            args.extend(vec![
-                "--target-lamports-per-signature".to_string(),
-                lamports_per_signature.to_string(),
-            ]);
-        }
+            args.push("--target-lamports-per-signature".to_string());
+            args.push(lamports_per_signature.to_string());
+        }        
 
         args
     }
