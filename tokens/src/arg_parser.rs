@@ -559,6 +559,7 @@ fn parse_distribute_stake_args(
         stake_authority,
         withdraw_authority,
         lockup_authority,
+        rent_exempt_reserve: None,
     };
     let stake_args = StakeArgs {
         unlocked_sol: sol_to_lamports(value_t_or_exit!(matches, "unlocked_sol", f64)),

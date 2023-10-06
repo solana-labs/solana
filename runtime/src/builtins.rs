@@ -101,4 +101,10 @@ pub static BUILTINS: &[BuiltinPrototype] = &[
         name: "zk_token_proof_program",
         entrypoint: solana_zk_token_proof_program::process_instruction,
     },
+    BuiltinPrototype {
+        feature_id: Some(feature_set::enable_program_runtime_v2_and_loader_v4::id()),
+        program_id: solana_sdk::loader_v4::id(),
+        name: "loader_v4",
+        entrypoint: solana_loader_v4_program::process_instruction,
+    },
 ];

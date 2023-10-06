@@ -103,6 +103,19 @@ pub(crate) fn new_warmup_cooldown_rate_epoch(invoke_context: &InvokeContext) -> 
         .new_warmup_cooldown_rate_epoch(epoch_schedule.as_ref())
 }
 
+fn get_stake_status(
+    invoke_context: &InvokeContext,
+    stake: &Stake,
+    clock: &Clock,
+) -> Result<StakeActivationStatus, InstructionError> {
+    let stake_history = invoke_context.get_sysvar_cache().get_stake_history()?;
+    Ok(stake.delegation.stake_activating_and_deactivating(
+        clock.epoch,
+        Some(&stake_history),
+        new_warmup_cooldown_rate_epoch(invoke_context),
+    ))
+}
+
 fn redelegate_stake(
     invoke_context: &InvokeContext,
     stake: &mut Stake,
@@ -620,15 +633,56 @@ pub fn delegate(
     }
 }
 
+fn deactivate_stake(
+    invoke_context: &InvokeContext,
+    stake: &mut Stake,
+    stake_flags: &mut StakeFlags,
+    epoch: Epoch,
+) -> Result<(), InstructionError> {
+    if invoke_context
+        .feature_set
+        .is_active(&feature_set::stake_redelegate_instruction::id())
+    {
+        if stake_flags.contains(StakeFlags::MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED) {
+            let stake_history = invoke_context.get_sysvar_cache().get_stake_history()?;
+            // when MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED flag is set on stake_flags,
+            // deactivation is only permitted when the stake delegation activating amount is zero.
+            let status = stake.delegation.stake_activating_and_deactivating(
+                epoch,
+                Some(stake_history.as_ref()),
+                new_warmup_cooldown_rate_epoch(invoke_context),
+            );
+            if status.activating != 0 {
+                Err(InstructionError::from(
+                    StakeError::RedelegatedStakeMustFullyActivateBeforeDeactivationIsPermitted,
+                ))
+            } else {
+                stake.deactivate(epoch)?;
+                // After deactivation, need to clear `MustFullyActivateBeforeDeactivationIsPermitted` flag if any.
+                // So that future activation and deactivation are not subject to that restriction.
+                stake_flags
+                    .remove(StakeFlags::MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED);
+                Ok(())
+            }
+        } else {
+            stake.deactivate(epoch)?;
+            Ok(())
+        }
+    } else {
+        stake.deactivate(epoch)?;
+        Ok(())
+    }
+}
+
 pub fn deactivate(
+    invoke_context: &InvokeContext,
     stake_account: &mut BorrowedAccount,
     clock: &Clock,
     signers: &HashSet<Pubkey>,
 ) -> Result<(), InstructionError> {
-    if let StakeStateV2::Stake(meta, mut stake, stake_flags) = stake_account.get_state()? {
+    if let StakeStateV2::Stake(meta, mut stake, mut stake_flags) = stake_account.get_state()? {
         meta.authorized.check(signers, StakeAuthorize::Staker)?;
-        stake.deactivate(clock.epoch)?;
-
+        deactivate_stake(invoke_context, &mut stake, &mut stake_flags, clock.epoch)?;
         stake_account.set_state(&StakeStateV2::Stake(meta, stake, stake_flags))
     } else {
         Err(InstructionError::InvalidAccountData)
@@ -688,6 +742,16 @@ pub fn split(
         StakeStateV2::Stake(meta, mut stake, stake_flags) => {
             meta.authorized.check(signers, StakeAuthorize::Staker)?;
             let minimum_delegation = crate::get_minimum_delegation(&invoke_context.feature_set);
+            let is_active = if invoke_context
+                .feature_set
+                .is_active(&feature_set::require_rent_exempt_split_destination::id())
+            {
+                let clock = invoke_context.get_sysvar_cache().get_clock()?;
+                let status = get_stake_status(invoke_context, &stake, &clock)?;
+                status.effective > 0
+            } else {
+                false
+            };
             let validated_split_info = validate_split_amount(
                 invoke_context,
                 transaction_context,
@@ -697,6 +761,7 @@ pub fn split(
                 lamports,
                 &meta,
                 minimum_delegation,
+                is_active,
             )?;
 
             // split the stake, subtract rent_exempt_balance unless
@@ -763,6 +828,7 @@ pub fn split(
                 lamports,
                 &meta,
                 0, // additional_required_lamports
+                false,
             )?;
             let mut split_meta = meta;
             split_meta.rent_exempt_reserve = validated_split_info.destination_rent_exempt_reserve;
@@ -925,12 +991,7 @@ pub fn redelegate(
 
     let (stake_meta, effective_stake) =
         if let StakeStateV2::Stake(meta, stake, _stake_flags) = stake_account.get_state()? {
-            let stake_history = invoke_context.get_sysvar_cache().get_stake_history()?;
-            let status = stake.delegation.stake_activating_and_deactivating(
-                clock.epoch,
-                Some(&stake_history),
-                new_warmup_cooldown_rate_epoch(invoke_context),
-            );
+            let status = get_stake_status(invoke_context, &stake, &clock)?;
             if status.effective == 0 || status.activating != 0 || status.deactivating != 0 {
                 ic_msg!(invoke_context, "stake is not active");
                 return Err(StakeError::RedelegateTransientOrInactiveStake.into());
@@ -955,7 +1016,7 @@ pub fn redelegate(
     // deactivate `stake_account`
     //
     // Note: This function also ensures `signers` contains the `StakeAuthorize::Staker`
-    deactivate(stake_account, &clock, signers)?;
+    deactivate(invoke_context, stake_account, &clock, signers)?;
 
     // transfer the effective stake to the uninitialized stake account
     stake_account.checked_sub_lamports(effective_stake)?;
@@ -981,7 +1042,7 @@ pub fn redelegate(
             &vote_state.convert_to_current(),
             clock.epoch,
         ),
-        StakeFlags::empty(),
+        StakeFlags::MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED,
     ))?;
 
     Ok(())
@@ -1095,6 +1156,7 @@ pub fn withdraw(
 }
 
 pub(crate) fn deactivate_delinquent(
+    invoke_context: &InvokeContext,
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
     stake_account: &mut BorrowedAccount,
@@ -1128,7 +1190,7 @@ pub(crate) fn deactivate_delinquent(
         return Err(StakeError::InsufficientReferenceVotes.into());
     }
 
-    if let StakeStateV2::Stake(meta, mut stake, stake_flags) = stake_account.get_state()? {
+    if let StakeStateV2::Stake(meta, mut stake, mut stake_flags) = stake_account.get_state()? {
         if stake.delegation.voter_pubkey != *delinquent_vote_account_pubkey {
             return Err(StakeError::VoteAddressMismatch.into());
         }
@@ -1136,7 +1198,7 @@ pub(crate) fn deactivate_delinquent(
         // Deactivate the stake account if its delegated vote account has never voted or has not
         // voted in the last `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION`
         if eligible_for_deactivate_delinquent(&delinquent_vote_state.epoch_credits, current_epoch) {
-            stake.deactivate(current_epoch)?;
+            deactivate_stake(invoke_context, &mut stake, &mut stake_flags, current_epoch)?;
             stake_account.set_state(&StakeStateV2::Stake(meta, stake, stake_flags))
         } else {
             Err(StakeError::MinimumDelinquentEpochsForDeactivationNotMet.into())
@@ -1192,6 +1254,7 @@ fn validate_split_amount(
     lamports: u64,
     source_meta: &Meta,
     additional_required_lamports: u64,
+    source_is_active: bool,
 ) -> Result<ValidatedSplitInfo, InstructionError> {
     let source_account = instruction_context
         .try_borrow_instruction_account(transaction_context, source_account_index)?;
@@ -1232,12 +1295,27 @@ fn validate_split_amount(
         // nothing to do here
     }
 
+    let rent = invoke_context.get_sysvar_cache().get_rent()?;
+    let destination_rent_exempt_reserve = rent.minimum_balance(destination_data_len);
+
+    // As of feature `require_rent_exempt_split_destination`, if the source is active stake, one of
+    // these criteria must be met:
+    // 1. the destination account must be prefunded with at least the rent-exempt reserve, or
+    // 2. the split must consume 100% of the source
+    if invoke_context
+        .feature_set
+        .is_active(&feature_set::require_rent_exempt_split_destination::id())
+        && source_is_active
+        && source_remaining_balance != 0
+        && destination_lamports < destination_rent_exempt_reserve
+    {
+        return Err(InstructionError::InsufficientFunds);
+    }
+
     // Verify the destination account meets the minimum balance requirements
     // This must handle:
     // 1. The destination account having a different rent exempt reserve due to data size changes
     // 2. The destination account being prefunded, which would lower the minimum split amount
-    let rent = invoke_context.get_sysvar_cache().get_rent()?;
-    let destination_rent_exempt_reserve = rent.minimum_balance(destination_data_len);
     let destination_minimum_balance =
         destination_rent_exempt_reserve.saturating_add(additional_required_lamports);
     let destination_balance_deficit =

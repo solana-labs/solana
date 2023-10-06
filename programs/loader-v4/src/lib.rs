@@ -18,7 +18,7 @@ use {
         vm::{BuiltinProgram, Config, ContextObject, EbpfVm, ProgramResult},
     },
     solana_sdk::{
-        entrypoint::{HEAP_LENGTH, SUCCESS},
+        entrypoint::SUCCESS,
         feature_set,
         instruction::InstructionError,
         loader_v4::{self, LoaderV4State, LoaderV4Status, DEPLOYMENT_COOLDOWN_IN_SLOTS},
@@ -94,10 +94,10 @@ pub fn create_program_runtime_environment_v2<'a>(
     BuiltinProgram::new_loader(config, FunctionRegistry::default())
 }
 
-fn calculate_heap_cost(heap_size: u64, heap_cost: u64) -> u64 {
+fn calculate_heap_cost(heap_size: u32, heap_cost: u64) -> u64 {
     const KIBIBYTE: u64 = 1024;
     const PAGE_SIZE_KB: u64 = 32;
-    heap_size
+    u64::from(heap_size)
         .saturating_add(PAGE_SIZE_KB.saturating_mul(KIBIBYTE).saturating_sub(1))
         .checked_div(PAGE_SIZE_KB.saturating_mul(KIBIBYTE))
         .expect("PAGE_SIZE_KB * KIBIBYTE > 0")
@@ -113,14 +113,11 @@ pub fn create_vm<'a, 'b>(
     let config = program.get_config();
     let sbpf_version = program.get_sbpf_version();
     let compute_budget = invoke_context.get_compute_budget();
-    let heap_size = compute_budget.heap_size.unwrap_or(HEAP_LENGTH);
-    invoke_context.consume_checked(calculate_heap_cost(
-        heap_size as u64,
-        compute_budget.heap_cost,
-    ))?;
+    let heap_size = compute_budget.heap_size;
+    invoke_context.consume_checked(calculate_heap_cost(heap_size, compute_budget.heap_cost))?;
     let mut stack = AlignedMemory::<{ ebpf::HOST_ALIGN }>::zero_filled(config.stack_size());
     let mut heap = AlignedMemory::<{ ebpf::HOST_ALIGN }>::zero_filled(
-        compute_budget.heap_size.unwrap_or(HEAP_LENGTH),
+        usize::try_from(compute_budget.heap_size).unwrap(),
     );
     let stack_len = stack.len();
     let regions: Vec<MemoryRegion> = vec![

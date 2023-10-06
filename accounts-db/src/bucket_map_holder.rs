@@ -204,7 +204,15 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> BucketMapHolder<T, U>
             .unwrap_or(DEFAULT_AGE_TO_STAY_IN_CACHE);
 
         let mut bucket_config = BucketMapConfig::new(bins);
-        bucket_config.drives = config.as_ref().and_then(|config| config.drives.clone());
+        bucket_config.drives = config.as_ref().and_then(|config| {
+            bucket_config.restart_config_file = config.drives.as_ref().and_then(|drives| {
+                drives
+                    .first()
+                    .map(|drive| drive.join("accounts_index_restart"))
+            });
+            config.drives.clone()
+        });
+
         let mem_budget_mb = match config
             .as_ref()
             .map(|config| &config.index_limit_mb)

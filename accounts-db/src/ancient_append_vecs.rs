@@ -1822,15 +1822,15 @@ pub mod tests {
         let offset = 3;
         let hash = Hash::new(&[2; 32]);
         let stored_meta = StoredMeta {
-            /// global write version
+            // global write version
             write_version_obsolete: 0,
-            /// key for the account
+            // key for the account
             pubkey,
             data_len: 43,
         };
         let account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &stored_meta,
-            /// account data
+            // account data
             account_meta: &account_meta,
             data: account.data(),
             offset,

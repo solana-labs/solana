@@ -51,7 +51,6 @@ ark-bn254 = { workspace = true }
 ark-ec = { workspace = true }
 ark-ff = { workspace = true }
 ark-serialize = { workspace = true }
-array-bytes = { workspace = true }
 bitflags = { workspace = true }
 base64 = { workspace = true, features = ["alloc", "std"] }
 curve25519-dalek = { workspace = true, features = ["serde"] }
@@ -79,6 +78,7 @@ parking_lot = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+array-bytes = { workspace = true }
 assert_matches = { workspace = true }
 serde_json = { workspace = true }
 static_assertions = { workspace = true }

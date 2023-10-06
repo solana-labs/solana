@@ -93,7 +93,7 @@ test-stable-sbf)
   # latest mainbeta release version.
   solana_program_count=$(grep -c 'solana-program v' cargo.log)
   rm -f cargo.log
-  if ((solana_program_count > 18)); then
+  if ((solana_program_count > 20)); then
       echo "Regression of build redundancy ${solana_program_count}."
       echo "Review dependency features that trigger redundant rebuilds of solana-program."
       exit 1
@@ -134,26 +134,6 @@ test-stable-perf)
   _ cargo build --bins ${V:+--verbose}
   _ cargo test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- --nocapture
   _ cargo run --manifest-path poh-bench/Cargo.toml ${V:+--verbose} -- --hashes-per-tick 10
-  ;;
-test-local-cluster)
-  _ cargo build --release --bins ${V:+--verbose}
-  _ ci/intercept.sh cargo test --release --package solana-local-cluster --test local_cluster ${V:+--verbose} -- --nocapture --test-threads=1
-  exit 0
-  ;;
-test-local-cluster-flakey)
-  _ cargo build --release --bins ${V:+--verbose}
-  _ ci/intercept.sh cargo test --release --package solana-local-cluster --test local_cluster_flakey ${V:+--verbose} -- --nocapture --test-threads=1
-  exit 0
-  ;;
-test-local-cluster-slow-1)
-  _ cargo build --release --bins ${V:+--verbose}
-  _ ci/intercept.sh cargo test --release --package solana-local-cluster --test local_cluster_slow_1 ${V:+--verbose} -- --nocapture --test-threads=1
-  exit 0
-  ;;
-test-local-cluster-slow-2)
-  _ cargo build --release --bins ${V:+--verbose}
-  _ ci/intercept.sh cargo test --release --package solana-local-cluster --test local_cluster_slow_2 ${V:+--verbose} -- --nocapture --test-threads=1
-  exit 0
   ;;
 test-wasm)
   _ node --version

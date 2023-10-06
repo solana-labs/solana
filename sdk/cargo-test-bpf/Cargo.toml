@@ -9,10 +9,6 @@ homepage = { workspace = true }
 license = { workspace = true }
 edition = { workspace = true }
 
-[dependencies]
-cargo_metadata = { workspace = true }
-clap = { version = "3.1.5", features = ["cargo"] }
-
 [[bin]]
 name = "cargo-test-bpf"
 path = "src/main.rs"

@@ -12,6 +12,7 @@ edition = { workspace = true }
 
 [dependencies]
 bv = { workspace = true, features = ["serde"] }
+bytemuck = { workspace = true, features = ["derive"] }
 log = { workspace = true }
 memmap2 = { workspace = true }
 modular-bitfield = { workspace = true }

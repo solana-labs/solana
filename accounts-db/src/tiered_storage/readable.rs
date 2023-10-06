@@ -1,12 +1,9 @@
 use {
-    crate::{
-        account_storage::meta::StoredMetaWriteVersion,
-        tiered_storage::{
-            footer::{AccountMetaFormat, TieredStorageFooter},
-            hot::HotStorageReader,
-            meta::TieredAccountMeta,
-            TieredStorageResult,
-        },
+    crate::tiered_storage::{
+        footer::{AccountMetaFormat, TieredStorageFooter},
+        hot::HotStorageReader,
+        meta::TieredAccountMeta,
+        TieredStorageResult,
     },
     solana_sdk::{account::ReadableAccount, hash::Hash, pubkey::Pubkey, stake_history::Epoch},
     std::path::Path,
@@ -42,11 +39,6 @@ impl<'accounts_file, M: TieredAccountMeta> TieredReadableAccount<'accounts_file,
     /// Returns the index to this account in its AccountsFile.
     pub fn index(&self) -> usize {
         self.index
-    }
-
-    /// Returns the write version of the account.
-    pub fn write_version(&self) -> Option<StoredMetaWriteVersion> {
-        self.meta.write_version(self.account_block)
     }
 
     /// Returns the data associated to this account.

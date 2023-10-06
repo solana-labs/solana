@@ -1,4 +1,4 @@
-FROM solanalabs/rust:1.72.0
+FROM solanalabs/rust:1.73.0
 ARG date
 
 RUN set -x \
