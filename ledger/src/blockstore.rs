@@ -2325,14 +2325,15 @@ impl Blockstore {
         confirmed_unrooted_slots: &HashSet<Slot>,
     ) -> Result<(Option<(Slot, TransactionStatusMeta)>, u64)> {
         let mut counter = 0;
-        let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
+        let (lock, _) = self.ensure_lowest_cleanup_slot();
+        let first_available_block = self.get_first_available_block()?;
 
         for transaction_status_cf_primary_index in 0..=1 {
             let index_iterator = self.transaction_status_cf.iter(IteratorMode::From(
                 (
                     transaction_status_cf_primary_index,
                     signature,
-                    lowest_available_slot,
+                    first_available_block,
                 ),
                 IteratorDirection::Forward,
             ))?;
