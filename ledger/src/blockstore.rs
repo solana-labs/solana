@@ -2630,16 +2630,17 @@ impl Blockstore {
         };
         get_before_slot_timer.stop();
 
+        let first_available_block = self.get_first_available_block()?;
         // Generate a HashSet of signatures that should be excluded from the results based on
         // `until` signature
         let mut get_until_slot_timer = Measure::start("get_until_slot_timer");
         let (lowest_slot, until_excluded_signatures) = match until {
-            None => (0, HashSet::new()),
+            None => (first_available_block, HashSet::new()),
             Some(until) => {
                 let transaction_status =
                     self.get_transaction_status(until, &confirmed_unrooted_slots)?;
                 match transaction_status {
-                    None => (0, HashSet::new()),
+                    None => (first_available_block, HashSet::new()),
                     Some((slot, _)) => {
                         let mut slot_signatures = self.get_sorted_block_signatures(slot)?;
                         if let Some(pos) = slot_signatures.iter().position(|&x| x == until) {
@@ -2654,7 +2655,6 @@ impl Blockstore {
         get_until_slot_timer.stop();
 
         // Fetch the list of signatures that affect the given address
-        let first_available_block = self.get_first_available_block()?;
         let mut address_signatures = vec![];
 
         // Get signatures in `slot`
@@ -2695,10 +2695,7 @@ impl Blockstore {
                     if slot == next_max_slot || slot < lowest_slot {
                         break;
                     }
-                    if i == starting_primary_index
-                        && key_address == address
-                        && slot >= first_available_block
-                    {
+                    if i == starting_primary_index && key_address == address {
                         if self.is_root(slot) || confirmed_unrooted_slots.contains(&slot) {
                             address_signatures.push((slot, signature));
                         }
@@ -2733,10 +2730,7 @@ impl Blockstore {
                 if slot < lowest_slot {
                     break;
                 }
-                if i == next_primary_index
-                    && key_address == address
-                    && slot >= first_available_block
-                {
+                if i == next_primary_index && key_address == address {
                     if self.is_root(slot) || confirmed_unrooted_slots.contains(&slot) {
                         address_signatures.push((slot, signature));
                     }
