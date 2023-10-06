@@ -2691,6 +2691,11 @@ impl Blockstore {
         let mut iterator =
             self.address_signatures_cf
                 .iter_current_index_filtered(IteratorMode::From(
+                    // Ragardless of whether a `before` signature is provided, the latest relevant
+                    // `slot` is queried directly with the `find_address_signatures_for_slot()`
+                    // call above. Thus, this iterator starts at the lowest entry of `address,
+                    // slot` and iterates backwards to continue reporting the next earliest
+                    // signatures.
                     (address, slot, 0, Signature::default()),
                     IteratorDirection::Reverse,
                 ))?;
