@@ -1,6 +1,9 @@
 use {
     crate::{
-        cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
+        cli::{
+            log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
+            ProcessResult,
+        },
         spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
     },
     clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand},
@@ -23,6 +26,7 @@ use {
         message::Message,
         pubkey::Pubkey,
         stake_history::Epoch,
+        system_instruction::SystemError,
         transaction::Transaction,
     },
     std::{cmp::Ordering, collections::HashMap, fmt, rc::Rc, str::FromStr},
@@ -957,6 +961,6 @@ fn process_activate(
         FEATURE_NAMES.get(&feature_id).unwrap(),
         feature_id
     );
-    rpc_client.send_and_confirm_transaction_with_spinner(&transaction)?;
-    Ok("".to_string())
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&transaction);
+    log_instruction_custom_error::<SystemError>(result, config)
 }
