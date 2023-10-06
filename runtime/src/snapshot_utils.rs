@@ -1469,7 +1469,7 @@ pub fn build_storage_from_snapshot_dir(
     let accounts_hardlinks = bank_snapshot_dir.join(SNAPSHOT_ACCOUNTS_HARDLINKS);
     let account_run_paths: HashSet<_> = HashSet::from_iter(account_paths);
 
-    for dir_entry in fs_err::read_dir(&accounts_hardlinks)? {
+    for dir_entry in fs_err::read_dir(accounts_hardlinks)? {
         let symlink_path = dir_entry?.path();
         // The symlink point to <account_path>/snapshot/<slot> which contain the account files hardlinks
         // The corresponding run path should be <account_path>/run/
