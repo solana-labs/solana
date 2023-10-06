@@ -1588,17 +1588,14 @@ pub fn main() {
         validator_config.accounts_hash_interval_slots,
     ) {
         eprintln!("Invalid snapshot configuration provided: snapshot intervals are incompatible. \
-            \n\t- full snapshot interval MUST be a multiple of accounts hash interval (if enabled) \
-            \n\t- incremental snapshot interval MUST be a multiple of accounts hash interval (if enabled) \
+            \n\t- full snapshot interval MUST be a multiple of incremental snapshot interval (if enabled) \
             \n\t- full snapshot interval MUST be larger than incremental snapshot interval (if enabled) \
             \nSnapshot configuration values: \
             \n\tfull snapshot interval: {} \
-            \n\tincremental snapshot interval: {} \
-            \n\taccounts hash interval: {}",
+            \n\tincremental snapshot interval: {}",
             if full_snapshot_archive_interval_slots == DISABLED_SNAPSHOT_ARCHIVE_INTERVAL { "disabled".to_string() } else { full_snapshot_archive_interval_slots.to_string() },
             if incremental_snapshot_archive_interval_slots == DISABLED_SNAPSHOT_ARCHIVE_INTERVAL { "disabled".to_string() } else { incremental_snapshot_archive_interval_slots.to_string() },
-            validator_config.accounts_hash_interval_slots);
-
+        );
         exit(1);
     }
 
