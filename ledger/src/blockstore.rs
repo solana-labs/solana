@@ -2325,12 +2325,12 @@ impl Blockstore {
         let (lock, _) = self.ensure_lowest_cleanup_slot();
         let first_available_block = self.get_first_available_block()?;
 
-        let iterator = self
-            .transaction_status_cf
-            .iter_filtered(IteratorMode::From(
-                (signature, first_available_block),
-                IteratorDirection::Forward,
-            ))?;
+        let iterator =
+            self.transaction_status_cf
+                .iter_current_index_filtered(IteratorMode::From(
+                    (signature, first_available_block),
+                    IteratorDirection::Forward,
+                ))?;
 
         for ((sig, slot), _data) in iterator {
             counter += 1;
@@ -2542,17 +2542,17 @@ impl Blockstore {
         if slot < lowest_available_slot {
             return Ok(signatures);
         }
-        let index_iterator = self
-            .address_signatures_cf
-            .iter_filtered(IteratorMode::From(
-                (
-                    pubkey,
-                    slot.max(lowest_available_slot),
-                    0,
-                    Signature::default(),
-                ),
-                IteratorDirection::Forward,
-            ))?;
+        let index_iterator =
+            self.address_signatures_cf
+                .iter_current_index_filtered(IteratorMode::From(
+                    (
+                        pubkey,
+                        slot.max(lowest_available_slot),
+                        0,
+                        Signature::default(),
+                    ),
+                    IteratorDirection::Forward,
+                ))?;
         for ((address, transaction_slot, _transaction_index, signature), _) in index_iterator {
             if transaction_slot > slot || address != pubkey {
                 break;
@@ -2688,12 +2688,12 @@ impl Blockstore {
         get_initial_slot_timer.stop();
 
         let mut address_signatures_iter_timer = Measure::start("iter_timer");
-        let mut iterator = self
-            .address_signatures_cf
-            .iter_filtered(IteratorMode::From(
-                (address, slot, 0, Signature::default()),
-                IteratorDirection::Reverse,
-            ))?;
+        let mut iterator =
+            self.address_signatures_cf
+                .iter_current_index_filtered(IteratorMode::From(
+                    (address, slot, 0, Signature::default()),
+                    IteratorDirection::Reverse,
+                ))?;
 
         // Iterate until limit is reached
         while address_signatures.len() < limit {

@@ -1714,7 +1714,7 @@ impl<C> LedgerColumn<C>
 where
     C: ColumnIndexDeprecation + ColumnName,
 {
-    pub(crate) fn iter_filtered(
+    pub(crate) fn iter_current_index_filtered(
         &self,
         iterator_mode: IteratorMode<C::Index>,
     ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)> + '_> {
