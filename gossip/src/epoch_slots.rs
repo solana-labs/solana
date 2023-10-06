@@ -13,7 +13,7 @@ use {
     },
 };
 
-const MAX_SLOTS_PER_ENTRY: usize = 2048 * 8;
+pub const MAX_SLOTS_PER_ENTRY: usize = 2048 * 8;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct Uncompressed {
     pub first_slot: Slot,
