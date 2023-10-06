@@ -2,17 +2,12 @@
 //! The account meta and related structs for hot accounts.
 
 use {
-    crate::{
-        account_storage::meta::StoredMetaWriteVersion,
-        tiered_storage::{
-            byte_block,
-            footer::{
-                AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat, TieredStorageFooter,
-            },
-            index::AccountIndexFormat,
-            meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
-            TieredStorageFormat, TieredStorageResult,
-        },
+    crate::tiered_storage::{
+        byte_block,
+        footer::{AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat, TieredStorageFooter},
+        index::AccountIndexFormat,
+        meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
+        TieredStorageFormat, TieredStorageResult,
     },
     memmap2::{Mmap, MmapOptions},
     modular_bitfield::prelude::*,
@@ -167,19 +162,6 @@ impl TieredAccountMeta for HotAccountMeta {
             .flatten()
     }
 
-    /// Returns the write version by parsing the specified account block.  None
-    /// will be returned if this account does not persist this optional field.
-    fn write_version(&self, account_block: &[u8]) -> Option<StoredMetaWriteVersion> {
-        self.flags
-            .has_write_version()
-            .then(|| {
-                let offset = self.optional_fields_offset(account_block)
-                    + AccountMetaOptionalFields::write_version_offset(self.flags());
-                byte_block::read_type::<StoredMetaWriteVersion>(account_block, offset).copied()
-            })
-            .flatten()
-    }
-
     /// Returns the offset of the optional fields based on the specified account
     /// block.
     fn optional_fields_offset(&self, account_block: &[u8]) -> usize {
@@ -239,13 +221,10 @@ impl HotStorageReader {
 pub mod tests {
     use {
         super::*,
-        crate::{
-            account_storage::meta::StoredMetaWriteVersion,
-            tiered_storage::{
-                byte_block::ByteBlockWriter,
-                footer::AccountBlockFormat,
-                meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
-            },
+        crate::tiered_storage::{
+            byte_block::ByteBlockWriter,
+            footer::AccountBlockFormat,
+            meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
         },
         ::solana_sdk::{hash::Hash, stake_history::Epoch},
         memoffset::offset_of,
@@ -311,7 +290,6 @@ pub mod tests {
         let optional_fields = AccountMetaOptionalFields {
             rent_epoch: Some(TEST_RENT_EPOCH),
             account_hash: Some(Hash::new_unique()),
-            write_version: None,
         };
 
         let flags = AccountMetaFlags::new_from(&optional_fields);
@@ -335,12 +313,10 @@ pub mod tests {
         const TEST_LAMPORT: u64 = 2314232137;
         const OWNER_INDEX: u32 = 0x1fef_1234;
         const TEST_RENT_EPOCH: Epoch = 7;
-        const TEST_WRITE_VERSION: StoredMetaWriteVersion = 0;
 
         let optional_fields = AccountMetaOptionalFields {
             rent_epoch: Some(TEST_RENT_EPOCH),
             account_hash: Some(Hash::new_unique()),
-            write_version: Some(TEST_WRITE_VERSION),
         };
 
         let flags = AccountMetaFlags::new_from(&optional_fields);
@@ -361,7 +337,6 @@ pub mod tests {
         assert_eq!(expected_meta, *meta);
         assert!(meta.flags().has_rent_epoch());
         assert!(meta.flags().has_account_hash());
-        assert!(meta.flags().has_write_version());
         assert_eq!(meta.account_data_padding() as usize, padding.len());
 
         let account_block = &buffer[std::mem::size_of::<HotAccountMeta>()..];
@@ -377,10 +352,6 @@ pub mod tests {
         assert_eq!(
             *(meta.account_hash(account_block).unwrap()),
             optional_fields.account_hash.unwrap()
-        );
-        assert_eq!(
-            meta.write_version(account_block),
-            optional_fields.write_version
         );
     }
 }
