@@ -272,7 +272,6 @@ impl Genesis {
                 .join("faucet.json")
                 .to_string_lossy()
                 .to_string(),
-                
             "--cluster-type".to_string(),
             self.flags.cluster_type.to_string(),
             "--ledger".to_string(),
@@ -281,11 +280,11 @@ impl Genesis {
                 .to_string_lossy()
                 .to_string(),
         ];
-    
+
         if self.flags.enable_warmup_epochs {
             args.push("--enable-warmup-epochs".to_string());
         }
-    
+
         args.push("--bootstrap-validator".to_string());
         ["identity", "vote-account", "stake-account"]
             .iter()
@@ -297,17 +296,17 @@ impl Genesis {
                         .to_string(),
                 );
             });
-    
+
         if let Some(slots_per_epoch) = self.flags.slots_per_epoch {
             args.push("--slots-per-epoch".to_string());
             args.push(slots_per_epoch.to_string());
         }
-    
+
         if let Some(lamports_per_signature) = self.flags.target_lamports_per_signature {
             args.push("--target-lamports-per-signature".to_string());
             args.push(lamports_per_signature.to_string());
         }
-    
+
         args
     }
 
