@@ -17,24 +17,17 @@ log = { workspace = true, features = ["std"] }
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_bytes = { workspace = true }
 serde_derive = { workspace = true }
-serde_json = { workspace = true }
 sha2 = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
 thiserror = { workspace = true }
 
 [target.'cfg(not(target_os = "solana"))'.dependencies]
-ahash = { workspace = true }
-blake3 = { workspace = true, features = ["digest", "traits-preview"] }
 block-buffer = { workspace = true }
-byteorder = { workspace = true, features = ["i128"] }
 either = { workspace = true, features = ["use_std"] }
 generic-array = { workspace = true, features = ["serde", "more_lengths"] }
 im = { workspace = true, features = ["rayon", "serde"] }
 memmap2 = { workspace = true }
 subtle = { workspace = true }
-
-[target.'cfg(any(unix, windows))'.dependencies]
-cc = { workspace = true, features = ["jobserver", "parallel"] }
 
 [target.'cfg(not(target_os = "solana"))'.dev-dependencies]
 solana-logger = { workspace = true }

@@ -710,7 +710,7 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("csv")
                         .long("csv")
                         .takes_value(false)
-                        .help("Format stake account data in csv")
+                        .help("Format stake rewards data in csv")
                 )
                 .arg(
                     Arg::with_name("num_rewards_epochs")

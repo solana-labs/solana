@@ -106,34 +106,48 @@ const OPTIMISTIC_SLOTS_CF: &str = "optimistic_slots";
 
 #[derive(Error, Debug)]
 pub enum BlockstoreError {
+    #[error("shred for index exists")]
     ShredForIndexExists,
+    #[error("invalid shred data")]
     InvalidShredData(Box<bincode::ErrorKind>),
+    #[error("RocksDB error: {0}")]
     RocksDb(#[from] rocksdb::Error),
+    #[error("slot is not rooted")]
     SlotNotRooted,
+    #[error("dead slot")]
     DeadSlot,
+    #[error("io error: {0}")]
     Io(#[from] std::io::Error),
+    #[error("serialization error: {0}")]
     Serialize(#[from] Box<bincode::ErrorKind>),
+    #[error("fs extra error: {0}")]
     FsExtraError(#[from] fs_extra::error::Error),
+    #[error("slot cleaned up")]
     SlotCleanedUp,
+    #[error("unpack error: {0}")]
     UnpackError(#[from] UnpackError),
+    #[error("unable to set open file descriptor limit")]
     UnableToSetOpenFileDescriptorLimit,
+    #[error("transaction status slot mismatch")]
     TransactionStatusSlotMismatch,
+    #[error("empty epoch stakes")]
     EmptyEpochStakes,
+    #[error("no vote timestamps in range")]
     NoVoteTimestampsInRange,
+    #[error("protobuf encode error: {0}")]
     ProtobufEncodeError(#[from] prost::EncodeError),
+    #[error("protobuf decode error: {0}")]
     ProtobufDecodeError(#[from] prost::DecodeError),
+    #[error("parent entries unavailable")]
     ParentEntriesUnavailable,
+    #[error("slot unavailable")]
     SlotUnavailable,
+    #[error("unsupported transaction version")]
     UnsupportedTransactionVersion,
+    #[error("missing transaction metadata")]
     MissingTransactionMetadata,
 }
 pub type Result<T> = std::result::Result<T, BlockstoreError>;
-
-impl std::fmt::Display for BlockstoreError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "blockstore error")
-    }
-}
 
 pub enum IteratorMode<Index> {
     Start,
@@ -663,12 +677,8 @@ pub trait Column {
 
     fn key(index: Self::Index) -> Vec<u8>;
     fn index(key: &[u8]) -> Self::Index;
-    // this return Slot or some u64
-    fn primary_index(index: Self::Index) -> u64;
     fn as_index(slot: Slot) -> Self::Index;
-    fn slot(index: Self::Index) -> Slot {
-        Self::primary_index(index)
-    }
+    fn slot(index: Self::Index) -> Slot;
 }
 
 pub trait ColumnName {
@@ -719,8 +729,7 @@ impl<T: SlotColumn> Column for T {
         BigEndian::read_u64(&key[..8])
     }
 
-    /// Obtains the primary index from the specified index.
-    fn primary_index(index: u64) -> Slot {
+    fn slot(index: Self::Index) -> Slot {
         index
     }
 
@@ -736,7 +745,7 @@ impl Column for columns::TransactionStatus {
     fn key((index, signature, slot): (u64, Signature, Slot)) -> Vec<u8> {
         let mut key = vec![0; 8 + 64 + 8]; // size_of u64 + size_of Signature + size_of Slot
         BigEndian::write_u64(&mut key[0..8], index);
-        key[8..72].clone_from_slice(&signature.as_ref()[0..64]);
+        key[8..72].copy_from_slice(&signature.as_ref()[0..64]);
         BigEndian::write_u64(&mut key[72..80], slot);
         key
     }
@@ -750,10 +759,6 @@ impl Column for columns::TransactionStatus {
             let slot = BigEndian::read_u64(&key[72..80]);
             (index, signature, slot)
         }
-    }
-
-    fn primary_index(index: Self::Index) -> u64 {
-        index.0
     }
 
     fn slot(index: Self::Index) -> Slot {
@@ -777,9 +782,9 @@ impl Column for columns::AddressSignatures {
     fn key((index, pubkey, slot, signature): (u64, Pubkey, Slot, Signature)) -> Vec<u8> {
         let mut key = vec![0; 8 + 32 + 8 + 64]; // size_of u64 + size_of Pubkey + size_of Slot + size_of Signature
         BigEndian::write_u64(&mut key[0..8], index);
-        key[8..40].clone_from_slice(&pubkey.as_ref()[0..32]);
+        key[8..40].copy_from_slice(&pubkey.as_ref()[0..32]);
         BigEndian::write_u64(&mut key[40..48], slot);
-        key[48..112].clone_from_slice(&signature.as_ref()[0..64]);
+        key[48..112].copy_from_slice(&signature.as_ref()[0..64]);
         key
     }
 
@@ -789,10 +794,6 @@ impl Column for columns::AddressSignatures {
         let slot = BigEndian::read_u64(&key[40..48]);
         let signature = Signature::try_from(&key[48..112]).unwrap();
         (index, pubkey, slot, signature)
-    }
-
-    fn primary_index(index: Self::Index) -> u64 {
-        index.0
     }
 
     fn slot(index: Self::Index) -> Slot {
@@ -812,16 +813,12 @@ impl Column for columns::TransactionMemos {
 
     fn key(signature: Signature) -> Vec<u8> {
         let mut key = vec![0; 64]; // size_of Signature
-        key[0..64].clone_from_slice(&signature.as_ref()[0..64]);
+        key[0..64].copy_from_slice(&signature.as_ref()[0..64]);
         key
     }
 
     fn index(key: &[u8]) -> Signature {
         Signature::try_from(&key[..64]).unwrap()
-    }
-
-    fn primary_index(_index: Self::Index) -> u64 {
-        unimplemented!()
     }
 
     fn slot(_index: Self::Index) -> Slot {
@@ -847,10 +844,6 @@ impl Column for columns::TransactionStatusIndex {
 
     fn index(key: &[u8]) -> u64 {
         BigEndian::read_u64(&key[..8])
-    }
-
-    fn primary_index(index: u64) -> u64 {
-        index
     }
 
     fn slot(_index: Self::Index) -> Slot {
@@ -905,16 +898,12 @@ impl Column for columns::ProgramCosts {
 
     fn key(pubkey: Pubkey) -> Vec<u8> {
         let mut key = vec![0; 32]; // size_of Pubkey
-        key[0..32].clone_from_slice(&pubkey.as_ref()[0..32]);
+        key[0..32].copy_from_slice(&pubkey.as_ref()[0..32]);
         key
     }
 
     fn index(key: &[u8]) -> Self::Index {
         Pubkey::try_from(&key[..32]).unwrap()
-    }
-
-    fn primary_index(_index: Self::Index) -> u64 {
-        unimplemented!()
     }
 
     fn slot(_index: Self::Index) -> Slot {
@@ -937,7 +926,7 @@ impl Column for columns::ShredCode {
         columns::ShredData::index(key)
     }
 
-    fn primary_index(index: Self::Index) -> Slot {
+    fn slot(index: Self::Index) -> Slot {
         index.0
     }
 
@@ -965,7 +954,7 @@ impl Column for columns::ShredData {
         (slot, index)
     }
 
-    fn primary_index(index: Self::Index) -> Slot {
+    fn slot(index: Self::Index) -> Slot {
         index.0
     }
 
@@ -1050,7 +1039,7 @@ impl Column for columns::ErasureMeta {
         key
     }
 
-    fn primary_index(index: Self::Index) -> Slot {
+    fn slot(index: Self::Index) -> Slot {
         index.0
     }
 
@@ -1287,6 +1276,11 @@ impl Database {
     pub fn live_files_metadata(&self) -> Result<Vec<LiveFile>> {
         self.backend.live_files_metadata()
     }
+
+    pub fn compact_range_cf<C: Column + ColumnName>(&self, from: &[u8], to: &[u8]) {
+        let cf = self.cf_handle::<C>();
+        self.backend.db.compact_range_cf(cf, Some(from), Some(to));
+    }
 }
 
 impl<C> LedgerColumn<C>
@@ -1354,40 +1348,6 @@ where
             let (key, value) = pair.unwrap();
             (C::index(&key), value)
         }))
-    }
-
-    pub fn delete_slot(
-        &self,
-        batch: &mut WriteBatch,
-        from: Option<Slot>,
-        to: Option<Slot>,
-    ) -> Result<bool>
-    where
-        C::Index: PartialOrd + Copy + ColumnName,
-    {
-        let mut end = true;
-        let iter_config = match from {
-            Some(s) => IteratorMode::From(C::as_index(s), IteratorDirection::Forward),
-            None => IteratorMode::Start,
-        };
-        let iter = self.iter(iter_config)?;
-        for (index, _) in iter {
-            if let Some(to) = to {
-                if C::primary_index(index) > to {
-                    end = false;
-                    break;
-                }
-            };
-            if let Err(e) = batch.delete::<C>(index) {
-                error!(
-                    "Error: {:?} while adding delete from_slot {:?} to batch {:?}",
-                    e,
-                    from,
-                    C::NAME
-                )
-            }
-        }
-        Ok(end)
     }
 
     pub fn compact_range(&self, from: Slot, to: Slot) -> Result<bool>

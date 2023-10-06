@@ -1433,7 +1433,7 @@ dependencies = [
  "derivation-path",
  "ed25519-dalek",
  "hmac 0.12.1",
- "sha2 0.10.7",
+ "sha2 0.10.8",
 ]
 
 [[package]]
@@ -3733,9 +3733,9 @@ dependencies = [
 
 [[package]]
 name = "rayon"
-version = "1.7.0"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d2df5196e37bcc87abebc0053e20787d73847bb33134a69841207dd0a47f03b"
+checksum = "9c27db03db7734835b3f53954b534c91069375ce6ccaa2e065441e07d9b6cdb1"
 dependencies = [
  "either",
  "rayon-core",
@@ -3743,14 +3743,12 @@ dependencies = [
 
 [[package]]
 name = "rayon-core"
-version = "1.11.0"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b8f95bd6966f5c87776639160a66bd8ab9895d9d4ab01ddba9fc60661aebe8d"
+checksum = "5ce3fb6ad83f861aac485e76e1985cd109d9a3713802152be56c3b1f0e0658ed"
 dependencies = [
- "crossbeam-channel",
  "crossbeam-deque",
  "crossbeam-utils",
- "num_cpus",
 ]
 
 [[package]]
@@ -4282,9 +4280,9 @@ dependencies = [
 
 [[package]]
 name = "sha2"
-version = "0.10.7"
+version = "0.10.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "479fb9d862239e610720565ca91403019f2f00410f1864c5aa7479b950a76ed8"
+checksum = "793db75ad2bcafc3ffa7c68b215fee268f537982cd901d132f89c6343f3a3dc8"
 dependencies = [
  "cfg-if 1.0.0",
  "cpufeatures",
@@ -4446,7 +4444,7 @@ dependencies = [
 
 [[package]]
 name = "solana-account-decoder"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "Inflector",
  "base64 0.21.4",
@@ -4468,7 +4466,7 @@ dependencies = [
 
 [[package]]
 name = "solana-accounts-db"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "arrayref",
  "bincode",
@@ -4493,7 +4491,7 @@ dependencies = [
  "num-derive 0.3.0",
  "num-traits",
  "num_cpus",
- "num_enum 0.6.1",
+ "num_enum 0.7.0",
  "ouroboros",
  "percentage",
  "qualifier_attr",
@@ -4509,6 +4507,7 @@ dependencies = [
  "solana-frozen-abi-macro",
  "solana-measure",
  "solana-metrics",
+ "solana-nohash-hasher",
  "solana-program-runtime",
  "solana-rayon-threadlimit",
  "solana-sdk",
@@ -4525,7 +4524,7 @@ dependencies = [
 
 [[package]]
 name = "solana-address-lookup-table-program"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "bincode",
  "bytemuck",
@@ -4544,7 +4543,7 @@ dependencies = [
 
 [[package]]
 name = "solana-banks-client"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "borsh 0.10.3",
  "futures 0.3.28",
@@ -4559,7 +4558,7 @@ dependencies = [
 
 [[package]]
 name = "solana-banks-interface"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "serde",
  "solana-sdk",
@@ -4568,7 +4567,7 @@ dependencies = [
 
 [[package]]
 name = "solana-banks-server"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "bincode",
  "crossbeam-channel",
@@ -4586,7 +4585,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bloom"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "bv",
  "fnv",
@@ -4603,7 +4602,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-loader-program"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "bincode",
  "byteorder 1.4.3",
@@ -4620,7 +4619,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-big-mod-exp"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "array-bytes",
  "serde",
@@ -4630,14 +4629,14 @@ dependencies = [
 
 [[package]]
 name = "solana-bucket-map"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "bv",
  "bytemuck",
  "log",
  "memmap2",
  "modular-bitfield",
- "num_enum 0.6.1",
+ "num_enum 0.7.0",
  "rand 0.8.5",
  "solana-measure",
  "solana-sdk",
@@ -4646,7 +4645,7 @@ dependencies = [
 
 [[package]]
 name = "solana-clap-utils"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "chrono",
  "clap 2.33.3",
@@ -4661,7 +4660,7 @@ dependencies = [
 
 [[package]]
 name = "solana-cli-config"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "dirs-next",
  "lazy_static",
@@ -4675,7 +4674,7 @@ dependencies = [
 
 [[package]]
 name = "solana-cli-output"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "Inflector",
  "base64 0.21.4",
@@ -4700,7 +4699,7 @@ dependencies = [
 
 [[package]]
 name = "solana-client"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "async-trait",
  "bincode",
@@ -4731,7 +4730,7 @@ dependencies = [
 
 [[package]]
 name = "solana-compute-budget-program"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program-runtime",
  "solana-sdk",
@@ -4739,7 +4738,7 @@ dependencies = [
 
 [[package]]
 name = "solana-config-program"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "bincode",
  "chrono",
@@ -4751,7 +4750,7 @@ dependencies = [
 
 [[package]]
 name = "solana-connection-cache"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "async-trait",
  "bincode",
@@ -4771,7 +4770,7 @@ dependencies = [
 
 [[package]]
 name = "solana-core"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "base64 0.21.4",
  "bincode",
@@ -4789,7 +4788,7 @@ dependencies = [
  "log",
  "lru",
  "min-max-heap",
- "num_enum 0.6.1",
+ "num_enum 0.7.0",
  "quinn",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
@@ -4844,7 +4843,7 @@ dependencies = [
 
 [[package]]
 name = "solana-cost-model"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "lazy_static",
  "log",
@@ -4866,7 +4865,7 @@ dependencies = [
 
 [[package]]
 name = "solana-download-utils"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "console",
  "indicatif",
@@ -4878,7 +4877,7 @@ dependencies = [
 
 [[package]]
 name = "solana-entry"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "bincode",
  "crossbeam-channel",
@@ -4898,7 +4897,7 @@ dependencies = [
 
 [[package]]
 name = "solana-faucet"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "bincode",
  "byteorder 1.4.3",
@@ -4920,15 +4919,11 @@ dependencies = [
 
 [[package]]
 name = "solana-frozen-abi"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
- "ahash 0.8.3",
- "blake3",
  "block-buffer 0.10.4",
  "bs58",
  "bv",
- "byteorder 1.4.3",
- "cc",
  "either",
  "generic-array 0.14.7",
  "im",
@@ -4939,8 +4934,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_derive",
- "serde_json",
- "sha2 0.10.7",
+ "sha2 0.10.8",
  "solana-frozen-abi-macro",
  "subtle",
  "thiserror",
@@ -4948,7 +4942,7 @@ dependencies = [
 
 [[package]]
 name = "solana-frozen-abi-macro"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4958,7 +4952,7 @@ dependencies = [
 
 [[package]]
 name = "solana-genesis-utils"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "log",
  "solana-accounts-db",
@@ -4969,7 +4963,7 @@ dependencies = [
 
 [[package]]
 name = "solana-geyser-plugin-interface"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "log",
  "solana-sdk",
@@ -4979,7 +4973,7 @@ dependencies = [
 
 [[package]]
 name = "solana-geyser-plugin-manager"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "bs58",
  "crossbeam-channel",
@@ -5004,7 +4998,7 @@ dependencies = [
 
 [[package]]
 name = "solana-gossip"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "assert_matches",
  "bincode",
@@ -5052,7 +5046,7 @@ dependencies = [
 
 [[package]]
 name = "solana-ledger"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "assert_matches",
  "bincode",
@@ -5070,7 +5064,7 @@ dependencies = [
  "log",
  "lru",
  "num_cpus",
- "num_enum 0.6.1",
+ "num_enum 0.7.0",
  "prost",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
@@ -5081,7 +5075,7 @@ dependencies = [
  "scopeguard",
  "serde",
  "serde_bytes",
- "sha2 0.10.7",
+ "sha2 0.10.8",
  "solana-account-decoder",
  "solana-accounts-db",
  "solana-bpf-loader-program",
@@ -5116,7 +5110,7 @@ dependencies = [
 
 [[package]]
 name = "solana-loader-v4-program"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "log",
  "solana-measure",
@@ -5127,7 +5121,7 @@ dependencies = [
 
 [[package]]
 name = "solana-logger"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "env_logger",
  "lazy_static",
@@ -5136,7 +5130,7 @@ dependencies = [
 
 [[package]]
 name = "solana-measure"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "log",
  "solana-sdk",
@@ -5144,7 +5138,7 @@ dependencies = [
 
 [[package]]
 name = "solana-merkle-tree"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "fast-math",
  "solana-program",
@@ -5152,7 +5146,7 @@ dependencies = [
 
 [[package]]
 name = "solana-metrics"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "crossbeam-channel",
  "gethostname",
@@ -5165,7 +5159,7 @@ dependencies = [
 
 [[package]]
 name = "solana-net-utils"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "bincode",
  "clap 3.1.6",
@@ -5184,8 +5178,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-nohash-hasher"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b8a731ed60e89177c8a7ab05fe0f1511cedd3e70e773f288f9de33a9cfdc21e"
+
+[[package]]
 name = "solana-perf"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "ahash 0.8.3",
  "bincode",
@@ -5209,7 +5209,7 @@ dependencies = [
 
 [[package]]
 name = "solana-poh"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "core_affinity",
  "crossbeam-channel",
@@ -5225,7 +5225,7 @@ dependencies = [
 
 [[package]]
 name = "solana-program"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "ark-bn254",
  "ark-ec",
@@ -5264,7 +5264,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2 0.10.7",
+ "sha2 0.10.8",
  "sha3 0.10.4",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
@@ -5277,7 +5277,7 @@ dependencies = [
 
 [[package]]
 name = "solana-program-runtime"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "base64 0.21.4",
  "bincode",
@@ -5303,7 +5303,7 @@ dependencies = [
 
 [[package]]
 name = "solana-program-test"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "assert_matches",
  "async-trait",
@@ -5330,7 +5330,7 @@ dependencies = [
 
 [[package]]
 name = "solana-pubsub-client"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "crossbeam-channel",
  "futures-util",
@@ -5353,7 +5353,7 @@ dependencies = [
 
 [[package]]
 name = "solana-quic-client"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "async-mutex",
  "async-trait",
@@ -5378,7 +5378,7 @@ dependencies = [
 
 [[package]]
 name = "solana-rayon-threadlimit"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "lazy_static",
  "num_cpus",
@@ -5386,7 +5386,7 @@ dependencies = [
 
 [[package]]
 name = "solana-remote-wallet"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "console",
  "dialoguer",
@@ -5403,7 +5403,7 @@ dependencies = [
 
 [[package]]
 name = "solana-rpc"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "base64 0.21.4",
  "bincode",
@@ -5458,7 +5458,7 @@ dependencies = [
 
 [[package]]
 name = "solana-rpc-client"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "async-trait",
  "base64 0.21.4",
@@ -5482,7 +5482,7 @@ dependencies = [
 
 [[package]]
 name = "solana-rpc-client-api"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "base64 0.21.4",
  "bs58",
@@ -5502,7 +5502,7 @@ dependencies = [
 
 [[package]]
 name = "solana-rpc-client-nonce-utils"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "clap 2.33.3",
  "solana-clap-utils",
@@ -5513,7 +5513,7 @@ dependencies = [
 
 [[package]]
 name = "solana-runtime"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "arrayref",
  "base64 0.21.4",
@@ -5541,7 +5541,7 @@ dependencies = [
  "num-derive 0.3.0",
  "num-traits",
  "num_cpus",
- "num_enum 0.6.1",
+ "num_enum 0.7.0",
  "ouroboros",
  "percentage",
  "qualifier_attr",
@@ -5588,7 +5588,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-programs"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "bincode",
  "byteorder 1.4.3",
@@ -5617,7 +5617,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-128bit"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
  "solana-sbf-rust-128bit-dep",
@@ -5625,21 +5625,21 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-128bit-dep"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-alloc"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-alt-bn128"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "array-bytes",
  "solana-program",
@@ -5647,7 +5647,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-alt-bn128-compression"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "array-bytes",
  "solana-program",
@@ -5655,21 +5655,21 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-call-depth"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-caller-access"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-curve25519"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
  "solana-zk-token-sdk",
@@ -5677,14 +5677,14 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-custom-heap"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-dep-crate"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "byteorder 1.4.3",
  "solana-program",
@@ -5692,21 +5692,21 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-deprecated-loader"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-dup-accounts"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-error-handling"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "num-derive 0.3.0",
  "num-traits",
@@ -5716,42 +5716,42 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-external-spend"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-finalize"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-get-minimum-delegation"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-inner_instruction_alignment_check"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-instruction-introspection"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-invoke"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "rustversion",
  "solana-program",
@@ -5761,49 +5761,49 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-invoke-and-error"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-invoke-and-ok"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-invoke-and-return"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-invoked"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-iter"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-log-data"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-many-args"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
  "solana-sbf-rust-many-args-dep",
@@ -5811,14 +5811,14 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-many-args-dep"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-mem"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
  "solana-program-runtime",
@@ -5828,7 +5828,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-membuiltins"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
  "solana-sbf-rust-mem",
@@ -5836,21 +5836,21 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-noop"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-panic"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-param-passing"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
  "solana-sbf-rust-param-passing-dep",
@@ -5858,14 +5858,14 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-param-passing-dep"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-poseidon"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "array-bytes",
  "solana-program",
@@ -5873,7 +5873,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-rand"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "getrandom 0.2.10",
  "rand 0.8.5",
@@ -5882,14 +5882,14 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-realloc"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-realloc-invoke"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
  "solana-sbf-rust-realloc",
@@ -5897,7 +5897,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-remaining-compute-units"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
  "solana-program-runtime",
@@ -5907,21 +5907,21 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-ro-account_modify"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-ro-modify"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-sanity"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
  "solana-program-runtime",
@@ -5931,7 +5931,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-secp256k1-recover"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "libsecp256k1 0.7.0",
  "solana-program",
@@ -5939,7 +5939,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-sha"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "blake3",
  "solana-program",
@@ -5947,21 +5947,21 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-sibling-instructions"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-sibling_inner-instructions"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-simulation"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-logger",
  "solana-program",
@@ -5972,21 +5972,21 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-spoof1"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-spoof1-system"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-sysvar"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
  "solana-program-runtime",
@@ -5996,21 +5996,21 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-upgradeable"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sbf-rust-upgraded"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-sdk"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "assert_matches",
  "base64 0.21.4",
@@ -6035,7 +6035,7 @@ dependencies = [
  "memmap2",
  "num-derive 0.3.0",
  "num-traits",
- "num_enum 0.6.1",
+ "num_enum 0.7.0",
  "pbkdf2 0.11.0",
  "qstring",
  "qualifier_attr",
@@ -6048,7 +6048,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "serde_with",
- "sha2 0.10.7",
+ "sha2 0.10.8",
  "sha3 0.10.4",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
@@ -6062,7 +6062,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk-macro"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "bs58",
  "proc-macro2",
@@ -6073,7 +6073,7 @@ dependencies = [
 
 [[package]]
 name = "solana-send-transaction-service"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "crossbeam-channel",
  "log",
@@ -6087,7 +6087,7 @@ dependencies = [
 
 [[package]]
 name = "solana-stake-program"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "bincode",
  "log",
@@ -6100,7 +6100,7 @@ dependencies = [
 
 [[package]]
 name = "solana-storage-bigtable"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "backoff",
  "bincode",
@@ -6132,7 +6132,7 @@ dependencies = [
 
 [[package]]
 name = "solana-storage-proto"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "bincode",
  "bs58",
@@ -6147,7 +6147,7 @@ dependencies = [
 
 [[package]]
 name = "solana-streamer"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "async-channel",
  "bytes",
@@ -6177,7 +6177,7 @@ dependencies = [
 
 [[package]]
 name = "solana-system-program"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "bincode",
  "log",
@@ -6189,7 +6189,7 @@ dependencies = [
 
 [[package]]
 name = "solana-test-validator"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "base64 0.21.4",
  "bincode",
@@ -6219,7 +6219,7 @@ dependencies = [
 
 [[package]]
 name = "solana-thin-client"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "bincode",
  "log",
@@ -6232,7 +6232,7 @@ dependencies = [
 
 [[package]]
 name = "solana-tpu-client"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "async-trait",
  "bincode",
@@ -6254,7 +6254,7 @@ dependencies = [
 
 [[package]]
 name = "solana-transaction-status"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "Inflector",
  "base64 0.21.4",
@@ -6277,7 +6277,7 @@ dependencies = [
 
 [[package]]
 name = "solana-turbine"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "bincode",
  "bytes",
@@ -6312,7 +6312,7 @@ dependencies = [
 
 [[package]]
 name = "solana-udp-client"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "async-trait",
  "solana-connection-cache",
@@ -6325,7 +6325,7 @@ dependencies = [
 
 [[package]]
 name = "solana-validator"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "chrono",
  "clap 2.33.3",
@@ -6387,7 +6387,7 @@ dependencies = [
 
 [[package]]
 name = "solana-version"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "log",
  "rustc_version",
@@ -6401,7 +6401,7 @@ dependencies = [
 
 [[package]]
 name = "solana-vote"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "crossbeam-channel",
  "itertools",
@@ -6418,7 +6418,7 @@ dependencies = [
 
 [[package]]
 name = "solana-vote-program"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "bincode",
  "log",
@@ -6457,7 +6457,7 @@ dependencies = [
 
 [[package]]
 name = "solana-zk-token-proof-program"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "bytemuck",
  "num-derive 0.3.0",
@@ -6469,7 +6469,7 @@ dependencies = [
 
 [[package]]
 name = "solana-zk-token-sdk"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "aes-gcm-siv",
  "base64 0.21.4",
@@ -6581,7 +6581,7 @@ checksum = "0e5f2044ca42c8938d54d1255ce599c79a1ffd86b677dfab695caa20f9ffc3f2"
 dependencies = [
  "proc-macro2",
  "quote",
- "sha2 0.10.7",
+ "sha2 0.10.8",
  "syn 2.0.37",
  "thiserror",
 ]
@@ -6629,7 +6629,7 @@ checksum = "ab5269c8e868da17b6552ef35a51355a017bd8e0eae269c201fef830d35fa52c"
 dependencies = [
  "proc-macro2",
  "quote",
- "sha2 0.10.7",
+ "sha2 0.10.8",
  "syn 2.0.37",
 ]
 

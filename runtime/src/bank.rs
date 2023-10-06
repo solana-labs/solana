@@ -42,6 +42,7 @@ use {
         builtins::{BuiltinPrototype, BUILTINS},
         epoch_rewards_hasher::hash_rewards_into_partitions,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
+        inline_feature_gate_program,
         runtime_config::RuntimeConfig,
         serde_snapshot::BankIncrementalSnapshotPersistence,
         snapshot_hash::SnapshotHash,
@@ -215,6 +216,7 @@ pub mod bank_hash_details;
 mod builtin_programs;
 pub mod epoch_accounts_hash_utils;
 mod metrics;
+mod replace_account;
 mod serde_snapshot;
 mod sysvar_cache;
 #[cfg(test)]
@@ -8054,6 +8056,24 @@ impl Bank {
         if new_feature_activations.contains(&feature_set::update_hashes_per_tick::id()) {
             self.apply_updated_hashes_per_tick(DEFAULT_HASHES_PER_TICK);
         }
+
+        if new_feature_activations.contains(&feature_set::programify_feature_gate_program::id()) {
+            let datapoint_name = "bank-progamify_feature_gate_program";
+            if let Err(e) = replace_account::replace_empty_account_with_upgradeable_program(
+                self,
+                &feature::id(),
+                &inline_feature_gate_program::noop_program::id(),
+                datapoint_name,
+            ) {
+                warn!(
+                    "{}: Failed to replace empty account {} with upgradeable program: {}",
+                    datapoint_name,
+                    feature::id(),
+                    e
+                );
+                datapoint_warn!(datapoint_name, ("slot", self.slot(), i64),);
+            }
+        }
     }
 
     fn apply_updated_hashes_per_tick(&mut self, hashes_per_tick: u64) {
@@ -8192,42 +8212,6 @@ impl Bank {
                 self.feature_set.is_active(feature_id)
             }) {
                 self.add_precompile(&precompile.program_id);
-            }
-        }
-    }
-
-    /// Use to replace programs by feature activation
-    #[allow(dead_code)]
-    fn replace_program_account(
-        &mut self,
-        old_address: &Pubkey,
-        new_address: &Pubkey,
-        datapoint_name: &'static str,
-    ) {
-        if let Some(old_account) = self.get_account_with_fixed_root(old_address) {
-            if let Some(new_account) = self.get_account_with_fixed_root(new_address) {
-                datapoint_info!(datapoint_name, ("slot", self.slot, i64));
-
-                // Burn lamports in the old account
-                self.capitalization
-                    .fetch_sub(old_account.lamports(), Relaxed);
-
-                // Transfer new account to old account
-                self.store_account(old_address, &new_account);
-
-                // Clear new account
-                self.store_account(new_address, &AccountSharedData::default());
-
-                // Unload a program from the bank's cache
-                self.loaded_programs_cache
-                    .write()
-                    .unwrap()
-                    .remove_programs([*old_address].into_iter());
-
-                self.calculate_and_update_accounts_data_size_delta_off_chain(
-                    old_account.data().len(),
-                    new_account.data().len(),
-                );
             }
         }
     }

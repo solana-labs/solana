@@ -196,33 +196,6 @@ EOF
       "Stable-SBF skipped as no relevant files were modified"
   fi
 
-  # Perf test suite
-  if affects \
-             .rs$ \
-             Cargo.lock$ \
-             Cargo.toml$ \
-             ^ci/rust-version.sh \
-             ^ci/test-stable-perf.sh \
-             ^ci/test-stable.sh \
-             ^ci/test-local-cluster.sh \
-             ^core/build.rs \
-             ^fetch-perf-libs.sh \
-             ^programs/ \
-             ^sdk/ \
-      ; then
-    cat >> "$output_file" <<"EOF"
-  - command: "ci/test-stable-perf.sh"
-    name: "stable-perf"
-    timeout_in_minutes: 35
-    artifact_paths: "log-*.txt"
-    agents:
-      queue: "cuda"
-EOF
-  else
-    annotate --style info \
-      "Stable-perf skipped as no relevant files were modified"
-  fi
-
   # Downstream backwards compatibility
   if affects \
              .rs$ \

@@ -21,6 +21,7 @@ use {
             Shred, ShredData, ShredId, ShredType, Shredder,
         },
         slot_stats::{ShredSource, SlotsStats},
+        transaction_address_lookup_table_scanner::scan_transaction,
     },
     assert_matches::debug_assert_matches,
     bincode::{deserialize, serialize},
@@ -44,13 +45,15 @@ use {
     solana_rayon_threadlimit::get_max_thread_count,
     solana_runtime::bank::Bank,
     solana_sdk::{
+        account::ReadableAccount,
+        address_lookup_table::state::AddressLookupTable,
         clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND},
         genesis_config::{GenesisConfig, DEFAULT_GENESIS_ARCHIVE, DEFAULT_GENESIS_FILE},
         hash::Hash,
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer},
         timing::timestamp,
-        transaction::VersionedTransaction,
+        transaction::{SanitizedVersionedTransaction, VersionedTransaction},
     },
     solana_storage_proto::{StoredExtendedRewards, StoredTransactionStatusMeta},
     solana_transaction_status::{
@@ -2127,14 +2130,29 @@ impl Blockstore {
             .put(0, &TransactionStatusIndexMeta::default())?;
         self.transaction_status_index_cf
             .put(1, &TransactionStatusIndexMeta::default())?;
-        // This dummy status improves compaction performance
-        let default_status = TransactionStatusMeta::default().into();
-        self.transaction_status_cf
-            .put_protobuf(cf::TransactionStatus::as_index(2), &default_status)?;
-        self.address_signatures_cf.put(
-            cf::AddressSignatures::as_index(2),
-            &AddressSignatureMeta::default(),
-        )
+
+        // If present, delete dummy entries inserted by old software
+        // https://github.com/solana-labs/solana/blob/bc2b372/ledger/src/blockstore.rs#L2130-L2137
+        let transaction_status_dummy_key = cf::TransactionStatus::as_index(2);
+        if self
+            .transaction_status_cf
+            .get_protobuf_or_bincode::<StoredTransactionStatusMeta>(transaction_status_dummy_key)?
+            .is_some()
+        {
+            self.transaction_status_cf
+                .delete(transaction_status_dummy_key)?;
+        };
+        let address_signatures_dummy_key = cf::AddressSignatures::as_index(2);
+        if self
+            .address_signatures_cf
+            .get(address_signatures_dummy_key)?
+            .is_some()
+        {
+            self.address_signatures_cf
+                .delete(address_signatures_dummy_key)?;
+        };
+
+        Ok(())
     }
 
     /// Toggles the active primary index between `0` and `1`, and clears the
@@ -2456,8 +2474,10 @@ impl Blockstore {
         end_slot: Slot,
     ) -> Result<Vec<(Slot, Signature)>> {
         let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
-
         let mut signatures: Vec<(Slot, Signature)> = vec![];
+        if end_slot < lowest_available_slot {
+            return Ok(signatures);
+        }
         for transaction_status_cf_primary_index in 0..=1 {
             let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
                 (
@@ -2493,12 +2513,15 @@ impl Blockstore {
     ) -> Result<Vec<(Slot, Signature)>> {
         let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
         let mut signatures: Vec<(Slot, Signature)> = vec![];
+        if slot < lowest_available_slot {
+            return Ok(signatures);
+        }
         for transaction_status_cf_primary_index in 0..=1 {
             let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
                 (
                     transaction_status_cf_primary_index,
                     pubkey,
-                    slot.max(lowest_available_slot),
+                    slot,
                     Signature::default(),
                 ),
                 IteratorDirection::Forward,
@@ -2915,14 +2938,23 @@ impl Blockstore {
     }
 
     /// Gets accounts used in transactions in the slot range [starting_slot, ending_slot].
+    /// Additionally returns a bool indicating if the set may be incomplete.
     /// Used by ledger-tool to create a minimized snapshot
     pub fn get_accounts_used_in_range(
         &self,
         bank: &Bank,
         starting_slot: Slot,
         ending_slot: Slot,
-    ) -> DashSet<Pubkey> {
+    ) -> (DashSet<Pubkey>, bool) {
         let result = DashSet::new();
+        let lookup_tables = DashSet::new();
+        let possible_cpi_alt_extend = AtomicBool::new(false);
+
+        fn add_to_set<'a>(set: &DashSet<Pubkey>, iter: impl IntoIterator<Item = &'a Pubkey>) {
+            iter.into_iter().for_each(|key| {
+                set.insert(*key);
+            });
+        }
 
         (starting_slot..=ending_slot)
             .into_par_iter()
@@ -2930,31 +2962,44 @@ impl Blockstore {
                 if let Ok(entries) = self.get_slot_entries(slot, 0) {
                     entries.into_par_iter().for_each(|entry| {
                         entry.transactions.into_iter().for_each(|tx| {
-                            if let Some(lookups) = tx.message.address_table_lookups() {
-                                lookups.iter().for_each(|lookup| {
-                                    result.insert(lookup.account_key);
-                                });
+                            // Attempt to verify transaction and load addresses from the current bank,
+                            // or manually scan the transaction for addresses if the transaction.
+                            if let Ok(tx) = bank.fully_verify_transaction(tx.clone()) {
+                                add_to_set(&result, tx.message().account_keys().iter());
+                            } else {
+                                add_to_set(&result, tx.message.static_account_keys());
+                                if let Some(lookups) = tx.message.address_table_lookups() {
+                                    add_to_set(
+                                        &lookup_tables,
+                                        lookups.iter().map(|lookup| &lookup.account_key),
+                                    );
+                                }
+
+                                let tx = SanitizedVersionedTransaction::try_from(tx)
+                                    .expect("transaction failed to sanitize");
+
+                                let alt_scan_extensions = scan_transaction(&tx);
+                                add_to_set(&result, &alt_scan_extensions.accounts);
+                                if alt_scan_extensions.possibly_incomplete {
+                                    possible_cpi_alt_extend.store(true, Ordering::Relaxed);
+                                }
                             }
-                            // howdy, anybody who reached here from the panic messsage!
-                            // the .unwrap() below could indicate there was an odd error or there
-                            // could simply be a tx with a new ALT, which is just created/updated
-                            // in this range. too bad... this edge case isn't currently supported.
-                            // see: https://github.com/solana-labs/solana/issues/30165
-                            // for casual use, please choose different slot range.
-                            let sanitized_tx = bank.fully_verify_transaction(tx).unwrap();
-                            sanitized_tx
-                                .message()
-                                .account_keys()
-                                .iter()
-                                .for_each(|&pubkey| {
-                                    result.insert(pubkey);
-                                });
                         });
                     });
                 }
             });
 
-        result
+        // For each unique lookup table add all accounts to the minimized set.
+        lookup_tables.into_par_iter().for_each(|lookup_table_key| {
+            bank.get_account(&lookup_table_key)
+                .map(|lookup_table_account| {
+                    AddressLookupTable::deserialize(lookup_table_account.data()).map(|t| {
+                        add_to_set(&result, &t.addresses[..]);
+                    })
+                });
+        });
+
+        (result, possible_cpi_alt_extend.into_inner())
     }
 
     fn get_completed_ranges(
@@ -7669,8 +7714,6 @@ pub mod tests {
     fn test_get_transaction_status() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-
-        // TransactionStatus column opens initialized with one entry at index 2
         let transaction_status_cf = &blockstore.transaction_status_cf;
 
         let pre_balances_vec = vec![1, 2, 3];
@@ -7849,13 +7892,13 @@ pub mod tests {
             .get_transaction_status_with_counter(signature7, &[].into())
             .unwrap();
         assert_eq!(status, None);
-        assert_eq!(counter, 2);
+        assert_eq!(counter, 1);
 
         let (status, counter) = blockstore
             .get_transaction_status_with_counter(signature7, &[3].into())
             .unwrap();
         assert_eq!(status, None);
-        assert_eq!(counter, 2);
+        assert_eq!(counter, 1);
     }
 
     fn do_test_lowest_cleanup_slot_and_special_cfs(simulate_ledger_cleanup_service: bool) {
@@ -7863,8 +7906,6 @@ pub mod tests {
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-
-        // TransactionStatus column opens initialized with one entry at index 2
         let transaction_status_cf = &blockstore.transaction_status_cf;
 
         let pre_balances_vec = vec![1, 2, 3];
