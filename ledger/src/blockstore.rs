@@ -2273,8 +2273,18 @@ impl Blockstore {
         Ok(())
     }
 
-    pub fn read_transaction_memos(&self, signature: Signature) -> Result<Option<String>> {
-        self.transaction_memos_cf.get(signature)
+    pub fn read_transaction_memos(
+        &self,
+        signature: Signature,
+        slot: Slot,
+    ) -> Result<Option<String>> {
+        let memos = self.transaction_memos_cf.get((signature, slot))?;
+        if memos.is_none() {
+            self.transaction_memos_cf
+                .get_raw(&cf::TransactionMemos::deprecated_key(signature))
+        } else {
+            Ok(memos)
+        }
     }
 
     pub fn write_transaction_memos(
@@ -2735,7 +2745,7 @@ impl Blockstore {
             let transaction_status =
                 self.get_transaction_status(signature, &confirmed_unrooted_slots)?;
             let err = transaction_status.and_then(|(_slot, status)| status.status.err());
-            let memo = self.read_transaction_memos(signature)?;
+            let memo = self.read_transaction_memos(signature, slot)?;
             let block_time = self.get_block_time(slot)?;
             infos.push(ConfirmedTransactionStatusWithSignature {
                 signature,
