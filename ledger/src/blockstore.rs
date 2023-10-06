@@ -2578,7 +2578,7 @@ impl Blockstore {
             .map(|signatures| signatures.iter().map(|(_, signature)| *signature).collect())
     }
 
-    fn get_block_signatures(&self, slot: Slot) -> Result<Vec<Signature>> {
+    fn get_block_signatures_rev(&self, slot: Slot) -> Result<Vec<Signature>> {
         let block = self.get_complete_block(slot, false).map_err(|err| {
             BlockstoreError::Io(IoError::new(
                 ErrorKind::Other,
@@ -2589,6 +2589,7 @@ impl Blockstore {
         Ok(block
             .transactions
             .into_iter()
+            .rev()
             .filter_map(|transaction_with_meta| {
                 transaction_with_meta
                     .transaction
@@ -2629,8 +2630,7 @@ impl Blockstore {
                 match transaction_status {
                     None => return Ok(SignatureInfosForAddress::default()),
                     Some((slot, _)) => {
-                        let mut slot_signatures = self.get_block_signatures(slot)?;
-                        slot_signatures.reverse();
+                        let mut slot_signatures = self.get_block_signatures_rev(slot)?;
                         if let Some(pos) = slot_signatures.iter().position(|&x| x == before) {
                             slot_signatures.truncate(pos + 1);
                         }
@@ -2657,8 +2657,7 @@ impl Blockstore {
                 match transaction_status {
                     None => (first_available_block, HashSet::new()),
                     Some((slot, _)) => {
-                        let mut slot_signatures = self.get_block_signatures(slot)?;
-                        slot_signatures.reverse();
+                        let mut slot_signatures = self.get_block_signatures_rev(slot)?;
                         if let Some(pos) = slot_signatures.iter().position(|&x| x == until) {
                             slot_signatures = slot_signatures.split_off(pos);
                         }
