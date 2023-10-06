@@ -64,21 +64,20 @@ fn fetch_spl(fetch_spl_file: &PathBuf) -> Result<(), Box<dyn Error>> {
 }
 
 fn parse_spl_genesis_file(spl_file: &PathBuf) -> Result<Vec<String>, Box<dyn Error>> {
-    // Step 1: Read entire file into a String
+    // Read entire file into a String
     let mut file = File::open(spl_file)?;
     let mut content = String::new();
     file.read_to_string(&mut content)?;
 
-    // Step 2: Split by " --" to get groups
+    // Split by whitespace
     let mut args = Vec::new();
     let mut tokens_iter = content.split_whitespace();
 
     while let Some(token) = tokens_iter.next() {
         args.push(token.to_string());
+        // Find flag delimiters
         if token.starts_with("--") {
-            // Step 3 & 4: Split further and add to Vec
             for next_token in tokens_iter.by_ref() {
-            // while let Some(next_token) = tokens_iter.next() {
                 if next_token.starts_with("--") {
                     args.push(next_token.to_string());
                 } else {
