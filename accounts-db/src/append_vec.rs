@@ -686,6 +686,8 @@ pub mod tests {
         pub(crate) fn ref_executable_byte(&self) -> &u8 {
             match self {
                 Self::AppendVec(av) => av.ref_executable_byte(),
+                // Tests currently only cover AppendVec.
+                Self::Hot(_) => unreachable!(),
             }
         }
     }
@@ -1181,7 +1183,9 @@ pub mod tests {
             av.append_account_test(&create_test_account(10)).unwrap();
 
             let accounts = av.accounts(0);
-            let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap();
+            let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap() else {
+                panic!("StoredAccountMeta can only be AppendVec in this test.");
+            };
             account.set_data_len_unsafe(crafted_data_len);
             assert_eq!(account.data_len(), crafted_data_len);
 
@@ -1209,7 +1213,9 @@ pub mod tests {
             av.append_account_test(&create_test_account(10)).unwrap();
 
             let accounts = av.accounts(0);
-            let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap();
+            let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap() else {
+                panic!("StoredAccountMeta can only be AppendVec in this test.");
+            };
             account.set_data_len_unsafe(too_large_data_len);
             assert_eq!(account.data_len(), too_large_data_len);
 
@@ -1245,14 +1251,18 @@ pub mod tests {
             assert_eq!(*accounts[0].ref_executable_byte(), 0);
             assert_eq!(*accounts[1].ref_executable_byte(), 1);
 
-            let StoredAccountMeta::AppendVec(account) = &accounts[0];
+            let StoredAccountMeta::AppendVec(account) = &accounts[0] else {
+                panic!("StoredAccountMeta can only be AppendVec in this test.");
+            };
             let crafted_executable = u8::max_value() - 1;
 
             account.set_executable_as_byte(crafted_executable);
 
             // reload crafted accounts
             let accounts = av.accounts(0);
-            let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap();
+            let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap() else {
+                panic!("StoredAccountMeta can only be AppendVec in this test.");
+            };
 
             // upper 7-bits are not 0, so sanitization should fail
             assert!(!account.sanitize_executable());
