@@ -3,22 +3,25 @@
 //! specified by compute-budget instructions, simple-vote flag, transaction
 //! costs, durable nonce account etc;
 //!
-//! The premiss is if anything qualifies as metadata, then it must be valid
-//! and available as long as the transaction itself is valid and available.
+//! The premiss is metadata must be valid and available WITHIN SAME EPOCH
+//! as long as the transaction itself is valid and available.
 //! Hence they are not Option<T> type. Their visibility at different states
 //! are defined in traits.
 //!
-use solana_sdk::hash::Hash;
+use {
+    solana_program_runtime::compute_budget_processor::ComputeBudgetLimits,
+    solana_sdk::{hash::Hash, slot_history::Slot},
+};
 
 /// metadata can be extracted statically from sanitized transaction,
 /// for example: message hash, simple-vote-tx flag, compute budget limits,
 pub trait StaticMeta {
     fn message_hash(&self) -> &Hash;
     fn is_simple_vote_tx(&self) -> bool;
-    fn updated_heap_bytes(&self) -> usize;
-    fn compute_unit_limit(&self) -> u32;
-    fn compute_unit_price(&self) -> u64;
-    fn loaded_accounts_bytes(&self) -> usize;
+
+    // cached compute_budget_limits expires at the last slot of epoch when it is
+    // extracted.
+    fn compute_budget_limits(&self, current_slot: Slot) -> Option<&ComputeBudgetLimits>;
 }
 
 /// Statically loaded meta is a supertrait of Dynamically loaded meta, when
@@ -28,14 +31,21 @@ pub trait StaticMeta {
 /// on-chain ALT, examples are: transaction usage costs, nonce account.
 pub trait DynamicMeta: StaticMeta {}
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default)]
 pub struct TransactionMeta {
-    pub message_hash: Hash,
-    pub is_simple_vote_tx: bool,
-    pub updated_heap_bytes: usize,
-    pub compute_unit_limit: u32,
-    pub compute_unit_price: u64,
-    pub loaded_accounts_bytes: usize,
+    pub(crate) message_hash: Hash,
+    pub(crate) is_simple_vote_tx: bool,
+
+    // currently resolving compute_budget_limits requires feature_set,
+    // which could change between epochs. Therefore resolved compute_budget_limits
+    // needs to be stamped with the last slot of current epoch.
+    pub(crate) compute_budget_limits_ttl: ComputeBudgetLimitsTTL,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct ComputeBudgetLimitsTTL {
+    pub(crate) compute_budget_limits: ComputeBudgetLimits,
+    pub(crate) max_age_slot: Slot,
 }
 
 impl TransactionMeta {
@@ -47,10 +57,14 @@ impl TransactionMeta {
         self.is_simple_vote_tx = is_simple_vote_tx;
     }
 
-    pub fn set_compute_budget_limits(&mut self, compute_budget_limits: &ComputeBudgetLimits) {
-        self.updated_heap_bytes = compute_budget_limits.updated_heap_bytes;
-        self.compute_unit_limit = compute_budget_limits.compute_unit_limit;
-        self.compute_unit_price = compute_budget_limits.compute_unit_price;
-        self.loaded_accounts_bytes = compute_budget_limits.loaded_accounts_bytes;
+    pub fn set_compute_budget_limits(
+        &mut self,
+        compute_budget_limits: ComputeBudgetLimits,
+        max_age_slot: Slot,
+    ) {
+        self.compute_budget_limits_ttl = ComputeBudgetLimitsTTL {
+            compute_budget_limits,
+            max_age_slot,
+        };
     }
 }
