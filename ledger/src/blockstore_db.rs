@@ -2092,7 +2092,9 @@ fn should_enable_cf_compaction(cf_name: &str) -> bool {
     // completed on a given range or file.
     matches!(
         cf_name,
-        columns::TransactionStatus::NAME | columns::AddressSignatures::NAME
+        columns::TransactionStatus::NAME
+            | columns::TransactionMemos::NAME
+            | columns::AddressSignatures::NAME
     )
 }
 
