@@ -119,6 +119,7 @@ use {
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     solana_turbine::{self, broadcast_stage::BroadcastStageType},
     solana_vote_program::vote_state,
+    solana_wen_restart::wen_restart::wait_for_wen_restart,
     std::{
         collections::{HashMap, HashSet},
         net::SocketAddr,
@@ -259,6 +260,7 @@ pub struct ValidatorConfig {
     pub block_production_method: BlockProductionMethod,
     pub generator_config: Option<GeneratorConfig>,
     pub use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup,
+    pub wen_restart_proto_path: Option<PathBuf>,
 }
 
 impl Default for ValidatorConfig {
@@ -326,6 +328,7 @@ impl Default for ValidatorConfig {
             block_production_method: BlockProductionMethod::default(),
             generator_config: None,
             use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup::default(),
+            wen_restart_proto_path: None,
         }
     }
 }
@@ -1202,6 +1205,22 @@ impl Validator {
             )
             .unwrap();
 
+        let in_wen_restart = config.wen_restart_proto_path.is_some() && !waited_for_supermajority;
+        let tower = match process_blockstore.process_to_create_tower() {
+            Ok(tower) => {
+                info!("Tower state: {:?}", tower);
+                tower
+            }
+            Err(e) => {
+                warn!(
+                    "Unable to retrieve tower: {:?} creating default tower....",
+                    e
+                );
+                Tower::default()
+            }
+        };
+        let last_vote = tower.last_vote();
+
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
@@ -1218,7 +1237,7 @@ impl Validator {
             ledger_signal_receiver,
             &rpc_subscriptions,
             &poh_recorder,
-            Some(process_blockstore),
+            tower,
             config.tower_storage.clone(),
             &leader_schedule_cache,
             exit.clone(),
@@ -1256,6 +1275,21 @@ impl Validator {
             turbine_quic_endpoint_receiver,
             repair_quic_endpoint_sender,
         )?;
+
+        if in_wen_restart {
+            info!("Waiting for wen_restart phase one to finish");
+            match wait_for_wen_restart(
+                &config.wen_restart_proto_path.clone().unwrap(),
+                last_vote,
+                blockstore.clone(),
+                cluster_info.clone(),
+            ) {
+                Ok(()) => {
+                    return Err("wen_restart phase one completedy".to_string());
+                }
+                Err(e) => return Err(format!("wait_for_wen_restart failed: {e:?}")),
+            };
+        }
 
         let tpu = Tpu::new(
             &cluster_info,

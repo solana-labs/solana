@@ -5792,6 +5792,7 @@ dependencies = [
  "solana-version",
  "solana-vote",
  "solana-vote-program",
+ "solana-wen-restart",
  "static_assertions",
  "strum",
  "strum_macros",
@@ -7480,6 +7481,28 @@ dependencies = [
  "solana-rpc-client-api",
  "solana-sdk",
  "solana-version",
+]
+
+[[package]]
+name = "solana-wen-restart"
+version = "1.18.0"
+dependencies = [
+ "log",
+ "prost",
+ "prost-build",
+ "prost-types",
+ "protobuf-src",
+ "rustc_version 0.4.0",
+ "serial_test",
+ "solana-entry",
+ "solana-gossip",
+ "solana-ledger",
+ "solana-logger",
+ "solana-program",
+ "solana-runtime",
+ "solana-sdk",
+ "solana-streamer",
+ "solana-vote-program",
 ]
 
 [[package]]
