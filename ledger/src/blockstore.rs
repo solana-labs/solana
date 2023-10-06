@@ -8012,6 +8012,7 @@ pub mod tests {
 
         if simulate_ledger_cleanup_service {
             *blockstore.lowest_cleanup_slot.write().unwrap() = lowest_cleanup_slot;
+            blockstore.purge_slots(0, lowest_cleanup_slot, PurgeType::CompactionFilter);
         }
 
         let are_missing = check_for_missing();
