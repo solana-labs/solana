@@ -2,7 +2,7 @@
 #![allow(clippy::arithmetic_side_effects)]
 
 use {
-    crate::{boxed_error, initialize_globals, LEDGER_DIR, SOLANA_ROOT, ValidatorType},
+    crate::{boxed_error, initialize_globals, ValidatorType, LEDGER_DIR, SOLANA_ROOT},
     base64::{engine::general_purpose, Engine as _},
     bip39::{Language, Mnemonic, MnemonicType, Seed},
     bzip2::{write::BzEncoder, Compression},
@@ -216,7 +216,7 @@ impl Genesis {
             ValidatorType::Standard => format!("generating {} account: {}", validator_type, i),
         };
         info!("{}", log_msg);
-        
+
         let account_types = vec!["identity", "vote-account", "stake-account"];
         for account in account_types {
             let filename = match validator_type {
@@ -243,14 +243,27 @@ impl Genesis {
         let mut args: Vec<String> = Vec::new();
 
         args.push("--bootstrap-validator-lamports".to_string());
-        args.push(sol_to_lamports(self.flags.bootstrap_validator_sol.unwrap_or(DEFAULT_BOOTSTRAP_NODE_SOL)).to_string());
+        args.push(
+            sol_to_lamports(
+                self.flags
+                    .bootstrap_validator_sol
+                    .unwrap_or(DEFAULT_BOOTSTRAP_NODE_SOL),
+            )
+            .to_string(),
+        );
 
         args.push("--bootstrap-validator-stake-lamports".to_string());
-        args.push(sol_to_lamports(self.flags.bootstrap_validator_stake_sol.unwrap_or(DEFAULT_BOOTSTRAP_NODE_STAKE_SOL)).to_string());
+        args.push(
+            sol_to_lamports(
+                self.flags
+                    .bootstrap_validator_stake_sol
+                    .unwrap_or(DEFAULT_BOOTSTRAP_NODE_STAKE_SOL),
+            )
+            .to_string(),
+        );
 
         args.push("--hashes-per-tick".to_string());
         args.push(self.flags.hashes_per_tick.clone());
-        
 
         args.push("--max-genesis-archive-unpacked-size".to_string());
         args.push(
@@ -273,30 +286,46 @@ impl Genesis {
         );
 
         args.push("--faucet-pubkey".to_string());
-        args.push(self.config_dir.join("faucet.json").to_string_lossy().to_string());
+        args.push(
+            self.config_dir
+                .join("faucet.json")
+                .to_string_lossy()
+                .to_string(),
+        );
 
         args.push("--cluster-type".to_string());
         args.push(self.flags.cluster_type.to_string());
 
         args.push("--ledger".to_string());
-        args.push(self.config_dir.join("bootstrap-validator").to_string_lossy().to_string());
-
+        args.push(
+            self.config_dir
+                .join("bootstrap-validator")
+                .to_string_lossy()
+                .to_string(),
+        );
 
         // Order of accounts matters here!!
         args.push("--bootstrap-validator".to_string());
-        ["identity", "vote-account", "stake-account"].iter().for_each(|account_type| {
-            args.push(self.config_dir.join(format!("bootstrap-validator/{}.json", account_type)).to_string_lossy().to_string());
-        });
+        ["identity", "vote-account", "stake-account"]
+            .iter()
+            .for_each(|account_type| {
+                args.push(
+                    self.config_dir
+                        .join(format!("bootstrap-validator/{}.json", account_type))
+                        .to_string_lossy()
+                        .to_string(),
+                );
+            });
 
         if let Some(slots_per_epoch) = self.flags.slots_per_epoch {
             args.push("--slots-per-epoch".to_string());
             args.push(slots_per_epoch.to_string());
         }
-        
+
         if let Some(lamports_per_signature) = self.flags.target_lamports_per_signature {
             args.push("--target-lamports-per-signature".to_string());
             args.push(lamports_per_signature.to_string());
-        }        
+        }
 
         args
     }
