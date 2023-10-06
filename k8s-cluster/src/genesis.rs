@@ -63,9 +63,7 @@ fn fetch_spl(fetch_spl_file: &PathBuf) -> Result<(), Box<dyn Error>> {
     }
 }
 
-fn parse_spl_genesis_file(
-    spl_file: &PathBuf,
-) -> Result<Vec<String>, Box<dyn Error>> {
+fn parse_spl_genesis_file(spl_file: &PathBuf) -> Result<Vec<String>, Box<dyn Error>> {
     // Step 1: Read entire file into a String
     let mut file = File::open(spl_file)?;
     let mut content = String::new();
@@ -416,7 +414,7 @@ impl Genesis {
 
     // solana-genesis creates a genesis.tar.bz2 but if we need to create snapshots, these
     // are not included in the genesis.tar.bz2. So we package everything including genesis,
-    // snapshots, etc into genesis-package.tar.bz2 and we use this as our genesis in the 
+    // snapshots, etc into genesis-package.tar.bz2 and we use this as our genesis in the
     // bootstrap validator
     pub fn package_up(&mut self) -> Result<(), Box<dyn Error>> {
         // delete the genesis.tar.bz2 since its contents will be included in the
@@ -432,7 +430,7 @@ impl Genesis {
         let encoder = BzEncoder::new(tar_bz2_file, Compression::best());
         let mut tar_builder = Builder::new(encoder);
         tar_builder.append_dir_all("ledger", folder_to_tar)?;
-        
+
         Ok(())
     }
 }
