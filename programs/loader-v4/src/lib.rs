@@ -366,7 +366,11 @@ pub fn process_instruction_deploy(
         authority_address,
     )?;
     let current_slot = invoke_context.get_sysvar_cache().get_clock()?.slot;
-    if state.slot.saturating_add(DEPLOYMENT_COOLDOWN_IN_SLOTS) > current_slot {
+
+    // Slot = 0 indicates that the program hasn't been deployed yet. So no need to check for the cooldown slots.
+    // (Without this check, the program deployment is failing in freshly started test validators. That's
+    //  because at startup current_slot is 0, which is < DEPLOYMENT_COOLDOWN_IN_SLOTS).
+    if state.slot != 0 && state.slot.saturating_add(DEPLOYMENT_COOLDOWN_IN_SLOTS) > current_slot {
         ic_logger_msg!(
             log_collector,
             "Program was deployed recently, cooldown still in effect"
