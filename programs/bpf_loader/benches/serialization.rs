@@ -109,7 +109,7 @@ fn create_inputs(owner: Pubkey, num_instruction_accounts: usize) -> TransactionC
     }
 
     let mut transaction_context =
-        TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
+        TransactionContext::new(transaction_accounts, Rent::default(), 1, 1);
     let instruction_data = vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
     transaction_context
         .get_next_instruction_context()

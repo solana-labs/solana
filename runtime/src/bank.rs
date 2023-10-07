@@ -135,7 +135,6 @@ use {
         feature,
         feature_set::{
             self, add_set_tx_loaded_accounts_data_size_instruction,
-            enable_early_verification_of_account_modifications,
             include_loaded_accounts_data_size_in_fee_calculation,
             remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
             FeatureSet,
@@ -4841,14 +4840,7 @@ impl Bank {
 
         let mut transaction_context = TransactionContext::new(
             transaction_accounts,
-            if self
-                .feature_set
-                .is_active(&enable_early_verification_of_account_modifications::id())
-            {
-                Some(self.rent_collector.rent)
-            } else {
-                None
-            },
+            self.rent_collector.rent,
             compute_budget.max_invoke_stack_height,
             if self
                 .feature_set
@@ -4898,7 +4890,6 @@ impl Bank {
             tx.message(),
             &loaded_transaction.program_indices,
             &mut transaction_context,
-            self.rent_collector.rent,
             log_collector.clone(),
             programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
@@ -4975,23 +4966,15 @@ impl Bank {
         {
             status = Err(TransactionError::UnbalancedTransaction);
         }
-        let mut accounts_data_len_delta = status
-            .as_ref()
-            .map_or(0, |info| info.accounts_data_len_delta);
         let status = status.map(|_| ());
 
         loaded_transaction.accounts = accounts;
-        if self
-            .feature_set
-            .is_active(&enable_early_verification_of_account_modifications::id())
-        {
-            saturating_add_assign!(
-                timings.details.total_account_count,
-                loaded_transaction.accounts.len() as u64
-            );
-            saturating_add_assign!(timings.details.changed_account_count, touched_account_count);
-            accounts_data_len_delta = status.as_ref().map_or(0, |_| accounts_resize_delta);
-        }
+        saturating_add_assign!(
+            timings.details.total_account_count,
+            loaded_transaction.accounts.len() as u64
+        );
+        saturating_add_assign!(timings.details.changed_account_count, touched_account_count);
+        let accounts_data_len_delta = status.as_ref().map_or(0, |_| accounts_resize_delta);
 
         let return_data = if enable_return_data_recording {
             if let Some(end_index) = return_data.data.iter().rposition(|&x| x != 0) {

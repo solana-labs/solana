@@ -2,10 +2,9 @@ use {
     crate::{
         accounts_data_meter::AccountsDataMeter,
         compute_budget::ComputeBudget,
-        ic_logger_msg, ic_msg,
+        ic_msg,
         loaded_programs::{LoadedProgram, LoadedProgramType, LoadedProgramsForTxBatch},
         log_collector::LogCollector,
-        pre_account::PreAccount,
         stable_log,
         sysvar_cache::SysvarCache,
         timings::{ExecuteDetailsTimings, ExecuteTimings},
@@ -18,17 +17,13 @@ use {
         vm::{BuiltinFunction, Config, ContextObject, ProgramResult},
     },
     solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
+        account::AccountSharedData,
         bpf_loader_deprecated,
-        feature_set::{
-            check_slice_translation_size, enable_early_verification_of_account_modifications,
-            native_programs_consume_cu, FeatureSet,
-        },
+        feature_set::{check_slice_translation_size, native_programs_consume_cu, FeatureSet},
         hash::Hash,
         instruction::{AccountMeta, InstructionError},
         native_loader,
         pubkey::Pubkey,
-        rent::Rent,
         saturating_add_assign,
         stable_layout::stable_instruction::StableInstruction,
         transaction_context::{
@@ -161,8 +156,6 @@ pub struct SerializedAccountMetadata {
 
 pub struct InvokeContext<'a> {
     pub transaction_context: &'a mut TransactionContext,
-    rent: Rent,
-    pre_accounts: Vec<PreAccount>,
     sysvar_cache: &'a SysvarCache,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
@@ -184,7 +177,6 @@ impl<'a> InvokeContext<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         transaction_context: &'a mut TransactionContext,
-        rent: Rent,
         sysvar_cache: &'a SysvarCache,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
@@ -198,8 +190,6 @@ impl<'a> InvokeContext<'a> {
     ) -> Self {
         Self {
             transaction_context,
-            rent,
-            pre_accounts: Vec::new(),
             sysvar_cache,
             log_collector,
             current_compute_budget: compute_budget,
@@ -242,42 +232,6 @@ impl<'a> InvokeContext<'a> {
             == 0
         {
             self.current_compute_budget = self.compute_budget;
-
-            if !self
-                .feature_set
-                .is_active(&enable_early_verification_of_account_modifications::id())
-            {
-                self.pre_accounts = Vec::with_capacity(
-                    instruction_context.get_number_of_instruction_accounts() as usize,
-                );
-                for instruction_account_index in
-                    0..instruction_context.get_number_of_instruction_accounts()
-                {
-                    if instruction_context
-                        .is_instruction_account_duplicate(instruction_account_index)?
-                        .is_some()
-                    {
-                        continue; // Skip duplicate account
-                    }
-                    let index_in_transaction = instruction_context
-                        .get_index_of_instruction_account_in_transaction(
-                            instruction_account_index,
-                        )?;
-                    if index_in_transaction >= self.transaction_context.get_number_of_accounts() {
-                        return Err(InstructionError::MissingAccount);
-                    }
-                    let account = self
-                        .transaction_context
-                        .get_account_at_index(index_in_transaction)?
-                        .borrow()
-                        .clone();
-                    self.pre_accounts.push(PreAccount::new(
-                        self.transaction_context
-                            .get_key_of_account_at_index(index_in_transaction)?,
-                        account,
-                    ));
-                }
-            }
         } else {
             let contains = (0..self
                 .transaction_context
@@ -323,189 +277,6 @@ impl<'a> InvokeContext<'a> {
     pub fn get_stack_height(&self) -> usize {
         self.transaction_context
             .get_instruction_context_stack_height()
-    }
-
-    /// Verify the results of an instruction
-    ///
-    /// Note: `instruction_accounts` must be the same as passed to `InvokeContext::push()`,
-    /// so that they match the order of `pre_accounts`.
-    fn verify(
-        &mut self,
-        instruction_accounts: &[InstructionAccount],
-        program_indices: &[IndexOfAccount],
-    ) -> Result<(), InstructionError> {
-        let instruction_context = self
-            .transaction_context
-            .get_current_instruction_context()
-            .map_err(|_| InstructionError::CallDepth)?;
-        let program_id = instruction_context
-            .get_last_program_key(self.transaction_context)
-            .map_err(|_| InstructionError::CallDepth)?;
-
-        // Verify all executable accounts have zero outstanding refs
-        for account_index in program_indices.iter() {
-            self.transaction_context
-                .get_account_at_index(*account_index)?
-                .try_borrow_mut()
-                .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
-        }
-
-        // Verify the per-account instruction results
-        let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
-        let mut pre_account_index = 0;
-        for (instruction_account_index, instruction_account) in
-            instruction_accounts.iter().enumerate()
-        {
-            if instruction_account_index as IndexOfAccount != instruction_account.index_in_callee {
-                continue; // Skip duplicate account
-            }
-            {
-                // Verify account has no outstanding references
-                let _ = self
-                    .transaction_context
-                    .get_account_at_index(instruction_account.index_in_transaction)?
-                    .try_borrow_mut()
-                    .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
-            }
-            let pre_account = &self
-                .pre_accounts
-                .get(pre_account_index)
-                .ok_or(InstructionError::NotEnoughAccountKeys)?;
-            pre_account_index = pre_account_index.saturating_add(1);
-            let account = self
-                .transaction_context
-                .get_account_at_index(instruction_account.index_in_transaction)?
-                .borrow();
-            pre_account
-                .verify(
-                    program_id,
-                    instruction_account.is_writable,
-                    &self.rent,
-                    &account,
-                    &mut self.timings,
-                    true,
-                )
-                .map_err(|err| {
-                    ic_logger_msg!(
-                        self.log_collector,
-                        "failed to verify account {}: {}",
-                        pre_account.key(),
-                        err
-                    );
-                    err
-                })?;
-            pre_sum = pre_sum
-                .checked_add(u128::from(pre_account.lamports()))
-                .ok_or(InstructionError::UnbalancedInstruction)?;
-            post_sum = post_sum
-                .checked_add(u128::from(account.lamports()))
-                .ok_or(InstructionError::UnbalancedInstruction)?;
-
-            let pre_data_len = pre_account.data().len() as i64;
-            let post_data_len = account.data().len() as i64;
-            let data_len_delta = post_data_len.saturating_sub(pre_data_len);
-            self.accounts_data_meter
-                .adjust_delta_unchecked(data_len_delta);
-        }
-
-        // Verify that the total sum of all the lamports did not change
-        if pre_sum != post_sum {
-            return Err(InstructionError::UnbalancedInstruction);
-        }
-        Ok(())
-    }
-
-    /// Verify and update PreAccount state based on program execution
-    ///
-    /// Note: `instruction_accounts` must be the same as passed to `InvokeContext::push()`,
-    /// so that they match the order of `pre_accounts`.
-    fn verify_and_update(
-        &mut self,
-        instruction_accounts: &[InstructionAccount],
-        before_instruction_context_push: bool,
-    ) -> Result<(), InstructionError> {
-        let transaction_context = &self.transaction_context;
-        let instruction_context = transaction_context.get_current_instruction_context()?;
-        let program_id = instruction_context
-            .get_last_program_key(transaction_context)
-            .map_err(|_| InstructionError::CallDepth)?;
-
-        // Verify the per-account instruction results
-        let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
-        for (instruction_account_index, instruction_account) in
-            instruction_accounts.iter().enumerate()
-        {
-            if instruction_account_index as IndexOfAccount != instruction_account.index_in_callee {
-                continue; // Skip duplicate account
-            }
-            if instruction_account.index_in_transaction
-                < transaction_context.get_number_of_accounts()
-            {
-                let key = transaction_context
-                    .get_key_of_account_at_index(instruction_account.index_in_transaction)?;
-                let account = transaction_context
-                    .get_account_at_index(instruction_account.index_in_transaction)?;
-                let is_writable = if before_instruction_context_push {
-                    instruction_context
-                        .is_instruction_account_writable(instruction_account.index_in_caller)?
-                } else {
-                    instruction_account.is_writable
-                };
-                // Find the matching PreAccount
-                for pre_account in self.pre_accounts.iter_mut() {
-                    if key == pre_account.key() {
-                        {
-                            // Verify account has no outstanding references
-                            let _ = account
-                                .try_borrow_mut()
-                                .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
-                        }
-                        let account = account.borrow();
-                        pre_account
-                            .verify(
-                                program_id,
-                                is_writable,
-                                &self.rent,
-                                &account,
-                                &mut self.timings,
-                                false,
-                            )
-                            .map_err(|err| {
-                                ic_logger_msg!(
-                                    self.log_collector,
-                                    "failed to verify account {}: {}",
-                                    key,
-                                    err
-                                );
-                                err
-                            })?;
-                        pre_sum = pre_sum
-                            .checked_add(u128::from(pre_account.lamports()))
-                            .ok_or(InstructionError::UnbalancedInstruction)?;
-                        post_sum = post_sum
-                            .checked_add(u128::from(account.lamports()))
-                            .ok_or(InstructionError::UnbalancedInstruction)?;
-                        if is_writable && !pre_account.executable() {
-                            pre_account.update(account.clone());
-                        }
-
-                        let pre_data_len = pre_account.data().len() as i64;
-                        let post_data_len = account.data().len() as i64;
-                        let data_len_delta = post_data_len.saturating_sub(pre_data_len);
-                        self.accounts_data_meter
-                            .adjust_delta_unchecked(data_len_delta);
-
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Verify that the total sum of all the lamports did not change
-        if pre_sum != post_sum {
-            return Err(InstructionError::UnbalancedInstruction);
-        }
-        Ok(())
     }
 
     /// Entrypoint for a cross-program invocation from a builtin program
@@ -660,60 +431,11 @@ impl<'a> InvokeContext<'a> {
         timings: &mut ExecuteTimings,
     ) -> Result<(), InstructionError> {
         *compute_units_consumed = 0;
-
-        let nesting_level = self
-            .transaction_context
-            .get_instruction_context_stack_height();
-        let is_top_level_instruction = nesting_level == 0;
-        if !is_top_level_instruction
-            && !self
-                .feature_set
-                .is_active(&enable_early_verification_of_account_modifications::id())
-        {
-            // Verify the calling program hasn't misbehaved
-            let mut verify_caller_time = Measure::start("verify_caller_time");
-            let verify_caller_result = self.verify_and_update(instruction_accounts, true);
-            verify_caller_time.stop();
-            saturating_add_assign!(
-                timings
-                    .execute_accessories
-                    .process_instructions
-                    .verify_caller_us,
-                verify_caller_time.as_us()
-            );
-            verify_caller_result?;
-        }
-
         self.transaction_context
             .get_next_instruction_context()?
             .configure(program_indices, instruction_accounts, instruction_data);
         self.push()?;
         self.process_executable_chain(compute_units_consumed, timings)
-            .and_then(|_| {
-                if self
-                    .feature_set
-                    .is_active(&enable_early_verification_of_account_modifications::id())
-                {
-                    Ok(())
-                } else {
-                    // Verify the called program has not misbehaved
-                    let mut verify_callee_time = Measure::start("verify_callee_time");
-                    let result = if is_top_level_instruction {
-                        self.verify(instruction_accounts, program_indices)
-                    } else {
-                        self.verify_and_update(instruction_accounts, false)
-                    };
-                    verify_callee_time.stop();
-                    saturating_add_assign!(
-                        timings
-                            .execute_accessories
-                            .process_instructions
-                            .verify_callee_us,
-                        verify_callee_time.as_us()
-                    );
-                    result
-                }
-            })
             // MUST pop if and only if `push` succeeded, independent of `result`.
             // Thus, the `.and()` instead of an `.and_then()`.
             .and(self.pop())
@@ -929,7 +651,7 @@ macro_rules! with_mock_invoke_context {
         let compute_budget = ComputeBudget::default();
         let mut $transaction_context = TransactionContext::new(
             $transaction_accounts,
-            Some(Rent::default()),
+            Rent::default(),
             compute_budget.max_invoke_stack_height,
             compute_budget.max_instruction_trace_length,
         );
@@ -957,7 +679,6 @@ macro_rules! with_mock_invoke_context {
         let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::default();
         let mut $invoke_context = InvokeContext::new(
             &mut $transaction_context,
-            Rent::default(),
             &sysvar_cache,
             Some(LogCollector::new_ref()),
             compute_budget,
@@ -1038,7 +759,7 @@ mod tests {
         super::*,
         crate::compute_budget,
         serde::{Deserialize, Serialize},
-        solana_sdk::{account::WritableAccount, instruction::Instruction},
+        solana_sdk::{account::WritableAccount, instruction::Instruction, rent::Rent},
     };
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -1223,7 +944,7 @@ mod tests {
     fn test_max_instruction_trace_length() {
         const MAX_INSTRUCTIONS: usize = 8;
         let mut transaction_context =
-            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, MAX_INSTRUCTIONS);
+            TransactionContext::new(Vec::new(), Rent::default(), 1, MAX_INSTRUCTIONS);
         for _ in 0..MAX_INSTRUCTIONS {
             transaction_context.push().unwrap();
             transaction_context.pop().unwrap();
