@@ -57,6 +57,15 @@ impl<T: Default> Default for RecyclerX<T> {
     }
 }
 
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl solana_frozen_abi::abi_example::AbiExample
+    for RecyclerX<crate::cuda_runtime::PinnedVec<solana_sdk::packet::Packet>>
+{
+    fn example() -> Self {
+        Self::default()
+    }
+}
+
 pub trait Reset {
     fn reset(&mut self);
     fn warm(&mut self, size_hint: usize);

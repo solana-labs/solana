@@ -17,7 +17,7 @@ pub struct AbiDigester {
     data_types: std::rc::Rc<std::cell::RefCell<Vec<String>>>,
     depth: usize,
     for_enum: bool,
-    opaque_scope: Option<String>,
+    opaque_type_matcher: Option<String>,
 }
 
 pub type DigestResult = Result<AbiDigester, DigestError>;
@@ -70,7 +70,7 @@ impl AbiDigester {
             data_types: std::rc::Rc::new(std::cell::RefCell::new(vec![])),
             for_enum: false,
             depth: 0,
-            opaque_scope: None,
+            opaque_type_matcher: None,
         }
     }
 
@@ -81,16 +81,16 @@ impl AbiDigester {
             data_types: self.data_types.clone(),
             depth: self.depth,
             for_enum: false,
-            opaque_scope: self.opaque_scope.clone(),
+            opaque_type_matcher: self.opaque_type_matcher.clone(),
         }
     }
 
-    pub fn create_new_opaque(&self, top_scope: &str) -> Self {
+    pub fn create_new_opaque(&self, type_matcher: &str) -> Self {
         Self {
             data_types: self.data_types.clone(),
             depth: self.depth,
             for_enum: false,
-            opaque_scope: Some(top_scope.to_owned()),
+            opaque_type_matcher: Some(type_matcher.to_owned()),
         }
     }
 
@@ -103,7 +103,7 @@ impl AbiDigester {
             data_types: self.data_types.clone(),
             depth,
             for_enum: false,
-            opaque_scope: self.opaque_scope.clone(),
+            opaque_type_matcher: self.opaque_type_matcher.clone(),
         })
     }
 
@@ -116,15 +116,15 @@ impl AbiDigester {
             data_types: self.data_types.clone(),
             depth,
             for_enum: true,
-            opaque_scope: self.opaque_scope.clone(),
+            opaque_type_matcher: self.opaque_type_matcher.clone(),
         })
     }
 
     pub fn digest_data<T: ?Sized + Serialize>(&mut self, value: &T) -> DigestResult {
         let type_name = normalize_type_name(type_name::<T>());
         if type_name.ends_with("__SerializeWith")
-            || (self.opaque_scope.is_some()
-                && type_name.starts_with(self.opaque_scope.as_ref().unwrap()))
+            || (self.opaque_type_matcher.is_some()
+                && type_name.contains(self.opaque_type_matcher.as_ref().unwrap()))
         {
             // we can't use the AbiEnumVisitor trait for these cases.
             value.serialize(self.create_new())
@@ -661,6 +661,34 @@ mod tests {
     #[frozen_abi(digest = "9PMdHRb49BpkywrmPoJyZWMsEmf5E1xgmsFGkGmea5RW")]
     type TestBitVec = bv::BitVec<u64>;
 
+    mod bitflags_abi {
+        use crate::abi_example::{AbiExample, EvenAsOpaque, IgnoreAsHelper};
+
+        bitflags::bitflags! {
+            #[frozen_abi(digest = "HhKNkaeAd7AohTb8S8sPKjAWwzxWY2DPz5FvkWmx5bSH")]
+            #[derive(Serialize, Deserialize)]
+            struct TestFlags: u8 {
+                const TestBit = 0b0000_0001;
+            }
+        }
+
+        impl AbiExample for TestFlags {
+            fn example() -> Self {
+                Self::empty()
+            }
+        }
+
+        impl IgnoreAsHelper for TestFlags {}
+        // This (EvenAsOpaque) marker trait is needed for bitflags-generated types because we can't
+        // impl AbiExample for its private type:
+        // thread '...TestFlags_frozen_abi...' panicked at ...:
+        //   derive or implement AbiExample/AbiEnumVisitor for
+        //   solana_frozen_abi::abi_digester::tests::_::InternalBitFlags
+        impl EvenAsOpaque for TestFlags {
+            const TYPE_NAME_MATCHER: &'static str = "::_::InternalBitFlags";
+        }
+    }
+
     mod skip_should_be_same {
         #[frozen_abi(digest = "4LbuvQLX78XPbm4hqqZcHFHpseDJcw4qZL9EUZXSi2Ss")]
         #[derive(Serialize, AbiExample)]
@@ -691,4 +719,12 @@ mod tests {
             Variant2(u8, u16, #[serde(skip)] u32),
         }
     }
+
+    #[frozen_abi(digest = "B1PcwZdUfGnxaRid9e6ZwkST3NZ2KUEYobA1DkxWrYLP")]
+    #[derive(Serialize, AbiExample)]
+    struct TestArcWeak(std::sync::Weak<u64>);
+
+    #[frozen_abi(digest = "4R8uCLR1BVU1aFgkSaNyKcFD1FeM6rGdsjbJBFpnqx4v")]
+    #[derive(Serialize, AbiExample)]
+    struct TestRcWeak(std::rc::Weak<u64>);
 }
