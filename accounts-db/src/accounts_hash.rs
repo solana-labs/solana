@@ -97,6 +97,7 @@ impl AccountHashesFile {
             // Theoretical performance optimization: write a zero to the end of
             // the file so that we won't have to resize it later, which may be
             // expensive.
+            assert!(self.capacity > 0);
             data.seek(SeekFrom::Start((self.capacity - 1) as u64))
                 .unwrap();
             data.write_all(&[0]).unwrap();
