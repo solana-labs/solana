@@ -4,7 +4,7 @@ use {
         snapshot_hash::{
             FullSnapshotHash, IncrementalSnapshotHash, SnapshotHash, StartingSnapshotHashes,
         },
-        snapshot_package::{retain_max_n_elements, SnapshotKind},
+        snapshot_package::SnapshotKind,
     },
     solana_sdk::{clock::Slot, hash::Hash},
     std::sync::Arc,
@@ -14,8 +14,6 @@ use {
 pub struct SnapshotGossipManager {
     cluster_info: Arc<ClusterInfo>,
     latest_snapshot_hashes: Option<LatestSnapshotHashes>,
-    max_legacy_full_snapshot_hashes: usize,
-    legacy_full_snapshot_hashes: Vec<FullSnapshotHash>,
 }
 
 impl SnapshotGossipManager {
@@ -24,14 +22,11 @@ impl SnapshotGossipManager {
     #[must_use]
     pub fn new(
         cluster_info: Arc<ClusterInfo>,
-        max_legacy_full_snapshot_hashes: usize,
         starting_snapshot_hashes: Option<StartingSnapshotHashes>,
     ) -> Self {
         let mut this = SnapshotGossipManager {
             cluster_info,
             latest_snapshot_hashes: None,
-            max_legacy_full_snapshot_hashes,
-            legacy_full_snapshot_hashes: Vec::default(),
         };
         if let Some(starting_snapshot_hashes) = starting_snapshot_hashes {
             this.push_starting_snapshot_hashes(starting_snapshot_hashes);
@@ -49,10 +44,6 @@ impl SnapshotGossipManager {
             );
         }
         self.push_latest_snapshot_hashes_to_cluster();
-
-        // Handle legacy snapshot hashes here too
-        // Once LegacySnapshotHashes are removed from CRDS, also remove them here
-        self.push_legacy_full_snapshot_hash(starting_snapshot_hashes.full);
     }
 
     /// Push new snapshot hash to the cluster via CRDS
@@ -78,10 +69,6 @@ impl SnapshotGossipManager {
     fn push_full_snapshot_hash(&mut self, full_snapshot_hash: FullSnapshotHash) {
         self.update_latest_full_snapshot_hash(full_snapshot_hash);
         self.push_latest_snapshot_hashes_to_cluster();
-
-        // Handle legacy snapshot hashes here too
-        // Once LegacySnapshotHashes are removed from CRDS, also remove them here
-        self.push_legacy_full_snapshot_hash(full_snapshot_hash);
     }
 
     /// Push new incremental snapshot hash to the cluster via CRDS
@@ -146,22 +133,6 @@ impl SnapshotGossipManager {
                  and a new error case has been added that has not been handled here.",
             );
     }
-
-    /// Add `full_snapshot_hash` to the vector of full snapshot hashes, then push that vector to
-    /// the cluster via CRDS.
-    fn push_legacy_full_snapshot_hash(&mut self, full_snapshot_hash: FullSnapshotHash) {
-        self.legacy_full_snapshot_hashes.push(full_snapshot_hash);
-
-        retain_max_n_elements(
-            &mut self.legacy_full_snapshot_hashes,
-            self.max_legacy_full_snapshot_hashes,
-        );
-
-        self.cluster_info
-            .push_legacy_snapshot_hashes(clone_hashes_for_crds(
-                self.legacy_full_snapshot_hashes.as_slice(),
-            ));
-    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -190,9 +161,4 @@ impl AsSnapshotHash for IncrementalSnapshotHash {
     fn as_snapshot_hash(&self) -> &(Slot, SnapshotHash) {
         &self.0
     }
-}
-
-/// Clones and maps snapshot hashes into what CRDS expects
-fn clone_hashes_for_crds(hashes: &[impl AsSnapshotHash]) -> Vec<(Slot, Hash)> {
-    hashes.iter().map(AsSnapshotHash::clone_for_crds).collect()
 }

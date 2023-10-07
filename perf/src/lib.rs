@@ -1,3 +1,4 @@
+#![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
 pub mod cuda_runtime;
 pub mod data_budget;
 pub mod deduper;
@@ -22,6 +23,9 @@ extern crate assert_matches;
 
 #[macro_use]
 extern crate solana_metrics;
+
+#[macro_use]
+extern crate solana_frozen_abi_macro;
 
 fn is_rosetta_emulated() -> bool {
     #[cfg(target_os = "macos")]
