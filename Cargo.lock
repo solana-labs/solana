@@ -5931,8 +5931,12 @@ dependencies = [
 name = "solana-frozen-abi"
 version = "1.17.2"
 dependencies = [
+<<<<<<< HEAD
  "ahash 0.8.3",
  "blake3",
+=======
+ "bitflags 2.3.3",
+>>>>>>> 95810d876a (Enable frozen_abi on banking trace file (#33501))
  "block-buffer 0.10.4",
  "bs58",
  "bv",
@@ -6439,7 +6443,10 @@ dependencies = [
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rayon",
+ "rustc_version 0.4.0",
  "serde",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
  "solana-logger",
  "solana-metrics",
  "solana-rayon-threadlimit",
