@@ -668,7 +668,7 @@ mod tests {
             #[frozen_abi(digest = "HhKNkaeAd7AohTb8S8sPKjAWwzxWY2DPz5FvkWmx5bSH")]
             #[derive(Serialize, Deserialize)]
             struct TestFlags: u8 {
-                const TestBit = 0b0000_0001;
+                const TEST_BIT = 0b0000_0001;
             }
         }
 
