@@ -162,10 +162,7 @@ fn wait_for_restart_window(
         seen_incremential_snapshot |= snapshot_slot_info_has_incremential;
 
         let epoch_info = rpc_client.get_epoch_info_with_commitment(CommitmentConfig::processed())?;
-        let healthy = match skip_health_check {
-            false => Some(rpc_client.get_health().ok().is_some()),
-            true => None,
-        };
+        let healthy = skip_health_check || rpc_client.get_health().ok().is_some();
         let delinquent_stake_percentage = {
             let vote_accounts = rpc_client.get_vote_accounts()?;
             let current_stake: u64 = vote_accounts
@@ -237,7 +234,7 @@ fn wait_for_restart_window(
         }
 
         let status = {
-            if let Some(false) = healthy {
+            if !healthy {
                 style("Node is unhealthy").red().to_string()
             } else {
                 // Wait until a hole in the leader schedule before restarting the node
