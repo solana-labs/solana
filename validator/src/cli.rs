@@ -1453,6 +1453,11 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                         .long("skip-new-snapshot-check")
                         .help("Skip check for a new snapshot")
                 )
+                .arg(
+                    Arg::with_name("skip_health_check")
+                        .long("skip-health-check")
+                        .help("Skip health check")
+                )
         )
         .subcommand(
             SubCommand::with_name("authorized-voter")
@@ -1667,6 +1672,11 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                     Arg::with_name("skip_new_snapshot_check")
                         .long("skip-new-snapshot-check")
                         .help("Skip check for a new snapshot")
+                )
+                .arg(
+                    Arg::with_name("skip_health_check")
+                        .long("skip-health-check")
+                        .help("Skip health check")
                 )
                 .after_help("Note: If this command exits with a non-zero status \
                          then this not a good time for a restart")
