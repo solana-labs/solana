@@ -338,7 +338,7 @@ impl AccountsCache {
 
 #[cfg(test)]
 pub mod tests {
-    use {super::*, crate::accounts_db::INCLUDE_SLOT_IN_HASH_TESTS, solana_sdk::hash::Hash};
+    use {super::*, crate::accounts_db::INCLUDE_SLOT_IN_HASH_TESTS};
 
     #[test]
     fn test_remove_slots_le() {
