@@ -48,6 +48,45 @@ impl PrioGraphScheduler {
     ) -> Result<usize, SchedulerError> {
         todo!()
     }
+
+    /// Send all batches of transactions to the worker threads.
+    /// Returns the number of transactions sent.
+    fn send_batches(&mut self, batches: &mut Batches) -> Result<usize, SchedulerError> {
+        (0..self.consume_work_senders.len())
+            .map(|thread_index| self.send_batch(batches, thread_index))
+            .sum()
+    }
+
+    /// Send a batch of transactions to the given thread's `ConsumeWork` channel.
+    /// Returns the number of transactions sent.
+    fn send_batch(
+        &mut self,
+        batches: &mut Batches,
+        thread_index: usize,
+    ) -> Result<usize, SchedulerError> {
+        if batches.ids[thread_index].is_empty() {
+            return Ok(0);
+        }
+
+        let (ids, transactions, max_age_slots, total_cus) = batches.take_batch(thread_index);
+
+        let batch_id = self
+            .in_flight_tracker
+            .track_batch(ids.len(), total_cus, thread_index);
+
+        let num_scheduled = ids.len();
+        let work = ConsumeWork {
+            batch_id,
+            ids,
+            transactions,
+            max_age_slots,
+        };
+        self.consume_work_senders[thread_index]
+            .send(work)
+            .map_err(|_| SchedulerError::DisconnectedSendChannel("consume work sender"))?;
+
+        Ok(num_scheduled)
+    }
 }
 
 struct Batches {
