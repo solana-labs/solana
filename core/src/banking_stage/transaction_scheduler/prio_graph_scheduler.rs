@@ -2,7 +2,7 @@ use {
     super::{
         in_flight_tracker::InFlightTracker,
         scheduler_error::SchedulerError,
-        thread_aware_account_locks::{ThreadAwareAccountLocks, ThreadId},
+        thread_aware_account_locks::{ThreadAwareAccountLocks, ThreadId, ThreadSet},
         transaction_state_container::TransactionStateContainer,
     },
     crate::banking_stage::{
@@ -59,6 +59,37 @@ impl PrioGraphScheduler {
                 account_locks.readonly.into_iter(),
                 thread_id,
             );
+        }
+    }
+
+    /// Given the schedulable `thread_set`, select the thread with the least amount
+    /// of work queued up.
+    /// Currently, "work" is just defined as the number of transactions.
+    ///
+    /// If the `chain_thread` is available, this thread will be selected, regardless of
+    /// load-balancing.
+    ///
+    /// Panics if the `thread_set` is empty.
+    fn select_thread(
+        thread_set: ThreadSet,
+        chain_thread: ThreadId,
+        batches_per_thread: &[Vec<SanitizedTransaction>],
+        in_flight_per_thread: &[usize],
+    ) -> ThreadId {
+        if thread_set.contains(chain_thread) {
+            chain_thread
+        } else {
+            thread_set
+                .contained_threads_iter()
+                .map(|thread_id| {
+                    (
+                        thread_id,
+                        batches_per_thread[thread_id].len() + in_flight_per_thread[thread_id],
+                    )
+                })
+                .min_by(|a, b| a.1.cmp(&b.1))
+                .map(|(thread_id, _)| thread_id)
+                .unwrap()
         }
     }
 
