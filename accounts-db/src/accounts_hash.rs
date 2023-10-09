@@ -740,14 +740,9 @@ impl<'a> AccountsHasher<'a> {
         )
     }
 
-    pub fn accumulate_account_hashes(mut hashes: Vec<(Pubkey, Hash)>) -> Hash {
-        Self::sort_hashes_by_pubkey(&mut hashes);
-
-        Self::compute_merkle_root_loop(hashes, MERKLE_FANOUT, |i| &i.1)
-    }
-
-    pub fn sort_hashes_by_pubkey(hashes: &mut Vec<(Pubkey, Hash)>) {
+    pub fn accumulate_account_hashes(mut hashes: Vec<(Pubkey, AccountHash)>) -> Hash {
         hashes.par_sort_unstable_by(|a, b| a.0.cmp(&b.0));
+        Self::compute_merkle_root_loop(hashes, MERKLE_FANOUT, |i| &i.1 .0)
     }
 
     pub fn compare_two_hash_entries(
@@ -2335,14 +2330,18 @@ mod tests {
                     .collect();
 
                 let result = if pass == 0 {
-                    test_hashing_larger(input.clone(), fanout)
+                    test_hashing_larger(input, fanout)
                 } else {
                     // this sorts inside
                     let early_result = AccountsHasher::accumulate_account_hashes(
-                        input.iter().map(|i| (i.0, i.1)).collect::<Vec<_>>(),
+                        input
+                            .iter()
+                            .map(|i| (i.0, AccountHash(i.1)))
+                            .collect::<Vec<_>>(),
                     );
-                    AccountsHasher::sort_hashes_by_pubkey(&mut input);
-                    let result = AccountsHasher::compute_merkle_root(input.clone(), fanout);
+
+                    input.par_sort_unstable_by(|a, b| a.0.cmp(&b.0));
+                    let result = AccountsHasher::compute_merkle_root(input, fanout);
                     assert_eq!(early_result, result);
                     result
                 };

@@ -2385,7 +2385,7 @@ impl<'a> AppendVecScan for ScanState<'a> {
         let balance = loaded_account.lamports();
         let mut loaded_hash = loaded_account.loaded_hash();
 
-        let hash_is_missing = loaded_hash == Hash::default();
+        let hash_is_missing = loaded_hash == AccountHash(Hash::default());
         if (self.config.check_hash || hash_is_missing)
             && !AccountsDb::is_filler_account_helper(pubkey, self.filler_account_suffix)
         {
@@ -2399,13 +2399,13 @@ impl<'a> AppendVecScan for ScanState<'a> {
             } else if self.config.check_hash && computed_hash != loaded_hash {
                 info!(
                     "hash mismatch found: computed: {}, loaded: {}, pubkey: {}",
-                    computed_hash, loaded_hash, pubkey
+                    computed_hash.0, loaded_hash.0, pubkey
                 );
                 self.mismatch_found.fetch_add(1, Ordering::Relaxed);
             }
         }
         let source_item = CalculateHashIntermediate {
-            hash: loaded_hash,
+            hash: loaded_hash.0,
             lamports: balance,
             pubkey: *pubkey,
         };
@@ -6553,7 +6553,7 @@ impl AccountsDb {
             }
         }
 
-        let (accounts, hashes): (Vec<(&Pubkey, &AccountSharedData)>, Vec<Hash>) = iter_items
+        let (accounts, hashes): (Vec<(&Pubkey, &AccountSharedData)>, Vec<AccountHash>) = iter_items
             .iter()
             .filter_map(|iter_item| {
                 let key = iter_item.key();
@@ -7018,7 +7018,7 @@ impl AccountsDb {
                                         |loaded_account| {
                                             let mut loaded_hash = loaded_account.loaded_hash();
                                             let balance = loaded_account.lamports();
-                                            let hash_is_missing = loaded_hash == Hash::default();
+                                            let hash_is_missing = loaded_hash == AccountHash(Hash::default());
                                             if (config.check_hash || hash_is_missing) && !self.is_filler_account(pubkey) {
                                                 let computed_hash =
                                                     loaded_account.compute_hash(*slot, pubkey, config.include_slot_in_hash);
@@ -7026,7 +7026,7 @@ impl AccountsDb {
                                                     loaded_hash = computed_hash;
                                                 }
                                                 else if config.check_hash && computed_hash != loaded_hash {
-                                                    info!("hash mismatch found: computed: {}, loaded: {}, pubkey: {}", computed_hash, loaded_hash, pubkey);
+                                                    info!("hash mismatch found: computed: {}, loaded: {}, pubkey: {}", computed_hash.0, loaded_hash.0, pubkey);
                                                     mismatch_found
                                                         .fetch_add(1, Ordering::Relaxed);
                                                     return None;
@@ -7034,7 +7034,7 @@ impl AccountsDb {
                                             }
 
                                             sum += balance as u128;
-                                            Some(loaded_hash)
+                                            Some(loaded_hash.0)
                                         },
                                     )
                                 } else {
@@ -7885,17 +7885,20 @@ impl AccountsDb {
     /// 1. pubkey, hash pairs for the slot
     /// 2. us spent scanning
     /// 3. Measure started when we began accumulating
-    pub fn get_pubkey_hash_for_slot(&self, slot: Slot) -> (Vec<(Pubkey, Hash)>, u64, Measure) {
+    pub fn get_pubkey_hash_for_slot(
+        &self,
+        slot: Slot,
+    ) -> (Vec<(Pubkey, AccountHash)>, u64, Measure) {
         let mut scan = Measure::start("scan");
 
-        let scan_result: ScanStorageResult<(Pubkey, Hash), DashMap<Pubkey, Hash>> = self
-            .scan_account_storage(
+        let scan_result: ScanStorageResult<(Pubkey, AccountHash), DashMap<Pubkey, AccountHash>> =
+            self.scan_account_storage(
                 slot,
                 |loaded_account: LoadedAccount| {
                     // Cache only has one version per key, don't need to worry about versioning
                     Some((*loaded_account.pubkey(), loaded_account.loaded_hash()))
                 },
-                |accum: &DashMap<Pubkey, Hash>, loaded_account: LoadedAccount| {
+                |accum: &DashMap<Pubkey, AccountHash>, loaded_account: LoadedAccount| {
                     let loaded_hash = loaded_account.loaded_hash();
                     accum.insert(*loaded_account.pubkey(), loaded_hash);
                 },
@@ -7913,7 +7916,7 @@ impl AccountsDb {
     /// Return all of the accounts for a given slot
     pub fn get_pubkey_hash_account_for_slot(&self, slot: Slot) -> Vec<PubkeyHashAccount> {
         type ScanResult =
-            ScanStorageResult<PubkeyHashAccount, DashMap<Pubkey, (Hash, AccountSharedData)>>;
+            ScanStorageResult<PubkeyHashAccount, DashMap<Pubkey, (AccountHash, AccountSharedData)>>;
         let scan_result: ScanResult = self.scan_account_storage(
             slot,
             |loaded_account: LoadedAccount| {
@@ -7924,7 +7927,8 @@ impl AccountsDb {
                     account: loaded_account.take_account(),
                 })
             },
-            |accum: &DashMap<Pubkey, (Hash, AccountSharedData)>, loaded_account: LoadedAccount| {
+            |accum: &DashMap<Pubkey, (AccountHash, AccountSharedData)>,
+             loaded_account: LoadedAccount| {
                 // Storage may have duplicates so only keep the latest version for each key
                 accum.insert(
                     *loaded_account.pubkey(),
@@ -10451,10 +10455,10 @@ pub mod tests {
         ];
 
         let expected_hashes = [
-            Hash::from_str("5K3NW73xFHwgTWVe4LyCg4QfQda8f88uZj2ypDx2kmmH").unwrap(),
-            Hash::from_str("84ozw83MZ8oeSF4hRAg7SeW1Tqs9LMXagX1BrDRjtZEx").unwrap(),
-            Hash::from_str("5XqtnEJ41CG2JWNp7MAg9nxkRUAnyjLxfsKsdrLxQUbC").unwrap(),
-            Hash::from_str("DpvwJcznzwULYh19Zu5CuAA4AT6WTBe4H6n15prATmqj").unwrap(),
+            AccountHash(Hash::from_str("5K3NW73xFHwgTWVe4LyCg4QfQda8f88uZj2ypDx2kmmH").unwrap()),
+            AccountHash(Hash::from_str("84ozw83MZ8oeSF4hRAg7SeW1Tqs9LMXagX1BrDRjtZEx").unwrap()),
+            AccountHash(Hash::from_str("5XqtnEJ41CG2JWNp7MAg9nxkRUAnyjLxfsKsdrLxQUbC").unwrap()),
+            AccountHash(Hash::from_str("DpvwJcznzwULYh19Zu5CuAA4AT6WTBe4H6n15prATmqj").unwrap()),
         ];
 
         let mut raw_accounts = Vec::default();
@@ -10474,7 +10478,7 @@ pub mod tests {
             if slot == 1 && matches!(include_slot_in_hash, IncludeSlotInHash::IncludeSlot) {
                 assert_eq!(hash, expected_hashes[i]);
             }
-            raw_expected[i].hash = hash;
+            raw_expected[i].hash = hash.0;
         }
 
         let to_store = raw_accounts
@@ -12665,7 +12669,7 @@ pub mod tests {
         let account = stored_account.to_account_shared_data();
 
         let expected_account_hash =
-            Hash::from_str("6VeAL4x4PVkECKL1hD1avwPE1uMCRoWiZJzVMvVNYhTq").unwrap();
+            AccountHash(Hash::from_str("6VeAL4x4PVkECKL1hD1avwPE1uMCRoWiZJzVMvVNYhTq").unwrap());
 
         assert_eq!(
             AccountsDb::hash_account(
@@ -18130,7 +18134,7 @@ pub mod tests {
         // Ensure the zero-lamport accounts are NOT included in the full accounts hash.
         let full_account_hashes = [(2, 0), (3, 0), (4, 1)].into_iter().map(|(index, slot)| {
             let (pubkey, account) = &accounts[index];
-            AccountsDb::hash_account(slot, account, pubkey, INCLUDE_SLOT_IN_HASH_TESTS)
+            AccountsDb::hash_account(slot, account, pubkey, INCLUDE_SLOT_IN_HASH_TESTS).0
         });
         let expected_accounts_hash = AccountsHash(compute_merkle_root(full_account_hashes));
         assert_eq!(full_accounts_hash.0, expected_accounts_hash);
@@ -18212,6 +18216,7 @@ pub mod tests {
                         Hash::new_from_array(hash.into())
                     } else {
                         AccountsDb::hash_account(slot, account, pubkey, INCLUDE_SLOT_IN_HASH_TESTS)
+                            .0
                     }
                 });
         let expected_accounts_hash =
