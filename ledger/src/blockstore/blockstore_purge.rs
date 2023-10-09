@@ -1,8 +1,6 @@
 use {
-    super::*,
-    crate::blockstore_db::ColumnIndexDeprecation,
-    solana_sdk::message::AccountKeys,
-    std::{cmp, time::Instant},
+    super::*, crate::blockstore_db::ColumnIndexDeprecation, solana_sdk::message::AccountKeys,
+    std::time::Instant,
 };
 
 #[derive(Default)]
@@ -396,8 +394,6 @@ impl Blockstore {
 
         for slot in from_slot..=to_slot {
             let primary_indexes = slot_indexes(slot);
-            let delete_new_column_key =
-                primary_indexes.is_empty() || (slot == cmp::max(index0.max_slot, index1.max_slot));
 
             let slot_entries = self.get_any_valid_slot_entries(slot, 0);
             let transactions = slot_entries
@@ -405,10 +401,8 @@ impl Blockstore {
                 .flat_map(|entry| entry.transactions);
             for (i, transaction) in transactions.enumerate() {
                 if let Some(&signature) = transaction.signatures.get(0) {
-                    if delete_new_column_key {
-                        batch.delete::<cf::TransactionStatus>((signature, slot))?;
-                        batch.delete::<cf::TransactionMemos>((signature, slot))?;
-                    }
+                    batch.delete::<cf::TransactionStatus>((signature, slot))?;
+                    batch.delete::<cf::TransactionMemos>((signature, slot))?;
                     if !primary_indexes.is_empty() {
                         batch.delete_raw::<cf::TransactionMemos>(
                             &cf::TransactionMemos::deprecated_key(signature),
@@ -434,14 +428,12 @@ impl Blockstore {
                     let transaction_index =
                         u32::try_from(i).map_err(|_| BlockstoreError::TransactionIndexOverflow)?;
                     for pubkey in account_keys.iter() {
-                        if delete_new_column_key {
-                            batch.delete::<cf::AddressSignatures>((
-                                *pubkey,
-                                slot,
-                                transaction_index,
-                                signature,
-                            ))?;
-                        }
+                        batch.delete::<cf::AddressSignatures>((
+                            *pubkey,
+                            slot,
+                            transaction_index,
+                            signature,
+                        ))?;
                         for primary_index in &primary_indexes {
                             batch.delete_raw::<cf::AddressSignatures>(
                                 &cf::AddressSignatures::deprecated_key((
