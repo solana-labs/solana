@@ -1,6 +1,6 @@
 use {
     crate::{
-        cluster_info::MAX_LEGACY_SNAPSHOT_HASHES,
+        cluster_info::MAX_ACCOUNTS_HASHES,
         contact_info::ContactInfo,
         deprecated,
         duplicate_shred::{DuplicateShred, DuplicateShredIndex, MAX_DUPLICATE_SHREDS},
@@ -85,7 +85,7 @@ pub enum CrdsData {
     LegacyContactInfo(LegacyContactInfo),
     Vote(VoteIndex, Vote),
     LowestSlot(/*DEPRECATED:*/ u8, LowestSlot),
-    LegacySnapshotHashes(LegacySnapshotHashes),
+    LegacySnapshotHashes(LegacySnapshotHashes), // Deprecated
     AccountsHashes(AccountsHashes),
     EpochSlots(EpochSlotsIndex, EpochSlots),
     LegacyVersion(LegacyVersion),
@@ -195,7 +195,7 @@ impl AccountsHashes {
 
     /// New random AccountsHashes for tests and benchmarks.
     pub(crate) fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
-        let num_hashes = rng.gen_range(0..MAX_LEGACY_SNAPSHOT_HASHES) + 1;
+        let num_hashes = rng.gen_range(0..MAX_ACCOUNTS_HASHES) + 1;
         let hashes = std::iter::repeat_with(|| {
             let slot = 47825632 + rng.gen_range(0..512);
             let hash = Hash::new_unique();
@@ -211,7 +211,7 @@ impl AccountsHashes {
     }
 }
 
-pub type LegacySnapshotHashes = AccountsHashes;
+type LegacySnapshotHashes = AccountsHashes;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct SnapshotHashes {
