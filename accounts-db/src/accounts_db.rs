@@ -887,9 +887,9 @@ pub enum LoadedAccount<'a> {
 }
 
 impl<'a> LoadedAccount<'a> {
-    pub fn loaded_hash(&self) -> Hash {
+    pub fn loaded_hash(&self) -> AccountHash {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => *stored_account_meta.hash(),
+            LoadedAccount::Stored(stored_account_meta) => AccountHash(*stored_account_meta.hash()),
             LoadedAccount::Cached(cached_account) => cached_account.hash(),
         }
     }
@@ -906,7 +906,7 @@ impl<'a> LoadedAccount<'a> {
         slot: Slot,
         pubkey: &Pubkey,
         include_slot: IncludeSlotInHash,
-    ) -> Hash {
+    ) -> AccountHash {
         match self {
             LoadedAccount::Stored(stored_account_meta) => AccountsDb::hash_account(
                 slot,
