@@ -311,7 +311,7 @@ pub fn parse_program_v4_subcommand(
     Ok(response)
 }
 
-fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+pub fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let mut file = File::open(program_location)
         .map_err(|err| format!("Unable to open program file: {err}"))?;
     let mut program_data = Vec::new();
@@ -427,7 +427,7 @@ pub fn process_program_v4_subcommand(
 // * Redeploy a program using a buffer account
 //   - buffer_signer argument must contain the temporary buffer account information
 //     (program_address must contain program ID and must NOT be same as buffer_signer.pubkey())
-fn process_deploy_program(
+pub fn process_deploy_program(
     rpc_client: Arc<RpcClient>,
     config: &ProgramV4CommandConfig,
     program_data: &[u8],
