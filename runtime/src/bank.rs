@@ -136,8 +136,7 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{
-            self,
-            include_loaded_accounts_data_size_in_fee_calculation,
+            self, include_loaded_accounts_data_size_in_fee_calculation,
             remove_congestion_multiplier_from_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
