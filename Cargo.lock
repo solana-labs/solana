@@ -6028,7 +6028,7 @@ dependencies = [
 name = "solana-frozen-abi"
 version = "1.18.0"
 dependencies = [
- "bitflags 2.3.3",
+ "bitflags 2.4.0",
  "block-buffer 0.10.4",
  "bs58",
  "bv",
@@ -6607,7 +6607,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rayon",
- "rustc_version 0.4.0",
+ "rustc_version",
  "serde",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
