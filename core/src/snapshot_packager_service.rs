@@ -2,7 +2,7 @@ mod snapshot_gossip_manager;
 use {
     crossbeam_channel::{Receiver, Sender},
     snapshot_gossip_manager::SnapshotGossipManager,
-    solana_gossip::cluster_info::{ClusterInfo, MAX_LEGACY_SNAPSHOT_HASHES},
+    solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure_us,
     solana_perf::thread::renice_this_thread,
     solana_runtime::{
@@ -39,25 +39,13 @@ impl SnapshotPackagerService {
         snapshot_config: SnapshotConfig,
         enable_gossip_push: bool,
     ) -> Self {
-        let max_full_snapshot_hashes = std::cmp::min(
-            MAX_LEGACY_SNAPSHOT_HASHES,
-            snapshot_config
-                .maximum_full_snapshot_archives_to_retain
-                .get(),
-        );
-
         let t_snapshot_packager = Builder::new()
             .name("solSnapshotPkgr".to_string())
             .spawn(move || {
                 info!("SnapshotPackagerService has started");
                 renice_this_thread(snapshot_config.packager_thread_niceness_adj).unwrap();
-                let mut snapshot_gossip_manager = enable_gossip_push.then(|| {
-                    SnapshotGossipManager::new(
-                        cluster_info,
-                        max_full_snapshot_hashes,
-                        starting_snapshot_hashes,
-                    )
-                });
+                let mut snapshot_gossip_manager = enable_gossip_push
+                    .then(|| SnapshotGossipManager::new(cluster_info, starting_snapshot_hashes));
 
                 loop {
                     if exit.load(Ordering::Relaxed) {

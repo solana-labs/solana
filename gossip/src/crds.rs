@@ -759,7 +759,7 @@ fn should_report_message_signature(signature: &Signature) -> bool {
 mod tests {
     use {
         super::*,
-        crate::crds_value::{new_rand_timestamp, LegacySnapshotHashes, NodeInstance},
+        crate::crds_value::{new_rand_timestamp, AccountsHashes, NodeInstance},
         rand::{thread_rng, Rng, SeedableRng},
         rand_chacha::ChaChaRng,
         rayon::ThreadPoolBuilder,
@@ -1341,8 +1341,8 @@ mod tests {
         );
         assert_eq!(crds.get_shred_version(&pubkey), Some(8));
         // Add other crds values with the same pubkey.
-        let val = LegacySnapshotHashes::new_rand(&mut rng, Some(pubkey));
-        let val = CrdsData::LegacySnapshotHashes(val);
+        let val = AccountsHashes::new_rand(&mut rng, Some(pubkey));
+        let val = CrdsData::AccountsHashes(val);
         let val = CrdsValue::new_unsigned(val);
         assert_eq!(
             crds.insert(val, timestamp(), GossipRoute::LocalMessage),
@@ -1355,7 +1355,7 @@ mod tests {
         assert_eq!(crds.get::<&ContactInfo>(pubkey), None);
         assert_eq!(crds.get_shred_version(&pubkey), Some(8));
         // Remove the remaining entry with the same pubkey.
-        crds.remove(&CrdsValueLabel::LegacySnapshotHashes(pubkey), timestamp());
+        crds.remove(&CrdsValueLabel::AccountsHashes(pubkey), timestamp());
         assert_eq!(crds.get_records(&pubkey).count(), 0);
         assert_eq!(crds.get_shred_version(&pubkey), None);
     }
