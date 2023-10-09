@@ -133,6 +133,7 @@ impl AccountHashesFile {
                                 num_retries
                             );
                         }
+                        datapoint_info!("account_hash_file_allocation_retry", ("retry", 1, i64),);
                         thread::sleep(time::Duration::from_millis(num_retries * 100));
                     }
                 }
