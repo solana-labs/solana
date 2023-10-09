@@ -1095,7 +1095,7 @@ impl AccountStorageEntry {
         *count_and_status = (count, status);
     }
 
-    pub fn recycle(&self, slot: Slot, id: AppendVecId) {
+    pub(crate) fn recycle(&self, slot: Slot, id: AppendVecId, clear_beyond_this_size: u64) {
         let mut count_and_status = self.count_and_status.write().unwrap();
         self.accounts.reset();
         *count_and_status = (0, AccountStorageStatus::Available);
@@ -1103,6 +1103,8 @@ impl AccountStorageEntry {
         self.id.store(id, Ordering::Release);
         self.approx_store_count.store(0, Ordering::Relaxed);
         self.alive_bytes.store(0, Ordering::Release);
+        self.accounts
+            .clear_left_over_data_beyond_this_offset(clear_beyond_this_size as usize);
     }
 
     pub fn status(&self) -> AccountStorageStatus {
@@ -4243,7 +4245,7 @@ impl AccountsDb {
     /// return a store that can contain 'aligned_total' bytes
     pub fn get_store_for_shrink(&self, slot: Slot, aligned_total: u64) -> ShrinkInProgress<'_> {
         let shrunken_store = self
-            .try_recycle_store(slot, aligned_total, aligned_total + 1024)
+            .try_recycle_store(slot, aligned_total, aligned_total + 1024, aligned_total)
             .unwrap_or_else(|| {
                 let maybe_shrink_paths = self.shrink_paths.read().unwrap();
                 let (shrink_paths, from) = maybe_shrink_paths
@@ -5610,8 +5612,9 @@ impl AccountsDb {
         slot: Slot,
         min_size: u64,
         max_size: u64,
+        expected_size_use: u64,
     ) -> Option<Arc<AccountStorageEntry>> {
-        let store = self.try_recycle_store(slot, min_size, max_size)?;
+        let store = self.try_recycle_store(slot, min_size, max_size, expected_size_use)?;
         self.insert_store(slot, store.clone());
         Some(store)
     }
@@ -5621,6 +5624,7 @@ impl AccountsDb {
         slot: Slot,
         min_size: u64,
         max_size: u64,
+        expected_size_to_use: u64,
     ) -> Option<Arc<AccountStorageEntry>> {
         let mut max = 0;
         let mut min = std::u64::MAX;
@@ -5639,7 +5643,7 @@ impl AccountsDb {
                     let ret = recycle_stores.remove_entry(i);
                     drop(recycle_stores);
                     let old_id = ret.append_vec_id();
-                    ret.recycle(slot, self.next_id());
+                    ret.recycle(slot, self.next_id(), expected_size_to_use);
                     // This info shows the appendvec change history.  It helps debugging
                     // the appendvec data corrupution issues related to recycling.
                     debug!(
@@ -5693,7 +5697,9 @@ impl AccountsDb {
             .store_find_existing
             .fetch_add(find_existing.as_us(), Ordering::Relaxed);
 
-        let store = if let Some(store) = self.try_recycle_store(slot, size as u64, std::u64::MAX) {
+        let store = if let Some(store) =
+            self.try_recycle_store(slot, size as u64, std::u64::MAX, size as u64)
+        {
             store
         } else {
             self.create_store(slot, self.file_size, "store", &self.paths)
@@ -6275,8 +6281,14 @@ impl AccountsDb {
                 let data_len = (data_len + STORE_META_OVERHEAD) as u64;
                 if !self.has_space_available(slot, data_len) {
                     let special_store_size = std::cmp::max(data_len * 2, self.file_size);
+                    // this should never happen
                     if self
-                        .try_recycle_and_insert_store(slot, special_store_size, std::u64::MAX)
+                        .try_recycle_and_insert_store(
+                            slot,
+                            special_store_size,
+                            std::u64::MAX,
+                            special_store_size,
+                        )
                         .is_none()
                     {
                         self.create_and_insert_store(slot, special_store_size, "large create");

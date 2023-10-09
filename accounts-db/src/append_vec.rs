@@ -292,6 +292,19 @@ impl AppendVec {
         }
     }
 
+    /// When recycling a mmapped file, there may be garbage left over at the end of the file.
+    /// This clears out all data after `offset`.
+    pub(crate) fn clear_left_over_data_beyond_this_offset(&self, offset: usize) {
+        unsafe {
+            // this is ugly... clean it up
+            let r = &self.map[offset..];
+            let const_ptr = r as *const [u8];
+            let mut_ptr = const_ptr as *mut [u8];
+            let m2 = &mut *mut_ptr;
+            m2.iter_mut().for_each(|x| *x = 0);
+        }
+    }
+
     fn sanitize_len_and_size(current_len: usize, file_size: usize) -> Result<()> {
         if file_size == 0 {
             Err(AccountsFileError::AppendVecError(

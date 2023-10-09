@@ -58,6 +58,12 @@ impl AccountsFile {
         Ok((Self::AppendVec(av), num_accounts))
     }
 
+    pub(crate) fn clear_left_over_data_beyond_this_offset(&self, offset: usize) {
+        match self {
+            Self::AppendVec(av) => av.clear_left_over_data_beyond_this_offset(offset),
+        }
+    }
+
     pub fn flush(&self) -> Result<()> {
         match self {
             Self::AppendVec(av) => av.flush(),
