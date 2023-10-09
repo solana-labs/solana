@@ -63,11 +63,11 @@ impl From<ComputeBudgetLimits> for FeeBudgetLimits {
     }
 }
 
-// Processing compute_budget could be part of tx sanitizing, failed to process
-// these instructions will drop the transaction eventually without execution,
-// may as well fail it early.
-// If succeeded, the transaction's specific limits/requests (could be default)
-// are retrieved and returned,
+/// Processing compute_budget could be part of tx sanitizing, failed to process
+/// these instructions will drop the transaction eventually without execution,
+/// may as well fail it early.
+/// If succeeded, the transaction's specific limits/requests (could be default)
+/// are retrieved and returned,
 pub fn process_compute_budget_instructions<'a>(
     instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
     feature_set: &FeatureSet,
