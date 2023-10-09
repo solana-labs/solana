@@ -8,9 +8,9 @@ use {
     crate::banking_stage::{
         consumer::TARGET_NUM_TRANSACTIONS_PER_BATCH,
         read_write_account_set::ReadWriteAccountSet,
-        scheduler_messages::{ConsumeWork, FinishedConsumeWork, TransactionId},
+        scheduler_messages::{ConsumeWork, TransactionBatchId, TransactionId},
     },
-    crossbeam_channel::{Receiver, Sender},
+    crossbeam_channel::Sender,
     solana_sdk::{slot_history::Slot, transaction::SanitizedTransaction},
 };
 
@@ -18,20 +18,15 @@ pub(crate) struct PrioGraphScheduler {
     in_flight_tracker: InFlightTracker,
     account_locks: ThreadAwareAccountLocks,
     consume_work_senders: Vec<Sender<ConsumeWork>>,
-    consume_work_receiver: Receiver<FinishedConsumeWork>,
 }
 
 impl PrioGraphScheduler {
-    pub(crate) fn new(
-        consume_work_senders: Vec<Sender<ConsumeWork>>,
-        consume_work_receiver: Receiver<FinishedConsumeWork>,
-    ) -> Self {
+    pub(crate) fn new(consume_work_senders: Vec<Sender<ConsumeWork>>) -> Self {
         let num_threads = consume_work_senders.len();
         Self {
             in_flight_tracker: InFlightTracker::new(num_threads),
             account_locks: ThreadAwareAccountLocks::new(num_threads),
             consume_work_senders,
-            consume_work_receiver,
         }
     }
 
@@ -47,6 +42,24 @@ impl PrioGraphScheduler {
         _container: &mut TransactionStateContainer,
     ) -> Result<usize, SchedulerError> {
         todo!()
+    }
+
+    /// Mark a given `TransactionBatchId` as completed.
+    /// This will update the internal tracking, including account locks.
+    pub(crate) fn complete_batch(
+        &mut self,
+        batch_id: TransactionBatchId,
+        transactions: &[SanitizedTransaction],
+    ) {
+        let thread_id = self.in_flight_tracker.complete_batch(batch_id);
+        for transaction in transactions {
+            let account_locks = transaction.get_account_locks_unchecked();
+            self.account_locks.unlock_accounts(
+                account_locks.writable.into_iter(),
+                account_locks.readonly.into_iter(),
+                thread_id,
+            );
+        }
     }
 
     /// Send all batches of transactions to the worker threads.
