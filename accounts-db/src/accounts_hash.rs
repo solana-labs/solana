@@ -26,6 +26,7 @@ use {
             atomic::{AtomicU64, AtomicUsize, Ordering},
             Arc,
         },
+        thread, time,
     },
     tempfile::tempfile_in,
 };
@@ -132,6 +133,7 @@ impl AccountHashesFile {
                                 num_retries
                             );
                         }
+                        thread::sleep(time::Duration::from_millis(num_retries * 100));
                     }
                 }
             };
