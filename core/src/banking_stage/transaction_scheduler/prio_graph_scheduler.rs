@@ -22,6 +22,7 @@ pub(crate) struct PrioGraphScheduler {
     in_flight_tracker: InFlightTracker,
     account_locks: ThreadAwareAccountLocks,
     consume_work_senders: Vec<Sender<ConsumeWork>>,
+    look_ahead_window_size: usize,
 }
 
 impl PrioGraphScheduler {
@@ -31,6 +32,7 @@ impl PrioGraphScheduler {
             in_flight_tracker: InFlightTracker::new(num_threads),
             account_locks: ThreadAwareAccountLocks::new(num_threads),
             consume_work_senders,
+            look_ahead_window_size: 2048,
         }
     }
 
@@ -54,16 +56,10 @@ impl PrioGraphScheduler {
         // these transactions to be scheduled before them.
         let mut unschedulable_ids = Vec::new();
         let mut blocking_locks = ReadWriteAccountSet::default();
-
-        // Number of transactions to keep `active` in the `PrioGraph` during scheduling.
-        // This only needs to be large enough to give the scheduler a reasonable idea if
-        // a transaction will conflict with another upcoming transaction.
-        const LOOK_AHEAD_WINDOW: usize = 2048;
-
         let mut prio_graph = PrioGraph::new(|id: &TransactionPriorityId, _graph_node| *id);
 
         // Create the initial look-ahead window.
-        for _ in 0..LOOK_AHEAD_WINDOW {
+        for _ in 0..self.look_ahead_window_size {
             let Some(id) = container.pop() else {
                 break;
             };
@@ -535,46 +531,47 @@ mod tests {
         );
     }
 
-    // #[test]
-    // fn test_schedule_priority_guard() {
-    //     let (mut scheduler, work_receivers) = create_test_frame(2);
+    #[test]
+    fn test_schedule_priority_guard() {
+        let (mut scheduler, work_receivers) = create_test_frame(2);
+        // intentionally shorten the look-ahead window to cause unschedulable conflicts
+        scheduler.look_ahead_window_size = 2;
 
-    //     let accounts = (0..6).map(|_| Keypair::new()).collect_vec();
-    //     let mut container = create_container([
-    //         (&accounts[0], vec![accounts[1].pubkey()], 1, 3),
-    //         (&accounts[2], vec![accounts[3].pubkey()], 1, 2),
-    //         (
-    //             &accounts[1],
-    //             vec![accounts[2].pubkey(), accounts[4].pubkey()],
-    //             1,
-    //             1,
-    //         ),
-    //         (&accounts[4], vec![accounts[5].pubkey()], 1, 0),
-    //     ]);
+        let accounts = (0..8).map(|_| Keypair::new()).collect_vec();
+        let mut container = create_container([
+            (&accounts[0], &[accounts[1].pubkey()], 1, 6),
+            (&accounts[2], &[accounts[3].pubkey()], 1, 5),
+            (&accounts[4], &[accounts[5].pubkey()], 1, 4),
+            (&accounts[6], &[accounts[7].pubkey()], 1, 3),
+            (&accounts[1], &[accounts[2].pubkey()], 1, 2),
+            (&accounts[2], &[accounts[3].pubkey()], 1, 1),
+        ]);
 
-    //     // high priority transactions [0, 1] do not conflict, and would be
-    //     // scheduled to *different* threads without chain-id look-ahead.
-    //     // low priority transaction [2] conflicts with both, and thus will
-    //     // cause transaction [1] to be scheduled onto the same thread as
-    //     // transaction [0].
-    //     let num_scheduled = scheduler.schedule(&mut container).unwrap();
-    //     assert_eq!(num_scheduled, 2);
-    //     let (thread_0_work, thread_0_ids) = collect_work(&work_receivers[0]);
-    //     assert_eq!(thread_0_ids, [txids!([0])]);
-    //     assert_eq!(collect_work(&work_receivers[1]).1, [txids!([1])]);
+        // high priority transactions [0, 1, 2, 3] do not conflict, and are
+        // scheduled onto threads in a round-robin fashion.
+        // The look-ahead window is intentionally shortened, which leads to
+        // transaction [4] being unschedulable due to conflicts with [0] and [1],
+        // which were scheduled to different threads.
+        // Transaction [5] is technically schedulable, but will not be scheduled
+        // because it conflicts with [4].
+        let num_scheduled = scheduler.schedule(&mut container).unwrap();
+        assert_eq!(num_scheduled, 4);
+        let (thread_0_work, thread_0_ids) = collect_work(&work_receivers[0]);
+        assert_eq!(thread_0_ids, [txids!([0, 2])]);
+        assert_eq!(collect_work(&work_receivers[1]).1, [txids!([1, 3])]);
 
-    //     // Cannot schedule even on next pass because of lock conflicts
-    //     let num_scheduled = scheduler.schedule(&mut container).unwrap();
-    //     assert_eq!(num_scheduled, 0);
+        // Cannot schedule even on next pass because of lock conflicts
+        let num_scheduled = scheduler.schedule(&mut container).unwrap();
+        assert_eq!(num_scheduled, 0);
 
-    //     // Complete batch on thread 0. Remaining txs can be scheduled onto thread 1
-    //     scheduler.complete_batch(thread_0_work[0].batch_id, &thread_0_work[0].transactions);
-    //     let num_scheduled = scheduler.schedule(&mut container).unwrap();
-    //     assert_eq!(num_scheduled, 2);
+        // Complete batch on thread 0. Remaining txs can be scheduled onto thread 1
+        scheduler.complete_batch(thread_0_work[0].batch_id, &thread_0_work[0].transactions);
+        let num_scheduled = scheduler.schedule(&mut container).unwrap();
+        assert_eq!(num_scheduled, 2);
 
-    //     assert_eq!(
-    //         collect_work(&work_receivers[1]).1,
-    //         [txids!([2]), txids!([3])]
-    //     );
-    // }
+        assert_eq!(
+            collect_work(&work_receivers[1]).1,
+            [txids!([4]), txids!([5])]
+        );
+    }
 }
