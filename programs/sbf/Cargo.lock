@@ -613,7 +613,7 @@ checksum = "c0940dc441f31689269e10ac70eb1002a3a1d3ad1390e030043662eb7fe4688b"
 dependencies = [
  "block-padding 0.1.5",
  "byte-tools",
- "byteorder 1.4.3",
+ "byteorder 1.5.0",
  "generic-array 0.12.4",
 ]
 
@@ -827,9 +827,9 @@ checksum = "0fc10e8cc6b2580fda3f36eb6dc5316657f812a3df879a44a66fc9f0fdbc4855"
 
 [[package]]
 name = "byteorder"
-version = "1.4.3"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
+checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "bytes"
@@ -981,7 +981,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da3da6baa321ec19e1cc41d31bf599f00c783d0517095cdaf0332e3fe8d20680"
 dependencies = [
  "ascii",
- "byteorder 1.4.3",
+ "byteorder 1.5.0",
  "either",
  "memchr",
  "unreachable",
@@ -1177,7 +1177,7 @@ version = "3.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90f9d052967f590a76e62eb387bd0bbb1b000182c3cefe5364db6b7211651bc0"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder 1.5.0",
  "digest 0.9.0",
  "rand_core 0.5.1",
  "serde",
@@ -1913,7 +1913,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0c35f58762feb77d74ebe43bdbc3210f09be9fe6742234d573bacc26ed92b67"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder 1.5.0",
 ]
 
 [[package]]
@@ -2729,7 +2729,7 @@ version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "58c38e2799fc0978b65dfff8023ec7843e2330bb462f19198840b34b6582397d"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder 1.5.0",
  "keccak",
  "rand_core 0.6.4",
  "zeroize",
@@ -4474,7 +4474,7 @@ dependencies = [
  "blake3",
  "bv",
  "bytemuck",
- "byteorder 1.4.3",
+ "byteorder 1.5.0",
  "bzip2",
  "crossbeam-channel",
  "dashmap",
@@ -4606,7 +4606,7 @@ name = "solana-bpf-loader-program"
 version = "1.18.0"
 dependencies = [
  "bincode",
- "byteorder 1.4.3",
+ "byteorder 1.5.0",
  "libsecp256k1 0.6.0",
  "log",
  "scopeguard",
@@ -4901,7 +4901,7 @@ name = "solana-faucet"
 version = "1.18.0"
 dependencies = [
  "bincode",
- "byteorder 1.4.3",
+ "byteorder 1.5.0",
  "clap 2.33.3",
  "crossbeam-channel",
  "log",
@@ -5052,7 +5052,7 @@ dependencies = [
  "assert_matches",
  "bincode",
  "bitflags 2.3.3",
- "byteorder 1.4.3",
+ "byteorder 1.5.0",
  "chrono",
  "chrono-humanize",
  "crossbeam-channel",
@@ -5525,7 +5525,7 @@ dependencies = [
  "blake3",
  "bv",
  "bytemuck",
- "byteorder 1.4.3",
+ "byteorder 1.5.0",
  "bzip2",
  "crossbeam-channel",
  "dashmap",
@@ -5595,7 +5595,7 @@ name = "solana-sbf-programs"
 version = "1.18.0"
 dependencies = [
  "bincode",
- "byteorder 1.4.3",
+ "byteorder 1.5.0",
  "elf",
  "itertools",
  "log",
@@ -5690,7 +5690,7 @@ dependencies = [
 name = "solana-sbf-rust-dep-crate"
 version = "1.18.0"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder 1.5.0",
  "solana-program",
 ]
 
@@ -6023,7 +6023,7 @@ dependencies = [
  "borsh 0.10.3",
  "bs58",
  "bytemuck",
- "byteorder 1.4.3",
+ "byteorder 1.5.0",
  "chrono",
  "derivation-path",
  "digest 0.10.7",
@@ -6479,7 +6479,7 @@ dependencies = [
  "base64 0.21.4",
  "bincode",
  "bytemuck",
- "byteorder 1.4.3",
+ "byteorder 1.5.0",
  "curve25519-dalek",
  "getrandom 0.1.14",
  "itertools",
@@ -6504,7 +6504,7 @@ version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "103318aa365ff7caa8cf534f2246b5eb7e5b34668736d52b1266b143f7a21196"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder 1.5.0",
  "combine",
  "goblin",
  "hash32",
@@ -6851,7 +6851,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "225e483f02d0ad107168dc57381a8a40c3aeea6abe47f37506931f861643cfa8"
 dependencies = [
  "bitflags 1.3.2",
- "byteorder 1.4.3",
+ "byteorder 1.5.0",
  "libc",
  "thiserror",
  "walkdir",
@@ -7391,7 +7391,7 @@ version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e3dac10fd62eaf6617d3a904ae222845979aec67c615d1c842b4002c7666fb9"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder 1.5.0",
  "bytes",
  "data-encoding",
  "http",
