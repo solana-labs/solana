@@ -6597,12 +6597,10 @@ impl AccountsDb {
         );
 
         if !is_dead_slot {
-            let aligned_total_size = Self::page_align(total_size);
             // This ensures that all updates are written to an AppendVec, before any
             // updates to the index happen, so anybody that sees a real entry in the index,
             // will be able to find the account in storage
-            let flushed_store =
-                self.create_and_insert_store(slot, aligned_total_size, "flush_slot_cache");
+            let flushed_store = self.create_and_insert_store(slot, total_size, "flush_slot_cache");
             // irrelevant - account will already be hashed since it was used in bank hash previously
             let include_slot_in_hash = IncludeSlotInHash::IrrelevantAssertOnUse;
             self.store_accounts_frozen(
