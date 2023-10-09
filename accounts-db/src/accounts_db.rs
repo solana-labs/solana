@@ -33,7 +33,7 @@ use {
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
         accounts_file::{AccountsFile, AccountsFileError},
         accounts_hash::{
-            AccountsDeltaHash, AccountsHash, AccountsHashKind, AccountsHasher,
+            AccountHash, AccountsDeltaHash, AccountsHash, AccountsHashKind, AccountsHasher,
             CalcAccountsHashConfig, CalculateHashIntermediate, HashStats, IncrementalAccountsHash,
             SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash,
             ZeroLamportAccounts,
@@ -6178,7 +6178,7 @@ impl AccountsDb {
         account: &T,
         pubkey: &Pubkey,
         include_slot: IncludeSlotInHash,
-    ) -> Hash {
+    ) -> AccountHash {
         Self::hash_account_data(
             slot,
             account.lamports(),
@@ -6200,9 +6200,9 @@ impl AccountsDb {
         data: &[u8],
         pubkey: &Pubkey,
         include_slot: IncludeSlotInHash,
-    ) -> Hash {
+    ) -> AccountHash {
         if lamports == 0 {
-            return Hash::default();
+            return AccountHash(Hash::default());
         }
         let mut hasher = blake3::Hasher::new();
 
@@ -6232,7 +6232,7 @@ impl AccountsDb {
         hasher.update(owner.as_ref());
         hasher.update(pubkey.as_ref());
 
-        Hash::new_from_array(hasher.finalize().into())
+        AccountHash(Hash::new_from_array(hasher.finalize().into()))
     }
 
     fn bulk_assign_write_version(&self, count: usize) -> StoredMetaWriteVersion {
