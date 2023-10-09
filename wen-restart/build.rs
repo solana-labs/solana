@@ -10,14 +10,10 @@ fn main() -> Result<()> {
     }
 
     let proto_base_path = std::path::PathBuf::from("proto");
-    let proto_files = ["wen_restart.proto"];
-    let mut protos = Vec::new();
-    for proto_file in &proto_files {
-        let proto = proto_base_path.join(proto_file);
-        println!("cargo:rerun-if-changed={}", proto.display());
-        protos.push(proto);
-    }
+    let proto = proto_base_path.join("wen_restart.proto");
+    println!("cargo:rerun-if-changed={}", proto.display());
+
     // Generate rust files from protos.
-    prost_build::compile_protos(&protos, &[proto_base_path])?;
+    prost_build::compile_protos(&[proto], &[proto_base_path])?;
     Ok(())
 }
