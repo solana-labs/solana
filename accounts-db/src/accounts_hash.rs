@@ -1206,6 +1206,21 @@ pub enum ZeroLamportAccounts {
     Included,
 }
 
+/// Hash of an account
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Pod, Zeroable)]
+pub struct AccountHash(pub Hash);
+
+// Ensure the newtype wrapper never changes size from the underlying Hash
+// This also ensures there are no padding bytes, which is requried to safely implement Pod
+const _: () = assert!(std::mem::size_of::<AccountHash>() == std::mem::size_of::<Hash>());
+
+impl Borrow<Hash> for AccountHash {
+    fn borrow(&self) -> &Hash {
+        &self.0
+    }
+}
+
 /// Hash of accounts
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum AccountsHashKind {
