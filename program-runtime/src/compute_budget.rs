@@ -186,10 +186,11 @@ impl ComputeBudget {
         feature_set: &FeatureSet,
     ) -> Result<Self> {
         let compute_budget_limits = process_compute_budget_instructions(instructions, feature_set)?;
-        let mut compute_budget =
-            ComputeBudget::new(u64::from(compute_budget_limits.compute_unit_limit));
-        compute_budget.heap_size = compute_budget_limits.updated_heap_bytes;
-        Ok(compute_budget)
+        Ok(ComputeBudget {
+            compute_unit_limit: u64::from(compute_budget_limits.compute_unit_limit),
+            heap_size: compute_budget_limits.updated_heap_bytes,
+            ..ComputeBudget::default()
+        })
     }
 
     /// Returns cost of the Poseidon hash function for the given number of
