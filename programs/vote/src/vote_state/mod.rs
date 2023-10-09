@@ -538,6 +538,7 @@ fn check_slots_are_valid(
 //
 // { slot 0, confirmations: 31 }
 // { slot 1, confirmations: 30 }
+// { slot 2, confirmations: 1 }
 //
 // is a legal tower that could be submitted on top of a previously empty tower. However,
 // there is no way to create this tower from the iterative process, because slot 1 would
@@ -555,6 +556,19 @@ pub fn process_new_vote_state(
     assert!(!new_state.is_empty());
     if new_state.len() > MAX_LOCKOUT_HISTORY {
         return Err(VoteError::TooManyVotes);
+    }
+
+    if let Some(feature_set) = feature_set {
+        if feature_set.is_active(&feature_set::disallow_partial_towers::id())
+            && new_state
+                .back()
+                .expect("proposed state cannot be empty")
+                .confirmation_count()
+                != 1
+        {
+            // Top of new vote state must have confirmation 1.
+            return Err(VoteError::PartialTower);
+        }
     }
 
     match (new_root, vote_state.root_slot) {
@@ -3151,7 +3165,7 @@ mod tests {
         let vote_slot = 12;
         let vote_slot_hash = slot_hashes
             .iter()
-            .find(|(slot, _hash)| *slot == vote_slot)
+            .find(|(slot, _hash)| *slot == vote_slot + 1)
             .unwrap()
             .1;
         let missing_older_than_history_slot = earliest_slot_in_history - 1;
@@ -3159,6 +3173,7 @@ mod tests {
             (1, 4),
             (missing_older_than_history_slot, 2),
             (vote_slot, 3),
+            (vote_slot + 1, 1),
         ]);
         vote_state_update.hash = vote_slot_hash;
         check_update_vote_state_slots_are_valid(&vote_state, &mut vote_state_update, &slot_hashes)
@@ -3173,7 +3188,8 @@ mod tests {
                 .collect::<Vec<Lockout>>(),
             vec![
                 Lockout::new_with_confirmation_count(1, 4),
-                Lockout::new_with_confirmation_count(vote_slot, 3)
+                Lockout::new_with_confirmation_count(vote_slot, 3),
+                Lockout::new_with_confirmation_count(vote_slot + 1, 1)
             ]
         );
         assert!(do_process_vote_state_update(
@@ -3201,17 +3217,20 @@ mod tests {
         let vote_slot = 12;
         let vote_slot_hash = slot_hashes
             .iter()
-            .find(|(slot, _hash)| *slot == vote_slot)
+            .find(|(slot, _hash)| *slot == vote_slot + 1)
             .unwrap()
             .1;
         let existing_older_than_history_slot = 4;
-        let mut vote_state_update =
-            VoteStateUpdate::from(vec![(existing_older_than_history_slot, 3), (vote_slot, 2)]);
+        let mut vote_state_update = VoteStateUpdate::from(vec![
+            (existing_older_than_history_slot, 3),
+            (vote_slot, 2),
+            (vote_slot + 1, 1),
+        ]);
         vote_state_update.hash = vote_slot_hash;
         check_update_vote_state_slots_are_valid(&vote_state, &mut vote_state_update, &slot_hashes)
             .unwrap();
         // Check the earlier slot was *NOT* filtered out
-        assert_eq!(vote_state_update.lockouts.len(), 2);
+        assert_eq!(vote_state_update.lockouts.len(), 3);
         assert_eq!(
             vote_state_update
                 .clone()
@@ -3220,7 +3239,8 @@ mod tests {
                 .collect::<Vec<Lockout>>(),
             vec![
                 Lockout::new_with_confirmation_count(existing_older_than_history_slot, 3),
-                Lockout::new_with_confirmation_count(vote_slot, 2)
+                Lockout::new_with_confirmation_count(vote_slot, 2),
+                Lockout::new_with_confirmation_count(vote_slot + 1, 1)
             ]
         );
         assert!(do_process_vote_state_update(
@@ -3564,6 +3584,52 @@ mod tests {
         assert_eq!(
             is_commission_update_allowed(first_normal_slot.saturating_add(slot), &epoch_schedule),
             expected_allowed
+        );
+    }
+
+    #[test_case(FeatureSet::all_enabled(), Err(VoteError::PartialTower) ; "feature enabled")]
+    #[test_case(FeatureSet::default(), Ok(()) ; "feature disabled")]
+    fn test_process_new_vote_state_partial_tower(
+        feature_set: FeatureSet,
+        result: Result<(), VoteError>,
+    ) {
+        let slot_hashes = build_slot_hashes(vec![2, 4, 6, 8]);
+        let mut vote_state = build_vote_state(vec![2, 4, 6], &slot_hashes);
+        let vote_state_update = VoteStateUpdate::from(vec![(2, 5), (4, 4), (6, 3), (8, 2)]);
+        let epoch = vote_state.current_epoch();
+        assert_eq!(
+            process_new_vote_state(
+                &mut vote_state,
+                vote_state_update
+                    .lockouts
+                    .into_iter()
+                    .map(LandedVote::from)
+                    .collect(),
+                Some(0),
+                None,
+                epoch,
+                10,
+                Some(&feature_set),
+            ),
+            result,
+        );
+
+        let vote_state_update = VoteStateUpdate::from(vec![(16, 31)]);
+        assert_eq!(
+            process_new_vote_state(
+                &mut vote_state,
+                vote_state_update
+                    .lockouts
+                    .into_iter()
+                    .map(LandedVote::from)
+                    .collect(),
+                Some(10),
+                None,
+                epoch,
+                18,
+                Some(&feature_set)
+            ),
+            result,
         );
     }
 }

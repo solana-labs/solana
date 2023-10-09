@@ -704,6 +704,10 @@ pub mod programify_feature_gate_program {
     solana_sdk::declare_id!("8GdovDzVwWU5edz2G697bbB7GZjrUc6aQZLWyNNAtHdg");
 }
 
+pub mod disallow_partial_towers {
+    solana_sdk::declare_id!("5ma5Su5wKxgQj66YnFVpnuxgqzTPfqJrTFa3rfoE7Fet");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -875,6 +879,7 @@ lazy_static! {
         (better_error_codes_for_tx_lamport_check::id(), "better error codes for tx lamport check #33353"),
         (enable_alt_bn128_compression_syscall::id(), "add alt_bn128 compression syscalls"),
         (programify_feature_gate_program::id(), "move feature gate activation logic to an on-chain program #32783"),
+        (disallow_partial_towers::id(), "disallow partial towers in vote program"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

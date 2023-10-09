@@ -69,6 +69,9 @@ pub enum VoteError {
 
     #[error("Cannot update commission at this point in the epoch")]
     CommissionUpdateTooLate,
+
+    #[error("Proposed state is a partial tower, unreachable from previous state")]
+    PartialTower,
 }
 
 impl<E> DecodeError<E> for VoteError {
