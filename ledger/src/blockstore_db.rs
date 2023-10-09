@@ -809,9 +809,8 @@ impl Column for columns::TransactionStatus {
         index.1
     }
 
-    // This trait method is primarily used by Database::delete_range_cf(). Because the
-    // TransactionStatus Column is not keyed by slot, it cannot be range deleted. Therefore this
-    // method is meaningless for this type, and simply returns a default Index.
+    // The TransactionStatus column is not keyed by slot so this method is meaningless
+    // See Column::as_index() declaration for more details
     fn as_index(_index: u64) -> Self::Index {
         (Signature::default(), 0)
     }
@@ -881,9 +880,8 @@ impl Column for columns::AddressSignatures {
         index.1
     }
 
-    // This trait method is primarily used by Database::delete_range_cf(). Because the
-    // AddressSignatures Column is not keyed by slot, it cannot be range deleted. Therefore this
-    // method is meaningless for this type, and simply returns a default Index.
+    // The AddressSignatures column is not keyed by slot so this method is meaningless
+    // See Column::as_index() declaration for more details
     fn as_index(_index: u64) -> Self::Index {
         (Pubkey::default(), 0, 0, Signature::default())
     }
