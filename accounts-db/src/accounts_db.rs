@@ -5733,11 +5733,7 @@ impl AccountsDb {
             .create_store_count
             .fetch_add(1, Ordering::Relaxed);
         let path_index = thread_rng().gen_range(0..paths.len());
-        let store = Arc::new(self.new_storage_entry(
-            slot,
-            Path::new(&paths[path_index]),
-            Self::page_align(size),
-        ));
+        let store = Arc::new(self.new_storage_entry(slot, Path::new(&paths[path_index]), size));
 
         debug!(
             "creating store: {} slot: {} len: {} size: {} from: {} path: {:?}",
