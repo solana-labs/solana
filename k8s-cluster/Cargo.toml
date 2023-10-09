@@ -49,6 +49,7 @@ solana-bloom = { workspace = true }
 solana-clap-utils = { workspace = true }
 solana-clap-v3-utils = { workspace = true }
 solana-client = { workspace = true }
+solana-core = { workspace = true }
 solana-entry = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }

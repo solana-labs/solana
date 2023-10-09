@@ -47,55 +47,52 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --limit-ledger-size ]]; then # Done
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --no-rocksdb-compaction ]]; then
+    elif [[ $1 = --no-rocksdb-compaction ]]; then # not enabled in net.sh
       args+=("$1")
       shift
-    elif [[ $1 = --enable-rpc-transaction-history ]]; then
+    elif [[ $1 = --enable-rpc-transaction-history ]]; then # not enabled in net.sh
       args+=("$1")
       shift
-    elif [[ $1 = --rpc-pubsub-enable-block-subscription ]]; then
+    elif [[ $1 = --rpc-pubsub-enable-block-subscription ]]; then # not enabled in net.sh
       args+=("$1")
       shift
-    elif [[ $1 = --enable-cpi-and-log-storage ]]; then
+    elif [[ $1 = --enable-cpi-and-log-storage ]]; then # not enabled in net.sh
       args+=("$1")
       shift
-    elif [[ $1 = --enable-extended-tx-metadata-storage ]]; then
+    elif [[ $1 = --enable-extended-tx-metadata-storage ]]; then # not enabled in net.sh
       args+=("$1")
       shift
-    elif [[ $1 = --enable-rpc-bigtable-ledger-storage ]]; then
+    elif [[ $1 = --enable-rpc-bigtable-ledger-storage ]]; then # not enabled in net.sh
       args+=("$1")
       shift
-    elif [[ $1 = --tpu-disable-quic ]]; then
+    elif [[ $1 = --tpu-disable-quic ]]; then # Done
       args+=("$1")
       shift
-    elif [[ $1 = --tpu-enable-udp ]]; then
+    elif [[ $1 = --tpu-enable-udp ]]; then # Done
       args+=("$1")
       shift
-    elif [[ $1 = --rpc-send-batch-ms ]]; then
+    elif [[ $1 = --rpc-send-batch-ms ]]; then # not enabled in net.sh
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --rpc-send-batch-size ]]; then
+    elif [[ $1 = --rpc-send-batch-size ]]; then # not enabled in net.sh
       args+=("$1" "$2")
       shift 2
     elif [[ $1 = --skip-poh-verify ]]; then
       args+=("$1")
       shift
-    elif [[ $1 = --log ]]; then
-      args+=("$1" "$2")
-      shift 2
-    elif [[ $1 = --no-restart ]]; then
+    elif [[ $1 = --no-restart ]]; then # not enabled in net.sh
       no_restart=1
       shift
-    elif [[ $1 == --wait-for-supermajority ]]; then
+    elif [[ $1 == --wait-for-supermajority ]]; then # Done
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 == --expected-bank-hash ]]; then
+    elif [[ $1 == --expected-bank-hash ]]; then # Done
       args+=("$1" "$2")
       shift 2
     elif [[ $1 == --accounts ]]; then
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 == --maximum-snapshots-to-retain ]]; then
+    elif [[ $1 == --maximum-snapshots-to-retain ]]; then  # not enabled in net.sh
       args+=("$1" "$2")
       shift 2
     elif [[ $1 == --no-snapshot-fetch ]]; then

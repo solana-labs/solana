@@ -22,9 +22,9 @@ use {
     std::{collections::BTreeMap, error::Error, fs::File, io::Read},
 };
 
-pub struct RuntimeConfig<'a> {
-    pub enable_udp: bool,
-    pub disable_quic: bool,
+pub struct ValidatorConfig<'a> {
+    pub tpu_enable_udp: bool,
+    pub tpu_disable_quic: bool,
     pub gpu_mode: &'a str, // TODO: this is not implemented yet
     pub internal_node_sol: f64,
     pub internal_node_stake_sol: f64,
@@ -32,24 +32,26 @@ pub struct RuntimeConfig<'a> {
     pub warp_slot: Option<u64>,
     pub shred_version: Option<u16>,
     pub bank_hash: Option<Hash>,
+    pub max_ledger_size: Option<u64>,
 }
 
-impl<'a> std::fmt::Display for RuntimeConfig<'a> {
+impl<'a> std::fmt::Display for ValidatorConfig<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "Runtime Config\n\
-             enable_udp: {}\n\
-             disable_quic: {}\n\
+             tpu_enable_udp: {}\n\
+             tpu_disable_quic: {}\n\
              gpu_mode: {}\n\
              internal_node_sol: {}\n\
              internal_node_stake_sol: {}\n\
              wait_for_supermajority: {:?}\n\
              warp_slot: {:?}\n\
              shred_version: {:?}\n\
-             bank_hash: {:?}",
-            self.enable_udp,
-            self.disable_quic,
+             bank_hash: {:?}\n\
+             max_ledger_size: {:?}",
+            self.tpu_enable_udp,
+            self.tpu_disable_quic,
             self.gpu_mode,
             self.internal_node_sol,
             self.internal_node_stake_sol,
@@ -57,6 +59,7 @@ impl<'a> std::fmt::Display for RuntimeConfig<'a> {
             self.warp_slot,
             self.shred_version,
             self.bank_hash,
+            self.max_ledger_size,
         )
     }
 }
@@ -64,47 +67,52 @@ impl<'a> std::fmt::Display for RuntimeConfig<'a> {
 pub struct Kubernetes<'a> {
     client: Client,
     namespace: &'a str,
-    runtime_config: &'a mut RuntimeConfig<'a>,
+    validator_config: &'a mut ValidatorConfig<'a>,
 }
 
 impl<'a> Kubernetes<'a> {
     pub async fn new(
         namespace: &'a str,
-        runtime_config: &'a mut RuntimeConfig<'a>,
+        validator_config: &'a mut ValidatorConfig<'a>,
     ) -> Kubernetes<'a> {
         Kubernetes {
             client: Client::try_default().await.unwrap(),
             namespace,
-            runtime_config,
+            validator_config,
         }
     }
 
     pub fn set_shred_version(&mut self, shred_version: u16) {
-        self.runtime_config.shred_version = Some(shred_version);
+        self.validator_config.shred_version = Some(shred_version);
     }
 
     pub fn set_bank_hash(&mut self, bank_hash: Hash) {
-        self.runtime_config.bank_hash = Some(bank_hash);
+        self.validator_config.bank_hash = Some(bank_hash);
     }
 
     fn generate_command_flags(&mut self) -> Vec<String> {
         let mut flags = Vec::new();
 
-        if self.runtime_config.enable_udp {
+        if self.validator_config.tpu_enable_udp {
             flags.push("--tpu-enable-udp".to_string());
         }
-        if self.runtime_config.disable_quic {
+        if self.validator_config.tpu_disable_quic {
             flags.push("--tpu-disable-quic".to_string());
         }
 
-        if let Some(slot) = self.runtime_config.wait_for_supermajority {
+        if let Some(slot) = self.validator_config.wait_for_supermajority {
             flags.push("--wait-for-supermajority".to_string());
             flags.push(slot.to_string());
         }
 
-        if let Some(bank_hash) = self.runtime_config.bank_hash {
+        if let Some(bank_hash) = self.validator_config.bank_hash {
             flags.push("--expected-bank-hash".to_string());
             flags.push(bank_hash.to_string());
+        }
+
+        if let Some(limit_ledger_size) = self.validator_config.max_ledger_size {
+            flags.push("--limit-ledger-size".to_string());
+            flags.push(limit_ledger_size.to_string());
         }
 
         flags
@@ -118,11 +126,11 @@ impl<'a> Kubernetes<'a> {
         let mut flags = self.generate_command_flags();
 
         flags.push("--internal-node-stake-sol".to_string());
-        flags.push(self.runtime_config.internal_node_stake_sol.to_string());
+        flags.push(self.validator_config.internal_node_stake_sol.to_string());
         flags.push("--internal-node-sol".to_string());
-        flags.push(self.runtime_config.internal_node_sol.to_string());
+        flags.push(self.validator_config.internal_node_sol.to_string());
 
-        if let Some(shred_version) = self.runtime_config.shred_version {
+        if let Some(shred_version) = self.validator_config.shred_version {
             flags.push("--expected-shred-version".to_string());
             flags.push(shred_version.to_string());
         }
