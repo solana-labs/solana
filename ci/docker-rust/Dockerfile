@@ -1,6 +1,6 @@
 # Note: when the rust version is changed also modify
 # ci/rust-version.sh to pick up the new image tag
-FROM rust:1.72.1
+FROM rust:1.73.0
 
 ARG NODE_MAJOR=18
 

@@ -2,7 +2,7 @@
 //! Relies on there being a sliding window of key values. The key values continue to increase.
 //! Old key values are removed from the lesser values and do not accumulate.
 
-use {bv::BitVec, solana_sdk::clock::Slot, std::collections::HashSet};
+use {bv::BitVec, solana_nohash_hasher::IntSet, solana_sdk::clock::Slot};
 
 #[derive(Debug, Default, AbiExample, Clone)]
 pub struct RollingBitField {
@@ -15,7 +15,7 @@ pub struct RollingBitField {
     // They would cause us to exceed max_width if we stored them in our bit field.
     // We only expect these items in conditions where there is some other bug in the system
     //  or in testing when large ranges are created.
-    excess: HashSet<u64>,
+    excess: IntSet<u64>,
 }
 
 impl PartialEq<RollingBitField> for RollingBitField {
@@ -47,7 +47,7 @@ impl RollingBitField {
             count: 0,
             min: 0,
             max_exclusive: 0,
-            excess: HashSet::new(),
+            excess: IntSet::default(),
         }
     }
 
@@ -290,7 +290,7 @@ impl RollingBitField {
 
 #[cfg(test)]
 pub mod tests {
-    use {super::*, log::*, solana_measure::measure::Measure};
+    use {super::*, log::*, solana_measure::measure::Measure, std::collections::HashSet};
 
     impl RollingBitField {
         pub fn clear(&mut self) {

@@ -80,6 +80,7 @@ use {
     rayon::{prelude::*, ThreadPool},
     serde::{Deserialize, Serialize},
     solana_measure::{measure::Measure, measure_us},
+    solana_nohash_hasher::IntSet,
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -178,6 +179,13 @@ impl<'a> StoreTo<'a> {
     fn is_cached(&self) -> bool {
         matches!(self, StoreTo::Cache)
     }
+}
+
+enum ScanAccountStorageResult {
+    /// this data has already been scanned and cached
+    CacheFileAlreadyExists(CacheHashDataFileReference),
+    /// this data needs to be scanned and cached
+    CacheFileNeedsToBeCreated((String, Range<Slot>)),
 }
 
 #[derive(Default, Debug)]
@@ -767,7 +775,7 @@ type AccountSlots = HashMap<Pubkey, HashSet<Slot>>;
 type SlotOffsets = HashMap<Slot, HashSet<usize>>;
 type ReclaimResult = (AccountSlots, SlotOffsets);
 type PubkeysRemovedFromAccountsIndex = HashSet<Pubkey>;
-type ShrinkCandidates = HashSet<Slot>;
+type ShrinkCandidates = IntSet<Slot>;
 
 // Some hints for applicability of additional sanity checks for the do_load fast-path;
 // Slower fallback code path will be taken if the fast path has failed over the retry
@@ -1415,7 +1423,7 @@ impl RecycleStores {
 #[derive(Debug, Default)]
 struct RemoveUnrootedSlotsSynchronization {
     // slots being flushed from the cache or being purged
-    slots_under_contention: Mutex<HashSet<Slot>>,
+    slots_under_contention: Mutex<IntSet<Slot>>,
     signal: Condvar,
 }
 
@@ -2488,7 +2496,7 @@ impl AccountsDb {
             recycle_stores: RwLock::new(RecycleStores::default()),
             uncleaned_pubkeys: DashMap::new(),
             next_id: AtomicAppendVecId::new(0),
-            shrink_candidate_slots: Mutex::new(ShrinkCandidates::new()),
+            shrink_candidate_slots: Mutex::new(ShrinkCandidates::default()),
             write_cache_limit_bytes: None,
             write_version: AtomicU64::new(0),
             paths: vec![],
@@ -2815,7 +2823,7 @@ impl AccountsDb {
         // Another pass to check if there are some filtered accounts which
         // do not match the criteria of deleting all appendvecs which contain them
         // then increment their storage count.
-        let mut already_counted = HashSet::new();
+        let mut already_counted = IntSet::default();
         for (pubkey, (account_infos, ref_count_from_storage)) in purges.iter() {
             let mut failed_slot = None;
             let all_stores_being_deleted =
@@ -2860,7 +2868,7 @@ impl AccountsDb {
             }
 
             // increment store_counts to non-zero for all stores that can not be deleted.
-            let mut pending_stores = HashSet::new();
+            let mut pending_stores = IntSet::default();
             for (slot, _account_info) in account_infos {
                 if !already_counted.contains(slot) {
                     pending_stores.insert(*slot);
@@ -3792,7 +3800,7 @@ impl AccountsDb {
     ///    and should not be unref'd. If they exist in the accounts index, they are NEW.
     fn process_dead_slots(
         &self,
-        dead_slots: &HashSet<Slot>,
+        dead_slots: &IntSet<Slot>,
         purged_account_slots: Option<&mut AccountSlots>,
         purge_stats: &PurgeStats,
         pubkeys_removed_from_accounts_index: &PubkeysRemovedFromAccountsIndex,
@@ -4323,7 +4331,7 @@ impl AccountsDb {
         // Working from the beginning of store_usage which are the most sparse and see when we can stop
         // shrinking while still achieving the overall goals.
         let mut shrink_slots = HashMap::new();
-        let mut shrink_slots_next_batch = ShrinkCandidates::new();
+        let mut shrink_slots_next_batch = ShrinkCandidates::default();
         for usage in &store_usage {
             let store = &usage.store;
             let alive_ratio = (total_alive_bytes as f64) / (total_bytes as f64);
@@ -6774,7 +6782,6 @@ impl AccountsDb {
                     slot,
                     accounts_and_meta_to_store.pubkey(i),
                     account,
-                    None::<&Hash>,
                     include_slot_in_hash,
                 );
                 // hash this account in the bg
@@ -7222,90 +7229,114 @@ impl AccountsDb {
             .saturating_sub(slots_per_epoch);
 
         stats.scan_chunks = splitter.chunk_count;
-        (0..splitter.chunk_count)
-            .into_par_iter()
-            .map(|chunk| {
-                let mut scanner = scanner.clone();
 
+        let cache_files = (0..splitter.chunk_count)
+            .into_par_iter()
+            .filter_map(|chunk| {
                 let range_this_chunk = splitter.get_slot_range(chunk)?;
 
-                let file_name = {
-                    let mut load_from_cache = true;
-                    let mut hasher = hash_map::DefaultHasher::new();
-                    bin_range.start.hash(&mut hasher);
-                    bin_range.end.hash(&mut hasher);
-                    let is_first_scan_pass = bin_range.start == 0;
+                let mut load_from_cache = true;
+                let mut hasher = hash_map::DefaultHasher::new();
+                bin_range.start.hash(&mut hasher);
+                bin_range.end.hash(&mut hasher);
+                let is_first_scan_pass = bin_range.start == 0;
 
-                    // calculate hash representing all storages in this chunk
-                    for (slot, storage) in snapshot_storages.iter_range(&range_this_chunk) {
-                        if is_first_scan_pass && slot < one_epoch_old {
-                            self.update_old_slot_stats(stats, storage);
-                        }
-                        if !Self::hash_storage_info(&mut hasher, storage, slot) {
-                            load_from_cache = false;
-                            break;
-                        }
-                    }
-                    // we have a hash value for the storages in this chunk
-                    // so, build a file name:
-                    let hash = hasher.finish();
-                    let file_name = format!(
-                        "{}.{}.{}.{}.{:016x}",
-                        range_this_chunk.start,
-                        range_this_chunk.end,
-                        bin_range.start,
-                        bin_range.end,
-                        hash
-                    );
-                    if load_from_cache {
-                        if let Ok(mapped_file) =
-                            cache_hash_data.get_file_reference_to_map_later(&file_name)
-                        {
-                            return Some(mapped_file);
-                        }
-                    }
-
-                    // fall through and load normally - we failed to load from a cache file
-                    file_name
-                };
-
-                let mut init_accum = true;
-                // load from cache failed, so create the cache file for this chunk
+                // calculate hash representing all storages in this chunk
+                let mut empty = true;
                 for (slot, storage) in snapshot_storages.iter_range(&range_this_chunk) {
-                    let ancient = slot < oldest_non_ancient_slot;
-                    let (_, scan_us) = measure_us!(if let Some(storage) = storage {
-                        if init_accum {
-                            let range = bin_range.end - bin_range.start;
-                            scanner.init_accum(range);
-                            init_accum = false;
-                        }
-                        scanner.set_slot(slot);
-
-                        Self::scan_single_account_storage(storage, &mut scanner);
-                    });
-                    if ancient {
-                        stats
-                            .sum_ancient_scans_us
-                            .fetch_add(scan_us, Ordering::Relaxed);
-                        stats.count_ancient_scans.fetch_add(1, Ordering::Relaxed);
-                        stats
-                            .longest_ancient_scan_us
-                            .fetch_max(scan_us, Ordering::Relaxed);
+                    empty = false;
+                    if is_first_scan_pass && slot < one_epoch_old {
+                        self.update_old_slot_stats(stats, storage);
+                    }
+                    if !Self::hash_storage_info(&mut hasher, storage, slot) {
+                        load_from_cache = false;
+                        break;
                     }
                 }
-                (!init_accum)
-                    .then(|| {
-                        let r = scanner.scanning_complete();
-                        assert!(!file_name.is_empty());
-                        (!r.is_empty() && r.iter().any(|b| !b.is_empty())).then(|| {
-                            // error if we can't write this
-                            cache_hash_data.save(&file_name, &r).unwrap();
-                            cache_hash_data
-                                .get_file_reference_to_map_later(&file_name)
-                                .unwrap()
-                        })
-                    })
-                    .flatten()
+                if empty {
+                    return None;
+                }
+                // we have a hash value for the storages in this chunk
+                // so, build a file name:
+                let hash = hasher.finish();
+                let file_name = format!(
+                    "{}.{}.{}.{}.{:016x}",
+                    range_this_chunk.start,
+                    range_this_chunk.end,
+                    bin_range.start,
+                    bin_range.end,
+                    hash
+                );
+                if load_from_cache {
+                    if let Ok(mapped_file) =
+                        cache_hash_data.get_file_reference_to_map_later(&file_name)
+                    {
+                        return Some(ScanAccountStorageResult::CacheFileAlreadyExists(
+                            mapped_file,
+                        ));
+                    }
+                }
+
+                // fall through and load normally - we failed to load from a cache file but there are storages present
+                Some(ScanAccountStorageResult::CacheFileNeedsToBeCreated((
+                    file_name,
+                    range_this_chunk,
+                )))
+            })
+            .collect::<Vec<_>>();
+
+        // deletes the old files that will not be used before creating new ones
+        cache_hash_data.delete_old_cache_files();
+
+        cache_files
+            .into_par_iter()
+            .map(|chunk| {
+                match chunk {
+                    ScanAccountStorageResult::CacheFileAlreadyExists(file) => Some(file),
+                    ScanAccountStorageResult::CacheFileNeedsToBeCreated((
+                        file_name,
+                        range_this_chunk,
+                    )) => {
+                        let mut scanner = scanner.clone();
+                        let mut init_accum = true;
+                        // load from cache failed, so create the cache file for this chunk
+                        for (slot, storage) in snapshot_storages.iter_range(&range_this_chunk) {
+                            let ancient = slot < oldest_non_ancient_slot;
+                            let (_, scan_us) = measure_us!(if let Some(storage) = storage {
+                                if init_accum {
+                                    let range = bin_range.end - bin_range.start;
+                                    scanner.init_accum(range);
+                                    init_accum = false;
+                                }
+                                scanner.set_slot(slot);
+
+                                Self::scan_single_account_storage(storage, &mut scanner);
+                            });
+                            if ancient {
+                                stats
+                                    .sum_ancient_scans_us
+                                    .fetch_add(scan_us, Ordering::Relaxed);
+                                stats.count_ancient_scans.fetch_add(1, Ordering::Relaxed);
+                                stats
+                                    .longest_ancient_scan_us
+                                    .fetch_max(scan_us, Ordering::Relaxed);
+                            }
+                        }
+                        (!init_accum)
+                            .then(|| {
+                                let r = scanner.scanning_complete();
+                                assert!(!file_name.is_empty());
+                                (!r.is_empty() && r.iter().any(|b| !b.is_empty())).then(|| {
+                                    // error if we can't write this
+                                    cache_hash_data.save(&file_name, &r).unwrap();
+                                    cache_hash_data
+                                        .get_file_reference_to_map_later(&file_name)
+                                        .unwrap()
+                                })
+                            })
+                            .flatten()
+                    }
+                }
             })
             .filter_map(|x| x)
             .collect()
@@ -8169,14 +8200,14 @@ impl AccountsDb {
         expected_slot: Option<Slot>,
         mut reclaimed_offsets: Option<&mut SlotOffsets>,
         reset_accounts: bool,
-    ) -> HashSet<Slot>
+    ) -> IntSet<Slot>
     where
         I: Iterator<Item = &'a (Slot, AccountInfo)>,
     {
         assert!(self.storage.no_shrink_in_progress());
 
-        let mut dead_slots = HashSet::new();
-        let mut new_shrink_candidates = ShrinkCandidates::new();
+        let mut dead_slots = IntSet::default();
+        let mut new_shrink_candidates = ShrinkCandidates::default();
         let mut measure = Measure::start("remove");
         for (slot, account_info) in reclaims {
             // No cached accounts should make it here
@@ -8393,7 +8424,7 @@ impl AccountsDb {
     ///    and should not be unref'd. If they exist in the accounts index, they are NEW.
     fn clean_stored_dead_slots(
         &self,
-        dead_slots: &HashSet<Slot>,
+        dead_slots: &IntSet<Slot>,
         purged_account_slots: Option<&mut AccountSlots>,
         pubkeys_removed_from_accounts_index: &PubkeysRemovedFromAccountsIndex,
     ) {
@@ -13241,7 +13272,7 @@ pub mod tests {
     #[test]
     fn test_clean_stored_dead_slots_empty() {
         let accounts = AccountsDb::new_single_for_tests();
-        let mut dead_slots = HashSet::new();
+        let mut dead_slots = IntSet::default();
         dead_slots.insert(10);
         accounts.clean_stored_dead_slots(&dead_slots, None, &HashSet::default());
     }
@@ -13325,7 +13356,7 @@ pub mod tests {
     fn test_select_candidates_by_total_usage_no_candidates() {
         // no input candidates -- none should be selected
         solana_logger::setup();
-        let candidates: ShrinkCandidates = ShrinkCandidates::new();
+        let candidates = ShrinkCandidates::default();
         let db = AccountsDb::new_single_for_tests();
 
         let (selected_candidates, next_candidates) =
@@ -13339,7 +13370,7 @@ pub mod tests {
     fn test_select_candidates_by_total_usage_3_way_split_condition() {
         // three candidates, one selected for shrink, one is put back to the candidate list and one is ignored
         solana_logger::setup();
-        let mut candidates = ShrinkCandidates::new();
+        let mut candidates = ShrinkCandidates::default();
         let db = AccountsDb::new_single_for_tests();
 
         let common_store_path = Path::new("");
@@ -13413,7 +13444,7 @@ pub mod tests {
         // three candidates, 2 are selected for shrink, one is ignored
         solana_logger::setup();
         let db = AccountsDb::new_single_for_tests();
-        let mut candidates = ShrinkCandidates::new();
+        let mut candidates = ShrinkCandidates::default();
 
         let common_store_path = Path::new("");
         let slot_id_1 = 12;
@@ -13479,7 +13510,7 @@ pub mod tests {
         // 2 candidates, they must be selected to achieve the target alive ratio
         solana_logger::setup();
         let db = AccountsDb::new_single_for_tests();
-        let mut candidates = ShrinkCandidates::new();
+        let mut candidates = ShrinkCandidates::default();
 
         let slot1 = 12;
         let common_store_path = Path::new("");

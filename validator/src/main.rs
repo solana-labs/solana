@@ -118,6 +118,7 @@ fn wait_for_restart_window(
     min_idle_time_in_minutes: usize,
     max_delinquency_percentage: u8,
     skip_new_snapshot_check: bool,
+    skip_health_check: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sleep_interval = Duration::from_secs(5);
 
@@ -161,7 +162,7 @@ fn wait_for_restart_window(
         seen_incremential_snapshot |= snapshot_slot_info_has_incremential;
 
         let epoch_info = rpc_client.get_epoch_info_with_commitment(CommitmentConfig::processed())?;
-        let healthy = rpc_client.get_health().ok().is_some();
+        let healthy = skip_health_check || rpc_client.get_health().ok().is_some();
         let delinquent_stake_percentage = {
             let vote_accounts = rpc_client.get_vote_accounts()?;
             let current_stake: u64 = vote_accounts
@@ -448,15 +449,16 @@ fn configure_banking_trace_dir_byte_limit(
     validator_config: &mut ValidatorConfig,
     matches: &ArgMatches,
 ) {
-    validator_config.banking_trace_dir_byte_limit =
-        if matches.occurrences_of("banking_trace_dir_byte_limit") == 0 {
-            // disable with no explicit flag; then, this effectively becomes `opt-in` even if we're
-            // specifying a default value in clap configuration.
-            DISABLED_BAKING_TRACE_DIR
-        } else {
-            // BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT or user-supplied override value
-            value_t_or_exit!(matches, "banking_trace_dir_byte_limit", u64)
-        };
+    validator_config.banking_trace_dir_byte_limit = if matches.is_present("disable_banking_trace") {
+        // disable with an explicit flag; This effectively becomes `opt-out` by reseting to
+        // DISABLED_BAKING_TRACE_DIR, while allowing us to specify a default sensible limit in clap
+        // configuration for cli help.
+        DISABLED_BAKING_TRACE_DIR
+    } else {
+        // a default value in clap configuration (BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT) or
+        // explicit user-supplied override value
+        value_t_or_exit!(matches, "banking_trace_dir_byte_limit", u64)
+    };
 }
 
 pub fn main() {
@@ -648,6 +650,7 @@ pub fn main() {
             let force = subcommand_matches.is_present("force");
             let monitor = subcommand_matches.is_present("monitor");
             let skip_new_snapshot_check = subcommand_matches.is_present("skip_new_snapshot_check");
+            let skip_health_check = subcommand_matches.is_present("skip_health_check");
             let max_delinquent_stake =
                 value_t_or_exit!(subcommand_matches, "max_delinquent_stake", u8);
 
@@ -658,6 +661,7 @@ pub fn main() {
                     min_idle_time,
                     max_delinquent_stake,
                     skip_new_snapshot_check,
+                    skip_health_check,
                 )
                 .unwrap_or_else(|err| {
                     println!("{err}");
@@ -776,6 +780,7 @@ pub fn main() {
             let max_delinquent_stake =
                 value_t_or_exit!(subcommand_matches, "max_delinquent_stake", u8);
             let skip_new_snapshot_check = subcommand_matches.is_present("skip_new_snapshot_check");
+            let skip_health_check = subcommand_matches.is_present("skip_health_check");
 
             wait_for_restart_window(
                 &ledger_path,
@@ -783,6 +788,7 @@ pub fn main() {
                 min_idle_time,
                 max_delinquent_stake,
                 skip_new_snapshot_check,
+                skip_health_check,
             )
             .unwrap_or_else(|err| {
                 println!("{err}");
@@ -1587,17 +1593,14 @@ pub fn main() {
         validator_config.accounts_hash_interval_slots,
     ) {
         eprintln!("Invalid snapshot configuration provided: snapshot intervals are incompatible. \
-            \n\t- full snapshot interval MUST be a multiple of accounts hash interval (if enabled) \
-            \n\t- incremental snapshot interval MUST be a multiple of accounts hash interval (if enabled) \
+            \n\t- full snapshot interval MUST be a multiple of incremental snapshot interval (if enabled) \
             \n\t- full snapshot interval MUST be larger than incremental snapshot interval (if enabled) \
             \nSnapshot configuration values: \
             \n\tfull snapshot interval: {} \
-            \n\tincremental snapshot interval: {} \
-            \n\taccounts hash interval: {}",
+            \n\tincremental snapshot interval: {}",
             if full_snapshot_archive_interval_slots == DISABLED_SNAPSHOT_ARCHIVE_INTERVAL { "disabled".to_string() } else { full_snapshot_archive_interval_slots.to_string() },
             if incremental_snapshot_archive_interval_slots == DISABLED_SNAPSHOT_ARCHIVE_INTERVAL { "disabled".to_string() } else { incremental_snapshot_archive_interval_slots.to_string() },
-            validator_config.accounts_hash_interval_slots);
-
+        );
         exit(1);
     }
 

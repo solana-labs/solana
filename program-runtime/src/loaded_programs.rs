@@ -13,8 +13,11 @@ use {
         vm::{BuiltinProgram, Config},
     },
     solana_sdk::{
-        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, clock::Slot, loader_v4,
-        pubkey::Pubkey, saturating_add_assign,
+        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
+        clock::{Epoch, Slot},
+        loader_v4,
+        pubkey::Pubkey,
+        saturating_add_assign,
     },
     std::{
         collections::HashMap,
@@ -26,7 +29,8 @@ use {
     },
 };
 
-const MAX_LOADED_ENTRY_COUNT: usize = 256;
+pub type ProgramRuntimeEnvironment = Arc<BuiltinProgram<InvokeContext<'static>>>;
+pub const MAX_LOADED_ENTRY_COUNT: usize = 256;
 pub const DELAY_VISIBILITY_SLOT_OFFSET: Slot = 1;
 
 /// Relationship between two fork IDs
@@ -62,17 +66,17 @@ pub trait WorkingSlot {
 #[derive(Default)]
 pub enum LoadedProgramType {
     /// Tombstone for undeployed, closed or unloadable programs
-    FailedVerification(Arc<BuiltinProgram<InvokeContext<'static>>>),
+    FailedVerification(ProgramRuntimeEnvironment),
     #[default]
     Closed,
     DelayVisibility,
     /// Successfully verified but not currently compiled, used to track usage statistics when a compiled program is evicted from memory.
-    Unloaded(Arc<BuiltinProgram<InvokeContext<'static>>>),
+    Unloaded(ProgramRuntimeEnvironment),
     LegacyV0(Executable<InvokeContext<'static>>),
     LegacyV1(Executable<InvokeContext<'static>>),
     Typed(Executable<InvokeContext<'static>>),
     #[cfg(test)]
-    TestLoaded(Arc<BuiltinProgram<InvokeContext<'static>>>),
+    TestLoaded(ProgramRuntimeEnvironment),
     Builtin(BuiltinProgram<InvokeContext<'static>>),
 }
 
@@ -121,8 +125,9 @@ pub struct Stats {
     pub insertions: AtomicU64,
     pub replacements: AtomicU64,
     pub one_hit_wonders: AtomicU64,
-    pub prunes: AtomicU64,
-    pub expired: AtomicU64,
+    pub prunes_orphan: AtomicU64,
+    pub prunes_expired: AtomicU64,
+    pub prunes_environment: AtomicU64,
     pub empty_entries: AtomicU64,
 }
 
@@ -135,8 +140,9 @@ impl Stats {
         let replacements = self.replacements.load(Ordering::Relaxed);
         let one_hit_wonders = self.one_hit_wonders.load(Ordering::Relaxed);
         let evictions: u64 = self.evictions.values().sum();
-        let prunes = self.prunes.load(Ordering::Relaxed);
-        let expired = self.expired.load(Ordering::Relaxed);
+        let prunes_orphan = self.prunes_orphan.load(Ordering::Relaxed);
+        let prunes_expired = self.prunes_expired.load(Ordering::Relaxed);
+        let prunes_environment = self.prunes_environment.load(Ordering::Relaxed);
         let empty_entries = self.empty_entries.load(Ordering::Relaxed);
         datapoint_info!(
             "loaded-programs-cache-stats",
@@ -147,13 +153,14 @@ impl Stats {
             ("insertions", insertions, i64),
             ("replacements", replacements, i64),
             ("one_hit_wonders", one_hit_wonders, i64),
-            ("prunes", prunes, i64),
-            ("evict_expired", expired, i64),
-            ("evict_empty_entries", empty_entries, i64),
+            ("prunes_orphan", prunes_orphan, i64),
+            ("prunes_expired", prunes_expired, i64),
+            ("prunes_environment", prunes_environment, i64),
+            ("empty_entries", empty_entries, i64),
         );
         debug!(
-            "Loaded Programs Cache Stats -- Hits: {}, Misses: {}, Evictions: {}, Insertions: {}, Replacements: {}, One-Hit-Wonders: {}, Prunes: {}, Expired: {}, Empty: {}",
-            hits, misses, evictions, insertions, replacements, one_hit_wonders, prunes, expired, empty_entries
+            "Loaded Programs Cache Stats -- Hits: {}, Misses: {}, Evictions: {}, Insertions: {}, Replacements: {}, One-Hit-Wonders: {}, Prunes-Orphan: {}, Prunes-Expired: {}, Prunes-Environment: {}, Empty: {}",
+            hits, misses, evictions, insertions, replacements, one_hit_wonders, prunes_orphan, prunes_expired, prunes_environment, empty_entries
         );
         if log_enabled!(log::Level::Trace) && !self.evictions.is_empty() {
             let mut evictions = self.evictions.iter().collect::<Vec<_>>();
@@ -221,7 +228,7 @@ impl LoadedProgram {
     /// Creates a new user program
     pub fn new(
         loader_key: &Pubkey,
-        program_runtime_environment: Arc<BuiltinProgram<InvokeContext<'static>>>,
+        program_runtime_environment: ProgramRuntimeEnvironment,
         deployment_slot: Slot,
         effective_slot: Slot,
         maybe_expiration_slot: Option<Slot>,
@@ -407,10 +414,10 @@ impl LoadedProgram {
 
 #[derive(Clone, Debug)]
 pub struct ProgramRuntimeEnvironments {
-    /// Globally shared RBPF config and syscall registry
-    pub program_runtime_v1: Arc<BuiltinProgram<InvokeContext<'static>>>,
+    /// Globally shared RBPF config and syscall registry for runtime V1
+    pub program_runtime_v1: ProgramRuntimeEnvironment,
     /// Globally shared RBPF config and syscall registry for runtime V2
-    pub program_runtime_v2: Arc<BuiltinProgram<InvokeContext<'static>>>,
+    pub program_runtime_v2: ProgramRuntimeEnvironment,
 }
 
 impl Default for ProgramRuntimeEnvironments {
@@ -432,8 +439,12 @@ pub struct LoadedPrograms {
     ///
     /// Pubkey is the address of a program, multiple versions can coexists simultaneously under the same address (in different slots).
     entries: HashMap<Pubkey, Vec<Arc<LoadedProgram>>>,
+    /// The slot of the last rerooting
+    pub latest_root_slot: Slot,
+    /// The epoch of the last rerooting
+    pub latest_root_epoch: Epoch,
+    /// Environments of the current epoch
     pub environments: ProgramRuntimeEnvironments,
-    latest_root: Slot,
     pub stats: Stats,
 }
 
@@ -605,7 +616,9 @@ impl LoadedPrograms {
                     _ => false,
                 };
                 if !retain {
-                    self.stats.prunes.fetch_add(1, Ordering::Relaxed);
+                    self.stats
+                        .prunes_environment
+                        .fetch_add(1, Ordering::Relaxed);
                 }
                 retain
             });
@@ -625,39 +638,54 @@ impl LoadedPrograms {
         self.remove_programs_with_no_entries();
     }
 
-    /// Before rerooting the blockstore this removes all programs of orphan forks
-    pub fn prune<F: ForkGraph>(&mut self, fork_graph: &F, new_root: Slot) {
-        let previous_root = self.latest_root;
-        self.entries.retain(|_key, second_level| {
+    /// Before rerooting the blockstore this removes all superfluous entries
+    pub fn prune<F: ForkGraph>(
+        &mut self,
+        fork_graph: &F,
+        new_root_slot: Slot,
+        new_root_epoch: Epoch,
+    ) {
+        for second_level in self.entries.values_mut() {
+            // Remove entries un/re/deployed on orphan forks
             let mut first_ancestor_found = false;
             *second_level = second_level
                 .iter()
                 .rev()
                 .filter(|entry| {
-                    let relation = fork_graph.relationship(entry.deployment_slot, new_root);
-                    if entry.deployment_slot >= new_root {
+                    let relation = fork_graph.relationship(entry.deployment_slot, new_root_slot);
+                    if entry.deployment_slot >= new_root_slot {
                         matches!(relation, BlockRelation::Equal | BlockRelation::Descendant)
                     } else if !first_ancestor_found
                         && (matches!(relation, BlockRelation::Ancestor)
-                            || entry.deployment_slot <= previous_root)
+                            || entry.deployment_slot <= self.latest_root_slot)
                     {
                         first_ancestor_found = true;
                         first_ancestor_found
                     } else {
-                        self.stats.prunes.fetch_add(1, Ordering::Relaxed);
+                        self.stats.prunes_orphan.fetch_add(1, Ordering::Relaxed);
                         false
                     }
+                })
+                .filter(|entry| {
+                    // Remove expired
+                    if let Some(expiration) = entry.maybe_expiration_slot {
+                        if expiration <= new_root_slot {
+                            self.stats.prunes_expired.fetch_add(1, Ordering::Relaxed);
+                            return false;
+                        }
+                    }
+                    true
                 })
                 .cloned()
                 .collect();
             second_level.reverse();
-            !second_level.is_empty()
-        });
-
-        self.remove_expired_entries(new_root);
+        }
         self.remove_programs_with_no_entries();
-
-        self.latest_root = std::cmp::max(self.latest_root, new_root);
+        debug_assert!(self.latest_root_slot <= new_root_slot);
+        self.latest_root_slot = new_root_slot;
+        if self.latest_root_epoch < new_root_epoch {
+            self.latest_root_epoch = new_root_epoch;
+        }
     }
 
     fn matches_loaded_program_criteria(
@@ -706,7 +734,7 @@ impl LoadedPrograms {
                 if let Some(second_level) = self.entries.get(&key) {
                     for entry in second_level.iter().rev() {
                         let current_slot = working_slot.current_slot();
-                        if entry.deployment_slot <= self.latest_root
+                        if entry.deployment_slot <= self.latest_root_slot
                             || entry.deployment_slot == current_slot
                             || working_slot.is_ancestor(entry.deployment_slot)
                         {
@@ -823,24 +851,6 @@ impl LoadedPrograms {
     pub fn remove_programs(&mut self, keys: impl Iterator<Item = Pubkey>) {
         for k in keys {
             self.entries.remove(&k);
-        }
-    }
-
-    fn remove_expired_entries(&mut self, current_slot: Slot) {
-        for entry in self.entries.values_mut() {
-            entry.retain(|program| {
-                program
-                    .maybe_expiration_slot
-                    .map(|expiration| {
-                        if expiration > current_slot {
-                            true
-                        } else {
-                            self.stats.expired.fetch_add(1, Ordering::Relaxed);
-                            false
-                        }
-                    })
-                    .unwrap_or(true)
-            });
         }
     }
 
@@ -1316,40 +1326,43 @@ mod tests {
             relation: BlockRelation::Unrelated,
         };
 
-        cache.prune(&fork_graph, 0);
+        cache.prune(&fork_graph, 0, 0);
         assert!(cache.entries.is_empty());
 
-        cache.prune(&fork_graph, 10);
+        cache.prune(&fork_graph, 10, 0);
         assert!(cache.entries.is_empty());
 
+        let mut cache = LoadedPrograms::default();
         let fork_graph = TestForkGraph {
             relation: BlockRelation::Ancestor,
         };
 
-        cache.prune(&fork_graph, 0);
+        cache.prune(&fork_graph, 0, 0);
         assert!(cache.entries.is_empty());
 
-        cache.prune(&fork_graph, 10);
+        cache.prune(&fork_graph, 10, 0);
         assert!(cache.entries.is_empty());
 
+        let mut cache = LoadedPrograms::default();
         let fork_graph = TestForkGraph {
             relation: BlockRelation::Descendant,
         };
 
-        cache.prune(&fork_graph, 0);
+        cache.prune(&fork_graph, 0, 0);
         assert!(cache.entries.is_empty());
 
-        cache.prune(&fork_graph, 10);
+        cache.prune(&fork_graph, 10, 0);
         assert!(cache.entries.is_empty());
 
+        let mut cache = LoadedPrograms::default();
         let fork_graph = TestForkGraph {
             relation: BlockRelation::Unknown,
         };
 
-        cache.prune(&fork_graph, 0);
+        cache.prune(&fork_graph, 0, 0);
         assert!(cache.entries.is_empty());
 
-        cache.prune(&fork_graph, 10);
+        cache.prune(&fork_graph, 10, 0);
         assert!(cache.entries.is_empty());
     }
 
@@ -1760,7 +1773,7 @@ mod tests {
             programs.pop();
         }
 
-        cache.prune(&fork_graph, 5);
+        cache.prune(&fork_graph, 5, 0);
 
         // Fork graph after pruning
         //                   0
@@ -1825,7 +1838,7 @@ mod tests {
         assert!(match_slot(&found, &program3, 25, 27));
         assert!(match_slot(&found, &program4, 5, 27));
 
-        cache.prune(&fork_graph, 15);
+        cache.prune(&fork_graph, 15, 0);
 
         // Fork graph after pruning
         //                  0
@@ -2176,7 +2189,7 @@ mod tests {
         );
 
         // New root 5 should not evict the expired entry for program1
-        cache.prune(&fork_graph, 5);
+        cache.prune(&fork_graph, 5, 0);
         assert_eq!(
             cache
                 .entries
@@ -2187,7 +2200,7 @@ mod tests {
         );
 
         // New root 15 should evict the expired entry for program1
-        cache.prune(&fork_graph, 15);
+        cache.prune(&fork_graph, 15, 0);
         assert!(cache.entries.get(&program1).is_none());
     }
 
@@ -2213,7 +2226,7 @@ mod tests {
         assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
         assert!(!cache.replenish(program1, new_test_loaded_program(5, 6)).0);
 
-        cache.prune(&fork_graph, 10);
+        cache.prune(&fork_graph, 10, 0);
 
         let working_slot = TestWorkingSlot::new(20, &[0, 10, 20]);
         let ExtractedPrograms {
