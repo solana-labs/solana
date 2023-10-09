@@ -33,6 +33,7 @@ pub struct ValidatorConfig<'a> {
     pub shred_version: Option<u16>,
     pub bank_hash: Option<Hash>,
     pub max_ledger_size: Option<u64>,
+    pub skip_poh_verify: bool,
 }
 
 impl<'a> std::fmt::Display for ValidatorConfig<'a> {
@@ -49,7 +50,8 @@ impl<'a> std::fmt::Display for ValidatorConfig<'a> {
              warp_slot: {:?}\n\
              shred_version: {:?}\n\
              bank_hash: {:?}\n\
-             max_ledger_size: {:?}",
+             max_ledger_size: {:?}\n\
+             skip_poh_verify: {}",
             self.tpu_enable_udp,
             self.tpu_disable_quic,
             self.gpu_mode,
@@ -60,6 +62,7 @@ impl<'a> std::fmt::Display for ValidatorConfig<'a> {
             self.shred_version,
             self.bank_hash,
             self.max_ledger_size,
+            self.skip_poh_verify,
         )
     }
 }
@@ -99,6 +102,9 @@ impl<'a> Kubernetes<'a> {
         if self.validator_config.tpu_disable_quic {
             flags.push("--tpu-disable-quic".to_string());
         }
+        if self.validator_config.skip_poh_verify {
+            flags.push("--skip-poh-verify".to_string());
+        }
 
         if let Some(slot) = self.validator_config.wait_for_supermajority {
             flags.push("--wait-for-supermajority".to_string());
@@ -114,6 +120,8 @@ impl<'a> Kubernetes<'a> {
             flags.push("--limit-ledger-size".to_string());
             flags.push(limit_ledger_size.to_string());
         }
+
+
 
         flags
     }

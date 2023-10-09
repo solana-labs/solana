@@ -190,7 +190,7 @@ fn parse_matches() -> ArgMatches<'static> {
             Arg::with_name("internal_node_stake_sol")
                 .long("internal-node-stake-sol")
                 .takes_value(true)
-                .help(" Amount to stake internal nodes (Sol)."),
+                .help("Amount to stake internal nodes (Sol)."),
         )
         .arg(
             Arg::with_name("enable_warmup_epochs")
@@ -219,12 +219,12 @@ fn parse_matches() -> ArgMatches<'static> {
         .arg(
             Arg::with_name("tpu_enable_udp")
                 .long("tpu-enable-udp")
-                .help("Runtime config. Enable UDP for tpu transactions."),
+                .help("Validator config. Enable UDP for tpu transactions."),
         )
         .arg(
             Arg::with_name("tpu_disable_quic")
                 .long("tpu-disable-quic")
-                .help("Genesis config. Disable quic for tpu packet forwarding"),
+                .help("Validator config. Disable quic for tpu packet forwarding"),
         )
         .arg(
             Arg::with_name("gpu_mode")
@@ -258,6 +258,13 @@ fn parse_matches() -> ArgMatches<'static> {
                 `--limit-ledger-size` if desired. Check `solana-validator --help` for the
                 default limit value used by `--limit-ledger-size`. More information about
                 selecting a custom limit value is at : https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26"),
+        )
+        .arg(
+            Arg::with_name("skip_poh_verify")
+                .long("skip-poh-verify")
+                .help("Validator config. If set, validators will skip verifying
+                the ledger they already have saved to disk at
+                boot (results in a much faster boot)"),
         )
         .get_matches()
 }
