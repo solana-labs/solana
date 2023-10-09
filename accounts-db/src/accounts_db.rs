@@ -2422,7 +2422,7 @@ impl<'a> AppendVecScan for ScanState<'a> {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PubkeyHashAccount {
     pub pubkey: Pubkey,
-    pub hash: Hash,
+    pub hash: AccountHash,
     pub account: AccountSharedData,
 }
 
@@ -5560,7 +5560,7 @@ impl AccountsDb {
         pubkey: &Pubkey,
         max_root: Option<Slot>,
         load_hint: LoadHint,
-    ) -> Option<Hash> {
+    ) -> Option<AccountHash> {
         let (slot, storage_location, _maybe_account_accesor) =
             self.read_index_for_accessor_or_load_slow(ancestors, pubkey, max_root, false)?;
         // Notice the subtle `?` at previous line, we bail out pretty early if missing.
