@@ -2502,47 +2502,15 @@ impl Blockstore {
             .find(|transaction| transaction.signatures[0] == signature))
     }
 
-    // Returns all rooted signatures for an address, ordered by slot that the transaction was
-    // processed in. Within each slot the transactions will be ordered by signature, and NOT by
-    // the order in which the transactions exist in the block
-    //
-    // DEPRECATED
+    // DEPRECATED and decommissioned
+    // This method always returns an empty Vec
     fn find_address_signatures(
         &self,
-        pubkey: Pubkey,
-        start_slot: Slot,
-        end_slot: Slot,
+        _pubkey: Pubkey,
+        _start_slot: Slot,
+        _end_slot: Slot,
     ) -> Result<Vec<(Slot, Signature)>> {
-        let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
-        let mut signatures: Vec<(Slot, Signature)> = vec![];
-        if end_slot < lowest_available_slot {
-            return Ok(signatures);
-        }
-        for transaction_status_cf_primary_index in 0..=1 {
-            let index_iterator =
-                self.address_signatures_cf
-                    .iter_deprecated_index_filtered(IteratorMode::From(
-                        (
-                            transaction_status_cf_primary_index,
-                            pubkey,
-                            start_slot.max(lowest_available_slot),
-                            Signature::default(),
-                        ),
-                        IteratorDirection::Forward,
-                    ))?;
-            for ((i, address, slot, signature), _) in index_iterator {
-                if i != transaction_status_cf_primary_index || slot > end_slot || address != pubkey
-                {
-                    break;
-                }
-                if self.is_root(slot) {
-                    signatures.push((slot, signature));
-                }
-            }
-        }
-        drop(lock);
-        signatures.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap().then(a.1.cmp(&b.1)));
-        Ok(signatures)
+        Ok(vec![])
     }
 
     // Returns all signatures for an address in a particular slot, regardless of whether that slot
@@ -2578,7 +2546,8 @@ impl Blockstore {
         Ok(signatures)
     }
 
-    // DEPRECATED
+    // DEPRECATED and decommissioned
+    // This method always returns an empty Vec
     pub fn get_confirmed_signatures_for_address(
         &self,
         pubkey: Pubkey,
@@ -8261,144 +8230,6 @@ pub mod tests {
                 )?;
             }
             Ok(())
-        }
-    }
-
-    #[test]
-    fn test_get_confirmed_signatures_for_address() {
-        let ledger_path = get_tmp_ledger_path_auto_delete!();
-        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-
-        let address0 = solana_sdk::pubkey::new_rand();
-        let address1 = solana_sdk::pubkey::new_rand();
-
-        let slot0 = 10;
-        for x in 1..5 {
-            let signature = Signature::from([x; 64]);
-            blockstore
-                .write_deprecated_transaction_status(
-                    0,
-                    slot0,
-                    signature,
-                    vec![&address0],
-                    vec![&address1],
-                    TransactionStatusMeta::default(),
-                )
-                .unwrap();
-        }
-        let slot1 = 20;
-        for x in 5..9 {
-            let signature = Signature::from([x; 64]);
-            blockstore
-                .write_deprecated_transaction_status(
-                    0,
-                    slot1,
-                    signature,
-                    vec![&address0],
-                    vec![&address1],
-                    TransactionStatusMeta::default(),
-                )
-                .unwrap();
-        }
-        blockstore.set_roots([slot0, slot1].iter()).unwrap();
-
-        let all0 = blockstore
-            .get_confirmed_signatures_for_address(address0, 0, 50)
-            .unwrap();
-        assert_eq!(all0.len(), 8);
-        for x in 1..9 {
-            let expected_signature = Signature::from([x; 64]);
-            assert_eq!(all0[x as usize - 1], expected_signature);
-        }
-        assert_eq!(
-            blockstore
-                .get_confirmed_signatures_for_address(address0, 20, 50)
-                .unwrap()
-                .len(),
-            4
-        );
-        assert_eq!(
-            blockstore
-                .get_confirmed_signatures_for_address(address0, 0, 10)
-                .unwrap()
-                .len(),
-            4
-        );
-        assert!(blockstore
-            .get_confirmed_signatures_for_address(address0, 1, 5)
-            .unwrap()
-            .is_empty());
-        assert_eq!(
-            blockstore
-                .get_confirmed_signatures_for_address(address0, 1, 15)
-                .unwrap()
-                .len(),
-            4
-        );
-
-        let all1 = blockstore
-            .get_confirmed_signatures_for_address(address1, 0, 50)
-            .unwrap();
-        assert_eq!(all1.len(), 8);
-        for x in 1..9 {
-            let expected_signature = Signature::from([x; 64]);
-            assert_eq!(all1[x as usize - 1], expected_signature);
-        }
-
-        // Purge index 0
-        blockstore
-            .run_purge(0, 10, PurgeType::PrimaryIndex)
-            .unwrap();
-        assert_eq!(
-            blockstore
-                .get_confirmed_signatures_for_address(address0, 0, 50)
-                .unwrap()
-                .len(),
-            4
-        );
-        assert_eq!(
-            blockstore
-                .get_confirmed_signatures_for_address(address0, 20, 50)
-                .unwrap()
-                .len(),
-            4
-        );
-        assert!(blockstore
-            .get_confirmed_signatures_for_address(address0, 0, 10)
-            .unwrap()
-            .is_empty());
-        assert!(blockstore
-            .get_confirmed_signatures_for_address(address0, 1, 5)
-            .unwrap()
-            .is_empty());
-        assert_eq!(
-            blockstore
-                .get_confirmed_signatures_for_address(address0, 1, 25)
-                .unwrap()
-                .len(),
-            4
-        );
-
-        // Test sort, regardless of entry order or signature value
-        for slot in (21..25).rev() {
-            let random_bytes: [u8; 64] = std::array::from_fn(|_| rand::random::<u8>());
-            let signature = Signature::from(random_bytes);
-            blockstore
-                .write_transaction_status(
-                    slot,
-                    signature,
-                    vec![&address0],
-                    vec![&address1],
-                    TransactionStatusMeta::default(),
-                    0,
-                )
-                .unwrap();
-        }
-        blockstore.set_roots([21, 22, 23, 24].iter()).unwrap();
-        let mut past_slot = 0;
-        for (slot, _) in blockstore.find_address_signatures(address0, 1, 25).unwrap() {
-            assert!(slot >= past_slot);
-            past_slot = slot;
         }
     }
 
