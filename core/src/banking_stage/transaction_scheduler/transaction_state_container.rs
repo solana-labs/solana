@@ -57,6 +57,11 @@ impl TransactionStateContainer {
         self.priority_queue.capacity() - self.priority_queue.len()
     }
 
+    /// Get the top transaction id in the priority queue.
+    pub(crate) fn pop(&mut self) -> Option<TransactionPriorityId> {
+        self.priority_queue.pop_max()
+    }
+
     /// Get an iterator of the top `n` transaction ids in the priority queue.
     /// This will remove the ids from the queue, but not drain the remainder
     /// of the queue.
@@ -64,7 +69,7 @@ impl TransactionStateContainer {
         &mut self,
         n: usize,
     ) -> impl Iterator<Item = TransactionPriorityId> + '_ {
-        (0..n).map_while(|_| self.priority_queue.pop_max())
+        (0..n).map_while(|_| self.pop())
     }
 
     /// Serialize entire priority queue. `hold` indicates whether the priority queue should
