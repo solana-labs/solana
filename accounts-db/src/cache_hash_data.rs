@@ -226,7 +226,8 @@ impl CacheHashData {
     /// delete all pre-existing files that will not be used
     pub(crate) fn delete_old_cache_files(&self) {
         if self.should_delete_old_cache_files_on_drop {
-            let old_cache_files = std::mem::take(&mut *self.pre_existing_cache_files.lock().unwrap());
+            let old_cache_files =
+                std::mem::take(&mut *self.pre_existing_cache_files.lock().unwrap());
             if !old_cache_files.is_empty() {
                 self.stats
                     .unused_cache_files
