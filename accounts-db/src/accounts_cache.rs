@@ -1,10 +1,12 @@
 use {
-    crate::accounts_db::IncludeSlotInHash,
+    crate::{
+        accounts_db::{AccountsDb, IncludeSlotInHash},
+        accounts_hash::AccountHash,
+    },
     dashmap::DashMap,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
-        hash::Hash,
         pubkey::Pubkey,
     },
     std::{
@@ -141,7 +143,7 @@ pub type CachedAccount = Arc<CachedAccountInner>;
 #[derive(Debug)]
 pub struct CachedAccountInner {
     pub account: AccountSharedData,
-    hash: RwLock<Option<Hash>>,
+    hash: RwLock<Option<AccountHash>>,
     slot: Slot,
     pubkey: Pubkey,
     /// temporarily here during feature activation
@@ -150,13 +152,13 @@ pub struct CachedAccountInner {
 }
 
 impl CachedAccountInner {
-    pub fn hash(&self) -> Hash {
+    pub fn hash(&self) -> AccountHash {
         let hash = self.hash.read().unwrap();
         match *hash {
             Some(hash) => hash,
             None => {
                 drop(hash);
-                let hash = crate::accounts_db::AccountsDb::hash_account(
+                let hash = AccountsDb::hash_account(
                     self.slot,
                     &self.account,
                     &self.pubkey,

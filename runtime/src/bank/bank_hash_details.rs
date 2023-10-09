@@ -8,7 +8,10 @@ use {
         de::{self, Deserialize, Deserializer},
         ser::{Serialize, SerializeSeq, Serializer},
     },
-    solana_accounts_db::{accounts_db::PubkeyHashAccount, accounts_hash::AccountsDeltaHash},
+    solana_accounts_db::{
+        accounts_db::PubkeyHashAccount,
+        accounts_hash::{AccountHash, AccountsDeltaHash},
+    },
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount},
         clock::{Epoch, Slot},
@@ -124,7 +127,7 @@ impl From<&PubkeyHashAccount> for SerdeAccount {
         } = pubkey_hash_account;
         Self {
             pubkey: pubkey.to_string(),
-            hash: hash.to_string(),
+            hash: hash.0.to_string(),
             owner: account.owner().to_string(),
             lamports: account.lamports(),
             rent_epoch: account.rent_epoch(),
@@ -139,7 +142,7 @@ impl TryFrom<SerdeAccount> for PubkeyHashAccount {
 
     fn try_from(temp_account: SerdeAccount) -> Result<Self, Self::Error> {
         let pubkey = Pubkey::from_str(&temp_account.pubkey).map_err(|err| err.to_string())?;
-        let hash = Hash::from_str(&temp_account.hash).map_err(|err| err.to_string())?;
+        let hash = AccountHash(Hash::from_str(&temp_account.hash).map_err(|err| err.to_string())?);
 
         let account = AccountSharedData::from(Account {
             lamports: temp_account.lamports,
@@ -244,7 +247,7 @@ pub mod tests {
             rent_epoch: 123,
         });
         let account_pubkey = Pubkey::new_unique();
-        let account_hash = hash("account".as_bytes());
+        let account_hash = AccountHash(hash("account".as_bytes()));
         let accounts = BankHashAccounts {
             accounts: vec![PubkeyHashAccount {
                 pubkey: account_pubkey,
