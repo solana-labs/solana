@@ -8,7 +8,6 @@ use {
         pubkey::Pubkey,
     },
     std::{
-        borrow::Borrow,
         collections::BTreeSet,
         ops::Deref,
         sync::{
@@ -70,14 +69,13 @@ impl SlotCacheInner {
         &self,
         pubkey: &Pubkey,
         account: AccountSharedData,
-        hash: Option<impl Borrow<Hash>>,
         slot: Slot,
         include_slot_in_hash: IncludeSlotInHash,
     ) -> CachedAccount {
         let data_len = account.data().len() as u64;
         let item = Arc::new(CachedAccountInner {
             account,
-            hash: RwLock::new(hash.map(|h| *h.borrow())),
+            hash: RwLock::new(None),
             slot,
             pubkey: *pubkey,
             include_slot_in_hash,
@@ -233,7 +231,6 @@ impl AccountsCache {
         slot: Slot,
         pubkey: &Pubkey,
         account: AccountSharedData,
-        hash: Option<impl Borrow<Hash>>,
         include_slot_in_hash: IncludeSlotInHash,
     ) -> CachedAccount {
         let slot_cache = self.slot_cache(slot).unwrap_or_else(||
@@ -247,7 +244,7 @@ impl AccountsCache {
                 .or_insert(self.new_inner())
                 .clone());
 
-        slot_cache.insert(pubkey, account, hash, slot, include_slot_in_hash)
+        slot_cache.insert(pubkey, account, slot, include_slot_in_hash)
     }
 
     pub fn load(&self, slot: Slot, pubkey: &Pubkey) -> Option<CachedAccount> {
@@ -351,7 +348,6 @@ pub mod tests {
             inserted_slot,
             &Pubkey::new_unique(),
             AccountSharedData::new(1, 0, &Pubkey::default()),
-            Some(&Hash::default()),
             INCLUDE_SLOT_IN_HASH_TESTS,
         );
         // If the cache is told the size limit is 0, it should return the one slot
@@ -370,7 +366,6 @@ pub mod tests {
             inserted_slot,
             &Pubkey::new_unique(),
             AccountSharedData::new(1, 0, &Pubkey::default()),
-            Some(&Hash::default()),
             INCLUDE_SLOT_IN_HASH_TESTS,
         );
 

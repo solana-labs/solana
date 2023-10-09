@@ -6775,7 +6775,6 @@ impl AccountsDb {
                     slot,
                     accounts_and_meta_to_store.pubkey(i),
                     account,
-                    None::<&Hash>,
                     include_slot_in_hash,
                 );
                 // hash this account in the bg
