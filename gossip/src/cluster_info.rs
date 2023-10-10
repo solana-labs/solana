@@ -33,7 +33,7 @@ use {
         },
         crds_value::{
             self, AccountsHashes, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot,
-            NodeInstance, SnapshotHashes, Version, Vote, MAX_WALLCLOCK,
+            NodeInstance, RestartLastVotedForkSlots, SnapshotHashes, Version, Vote, MAX_WALLCLOCK,
         },
         duplicate_shred::DuplicateShred,
         epoch_slots::EpochSlots,
@@ -965,6 +965,21 @@ impl ClusterInfo {
         }
     }
 
+    pub fn push_restart_last_voted_fork_slots(&self, update: &[Slot], last_vote_bankhash: Hash) {
+        let now = timestamp();
+        let mut last_voted_fork_slots = RestartLastVotedForkSlots::new(
+            self.id(),
+            now,
+            last_vote_bankhash,
+            self.my_shred_version(),
+        );
+        last_voted_fork_slots.fill(update);
+        self.push_message(CrdsValue::new_signed(
+            CrdsData::RestartLastVotedForkSlots(last_voted_fork_slots),
+            &self.keypair(),
+        ));
+    }
+
     fn time_gossip_read_lock<'a>(
         &'a self,
         label: &'static str,
@@ -1213,6 +1228,27 @@ impl ClusterInfo {
             .map(|entry| match &entry.value.data {
                 CrdsData::EpochSlots(_, slots) => slots.clone(),
                 _ => panic!("this should not happen!"),
+            })
+            .collect()
+    }
+
+    pub fn get_restart_last_voted_fork_slots(
+        &self,
+        cursor: &mut Cursor,
+    ) -> Vec<RestartLastVotedForkSlots> {
+        let self_shred_version = self.my_shred_version();
+        let gossip_crds = self.gossip.crds.read().unwrap();
+        gossip_crds
+            .get_entries(cursor)
+            .filter_map(|entry| match &entry.value.data {
+                CrdsData::RestartLastVotedForkSlots(slots) => {
+                    if slots.shred_version == self_shred_version {
+                        Some(slots.clone())
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
             })
             .collect()
     }
@@ -3162,6 +3198,7 @@ mod tests {
             crds_gossip_pull::tests::MIN_NUM_BLOOM_FILTERS,
             crds_value::{CrdsValue, CrdsValueLabel, Vote as CrdsVote},
             duplicate_shred::{self, tests::new_rand_shred, MAX_DUPLICATE_SHREDS},
+            epoch_slots::MAX_SLOTS_PER_ENTRY,
         },
         itertools::izip,
         solana_ledger::shred::Shredder,
@@ -4558,5 +4595,71 @@ mod tests {
             assert_eq!(shred_data.slot, 53084025);
             assert_eq!(shred_data.chunk_index() as usize, i);
         }
+    }
+
+    #[test]
+    fn test_push_restart_last_voted_fork_slots() {
+        let keypair = Arc::new(Keypair::new());
+        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
+        let cluster_info = ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified);
+        let slots = cluster_info.get_restart_last_voted_fork_slots(&mut Cursor::default());
+        assert!(slots.is_empty());
+        let mut update: Vec<Slot> = vec![0];
+        for i in 0..81 {
+            for j in 0..1000 {
+                update.push(i * 1050 + j);
+            }
+        }
+        cluster_info.push_restart_last_voted_fork_slots(&update, Hash::default());
+        cluster_info.flush_push_queue();
+
+        let mut cursor = Cursor::default();
+        let slots = cluster_info.get_restart_last_voted_fork_slots(&mut cursor);
+        assert_eq!(slots.len(), 1);
+        let retrieved_slots = slots[0].to_slots(0);
+        assert_eq!(retrieved_slots.len(), MAX_SLOTS_PER_ENTRY);
+        assert_eq!(retrieved_slots[0], 67816);
+        assert_eq!(retrieved_slots.last(), Some(84999).as_ref());
+
+        let slots = cluster_info.get_restart_last_voted_fork_slots(&mut cursor);
+        assert!(slots.is_empty());
+
+        // Test with different shred versions.
+        let mut rng = rand::thread_rng();
+        let node_pubkey = Pubkey::new_unique();
+        let mut node = LegacyContactInfo::new_rand(&mut rng, Some(node_pubkey));
+        node.set_shred_version(42);
+        let mut slots = RestartLastVotedForkSlots::new_rand(&mut rng, Some(node_pubkey));
+        slots.shred_version = 42;
+        let entries = vec![
+            CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(node)),
+            CrdsValue::new_unsigned(CrdsData::RestartLastVotedForkSlots(slots)),
+        ];
+        {
+            let mut gossip_crds = cluster_info.gossip.crds.write().unwrap();
+            for entry in entries {
+                assert!(gossip_crds
+                    .insert(entry, /*now=*/ 0, GossipRoute::LocalMessage)
+                    .is_ok());
+            }
+        }
+        // Should exclude other node's last-voted-fork-slot because of different
+        // shred-version.
+        let slots = cluster_info.get_restart_last_voted_fork_slots(&mut Cursor::default());
+        assert_eq!(slots.len(), 1);
+        assert_eq!(slots[0].from, cluster_info.id());
+
+        // Match shred versions.
+        {
+            let mut node = cluster_info.my_contact_info.write().unwrap();
+            node.set_shred_version(42);
+        }
+        cluster_info.push_restart_last_voted_fork_slots(&update, Hash::default());
+        cluster_info.flush_push_queue();
+        // Should now include both slots.
+        let slots = cluster_info.get_restart_last_voted_fork_slots(&mut Cursor::default());
+        assert_eq!(slots.len(), 2);
+        assert_eq!(slots[0].from, node_pubkey);
+        assert_eq!(slots[1].from, cluster_info.id());
     }
 }
