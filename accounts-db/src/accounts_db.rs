@@ -5733,7 +5733,11 @@ impl AccountsDb {
             .create_store_count
             .fetch_add(1, Ordering::Relaxed);
         let path_index = thread_rng().gen_range(0..paths.len());
-        let store = Arc::new(self.new_storage_entry(slot, Path::new(&paths[path_index]), size));
+        let store = Arc::new(self.new_storage_entry(
+            slot,
+            Path::new(&paths[path_index]),
+            Self::page_align(size),
+        ));
 
         debug!(
             "creating store: {} slot: {} len: {} size: {} from: {} path: {:?}",
@@ -9909,7 +9913,7 @@ pub mod test_utils {
             // allocate an append vec for this slot that can hold all the test accounts. This prevents us from creating more than 1 append vec for this slot.
             _ = accounts.accounts_db.create_and_insert_store(
                 slot,
-                AccountsDb::page_align(bytes_required as u64),
+                bytes_required as u64,
                 "create_test_accounts",
             );
         }
