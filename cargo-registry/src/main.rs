@@ -307,21 +307,8 @@ async fn main() {
     solana_logger::setup_with_default("solana=info");
     let client = Arc::new(Client::new().expect("Failed to get RPC Client instance"));
 
-    // Use "INADDR_ANY" IP address for server bind()
     let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), client.port);
-
-    // If requested, configure index to use the public IP address
-    if client.use_public_ip {
-        let Some(ip) = public_ip::addr().await else {
-            panic!("Failed to find the public IP address");
-        };
-        DummyGitIndex::create_or_update_git_repo(
-            PathBuf::from("/tmp/dummy-git"),
-            &SocketAddr::new(ip, client.port),
-        );
-    } else {
-        DummyGitIndex::create_or_update_git_repo(PathBuf::from("/tmp/dummy-git"), &bind_addr);
-    };
+    DummyGitIndex::create_or_update_git_repo(PathBuf::from("/tmp/dummy-git"), &client.server_url);
 
     let registry_service = make_service_fn(move |_| {
         let client_inner = client.clone();
