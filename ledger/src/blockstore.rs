@@ -2310,14 +2310,16 @@ impl Blockstore {
         let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
 
         for transaction_status_cf_primary_index in 0..=1 {
-            let index_iterator = self.transaction_status_cf.iter(IteratorMode::From(
-                (
-                    transaction_status_cf_primary_index,
-                    signature,
-                    lowest_available_slot,
-                ),
-                IteratorDirection::Forward,
-            ))?;
+            let index_iterator =
+                self.transaction_status_cf
+                    .iter_current_index_filtered(IteratorMode::From(
+                        (
+                            transaction_status_cf_primary_index,
+                            signature,
+                            lowest_available_slot,
+                        ),
+                        IteratorDirection::Forward,
+                    ))?;
             for ((i, sig, slot), _data) in index_iterator {
                 counter += 1;
                 if i != transaction_status_cf_primary_index || sig != signature {
