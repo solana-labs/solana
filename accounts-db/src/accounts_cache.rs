@@ -1,14 +1,15 @@
 use {
-    crate::accounts_db::IncludeSlotInHash,
+    crate::{
+        accounts_db::{AccountsDb, IncludeSlotInHash},
+        accounts_hash::AccountHash,
+    },
     dashmap::DashMap,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
-        hash::Hash,
         pubkey::Pubkey,
     },
     std::{
-        borrow::Borrow,
         collections::BTreeSet,
         ops::Deref,
         sync::{
@@ -70,14 +71,13 @@ impl SlotCacheInner {
         &self,
         pubkey: &Pubkey,
         account: AccountSharedData,
-        hash: Option<impl Borrow<Hash>>,
         slot: Slot,
         include_slot_in_hash: IncludeSlotInHash,
     ) -> CachedAccount {
         let data_len = account.data().len() as u64;
         let item = Arc::new(CachedAccountInner {
             account,
-            hash: RwLock::new(hash.map(|h| *h.borrow())),
+            hash: RwLock::new(None),
             slot,
             pubkey: *pubkey,
             include_slot_in_hash,
@@ -143,7 +143,7 @@ pub type CachedAccount = Arc<CachedAccountInner>;
 #[derive(Debug)]
 pub struct CachedAccountInner {
     pub account: AccountSharedData,
-    hash: RwLock<Option<Hash>>,
+    hash: RwLock<Option<AccountHash>>,
     slot: Slot,
     pubkey: Pubkey,
     /// temporarily here during feature activation
@@ -152,13 +152,13 @@ pub struct CachedAccountInner {
 }
 
 impl CachedAccountInner {
-    pub fn hash(&self) -> Hash {
+    pub fn hash(&self) -> AccountHash {
         let hash = self.hash.read().unwrap();
         match *hash {
             Some(hash) => hash,
             None => {
                 drop(hash);
-                let hash = crate::accounts_db::AccountsDb::hash_account(
+                let hash = AccountsDb::hash_account(
                     self.slot,
                     &self.account,
                     &self.pubkey,
@@ -233,7 +233,6 @@ impl AccountsCache {
         slot: Slot,
         pubkey: &Pubkey,
         account: AccountSharedData,
-        hash: Option<impl Borrow<Hash>>,
         include_slot_in_hash: IncludeSlotInHash,
     ) -> CachedAccount {
         let slot_cache = self.slot_cache(slot).unwrap_or_else(||
@@ -247,7 +246,7 @@ impl AccountsCache {
                 .or_insert(self.new_inner())
                 .clone());
 
-        slot_cache.insert(pubkey, account, hash, slot, include_slot_in_hash)
+        slot_cache.insert(pubkey, account, slot, include_slot_in_hash)
     }
 
     pub fn load(&self, slot: Slot, pubkey: &Pubkey) -> Option<CachedAccount> {
@@ -351,7 +350,6 @@ pub mod tests {
             inserted_slot,
             &Pubkey::new_unique(),
             AccountSharedData::new(1, 0, &Pubkey::default()),
-            Some(&Hash::default()),
             INCLUDE_SLOT_IN_HASH_TESTS,
         );
         // If the cache is told the size limit is 0, it should return the one slot
@@ -370,7 +368,6 @@ pub mod tests {
             inserted_slot,
             &Pubkey::new_unique(),
             AccountSharedData::new(1, 0, &Pubkey::default()),
-            Some(&Hash::default()),
             INCLUDE_SLOT_IN_HASH_TESTS,
         );
 

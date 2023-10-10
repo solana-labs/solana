@@ -300,8 +300,6 @@ mod tests {
     }
 
     /// Create a test account based on the specified seed.
-    /// The created test account might have default rent_epoch
-    /// and write_version.
     fn create_account(seed: u64) -> (StoredMeta, AccountSharedData) {
         let data_byte = seed as u8;
         let account = Account {
@@ -317,7 +315,7 @@ mod tests {
         };
 
         let stored_meta = StoredMeta {
-            write_version_obsolete: u64::MAX,
+            write_version_obsolete: StoredMetaWriteVersion::default(),
             pubkey: Pubkey::new_unique(),
             data_len: seed,
         };

@@ -1,3 +1,4 @@
+#![cfg(feature = "dev-context-only-utils")]
 use {
     crate::{
         cluster_info_vote_listener::VoteTracker,

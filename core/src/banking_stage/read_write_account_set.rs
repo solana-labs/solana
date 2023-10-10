@@ -1,12 +1,9 @@
 use {
-    solana_sdk::{
-        message::{SanitizedMessage, VersionedMessage},
-        pubkey::Pubkey,
-    },
+    solana_sdk::{message::SanitizedMessage, pubkey::Pubkey},
     std::collections::HashSet,
 };
 
-/// Wrapper struct to check account locks for a batch of transactions.
+/// Wrapper struct to accumulate locks for a batch of transactions.
 #[derive(Debug, Default)]
 pub struct ReadWriteAccountSet {
     /// Set of accounts that are locked for read
@@ -16,66 +13,42 @@ pub struct ReadWriteAccountSet {
 }
 
 impl ReadWriteAccountSet {
-    /// Check static account locks for a transaction message.
-    pub fn check_static_account_locks(&self, message: &VersionedMessage) -> bool {
-        !message
-            .static_account_keys()
+    /// Returns true if all account locks were available and false otherwise.
+    #[allow(dead_code)]
+    pub fn check_locks(&self, message: &SanitizedMessage) -> bool {
+        message
+            .account_keys()
             .iter()
             .enumerate()
-            .any(|(index, pubkey)| {
-                if message.is_maybe_writable(index) {
-                    !self.can_write(pubkey)
+            .all(|(index, pubkey)| {
+                if message.is_writable(index) {
+                    self.can_write(pubkey)
                 } else {
-                    !self.can_read(pubkey)
+                    self.can_read(pubkey)
                 }
             })
     }
 
-    /// Check all account locks and if they are available, lock them.
-    /// Returns true if all account locks are available and false otherwise.
-    pub fn try_locking(&mut self, message: &SanitizedMessage) -> bool {
-        if self.check_sanitized_message_account_locks(message) {
-            self.add_sanitized_message_account_locks(message);
-            true
-        } else {
-            false
-        }
+    /// Add all account locks.
+    /// Returns true if all account locks were available and false otherwise.
+    pub fn take_locks(&mut self, message: &SanitizedMessage) -> bool {
+        message
+            .account_keys()
+            .iter()
+            .enumerate()
+            .fold(true, |all_available, (index, pubkey)| {
+                if message.is_writable(index) {
+                    all_available & self.add_write(pubkey)
+                } else {
+                    all_available & self.add_read(pubkey)
+                }
+            })
     }
 
     /// Clears the read and write sets
     pub fn clear(&mut self) {
         self.read_set.clear();
         self.write_set.clear();
-    }
-
-    /// Check if a sanitized message's account locks are available.
-    fn check_sanitized_message_account_locks(&self, message: &SanitizedMessage) -> bool {
-        !message
-            .account_keys()
-            .iter()
-            .enumerate()
-            .any(|(index, pubkey)| {
-                if message.is_writable(index) {
-                    !self.can_write(pubkey)
-                } else {
-                    !self.can_read(pubkey)
-                }
-            })
-    }
-
-    /// Insert the read and write locks for a sanitized message.
-    fn add_sanitized_message_account_locks(&mut self, message: &SanitizedMessage) {
-        message
-            .account_keys()
-            .iter()
-            .enumerate()
-            .for_each(|(index, pubkey)| {
-                if message.is_writable(index) {
-                    self.add_write(pubkey);
-                } else {
-                    self.add_read(pubkey);
-                }
-            });
     }
 
     /// Check if an account can be read-locked
@@ -89,15 +62,21 @@ impl ReadWriteAccountSet {
     }
 
     /// Add an account to the read-set.
-    /// Should only be called after `can_read()` returns true
-    fn add_read(&mut self, pubkey: &Pubkey) {
+    /// Returns true if the lock was available.
+    fn add_read(&mut self, pubkey: &Pubkey) -> bool {
+        let can_read = self.can_read(pubkey);
         self.read_set.insert(*pubkey);
+
+        can_read
     }
 
     /// Add an account to the write-set.
-    /// Should only be called after `can_write()` returns true
-    fn add_write(&mut self, pubkey: &Pubkey) {
+    /// Returns true if the lock was available.
+    fn add_write(&mut self, pubkey: &Pubkey) -> bool {
+        let can_write = self.can_write(pubkey);
         self.write_set.insert(*pubkey);
+
+        can_write
     }
 }
 
@@ -198,57 +177,11 @@ mod tests {
     }
 
     // Helper function (could potentially use test_case in future).
-    // conflict_index = 0 means write lock conflict
-    // conflict_index = 1 means read lock conflict
-    fn test_check_static_account_locks(conflict_index: usize, add_write: bool, expectation: bool) {
-        let message =
-            create_test_versioned_message(&[Pubkey::new_unique()], &[Pubkey::new_unique()], vec![]);
-
-        let mut account_locks = ReadWriteAccountSet::default();
-        assert!(account_locks.check_static_account_locks(&message));
-
-        let conflict_key = message.static_account_keys().get(conflict_index).unwrap();
-        if add_write {
-            account_locks.add_write(conflict_key);
-        } else {
-            account_locks.add_read(conflict_key);
-        }
-        assert_eq!(
-            expectation,
-            account_locks.check_static_account_locks(&message)
-        );
-    }
-
-    #[test]
-    fn test_check_static_account_locks_write_write_conflict() {
-        test_check_static_account_locks(0, true, false);
-    }
-
-    #[test]
-    fn test_check_static_account_locks_read_write_conflict() {
-        test_check_static_account_locks(0, false, false);
-    }
-
-    #[test]
-    fn test_check_static_account_locks_write_read_conflict() {
-        test_check_static_account_locks(1, true, false);
-    }
-
-    #[test]
-    fn test_check_static_account_locks_read_read_non_conflict() {
-        test_check_static_account_locks(1, false, true);
-    }
-
-    // Helper function (could potentially use test_case in future).
     // conflict_index = 0 means write lock conflict with static key
     // conflict_index = 1 means read lock conflict with static key
     // conflict_index = 2 means write lock conflict with address table key
     // conflict_index = 3 means read lock conflict with address table key
-    fn test_check_sanitized_message_account_locks(
-        conflict_index: usize,
-        add_write: bool,
-        expectation: bool,
-    ) {
+    fn test_check_and_take_locks(conflict_index: usize, add_write: bool, expectation: bool) {
         let bank = create_test_bank();
         let (bank, table_address) = create_test_address_lookup_table(bank, 2);
         let tx = create_test_sanitized_transaction(
@@ -264,7 +197,6 @@ mod tests {
         let message = tx.message();
 
         let mut account_locks = ReadWriteAccountSet::default();
-        assert!(account_locks.check_sanitized_message_account_locks(message));
 
         let conflict_key = message.account_keys().get(conflict_index).unwrap();
         if add_write {
@@ -272,34 +204,32 @@ mod tests {
         } else {
             account_locks.add_read(conflict_key);
         }
-        assert_eq!(
-            expectation,
-            account_locks.check_sanitized_message_account_locks(message)
-        );
+        assert_eq!(expectation, account_locks.check_locks(message));
+        assert_eq!(expectation, account_locks.take_locks(message));
     }
 
     #[test]
-    fn test_check_sanitized_message_account_locks_write_write_conflict() {
-        test_check_sanitized_message_account_locks(0, true, false); // static key conflict
-        test_check_sanitized_message_account_locks(2, true, false); // lookup key conflict
+    fn test_check_and_take_locks_write_write_conflict() {
+        test_check_and_take_locks(0, true, false); // static key conflict
+        test_check_and_take_locks(2, true, false); // lookup key conflict
     }
 
     #[test]
-    fn test_check_sanitized_message_account_locks_read_write_conflict() {
-        test_check_sanitized_message_account_locks(0, false, false); // static key conflict
-        test_check_sanitized_message_account_locks(2, false, false); // lookup key conflict
+    fn test_check_and_take_locks_read_write_conflict() {
+        test_check_and_take_locks(0, false, false); // static key conflict
+        test_check_and_take_locks(2, false, false); // lookup key conflict
     }
 
     #[test]
-    fn test_check_sanitized_message_account_locks_write_read_conflict() {
-        test_check_sanitized_message_account_locks(1, true, false); // static key conflict
-        test_check_sanitized_message_account_locks(3, true, false); // lookup key conflict
+    fn test_check_and_take_locks_write_read_conflict() {
+        test_check_and_take_locks(1, true, false); // static key conflict
+        test_check_and_take_locks(3, true, false); // lookup key conflict
     }
 
     #[test]
-    fn test_check_sanitized_message_account_locks_read_read_non_conflict() {
-        test_check_sanitized_message_account_locks(1, false, true); // static key conflict
-        test_check_sanitized_message_account_locks(3, false, true); // lookup key conflict
+    fn test_check_and_take_locks_read_read_non_conflict() {
+        test_check_and_take_locks(1, false, true); // static key conflict
+        test_check_and_take_locks(3, false, true); // lookup key conflict
     }
 
     #[test]
