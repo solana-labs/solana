@@ -36,7 +36,9 @@ use {
         snapshot_utils,
     },
     solana_sdk::{
-        exit::Exit, genesis_config::DEFAULT_GENESIS_DOWNLOAD_PATH, hash::Hash,
+        exit::Exit,
+        genesis_config::{DEFAULT_GENESIS_DOWNLOAD_PATH, ZSTD_GENESIS_DOWNLOAD_PATH},
+        hash::Hash,
         native_token::lamports_to_sol,
     },
     solana_send_transaction_service::send_transaction_service::{self, SendTransactionService},
@@ -126,7 +128,7 @@ impl RpcRequestMiddleware {
     }
 
     fn is_file_get_path(&self, path: &str) -> bool {
-        if path == DEFAULT_GENESIS_DOWNLOAD_PATH {
+        if path == DEFAULT_GENESIS_DOWNLOAD_PATH || path == ZSTD_GENESIS_DOWNLOAD_PATH {
             return true;
         }
 
@@ -194,6 +196,10 @@ impl RpcRequestMiddleware {
             match path {
                 DEFAULT_GENESIS_DOWNLOAD_PATH => {
                     inc_new_counter_info!("rpc-get_genesis", 1);
+                    self.ledger_path.join(stem)
+                }
+                ZSTD_GENESIS_DOWNLOAD_PATH => {
+                    inc_new_counter_info!("rpc-get_zstd_genesis", 1);
                     self.ledger_path.join(stem)
                 }
                 _ => {
@@ -744,6 +750,7 @@ mod tests {
         assert!(!rrm.is_file_get_path(DEFAULT_GENESIS_ARCHIVE));
         assert!(!rrm.is_file_get_path("//genesis.tar.bz2"));
         assert!(!rrm.is_file_get_path("/../genesis.tar.bz2"));
+        assert!(rrm.is_file_get_path(ZSTD_GENESIS_DOWNLOAD_PATH));
 
         // These two are redirects
         assert!(!rrm.is_file_get_path("/snapshot.tar.bz2"));
