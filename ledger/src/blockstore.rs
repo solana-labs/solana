@@ -1125,7 +1125,7 @@ impl Blockstore {
             .expect("Couldn't fetch from SlotMeta column family")
         {
             // Clear all slot related information
-            self.run_purge(slot, slot, PurgeType::PrimaryIndex)
+            self.run_purge(slot, slot, PurgeType::Exact)
                 .expect("Purge database operations failed");
 
             // Clear this slot as a next slot from parent
