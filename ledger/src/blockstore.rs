@@ -206,7 +206,6 @@ pub struct Blockstore {
     address_signatures_cf: LedgerColumn<cf::AddressSignatures>,
     transaction_memos_cf: LedgerColumn<cf::TransactionMemos>,
     transaction_status_index_cf: LedgerColumn<cf::TransactionStatusIndex>,
-    active_transaction_status_index: RwLock<u64>,
     rewards_cf: LedgerColumn<cf::Rewards>,
     blocktime_cf: LedgerColumn<cf::Blocktime>,
     perf_samples_cf: LedgerColumn<cf::PerfSamples>,
@@ -326,21 +325,11 @@ impl Blockstore {
             .unwrap_or(0);
         let last_root = RwLock::new(max_root);
 
-        // Get active transaction-status index or 0
-        let active_transaction_status_index = db
+        // Initialize transaction status index if entries are not present
+        let initialize_transaction_status_index = db
             .iter::<cf::TransactionStatusIndex>(IteratorMode::Start)?
-            .next();
-        let initialize_transaction_status_index = active_transaction_status_index.is_none();
-        let active_transaction_status_index = active_transaction_status_index
-            .and_then(|(_, data)| {
-                let index0: TransactionStatusIndexMeta = deserialize(&data).unwrap();
-                if index0.frozen {
-                    Some(1)
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(0);
+            .next()
+            .is_none();
 
         measure.stop();
         info!("{:?} {}", blockstore_path, measure);
@@ -360,7 +349,6 @@ impl Blockstore {
             address_signatures_cf,
             transaction_memos_cf,
             transaction_status_index_cf,
-            active_transaction_status_index: RwLock::new(active_transaction_status_index),
             rewards_cf,
             blocktime_cf,
             perf_samples_cf,
