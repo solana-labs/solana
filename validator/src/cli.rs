@@ -1388,7 +1388,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("DIR")
                 .takes_value(true)
                 .required(false)
-                .default_value(&default_args.wen_restart_path)
+                //.default_value(&default_args.wen_restart_path)
                 .conflicts_with("wait_for_supermajority")
                 .help(
                     "When specified, the validator will enter Wen Restart mode which
