@@ -13,6 +13,8 @@ Release channels have their own copy of this changelog:
 
 <a name="edge-channel"></a>
 ## [1.18.0] - Unreleased
+* Changes
+* Upgrade Notes
 
 ## [1.17.0]
 * Changes
