@@ -266,6 +266,21 @@ fn parse_matches() -> ArgMatches<'static> {
                 the ledger they already have saved to disk at
                 boot (results in a much faster boot)"),
         )
+        .arg(
+            Arg::with_name("no_snapshot_fetch")
+                .long("no-snapshot-fetch")
+                .help("Validator config. If set, disables booting validators from a snapshot"),
+        )
+        .arg(
+            Arg::with_name("skip_require_tower")
+                .long("skip-require-tower")
+                .help("Validator config. Disable require tower"),
+        )
+        .arg(
+            Arg::with_name("full_rpc")
+                .long("full-rpc")
+                .help("Validator config. Support full RPC services on all nodes"),
+        )
         .get_matches()
 }
 
@@ -383,8 +398,10 @@ async fn main() {
         } else {
             None
         },
-        skip_poh_verify: matches.is_present("skip_poh_verify")
-
+        skip_poh_verify: matches.is_present("skip_poh_verify"),
+        no_snapshot_fetch: matches.is_present("no_snapshot_fetch"),
+        skip_require_tower: matches.is_present("skip_require_tower"),
+        enable_full_rpc: matches.is_present("enable_full_rpc"),
     };
 
     let wait_for_supermajority: Option<u64> = validator_config.wait_for_supermajority;
