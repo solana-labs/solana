@@ -60,7 +60,7 @@ impl HttpSender {
 
     /// Create an HTTP RPC sender.
     ///
-    /// Most flexiable way to create sender. Accept created `reqwest::Client`.
+    /// Most flexible way to create a sender. Pass a created `reqwest::Client`.
     pub fn new_with_client<U: ToString>(url: U, client: reqwest::Client) -> Self {
         Self {
             client: Arc::new(client),
