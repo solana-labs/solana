@@ -106,6 +106,7 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
     fn from_account_info(
         invoke_context: &InvokeContext,
         memory_mapping: &'b MemoryMapping<'a>,
+        is_disable_cpi_setting_executable_and_rent_epoch_active: bool,
         _vm_addr: u64,
         account_info: &AccountInfo,
         account_metadata: &SerializedAccountMetadata,
@@ -257,8 +258,16 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
             vm_data_addr,
             ref_to_len_in_vm,
             serialized_len_ptr,
-            executable: account_info.executable,
-            rent_epoch: account_info.rent_epoch,
+            executable: if is_disable_cpi_setting_executable_and_rent_epoch_active {
+                false
+            } else {
+                account_info.executable
+            },
+            rent_epoch: if is_disable_cpi_setting_executable_and_rent_epoch_active {
+                0
+            } else {
+                account_info.rent_epoch
+            },
         })
     }
 
@@ -266,6 +275,7 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
     fn from_sol_account_info(
         invoke_context: &InvokeContext,
         memory_mapping: &'b MemoryMapping<'a>,
+        is_disable_cpi_setting_executable_and_rent_epoch_active: bool,
         vm_addr: u64,
         account_info: &SolAccountInfo,
         account_metadata: &SerializedAccountMetadata,
@@ -391,8 +401,16 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
             vm_data_addr: account_info.data_addr,
             ref_to_len_in_vm,
             serialized_len_ptr,
-            executable: account_info.executable,
-            rent_epoch: account_info.rent_epoch,
+            executable: if is_disable_cpi_setting_executable_and_rent_epoch_active {
+                false
+            } else {
+                account_info.executable
+            },
+            rent_epoch: if is_disable_cpi_setting_executable_and_rent_epoch_active {
+                0
+            } else {
+                account_info.rent_epoch
+            },
         })
     }
 
@@ -475,14 +493,36 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
 
         check_instruction_size(ix.accounts.len(), ix.data.len(), invoke_context)?;
 
-        let accounts = translate_slice::<AccountMeta>(
+        let account_metas = translate_slice::<AccountMeta>(
             memory_mapping,
             ix.accounts.as_ptr() as u64,
             ix.accounts.len() as u64,
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),
-        )?
-        .to_vec();
+        )?;
+        let accounts = if invoke_context
+            .feature_set
+            .is_active(&feature_set::disable_cpi_setting_executable_and_rent_epoch::id())
+        {
+            let mut accounts = Vec::with_capacity(ix.accounts.len());
+            #[allow(clippy::needless_range_loop)]
+            for account_index in 0..ix.accounts.len() {
+                #[allow(clippy::indexing_slicing)]
+                let account_meta = &account_metas[account_index];
+                if unsafe {
+                    std::ptr::read_volatile(&account_meta.is_signer as *const _ as *const u8) > 1
+                        || std::ptr::read_volatile(
+                            &account_meta.is_writable as *const _ as *const u8,
+                        ) > 1
+                } {
+                    return Err(Box::new(InstructionError::InvalidArgument));
+                }
+                accounts.push(account_meta.clone());
+            }
+            accounts
+        } else {
+            account_metas.to_vec()
+        };
 
         let ix_data_len = ix.data.len() as u64;
         if invoke_context
@@ -695,7 +735,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
             ix_c.program_id_addr,
             invoke_context.get_check_aligned(),
         )?;
-        let meta_cs = translate_slice::<SolAccountMeta>(
+        let account_metas = translate_slice::<SolAccountMeta>(
             memory_mapping,
             ix_c.accounts_addr,
             ix_c.accounts_len,
@@ -724,21 +764,53 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
             invoke_context.get_check_size(),
         )?
         .to_vec();
-        let accounts = meta_cs
-            .iter()
-            .map(|meta_c| {
+
+        let accounts = if invoke_context
+            .feature_set
+            .is_active(&feature_set::disable_cpi_setting_executable_and_rent_epoch::id())
+        {
+            let mut accounts = Vec::with_capacity(ix_c.accounts_len as usize);
+            #[allow(clippy::needless_range_loop)]
+            for account_index in 0..ix_c.accounts_len as usize {
+                #[allow(clippy::indexing_slicing)]
+                let account_meta = &account_metas[account_index];
+                if unsafe {
+                    std::ptr::read_volatile(&account_meta.is_signer as *const _ as *const u8) > 1
+                        || std::ptr::read_volatile(
+                            &account_meta.is_writable as *const _ as *const u8,
+                        ) > 1
+                } {
+                    return Err(Box::new(InstructionError::InvalidArgument));
+                }
                 let pubkey = translate_type::<Pubkey>(
                     memory_mapping,
-                    meta_c.pubkey_addr,
+                    account_meta.pubkey_addr,
                     invoke_context.get_check_aligned(),
                 )?;
-                Ok(AccountMeta {
+                accounts.push(AccountMeta {
                     pubkey: *pubkey,
-                    is_signer: meta_c.is_signer,
-                    is_writable: meta_c.is_writable,
+                    is_signer: account_meta.is_signer,
+                    is_writable: account_meta.is_writable,
+                });
+            }
+            accounts
+        } else {
+            account_metas
+                .iter()
+                .map(|account_meta| {
+                    let pubkey = translate_type::<Pubkey>(
+                        memory_mapping,
+                        account_meta.pubkey_addr,
+                        invoke_context.get_check_aligned(),
+                    )?;
+                    Ok(AccountMeta {
+                        pubkey: *pubkey,
+                        is_signer: account_meta.is_signer,
+                        is_writable: account_meta.is_writable,
+                    })
                 })
-            })
-            .collect::<Result<Vec<AccountMeta>, Error>>()?;
+                .collect::<Result<Vec<AccountMeta>, Error>>()?
+        };
 
         Ok(StableInstruction {
             accounts: accounts.into(),
@@ -848,17 +920,34 @@ where
         invoke_context.get_check_size(),
     )?;
     check_account_infos(account_infos.len(), invoke_context)?;
-    let account_info_keys = account_infos
-        .iter()
-        .map(|account_info| {
-            translate_type::<Pubkey>(
+    let account_info_keys = if invoke_context
+        .feature_set
+        .is_active(&feature_set::disable_cpi_setting_executable_and_rent_epoch::id())
+    {
+        let mut account_info_keys = Vec::with_capacity(account_infos_len as usize);
+        #[allow(clippy::needless_range_loop)]
+        for account_index in 0..account_infos_len as usize {
+            #[allow(clippy::indexing_slicing)]
+            let account_info = &account_infos[account_index];
+            account_info_keys.push(translate_type::<Pubkey>(
                 memory_mapping,
                 key_addr(account_info),
                 invoke_context.get_check_aligned(),
-            )
-        })
-        .collect::<Result<Vec<_>, Error>>()?;
-
+            )?);
+        }
+        account_info_keys
+    } else {
+        account_infos
+            .iter()
+            .map(|account_info| {
+                translate_type::<Pubkey>(
+                    memory_mapping,
+                    key_addr(account_info),
+                    invoke_context.get_check_aligned(),
+                )
+            })
+            .collect::<Result<Vec<_>, Error>>()?
+    };
     Ok((account_infos, account_info_keys))
 }
 
@@ -879,6 +968,7 @@ where
     F: Fn(
         &InvokeContext,
         &'b MemoryMapping<'a>,
+        bool,
         u64,
         &T,
         &SerializedAccountMetadata,
@@ -887,6 +977,9 @@ where
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let mut accounts = Vec::with_capacity(instruction_accounts.len().saturating_add(1));
+    let is_disable_cpi_setting_executable_and_rent_epoch_active = invoke_context
+        .feature_set
+        .is_active(&disable_cpi_setting_executable_and_rent_epoch::id());
 
     let program_account_index = program_indices
         .last()
@@ -943,16 +1036,19 @@ where
                 })?;
 
             // build the CallerAccount corresponding to this account.
+            if caller_account_index >= account_infos.len() {
+                return Err(Box::new(SyscallError::InvalidLength));
+            }
+            #[allow(clippy::indexing_slicing)]
             let caller_account =
                 do_translate(
                     invoke_context,
                     memory_mapping,
+                    is_disable_cpi_setting_executable_and_rent_epoch_active,
                     account_infos_addr.saturating_add(
                         caller_account_index.saturating_mul(mem::size_of::<T>()) as u64,
                     ),
-                    account_infos
-                        .get(caller_account_index)
-                        .ok_or(SyscallError::InvalidLength)?,
+                    &account_infos[caller_account_index],
                     serialized_metadata,
                 )?;
 
@@ -1822,6 +1918,7 @@ mod tests {
         let caller_account = CallerAccount::from_account_info(
             &invoke_context,
             &memory_mapping,
+            false,
             vm_addr,
             account_info,
             &account_metadata,
