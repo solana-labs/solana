@@ -2461,15 +2461,17 @@ impl Blockstore {
 
         let mut signatures: Vec<(Slot, Signature)> = vec![];
         for transaction_status_cf_primary_index in 0..=1 {
-            let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
-                (
-                    transaction_status_cf_primary_index,
-                    pubkey,
-                    start_slot.max(lowest_available_slot),
-                    Signature::default(),
-                ),
-                IteratorDirection::Forward,
-            ))?;
+            let index_iterator =
+                self.address_signatures_cf
+                    .iter_current_index_filtered(IteratorMode::From(
+                        (
+                            transaction_status_cf_primary_index,
+                            pubkey,
+                            start_slot.max(lowest_available_slot),
+                            Signature::default(),
+                        ),
+                        IteratorDirection::Forward,
+                    ))?;
             for ((i, address, slot, signature), _) in index_iterator {
                 if i != transaction_status_cf_primary_index || slot > end_slot || address != pubkey
                 {
@@ -2496,15 +2498,17 @@ impl Blockstore {
         let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
         let mut signatures: Vec<(Slot, Signature)> = vec![];
         for transaction_status_cf_primary_index in 0..=1 {
-            let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
-                (
-                    transaction_status_cf_primary_index,
-                    pubkey,
-                    slot.max(lowest_available_slot),
-                    Signature::default(),
-                ),
-                IteratorDirection::Forward,
-            ))?;
+            let index_iterator =
+                self.address_signatures_cf
+                    .iter_current_index_filtered(IteratorMode::From(
+                        (
+                            transaction_status_cf_primary_index,
+                            pubkey,
+                            slot.max(lowest_available_slot),
+                            Signature::default(),
+                        ),
+                        IteratorDirection::Forward,
+                    ))?;
             for ((i, address, transaction_slot, signature), _) in index_iterator {
                 if i != transaction_status_cf_primary_index
                     || transaction_slot > slot
