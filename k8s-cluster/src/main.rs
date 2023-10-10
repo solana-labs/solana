@@ -382,7 +382,9 @@ async fn main() {
             Some(limit_ledger_size)
         } else {
             None
-        }
+        },
+        skip_poh_verify: matches.is_present("skip_poh_verify")
+
     };
 
     let wait_for_supermajority: Option<u64> = validator_config.wait_for_supermajority;

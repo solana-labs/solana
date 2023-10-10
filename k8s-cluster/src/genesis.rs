@@ -230,6 +230,10 @@ impl Genesis {
             let keypair = generate_keypair()?;
             self.all_pubkeys.push(keypair.pubkey());
 
+            if account == "identity" {
+                info!("identity: {:?}", keypair.pubkey());
+            }
+
             if let Some(outfile) = outfile.to_str() {
                 output_keypair(&keypair, outfile)
                     .map_err(|err| format!("Unable to write {outfile}: {err}"))?;
