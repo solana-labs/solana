@@ -37,6 +37,7 @@ pub const DEFAULT_GENESIS_FILE: &str = "genesis.bin";
 pub const DEFAULT_GENESIS_ARCHIVE: &str = "genesis.tar.bz2";
 pub const DEFAULT_GENESIS_DOWNLOAD_PATH: &str = "/genesis.tar.bz2";
 pub const ZSTD_GENESIS_ARCHIVE: &str = "genesis.tar.zst";
+pub const ZSTD_GENESIS_DOWNLOAD_PATH: &str = "/genesis.tar.zst";
 
 // deprecated default that is no longer used
 pub const UNUSED_DEFAULT: u64 = 1024;
