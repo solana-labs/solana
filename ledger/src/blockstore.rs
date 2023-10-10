@@ -2310,14 +2310,16 @@ impl Blockstore {
         let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
 
         for transaction_status_cf_primary_index in 0..=1 {
-            let index_iterator = self.transaction_status_cf.iter(IteratorMode::From(
-                (
-                    transaction_status_cf_primary_index,
-                    signature,
-                    lowest_available_slot,
-                ),
-                IteratorDirection::Forward,
-            ))?;
+            let index_iterator =
+                self.transaction_status_cf
+                    .iter_current_index_filtered(IteratorMode::From(
+                        (
+                            transaction_status_cf_primary_index,
+                            signature,
+                            lowest_available_slot,
+                        ),
+                        IteratorDirection::Forward,
+                    ))?;
             for ((i, sig, slot), _data) in index_iterator {
                 counter += 1;
                 if i != transaction_status_cf_primary_index || sig != signature {
@@ -2459,15 +2461,17 @@ impl Blockstore {
 
         let mut signatures: Vec<(Slot, Signature)> = vec![];
         for transaction_status_cf_primary_index in 0..=1 {
-            let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
-                (
-                    transaction_status_cf_primary_index,
-                    pubkey,
-                    start_slot.max(lowest_available_slot),
-                    Signature::default(),
-                ),
-                IteratorDirection::Forward,
-            ))?;
+            let index_iterator =
+                self.address_signatures_cf
+                    .iter_current_index_filtered(IteratorMode::From(
+                        (
+                            transaction_status_cf_primary_index,
+                            pubkey,
+                            start_slot.max(lowest_available_slot),
+                            Signature::default(),
+                        ),
+                        IteratorDirection::Forward,
+                    ))?;
             for ((i, address, slot, signature), _) in index_iterator {
                 if i != transaction_status_cf_primary_index || slot > end_slot || address != pubkey
                 {
@@ -2494,15 +2498,17 @@ impl Blockstore {
         let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
         let mut signatures: Vec<(Slot, Signature)> = vec![];
         for transaction_status_cf_primary_index in 0..=1 {
-            let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
-                (
-                    transaction_status_cf_primary_index,
-                    pubkey,
-                    slot.max(lowest_available_slot),
-                    Signature::default(),
-                ),
-                IteratorDirection::Forward,
-            ))?;
+            let index_iterator =
+                self.address_signatures_cf
+                    .iter_current_index_filtered(IteratorMode::From(
+                        (
+                            transaction_status_cf_primary_index,
+                            pubkey,
+                            slot.max(lowest_available_slot),
+                            Signature::default(),
+                        ),
+                        IteratorDirection::Forward,
+                    ))?;
             for ((i, address, transaction_slot, signature), _) in index_iterator {
                 if i != transaction_status_cf_primary_index
                     || transaction_slot > slot
@@ -2661,10 +2667,12 @@ impl Blockstore {
 
         let mut starting_primary_index_iter_timer = Measure::start("starting_primary_index_iter");
         if slot > next_max_slot {
-            let mut starting_iterator = self.address_signatures_cf.iter(IteratorMode::From(
-                (starting_primary_index, address, slot, Signature::default()),
-                IteratorDirection::Reverse,
-            ))?;
+            let mut starting_iterator =
+                self.address_signatures_cf
+                    .iter_current_index_filtered(IteratorMode::From(
+                        (starting_primary_index, address, slot, Signature::default()),
+                        IteratorDirection::Reverse,
+                    ))?;
 
             // Iterate through starting_iterator until limit is reached
             while address_signatures.len() < limit {
@@ -2697,10 +2705,12 @@ impl Blockstore {
 
         // Iterate through next_iterator until limit is reached
         let mut next_primary_index_iter_timer = Measure::start("next_primary_index_iter_timer");
-        let mut next_iterator = self.address_signatures_cf.iter(IteratorMode::From(
-            (next_primary_index, address, slot, Signature::default()),
-            IteratorDirection::Reverse,
-        ))?;
+        let mut next_iterator =
+            self.address_signatures_cf
+                .iter_current_index_filtered(IteratorMode::From(
+                    (next_primary_index, address, slot, Signature::default()),
+                    IteratorDirection::Reverse,
+                ))?;
         while address_signatures.len() < limit {
             if let Some(((i, key_address, slot, signature), _)) = next_iterator.next() {
                 // Skip next_max_slot, which is already included

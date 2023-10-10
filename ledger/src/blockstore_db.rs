@@ -730,6 +730,19 @@ impl<T: SlotColumn> Column for T {
     }
 }
 
+#[derive(Debug)]
+pub enum IndexError {
+    UnpackError,
+}
+
+/// Helper trait to transition primary indexes out from the columns that are using them. This
+/// abbreviated trait assists in iterating past data with new keys. It will be modified and
+/// expanded in a future version to support writing with the new key and reading both key types.
+pub trait ColumnIndexDeprecation: Column {
+    const CURRENT_INDEX_LEN: usize;
+    fn try_current_index(key: &[u8]) -> std::result::Result<Self::Index, IndexError>;
+}
+
 impl Column for columns::TransactionStatus {
     type Index = (u64, Signature, Slot);
 
@@ -742,14 +755,8 @@ impl Column for columns::TransactionStatus {
     }
 
     fn index(key: &[u8]) -> (u64, Signature, Slot) {
-        if key.len() != 80 {
-            Self::as_index(0)
-        } else {
-            let index = BigEndian::read_u64(&key[0..8]);
-            let signature = Signature::try_from(&key[8..72]).unwrap();
-            let slot = BigEndian::read_u64(&key[72..80]);
-            (index, signature, slot)
-        }
+        <columns::TransactionStatus as ColumnIndexDeprecation>::try_current_index(key)
+            .unwrap_or_else(|_| Self::as_index(0))
     }
 
     fn primary_index(index: Self::Index) -> u64 {
@@ -771,6 +778,20 @@ impl ProtobufColumn for columns::TransactionStatus {
     type Type = generated::TransactionStatusMeta;
 }
 
+impl ColumnIndexDeprecation for columns::TransactionStatus {
+    const CURRENT_INDEX_LEN: usize = 80;
+
+    fn try_current_index(key: &[u8]) -> std::result::Result<Self::Index, IndexError> {
+        if key.len() != Self::CURRENT_INDEX_LEN {
+            return Err(IndexError::UnpackError);
+        }
+        let primary_index = BigEndian::read_u64(&key[0..8]);
+        let signature = Signature::try_from(&key[8..72]).unwrap();
+        let slot = BigEndian::read_u64(&key[72..80]);
+        Ok((primary_index, signature, slot))
+    }
+}
+
 impl Column for columns::AddressSignatures {
     type Index = (u64, Pubkey, Slot, Signature);
 
@@ -784,11 +805,7 @@ impl Column for columns::AddressSignatures {
     }
 
     fn index(key: &[u8]) -> (u64, Pubkey, Slot, Signature) {
-        let index = BigEndian::read_u64(&key[0..8]);
-        let pubkey = Pubkey::try_from(&key[8..40]).unwrap();
-        let slot = BigEndian::read_u64(&key[40..48]);
-        let signature = Signature::try_from(&key[48..112]).unwrap();
-        (index, pubkey, slot, signature)
+        <columns::AddressSignatures as ColumnIndexDeprecation>::try_current_index(key).unwrap()
     }
 
     fn primary_index(index: Self::Index) -> u64 {
@@ -805,6 +822,21 @@ impl Column for columns::AddressSignatures {
 }
 impl ColumnName for columns::AddressSignatures {
     const NAME: &'static str = ADDRESS_SIGNATURES_CF;
+}
+
+impl ColumnIndexDeprecation for columns::AddressSignatures {
+    const CURRENT_INDEX_LEN: usize = 112;
+
+    fn try_current_index(key: &[u8]) -> std::result::Result<Self::Index, IndexError> {
+        if key.len() != Self::CURRENT_INDEX_LEN {
+            return Err(IndexError::UnpackError);
+        }
+        let primary_index = BigEndian::read_u64(&key[0..8]);
+        let pubkey = Pubkey::try_from(&key[8..40]).unwrap();
+        let slot = BigEndian::read_u64(&key[40..48]);
+        let signature = Signature::try_from(&key[48..112]).unwrap();
+        Ok((primary_index, pubkey, slot, signature))
+    }
 }
 
 impl Column for columns::TransactionMemos {
@@ -1614,6 +1646,23 @@ where
         }
 
         result
+    }
+}
+
+impl<C> LedgerColumn<C>
+where
+    C: ColumnIndexDeprecation + ColumnName,
+{
+    pub(crate) fn iter_current_index_filtered(
+        &self,
+        iterator_mode: IteratorMode<C::Index>,
+    ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)> + '_> {
+        let cf = self.handle();
+        let iter = self.backend.iterator_cf::<C>(cf, iterator_mode);
+        Ok(iter.filter_map(|pair| {
+            let (key, value) = pair.unwrap();
+            C::try_current_index(&key).ok().map(|index| (index, value))
+        }))
     }
 }
 
