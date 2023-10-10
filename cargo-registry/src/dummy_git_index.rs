@@ -70,7 +70,11 @@ impl DummyGitIndex {
         if empty || config_written || new_symlink || new_git_symlink {
             let mut index = repository.index().expect("cannot get the Index file");
             index
-                .add_all(["*"].iter(), IndexAddOption::DEFAULT, None)
+                .add_all(
+                    ["config.json", "index"].iter(),
+                    IndexAddOption::DEFAULT,
+                    None,
+                )
                 .expect("Failed to add modified files to git index");
             index.write().expect("Failed to update the git index");
 
