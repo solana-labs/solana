@@ -53,7 +53,7 @@ lazy_static! {
     pub static ref MAYBE_BUILTIN_KEY_OR_SYSVAR: [bool; 256] = {
         let mut temp_table: [bool; 256] = [false; 256];
         BUILTIN_PROGRAMS_KEYS.iter().for_each(|key| temp_table[key.0[0] as usize] = true);
-        sysvar::ALL_IDS.iter().for_each(|key| temp_table[key.0[0] as usize] = true);
+        sysvar::for_each_sysvar_id(|key| temp_table[key.0[0] as usize] = true);
         temp_table
     };
 }

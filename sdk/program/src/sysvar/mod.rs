@@ -100,7 +100,7 @@ pub mod slot_history;
 pub mod stake_history;
 
 lazy_static! {
-    pub static ref ALL_IDS: Vec<Pubkey> = vec![
+    static ref ALL_IDS: Vec<Pubkey> = vec![
         clock::id(),
         epoch_schedule::id(),
         #[allow(deprecated)]
@@ -121,6 +121,17 @@ lazy_static! {
 /// Returns `true` of the given `Pubkey` is a sysvar account.
 pub fn is_sysvar_id(id: &Pubkey) -> bool {
     ALL_IDS.iter().any(|key| key == id)
+}
+
+pub fn extend_with_sysvar_ids(pubkeys: &mut Vec<Pubkey>) {
+    pubkeys.extend(ALL_IDS.iter())
+}
+
+pub fn for_each_sysvar_id<F>(f: F)
+where
+    F: FnMut(&Pubkey),
+{
+    ALL_IDS.iter().for_each(f)
 }
 
 /// Declares an ID that implements [`SysvarId`].

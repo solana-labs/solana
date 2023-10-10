@@ -591,7 +591,7 @@ pub mod sdk_ids {
                 #[allow(deprecated)]
                 stake::config::id(),
             ];
-            sdk_ids.extend(sysvar::ALL_IDS.iter());
+            sysvar::extend_with_sysvar_ids(&mut sdk_ids);
             sdk_ids
         };
     }
