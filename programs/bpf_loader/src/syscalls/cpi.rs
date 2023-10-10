@@ -1385,16 +1385,7 @@ fn update_callee_account(
     if !is_disable_cpi_setting_executable_and_rent_epoch_active
         && callee_account.borrow().rent_epoch() != caller_account.rent_epoch
     {
-        if invoke_context
-            .feature_set
-            .is_active(&enable_early_verification_of_account_modifications::id())
-        {
-            return Err(Box::new(InstructionError::RentEpochModified));
-        } else {
-            callee_account
-                .borrow_mut()
-                .set_rent_epoch(caller_account.rent_epoch);
-        }
+        return Err(Box::new(InstructionError::RentEpochModified));
     }
 
     Ok(())

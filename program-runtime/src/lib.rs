@@ -16,7 +16,6 @@ pub mod invoke_context;
 pub mod loaded_programs;
 pub mod log_collector;
 pub mod message_processor;
-pub mod pre_account;
 pub mod prioritization_fee;
 pub mod stable_log;
 pub mod sysvar_cache;

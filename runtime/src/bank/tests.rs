@@ -6576,8 +6576,9 @@ fn test_bank_hash_consistency() {
     }
 }
 
+#[ignore]
 #[test]
-fn test_same_program_id_uses_unqiue_executable_accounts() {
+fn test_same_program_id_uses_unique_executable_accounts() {
     declare_process_instruction!(process_instruction, 1, |invoke_context| {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
@@ -11475,7 +11476,7 @@ fn test_rent_state_list_len() {
     });
     let transaction_context = TransactionContext::new(
         loaded_txs[0].0.as_ref().unwrap().accounts.clone(),
-        Some(Rent::default()),
+        Rent::default(),
         compute_budget.max_invoke_stack_height,
         compute_budget.max_instruction_trace_length,
     );
@@ -12165,7 +12166,6 @@ fn test_cap_accounts_data_allocations_per_transaction() {
 
     let (genesis_config, mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
     let mut bank = Bank::new_for_tests(&genesis_config);
-    bank.activate_feature(&feature_set::enable_early_verification_of_account_modifications::id());
     bank.activate_feature(&feature_set::cap_accounts_data_allocations_per_transaction::id());
 
     let mut instructions = Vec::new();

@@ -1225,7 +1225,6 @@ mod tests {
             VoteState1_14_11::from(vote_state.clone()),
         )))
         .unwrap();
-
         let version1_14_11_serialized_len = version1_14_11_serialized.len();
         let rent = Rent::default();
         let lamports = rent.minimum_balance(version1_14_11_serialized_len);
@@ -1235,14 +1234,19 @@ mod tests {
 
         // Create a fake TransactionContext with a fake InstructionContext with a single account which is the
         // vote account that was just created
-        let transaction_context =
-            TransactionContext::new(vec![(node_pubkey, vote_account)], None, 0, 0);
+        let processor_account = AccountSharedData::new(0, 0, &solana_sdk::native_loader::id());
+        let transaction_context = TransactionContext::new(
+            vec![(id(), processor_account), (node_pubkey, vote_account)],
+            rent,
+            0,
+            0,
+        );
         let mut instruction_context = InstructionContext::default();
         instruction_context.configure(
             &[0],
             &[InstructionAccount {
-                index_in_transaction: 0,
-                index_in_caller: 0,
+                index_in_transaction: 1,
+                index_in_caller: 1,
                 index_in_callee: 0,
                 is_signer: false,
                 is_writable: true,
