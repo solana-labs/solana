@@ -9907,7 +9907,7 @@ pub mod test_utils {
             // allocate an append vec for this slot that can hold all the test accounts. This prevents us from creating more than 1 append vec for this slot.
             _ = accounts.accounts_db.create_and_insert_store(
                 slot,
-                bytes_required as u64,
+                AccountsDb::page_align(bytes_required as u64),
                 "create_test_accounts",
             );
         }
