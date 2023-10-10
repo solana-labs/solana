@@ -13,6 +13,14 @@ source ci/rust-version.sh nightly
 eval "$(ci/channel-info.sh)"
 cargoNightly="$(readlink -f "./cargo") nightly"
 
+# check that cargo-hack has been installed
+if ! $cargoNightly hack --version >/dev/null 2>&1; then
+  cat >&2 <<EOF
+ERROR: cargo hack failed.
+       install 'cargo hack' with 'cargo install cargo-hack'
+EOF
+fi
+
 echo --- build environment
 (
   set -x
