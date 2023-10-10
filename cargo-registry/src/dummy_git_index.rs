@@ -4,7 +4,6 @@ use {
     std::{
         fs::{self, create_dir_all},
         io::ErrorKind,
-        net::SocketAddr,
         path::PathBuf,
         process::Command,
     },
@@ -19,15 +18,15 @@ struct RegistryConfig {
 pub struct DummyGitIndex {}
 
 impl DummyGitIndex {
-    pub fn create_or_update_git_repo(root_dir: PathBuf, server_addr: &SocketAddr) {
+    pub fn create_or_update_git_repo(root_dir: PathBuf, server_url: &str) {
         create_dir_all(&root_dir).expect("Failed to create root directory");
 
         let expected_config = serde_json::to_string(&RegistryConfig {
             dl: format!(
-                "http://{}/api/v1/crates/{{crate}}/{{version}}/download",
-                server_addr
+                "{}/api/v1/crates/{{crate}}/{{version}}/download",
+                server_url
             ),
-            api: Some(format!("http://{}", server_addr)),
+            api: Some(server_url.to_string()),
         })
         .expect("Failed to create expected config");
 
