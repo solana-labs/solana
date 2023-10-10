@@ -306,7 +306,22 @@ impl CargoRegistryService {
 async fn main() {
     solana_logger::setup_with_default("solana=info");
     let client = Arc::new(Client::new().expect("Failed to get RPC Client instance"));
-    let port = client.port;
+
+    // Use "INADDR_ANY" IP address for server bind()
+    let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), client.port);
+
+    // If requested, configure index to use the public IP address
+    if client.use_public_ip {
+        let Some(ip) = public_ip::addr().await else {
+            panic!("Failed to find the public IP address");
+        };
+        DummyGitIndex::create_or_update_git_repo(
+            PathBuf::from("/tmp/dummy-git"),
+            &SocketAddr::new(ip, client.port),
+        );
+    } else {
+        DummyGitIndex::create_or_update_git_repo(PathBuf::from("/tmp/dummy-git"), &bind_addr);
+    };
 
     let registry_service = make_service_fn(move |_| {
         let client_inner = client.clone();
@@ -317,11 +332,8 @@ async fn main() {
         }
     });
 
-    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port);
-    DummyGitIndex::create_or_update_git_repo(PathBuf::from("/tmp/dummy-git"), &addr);
-
-    let server = Server::bind(&addr).serve(registry_service);
-    info!("Server running on on http://{}", addr);
+    let server = Server::bind(&bind_addr).serve(registry_service);
+    info!("Server running on on http://{}", bind_addr);
 
     let _ = server.await;
 }

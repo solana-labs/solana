@@ -16,6 +16,7 @@ git2 = { workspace = true }
 hyper = { workspace = true, features = ["full"] }
 hyper-staticfile = { workspace = true }
 log = { workspace = true }
+public-ip = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 solana-clap-utils = { workspace = true }

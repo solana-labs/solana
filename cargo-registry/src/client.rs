@@ -37,6 +37,7 @@ impl<'a> ClientConfig<'a> {
 pub struct Client {
     pub rpc_client: Arc<RpcClient>,
     pub port: u16,
+    pub use_public_ip: bool,
     websocket_url: String,
     commitment: commitment_config::CommitmentConfig,
     cli_signers: Vec<Keypair>,
@@ -111,6 +112,13 @@ impl Client {
                     .global(true)
                     .takes_value(true)
                     .help("Cargo registry's local TCP port. The server will bind to this port and wait for requests."),
+            )
+            .arg(
+                Arg::with_name("use_public_ip")
+                    .long("public-ip")
+                    .global(true)
+                    .takes_value(false)
+                    .help("Should the registry server use public IP"),
             )
             .arg(
                 Arg::with_name("commitment")
@@ -192,6 +200,8 @@ impl Client {
 
         let port = value_t_or_exit!(matches, "port", u16);
 
+        let use_public_ip = matches.is_present("use_public_ip");
+
         Ok(Client {
             rpc_client: Arc::new(RpcClient::new_with_timeouts_and_commitment(
                 json_rpc_url.to_string(),
@@ -200,6 +210,7 @@ impl Client {
                 confirm_transaction_initial_timeout,
             )),
             port,
+            use_public_ip,
             websocket_url,
             commitment,
             cli_signers: vec![payer_keypair, authority_keypair],
