@@ -754,14 +754,8 @@ impl Column for columns::TransactionStatus {
     }
 
     fn index(key: &[u8]) -> (u64, Signature, Slot) {
-        if key.len() != 80 {
-            Self::as_index(0)
-        } else {
-            let index = BigEndian::read_u64(&key[0..8]);
-            let signature = Signature::try_from(&key[8..72]).unwrap();
-            let slot = BigEndian::read_u64(&key[72..80]);
-            (index, signature, slot)
-        }
+        <columns::TransactionStatus as ColumnIndexDeprecation>::try_current_index(key)
+            .unwrap_or_else(|_| Self::as_index(0))
     }
 
     fn primary_index(index: Self::Index) -> u64 {
@@ -781,6 +775,20 @@ impl ColumnName for columns::TransactionStatus {
 }
 impl ProtobufColumn for columns::TransactionStatus {
     type Type = generated::TransactionStatusMeta;
+}
+
+impl ColumnIndexDeprecation for columns::TransactionStatus {
+    const CURRENT_INDEX_LEN: usize = 80;
+
+    fn try_current_index(key: &[u8]) -> std::result::Result<Self::Index, IndexError> {
+        if key.len() != Self::CURRENT_INDEX_LEN {
+            return Err(IndexError::UnpackError);
+        }
+        let primary_index = BigEndian::read_u64(&key[0..8]);
+        let signature = Signature::try_from(&key[8..72]).unwrap();
+        let slot = BigEndian::read_u64(&key[72..80]);
+        Ok((primary_index, signature, slot))
+    }
 }
 
 impl Column for columns::AddressSignatures {
