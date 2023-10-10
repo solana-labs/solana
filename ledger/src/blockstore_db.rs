@@ -730,6 +730,7 @@ impl<T: SlotColumn> Column for T {
     }
 }
 
+#[derive(Debug)]
 pub enum IndexError {
     UnpackError,
 }
@@ -804,11 +805,7 @@ impl Column for columns::AddressSignatures {
     }
 
     fn index(key: &[u8]) -> (u64, Pubkey, Slot, Signature) {
-        let index = BigEndian::read_u64(&key[0..8]);
-        let pubkey = Pubkey::try_from(&key[8..40]).unwrap();
-        let slot = BigEndian::read_u64(&key[40..48]);
-        let signature = Signature::try_from(&key[48..112]).unwrap();
-        (index, pubkey, slot, signature)
+        <columns::AddressSignatures as ColumnIndexDeprecation>::try_current_index(key).unwrap()
     }
 
     fn primary_index(index: Self::Index) -> u64 {
@@ -825,6 +822,21 @@ impl Column for columns::AddressSignatures {
 }
 impl ColumnName for columns::AddressSignatures {
     const NAME: &'static str = ADDRESS_SIGNATURES_CF;
+}
+
+impl ColumnIndexDeprecation for columns::AddressSignatures {
+    const CURRENT_INDEX_LEN: usize = 112;
+
+    fn try_current_index(key: &[u8]) -> std::result::Result<Self::Index, IndexError> {
+        if key.len() != Self::CURRENT_INDEX_LEN {
+            return Err(IndexError::UnpackError);
+        }
+        let primary_index = BigEndian::read_u64(&key[0..8]);
+        let pubkey = Pubkey::try_from(&key[8..40]).unwrap();
+        let slot = BigEndian::read_u64(&key[40..48]);
+        let signature = Signature::try_from(&key[48..112]).unwrap();
+        Ok((primary_index, pubkey, slot, signature))
+    }
 }
 
 impl Column for columns::TransactionMemos {
