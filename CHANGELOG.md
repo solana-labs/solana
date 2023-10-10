@@ -11,8 +11,16 @@ Release channels have their own copy of this changelog:
 * [beta - v1.16](https://github.com/solana-labs/solana/blob/v1.16/CHANGELOG.md)
 * [stable - v1.14](https://github.com/solana-labs/solana/blob/v1.14/CHANGELOG.md)
 
+## [1.17.2] - Unreleased
+* Changes
+* Upgrade Notes
+
+## [1.17.1]
+* Changes
+* Upgrade Notes
+
 <a name="edge-channel"></a>
-## [1.17.0] - Unreleased
+## [1.17.0]
 * Changes
   * Added a changelog.
 * Upgrade Notes
