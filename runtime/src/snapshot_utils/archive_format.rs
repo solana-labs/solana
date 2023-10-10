@@ -44,6 +44,7 @@ impl ArchiveFormat {
         match archive_format_str {
             "zstd" => Some(ArchiveFormat::TarZstd),
             "lz4" => Some(ArchiveFormat::TarLz4),
+            "tar" | "none" => Some(ArchiveFormat::Tar),
             _ => None,
         }
     }
