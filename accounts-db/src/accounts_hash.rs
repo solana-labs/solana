@@ -109,7 +109,7 @@ impl AccountHashesFile {
 
             // Retry 5 times to allocate the AccountHashesFile. The memory might be fragmented and
             // causes memory allocation failure. Therefore, let's retry after failure. Hoping that the
-            // kernel have the chance to defrag the memory between the retires, and retries succeed.
+            // kernel has the chance to defrag the memory between the retries, and retries succeed.
             let mut num_retries = 0;
             let data = loop {
                 num_retries += 1;
