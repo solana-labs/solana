@@ -16,9 +16,6 @@ pub enum PurgeType {
     /// A slower but more accurate way to purge slots by also ensuring higher
     /// level of consistency between data during the clean up process.
     Exact,
-    /// A faster approximation of `Exact` where the purge process only takes
-    /// care of the primary index and does not update the associated entries.
-    PrimaryIndex,
     /// The fastest purge mode that relies on the slot-id based TTL
     /// compaction filter to do the cleanup.
     CompactionFilter,
@@ -158,7 +155,7 @@ impl Blockstore {
             .batch()
             .expect("Database Error: Failed to get write batch");
         let mut delete_range_timer = Measure::start("delete_range");
-        let mut columns_purged = self
+        let columns_purged = self
             .db
             .delete_range_cf::<cf::SlotMeta>(&mut write_batch, from_slot, to_slot)
             .is_ok()
@@ -218,19 +215,9 @@ impl Blockstore {
                 .db
                 .delete_range_cf::<cf::OptimisticSlots>(&mut write_batch, from_slot, to_slot)
                 .is_ok();
-        let mut w_active_transaction_status_index =
-            self.active_transaction_status_index.write().unwrap();
         match purge_type {
             PurgeType::Exact => {
                 self.purge_special_columns_exact(&mut write_batch, from_slot, to_slot)?;
-            }
-            PurgeType::PrimaryIndex => {
-                self.purge_special_columns_with_primary_index(
-                    &mut write_batch,
-                    &mut columns_purged,
-                    &mut w_active_transaction_status_index,
-                    to_slot,
-                )?;
             }
             PurgeType::CompactionFilter => {
                 // No explicit action is required here because this purge type completely and
@@ -273,10 +260,6 @@ impl Blockstore {
         purge_stats.write_batch += write_timer.as_us();
         purge_stats.delete_files_in_range += purge_files_in_range_timer.as_us();
 
-        // only drop w_active_transaction_status_index after we do db.write(write_batch);
-        // otherwise, readers might be confused with inconsistent state between
-        // self.active_transaction_status_index and RockDb's TransactionStatusIndex contents
-        drop(w_active_transaction_status_index);
         Ok(columns_purged)
     }
 
@@ -455,37 +438,6 @@ impl Blockstore {
         if index1.max_slot >= from_slot && index1.max_slot <= to_slot {
             index1.max_slot = from_slot.saturating_sub(1);
             batch.put::<cf::TransactionStatusIndex>(1, &index1)?;
-        }
-        Ok(())
-    }
-
-    /// Purges special columns (using a non-Slot primary-index) by range. Purge
-    /// occurs if frozen primary index has a max-slot less than the highest slot
-    /// being purged.
-    fn purge_special_columns_with_primary_index(
-        &self,
-        write_batch: &mut WriteBatch,
-        columns_purged: &mut bool,
-        w_active_transaction_status_index: &mut u64,
-        to_slot: Slot,
-    ) -> Result<()> {
-        if let Some(purged_index) = self.toggle_transaction_status_index(
-            write_batch,
-            w_active_transaction_status_index,
-            to_slot + 1,
-        )? {
-            *columns_purged &= self
-                .db
-                .delete_range_cf::<cf::TransactionStatus>(write_batch, purged_index, purged_index)
-                .is_ok()
-                & self
-                    .db
-                    .delete_range_cf::<cf::AddressSignatures>(
-                        write_batch,
-                        purged_index,
-                        purged_index,
-                    )
-                    .is_ok();
         }
         Ok(())
     }
