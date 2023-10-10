@@ -56,6 +56,30 @@ pub enum UiAccountData {
     Binary(String, UiAccountEncoding),
 }
 
+impl UiAccountData {
+    /// Returns decoded account data in binary format if possible
+    pub fn decode(&self) -> Option<Vec<u8>> {
+        match self {
+            UiAccountData::Json(_) => None,
+            UiAccountData::LegacyBinary(blob) => bs58::decode(blob).into_vec().ok(),
+            UiAccountData::Binary(blob, encoding) => match encoding {
+                UiAccountEncoding::Base58 => bs58::decode(blob).into_vec().ok(),
+                UiAccountEncoding::Base64 => BASE64_STANDARD.decode(blob).ok(),
+                UiAccountEncoding::Base64Zstd => {
+                    BASE64_STANDARD.decode(blob).ok().and_then(|zstd_data| {
+                        let mut data = vec![];
+                        zstd::stream::read::Decoder::new(zstd_data.as_slice())
+                            .and_then(|mut reader| reader.read_to_end(&mut data))
+                            .map(|_| data)
+                            .ok()
+                    })
+                }
+                UiAccountEncoding::Binary | UiAccountEncoding::JsonParsed => None,
+            },
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub enum UiAccountEncoding {
@@ -139,24 +163,7 @@ impl UiAccount {
     }
 
     pub fn decode<T: WritableAccount>(&self) -> Option<T> {
-        let data = match &self.data {
-            UiAccountData::Json(_) => None,
-            UiAccountData::LegacyBinary(blob) => bs58::decode(blob).into_vec().ok(),
-            UiAccountData::Binary(blob, encoding) => match encoding {
-                UiAccountEncoding::Base58 => bs58::decode(blob).into_vec().ok(),
-                UiAccountEncoding::Base64 => BASE64_STANDARD.decode(blob).ok(),
-                UiAccountEncoding::Base64Zstd => {
-                    BASE64_STANDARD.decode(blob).ok().and_then(|zstd_data| {
-                        let mut data = vec![];
-                        zstd::stream::read::Decoder::new(zstd_data.as_slice())
-                            .and_then(|mut reader| reader.read_to_end(&mut data))
-                            .map(|_| data)
-                            .ok()
-                    })
-                }
-                UiAccountEncoding::Binary | UiAccountEncoding::JsonParsed => None,
-            },
-        }?;
+        let data = self.data.decode()?;
         Some(T::create(
             self.lamports,
             data,
