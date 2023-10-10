@@ -310,7 +310,7 @@ fn goto_end_of_slot(bank: &Bank) {
     let mut tick_hash = bank.last_blockhash();
     loop {
         tick_hash = hashv(&[tick_hash.as_ref(), &[42]]);
-        bank.register_tick(&tick_hash);
+        bank.register_tick_for_test(&tick_hash);
         if tick_hash == bank.last_blockhash() {
             bank.freeze();
             return;
@@ -742,7 +742,7 @@ fn test_bank_forks_incremental_snapshot(
             assert_eq!(bank.process_transaction(&tx), Ok(()));
 
             while !bank.is_complete() {
-                bank.register_tick(&Hash::new_unique());
+                bank.register_unique_tick();
             }
 
             bank_forks.insert(bank)
@@ -1041,7 +1041,7 @@ fn test_snapshots_with_background_services(
             assert_eq!(bank.process_transaction(&tx), Ok(()));
 
             while !bank.is_complete() {
-                bank.register_tick(&Hash::new_unique());
+                bank.register_unique_tick();
             }
 
             bank_forks.write().unwrap().insert(bank);

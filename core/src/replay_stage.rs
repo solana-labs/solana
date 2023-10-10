@@ -4834,7 +4834,7 @@ pub(crate) mod tests {
         genesis_config.ticks_per_slot = 4;
         let bank0 = Bank::new_for_tests(&genesis_config);
         for _ in 0..genesis_config.ticks_per_slot {
-            bank0.register_tick(&Hash::default());
+            bank0.register_default_tick_for_test();
         }
         bank0.freeze();
         let arc_bank0 = Arc::new(bank0);
@@ -4879,7 +4879,7 @@ pub(crate) mod tests {
                 &solana_sdk::pubkey::new_rand(),
             );
             for _ in 0..genesis_config.ticks_per_slot {
-                bank.register_tick(&Hash::default());
+                bank.register_default_tick_for_test();
             }
             bank_forks.write().unwrap().insert(bank);
             let arc_bank = bank_forks.read().unwrap().get(i).unwrap();

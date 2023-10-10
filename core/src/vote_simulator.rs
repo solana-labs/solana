@@ -1,3 +1,4 @@
+#![cfg(feature = "dev-context-only-utils")]
 use {
     crate::{
         cluster_info_vote_listener::VoteTracker,
@@ -117,7 +118,7 @@ impl VoteSimulator {
                 }
             }
             while new_bank.tick_height() < new_bank.max_tick_height() {
-                new_bank.register_tick(&Hash::new_unique());
+                new_bank.register_unique_tick();
             }
             if !visit.node().has_no_child() || is_frozen {
                 new_bank.freeze();
@@ -358,7 +359,7 @@ pub fn initialize_state(
     }
 
     while bank0.tick_height() < bank0.max_tick_height() {
-        bank0.register_tick(&Hash::new_unique());
+        bank0.register_unique_tick();
     }
     bank0.freeze();
     let mut progress = ProgressMap::default();

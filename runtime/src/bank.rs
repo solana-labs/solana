@@ -4208,6 +4208,22 @@ impl Bank {
         self.tick_height.fetch_add(1, Relaxed);
     }
 
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn register_tick_for_test(&self, hash: &Hash) {
+        // currently meaningless wrapper; upcoming pr will make it an actual helper...
+        self.register_tick(hash)
+    }
+
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn register_default_tick_for_test(&self) {
+        self.register_tick(&Hash::default())
+    }
+
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn register_unique_tick(&self) {
+        self.register_tick(&Hash::new_unique())
+    }
+
     pub fn is_complete(&self) -> bool {
         self.tick_height() == self.max_tick_height()
     }
