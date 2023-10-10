@@ -6347,12 +6347,14 @@ dependencies = [
  "static_assertions",
  "strum",
  "strum_macros",
+ "tar",
  "tempfile",
  "test-case",
  "thiserror",
  "tokio",
  "tokio-stream",
  "trees",
+ "zstd",
 ]
 
 [[package]]

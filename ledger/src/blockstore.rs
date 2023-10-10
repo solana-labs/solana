@@ -49,7 +49,7 @@ use {
         account::ReadableAccount,
         address_lookup_table::state::AddressLookupTable,
         clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND},
-        genesis_config::{GenesisConfig, DEFAULT_GENESIS_ARCHIVE, DEFAULT_GENESIS_FILE},
+        genesis_config::{GenesisConfig, DEFAULT_GENESIS_FILE, ZSTD_GENESIS_ARCHIVE},
         hash::Hash,
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer},
@@ -69,7 +69,7 @@ use {
         collections::{hash_map::Entry as HashMapEntry, BTreeSet, HashMap, HashSet, VecDeque},
         convert::TryInto,
         fmt::Write,
-        fs,
+        fs::{self, File},
         io::{Error as IoError, ErrorKind},
         path::{Path, PathBuf},
         rc::Rc,
@@ -4121,32 +4121,14 @@ pub fn create_new_ledger(
     // Explicitly close the blockstore before we create the archived genesis file
     drop(blockstore);
 
-    let archive_path = ledger_path.join(DEFAULT_GENESIS_ARCHIVE);
-    let args = vec![
-        "jcfhS",
-        archive_path.to_str().unwrap(),
-        "-C",
-        ledger_path.to_str().unwrap(),
-        DEFAULT_GENESIS_FILE,
-        blockstore_dir,
-    ];
-    let output = std::process::Command::new("tar")
-        .args(args)
-        .output()
-        .unwrap();
-    if !output.status.success() {
-        use std::str::from_utf8;
-        error!("tar stdout: {}", from_utf8(&output.stdout).unwrap_or("?"));
-        error!("tar stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
-
-        return Err(BlockstoreError::Io(IoError::new(
-            ErrorKind::Other,
-            format!(
-                "Error trying to generate snapshot archive: {}",
-                output.status
-            ),
-        )));
-    }
+    let archive_path = ledger_path.join(ZSTD_GENESIS_ARCHIVE);
+    let archive_stream =
+        zstd::Encoder::auto_finish(zstd::Encoder::new(File::create(&archive_path)?, 0)?);
+    let mut archive = tar::Builder::new(archive_stream);
+    archive.append_path_with_name(ledger_path.join(DEFAULT_GENESIS_FILE), DEFAULT_GENESIS_FILE)?;
+    archive.append_dir_all("rocksdb", ledger_path.join(blockstore_dir))?;
+    archive.finish()?;
+    drop(archive);
 
     // ensure the genesis archive can be unpacked and it is under
     // max_genesis_archive_unpacked_size, immediately after creating it above.
@@ -4165,13 +4147,13 @@ pub fn create_new_ledger(
             let mut error_messages = String::new();
 
             fs::rename(
-                ledger_path.join(DEFAULT_GENESIS_ARCHIVE),
-                ledger_path.join(format!("{DEFAULT_GENESIS_ARCHIVE}.failed")),
+                &archive_path,
+                archive_path.with_file_name(format!("{ZSTD_GENESIS_ARCHIVE}.failed")),
             )
             .unwrap_or_else(|e| {
                 let _ = write!(
                     &mut error_messages,
-                    "/failed to stash problematic {DEFAULT_GENESIS_ARCHIVE}: {e}"
+                    "/failed to stash problematic {ZSTD_GENESIS_ARCHIVE}: {e}"
                 );
             });
             fs::rename(
