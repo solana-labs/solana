@@ -5341,6 +5341,7 @@ dependencies = [
  "tempfile",
  "test-case",
  "thiserror",
+ "zstd",
 ]
 
 [[package]]

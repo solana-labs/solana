@@ -2,7 +2,9 @@ use {
     bzip2::bufread::BzDecoder,
     log::*,
     rand::{thread_rng, Rng},
-    solana_sdk::genesis_config::{GenesisConfig, DEFAULT_GENESIS_ARCHIVE, DEFAULT_GENESIS_FILE},
+    solana_sdk::genesis_config::{
+        GenesisConfig, DEFAULT_GENESIS_ARCHIVE, DEFAULT_GENESIS_FILE, ZSTD_GENESIS_ARCHIVE,
+    },
     std::{
         collections::HashMap,
         fs::{self, File},
@@ -451,7 +453,12 @@ pub fn open_genesis_config(
     max_genesis_archive_unpacked_size: u64,
 ) -> GenesisConfig {
     GenesisConfig::load(ledger_path).unwrap_or_else(|load_err| {
-        let genesis_package = ledger_path.join(DEFAULT_GENESIS_ARCHIVE);
+        let genesis_package_zstd = ledger_path.join(ZSTD_GENESIS_ARCHIVE);
+        let genesis_package = if genesis_package_zstd.exists() {
+            genesis_package_zstd
+        } else {
+            ledger_path.join(DEFAULT_GENESIS_ARCHIVE)
+        };
         unpack_genesis_archive(
             &genesis_package,
             ledger_path,
@@ -479,8 +486,13 @@ pub fn unpack_genesis_archive(
     let extract_start = Instant::now();
 
     fs::create_dir_all(destination_dir)?;
-    let tar_bz2 = File::open(archive_filename)?;
-    let tar = BzDecoder::new(BufReader::new(tar_bz2));
+    let tar_comp = File::open(archive_filename)?;
+    let tar: Box<dyn Read> = match archive_filename.extension().and_then(|x| x.to_str()) {
+        Some("zst") => {
+            Box::new(zstd::stream::read::Decoder::new(BufReader::new(tar_comp)).unwrap())
+        }
+        _ => Box::new(BzDecoder::new(BufReader::new(tar_comp))),
+    };
     let mut archive = Archive::new(tar);
     unpack_genesis(
         &mut archive,
