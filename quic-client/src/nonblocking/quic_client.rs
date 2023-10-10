@@ -582,13 +582,14 @@ impl ClientConnection for QuicClientConnection {
 
     async fn send_data(&self, data: &[u8]) -> TransportResult<()> {
         let stats = Arc::new(ClientStats::default());
-        // When data is empty which is from cache warmer, we are not sending packets actually, do not count it in stats.
+        // When data is empty which is from cache warmer, we are not sending packets actually, do not count it in
         let num_packets = if data.is_empty() { 0 } else { 1 };
         self.client
             .send_buffer(data, &stats, self.connection_stats.clone())
             .map_ok(|v| {
                 self.connection_stats
                     .add_client_stats(&stats, num_packets, true);
+                v
             })
             .map_err(|e| {
                 warn!(
