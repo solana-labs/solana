@@ -107,9 +107,9 @@ impl AccountHashesFile {
                 Ok(data)
             };
 
-            // Retry 5 times for allocation the AccountHashFile. The memory maybe fragmented and
-            // causes memory allocation failure. Therefore, retry after failure. Hoping that the
-            // kernel can defrag the memory and allocation retries can succeed.
+            // Retry 5 times to allocate the AccountHashesFile. The memory might be fragmented and
+            // causes memory allocation failure. Therefore, let's retry after failure. Hoping that the
+            // kernel have the chance to defrag the memory between the retires, and retries succeed.
             let mut num_retries = 0;
             let data = loop {
                 num_retries += 1;
@@ -120,7 +120,7 @@ impl AccountHashesFile {
                     }
                     Err(err) => {
                         info!(
-                            "Unable to create account hash file within {}: {}, retry counter {}",
+                            "Unable to create account hashes file within {}: {}, retry counter {}",
                             self.dir_for_temp_cache_files.display(),
                             err,
                             num_retries
@@ -128,12 +128,12 @@ impl AccountHashesFile {
 
                         if num_retries > 5 {
                             panic!(
-                                "Unable to create account hash file within {}: after {} retries",
+                                "Unable to create account hashes file within {}: after {} retries",
                                 self.dir_for_temp_cache_files.display(),
                                 num_retries
                             );
                         }
-                        datapoint_info!("account_hash_file_allocation_retry", ("retry", 1, i64),);
+                        datapoint_info!("retry_account_hashes_file_allocation", ("retry", 1, i64));
                         thread::sleep(time::Duration::from_millis(num_retries * 100));
                     }
                 }
