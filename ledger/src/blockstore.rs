@@ -361,6 +361,7 @@ impl Blockstore {
             slots_stats: SlotsStats::default(),
         };
         blockstore.cleanup_old_entries()?;
+        blockstore.update_highest_primary_index_slot()?;
 
         Ok(blockstore)
     }
@@ -2134,6 +2135,27 @@ impl Blockstore {
 
     fn get_highest_primary_index_slot(&self) -> Option<Slot> {
         *self.highest_primary_index_slot.read().unwrap()
+    }
+
+    fn set_highest_primary_index_slot(&self, slot: Option<Slot>) {
+        *self.highest_primary_index_slot.write().unwrap() = slot;
+    }
+
+    fn update_highest_primary_index_slot(&self) -> Result<()> {
+        let iterator = self.transaction_status_index_cf.iter(IteratorMode::Start)?;
+        let mut highest_primary_index_slot = None;
+        for (_, data) in iterator {
+            let meta: TransactionStatusIndexMeta = deserialize(&data).unwrap();
+            if highest_primary_index_slot.is_none()
+                || highest_primary_index_slot.is_some_and(|slot| slot < meta.max_slot)
+            {
+                highest_primary_index_slot = Some(meta.max_slot);
+            }
+        }
+        if highest_primary_index_slot.is_some() {
+            self.set_highest_primary_index_slot(highest_primary_index_slot);
+        }
+        Ok(())
     }
 
     fn read_deprecated_transaction_status(
