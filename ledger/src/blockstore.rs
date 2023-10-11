@@ -358,7 +358,7 @@ impl Blockstore {
             lowest_cleanup_slot: RwLock::<Slot>::default(),
             slots_stats: SlotsStats::default(),
         };
-        blockstore.initialize_transaction_status_index()?;
+        blockstore.cleanup_old_entries()?;
 
         Ok(blockstore)
     }
@@ -2102,11 +2102,7 @@ impl Blockstore {
             .collect()
     }
 
-    /// Initializes the TransactionStatusIndex column family with two records, `0` and `1`,
-    /// which are used as the primary index for entries in the TransactionStatus and
-    /// AddressSignatures columns. At any given time, one primary index is active (ie. new records
-    /// are stored under this index), the other is frozen.
-    fn initialize_transaction_status_index(&self) -> Result<()> {
+    fn cleanup_old_entries(&self) -> Result<()> {
         if !self.is_primary_access() {
             return Ok(());
         }
