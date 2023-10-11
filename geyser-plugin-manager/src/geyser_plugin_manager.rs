@@ -343,7 +343,7 @@ pub(crate) fn load_plugin_from_config(
         libpath = config_dir.join(libpath);
     }
 
-    let libname = result["libname"].as_str().map(|s| s.to_owned());
+    let plugin_name = result["name"].as_str().map(|s| s.to_owned());
 
     let config_file = geyser_plugin_config_file
         .as_os_str()
@@ -359,7 +359,11 @@ pub(crate) fn load_plugin_from_config(
         let plugin_raw = constructor();
         (Box::from_raw(plugin_raw), lib)
     };
-    Ok((LoadedGeyserPlugin::new(plugin, libname), lib, config_file))
+    Ok((
+        LoadedGeyserPlugin::new(plugin, plugin_name),
+        lib,
+        config_file,
+    ))
 }
 
 #[cfg(test)]
