@@ -1509,8 +1509,19 @@ pub fn main() {
 
     let archive_format = {
         let archive_format_str = value_t_or_exit!(matches, "snapshot_archive_format", String);
-        ArchiveFormat::from_cli_arg(&archive_format_str)
-            .unwrap_or_else(|| panic!("Archive format not recognized: {archive_format_str}"))
+        let archive_format = ArchiveFormat::from_cli_arg(&archive_format_str)
+            .unwrap_or_else(|| panic!("Archive format not recognized: {archive_format_str}"));
+        match archive_format {
+            ArchiveFormat::TarBzip2 | ArchiveFormat::TarGzip | ArchiveFormat::Tar => {
+                warn!(
+                    "The specified --snapshot-archive-format is deprecated. Update to use either \
+                    zstd or lz4, or do not pass --snapshot-archive-format argument at all to use \
+                    the default value of zstd. Deprecated value: {archive_format_str}"
+                );
+            }
+            ArchiveFormat::TarZstd | ArchiveFormat::TarLz4 => {}
+        }
+        archive_format
     };
 
     let snapshot_version =
