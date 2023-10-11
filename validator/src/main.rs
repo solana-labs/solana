@@ -1515,7 +1515,7 @@ pub fn main() {
             ArchiveFormat::TarBzip2 | ArchiveFormat::TarGzip | ArchiveFormat::Tar => {
                 warn!(
                     "The specified --snapshot-archive-format is deprecated. Update to use either \
-                    lz4 or zstd, or do not pass --snapshot-archive-format argument at all to use \
+                    zstd or lz4, or do not pass --snapshot-archive-format argument at all to use \
                     the default value of zstd. Deprecated value: {archive_format_str}"
                 );
             }
