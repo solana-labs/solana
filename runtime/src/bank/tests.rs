@@ -2746,7 +2746,7 @@ fn test_bank_tx_fee() {
     );
 
     assert_eq!(bank.get_balance(&leader), initial_balance);
-    goto_end_of_slot(&bank);
+    goto_end_of_slot(bank.clone());
     assert_eq!(bank.signature_count(), 1);
     assert_eq!(
         bank.get_balance(&leader),
@@ -2786,7 +2786,7 @@ fn test_bank_tx_fee() {
         bank.get_balance(&mint_keypair.pubkey()),
         mint - arbitrary_transfer_amount - 2 * expected_fee_paid
     ); // mint_keypair still pays a fee
-    goto_end_of_slot(&bank);
+    goto_end_of_slot(bank.clone());
     assert_eq!(bank.signature_count(), 1);
 
     // Profit! 2 transaction signatures processed at 3 lamports each
@@ -2858,7 +2858,7 @@ fn test_bank_tx_compute_unit_fee() {
     );
 
     assert_eq!(bank.get_balance(&leader), initial_balance);
-    goto_end_of_slot(&bank);
+    goto_end_of_slot(bank.clone());
     assert_eq!(bank.signature_count(), 1);
     assert_eq!(
         bank.get_balance(&leader),
@@ -2898,7 +2898,7 @@ fn test_bank_tx_compute_unit_fee() {
         bank.get_balance(&mint_keypair.pubkey()),
         mint - arbitrary_transfer_amount - 2 * expected_fee_paid
     ); // mint_keypair still pays a fee
-    goto_end_of_slot(&bank);
+    goto_end_of_slot(bank.clone());
     assert_eq!(bank.signature_count(), 1);
 
     // Profit! 2 transaction signatures processed at 3 lamports each
@@ -2937,13 +2937,13 @@ fn test_bank_blockhash_fee_structure() {
     genesis_config.fee_rate_governor.target_signatures_per_slot = 0;
 
     let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-    goto_end_of_slot(&bank);
+    goto_end_of_slot(bank.clone());
     let cheap_blockhash = bank.last_blockhash();
     let cheap_lamports_per_signature = bank.get_lamports_per_signature();
     assert_eq!(cheap_lamports_per_signature, 0);
 
     let bank = Arc::new(Bank::new_from_parent(bank, &leader, 1));
-    goto_end_of_slot(&bank);
+    goto_end_of_slot(bank.clone());
     let expensive_blockhash = bank.last_blockhash();
     let expensive_lamports_per_signature = bank.get_lamports_per_signature();
     assert!(cheap_lamports_per_signature < expensive_lamports_per_signature);
@@ -2989,13 +2989,13 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
     genesis_config.fee_rate_governor.target_signatures_per_slot = 1;
 
     let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-    goto_end_of_slot(&bank);
+    goto_end_of_slot(bank.clone());
     let cheap_blockhash = bank.last_blockhash();
     let cheap_lamports_per_signature = bank.get_lamports_per_signature();
     assert_eq!(cheap_lamports_per_signature, 0);
 
     let bank = Arc::new(Bank::new_from_parent(bank, &leader, 1));
-    goto_end_of_slot(&bank);
+    goto_end_of_slot(bank.clone());
     let expensive_blockhash = bank.last_blockhash();
     let expensive_lamports_per_signature = bank.get_lamports_per_signature();
     assert!(cheap_lamports_per_signature < expensive_lamports_per_signature);
@@ -4885,7 +4885,7 @@ fn test_recent_blockhashes_sysvar() {
         let most_recent_hash = recent_blockhashes.iter().next().unwrap().blockhash;
         // Check order
         assert!(bank.is_hash_valid_for_age(&most_recent_hash, 0));
-        goto_end_of_slot(&bank);
+        goto_end_of_slot(bank.clone());
         bank = Arc::new(new_from_parent(bank));
     }
 }
@@ -4894,7 +4894,7 @@ fn test_recent_blockhashes_sysvar() {
 #[test]
 fn test_blockhash_queue_sysvar_consistency() {
     let bank = create_simple_test_arc_bank(100_000);
-    goto_end_of_slot(&bank);
+    goto_end_of_slot(bank.clone());
 
     let bhq_account = bank.get_account(&sysvar::recent_blockhashes::id()).unwrap();
     let recent_blockhashes =
@@ -5053,7 +5053,7 @@ where
     // Banks 0 and 1 have no fees, wait two blocks before
     // initializing our nonce accounts
     for _ in 0..2 {
-        goto_end_of_slot(&bank);
+        goto_end_of_slot(bank.clone());
         bank = Arc::new(new_from_parent(bank));
     }
 
@@ -5067,7 +5067,7 @@ where
 
     // The setup nonce is not valid to be used until the next bank
     // so wait one more block
-    goto_end_of_slot(&bank);
+    goto_end_of_slot(bank.clone());
     bank = Arc::new(new_from_parent(bank));
 
     Ok((bank, mint_keypair, custodian_keypair, nonce_keypair))
@@ -5322,7 +5322,7 @@ fn test_nonce_transaction() {
 
     /* Kick nonce hash off the blockhash_queue */
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
-        goto_end_of_slot(&bank);
+        goto_end_of_slot(bank.clone());
         bank = Arc::new(new_from_parent(bank));
     }
 
@@ -5391,7 +5391,7 @@ fn test_nonce_transaction() {
 
     /* Kick nonce hash off the blockhash_queue */
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
-        goto_end_of_slot(&bank);
+        goto_end_of_slot(bank.clone());
         bank = Arc::new(new_from_parent(bank));
     }
 
@@ -5449,7 +5449,7 @@ fn test_nonce_transaction_with_tx_wide_caps() {
 
     /* Kick nonce hash off the blockhash_queue */
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
-        goto_end_of_slot(&bank);
+        goto_end_of_slot(bank.clone());
         bank = Arc::new(new_from_parent(bank));
     }
 
