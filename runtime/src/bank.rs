@@ -8507,7 +8507,7 @@ pub mod test_utils {
         solana_vote_program::vote_state::{self, BlockTimestamp, VoteStateVersions},
         std::sync::Arc,
     };
-    pub fn goto_end_of_slot_with_scheduler(bank: BankWithScheduler) {
+    pub fn goto_end_of_slot_with_scheduler(bank: &BankWithScheduler) {
         let mut tick_hash = bank.last_blockhash();
         loop {
             tick_hash = hashv(&[tick_hash.as_ref(), &[42]]);
