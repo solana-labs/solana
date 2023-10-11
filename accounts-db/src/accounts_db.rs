@@ -15050,16 +15050,13 @@ pub mod tests {
         let account1 = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
 
         // Store into slot 0
-        db.store_cached((0, &[(&account_key1, &account1)][..]), None);
-        db.store_cached((0, &[(&account_key2, &account1)][..]), None);
+        // This has to be done uncached since we are trying to add another account to the append vec AFTER it has been flushed.
+        // This doesn't work if the flush creates an append vec of exactly the right size.
+        // Normal operations NEVER write the same account to the same append vec twice during a write cache flush.
+        db.store_uncached(0, &[(&account_key1, &account1)][..]);
+        db.store_uncached(0, &[(&account_key2, &account1)][..]);
         db.add_root(0);
         if !do_intra_cache_clean {
-            // If we don't want the cache doing purges before flush,
-            // then we cannot flush multiple roots at once, otherwise the later
-            // roots will clean the earlier roots before they are stored.
-            // Thus flush the roots individually
-            db.flush_accounts_cache(true, None);
-
             // Add an additional ref within the same slot to pubkey 1
             db.store_uncached(0, &[(&account_key1, &account1)]);
         }
