@@ -2114,11 +2114,6 @@ impl Blockstore {
     /// AddressSignatures columns. At any given time, one primary index is active (ie. new records
     /// are stored under this index), the other is frozen.
     fn initialize_transaction_status_index(&self) -> Result<()> {
-        self.transaction_status_index_cf
-            .put(0, &TransactionStatusIndexMeta::default())?;
-        self.transaction_status_index_cf
-            .put(1, &TransactionStatusIndexMeta::default())?;
-
         // If present, delete dummy entries inserted by old software
         // https://github.com/solana-labs/solana/blob/bc2b372/ledger/src/blockstore.rs#L2130-L2137
         let transaction_status_dummy_key = cf::TransactionStatus::as_index(2);
