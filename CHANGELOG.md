@@ -11,8 +11,7 @@ and follows a [Backwards Compatability Policy](https://docs.solana.com/developin
 * Upgrade Notes
 
 ## [1.17.1]
-* Changes
-* Upgrade Notes
+* minor bug fixes and improvements
 
 ## [1.17.0]
 * Changes
