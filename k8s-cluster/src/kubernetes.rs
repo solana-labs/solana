@@ -144,8 +144,6 @@ impl<'a> Kubernetes<'a> {
             flags.push(limit_ledger_size.to_string());
         }
 
-
-
         flags
     }
 

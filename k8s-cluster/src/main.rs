@@ -1,11 +1,13 @@
 use {
     clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches},
     log::*,
+    solana_core::ledger_cleanup_service::{
+        DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS,
+    },
     solana_k8s_cluster::{
         docker::{DockerConfig, DockerImageConfig},
         genesis::{
-            Genesis, GenesisFlags, SetupConfig, DEFAULT_INTERNAL_NODE_SOL,
-            DEFAULT_INTERNAL_NODE_STAKE_SOL,
+            Genesis, GenesisFlags, DEFAULT_INTERNAL_NODE_SOL, DEFAULT_INTERNAL_NODE_STAKE_SOL,
         },
         initialize_globals,
         kubernetes::{Kubernetes, ValidatorConfig},
@@ -13,7 +15,6 @@ use {
         release::{BuildConfig, Deploy},
         ValidatorType,
     },
-    solana_core::ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
     std::{thread, time::Duration},
 };
 
@@ -38,7 +39,7 @@ fn parse_matches() -> ArgMatches<'static> {
                 .help("Number of validator replicas to deploy")
                 .validator(|s| match s.parse::<i32>() {
                     Ok(n) if n > 0 => Ok(()),
-                    _ => Err(String::from("number_of_validators should be greater than 0")),
+                    _ => Err(String::from("number_of_validators should be >= 0")),
                 }),
         )
         .arg(
@@ -281,7 +282,40 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("full-rpc")
                 .help("Validator config. Support full RPC services on all nodes"),
         )
+        // Client Configurations
+        .arg(
+            Arg::with_name("number_of_clients")
+                .long("num-clients")
+                .short("c")
+                .takes_value(true)
+                .help("Number of clients ")
+                .validator(|s| match s.parse::<i32>() {
+                    Ok(n) if n > 0 => Ok(()),
+                    _ => Err(String::from("number_of_clients should be >= 0")),
+                }),
+        )
+        .arg(
+            Arg::with_name("client_delay_start")
+                .long("client-delay-start")
+                .takes_value(true)
+                .default_value("0")
+                .help("Number of seconds to wait after validators have finished starting before starting client programs
+                (default: 0")
+                .validator(|s| match s.parse::<i32>() {
+                    Ok(n) if n > 0 => Ok(()),
+                    _ => Err(String::from("client_delay_start should be greater than 0")),
+                }),
+        )
         .get_matches()
+}
+
+#[derive(Clone, Debug)]
+pub struct SetupConfig<'a> {
+    pub namespace: &'a str,
+    pub num_validators: i32,
+    pub prebuild_genesis: bool,
+    pub num_clients: Option<i32>,
+    pub client_delay_start: u64,
 }
 
 #[tokio::main]
@@ -296,6 +330,16 @@ async fn main() {
         namespace: matches.value_of("cluster_namespace").unwrap_or_default(),
         num_validators: value_t_or_exit!(matches, "number_of_validators", i32),
         prebuild_genesis: matches.is_present("prebuild_genesis"),
+        num_clients: matches.value_of("number_of_clients").map(|value_str| {
+            value_str
+                .parse()
+                .expect("Invalid value for number_of_clients")
+        }),
+        client_delay_start: matches
+            .value_of("client_delay_start")
+            .unwrap()
+            .parse()
+            .expect("Failed to parse client_delay_start into u64"),
     };
 
     let build_config = BuildConfig {
@@ -380,7 +424,7 @@ async fn main() {
         warp_slot: matches
             .value_of("warp_slot")
             .map(|value_str| value_str.parse().expect("Invalid value for warp_slot")),
-        
+
         shred_version: None, // set after genesis created
         bank_hash: None,     // set after genesis created
         max_ledger_size: if matches.is_present("limit_ledger_size") {
@@ -570,8 +614,6 @@ async fn main() {
         }
     }
 
-    // std::process::exit(-1);
-
     // Begin Kubernetes Setup and Deployment
     let config_map = match kub_controller.create_genesis_config_map().await {
         Ok(config_map) => {
@@ -748,6 +790,18 @@ async fn main() {
                 "Error! Failed to deploy validator service: {}. err: {:?}",
                 validator_index, err
             ),
+        }
+    }
+
+    //TODO, we need to wait for all validators to actually be deployed before starting the client.
+    // Aka need to somehow check that either all validators are connected via gossip and through tpu
+    // or we just check that their replica sets are 1/1
+    info!("Waiting for client_delay_start: {} seconds", setup_config.client_delay_start);
+    thread::sleep(Duration::from_secs(setup_config.client_delay_start));
+
+    if let Some(num_clients) = setup_config.num_clients {
+        for client_index in 0..num_clients {
+            info!("deploying client: {}", client_index);
         }
     }
 }
