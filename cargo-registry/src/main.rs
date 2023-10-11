@@ -2,7 +2,6 @@
 use {
     crate::{
         client::Client,
-        dummy_git_index::DummyGitIndex,
         publisher::{Error, Publisher},
     },
     hyper::{
@@ -10,18 +9,15 @@ use {
         service::{make_service_fn, service_fn},
         Method, Server,
     },
-    hyper_staticfile::Static,
     log::*,
     serde::{Deserialize, Serialize},
     std::{
         net::{IpAddr, Ipv4Addr, SocketAddr},
-        path::PathBuf,
         sync::Arc,
     },
 };
 
 mod client;
-mod dummy_git_index;
 mod publisher;
 
 const PATH_PREFIX: &str = "/api/v1/crates";
@@ -256,18 +252,12 @@ impl CargoRegistryService {
         request: hyper::Request<hyper::Body>,
         client: Arc<Client>,
     ) -> Result<hyper::Response<hyper::Body>, Error> {
-        info!("Request is {:?}", &request);
         let path = request.uri().path();
         if path.starts_with("/git") {
-            return Static::new("/tmp/dummy-git")
-                .serve(request)
-                .await
-                .or_else(|_| {
-                    Ok(Self::error_response(
-                        hyper::StatusCode::BAD_REQUEST,
-                        "Failed to serve git index",
-                    ))
-                });
+            return Ok(Self::error_response(
+                hyper::StatusCode::BAD_REQUEST,
+                "This registry server does not support GIT index. Please use sparse index.",
+            ));
         }
 
         if path == "/config.json" {
@@ -335,11 +325,6 @@ async fn main() {
     };
     let registry_config_json =
         serde_json::to_string(&registry_config).expect("Failed to create registry config");
-
-    DummyGitIndex::create_or_update_git_repo(
-        PathBuf::from("/tmp/dummy-git"),
-        &registry_config_json,
-    );
 
     let registry_service = make_service_fn(move |_| {
         let client_inner = client.clone();
