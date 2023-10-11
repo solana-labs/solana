@@ -184,7 +184,7 @@ fn bench_bank_async_process_native_loader_transactions(bencher: &mut Bencher) {
 fn bench_bank_update_recent_blockhashes(bencher: &mut Bencher) {
     let (genesis_config, _mint_keypair) = create_genesis_config(100);
     let mut bank = Arc::new(Bank::new_for_benches(&genesis_config));
-    goto_end_of_slot(bank);
+    goto_end_of_slot(bank.clone());
     let genesis_hash = bank.last_blockhash();
     // Prime blockhash_queue
     for i in 0..(MAX_RECENT_BLOCKHASHES + 1) {
