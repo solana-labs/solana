@@ -55,7 +55,7 @@ This subscription is unstable
 
 The notification will be an object with the following fields:
 
-- `parent: <u64>` - The parent slot
+- `parent: <u64|undefined>` - The parent slot. Only present if the update is of type "createdBank".
 - `slot: <u64>` - The newly updated slot
 - `timestamp: <i64>` - The Unix timestamp of the update
 - `type: <string>` - The update type, one of:
