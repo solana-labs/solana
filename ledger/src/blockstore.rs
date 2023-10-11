@@ -325,12 +325,6 @@ impl Blockstore {
             .unwrap_or(0);
         let last_root = RwLock::new(max_root);
 
-        // Initialize transaction status index if entries are not present
-        let initialize_transaction_status_index = db
-            .iter::<cf::TransactionStatusIndex>(IteratorMode::Start)?
-            .next()
-            .is_none();
-
         measure.stop();
         info!("{:?} {}", blockstore_path, measure);
         let blockstore = Blockstore {
@@ -364,9 +358,8 @@ impl Blockstore {
             lowest_cleanup_slot: RwLock::<Slot>::default(),
             slots_stats: SlotsStats::default(),
         };
-        if initialize_transaction_status_index {
-            blockstore.initialize_transaction_status_index()?;
-        }
+        blockstore.initialize_transaction_status_index()?;
+
         Ok(blockstore)
     }
 
@@ -2114,6 +2107,9 @@ impl Blockstore {
     /// AddressSignatures columns. At any given time, one primary index is active (ie. new records
     /// are stored under this index), the other is frozen.
     fn initialize_transaction_status_index(&self) -> Result<()> {
+        if !self.is_primary_access() {
+            return Ok(());
+        }
         // If present, delete dummy entries inserted by old software
         // https://github.com/solana-labs/solana/blob/bc2b372/ledger/src/blockstore.rs#L2130-L2137
         let transaction_status_dummy_key = cf::TransactionStatus::as_index(2);
