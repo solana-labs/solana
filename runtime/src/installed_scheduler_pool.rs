@@ -275,7 +275,7 @@ impl BankWithScheduler {
     }
 
     pub fn into_bank(self) -> Arc<Bank> {
-        self.inner.bank
+        self.inner.into_inner().0
     }
 
     pub fn register_tick(&self, hash: &Hash) {
