@@ -895,11 +895,11 @@ lazy_static! {
         (better_error_codes_for_tx_lamport_check::id(), "better error codes for tx lamport check #33353"),
         (enable_alt_bn128_compression_syscall::id(), "add alt_bn128 compression syscalls"),
         (programify_feature_gate_program::id(), "move feature gate activation logic to an on-chain program #32783"),
-        (update_hashes_per_tick2::id(), "Update desired hashes per tick on epoch boundary"),
-        (update_hashes_per_tick3::id(), "Update desired hashes per tick on epoch boundary"),
-        (update_hashes_per_tick4::id(), "Update desired hashes per tick on epoch boundary"),
-        (update_hashes_per_tick5::id(), "Update desired hashes per tick on epoch boundary"),
-        (update_hashes_per_tick6::id(), "Update desired hashes per tick on epoch boundary"),
+        (update_hashes_per_tick2::id(), "Update desired hashes per tick to 2.8M"),
+        (update_hashes_per_tick3::id(), "Update desired hashes per tick to 4.4M"),
+        (update_hashes_per_tick4::id(), "Update desired hashes per tick to 7.6M"),
+        (update_hashes_per_tick5::id(), "Update desired hashes per tick to 9.2M"),
+        (update_hashes_per_tick6::id(), "Update desired hashes per tick to 10M"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
