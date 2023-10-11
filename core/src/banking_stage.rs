@@ -1071,7 +1071,10 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.write().unwrap().set_bank(bank.clone(), false);
+            poh_recorder
+                .write()
+                .unwrap()
+                .set_bank_for_test(bank.clone());
             let pubkey = solana_sdk::pubkey::new_rand();
             let keypair2 = Keypair::new();
             let pubkey2 = solana_sdk::pubkey::new_rand();

@@ -805,7 +805,10 @@ mod tests {
         let recorder = poh_recorder.new_recorder();
         let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
-        poh_recorder.write().unwrap().set_bank(bank.clone(), false);
+        poh_recorder
+            .write()
+            .unwrap()
+            .set_bank_for_test(bank.clone());
 
         let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
@@ -966,7 +969,10 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.write().unwrap().set_bank(bank.clone(), false);
+            poh_recorder
+                .write()
+                .unwrap()
+                .set_bank_for_test(bank.clone());
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
             let committer = Committer::new(
                 None,
@@ -1093,7 +1099,10 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.write().unwrap().set_bank(bank.clone(), false);
+            poh_recorder
+                .write()
+                .unwrap()
+                .set_bank_for_test(bank.clone());
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
             let committer = Committer::new(
                 None,
@@ -1179,7 +1188,10 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.write().unwrap().set_bank(bank.clone(), false);
+            poh_recorder
+                .write()
+                .unwrap()
+                .set_bank_for_test(bank.clone());
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
             let committer = Committer::new(
                 None,
@@ -1328,7 +1340,10 @@ mod tests {
             let recorder = poh_recorder.new_recorder();
             let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
-            poh_recorder.write().unwrap().set_bank(bank.clone(), false);
+            poh_recorder
+                .write()
+                .unwrap()
+                .set_bank_for_test(bank.clone());
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
@@ -1628,7 +1643,10 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.write().unwrap().set_bank(bank.clone(), false);
+            poh_recorder
+                .write()
+                .unwrap()
+                .set_bank_for_test(bank.clone());
 
             let shreds = entries_to_test_shreds(
                 &entries,
@@ -1765,7 +1783,10 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.write().unwrap().set_bank(bank.clone(), false);
+            poh_recorder
+                .write()
+                .unwrap()
+                .set_bank_for_test(bank.clone());
 
             let shreds = entries_to_test_shreds(
                 &entries,
@@ -1864,7 +1885,7 @@ mod tests {
             assert_eq!(buffered_packet_batches.len(), num_conflicting_transactions);
             // When the working bank in poh_recorder is Some, all packets should be processed.
             // Multi-Iterator will process them 1-by-1 if all txs are conflicting.
-            poh_recorder.write().unwrap().set_bank(bank, false);
+            poh_recorder.write().unwrap().set_bank_for_test(bank);
             let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
             let banking_stage_stats = BankingStageStats::default();
             consumer.consume_buffered_packets(
@@ -1942,7 +1963,7 @@ mod tests {
             assert_eq!(buffered_packet_batches.len(), num_conflicting_transactions);
             // When the working bank in poh_recorder is Some, all packets should be processed.
             // Multi-Iterator will process them 1-by-1 if all txs are conflicting.
-            poh_recorder.write().unwrap().set_bank(bank, false);
+            poh_recorder.write().unwrap().set_bank_for_test(bank);
             let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
             consumer.consume_buffered_packets(
                 &bank_start,
@@ -1995,7 +2016,10 @@ mod tests {
             // When the working bank in poh_recorder is Some, all packets should be processed
             // except except for retryable errors. Manually take the lock of a transaction to
             // simulate another thread processing a transaction with that lock.
-            poh_recorder.write().unwrap().set_bank(bank.clone(), false);
+            poh_recorder
+                .write()
+                .unwrap()
+                .set_bank_for_test(bank.clone());
             let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
 
             let lock_account = transactions[0].message.account_keys[1];
@@ -2116,7 +2140,7 @@ mod tests {
             assert_eq!(buffered_packet_batches.len(), num_conflicting_transactions);
             // When the working bank in poh_recorder is Some, all packets should be processed.
             // Multi-Iterator will process them 1-by-1 if all txs are conflicting.
-            poh_recorder.write().unwrap().set_bank(bank, false);
+            poh_recorder.write().unwrap().set_bank_for_test(bank);
             let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
             let banking_stage_stats = BankingStageStats::default();
             consumer.consume_buffered_packets(

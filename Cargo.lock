@@ -6587,6 +6587,7 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-perf",
+ "solana-poh",
  "solana-runtime",
  "solana-sdk",
  "thiserror",
