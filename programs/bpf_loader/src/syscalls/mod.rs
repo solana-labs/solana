@@ -21,7 +21,7 @@ use {
         vm::{BuiltinFunction, BuiltinProgram, Config, ProgramResult},
     },
     solana_sdk::{
-        account::{ReadableAccount, WritableAccount},
+        account::ReadableAccount,
         account_info::AccountInfo,
         alt_bn128::prelude::{
             alt_bn128_addition, alt_bn128_multiplication, alt_bn128_pairing, AltBn128Error,
@@ -37,8 +37,7 @@ use {
             self, blake3_syscall_enabled, curve25519_syscall_enabled,
             disable_cpi_setting_executable_and_rent_epoch, disable_deploy_of_alloc_free_syscall,
             disable_fees_sysvar, enable_alt_bn128_compression_syscall, enable_alt_bn128_syscall,
-            enable_big_mod_exp_syscall, enable_early_verification_of_account_modifications,
-            enable_partitioned_epoch_reward, enable_poseidon_syscall,
+            enable_big_mod_exp_syscall, enable_partitioned_epoch_reward, enable_poseidon_syscall,
             error_on_syscall_bpf_function_hash_collisions, last_restart_slot_sysvar,
             libsecp256k1_0_5_upgrade_enabled, reject_callx_r10,
             remaining_compute_units_syscall_enabled, stop_sibling_instruction_search_at_parent,

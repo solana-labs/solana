@@ -659,8 +659,8 @@ impl PohRecorder {
     }
 
     #[cfg(test)]
-    pub fn set_bank_with_transaction_index_for_test(&mut self, bank: &Arc<Bank>) {
-        self.set_bank(BankWithScheduler::new_without_scheduler(bank.clone()), true)
+    pub fn set_bank_with_transaction_index_for_test(&mut self, bank: Arc<Bank>) {
+        self.set_bank(BankWithScheduler::new_without_scheduler(bank), true)
     }
 
     // Flush cache will delay flushing the cache for a bank until it past the WorkingBank::min_tick_height
@@ -1563,7 +1563,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
 
-            poh_recorder.set_bank_with_transaction_index_for_test(&bank);
+            poh_recorder.set_bank_with_transaction_index_for_test(bank.clone());
             poh_recorder.tick();
             assert_eq!(
                 poh_recorder

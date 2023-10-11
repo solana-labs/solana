@@ -15,7 +15,6 @@ use {
         hash::Hash,
         message::SanitizedMessage,
         precompiles::is_precompile,
-        rent::Rent,
         saturating_add_assign,
         sysvar::instructions,
         transaction::TransactionError,
@@ -54,7 +53,6 @@ impl MessageProcessor {
         message: &SanitizedMessage,
         program_indices: &[Vec<IndexOfAccount>],
         transaction_context: &mut TransactionContext,
-        rent: Rent,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         programs_loaded_for_tx_batch: &LoadedProgramsForTxBatch,
         programs_modified_by_tx: &mut LoadedProgramsForTxBatch,
@@ -70,7 +68,6 @@ impl MessageProcessor {
     ) -> Result<ProcessedMessageInfo, TransactionError> {
         let mut invoke_context = InvokeContext::new(
             transaction_context,
-            rent,
             sysvar_cache,
             log_collector,
             compute_budget,
@@ -199,6 +196,7 @@ mod tests {
             message::{AccountKeys, LegacyMessage, Message},
             native_loader::{self, create_loadable_account_for_test},
             pubkey::Pubkey,
+            rent::Rent,
             secp256k1_instruction::new_secp256k1_instruction,
             secp256k1_program,
         },
@@ -268,8 +266,7 @@ mod tests {
                 create_loadable_account_for_test("mock_system_program"),
             ),
         ];
-        let mut transaction_context =
-            TransactionContext::new(accounts, Some(Rent::default()), 1, 3);
+        let mut transaction_context = TransactionContext::new(accounts, Rent::default(), 1, 3);
         let program_indices = vec![vec![2]];
         let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
         programs_loaded_for_tx_batch.replenish(
@@ -310,7 +307,6 @@ mod tests {
             &message,
             &program_indices,
             &mut transaction_context,
-            Rent::default(),
             None,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
@@ -363,7 +359,6 @@ mod tests {
             &message,
             &program_indices,
             &mut transaction_context,
-            Rent::default(),
             None,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
@@ -406,7 +401,6 @@ mod tests {
             &message,
             &program_indices,
             &mut transaction_context,
-            Rent::default(),
             None,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
@@ -501,8 +495,7 @@ mod tests {
                 create_loadable_account_for_test("mock_system_program"),
             ),
         ];
-        let mut transaction_context =
-            TransactionContext::new(accounts, Some(Rent::default()), 1, 3);
+        let mut transaction_context = TransactionContext::new(accounts, Rent::default(), 1, 3);
         let program_indices = vec![vec![2]];
         let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
         programs_loaded_for_tx_batch.replenish(
@@ -540,7 +533,6 @@ mod tests {
             &message,
             &program_indices,
             &mut transaction_context,
-            Rent::default(),
             None,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
@@ -577,7 +569,6 @@ mod tests {
             &message,
             &program_indices,
             &mut transaction_context,
-            Rent::default(),
             None,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
@@ -611,7 +602,6 @@ mod tests {
             &message,
             &program_indices,
             &mut transaction_context,
-            Rent::default(),
             None,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
@@ -667,8 +657,7 @@ mod tests {
             (secp256k1_program::id(), secp256k1_account),
             (mock_program_id, mock_program_account),
         ];
-        let mut transaction_context =
-            TransactionContext::new(accounts, Some(Rent::default()), 1, 2);
+        let mut transaction_context = TransactionContext::new(accounts, Rent::default(), 1, 2);
 
         // Since libsecp256k1 is still using the old version of rand, this test
         // copies the `random` implementation at:
@@ -703,7 +692,6 @@ mod tests {
             &message,
             &[vec![0], vec![1]],
             &mut transaction_context,
-            Rent::default(),
             None,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,

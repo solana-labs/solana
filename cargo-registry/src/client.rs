@@ -1,5 +1,5 @@
 use {
-    clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches},
+    clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches},
     solana_clap_utils::{
         hidden_unless_forced,
         input_validators::is_url_or_moniker,
@@ -37,6 +37,7 @@ impl<'a> ClientConfig<'a> {
 pub struct Client {
     pub rpc_client: Arc<RpcClient>,
     pub port: u16,
+    pub server_url: String,
     websocket_url: String,
     commitment: commitment_config::CommitmentConfig,
     cli_signers: Vec<Keypair>,
@@ -111,6 +112,18 @@ impl Client {
                     .global(true)
                     .takes_value(true)
                     .help("Cargo registry's local TCP port. The server will bind to this port and wait for requests."),
+            )
+            .arg(
+                Arg::with_name("server_url")
+                    .short("s")
+                    .long("server-url")
+                    .value_name("URL_OR_MONIKER")
+                    .takes_value(true)
+                    .global(true)
+                    .validator(is_url_or_moniker)
+                    .help(
+                        "URL where the registry service will be hosted. Default: http://0.0.0.0:<port>",
+                    ),
             )
             .arg(
                 Arg::with_name("commitment")
@@ -192,6 +205,9 @@ impl Client {
 
         let port = value_t_or_exit!(matches, "port", u16);
 
+        let server_url =
+            value_t!(matches, "server_url", String).unwrap_or(format!("http://0.0.0.0:{}", port));
+
         Ok(Client {
             rpc_client: Arc::new(RpcClient::new_with_timeouts_and_commitment(
                 json_rpc_url.to_string(),
@@ -200,6 +216,7 @@ impl Client {
                 confirm_transaction_initial_timeout,
             )),
             port,
+            server_url,
             websocket_url,
             commitment,
             cli_signers: vec![payer_keypair, authority_keypair],
