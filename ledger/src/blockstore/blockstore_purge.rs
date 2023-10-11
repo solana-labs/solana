@@ -73,6 +73,10 @@ impl Blockstore {
         // with Slot::default() for initial compaction filter behavior consistency
         let to_slot = to_slot.checked_add(1).unwrap();
         self.db.set_oldest_slot(to_slot);
+
+        if let Err(err) = self.maybe_cleanup_highest_primary_index_slot(to_slot) {
+            warn!("Could not clean up TransactionStatusIndex: {err:?}");
+        }
     }
 
     pub fn purge_and_compact_slots(&self, from_slot: Slot, to_slot: Slot) {

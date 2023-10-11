@@ -2158,6 +2158,18 @@ impl Blockstore {
         Ok(())
     }
 
+    fn maybe_cleanup_highest_primary_index_slot(&self, oldest_slot: Slot) -> Result<()> {
+        let mut w_highest_primary_index_slot = self.highest_primary_index_slot.write().unwrap();
+        if let Some(highest_primary_index_slot) = *w_highest_primary_index_slot {
+            if oldest_slot > highest_primary_index_slot {
+                *w_highest_primary_index_slot = None;
+                self.transaction_status_index_cf.delete(0)?;
+                self.transaction_status_index_cf.delete(1)?;
+            }
+        }
+        Ok(())
+    }
+
     fn read_deprecated_transaction_status(
         &self,
         index: (Signature, Slot),
