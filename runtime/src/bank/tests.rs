@@ -5518,7 +5518,7 @@ fn test_nonce_transaction_with_tx_wide_caps() {
 
     /* Kick nonce hash off the blockhash_queue */
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
-        goto_end_of_slot(&bank);
+        goto_end_of_slot(bank.clone());
         bank = Arc::new(new_from_parent(bank));
     }
 
@@ -5586,7 +5586,7 @@ fn test_nonce_authority() {
     let nonce_hash = get_nonce_blockhash(&bank, &nonce_pubkey).unwrap();
 
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
-        goto_end_of_slot(&bank);
+        goto_end_of_slot(bank.clone());
         bank = Arc::new(new_from_parent(bank));
     }
 
@@ -5644,7 +5644,7 @@ fn test_nonce_payer() {
     let nonce_hash = get_nonce_blockhash(&bank, &nonce_pubkey).unwrap();
 
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
-        goto_end_of_slot(&bank);
+        goto_end_of_slot(bank.clone());
         bank = Arc::new(new_from_parent(bank));
     }
 
@@ -5709,7 +5709,7 @@ fn test_nonce_payer_tx_wide_cap() {
     let nonce_hash = get_nonce_blockhash(&bank, &nonce_pubkey).unwrap();
 
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
-        goto_end_of_slot(&bank);
+        goto_end_of_slot(bank.clone());
         bank = Arc::new(new_from_parent(bank));
     }
 
@@ -5777,7 +5777,7 @@ fn test_nonce_fee_calculator_updates() {
 
     // Kick nonce hash off the blockhash_queue
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
-        goto_end_of_slot(&bank);
+        goto_end_of_slot(bank.clone());
         bank = Arc::new(new_from_parent(bank));
     }
 
@@ -5845,7 +5845,7 @@ fn test_nonce_fee_calculator_updates_tx_wide_cap() {
 
     // Kick nonce hash off the blockhash_queue
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
-        goto_end_of_slot(&bank);
+        goto_end_of_slot(bank.clone());
         bank = Arc::new(new_from_parent(bank));
     }
 
@@ -5925,7 +5925,7 @@ fn test_check_ro_durable_nonce_fails() {
     );
     // Kick nonce hash off the blockhash_queue
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
-        goto_end_of_slot(&bank);
+        goto_end_of_slot(bank.clone());
         bank = Arc::new(new_from_parent(bank));
     }
     // Caught by the runtime because it is a nonce transaction
@@ -6546,7 +6546,7 @@ fn test_bank_hash_consistency() {
     // Check a few slots, cross an epoch boundary
     assert_eq!(bank.get_slots_in_epoch(0), 32);
     loop {
-        goto_end_of_slot(&bank);
+        goto_end_of_slot(bank.clone());
         if bank.slot == 0 {
             assert_eq!(
                 bank.hash().to_string(),
@@ -6623,7 +6623,7 @@ fn get_shrink_account_size() -> usize {
         AccountShrinkThreshold::default(),
     ));
     bank0.restore_old_behavior_for_fragile_tests();
-    goto_end_of_slot(&bank0);
+    goto_end_of_slot(bank0.clone());
     bank0.freeze();
     bank0.squash();
     add_root_and_flush_write_cache(&bank0);
@@ -6664,7 +6664,7 @@ fn test_clean_nonrooted() {
 
     let account_zero = AccountSharedData::new(0, 0, &Pubkey::new_unique());
 
-    goto_end_of_slot(&bank0);
+    goto_end_of_slot(bank0.clone());
     bank0.freeze();
     bank0.squash();
     // Flush now so that accounts cache cleaning doesn't clean up bank 0 when later
@@ -6675,7 +6675,7 @@ fn test_clean_nonrooted() {
     let some_lamports = 123;
     let bank1 = Arc::new(Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1));
     bank1.deposit(&pubkey0, some_lamports).unwrap();
-    goto_end_of_slot(&bank1);
+    goto_end_of_slot(bank1.clone());
     bank1.freeze();
     bank1.flush_accounts_cache_slot_for_tests();
 
@@ -6686,7 +6686,7 @@ fn test_clean_nonrooted() {
     let bank2 = Arc::new(Bank::new_from_parent(bank0, &Pubkey::default(), 2));
     bank2.deposit(&pubkey1, some_lamports).unwrap();
     bank2.store_account(&pubkey0, &account_zero);
-    goto_end_of_slot(&bank2);
+    goto_end_of_slot(bank2.clone());
     bank2.freeze();
     bank2.squash();
     bank2.force_flush_accounts_cache();
@@ -6700,7 +6700,7 @@ fn test_clean_nonrooted() {
 
     let bank3 = Arc::new(Bank::new_from_parent(bank2, &Pubkey::default(), 3));
     bank3.deposit(&pubkey1, some_lamports + 1).unwrap();
-    goto_end_of_slot(&bank3);
+    goto_end_of_slot(bank3.clone());
     bank3.freeze();
     bank3.squash();
     bank3.force_flush_accounts_cache();
@@ -6743,7 +6743,7 @@ fn test_shrink_candidate_slots_cached() {
     let account0 = AccountSharedData::new(1000, pubkey0_size, &Pubkey::new_unique());
     bank0.store_account(&pubkey0, &account0);
 
-    goto_end_of_slot(&bank0);
+    goto_end_of_slot(bank0.clone());
     bank0.freeze();
     bank0.squash();
     // Flush now so that accounts cache cleaning doesn't clean up bank 0 when later
@@ -6755,7 +6755,7 @@ fn test_shrink_candidate_slots_cached() {
     let bank1 = Arc::new(new_from_parent(bank0));
     bank1.deposit(&pubkey1, some_lamports).unwrap();
     bank1.deposit(&pubkey2, some_lamports).unwrap();
-    goto_end_of_slot(&bank1);
+    goto_end_of_slot(bank1.clone());
     bank1.freeze();
     bank1.squash();
     // Flush now so that accounts cache cleaning doesn't clean up bank 0 when later
@@ -6766,7 +6766,7 @@ fn test_shrink_candidate_slots_cached() {
     let bank2 = Arc::new(new_from_parent(bank1));
     bank2.deposit(&pubkey1, some_lamports).unwrap();
     bank2.store_account(&pubkey0, &account0);
-    goto_end_of_slot(&bank2);
+    goto_end_of_slot(bank2.clone());
     bank2.freeze();
     bank2.squash();
     bank2.force_flush_accounts_cache();
@@ -12454,7 +12454,7 @@ fn test_runtime_feature_enable_with_program_cache() {
     let transaction1 = Transaction::new(&signers1, message1, root_bank.last_blockhash());
 
     // Advance the bank so the next transaction can be submitted.
-    goto_end_of_slot(&root_bank);
+    goto_end_of_slot(root_bank.clone());
     let mut bank = new_from_parent(root_bank);
 
     // Compose second instruction using the same program with a different block hash
