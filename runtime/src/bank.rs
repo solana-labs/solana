@@ -8508,6 +8508,10 @@ pub mod test_utils {
         std::sync::Arc,
     };
 
+    pub fn goto_end_of_slot(bank: Arc<Bank>) {
+        goto_end_of_slot_with_scheduler(&BankWithScheduler::new_without_scheduler(bank))
+    }
+
     pub fn goto_end_of_slot_with_scheduler(bank: &BankWithScheduler) {
         let mut tick_hash = bank.last_blockhash();
         loop {
@@ -8518,10 +8522,6 @@ pub mod test_utils {
                 return;
             }
         }
-    }
-
-    pub fn goto_end_of_slot(bank: &Arc<Bank>) {
-        goto_end_of_slot_with_scheduler(&BankWithScheduler::new_without_scheduler(bank.clone()))
     }
 
     pub fn update_vote_account_timestamp(
