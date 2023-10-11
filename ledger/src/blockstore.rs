@@ -2331,6 +2331,9 @@ impl Blockstore {
             return Ok((status, counter));
         }
 
+        if self.get_highest_primary_index_slot().is_none() {
+            return Ok((None, counter));
+        }
         for transaction_status_cf_primary_index in 0..=1 {
             let index_iterator =
                 self.transaction_status_cf
