@@ -8509,7 +8509,7 @@ pub mod test_utils {
     };
 
     pub fn goto_end_of_slot(bank: &Arc<Bank>) {
-        goto_end_of_slot_with_scheduler(&BankWithScheduler::new_without_scheduler(bank))
+        goto_end_of_slot_with_scheduler(&BankWithScheduler::new_without_scheduler(bank.clone()))
     }
 
     pub fn goto_end_of_slot_with_scheduler(bank: &BankWithScheduler) {
