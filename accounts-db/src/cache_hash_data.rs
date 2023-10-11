@@ -19,6 +19,9 @@ pub type EntryType = CalculateHashIntermediate;
 pub type SavedType = Vec<Vec<EntryType>>;
 pub type SavedTypeSlice = [Vec<EntryType>];
 
+/// Account hashes file version
+pub(crate) const ACCOUNT_HASHES_CACHE_FILE_VERSION: u64 = 1;
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct Header {
@@ -27,7 +30,7 @@ pub struct Header {
 
     /// offset for the first pubkey in each bin
     /// For `N` bins, there will be `N+1` offsets. The boundaries for each bin `i` are from offsets[i] to offsets[i+1].
-    /// The one extra element in offsets help to avoid the need to special case i=0 for offset look up by `bin`, which makes the lookup code faster.
+    /// The one extra element in offsets helps to avoid the need to special case i=0 for offset lookups by `bin`, which makes the lookup code faster.
     number_offsets: usize,
 }
 

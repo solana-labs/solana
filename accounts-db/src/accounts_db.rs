@@ -57,7 +57,9 @@ use {
             aligned_stored_size, AppendVec, MatchAccountOwnerError, APPEND_VEC_MMAPPED_FILES_OPEN,
             STORE_META_OVERHEAD,
         },
-        cache_hash_data::{CacheHashData, CacheHashDataFileReference},
+        cache_hash_data::{
+            CacheHashData, CacheHashDataFileReference, ACCOUNT_HASHES_CACHE_FILE_VERSION,
+        },
         contains::Contains,
         epoch_accounts_hash::EpochAccountsHashManager,
         in_mem_accounts_index::StartupStats,
@@ -7258,12 +7260,13 @@ impl AccountsDb {
                 // so, build a file name:
                 let hash = hasher.finish();
                 let file_name = format!(
-                    "new.{}.{}.{}.{}.{:016x}",
+                    "{}.{}.{}.{}.{:016x}.{}",
                     range_this_chunk.start,
                     range_this_chunk.end,
                     bin_range.start,
                     bin_range.end,
-                    hash
+                    hash,
+                    ACCOUNT_HASHES_CACHE_FILE_VERSION,
                 );
                 if load_from_cache {
                     if let Ok(mapped_file) =
