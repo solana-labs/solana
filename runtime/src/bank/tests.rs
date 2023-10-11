@@ -62,6 +62,8 @@ use {
         clock::{
             BankId, Epoch, Slot, UnixTimestamp, DEFAULT_HASHES_PER_TICK, DEFAULT_SLOTS_PER_EPOCH,
             DEFAULT_TICKS_PER_SLOT, INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES,
+            UPDATED_HASHES_PER_TICK2, UPDATED_HASHES_PER_TICK3, UPDATED_HASHES_PER_TICK4,
+            UPDATED_HASHES_PER_TICK5, UPDATED_HASHES_PER_TICK6,
         },
         compute_budget::ComputeBudgetInstruction,
         entrypoint::MAX_PERMITTED_DATA_INCREASE,
@@ -12228,6 +12230,80 @@ fn test_feature_activation_idempotent() {
     // Activate feature "again"
     bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
     assert_eq!(bank.hashes_per_tick, Some(DEFAULT_HASHES_PER_TICK));
+}
+
+#[test]
+fn test_feature_hashes_per_tick() {
+    let mut genesis_config = GenesisConfig::default();
+    const HASHES_PER_TICK_START: u64 = 3;
+    genesis_config.poh_config.hashes_per_tick = Some(HASHES_PER_TICK_START);
+
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    assert_eq!(bank.hashes_per_tick, Some(HASHES_PER_TICK_START));
+
+    // Don't activate feature
+    bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
+    assert_eq!(bank.hashes_per_tick, Some(HASHES_PER_TICK_START));
+
+    // Activate feature
+    let feature_account_balance =
+        std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
+    bank.store_account(
+        &feature_set::update_hashes_per_tick::id(),
+        &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
+    );
+    bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
+    assert_eq!(bank.hashes_per_tick, Some(DEFAULT_HASHES_PER_TICK));
+
+    // Activate feature
+    let feature_account_balance =
+        std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
+    bank.store_account(
+        &feature_set::update_hashes_per_tick2::id(),
+        &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
+    );
+    bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
+    assert_eq!(bank.hashes_per_tick, Some(UPDATED_HASHES_PER_TICK2));
+
+    // Activate feature
+    let feature_account_balance =
+        std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
+    bank.store_account(
+        &feature_set::update_hashes_per_tick3::id(),
+        &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
+    );
+    bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
+    assert_eq!(bank.hashes_per_tick, Some(UPDATED_HASHES_PER_TICK3));
+
+    // Activate feature
+    let feature_account_balance =
+        std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
+    bank.store_account(
+        &feature_set::update_hashes_per_tick4::id(),
+        &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
+    );
+    bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
+    assert_eq!(bank.hashes_per_tick, Some(UPDATED_HASHES_PER_TICK4));
+
+    // Activate feature
+    let feature_account_balance =
+        std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
+    bank.store_account(
+        &feature_set::update_hashes_per_tick5::id(),
+        &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
+    );
+    bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
+    assert_eq!(bank.hashes_per_tick, Some(UPDATED_HASHES_PER_TICK5));
+
+    // Activate feature
+    let feature_account_balance =
+        std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
+    bank.store_account(
+        &feature_set::update_hashes_per_tick6::id(),
+        &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
+    );
+    bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
+    assert_eq!(bank.hashes_per_tick, Some(UPDATED_HASHES_PER_TICK6));
 }
 
 #[test_case(true)]
