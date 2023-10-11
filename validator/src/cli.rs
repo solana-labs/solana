@@ -1197,6 +1197,13 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .hidden(hidden_unless_forced())
         )
         .arg(
+            Arg::with_name("accounts_db_force_initial_clean")
+                .long("accounts-db-force-initial-clean")
+                .help("Force cleaning of accounts when verifying snapshot bank")
+                .hidden(hidden_unless_forced())
+                .conflicts_with("accounts_db_skip_shrink")
+        )
+        .arg(
             Arg::with_name("accounts_db_create_ancient_storage_packed")
                 .long("accounts-db-create-ancient-storage-packed")
                 .help("Create ancient storages in one shot instead of appending.")
