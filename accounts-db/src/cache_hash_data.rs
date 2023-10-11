@@ -24,7 +24,7 @@ pub(crate) const ACCOUNT_HASHES_CACHE_FILE_VERSION: u64 = 1;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
-pub struct Header {
+struct Header {
     /// count of accounts' hashes in the file
     count: usize,
 
@@ -59,7 +59,7 @@ pub(crate) struct CacheHashDataFile {
 }
 
 impl CacheHashDataFileReference {
-    /// convert the open file refrence to a mmapped file that can be returned as a slice
+    /// convert the open file reference to a mmapped file that can be returned as a slice
     pub(crate) fn map(&self) -> Result<CacheHashDataFile, std::io::Error> {
         let file_len = self.file_len;
         let mut m1 = Measure::start("read_file");
