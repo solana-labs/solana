@@ -761,7 +761,7 @@ pub mod tests {
             .transaction_status_index_cf
             .get(0)
             .unwrap()
-            .unwrap();
+            .unwrap_or_default();
         index0.frozen = true;
         index0.max_slot = 4;
         blockstore
@@ -772,7 +772,7 @@ pub mod tests {
             .transaction_status_index_cf
             .get(1)
             .unwrap()
-            .unwrap();
+            .unwrap_or_default();
         index1.frozen = false;
         index1.max_slot = 9;
         blockstore
