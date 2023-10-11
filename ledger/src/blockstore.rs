@@ -2132,6 +2132,10 @@ impl Blockstore {
         Ok(())
     }
 
+    fn get_highest_primary_index_slot(&self) -> Option<Slot> {
+        *self.highest_primary_index_slot.read().unwrap()
+    }
+
     fn read_deprecated_transaction_status(
         &self,
         index: (Signature, Slot),
