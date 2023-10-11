@@ -1,6 +1,9 @@
 use {
     clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches},
     log::*,
+    solana_core::ledger_cleanup_service::{
+        DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS,
+    },
     solana_k8s_cluster::{
         docker::{DockerConfig, DockerImageConfig},
         genesis::{
@@ -13,7 +16,6 @@ use {
         release::{BuildConfig, Deploy},
         ValidatorType,
     },
-    solana_core::ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
     std::{thread, time::Duration},
 };
 
@@ -380,7 +382,7 @@ async fn main() {
         warp_slot: matches
             .value_of("warp_slot")
             .map(|value_str| value_str.parse().expect("Invalid value for warp_slot")),
-        
+
         shred_version: None, // set after genesis created
         bank_hash: None,     // set after genesis created
         max_ledger_size: if matches.is_present("limit_ledger_size") {
