@@ -2197,7 +2197,11 @@ impl Blockstore {
         index: (Signature, Slot),
     ) -> Result<Option<TransactionStatusMeta>> {
         let result = self.transaction_status_cf.get_protobuf(index)?;
-        if result.is_none() {
+        if result.is_none()
+            && self
+                .get_highest_primary_index_slot()
+                .is_some_and(|highest_slot| highest_slot >= index.1)
+        {
             self.read_deprecated_transaction_status(index)
         } else {
             Ok(result.and_then(|meta| meta.try_into().ok()))
