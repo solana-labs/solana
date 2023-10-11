@@ -431,6 +431,7 @@ solana-validator ..."); otherwise, when logrotate sends its signal to the
 validator, the enclosing script will die and take the validator process with
 it.
 
+<<<<<<< HEAD
 ### Using a ramdisk with spill-over into swap for the accounts database to reduce SSD wear
 
 If your machine has plenty of RAM, a tmpfs ramdisk
@@ -465,6 +466,8 @@ Example configuration:
 Now add the `--accounts /mnt/solana-accounts` argument to your `solana-validator`
 command-line arguments and restart the validator.
 
+=======
+>>>>>>> 99542d9b59 (docs: Removes accounts-on-ramdisk section (#33655))
 ### Account indexing
 
 As the number of populated accounts on the cluster grows, account-data RPC
