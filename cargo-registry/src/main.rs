@@ -12,6 +12,7 @@ use {
     },
     hyper_staticfile::Static,
     log::*,
+    serde::{Deserialize, Serialize},
     std::{
         net::{IpAddr, Ipv4Addr, SocketAddr},
         path::PathBuf,
@@ -24,6 +25,12 @@ mod dummy_git_index;
 mod publisher;
 
 const PATH_PREFIX: &str = "/api/v1/crates";
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+struct RegistryConfig {
+    dl: String,
+    api: Option<String>,
+}
 
 pub struct CargoRegistryService {}
 
@@ -43,11 +50,15 @@ impl CargoRegistryService {
             .unwrap()
     }
 
-    fn success_response() -> hyper::Response<hyper::Body> {
+    fn success_response_str(value: &str) -> hyper::Response<hyper::Body> {
         hyper::Response::builder()
             .status(hyper::StatusCode::OK)
-            .body(hyper::Body::from(""))
+            .body(hyper::Body::from(value.to_string()))
             .unwrap()
+    }
+
+    fn success_response() -> hyper::Response<hyper::Body> {
+        Self::success_response_str("")
     }
 
     async fn handle_publish_request(
@@ -241,9 +252,11 @@ impl CargoRegistryService {
     }
 
     async fn handler(
+        config: String,
         request: hyper::Request<hyper::Body>,
         client: Arc<Client>,
     ) -> Result<hyper::Response<hyper::Body>, Error> {
+        info!("Request is {:?}", &request);
         let path = request.uri().path();
         if path.starts_with("/git") {
             return Static::new("/tmp/dummy-git")
@@ -255,6 +268,10 @@ impl CargoRegistryService {
                         "Failed to serve git index",
                     ))
                 });
+        }
+
+        if path == "/config.json" {
+            return Ok(Self::success_response_str(&config));
         }
 
         if !path.starts_with(PATH_PREFIX) {
@@ -308,13 +325,28 @@ async fn main() {
     let client = Arc::new(Client::new().expect("Failed to get RPC Client instance"));
 
     let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), client.port);
-    DummyGitIndex::create_or_update_git_repo(PathBuf::from("/tmp/dummy-git"), &client.server_url);
+
+    let registry_config = RegistryConfig {
+        dl: format!(
+            "{}/api/v1/crates/{{crate}}/{{version}}/download",
+            client.server_url
+        ),
+        api: Some(client.server_url.to_string()),
+    };
+    let registry_config_json =
+        serde_json::to_string(&registry_config).expect("Failed to create registry config");
+
+    DummyGitIndex::create_or_update_git_repo(
+        PathBuf::from("/tmp/dummy-git"),
+        &registry_config_json,
+    );
 
     let registry_service = make_service_fn(move |_| {
         let client_inner = client.clone();
+        let config = registry_config_json.clone();
         async move {
             Ok::<_, Error>(service_fn(move |request| {
-                CargoRegistryService::handler(request, client_inner.clone())
+                CargoRegistryService::handler(config.clone(), request, client_inner.clone())
             }))
         }
     });

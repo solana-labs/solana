@@ -1,6 +1,5 @@
 use {
     git2::{IndexAddOption, Repository},
-    serde::{Deserialize, Serialize},
     std::{
         fs::{self, create_dir_all},
         io::ErrorKind,
@@ -9,26 +8,11 @@ use {
     },
 };
 
-#[derive(Debug, Default, Deserialize, Serialize)]
-struct RegistryConfig {
-    dl: String,
-    api: Option<String>,
-}
-
 pub struct DummyGitIndex {}
 
 impl DummyGitIndex {
-    pub fn create_or_update_git_repo(root_dir: PathBuf, server_url: &str) {
+    pub fn create_or_update_git_repo(root_dir: PathBuf, expected_config: &str) {
         create_dir_all(&root_dir).expect("Failed to create root directory");
-
-        let expected_config = serde_json::to_string(&RegistryConfig {
-            dl: format!(
-                "{}/api/v1/crates/{{crate}}/{{version}}/download",
-                server_url
-            ),
-            api: Some(server_url.to_string()),
-        })
-        .expect("Failed to create expected config");
 
         let config_path = root_dir.join("config.json");
         let config_written = if let Ok(config) = fs::read_to_string(&config_path) {
