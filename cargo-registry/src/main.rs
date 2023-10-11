@@ -247,6 +247,42 @@ impl CargoRegistryService {
         )
     }
 
+    fn get_crate_name_from_path(path: &str) -> Option<&str> {
+        let (path, crate_name) = path.rsplit_once('/')?;
+
+        match crate_name.len() {
+            0 => false,
+            1 => path == "/1",
+            2 => path == "/2",
+            3 => {
+                let first_char = crate_name.chars().next()?;
+                path == format!("/3/{}", first_char)
+            }
+            _ => {
+                let (first_two_char, rest) = crate_name.split_at(2);
+                let (next_two_char, _) = rest.split_at(2);
+                path == format!("/{}/{}", first_two_char, next_two_char)
+            }
+        }
+        .then_some(crate_name)
+    }
+
+    fn handle_crate_dl_request(
+        request: &hyper::Request<hyper::Body>,
+    ) -> hyper::Response<hyper::Body> {
+        let Some(crate_name) = Self::get_crate_name_from_path(request.uri().path()) else {
+            return Self::error_response(
+                hyper::StatusCode::BAD_REQUEST,
+                "Invalid path for the request",
+            );
+        };
+
+        // Fetch the program and return a crate buffer.
+        info!("Received a request to fetch {:?}", crate_name);
+
+        Self::success_response()
+    }
+
     async fn handler(
         config: String,
         request: hyper::Request<hyper::Body>,
@@ -265,10 +301,7 @@ impl CargoRegistryService {
         }
 
         if !path.starts_with(PATH_PREFIX) {
-            return Ok(Self::error_response(
-                hyper::StatusCode::BAD_REQUEST,
-                "Invalid path for the request",
-            ));
+            return Ok(Self::handle_crate_dl_request(&request));
         }
 
         let Some((path, endpoint)) = path.rsplit_once('/') else {
@@ -317,10 +350,7 @@ async fn main() {
     let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), client.port);
 
     let registry_config = RegistryConfig {
-        dl: format!(
-            "{}/api/v1/crates/{{crate}}/{{version}}/download",
-            client.server_url
-        ),
+        dl: format!("{}/api/v1/crates", client.server_url),
         api: Some(client.server_url.to_string()),
     };
     let registry_config_json =
@@ -340,4 +370,134 @@ async fn main() {
     info!("Server running on on http://{}", bind_addr);
 
     let _ = server.await;
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_get_crate_name_from_path() {
+        assert_eq!(CargoRegistryService::get_crate_name_from_path(""), None);
+        assert_eq!(CargoRegistryService::get_crate_name_from_path("/"), None);
+
+        // Single character crate name
+        assert_eq!(CargoRegistryService::get_crate_name_from_path("/a"), None);
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/1/a"),
+            Some("a")
+        );
+        assert_eq!(CargoRegistryService::get_crate_name_from_path("/2/a"), None);
+        assert_eq!(CargoRegistryService::get_crate_name_from_path("/a/a"), None);
+
+        // Two character crate name
+        assert_eq!(CargoRegistryService::get_crate_name_from_path("/ab"), None);
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/1/ab"),
+            None
+        );
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/2/ab"),
+            Some("ab")
+        );
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/3/ab"),
+            None
+        );
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/ab/ab"),
+            None
+        );
+
+        // Three character crate name
+        assert_eq!(CargoRegistryService::get_crate_name_from_path("/abc"), None);
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/1/abc"),
+            None
+        );
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/2/abc"),
+            None
+        );
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/3/abc"),
+            None
+        );
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/3/a/abc"),
+            Some("abc")
+        );
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/ab/abc"),
+            None
+        );
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/ab/c/abc"),
+            None
+        );
+
+        // Four character crate name
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/abcd"),
+            None
+        );
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/1/abcd"),
+            None
+        );
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/2/abcd"),
+            None
+        );
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/3/abcd"),
+            None
+        );
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/3/a/abcd"),
+            None
+        );
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/4/abcd"),
+            None
+        );
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/ab/cd/abcd"),
+            Some("abcd")
+        );
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/ab/cd/abc"),
+            None
+        );
+
+        // More character crate name
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/abcdefgh"),
+            None
+        );
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/1/abcdefgh"),
+            None
+        );
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/2/abcdefgh"),
+            None
+        );
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/3/abcdefgh"),
+            None
+        );
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/3/a/abcdefgh"),
+            None
+        );
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/4/abcdefgh"),
+            None
+        );
+        assert_eq!(
+            CargoRegistryService::get_crate_name_from_path("/ab/cd/abcdefgh"),
+            Some("abcdefgh")
+        );
+    }
 }
