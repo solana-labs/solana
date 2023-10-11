@@ -8,11 +8,12 @@ use {
             DEFAULT_INTERNAL_NODE_STAKE_SOL,
         },
         initialize_globals,
-        kubernetes::{Kubernetes, RuntimeConfig},
+        kubernetes::{Kubernetes, ValidatorConfig},
         ledger_helper::LedgerHelper,
         release::{BuildConfig, Deploy},
         ValidatorType,
     },
+    solana_core::ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
     std::{thread, time::Duration},
 };
 
@@ -189,7 +190,7 @@ fn parse_matches() -> ArgMatches<'static> {
             Arg::with_name("internal_node_stake_sol")
                 .long("internal-node-stake-sol")
                 .takes_value(true)
-                .help(" Amount to stake internal nodes (Sol)."),
+                .help("Amount to stake internal nodes (Sol)."),
         )
         .arg(
             Arg::with_name("enable_warmup_epochs")
@@ -218,12 +219,12 @@ fn parse_matches() -> ArgMatches<'static> {
         .arg(
             Arg::with_name("tpu_enable_udp")
                 .long("tpu-enable-udp")
-                .help("Runtime config. Enable UDP for tpu transactions."),
+                .help("Validator config. Enable UDP for tpu transactions."),
         )
         .arg(
             Arg::with_name("tpu_disable_quic")
                 .long("tpu-disable-quic")
-                .help("Genesis config. Disable quic for tpu packet forwarding"),
+                .help("Validator config. Disable quic for tpu packet forwarding"),
         )
         .arg(
             Arg::with_name("gpu_mode")
@@ -244,6 +245,41 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("warp-slot")
                 .takes_value(true)
                 .help("Boot from a snapshot that has warped ahead to WARP_SLOT rather than a slot 0 genesis"),
+        )
+        .arg(
+            Arg::with_name("limit_ledger_size")
+                .long("limit-ledger-size")
+                .takes_value(true)
+                .help("Validator Config. The `--limit-ledger-size` parameter allows you to specify how many ledger
+                shreds your node retains on disk. If you do not
+                include this parameter, the validator will keep the entire ledger until it runs
+                out of disk space. The default value attempts to keep the ledger disk usage
+                under 500GB. More or less disk usage may be requested by adding an argument to
+                `--limit-ledger-size` if desired. Check `solana-validator --help` for the
+                default limit value used by `--limit-ledger-size`. More information about
+                selecting a custom limit value is at : https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26"),
+        )
+        .arg(
+            Arg::with_name("skip_poh_verify")
+                .long("skip-poh-verify")
+                .help("Validator config. If set, validators will skip verifying
+                the ledger they already have saved to disk at
+                boot (results in a much faster boot)"),
+        )
+        .arg(
+            Arg::with_name("no_snapshot_fetch")
+                .long("no-snapshot-fetch")
+                .help("Validator config. If set, disables booting validators from a snapshot"),
+        )
+        .arg(
+            Arg::with_name("skip_require_tower")
+                .long("skip-require-tower")
+                .help("Validator config. Disable require tower"),
+        )
+        .arg(
+            Arg::with_name("full_rpc")
+                .long("full-rpc")
+                .help("Validator config. Support full RPC services on all nodes"),
         )
         .get_matches()
 }
@@ -321,9 +357,9 @@ async fn main() {
         ),
     };
 
-    let mut runtime_config = RuntimeConfig {
-        enable_udp: matches.is_present("tpu_enable_udp"),
-        disable_quic: matches.is_present("tpu_disable_quic"),
+    let mut validator_config = ValidatorConfig {
+        tpu_enable_udp: matches.is_present("tpu_enable_udp"),
+        tpu_disable_quic: matches.is_present("tpu_disable_quic"),
         gpu_mode: matches.value_of("gpu_mode").unwrap(),
         internal_node_sol: matches
             .value_of("internal_node_sol")
@@ -344,15 +380,35 @@ async fn main() {
         warp_slot: matches
             .value_of("warp_slot")
             .map(|value_str| value_str.parse().expect("Invalid value for warp_slot")),
+        
         shred_version: None, // set after genesis created
         bank_hash: None,     // set after genesis created
+        max_ledger_size: if matches.is_present("limit_ledger_size") {
+            let limit_ledger_size = match matches.value_of("limit_ledger_size") {
+                Some(_) => value_t_or_exit!(matches, "limit_ledger_size", u64),
+                None => DEFAULT_MAX_LEDGER_SHREDS,
+            };
+            if limit_ledger_size < DEFAULT_MIN_MAX_LEDGER_SHREDS {
+                error!(
+                    "The provided --limit-ledger-size value was too small, the minimum value is {DEFAULT_MIN_MAX_LEDGER_SHREDS}"
+                );
+                return;
+            }
+            Some(limit_ledger_size)
+        } else {
+            None
+        },
+        skip_poh_verify: matches.is_present("skip_poh_verify"),
+        no_snapshot_fetch: matches.is_present("no_snapshot_fetch"),
+        skip_require_tower: matches.is_present("skip_require_tower"),
+        enable_full_rpc: matches.is_present("enable_full_rpc"),
     };
 
-    let wait_for_supermajority: Option<u64> = runtime_config.wait_for_supermajority;
-    let warp_slot: Option<u64> = runtime_config.warp_slot;
+    let wait_for_supermajority: Option<u64> = validator_config.wait_for_supermajority;
+    let warp_slot: Option<u64> = validator_config.warp_slot;
     if !match (
-        runtime_config.wait_for_supermajority,
-        runtime_config.warp_slot,
+        validator_config.wait_for_supermajority,
+        validator_config.warp_slot,
     ) {
         (Some(slot1), Some(slot2)) => slot1 == slot2,
         (None, None) => true, // Both are None, consider them equal
@@ -361,14 +417,14 @@ async fn main() {
         panic!(
             "Error: When specifying both --wait-for-supermajority and --warp-slot, \
         they must use the same slot. ({:?} != {:?})",
-            runtime_config.wait_for_supermajority, runtime_config.warp_slot
+            validator_config.wait_for_supermajority, validator_config.warp_slot
         );
     }
 
-    info!("Runtime Config: {}", runtime_config);
+    info!("Runtime Config: {}", validator_config);
 
     // Check if namespace exists
-    let mut kub_controller = Kubernetes::new(setup_config.namespace, &mut runtime_config).await;
+    let mut kub_controller = Kubernetes::new(setup_config.namespace, &mut validator_config).await;
     match kub_controller.namespace_exists().await {
         Ok(res) => {
             if !res {
