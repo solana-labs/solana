@@ -2243,7 +2243,11 @@ impl Blockstore {
         slot: Slot,
     ) -> Result<Option<String>> {
         let memos = self.transaction_memos_cf.get((signature, slot))?;
-        if memos.is_none() {
+        if memos.is_none()
+            && self
+                .get_highest_primary_index_slot()
+                .is_some_and(|highest_slot| highest_slot >= slot)
+        {
             self.transaction_memos_cf
                 .get_raw(&cf::TransactionMemos::deprecated_key(signature))
         } else {
