@@ -437,7 +437,7 @@ mod tests {
     use {
         super::*,
         crate::{
-            bank::test_utils::goto_end_of_slot,
+            bank::test_utils::goto_end_of_slot_with_scheduler,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
         },
         mockall::Sequence,
@@ -555,7 +555,7 @@ mod tests {
                 .into_iter(),
             )),
         );
-        goto_end_of_slot(&bank);
+        goto_end_of_slot_with_scheduler(&bank);
     }
 
     #[test]
