@@ -274,6 +274,10 @@ impl BankWithScheduler {
         (*self).clone()
     }
 
+    pub fn into_bank(self) -> Arc<Bank> {
+        self.bank
+    }
+
     pub fn register_tick(&self, hash: &Hash) {
         self.inner.bank.register_tick(hash, &self.inner.scheduler);
     }
