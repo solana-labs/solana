@@ -374,6 +374,10 @@ impl JsonRpcRequestProcessor {
         );
 
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
+        let startup_verification_complete = Arc::clone(bank.get_startup_verification_complete());
+        let slot = bank.slot();
+        let optimistically_confirmed_bank =
+            Arc::new(RwLock::new(OptimisticallyConfirmedBank { bank }));
         Self {
             config: JsonRpcConfig::default(),
             snapshot_config: None,
@@ -381,24 +385,22 @@ impl JsonRpcRequestProcessor {
             block_commitment_cache: Arc::new(RwLock::new(BlockCommitmentCache::new(
                 HashMap::new(),
                 0,
-                CommitmentSlots::new_from_slot(bank.slot()),
+                CommitmentSlots::new_from_slot(slot),
             ))),
-            blockstore,
+            blockstore: Arc::clone(&blockstore),
             validator_exit: create_validator_exit(exit.clone()),
             health: Arc::new(RpcHealth::new(
-                cluster_info.clone(),
-                None,
+                Arc::clone(&optimistically_confirmed_bank),
+                blockstore,
                 0,
                 exit,
-                Arc::clone(bank.get_startup_verification_complete()),
+                startup_verification_complete,
             )),
             cluster_info,
             genesis_hash,
             transaction_sender: Arc::new(Mutex::new(sender)),
             bigtable_ledger_storage: None,
-            optimistically_confirmed_bank: Arc::new(RwLock::new(OptimisticallyConfirmedBank {
-                bank,
-            })),
+            optimistically_confirmed_bank,
             largest_accounts_cache: Arc::new(RwLock::new(LargestAccountsCache::new(30))),
             max_slots: Arc::new(MaxSlots::default()),
             leader_schedule_cache,

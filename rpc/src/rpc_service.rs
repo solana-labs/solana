@@ -37,12 +37,11 @@ use {
     },
     solana_sdk::{
         exit::Exit, genesis_config::DEFAULT_GENESIS_DOWNLOAD_PATH, hash::Hash,
-        native_token::lamports_to_sol, pubkey::Pubkey,
+        native_token::lamports_to_sol,
     },
     solana_send_transaction_service::send_transaction_service::{self, SendTransactionService},
     solana_storage_bigtable::CredentialType,
     std::{
-        collections::HashSet,
         net::SocketAddr,
         path::{Path, PathBuf},
         sync::{
@@ -350,7 +349,6 @@ impl JsonRpcService {
         ledger_path: &Path,
         validator_exit: Arc<RwLock<Exit>>,
         exit: Arc<AtomicBool>,
-        known_validators: Option<HashSet<Pubkey>>,
         override_health_check: Arc<AtomicBool>,
         startup_verification_complete: Arc<AtomicBool>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
@@ -368,8 +366,8 @@ impl JsonRpcService {
         let rpc_niceness_adj = config.rpc_niceness_adj;
 
         let health = Arc::new(RpcHealth::new(
-            cluster_info.clone(),
-            known_validators,
+            Arc::clone(&optimistically_confirmed_bank),
+            Arc::clone(&blockstore),
             config.health_check_slot_distance,
             override_health_check,
             startup_verification_complete,

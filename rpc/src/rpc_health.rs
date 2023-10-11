@@ -1,12 +1,10 @@
 use {
-    solana_gossip::cluster_info::ClusterInfo,
-    solana_sdk::{clock::Slot, pubkey::Pubkey},
-    std::{
-        collections::HashSet,
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc,
-        },
+    crate::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
+    solana_ledger::blockstore::Blockstore,
+    solana_sdk::clock::Slot,
+    std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, RwLock,
     },
 };
 
@@ -18,8 +16,8 @@ pub enum RpcHealthStatus {
 }
 
 pub struct RpcHealth {
-    cluster_info: Arc<ClusterInfo>,
-    known_validators: Option<HashSet<Pubkey>>,
+    optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
+    blockstore: Arc<Blockstore>,
     health_check_slot_distance: u64,
     override_health_check: Arc<AtomicBool>,
     startup_verification_complete: Arc<AtomicBool>,
@@ -29,15 +27,15 @@ pub struct RpcHealth {
 
 impl RpcHealth {
     pub fn new(
-        cluster_info: Arc<ClusterInfo>,
-        known_validators: Option<HashSet<Pubkey>>,
+        optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
+        blockstore: Arc<Blockstore>,
         health_check_slot_distance: u64,
         override_health_check: Arc<AtomicBool>,
         startup_verification_complete: Arc<AtomicBool>,
     ) -> Self {
         Self {
-            cluster_info,
-            known_validators,
+            optimistically_confirmed_bank,
+            blockstore,
             health_check_slot_distance,
             override_health_check,
             startup_verification_complete,
@@ -57,72 +55,60 @@ impl RpcHealth {
         if !self.startup_verification_complete.load(Ordering::Acquire) {
             return RpcHealthStatus::Unknown;
         }
-
         if self.override_health_check.load(Ordering::Relaxed) {
-            RpcHealthStatus::Ok
-        } else if let Some(known_validators) = &self.known_validators {
-            match (
-                self.cluster_info
-                    .get_accounts_hash_for_node(&self.cluster_info.id(), |hashes| {
-                        hashes
-                            .iter()
-                            .max_by(|a, b| a.0.cmp(&b.0))
-                            .map(|slot_hash| slot_hash.0)
-                    })
-                    .flatten(),
-                known_validators
-                    .iter()
-                    .filter_map(|known_validator| {
-                        self.cluster_info
-                            .get_accounts_hash_for_node(known_validator, |hashes| {
-                                hashes
-                                    .iter()
-                                    .max_by(|a, b| a.0.cmp(&b.0))
-                                    .map(|slot_hash| slot_hash.0)
-                            })
-                            .flatten()
-                    })
-                    .max(),
-            ) {
-                (
-                    Some(latest_account_hash_slot),
-                    Some(latest_known_validator_account_hash_slot),
-                ) => {
-                    // The validator is considered healthy if its latest account hash slot is within
-                    // `health_check_slot_distance` of the latest known validator's account hash slot
-                    if latest_account_hash_slot
-                        > latest_known_validator_account_hash_slot
-                            .saturating_sub(self.health_check_slot_distance)
-                    {
-                        RpcHealthStatus::Ok
-                    } else {
-                        let num_slots = latest_known_validator_account_hash_slot
-                            .saturating_sub(latest_account_hash_slot);
-                        warn!(
-                            "health check: behind by {} slots: me={}, latest known_validator={}",
-                            num_slots,
-                            latest_account_hash_slot,
-                            latest_known_validator_account_hash_slot
-                        );
-                        RpcHealthStatus::Behind { num_slots }
-                    }
-                }
-                (latest_account_hash_slot, latest_known_validator_account_hash_slot) => {
-                    if latest_account_hash_slot.is_none() {
-                        warn!("health check: latest_account_hash_slot not available");
-                    }
-                    if latest_known_validator_account_hash_slot.is_none() {
-                        warn!(
-                            "health check: latest_known_validator_account_hash_slot not available"
-                        );
-                    }
-                    RpcHealthStatus::Unknown
-                }
+            return RpcHealthStatus::Ok;
+        }
+
+        // A node can observe votes by both replaying blocks and observing gossip.
+        //
+        // ClusterInfoVoteListener receives votes from both of these sources and then records
+        // optimistically confirmed slots in the Blockstore via OptimisticConfirmationVerifier.
+        // Thus, it is possible for a node to record an optimistically confirmed slot before the
+        // node has replayed and validated the slot for itself.
+        //
+        // OptimisticallyConfirmedBank holds a bank for the latest optimistically confirmed slot
+        // that the node has replayed. It is true that the node will have replayed that slot by
+        // virtue of having a bank available. Observing that the cluster has optimistically
+        // confirmed a slot through gossip is not enough to reconstruct the bank.
+        //
+        // So, comparing the latest optimistic slot from the Blockstore vs. the slot from the
+        // OptimisticallyConfirmedBank bank allows a node to see where it stands in relation to the
+        // tip of the cluster.
+        let my_latest_optimistically_confirmed_slot = self
+            .optimistically_confirmed_bank
+            .read()
+            .unwrap()
+            .bank
+            .slot();
+
+        let mut optimistic_slot_infos = match self.blockstore.get_latest_optimistic_slots(1) {
+            Ok(infos) => infos,
+            Err(err) => {
+                warn!("health check: blockstore error: {err}");
+                return RpcHealthStatus::Unknown;
             }
-        } else {
-            // No known validator point of reference available, so this validator is healthy
-            // because it's running
+        };
+        let Some((cluster_latest_optimistically_confirmed_slot, _, _)) =
+            optimistic_slot_infos.pop()
+        else {
+            warn!("health check: blockstore does not contain any optimistically confirmed slots");
+            return RpcHealthStatus::Unknown;
+        };
+
+        if my_latest_optimistically_confirmed_slot
+            > cluster_latest_optimistically_confirmed_slot
+                .saturating_sub(self.health_check_slot_distance)
+        {
             RpcHealthStatus::Ok
+        } else {
+            let num_slots = cluster_latest_optimistically_confirmed_slot
+                .saturating_sub(my_latest_optimistically_confirmed_slot);
+            warn!(
+                "health check: behind by {num_slots} \
+                slots: me={my_latest_optimistically_confirmed_slot}, \
+                latest cluster={cluster_latest_optimistically_confirmed_slot}",
+            );
+            RpcHealthStatus::Behind { num_slots }
         }
     }
 
