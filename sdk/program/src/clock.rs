@@ -44,9 +44,42 @@ pub const DEFAULT_TICKS_PER_SLOT: u64 = 64;
 // GCP n1-standard hardware and also a xeon e5-2520 v4 are about this rate of hashes/s
 pub const DEFAULT_HASHES_PER_SECOND: u64 = 2_000_000;
 
+// Empirical sampling of mainnet validator hash rate showed the following stake
+// percentages can exceed the designated hash rates as of July 2023:
+// 97.6%
+pub const UPDATED_HASHES_PER_SECOND_2: u64 = 2_800_000;
+// 96.2%
+pub const UPDATED_HASHES_PER_SECOND_3: u64 = 4_400_000;
+// 96.2%
+pub const UPDATED_HASHES_PER_SECOND_4: u64 = 7_600_000;
+// 96.2%
+pub const UPDATED_HASHES_PER_SECOND_5: u64 = 9_200_000;
+// 96.2%
+pub const UPDATED_HASHES_PER_SECOND_6: u64 = 10_000_000;
+
 #[cfg(test)]
 static_assertions::const_assert_eq!(DEFAULT_HASHES_PER_TICK, 12_500);
 pub const DEFAULT_HASHES_PER_TICK: u64 = DEFAULT_HASHES_PER_SECOND / DEFAULT_TICKS_PER_SECOND;
+
+#[cfg(test)]
+static_assertions::const_assert_eq!(UPDATED_HASHES_PER_TICK2, 17_500);
+pub const UPDATED_HASHES_PER_TICK2: u64 = UPDATED_HASHES_PER_SECOND_2 / DEFAULT_TICKS_PER_SECOND;
+
+#[cfg(test)]
+static_assertions::const_assert_eq!(UPDATED_HASHES_PER_TICK3, 27_500);
+pub const UPDATED_HASHES_PER_TICK3: u64 = UPDATED_HASHES_PER_SECOND_3 / DEFAULT_TICKS_PER_SECOND;
+
+#[cfg(test)]
+static_assertions::const_assert_eq!(UPDATED_HASHES_PER_TICK4, 47_500);
+pub const UPDATED_HASHES_PER_TICK4: u64 = UPDATED_HASHES_PER_SECOND_4 / DEFAULT_TICKS_PER_SECOND;
+
+#[cfg(test)]
+static_assertions::const_assert_eq!(UPDATED_HASHES_PER_TICK5, 57_500);
+pub const UPDATED_HASHES_PER_TICK5: u64 = UPDATED_HASHES_PER_SECOND_5 / DEFAULT_TICKS_PER_SECOND;
+
+#[cfg(test)]
+static_assertions::const_assert_eq!(UPDATED_HASHES_PER_TICK6, 62_500);
+pub const UPDATED_HASHES_PER_TICK6: u64 = UPDATED_HASHES_PER_SECOND_6 / DEFAULT_TICKS_PER_SECOND;
 
 // 1 Dev Epoch = 400 ms * 8192 ~= 55 minutes
 pub const DEFAULT_DEV_SLOTS_PER_EPOCH: u64 = 8192;
