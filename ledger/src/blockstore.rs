@@ -7741,6 +7741,7 @@ pub mod tests {
         transaction_status_cf
             .put_deprecated_protobuf((0, signature2, 4), &status)
             .unwrap();
+        blockstore.set_highest_primary_index_slot(Some(4));
 
         transaction_status_cf
             .put_protobuf((signature3, 4), &status)
@@ -8199,6 +8200,12 @@ pub mod tests {
                     (primary_index, *address, slot, signature),
                     &AddressSignatureMeta { writeable: false },
                 )?;
+            }
+            let mut w_highest_primary_index_slot = self.highest_primary_index_slot.write().unwrap();
+            if w_highest_primary_index_slot.is_none()
+                || w_highest_primary_index_slot.is_some_and(|highest_slot| highest_slot < slot)
+            {
+                *w_highest_primary_index_slot = Some(slot);
             }
             Ok(())
         }
