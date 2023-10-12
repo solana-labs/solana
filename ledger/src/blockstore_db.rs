@@ -2134,6 +2134,7 @@ pub mod tests {
             is_manual_compaction: true,
         };
         let oldest_slot = OldestSlot::default();
+        oldest_slot.set_clean_slot_0(true);
 
         let mut factory = PurgedSlotFilterFactory::<ShredData> {
             oldest_slot: oldest_slot.clone(),
