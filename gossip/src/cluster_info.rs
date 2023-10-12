@@ -1240,16 +1240,13 @@ impl ClusterInfo {
         let gossip_crds = self.gossip.crds.read().unwrap();
         gossip_crds
             .get_entries(cursor)
-            .filter_map(|entry| match &entry.value.data {
-                CrdsData::RestartLastVotedForkSlots(slots) => {
-                    if slots.shred_version == self_shred_version {
-                        Some(slots.clone())
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
+            .filter_map(|entry| {
+                let CrdsData::RestartLastVotedForkSlots(slots) = &entry.value.data else {
+                    return None;
+                };
+                (slots.shred_version == self_shred_version).then_some(slots)
             })
+            .cloned()
             .collect()
     }
 
