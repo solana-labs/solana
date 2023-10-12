@@ -370,9 +370,7 @@ impl Blockstore {
 
         let mut index0 = self.transaction_status_index_cf.get(0)?.unwrap_or_default();
         let mut index1 = self.transaction_status_index_cf.get(1)?.unwrap_or_default();
-        let r_highest_primary_index_slot = self.highest_primary_index_slot.read().unwrap();
-        let highest_primary_index_slot = *r_highest_primary_index_slot;
-        drop(r_highest_primary_index_slot);
+        let highest_primary_index_slot = self.get_highest_primary_index_slot();
         let slot_indexes = |slot: Slot| -> Vec<u64> {
             let mut indexes = vec![];
             if highest_primary_index_slot.is_none() {
