@@ -630,6 +630,7 @@ fn test_extra_fields_full_snapshot_archive() {
         false,
         false,
         false,
+        false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
         &Arc::default(),
