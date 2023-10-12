@@ -96,7 +96,7 @@ impl RpcHealth {
         };
 
         if my_latest_optimistically_confirmed_slot
-            > cluster_latest_optimistically_confirmed_slot
+            >= cluster_latest_optimistically_confirmed_slot
                 .saturating_sub(self.health_check_slot_distance)
         {
             RpcHealthStatus::Ok
