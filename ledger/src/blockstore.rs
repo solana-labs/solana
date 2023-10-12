@@ -2154,6 +2154,8 @@ impl Blockstore {
         }
         if highest_primary_index_slot.is_some() {
             self.set_highest_primary_index_slot(highest_primary_index_slot);
+        } else {
+            self.db.set_clean_slot_0(true);
         }
         Ok(())
     }
