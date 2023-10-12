@@ -385,7 +385,7 @@ mod tests {
         solana_ledger::{
             blockstore::Blockstore,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
-            get_tmp_ledger_path,
+            get_tmp_ledger_path_auto_delete,
             leader_schedule_cache::LeaderScheduleCache,
         },
         solana_measure::measure::Measure,
@@ -404,9 +404,8 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
         let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
         let prev_hash = bank.last_blockhash();
-        let ledger_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&ledger_path)
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+            let blockstore = Blockstore::open(ledger_path.path())
                 .expect("Expected to be able to open database ledger");
 
             let default_target_tick_duration =
@@ -568,7 +567,5 @@ mod tests {
             exit.store(true, Ordering::Relaxed);
             poh_service.join().unwrap();
             entry_producer.join().unwrap();
-        }
-        Blockstore::destroy(&ledger_path).unwrap();
     }
 }

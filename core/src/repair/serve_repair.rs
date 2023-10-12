@@ -1423,7 +1423,7 @@ mod tests {
             blockstore::make_many_slot_entries,
             blockstore_processor::fill_blockstore_slot_with_ticks,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
-            get_tmp_ledger_path,
+            get_tmp_ledger_path_auto_delete,
             shred::{max_ticks_per_n_shreds, Shred, ShredFlags},
         },
         solana_perf::packet::{deserialize_from_with_limit, Packet},
@@ -1853,9 +1853,8 @@ mod tests {
     fn run_highest_window_request(slot: Slot, num_slots: u64, nonce: Nonce) {
         let recycler = PacketBatchRecycler::default();
         solana_logger::setup();
-        let ledger_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
             let rv = ServeRepair::run_highest_window_request(
                 &recycler,
                 &socketaddr_any!(),
@@ -1908,9 +1907,6 @@ mod tests {
                 nonce,
             );
             assert!(rv.is_none());
-        }
-
-        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -1922,9 +1918,8 @@ mod tests {
     fn run_window_request(slot: Slot, nonce: Nonce) {
         let recycler = PacketBatchRecycler::default();
         solana_logger::setup();
-        let ledger_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
             let rv = ServeRepair::run_window_request(
                 &recycler,
                 &socketaddr_any!(),
@@ -1961,9 +1956,6 @@ mod tests {
                 .collect();
             assert_eq!(rv[0].index(), 1);
             assert_eq!(rv[0].slot(), slot);
-        }
-
-        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     fn new_test_cluster_info() -> ClusterInfo {
@@ -2095,9 +2087,8 @@ mod tests {
     fn run_orphan(slot: Slot, num_slots: u64, nonce: Nonce) {
         solana_logger::setup();
         let recycler = PacketBatchRecycler::default();
-        let ledger_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+            let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
             let rv =
                 ServeRepair::run_orphan(&recycler, &socketaddr_any!(), &blockstore, slot, 0, nonce);
             assert!(rv.is_none());
@@ -2153,18 +2144,14 @@ mod tests {
                 })
                 .collect();
             assert_eq!(rv, expected);
-        }
-
-        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn run_orphan_corrupted_shred_size() {
         solana_logger::setup();
         let recycler = PacketBatchRecycler::default();
-        let ledger_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+            let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
             // Create slots [1, 2] with 1 shred apiece
             let (mut shreds, _) = make_many_slot_entries(1, 2, 1);
 
@@ -2208,9 +2195,6 @@ mod tests {
             )
             .unwrap()];
             assert_eq!(rv, expected);
-        }
-
-        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -2223,13 +2207,13 @@ mod tests {
 
         solana_logger::setup();
         let recycler = PacketBatchRecycler::default();
-        let ledger_path = get_tmp_ledger_path!();
-        {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+
             let slot = 0;
             let num_slots = MAX_ANCESTOR_RESPONSES as u64;
             let nonce = 10;
 
-            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+            let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
 
             // Create slots [slot, slot + num_slots) with 5 shreds apiece
             let (shreds, _) = make_many_slot_entries(slot, num_slots, 5);
@@ -2309,9 +2293,6 @@ mod tests {
                     panic!("unexpected response: {:?}", &ancestor_hashes_response);
                 }
             }
-        }
-
-        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]

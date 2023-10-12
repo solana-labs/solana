@@ -505,7 +505,7 @@ pub mod test {
         solana_ledger::{
             blockstore::Blockstore,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
-            get_tmp_ledger_path,
+            get_tmp_ledger_path_auto_delete,
             shred::{max_ticks_per_n_shreds, ProcessShredsStats, ReedSolomonCache, Shredder},
         },
         solana_runtime::bank::Bank,
@@ -590,8 +590,8 @@ pub mod test {
     #[test]
     fn test_duplicate_retransmit_signal() {
         // Setup
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
         let (transmit_sender, transmit_receiver) = unbounded();
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
 
@@ -694,9 +694,8 @@ pub mod test {
     #[test]
     fn test_broadcast_ledger() {
         solana_logger::setup();
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
 
-        {
             // Create the leader scheduler
             let leader_keypair = Arc::new(Keypair::new());
 
@@ -704,7 +703,7 @@ pub mod test {
             let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
             let broadcast_service = setup_dummy_broadcast_service(
                 leader_keypair,
-                &ledger_path,
+                ledger_path.path(),
                 entry_receiver,
                 retransmit_slots_receiver,
             );
@@ -752,8 +751,5 @@ pub mod test {
                 .broadcast_service
                 .join()
                 .expect("Expect successful join of broadcast service");
-        }
-
-        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 }

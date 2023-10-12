@@ -864,7 +864,7 @@ mod test {
                 make_chaining_slot_entries, make_many_slot_entries, make_slot_entries, Blockstore,
             },
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
-            get_tmp_ledger_path,
+            get_tmp_ledger_path_auto_delete,
             shred::max_ticks_per_n_shreds,
         },
         solana_runtime::bank::Bank,
@@ -884,9 +884,8 @@ mod test {
 
     #[test]
     pub fn test_repair_orphan() {
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+            let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
             // Create some orphan slots
             let (mut shreds, _) = make_slot_entries(1, 0, 1, /*merkle_variant:*/ true);
@@ -911,16 +910,12 @@ mod test {
                     ShredRepairType::HighestShred(0, 0)
                 ]
             );
-        }
-
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_repair_empty_slot() {
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+            let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
             let (shreds, _) = make_slot_entries(2, 0, 1, /*merkle_variant:*/ true);
 
@@ -944,15 +939,12 @@ mod test {
                 ),
                 vec![ShredRepairType::HighestShred(0, 0)]
             );
-        }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_generate_repairs() {
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+            let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
             let nth = 3;
             let num_slots = 2;
@@ -1019,15 +1011,12 @@ mod test {
                 )[..],
                 expected[0..expected.len() - 2]
             );
-        }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_generate_highest_repair() {
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+            let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
             let num_entries_per_slot = 100;
 
@@ -1065,15 +1054,12 @@ mod test {
                 ),
                 expected
             );
-        }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_repair_range() {
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+            let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
             let slots: Vec<u64> = vec![1, 3, 5, 7, 8];
             let num_entries_per_slot = max_ticks_per_n_shreds(1, None) + 1;
@@ -1114,15 +1100,12 @@ mod test {
                     );
                 }
             }
-        }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_repair_range_highest() {
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+            let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
             let num_entries_per_slot = 10;
 
@@ -1159,14 +1142,12 @@ mod test {
                 ),
                 expected
             );
-        }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_generate_duplicate_repairs_for_slot() {
-        let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let dead_slot = 9;
 
         // SlotMeta doesn't exist, should make no repairs
@@ -1203,8 +1184,8 @@ mod test {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let cluster_slots = ClusterSlots::default();
         let cluster_info = Arc::new(new_test_cluster_info());
         let identity_keypair = cluster_info.keypair().clone();

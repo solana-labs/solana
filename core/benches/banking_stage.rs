@@ -29,7 +29,7 @@ use {
         blockstore::Blockstore,
         blockstore_processor::process_entries_for_tests,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        get_tmp_ledger_path,
+        get_tmp_ledger_path_auto_delete,
     },
     solana_perf::{
         packet::{to_packet_batches, Packet},
@@ -82,10 +82,9 @@ fn check_txs(receiver: &Arc<Receiver<WorkingBankEntry>>, ref_tx_count: usize) {
 fn bench_consume_buffered(bencher: &mut Bencher) {
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
     let bank = Arc::new(Bank::new_for_benches(&genesis_config));
-    let ledger_path = get_tmp_ledger_path!();
-    {
+    let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Arc::new(
-            Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
+            Blockstore::open(ledger_path.path()).expect("Expected to be able to open database ledger"),
         );
         let (exit, poh_recorder, poh_service, _signal_receiver) =
             create_test_recorder(bank, blockstore, None, None);
@@ -123,8 +122,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
 
         exit.store(true, Ordering::Relaxed);
         poh_service.join().unwrap();
-    }
-    let _unused = Blockstore::destroy(&ledger_path);
+
 }
 
 fn make_accounts_txs(txes: usize, mint_keypair: &Keypair, hash: Hash) -> Vec<Transaction> {
@@ -278,10 +276,9 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         packet_batches
     });
 
-    let ledger_path = get_tmp_ledger_path!();
-    {
+    let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Arc::new(
-            Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
+            Blockstore::open(ledger_path.path()).expect("Expected to be able to open database ledger"),
         );
         let (exit, poh_recorder, poh_service, signal_receiver) =
             create_test_recorder(bank.clone(), blockstore, None, None);
@@ -365,8 +362,6 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         });
         exit.store(true, Ordering::Relaxed);
         poh_service.join().unwrap();
-    }
-    let _unused = Blockstore::destroy(&ledger_path);
 }
 
 #[bench]

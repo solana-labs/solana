@@ -108,7 +108,7 @@ mod test {
         super::*,
         solana_gossip::contact_info::ContactInfo,
         solana_ledger::{
-            blockstore::Blockstore, get_tmp_ledger_path, leader_schedule_cache::LeaderScheduleCache,
+            blockstore::Blockstore, get_tmp_ledger_path_auto_delete, leader_schedule_cache::LeaderScheduleCache,
         },
         solana_runtime::{
             bank::Bank,
@@ -128,9 +128,8 @@ mod test {
 
     #[test]
     fn test_get_leader_tpus() {
-        let ledger_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+            let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
             let validator_vote_keypairs0 = ValidatorVoteKeypairs::new_rand();
             let validator_vote_keypairs1 = ValidatorVoteKeypairs::new_rand();
@@ -244,7 +243,5 @@ mod test {
             for x in 4..8 {
                 assert!(leader_info.get_leader_tpus(x, Protocol::UDP).len() <= recent_peers.len());
             }
-        }
-        Blockstore::destroy(&ledger_path).unwrap();
     }
 }

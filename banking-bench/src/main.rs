@@ -14,7 +14,7 @@ use {
     solana_ledger::{
         blockstore::Blockstore,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        get_tmp_ledger_path,
+        get_tmp_ledger_path_auto_delete,
         leader_schedule_cache::LeaderScheduleCache,
     },
     solana_measure::measure::Measure,
@@ -410,10 +410,9 @@ fn main() {
         }
     }
 
-    let ledger_path = get_tmp_ledger_path!();
-    {
+    let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Arc::new(
-            Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
+            Blockstore::open(ledger_path.path()).expect("Expected to be able to open database ledger"),
         );
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let (exit, poh_recorder, poh_service, signal_receiver) = create_test_recorder(
@@ -620,6 +619,4 @@ fn main() {
         if let Some(tracer_thread) = tracer_thread {
             tracer_thread.join().unwrap().unwrap();
         }
-    }
-    let _unused = Blockstore::destroy(&ledger_path);
 }

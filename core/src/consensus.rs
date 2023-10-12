@@ -1518,7 +1518,7 @@ pub mod test {
             vote_simulator::VoteSimulator,
         },
         itertools::Itertools,
-        solana_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path},
+        solana_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path_auto_delete},
         solana_runtime::bank::Bank,
         solana_sdk::{
             account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -2928,9 +2928,8 @@ pub mod test {
     #[test]
     fn test_reconcile_blockstore_roots_with_tower_normal() {
         solana_logger::setup();
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+            let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
             let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
             blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -2956,8 +2955,6 @@ pub mod test {
             assert!(blockstore.is_root(1));
             assert!(!blockstore.is_root(3));
             assert!(blockstore.is_root(4));
-        }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -2966,9 +2963,8 @@ pub mod test {
                                external root (Tower(4))!?")]
     fn test_reconcile_blockstore_roots_with_tower_panic_no_common_root() {
         solana_logger::setup();
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+            let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
             let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
             blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -2990,16 +2986,13 @@ pub mod test {
                 &mut blockstore.last_root(),
             )
             .unwrap();
-        }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_reconcile_blockstore_roots_with_tower_nop_no_parent() {
         solana_logger::setup();
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+            let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
             let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
             blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -3019,8 +3012,6 @@ pub mod test {
             )
             .unwrap();
             assert_eq!(blockstore.last_root(), 0);
-        }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
