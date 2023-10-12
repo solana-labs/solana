@@ -53,7 +53,7 @@ pub struct ConnectionCache<
 > {
     name: &'static str,
     map: Arc<RwLock<IndexMap<SocketAddr, /*ConnectionPool:*/ R>>>,
-    connection_manager: RwLock<S>,
+    connection_manager: Arc<RwLock<S>>,
     stats: Arc<ConnectionCacheStats>,
     last_stats: AtomicInterval,
     connection_pool_size: usize,
@@ -92,7 +92,7 @@ where
 
         let map = Arc::new(RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)));
         let config = Arc::new(connection_config);
-        let connection_manager = Arc::new(connection_manager);
+        let connection_manager = Arc::new(RwLock::new(connection_manager));
         let connection_pool_size = 1.max(connection_pool_size); // The minimum pool size is 1.
 
         let stats = Arc::new(ConnectionCacheStats::default());
@@ -101,8 +101,8 @@ where
             Self::create_connection_async_thread(map.clone(), receiver, stats.clone());
         Self {
             name,
-            map: RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)),
-            connection_manager: RwLock::new(connection_manager),
+            map: Arc::new(RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS))),
+            connection_manager: connection_manager,
             stats: Arc::new(ConnectionCacheStats::default()),
             last_stats: AtomicInterval::default(),
             connection_pool_size,
@@ -168,24 +168,19 @@ where
             .map(|pool| pool.check_pool_status(self.connection_pool_size))
             .unwrap_or(PoolStatus::Empty);
 
-        let (cache_hit, num_evictions, eviction_timing_ms) = if should_create_connection {
-            // evict a connection if the cache is reaching upper bounds
-            let mut num_evictions = 0;
-            let mut get_connection_cache_eviction_measure =
-                Measure::start("get_connection_cache_eviction_measure");
-            let existing_index = map.get_index_of(addr);
-            while map.len() >= MAX_CONNECTIONS {
-                let mut rng = thread_rng();
-                let n = rng.gen_range(0, MAX_CONNECTIONS);
-                if let Some(index) = existing_index {
-                    if n == index {
-                        continue;
-                    }
-                }
-                map.swap_remove_index(n);
-                num_evictions += 1;
-            }
-            get_connection_cache_eviction_measure.stop();
+            let (cache_hit, num_evictions, eviction_timing_ms) =
+            if matches!(pool_status, PoolStatus::Empty) {
+                Self::create_connection_internal(
+                    &self.connection_config,
+                    &self.connection_manager,
+                    &mut map,
+                    addr,
+                    self.connection_pool_size,
+                    None,
+                )
+            } else {
+                (true, 0, 0)
+            };
 
         if matches!(pool_status, PoolStatus::PartiallyFull) {
             // trigger an async connection create
@@ -214,7 +209,7 @@ where
 
     fn create_connection_internal(
         config: &C,
-        connection_manager: &M,
+        connection_manager: &RwLock<M>,
         map: &mut std::sync::RwLockWriteGuard<'_, IndexMap<SocketAddr, P>>,
         addr: &SocketAddr,
         connection_pool_size: usize,
@@ -239,6 +234,7 @@ where
         get_connection_cache_eviction_measure.stop();
 
         let mut hit_cache = false;
+        let conn_man = connection_manager.read().unwrap();
         map.entry(*addr)
             .and_modify(|pool| {
                 if matches!(
@@ -258,7 +254,7 @@ where
                 }
             })
             .or_insert_with(|| {
-                let mut pool = connection_manager.new_connection_pool();
+                let mut pool = conn_man.new_connection_pool();
                 pool.add_connection(config, addr);
                 pool
             });
