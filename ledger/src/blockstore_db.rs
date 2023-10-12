@@ -1850,6 +1850,10 @@ impl<'a> WriteBatch<'a> {
 struct PurgedSlotFilter<C: Column + ColumnName> {
     /// The oldest slot to keep; any slot < oldest_slot will be removed
     oldest_slot: Slot,
+    /// Whether to preserve keys that return slot 0, even when oldest_slot > 0.
+    // This is used to delete old column data that wasn't keyed with a Slot, and so always returns
+    // `C::slot() == 0`
+    clean_slot_0: bool,
     name: CString,
     _phantom: PhantomData<C>,
 }
@@ -1882,8 +1886,10 @@ impl<C: Column + ColumnName> CompactionFilterFactory for PurgedSlotFilterFactory
 
     fn create(&mut self, _context: CompactionFilterContext) -> Self::Filter {
         let copied_oldest_slot = self.oldest_slot.get();
+        let copied_clean_slot_0 = self.oldest_slot.get_clean_slot_0();
         PurgedSlotFilter::<C> {
             oldest_slot: copied_oldest_slot,
+            clean_slot_0: copied_clean_slot_0,
             name: CString::new(format!(
                 "purged_slot_filter({}, {:?})",
                 C::NAME,
