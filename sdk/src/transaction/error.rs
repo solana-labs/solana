@@ -3,8 +3,14 @@ use {
         instruction::InstructionError,
         message::{AddressLoaderError, SanitizeMessageError},
         sanitize::SanitizeError,
+        slot_history::Slot,
+        transaction::SanitizedTransaction,
     },
     serde::Serialize,
+    std::{
+        fmt::Debug,
+        sync::{Arc, RwLock},
+    },
     thiserror::Error,
 };
 
@@ -198,3 +204,15 @@ impl From<AddressLoaderError> for TransactionError {
         }
     }
 }
+
+pub trait TransactionResultNotifier: Debug {
+    fn notify_banking_transaction_result(
+        &self,
+        transaction: &SanitizedTransaction,
+        error: Option<TransactionError>,
+        slot: Slot,
+    );
+}
+
+pub type BankingTransactionResultNotifierLock =
+    Arc<RwLock<dyn TransactionResultNotifier + Sync + Send>>;

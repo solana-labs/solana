@@ -73,7 +73,7 @@ use {
         saturating_add_assign,
         signature::{Keypair, Signature, Signer},
         timing::timestamp,
-        transaction::Transaction,
+        transaction::{BankingTransactionResultNotifierLock, Transaction},
     },
     solana_vote::vote_sender_types::ReplayVoteSender,
     solana_vote_program::vote_state::VoteTransaction,
@@ -249,6 +249,7 @@ pub struct ReplayStageConfig {
     // duplicate voting which can lead to slashing.
     pub wait_to_vote_slot: Option<Slot>,
     pub replay_slots_concurrently: bool,
+    pub banking_transaction_result_notifier: Option<BankingTransactionResultNotifierLock>,
 }
 
 #[derive(Default)]
@@ -517,6 +518,7 @@ impl ReplayStage {
             tower_storage,
             wait_to_vote_slot,
             replay_slots_concurrently,
+            banking_transaction_result_notifier: banking_transaction_result_notifier_lock,
         } = config;
 
         trace!("replay stage");
@@ -1043,6 +1045,7 @@ impl ReplayStage {
                         &banking_tracer,
                         has_new_vote_been_rooted,
                         transaction_status_sender.is_some(),
+                        banking_transaction_result_notifier_lock.clone(),
                     );
 
                     let poh_bank = poh_recorder.read().unwrap().bank();
@@ -1853,6 +1856,7 @@ impl ReplayStage {
         banking_tracer: &Arc<BankingTracer>,
         has_new_vote_been_rooted: bool,
         track_transaction_indexes: bool,
+        banking_transaction_result_notifier_lock: Option<BankingTransactionResultNotifierLock>,
     ) {
         // all the individual calls to poh_recorder.read() are designed to
         // increase granularity, decrease contention
@@ -1963,7 +1967,7 @@ impl ReplayStage {
                 false
             };
 
-            let tpu_bank = Self::new_bank_from_parent_with_notify(
+            let mut tpu_bank = Self::new_bank_from_parent_with_notify(
                 parent.clone(),
                 poh_slot,
                 root_slot,
@@ -1971,6 +1975,11 @@ impl ReplayStage {
                 rpc_subscriptions,
                 NewBankOptions { vote_only_bank },
             );
+            if banking_transaction_result_notifier_lock.is_some() {
+                tpu_bank.set_banking_transaction_results_notifier(
+                    banking_transaction_result_notifier_lock,
+                );
+            }
             // make sure parent is frozen for finalized hashes via the above
             // new()-ing of its child bank
             banking_tracer.hash_event(parent.slot(), &parent.last_blockhash(), &parent.hash());

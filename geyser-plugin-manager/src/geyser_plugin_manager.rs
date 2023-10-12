@@ -64,6 +64,15 @@ impl GeyserPluginManager {
         false
     }
 
+    pub fn banking_transaction_result_notification_enabled(&self) -> bool {
+        for plugin in &self.plugins {
+            if plugin.banking_transaction_results_notifications_enabled() {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Admin RPC request handler
     pub(crate) fn list_plugins(&self) -> JsonRpcResult<Vec<String>> {
         Ok(self.plugins.iter().map(|p| p.name().to_owned()).collect())

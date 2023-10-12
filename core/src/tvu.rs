@@ -44,7 +44,10 @@ use {
         accounts_background_service::AbsRequestSender, bank_forks::BankForks,
         commitment::BlockCommitmentCache, prioritization_fee_cache::PrioritizationFeeCache,
     },
-    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
+    solana_sdk::{
+        clock::Slot, pubkey::Pubkey, signature::Keypair,
+        transaction::BankingTransactionResultNotifierLock,
+    },
     solana_turbine::retransmit_stage::RetransmitStage,
     solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
@@ -138,6 +141,7 @@ impl Tvu {
         turbine_quic_endpoint_sender: AsyncSender<(SocketAddr, Bytes)>,
         turbine_quic_endpoint_receiver: Receiver<(Pubkey, SocketAddr, Bytes)>,
         repair_quic_endpoint_sender: AsyncSender<LocalRequest>,
+        banking_transaction_result_notifier: Option<BankingTransactionResultNotifierLock>,
     ) -> Result<Self, String> {
         let TvuSockets {
             repair: repair_socket,
@@ -256,6 +260,7 @@ impl Tvu {
             tower_storage: tower_storage.clone(),
             wait_to_vote_slot,
             replay_slots_concurrently: tvu_config.replay_slots_concurrently,
+            banking_transaction_result_notifier,
         };
 
         let (voting_sender, voting_receiver) = unbounded();
@@ -491,6 +496,7 @@ pub mod tests {
             turbine_quic_endpoint_sender,
             turbine_quic_endpoint_receiver,
             repair_quic_endpoint_sender,
+            None,
         )
         .expect("assume success");
         exit.store(true, Ordering::Relaxed);

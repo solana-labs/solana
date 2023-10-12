@@ -168,8 +168,9 @@ use {
         sysvar::{self, last_restart_slot::LastRestartSlot, Sysvar, SysvarId},
         timing::years_as_slots,
         transaction::{
-            self, MessageHash, Result, SanitizedTransaction, Transaction, TransactionError,
-            TransactionVerificationMode, VersionedTransaction, MAX_TX_ACCOUNT_LOCKS,
+            self, BankingTransactionResultNotifierLock, MessageHash, Result, SanitizedTransaction,
+            Transaction, TransactionError, TransactionVerificationMode, VersionedTransaction,
+            MAX_TX_ACCOUNT_LOCKS,
         },
         transaction_context::{
             ExecutionRecord, TransactionAccount, TransactionContext, TransactionReturnData,
@@ -569,6 +570,7 @@ impl PartialEq for Bank {
             loaded_programs_cache: _,
             check_program_modification_slot: _,
             epoch_reward_status: _,
+            transaction_result_notifier_lock: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this PartialEq is accordingly updated.
@@ -831,6 +833,9 @@ pub struct Bank {
     pub check_program_modification_slot: bool,
 
     epoch_reward_status: EpochRewardStatus,
+
+    /// geyser plugin to notify transaction results
+    transaction_result_notifier_lock: Option<BankingTransactionResultNotifierLock>,
 }
 
 struct VoteWithStakeDelegations {
@@ -1079,6 +1084,7 @@ impl Bank {
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms<BankForks>>>::default(),
             check_program_modification_slot: false,
             epoch_reward_status: EpochRewardStatus::default(),
+            transaction_result_notifier_lock: None,
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1431,6 +1437,7 @@ impl Bank {
             loaded_programs_cache: parent.loaded_programs_cache.clone(),
             check_program_modification_slot: false,
             epoch_reward_status: parent.epoch_reward_status.clone(),
+            transaction_result_notifier_lock: None,
         };
 
         let (_, ancestors_time_us) = measure_us!({
@@ -1927,6 +1934,7 @@ impl Bank {
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms<BankForks>>>::default(),
             check_program_modification_slot: false,
             epoch_reward_status: EpochRewardStatus::default(),
+            transaction_result_notifier_lock: None,
         };
         bank.finish_init(
             genesis_config,
@@ -5222,6 +5230,24 @@ impl Bank {
             })
             .collect();
 
+        let transaction_result_notifier_lock = self.transaction_result_notifier_lock.clone();
+        if let Some(transaction_result_notifier_lock) = transaction_result_notifier_lock {
+            let transaction_error_notifier = transaction_result_notifier_lock.read();
+            if let Ok(transaction_error_notifier) = transaction_error_notifier {
+                batch
+                    .sanitized_transactions()
+                    .iter()
+                    .zip(batch.lock_results())
+                    .for_each(|(transaction, result)| {
+                        transaction_error_notifier.notify_banking_transaction_result(
+                            transaction,
+                            result.clone().err(),
+                            self.slot,
+                        );
+                    });
+            }
+        }
+
         let mut check_time = Measure::start("check_transactions");
         let mut check_results = self.check_transactions(
             sanitized_txs,
@@ -8252,6 +8278,17 @@ impl Bank {
             }
         }
         false
+    }
+
+    pub fn set_banking_transaction_results_notifier(
+        &mut self,
+        banking_transaction_result_notifier: Option<BankingTransactionResultNotifierLock>,
+    ) {
+        self.transaction_result_notifier_lock = banking_transaction_result_notifier;
+    }
+
+    pub fn has_banking_transaction_results_notifier(&self) -> bool {
+        self.transaction_result_notifier_lock.is_some()
     }
 }
 
