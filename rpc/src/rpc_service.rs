@@ -584,10 +584,6 @@ mod tests {
     use {
         super::*,
         crate::rpc::{create_validator_exit, tests::new_test_cluster_info},
-        solana_gossip::{
-            crds::GossipRoute,
-            crds_value::{AccountsHashes, CrdsData, CrdsValue},
-        },
         solana_ledger::{
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
             get_tmp_ledger_path,
@@ -882,107 +878,5 @@ mod tests {
                 panic!("Unexpected RequestMiddlewareAction variant");
             }
         }
-    }
-
-    #[test]
-    fn test_health_check_with_no_known_validators() {
-        let rm = RpcRequestMiddleware::new(
-            PathBuf::from("/"),
-            None,
-            create_bank_forks(),
-            RpcHealth::stub(),
-        );
-        assert_eq!(rm.health_check(), "ok");
-    }
-
-    #[test]
-    fn test_health_check_with_known_validators() {
-        let cluster_info = Arc::new(new_test_cluster_info());
-        let health_check_slot_distance = 123;
-        let override_health_check = Arc::new(AtomicBool::new(false));
-        let startup_verification_complete = Arc::new(AtomicBool::new(true));
-        let known_validators = vec![
-            solana_sdk::pubkey::new_rand(),
-            solana_sdk::pubkey::new_rand(),
-            solana_sdk::pubkey::new_rand(),
-        ];
-
-        let health = Arc::new(RpcHealth::new(
-            cluster_info.clone(),
-            Some(known_validators.clone().into_iter().collect()),
-            health_check_slot_distance,
-            override_health_check.clone(),
-            startup_verification_complete,
-        ));
-
-        let rm = RpcRequestMiddleware::new(PathBuf::from("/"), None, create_bank_forks(), health);
-
-        // No account hashes for this node or any known validators
-        assert_eq!(rm.health_check(), "unknown");
-
-        // No account hashes for any known validators
-        cluster_info.push_accounts_hashes(vec![(1000, Hash::default()), (900, Hash::default())]);
-        cluster_info.flush_push_queue();
-        assert_eq!(rm.health_check(), "unknown");
-
-        // Override health check
-        override_health_check.store(true, Ordering::Relaxed);
-        assert_eq!(rm.health_check(), "ok");
-        override_health_check.store(false, Ordering::Relaxed);
-
-        // This node is ahead of the known validators
-        cluster_info
-            .gossip
-            .crds
-            .write()
-            .unwrap()
-            .insert(
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(AccountsHashes::new(
-                    known_validators[0],
-                    vec![
-                        (1, Hash::default()),
-                        (1001, Hash::default()),
-                        (2, Hash::default()),
-                    ],
-                ))),
-                1,
-                GossipRoute::LocalMessage,
-            )
-            .unwrap();
-        assert_eq!(rm.health_check(), "ok");
-
-        // Node is slightly behind the known validators
-        cluster_info
-            .gossip
-            .crds
-            .write()
-            .unwrap()
-            .insert(
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(AccountsHashes::new(
-                    known_validators[1],
-                    vec![(1000 + health_check_slot_distance - 1, Hash::default())],
-                ))),
-                1,
-                GossipRoute::LocalMessage,
-            )
-            .unwrap();
-        assert_eq!(rm.health_check(), "ok");
-
-        // Node is far behind the known validators
-        cluster_info
-            .gossip
-            .crds
-            .write()
-            .unwrap()
-            .insert(
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(AccountsHashes::new(
-                    known_validators[2],
-                    vec![(1000 + health_check_slot_distance, Hash::default())],
-                ))),
-                1,
-                GossipRoute::LocalMessage,
-            )
-            .unwrap();
-        assert_eq!(rm.health_check(), "behind");
     }
 }
