@@ -1197,9 +1197,9 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .hidden(hidden_unless_forced())
         )
         .arg(
-            Arg::with_name("accounts_db_force_initial_clean")
-                .long("accounts-db-force-initial-clean")
-                .help("Force cleaning of accounts when verifying snapshot bank")
+            Arg::with_name("no_skip_initial_accounts_db_clean")
+                .long("no-skip-initial-accounts-db-clean")
+                .help("Do not skip the initial cleaning of accounts when verifying snapshot bank")
                 .hidden(hidden_unless_forced())
                 .conflicts_with("accounts_db_skip_shrink")
         )
