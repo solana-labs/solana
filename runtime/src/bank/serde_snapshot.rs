@@ -496,6 +496,7 @@ mod tests {
                 false,
                 false,
                 false,
+                false,
                 Some(solana_accounts_db::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
                 None,
                 Arc::default(),
