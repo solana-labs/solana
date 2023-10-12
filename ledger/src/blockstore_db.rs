@@ -40,7 +40,7 @@ use {
         marker::PhantomData,
         path::Path,
         sync::{
-            atomic::{AtomicU64, Ordering},
+            atomic::{AtomicBool, AtomicU64, Ordering},
             Arc,
         },
     },
@@ -350,6 +350,7 @@ pub mod columns {
 #[derive(Default, Clone, Debug)]
 struct OldestSlot {
     slot: Arc<AtomicU64>,
+    clean_slot_0: Arc<AtomicBool>,
 }
 
 impl OldestSlot {
@@ -368,6 +369,14 @@ impl OldestSlot {
         // also eventual propagation (very Relaxed) load is Ok, because compaction by nature doesn't
         // require strictly synchronized semantics in this regard
         self.slot.load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn set_clean_slot_0(&self, clean_slot_0: bool) {
+        self.clean_slot_0.store(clean_slot_0, Ordering::Relaxed);
+    }
+
+    pub(crate) fn get_clean_slot_0(&self) -> bool {
+        self.clean_slot_0.load(Ordering::Relaxed)
     }
 }
 
@@ -1427,6 +1436,10 @@ impl Database {
 
     pub fn set_oldest_slot(&self, oldest_slot: Slot) {
         self.backend.oldest_slot.set(oldest_slot);
+    }
+
+    pub(crate) fn set_clean_slot_0(&self, clean_slot_0: bool) {
+        self.backend.oldest_slot.set_clean_slot_0(clean_slot_0);
     }
 
     pub fn live_files_metadata(&self) -> Result<Vec<LiveFile>> {
