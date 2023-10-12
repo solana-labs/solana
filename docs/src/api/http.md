@@ -156,11 +156,9 @@ health-check mechanism for use by load balancers or other network
 infrastructure. This request will always return a HTTP 200 OK response with a body of
 "ok", "behind" or "unknown" based on the following conditions:
 
-1. If one or more `--known-validator` arguments are provided to `solana-validator` - "ok" is returned
-   when the node has within `HEALTH_CHECK_SLOT_DISTANCE` slots of the highest
-   known validator, otherwise "behind". "unknown" is returned when no slot
-   information from known validators is not yet available.
-2. "ok" is always returned if no known validators are provided.
+1. If the node is within `HEALTH_CHECK_SLOT_DISTANCE` slots from the latest cluster confirmed slot, "ok" is returned.
+2. If the node is behind more than `HEALTH_CHECK_SLOT_DISTANCE` slots from the latest cluster confirmed slot, an error is returned that will contain more information about far behind the node is.
+3. If the node is unable to determine its' health, an error is returned.
 
 ## JSON RPC API Reference
 
