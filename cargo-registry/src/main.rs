@@ -10,7 +10,6 @@ use {
         Method, Server,
     },
     log::*,
-    serde::{Deserialize, Serialize},
     std::{
         net::{IpAddr, Ipv4Addr, SocketAddr},
         sync::Arc,
@@ -20,43 +19,14 @@ use {
 mod client;
 mod publisher;
 
-const PATH_PREFIX: &str = "/api/v1/crates";
+mod response_builder;
+mod sparse_index;
 
-#[derive(Debug, Default, Deserialize, Serialize)]
-struct RegistryConfig {
-    dl: String,
-    api: Option<String>,
-}
+const PATH_PREFIX: &str = "/api/v1/crates";
 
 pub struct CargoRegistryService {}
 
 impl CargoRegistryService {
-    fn error_response(status: hyper::StatusCode, msg: &str) -> hyper::Response<hyper::Body> {
-        error!("{}", msg);
-        hyper::Response::builder()
-            .status(status)
-            .body(hyper::Body::from(
-                serde_json::json!({
-                    "errors" : [
-                        {"details": msg}
-                    ]
-                })
-                .to_string(),
-            ))
-            .unwrap()
-    }
-
-    fn success_response_str(value: &str) -> hyper::Response<hyper::Body> {
-        hyper::Response::builder()
-            .status(hyper::StatusCode::OK)
-            .body(hyper::Body::from(value.to_string()))
-            .unwrap()
-    }
-
-    fn success_response() -> hyper::Response<hyper::Body> {
-        Self::success_response_str("")
-    }
-
     async fn handle_publish_request(
         request: hyper::Request<hyper::Body>,
         client: Arc<Client>,
@@ -70,7 +40,7 @@ impl CargoRegistryService {
                     tokio::task::spawn_blocking(move || Publisher::publish_crate(data, client))
                         .await
                 else {
-                    return Self::error_response(
+                    return response_builder::error_response(
                         hyper::StatusCode::INTERNAL_SERVER_ERROR,
                         "Internal error. Failed to wait for program deployment",
                     );
@@ -78,15 +48,15 @@ impl CargoRegistryService {
 
                 if result.is_ok() {
                     info!("Published the crate successfully. {:?}", result);
-                    Self::success_response()
+                    response_builder::success_response()
                 } else {
-                    Self::error_response(
+                    response_builder::error_response(
                         hyper::StatusCode::BAD_REQUEST,
                         format!("Failed to publish the crate. {:?}", result).as_str(),
                     )
                 }
             }
-            Err(_) => Self::error_response(
+            Err(_) => response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Failed to receive the crate data from the client.",
             ),
@@ -106,20 +76,20 @@ impl CargoRegistryService {
         _request: &hyper::Request<hyper::Body>,
     ) -> hyper::Response<hyper::Body> {
         let Some((path, _crate_name, _version)) = Self::get_crate_name_and_version(path) else {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Failed to parse the request.",
             );
         };
 
         if path.len() != PATH_PREFIX.len() {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Request length is incorrect",
             );
         }
 
-        Self::error_response(
+        response_builder::error_response(
             hyper::StatusCode::NOT_IMPLEMENTED,
             "This command is not implemented yet",
         )
@@ -130,20 +100,20 @@ impl CargoRegistryService {
         _request: &hyper::Request<hyper::Body>,
     ) -> hyper::Response<hyper::Body> {
         let Some((path, _crate_name, _version)) = Self::get_crate_name_and_version(path) else {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Failed to parse the request.",
             );
         };
 
         if path.len() != PATH_PREFIX.len() {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Request length is incorrect",
             );
         }
 
-        Self::error_response(
+        response_builder::error_response(
             hyper::StatusCode::NOT_IMPLEMENTED,
             "This command is not implemented yet",
         )
@@ -158,20 +128,20 @@ impl CargoRegistryService {
         _request: &hyper::Request<hyper::Body>,
     ) -> hyper::Response<hyper::Body> {
         let Some((path, _crate_name)) = Self::get_crate_name(path) else {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Failed to parse the request.",
             );
         };
 
         if path.len() != PATH_PREFIX.len() {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Request length is incorrect",
             );
         }
 
-        Self::error_response(
+        response_builder::error_response(
             hyper::StatusCode::NOT_IMPLEMENTED,
             "This command is not implemented yet",
         )
@@ -182,20 +152,20 @@ impl CargoRegistryService {
         _request: &hyper::Request<hyper::Body>,
     ) -> hyper::Response<hyper::Body> {
         let Some((path, _crate_name)) = Self::get_crate_name(path) else {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Failed to parse the request.",
             );
         };
 
         if path.len() != PATH_PREFIX.len() {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Request length is incorrect",
             );
         }
 
-        Self::error_response(
+        response_builder::error_response(
             hyper::StatusCode::NOT_IMPLEMENTED,
             "This command is not implemented yet",
         )
@@ -206,20 +176,20 @@ impl CargoRegistryService {
         _request: &hyper::Request<hyper::Body>,
     ) -> hyper::Response<hyper::Body> {
         let Some((path, _crate_name)) = Self::get_crate_name(path) else {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Failed to parse the request.",
             );
         };
 
         if path.len() != PATH_PREFIX.len() {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Request length is incorrect",
             );
         }
 
-        Self::error_response(
+        response_builder::error_response(
             hyper::StatusCode::NOT_IMPLEMENTED,
             "This command is not implemented yet",
         )
@@ -235,77 +205,44 @@ impl CargoRegistryService {
         // full path started with PATH_PREFIX. So it's sufficient to check that provided
         // path is smaller than PATH_PREFIX.
         if path.len() >= PATH_PREFIX.len() {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Request length is incorrect",
             );
         }
 
-        Self::error_response(
+        response_builder::error_response(
             hyper::StatusCode::NOT_IMPLEMENTED,
             "This command is not implemented yet",
         )
     }
 
-    fn get_crate_name_from_path(path: &str) -> Option<&str> {
-        let (path, crate_name) = path.rsplit_once('/')?;
-
-        match crate_name.len() {
-            0 => false,
-            1 => path == "/1",
-            2 => path == "/2",
-            3 => {
-                let first_char = crate_name.chars().next()?;
-                path == format!("/3/{}", first_char)
-            }
-            _ => {
-                let (first_two_char, rest) = crate_name.split_at(2);
-                let (next_two_char, _) = rest.split_at(2);
-                path == format!("/{}/{}", first_two_char, next_two_char)
-            }
-        }
-        .then_some(crate_name)
-    }
-
-    fn handle_crate_dl_request(
-        request: &hyper::Request<hyper::Body>,
-    ) -> hyper::Response<hyper::Body> {
-        let Some(crate_name) = Self::get_crate_name_from_path(request.uri().path()) else {
-            return Self::error_response(
-                hyper::StatusCode::BAD_REQUEST,
-                "Invalid path for the request",
-            );
-        };
-
-        // Fetch the program and return a crate buffer.
-        info!("Received a request to fetch {:?}", crate_name);
-
-        Self::success_response()
-    }
-
     async fn handler(
-        config: String,
+        index: sparse_index::RegistryIndex,
         request: hyper::Request<hyper::Body>,
         client: Arc<Client>,
     ) -> Result<hyper::Response<hyper::Body>, Error> {
         let path = request.uri().path();
         if path.starts_with("/git") {
-            return Ok(Self::error_response(
+            return Ok(response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "This registry server does not support GIT index. Please use sparse index.",
             ));
         }
 
-        if path == "/config.json" {
-            return Ok(Self::success_response_str(&config));
+        if path.starts_with(index.index_root.as_str()) {
+            return Ok(index.handler(request));
         }
 
         if !path.starts_with(PATH_PREFIX) {
-            return Ok(Self::handle_crate_dl_request(&request));
+            return Ok(response_builder::error_response(
+                hyper::StatusCode::BAD_REQUEST,
+                "Invalid path for the request",
+            ));
         }
 
         let Some((path, endpoint)) = path.rsplit_once('/') else {
-            return Ok(Self::error_response(
+            return Ok(response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Invalid endpoint in the path",
             ));
@@ -315,7 +252,7 @@ impl CargoRegistryService {
             Method::PUT => match endpoint {
                 "new" => {
                     if path.len() != PATH_PREFIX.len() {
-                        Self::error_response(
+                        response_builder::error_response(
                             hyper::StatusCode::BAD_REQUEST,
                             "Invalid length of the request.",
                         )
@@ -325,19 +262,31 @@ impl CargoRegistryService {
                 }
                 "unyank" => Self::handle_unyank_request(path, &request),
                 "owners" => Self::handle_add_owners_request(path, &request),
-                _ => Self::error_response(hyper::StatusCode::METHOD_NOT_ALLOWED, "Unknown request"),
+                _ => response_builder::error_response(
+                    hyper::StatusCode::METHOD_NOT_ALLOWED,
+                    "Unknown request",
+                ),
             },
             Method::GET => match endpoint {
                 "crates" => Self::handle_get_crates_request(path, &request),
                 "owners" => Self::handle_get_owners_request(path, &request),
-                _ => Self::error_response(hyper::StatusCode::METHOD_NOT_ALLOWED, "Unknown request"),
+                _ => response_builder::error_response(
+                    hyper::StatusCode::METHOD_NOT_ALLOWED,
+                    "Unknown request",
+                ),
             },
             Method::DELETE => match endpoint {
                 "yank" => Self::handle_yank_request(path, &request),
                 "owners" => Self::handle_delete_owners_request(path, &request),
-                _ => Self::error_response(hyper::StatusCode::METHOD_NOT_ALLOWED, "Unknown request"),
+                _ => response_builder::error_response(
+                    hyper::StatusCode::METHOD_NOT_ALLOWED,
+                    "Unknown request",
+                ),
             },
-            _ => Self::error_response(hyper::StatusCode::METHOD_NOT_ALLOWED, "Unknown request"),
+            _ => response_builder::error_response(
+                hyper::StatusCode::METHOD_NOT_ALLOWED,
+                "Unknown request",
+            ),
         })
     }
 }
@@ -348,20 +297,14 @@ async fn main() {
     let client = Arc::new(Client::new().expect("Failed to get RPC Client instance"));
 
     let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), client.port);
-
-    let registry_config = RegistryConfig {
-        dl: format!("{}/api/v1/crates", client.server_url),
-        api: Some(client.server_url.to_string()),
-    };
-    let registry_config_json =
-        serde_json::to_string(&registry_config).expect("Failed to create registry config");
+    let index = sparse_index::RegistryIndex::new("/index", &client.server_url);
 
     let registry_service = make_service_fn(move |_| {
         let client_inner = client.clone();
-        let config = registry_config_json.clone();
+        let index = index.clone();
         async move {
             Ok::<_, Error>(service_fn(move |request| {
-                CargoRegistryService::handler(config.clone(), request, client_inner.clone())
+                CargoRegistryService::handler(index.clone(), request, client_inner.clone())
             }))
         }
     });
@@ -370,134 +313,4 @@ async fn main() {
     info!("Server running on on http://{}", bind_addr);
 
     let _ = server.await;
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_get_crate_name_from_path() {
-        assert_eq!(CargoRegistryService::get_crate_name_from_path(""), None);
-        assert_eq!(CargoRegistryService::get_crate_name_from_path("/"), None);
-
-        // Single character crate name
-        assert_eq!(CargoRegistryService::get_crate_name_from_path("/a"), None);
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/1/a"),
-            Some("a")
-        );
-        assert_eq!(CargoRegistryService::get_crate_name_from_path("/2/a"), None);
-        assert_eq!(CargoRegistryService::get_crate_name_from_path("/a/a"), None);
-
-        // Two character crate name
-        assert_eq!(CargoRegistryService::get_crate_name_from_path("/ab"), None);
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/1/ab"),
-            None
-        );
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/2/ab"),
-            Some("ab")
-        );
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/3/ab"),
-            None
-        );
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/ab/ab"),
-            None
-        );
-
-        // Three character crate name
-        assert_eq!(CargoRegistryService::get_crate_name_from_path("/abc"), None);
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/1/abc"),
-            None
-        );
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/2/abc"),
-            None
-        );
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/3/abc"),
-            None
-        );
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/3/a/abc"),
-            Some("abc")
-        );
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/ab/abc"),
-            None
-        );
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/ab/c/abc"),
-            None
-        );
-
-        // Four character crate name
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/abcd"),
-            None
-        );
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/1/abcd"),
-            None
-        );
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/2/abcd"),
-            None
-        );
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/3/abcd"),
-            None
-        );
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/3/a/abcd"),
-            None
-        );
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/4/abcd"),
-            None
-        );
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/ab/cd/abcd"),
-            Some("abcd")
-        );
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/ab/cd/abc"),
-            None
-        );
-
-        // More character crate name
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/abcdefgh"),
-            None
-        );
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/1/abcdefgh"),
-            None
-        );
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/2/abcdefgh"),
-            None
-        );
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/3/abcdefgh"),
-            None
-        );
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/3/a/abcdefgh"),
-            None
-        );
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/4/abcdefgh"),
-            None
-        );
-        assert_eq!(
-            CargoRegistryService::get_crate_name_from_path("/ab/cd/abcdefgh"),
-            Some("abcdefgh")
-        );
-    }
 }
