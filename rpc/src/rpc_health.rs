@@ -113,11 +113,13 @@ impl RpcHealth {
     }
 
     #[cfg(test)]
-    pub(crate) fn stub() -> Arc<Self> {
-        use crate::rpc::tests::new_test_cluster_info;
+    pub(crate) fn stub(
+        optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
+        blockstore: Arc<Blockstore>,
+    ) -> Arc<Self> {
         Arc::new(Self::new(
-            Arc::new(new_test_cluster_info()),
-            None,
+            optimistically_confirmed_bank,
+            blockstore,
             42,
             Arc::new(AtomicBool::new(false)),
             Arc::new(AtomicBool::new(true)),

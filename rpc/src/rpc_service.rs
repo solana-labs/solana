@@ -637,7 +637,6 @@ mod tests {
             &PathBuf::from("farf"),
             validator_exit,
             exit,
-            None,
             Arc::new(AtomicBool::new(false)),
             Arc::new(AtomicBool::new(true)),
             optimistically_confirmed_bank,
@@ -720,18 +719,25 @@ mod tests {
 
     #[test]
     fn test_is_file_get_path() {
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let bank_forks = create_bank_forks();
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+        let health = RpcHealth::stub(optimistically_confirmed_bank, blockstore);
+
         let bank_forks = create_bank_forks();
         let rrm = RpcRequestMiddleware::new(
-            PathBuf::from("/"),
+            ledger_path.clone(),
             None,
             bank_forks.clone(),
-            RpcHealth::stub(),
+            health.clone(),
         );
         let rrm_with_snapshot_config = RpcRequestMiddleware::new(
-            PathBuf::from("/"),
+            ledger_path.clone(),
             Some(SnapshotConfig::default()),
             bank_forks,
-            RpcHealth::stub(),
+            health,
         );
 
         assert!(rrm.is_file_get_path(DEFAULT_GENESIS_DOWNLOAD_PATH));
@@ -824,14 +830,17 @@ mod tests {
         let runtime = Runtime::new().unwrap();
 
         let ledger_path = get_tmp_ledger_path!();
-        std::fs::create_dir(&ledger_path).unwrap();
-
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let genesis_path = ledger_path.join(DEFAULT_GENESIS_ARCHIVE);
+        let bank_forks = create_bank_forks();
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+
         let rrm = RpcRequestMiddleware::new(
             ledger_path.clone(),
             None,
-            create_bank_forks(),
-            RpcHealth::stub(),
+            bank_forks,
+            RpcHealth::stub(optimistically_confirmed_bank, blockstore),
         );
 
         // File does not exist => request should fail.

@@ -4789,6 +4789,8 @@ pub mod tests {
             // note that this means that slot 0 will always be considered complete
             let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(0));
             let max_complete_rewards_slot = Arc::new(AtomicU64::new(0));
+            let optimistically_confirmed_bank =
+                OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
 
             let meta = JsonRpcRequestProcessor::new(
                 config,
@@ -4797,11 +4799,11 @@ pub mod tests {
                 block_commitment_cache.clone(),
                 blockstore.clone(),
                 validator_exit,
-                RpcHealth::stub(),
+                RpcHealth::stub(optimistically_confirmed_bank.clone(), blockstore.clone()),
                 cluster_info,
                 Hash::default(),
                 None,
-                OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
+                optimistically_confirmed_bank,
                 Arc::new(RwLock::new(LargestAccountsCache::new(30))),
                 max_slots.clone(),
                 Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
@@ -6400,7 +6402,11 @@ pub mod tests {
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let (bank_forks, mint_keypair, ..) = new_bank_forks();
-        let health = RpcHealth::stub();
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+        let health = RpcHealth::stub(optimistically_confirmed_bank.clone(), blockstore.clone());
+        // Mark the node as healthy to start
+        health.stub_set_health_status(Some(RpcHealthStatus::Ok));
 
         // Freeze bank 0 to prevent a panic in `run_transaction_simulation()`
         bank_forks.write().unwrap().get(0).unwrap().freeze();
@@ -6431,7 +6437,7 @@ pub mod tests {
             cluster_info,
             Hash::default(),
             None,
-            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
+            optimistically_confirmed_bank,
             Arc::new(RwLock::new(LargestAccountsCache::new(30))),
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
@@ -6692,18 +6698,20 @@ pub mod tests {
             .my_contact_info()
             .tpu(connection_cache.protocol())
             .unwrap();
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
             None,
             bank_forks.clone(),
             block_commitment_cache,
-            blockstore,
+            blockstore.clone(),
             validator_exit,
-            RpcHealth::stub(),
+            RpcHealth::stub(optimistically_confirmed_bank.clone(), blockstore),
             cluster_info,
             Hash::default(),
             None,
-            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
+            optimistically_confirmed_bank,
             Arc::new(RwLock::new(LargestAccountsCache::new(30))),
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
@@ -8329,9 +8337,9 @@ pub mod tests {
             None,
             bank_forks.clone(),
             block_commitment_cache,
-            blockstore,
+            blockstore.clone(),
             validator_exit,
-            RpcHealth::stub(),
+            RpcHealth::stub(optimistically_confirmed_bank.clone(), blockstore.clone()),
             cluster_info,
             Hash::default(),
             None,
