@@ -3608,11 +3608,11 @@ fn test_verify_snapshot_bank() {
     bank.freeze();
     add_root_and_flush_write_cache(&bank);
     bank.update_accounts_hash_for_tests();
-    assert!(bank.verify_snapshot_bank(true, false, bank.slot(), None));
+    assert!(bank.verify_snapshot_bank(true, false, false, bank.slot(), None));
 
     // tamper the bank after freeze!
     bank.increment_signature_count(1);
-    assert!(!bank.verify_snapshot_bank(true, false, bank.slot(), None));
+    assert!(!bank.verify_snapshot_bank(true, false, false, bank.slot(), None));
 }
 
 // Test that two bank forks with the same accounts should not hash to the same value.

@@ -7609,12 +7609,13 @@ impl Bank {
     pub fn verify_snapshot_bank(
         &self,
         test_hash_calculation: bool,
-        accounts_db_skip_shrink: bool,
+        skip_shrink: bool,
+        force_clean: bool,
         last_full_snapshot_slot: Slot,
         base: Option<(Slot, /*capitalization*/ u64)>,
     ) -> bool {
         let (_, clean_time_us) = measure_us!({
-            let should_clean = !accounts_db_skip_shrink && self.slot() > 0;
+            let should_clean = force_clean || (!skip_shrink && self.slot() > 0);
             if should_clean {
                 info!("Cleaning...");
                 // We cannot clean past the last full snapshot's slot because we are about to
@@ -7634,7 +7635,7 @@ impl Bank {
         });
 
         let (_, shrink_time_us) = measure_us!({
-            let should_shrink = !accounts_db_skip_shrink && self.slot() > 0;
+            let should_shrink = !skip_shrink && self.slot() > 0;
             if should_shrink {
                 info!("Shrinking...");
                 self.rc.accounts.accounts_db.shrink_all_slots(
