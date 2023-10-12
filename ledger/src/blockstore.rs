@@ -2167,6 +2167,9 @@ impl Blockstore {
                 self.transaction_status_index_cf.delete(1)?;
             }
         }
+        if w_highest_primary_index_slot.is_none() {
+            self.db.set_clean_slot_0(true);
+        }
         Ok(())
     }
 
