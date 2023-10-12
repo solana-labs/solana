@@ -348,7 +348,9 @@ pub mod columns {
 }
 
 #[derive(Default, Clone, Debug)]
-struct OldestSlot(Arc<AtomicU64>);
+struct OldestSlot {
+    slot: Arc<AtomicU64>,
+}
 
 impl OldestSlot {
     pub fn set(&self, oldest_slot: Slot) {
@@ -356,7 +358,7 @@ impl OldestSlot {
         // also, compaction_filters are created via its factories, creating short-lived copies of
         // this atomic value for the single job of compaction. So, Relaxed store can be justified
         // in total
-        self.0.store(oldest_slot, Ordering::Relaxed);
+        self.slot.store(oldest_slot, Ordering::Relaxed);
     }
 
     pub fn get(&self) -> Slot {
@@ -365,7 +367,7 @@ impl OldestSlot {
         // requirement at the moment
         // also eventual propagation (very Relaxed) load is Ok, because compaction by nature doesn't
         // require strictly synchronized semantics in this regard
-        self.0.load(Ordering::Relaxed)
+        self.slot.load(Ordering::Relaxed)
     }
 }
 
