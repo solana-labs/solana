@@ -2,7 +2,6 @@
 use {
     crate::{
         client::Client,
-        dummy_git_index::DummyGitIndex,
         publisher::{Error, Publisher},
     },
     hyper::{
@@ -10,46 +9,24 @@ use {
         service::{make_service_fn, service_fn},
         Method, Server,
     },
-    hyper_staticfile::Static,
     log::*,
     std::{
         net::{IpAddr, Ipv4Addr, SocketAddr},
-        path::PathBuf,
         sync::Arc,
     },
 };
 
 mod client;
-mod dummy_git_index;
 mod publisher;
+
+mod response_builder;
+mod sparse_index;
 
 const PATH_PREFIX: &str = "/api/v1/crates";
 
 pub struct CargoRegistryService {}
 
 impl CargoRegistryService {
-    fn error_response(status: hyper::StatusCode, msg: &str) -> hyper::Response<hyper::Body> {
-        error!("{}", msg);
-        hyper::Response::builder()
-            .status(status)
-            .body(hyper::Body::from(
-                serde_json::json!({
-                    "errors" : [
-                        {"details": msg}
-                    ]
-                })
-                .to_string(),
-            ))
-            .unwrap()
-    }
-
-    fn success_response() -> hyper::Response<hyper::Body> {
-        hyper::Response::builder()
-            .status(hyper::StatusCode::OK)
-            .body(hyper::Body::from(""))
-            .unwrap()
-    }
-
     async fn handle_publish_request(
         request: hyper::Request<hyper::Body>,
         client: Arc<Client>,
@@ -63,7 +40,7 @@ impl CargoRegistryService {
                     tokio::task::spawn_blocking(move || Publisher::publish_crate(data, client))
                         .await
                 else {
-                    return Self::error_response(
+                    return response_builder::error_response(
                         hyper::StatusCode::INTERNAL_SERVER_ERROR,
                         "Internal error. Failed to wait for program deployment",
                     );
@@ -71,15 +48,15 @@ impl CargoRegistryService {
 
                 if result.is_ok() {
                     info!("Published the crate successfully. {:?}", result);
-                    Self::success_response()
+                    response_builder::success_response()
                 } else {
-                    Self::error_response(
+                    response_builder::error_response(
                         hyper::StatusCode::BAD_REQUEST,
                         format!("Failed to publish the crate. {:?}", result).as_str(),
                     )
                 }
             }
-            Err(_) => Self::error_response(
+            Err(_) => response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Failed to receive the crate data from the client.",
             ),
@@ -99,20 +76,20 @@ impl CargoRegistryService {
         _request: &hyper::Request<hyper::Body>,
     ) -> hyper::Response<hyper::Body> {
         let Some((path, _crate_name, _version)) = Self::get_crate_name_and_version(path) else {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Failed to parse the request.",
             );
         };
 
         if path.len() != PATH_PREFIX.len() {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Request length is incorrect",
             );
         }
 
-        Self::error_response(
+        response_builder::error_response(
             hyper::StatusCode::NOT_IMPLEMENTED,
             "This command is not implemented yet",
         )
@@ -123,20 +100,20 @@ impl CargoRegistryService {
         _request: &hyper::Request<hyper::Body>,
     ) -> hyper::Response<hyper::Body> {
         let Some((path, _crate_name, _version)) = Self::get_crate_name_and_version(path) else {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Failed to parse the request.",
             );
         };
 
         if path.len() != PATH_PREFIX.len() {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Request length is incorrect",
             );
         }
 
-        Self::error_response(
+        response_builder::error_response(
             hyper::StatusCode::NOT_IMPLEMENTED,
             "This command is not implemented yet",
         )
@@ -151,20 +128,20 @@ impl CargoRegistryService {
         _request: &hyper::Request<hyper::Body>,
     ) -> hyper::Response<hyper::Body> {
         let Some((path, _crate_name)) = Self::get_crate_name(path) else {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Failed to parse the request.",
             );
         };
 
         if path.len() != PATH_PREFIX.len() {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Request length is incorrect",
             );
         }
 
-        Self::error_response(
+        response_builder::error_response(
             hyper::StatusCode::NOT_IMPLEMENTED,
             "This command is not implemented yet",
         )
@@ -175,20 +152,20 @@ impl CargoRegistryService {
         _request: &hyper::Request<hyper::Body>,
     ) -> hyper::Response<hyper::Body> {
         let Some((path, _crate_name)) = Self::get_crate_name(path) else {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Failed to parse the request.",
             );
         };
 
         if path.len() != PATH_PREFIX.len() {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Request length is incorrect",
             );
         }
 
-        Self::error_response(
+        response_builder::error_response(
             hyper::StatusCode::NOT_IMPLEMENTED,
             "This command is not implemented yet",
         )
@@ -199,20 +176,20 @@ impl CargoRegistryService {
         _request: &hyper::Request<hyper::Body>,
     ) -> hyper::Response<hyper::Body> {
         let Some((path, _crate_name)) = Self::get_crate_name(path) else {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Failed to parse the request.",
             );
         };
 
         if path.len() != PATH_PREFIX.len() {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Request length is incorrect",
             );
         }
 
-        Self::error_response(
+        response_builder::error_response(
             hyper::StatusCode::NOT_IMPLEMENTED,
             "This command is not implemented yet",
         )
@@ -228,44 +205,44 @@ impl CargoRegistryService {
         // full path started with PATH_PREFIX. So it's sufficient to check that provided
         // path is smaller than PATH_PREFIX.
         if path.len() >= PATH_PREFIX.len() {
-            return Self::error_response(
+            return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Request length is incorrect",
             );
         }
 
-        Self::error_response(
+        response_builder::error_response(
             hyper::StatusCode::NOT_IMPLEMENTED,
             "This command is not implemented yet",
         )
     }
 
     async fn handler(
+        index: sparse_index::RegistryIndex,
         request: hyper::Request<hyper::Body>,
         client: Arc<Client>,
     ) -> Result<hyper::Response<hyper::Body>, Error> {
         let path = request.uri().path();
         if path.starts_with("/git") {
-            return Static::new("/tmp/dummy-git")
-                .serve(request)
-                .await
-                .or_else(|_| {
-                    Ok(Self::error_response(
-                        hyper::StatusCode::BAD_REQUEST,
-                        "Failed to serve git index",
-                    ))
-                });
+            return Ok(response_builder::error_response(
+                hyper::StatusCode::BAD_REQUEST,
+                "This registry server does not support GIT index. Please use sparse index.",
+            ));
+        }
+
+        if path.starts_with(index.index_root.as_str()) {
+            return Ok(index.handler(request));
         }
 
         if !path.starts_with(PATH_PREFIX) {
-            return Ok(Self::error_response(
+            return Ok(response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Invalid path for the request",
             ));
         }
 
         let Some((path, endpoint)) = path.rsplit_once('/') else {
-            return Ok(Self::error_response(
+            return Ok(response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
                 "Invalid endpoint in the path",
             ));
@@ -275,7 +252,7 @@ impl CargoRegistryService {
             Method::PUT => match endpoint {
                 "new" => {
                     if path.len() != PATH_PREFIX.len() {
-                        Self::error_response(
+                        response_builder::error_response(
                             hyper::StatusCode::BAD_REQUEST,
                             "Invalid length of the request.",
                         )
@@ -285,19 +262,31 @@ impl CargoRegistryService {
                 }
                 "unyank" => Self::handle_unyank_request(path, &request),
                 "owners" => Self::handle_add_owners_request(path, &request),
-                _ => Self::error_response(hyper::StatusCode::METHOD_NOT_ALLOWED, "Unknown request"),
+                _ => response_builder::error_response(
+                    hyper::StatusCode::METHOD_NOT_ALLOWED,
+                    "Unknown request",
+                ),
             },
             Method::GET => match endpoint {
                 "crates" => Self::handle_get_crates_request(path, &request),
                 "owners" => Self::handle_get_owners_request(path, &request),
-                _ => Self::error_response(hyper::StatusCode::METHOD_NOT_ALLOWED, "Unknown request"),
+                _ => response_builder::error_response(
+                    hyper::StatusCode::METHOD_NOT_ALLOWED,
+                    "Unknown request",
+                ),
             },
             Method::DELETE => match endpoint {
                 "yank" => Self::handle_yank_request(path, &request),
                 "owners" => Self::handle_delete_owners_request(path, &request),
-                _ => Self::error_response(hyper::StatusCode::METHOD_NOT_ALLOWED, "Unknown request"),
+                _ => response_builder::error_response(
+                    hyper::StatusCode::METHOD_NOT_ALLOWED,
+                    "Unknown request",
+                ),
             },
-            _ => Self::error_response(hyper::StatusCode::METHOD_NOT_ALLOWED, "Unknown request"),
+            _ => response_builder::error_response(
+                hyper::StatusCode::METHOD_NOT_ALLOWED,
+                "Unknown request",
+            ),
         })
     }
 }
@@ -308,13 +297,14 @@ async fn main() {
     let client = Arc::new(Client::new().expect("Failed to get RPC Client instance"));
 
     let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), client.port);
-    DummyGitIndex::create_or_update_git_repo(PathBuf::from("/tmp/dummy-git"), &client.server_url);
+    let index = sparse_index::RegistryIndex::new("/index", &client.server_url);
 
     let registry_service = make_service_fn(move |_| {
         let client_inner = client.clone();
+        let index = index.clone();
         async move {
             Ok::<_, Error>(service_fn(move |request| {
-                CargoRegistryService::handler(request, client_inner.clone())
+                CargoRegistryService::handler(index.clone(), request, client_inner.clone())
             }))
         }
     });
