@@ -51,8 +51,8 @@ ark-bn254 = { workspace = true }
 ark-ec = { workspace = true }
 ark-ff = { workspace = true }
 ark-serialize = { workspace = true }
-bitflags = { workspace = true }
 base64 = { workspace = true, features = ["alloc", "std"] }
+bitflags = { workspace = true }
 curve25519-dalek = { workspace = true, features = ["serde"] }
 itertools = { workspace = true }
 libc = { workspace = true, features = ["extra_traits"] }
@@ -70,8 +70,8 @@ solana-logger = { workspace = true }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = { workspace = true }
 console_log = { workspace = true }
-js-sys = { workspace = true }
 getrandom = { workspace = true, features = ["js", "wasm-bindgen"] }
+js-sys = { workspace = true }
 
 [target.'cfg(not(target_pointer_width = "64"))'.dependencies]
 parking_lot = { workspace = true }
