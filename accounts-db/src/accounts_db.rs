@@ -5733,11 +5733,7 @@ impl AccountsDb {
             .create_store_count
             .fetch_add(1, Ordering::Relaxed);
         let path_index = thread_rng().gen_range(0..paths.len());
-        let store = Arc::new(self.new_storage_entry(
-            slot,
-            Path::new(&paths[path_index]),
-            Self::page_align(size),
-        ));
+        let store = Arc::new(self.new_storage_entry(slot, Path::new(&paths[path_index]), size));
 
         debug!(
             "creating store: {} slot: {} len: {} size: {} from: {} path: {:?}",
@@ -9913,7 +9909,7 @@ pub mod test_utils {
             // allocate an append vec for this slot that can hold all the test accounts. This prevents us from creating more than 1 append vec for this slot.
             _ = accounts.accounts_db.create_and_insert_store(
                 slot,
-                bytes_required as u64,
+                AccountsDb::page_align(bytes_required as u64),
                 "create_test_accounts",
             );
         }
@@ -15054,16 +15050,13 @@ pub mod tests {
         let account1 = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
 
         // Store into slot 0
-        db.store_cached((0, &[(&account_key1, &account1)][..]), None);
-        db.store_cached((0, &[(&account_key2, &account1)][..]), None);
+        // This has to be done uncached since we are trying to add another account to the append vec AFTER it has been flushed.
+        // This doesn't work if the flush creates an append vec of exactly the right size.
+        // Normal operations NEVER write the same account to the same append vec twice during a write cache flush.
+        db.store_uncached(0, &[(&account_key1, &account1)][..]);
+        db.store_uncached(0, &[(&account_key2, &account1)][..]);
         db.add_root(0);
         if !do_intra_cache_clean {
-            // If we don't want the cache doing purges before flush,
-            // then we cannot flush multiple roots at once, otherwise the later
-            // roots will clean the earlier roots before they are stored.
-            // Thus flush the roots individually
-            db.flush_accounts_cache(true, None);
-
             // Add an additional ref within the same slot to pubkey 1
             db.store_uncached(0, &[(&account_key1, &account1)]);
         }
@@ -17391,17 +17384,14 @@ pub mod tests {
                                     assert_eq!(shrink_collect.aligned_total_bytes, 0);
                                     assert_eq!(shrink_collect.alive_total_bytes, 0);
                                 }
-                                // these constants are multiples of page size (4096).
-                                // They are determined by what size append vec gets created when the write cache is flushed to an append vec.
-                                // Thus, they are dependent on the # of accounts that are written. They were identified by hitting the asserts and noting the value
-                                // for shrink_collect.original_bytes at each account_count and then encoding it here.
-                                let expected_capacity = if account_count >= 100 {
-                                    16384
-                                } else if account_count >= 50 {
-                                    8192
-                                } else {
-                                    4096
-                                };
+                                // expected_capacity is determined by what size append vec gets created when the write cache is flushed to an append vec.
+                                let mut expected_capacity =
+                                    (account_count * aligned_stored_size(space)) as u64;
+                                if append_opposite_zero_lamport_account && space != 0 {
+                                    // zero lamport accounts always write space = 0
+                                    expected_capacity -= space as u64;
+                                }
+
                                 assert_eq!(shrink_collect.capacity, expected_capacity);
                                 assert_eq!(shrink_collect.total_starting_accounts, account_count);
                                 let mut expected_all_are_zero_lamports = lamports == 0;
