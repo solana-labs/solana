@@ -264,6 +264,7 @@ fn bank_forks_from_snapshot(
             process_options.shrink_ratio,
             process_options.accounts_db_test_hash_calculation,
             process_options.accounts_db_skip_shrink,
+            process_options.accounts_db_force_initial_clean,
             process_options.verify_index,
             process_options.accounts_db_config.clone(),
             accounts_update_notifier,
