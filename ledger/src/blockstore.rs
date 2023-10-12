@@ -206,6 +206,7 @@ pub struct Blockstore {
     address_signatures_cf: LedgerColumn<cf::AddressSignatures>,
     transaction_memos_cf: LedgerColumn<cf::TransactionMemos>,
     transaction_status_index_cf: LedgerColumn<cf::TransactionStatusIndex>,
+    highest_primary_index_slot: RwLock<Option<Slot>>,
     rewards_cf: LedgerColumn<cf::Rewards>,
     blocktime_cf: LedgerColumn<cf::Blocktime>,
     perf_samples_cf: LedgerColumn<cf::PerfSamples>,
@@ -343,6 +344,7 @@ impl Blockstore {
             address_signatures_cf,
             transaction_memos_cf,
             transaction_status_index_cf,
+            highest_primary_index_slot: RwLock::<Option<Slot>>::default(),
             rewards_cf,
             blocktime_cf,
             perf_samples_cf,
@@ -359,6 +361,7 @@ impl Blockstore {
             slots_stats: SlotsStats::default(),
         };
         blockstore.cleanup_old_entries()?;
+        blockstore.update_highest_primary_index_slot()?;
 
         Ok(blockstore)
     }
@@ -2130,6 +2133,43 @@ impl Blockstore {
         Ok(())
     }
 
+    fn get_highest_primary_index_slot(&self) -> Option<Slot> {
+        *self.highest_primary_index_slot.read().unwrap()
+    }
+
+    fn set_highest_primary_index_slot(&self, slot: Option<Slot>) {
+        *self.highest_primary_index_slot.write().unwrap() = slot;
+    }
+
+    fn update_highest_primary_index_slot(&self) -> Result<()> {
+        let iterator = self.transaction_status_index_cf.iter(IteratorMode::Start)?;
+        let mut highest_primary_index_slot = None;
+        for (_, data) in iterator {
+            let meta: TransactionStatusIndexMeta = deserialize(&data).unwrap();
+            if highest_primary_index_slot.is_none()
+                || highest_primary_index_slot.is_some_and(|slot| slot < meta.max_slot)
+            {
+                highest_primary_index_slot = Some(meta.max_slot);
+            }
+        }
+        if highest_primary_index_slot.is_some() {
+            self.set_highest_primary_index_slot(highest_primary_index_slot);
+        }
+        Ok(())
+    }
+
+    fn maybe_cleanup_highest_primary_index_slot(&self, oldest_slot: Slot) -> Result<()> {
+        let mut w_highest_primary_index_slot = self.highest_primary_index_slot.write().unwrap();
+        if let Some(highest_primary_index_slot) = *w_highest_primary_index_slot {
+            if oldest_slot > highest_primary_index_slot {
+                *w_highest_primary_index_slot = None;
+                self.transaction_status_index_cf.delete(0)?;
+                self.transaction_status_index_cf.delete(1)?;
+            }
+        }
+        Ok(())
+    }
+
     fn read_deprecated_transaction_status(
         &self,
         index: (Signature, Slot),
@@ -2157,7 +2197,11 @@ impl Blockstore {
         index: (Signature, Slot),
     ) -> Result<Option<TransactionStatusMeta>> {
         let result = self.transaction_status_cf.get_protobuf(index)?;
-        if result.is_none() {
+        if result.is_none()
+            && self
+                .get_highest_primary_index_slot()
+                .is_some_and(|highest_slot| highest_slot >= index.1)
+        {
             self.read_deprecated_transaction_status(index)
         } else {
             Ok(result.and_then(|meta| meta.try_into().ok()))
@@ -2199,7 +2243,11 @@ impl Blockstore {
         slot: Slot,
     ) -> Result<Option<String>> {
         let memos = self.transaction_memos_cf.get((signature, slot))?;
-        if memos.is_none() {
+        if memos.is_none()
+            && self
+                .get_highest_primary_index_slot()
+                .is_some_and(|highest_slot| highest_slot >= slot)
+        {
             self.transaction_memos_cf
                 .get_raw(&cf::TransactionMemos::deprecated_key(signature))
         } else {
@@ -2283,6 +2331,9 @@ impl Blockstore {
             return Ok((status, counter));
         }
 
+        if self.get_highest_primary_index_slot().is_none() {
+            return Ok((None, counter));
+        }
         for transaction_status_cf_primary_index in 0..=1 {
             let index_iterator =
                 self.transaction_status_cf
@@ -2595,7 +2646,7 @@ impl Blockstore {
         let mut iterator =
             self.address_signatures_cf
                 .iter_current_index_filtered(IteratorMode::From(
-                    // Ragardless of whether a `before` signature is provided, the latest relevant
+                    // Regardless of whether a `before` signature is provided, the latest relevant
                     // `slot` is queried directly with the `find_address_signatures_for_slot()`
                     // call above. Thus, this iterator starts at the lowest entry of `address,
                     // slot` and iterates backwards to continue reporting the next earliest
@@ -7690,6 +7741,7 @@ pub mod tests {
         transaction_status_cf
             .put_deprecated_protobuf((0, signature2, 4), &status)
             .unwrap();
+        blockstore.set_highest_primary_index_slot(Some(4));
 
         transaction_status_cf
             .put_protobuf((signature3, 4), &status)
@@ -8148,6 +8200,12 @@ pub mod tests {
                     (primary_index, *address, slot, signature),
                     &AddressSignatureMeta { writeable: false },
                 )?;
+            }
+            let mut w_highest_primary_index_slot = self.highest_primary_index_slot.write().unwrap();
+            if w_highest_primary_index_slot.is_none()
+                || w_highest_primary_index_slot.is_some_and(|highest_slot| highest_slot < slot)
+            {
+                *w_highest_primary_index_slot = Some(slot);
             }
             Ok(())
         }

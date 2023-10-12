@@ -1,6 +1,8 @@
 use {
-    super::*, crate::blockstore_db::ColumnIndexDeprecation, solana_sdk::message::AccountKeys,
-    std::time::Instant,
+    super::*,
+    crate::blockstore_db::ColumnIndexDeprecation,
+    solana_sdk::message::AccountKeys,
+    std::{cmp::max, time::Instant},
 };
 
 #[derive(Default)]
@@ -73,6 +75,10 @@ impl Blockstore {
         // with Slot::default() for initial compaction filter behavior consistency
         let to_slot = to_slot.checked_add(1).unwrap();
         self.db.set_oldest_slot(to_slot);
+
+        if let Err(err) = self.maybe_cleanup_highest_primary_index_slot(to_slot) {
+            warn!("Could not clean up TransactionStatusIndex: {err:?}");
+        }
     }
 
     pub fn purge_and_compact_slots(&self, from_slot: Slot, to_slot: Slot) {
@@ -364,8 +370,12 @@ impl Blockstore {
 
         let mut index0 = self.transaction_status_index_cf.get(0)?.unwrap_or_default();
         let mut index1 = self.transaction_status_index_cf.get(1)?.unwrap_or_default();
+        let highest_primary_index_slot = self.get_highest_primary_index_slot();
         let slot_indexes = |slot: Slot| -> Vec<u64> {
             let mut indexes = vec![];
+            if highest_primary_index_slot.is_none() {
+                return indexes;
+            }
             if slot <= index0.max_slot && (index0.frozen || slot >= index1.max_slot) {
                 indexes.push(0);
             }
@@ -431,13 +441,19 @@ impl Blockstore {
                 }
             }
         }
+        let mut update_highest_primary_index_slot = false;
         if index0.max_slot >= from_slot && index0.max_slot <= to_slot {
             index0.max_slot = from_slot.saturating_sub(1);
             batch.put::<cf::TransactionStatusIndex>(0, &index0)?;
+            update_highest_primary_index_slot = true;
         }
         if index1.max_slot >= from_slot && index1.max_slot <= to_slot {
             index1.max_slot = from_slot.saturating_sub(1);
             batch.put::<cf::TransactionStatusIndex>(1, &index1)?;
+            update_highest_primary_index_slot = true
+        }
+        if update_highest_primary_index_slot {
+            self.set_highest_primary_index_slot(Some(max(index0.max_slot, index1.max_slot)))
         }
         Ok(())
     }
