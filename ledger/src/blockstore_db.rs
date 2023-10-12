@@ -1863,7 +1863,7 @@ impl<C: Column + ColumnName> CompactionFilter for PurgedSlotFilter<C> {
         use rocksdb::CompactionDecision::*;
 
         let slot_in_key = C::slot(C::index(key));
-        if slot_in_key >= self.oldest_slot {
+        if slot_in_key >= self.oldest_slot || (slot_in_key == 0 && !self.clean_slot_0) {
             Keep
         } else {
             Remove
