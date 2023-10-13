@@ -54,6 +54,26 @@ impl StaticMeta for RuntimeTransactionStatic {
     }
 }
 
+/// Example:
+///
+/// let tx: Transaction = receive_from_sigverify;
+/// let sanitized_versioned_tx = SanitizedVersionedTransaction::try_from(VersionedTransaction::from(tx)).unwrap();
+/// let bank = self.bank_forks.read().unwrap().working_bank();
+/// let last_slot_in_epoch = bank.epoch_schedule().get_last_slot_in_epoch(bank.epoch());
+/// let mut runtime_tx_static = RuntimeTransactionStatic::try_from(
+///     sanitized_versioned_tx,
+///     None,
+///     None,
+///     &bank.feature_set(),
+///     last_slot_in_epoch,
+///     );
+/// ... do with runtime_tx_static until it expiries at next epoch ...
+/// if runtime_tx_static.compute_budget_limits(current_slot).is_none() {
+///     let bank = self.bank_forks.read().unwrap().working_bank();
+///     let last_slot_in_epoch = bank.epoch_schedule().get_last_slot_in_epoch(bank.epoch());
+///     runtime_tx_static = runtime_tx_static.renew(&bank.feature_set(), last_slot_in_epoch)?;
+/// }
+///
 impl RuntimeTransactionStatic {
     pub fn try_from(
         sanitized_versioned_tx: SanitizedVersionedTransaction,
@@ -77,8 +97,8 @@ impl RuntimeTransactionStatic {
         })
     }
 
-    // Cached TransactionMeta has exprity time, usually the last slot of epoch.
-    // RuntimeTransaction types are read-only hence thread-safe. After exxpiry, the
+    // Cached TransactionMeta has expiry time, usually the last slot of epoch.
+    // RuntimeTransaction types are read-only hence thread-safe. After expiry, the
     // RuntimeTransaction instance should be discarded, or renew into a new instance
     pub fn renew_from(self, feature_set: &FeatureSet, max_age_slot: Slot) -> Result<Self> {
         let compute_budget_limits: ComputeBudgetLimits = process_compute_budget_instructions(
@@ -177,8 +197,8 @@ impl RuntimeTransactionDynamic {
         Ok(tx)
     }
 
-    // Cached TransactionMeta has exprity time, usually the last slot of epoch.
-    // RuntimeTransaction types are read-only hence thread-safe. After exxpiry, the
+    // Cached TransactionMeta has expiry time,
+    // RuntimeTransaction types are read-only hence thread-safe. After expiry, the
     // RuntimeTransaction instance should be discarded, or renew into a new instance
     pub fn renew_from(
         self,
