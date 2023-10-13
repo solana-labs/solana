@@ -149,12 +149,15 @@ pub struct JsonRpcConfig {
     pub obsolete_v1_7_api: bool,
     pub rpc_scan_and_fix_roots: bool,
     pub max_request_body_size: Option<usize>,
+    /// Disable the health check, used for tests and TestValidator
+    pub disable_health_check: bool,
 }
 
 impl JsonRpcConfig {
     pub fn default_for_test() -> Self {
         Self {
             full_api: true,
+            disable_health_check: true,
             ..Self::default()
         }
     }
