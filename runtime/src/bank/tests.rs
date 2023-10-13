@@ -12505,12 +12505,8 @@ fn test_runtime_feature_enable_with_program_cache() {
     genesis_config
         .accounts
         .remove(&feature_set::reject_callx_r10::id());
-<<<<<<< HEAD
-    let root_bank = Bank::new_for_tests(&genesis_config);
-=======
     let mut bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
     let root_bank = bank_forks.root_bank();
->>>>>>> a3f85aba21 (Refactor - LoadedPrograms part 2 (#33694))
 
     // Test a basic transfer
     let amount = genesis_config.rent.minimum_balance(0);
@@ -12539,13 +12535,8 @@ fn test_runtime_feature_enable_with_program_cache() {
     let transaction1 = Transaction::new(&signers1, message1, root_bank.last_blockhash());
 
     // Advance the bank so the next transaction can be submitted.
-<<<<<<< HEAD
     goto_end_of_slot(&root_bank);
-    let mut bank = new_from_parent(Arc::new(root_bank));
-=======
-    goto_end_of_slot(root_bank.clone());
     let bank = Arc::new(new_from_parent(root_bank));
->>>>>>> a3f85aba21 (Refactor - LoadedPrograms part 2 (#33694))
 
     // Compose second instruction using the same program with a different block hash
     let instruction2 = Instruction::new_with_bytes(program_keypair.pubkey(), &[], Vec::new());
@@ -12573,7 +12564,7 @@ fn test_runtime_feature_enable_with_program_cache() {
     );
 
     // Reroot to call LoadedPrograms::prune() and end the current recompilation phase
-    goto_end_of_slot(bank.clone());
+    goto_end_of_slot(&bank);
     bank_forks.insert(Arc::into_inner(bank).unwrap());
     let bank = bank_forks.working_bank();
     bank_forks.set_root(bank.slot, &AbsRequestSender::default(), None);
