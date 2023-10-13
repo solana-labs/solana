@@ -271,7 +271,7 @@ impl BankWithScheduler {
 
     // Disambiguated clone helper in the case of naming crash with (&_)::clone()
     pub fn clone_without_scheduler(&self) -> Arc<Bank> {
-        (*self).clone()
+        self.inner.bank.clone()
     }
 
     pub fn register_tick(&self, hash: &Hash) {
