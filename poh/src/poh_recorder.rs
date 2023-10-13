@@ -272,6 +272,7 @@ pub struct WorkingBank {
     pub transaction_index: Option<usize>,
 }
 
+// Manual Clone impl is intentioal, following intentional lack of Clone impl for BankWithScheduler.
 impl Clone for WorkingBank {
     fn clone(&self) -> Self {
         Self {
