@@ -1947,7 +1947,7 @@ declare_syscall!(
         }
     }
 );
-        
+
 declare_syscallhash!(
     // Generic Hashing Syscall
     SyscallHash,
