@@ -8,6 +8,7 @@ use {
         docker::{DockerConfig, DockerImageConfig},
         genesis::{
             Genesis, GenesisFlags, DEFAULT_INTERNAL_NODE_SOL, DEFAULT_INTERNAL_NODE_STAKE_SOL,
+            DEFAULT_CLIENT_LAMPORTS_PER_SIGNATURE,
         },
         initialize_globals,
         kubernetes::{Kubernetes, ValidatorConfig},
@@ -288,6 +289,7 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("num-clients")
                 .short("c")
                 .takes_value(true)
+                .default_value("0")
                 .help("Number of clients ")
                 .validator(|s| match s.parse::<i32>() {
                     Ok(n) if n > 0 => Ok(()),
@@ -302,9 +304,34 @@ fn parse_matches() -> ArgMatches<'static> {
                 .help("Number of seconds to wait after validators have finished starting before starting client programs
                 (default: 0")
                 .validator(|s| match s.parse::<i32>() {
-                    Ok(n) if n > 0 => Ok(()),
+                    Ok(n) if n >= 0 => Ok(()),
                     _ => Err(String::from("client_delay_start should be greater than 0")),
                 }),
+        )
+        .arg(
+            Arg::with_name("client_type")
+                .long("client-type")
+                .takes_value(true)
+                .default_value("bench-tps")
+                .help("Client Config. options: idle, bench-tps. default: [bench-tps]"),
+        )
+        .arg(
+            Arg::with_name("bench_tps_args")
+                .long("bench-tps-args")
+                .value_name("KEY VALUE")
+                .takes_value(true)
+                .multiple(true)
+                .number_of_values(1)
+                .help("Client Config. 
+                User can optionally provide extraArgs that are transparently
+                supplied to the client program as command line parameters.
+                For example,
+                    --bench-tps-args tx_count=25000
+                This will start bench-tps clients, and supply '--tx_count=25000'
+                to the bench-tps client. 
+                If you want multiple args, pass in twice: 
+                    --bench-tps-args tx_count=25000 --bench-tps-args --other-flag=<val>
+                "),
         )
         .get_matches()
 }
@@ -314,8 +341,13 @@ pub struct SetupConfig<'a> {
     pub namespace: &'a str,
     pub num_validators: i32,
     pub prebuild_genesis: bool,
-    pub num_clients: Option<i32>,
+}
+
+pub struct ClientConfig {
+    pub num_clients: i32,
     pub client_delay_start: u64,
+    pub client_type: String,
+    pub bench_tps_args: Vec<String>,
 }
 
 #[tokio::main]
@@ -330,16 +362,32 @@ async fn main() {
         namespace: matches.value_of("cluster_namespace").unwrap_or_default(),
         num_validators: value_t_or_exit!(matches, "number_of_validators", i32),
         prebuild_genesis: matches.is_present("prebuild_genesis"),
-        num_clients: matches.value_of("number_of_clients").map(|value_str| {
-            value_str
-                .parse()
-                .expect("Invalid value for number_of_clients")
-        }),
+    };
+
+    let client_config = ClientConfig {
+        num_clients: value_t_or_exit!(matches, "number_of_clients", i32),
         client_delay_start: matches
             .value_of("client_delay_start")
             .unwrap()
             .parse()
             .expect("Failed to parse client_delay_start into u64"),
+        client_type: matches.value_of("client_type").unwrap_or_default().to_string(),
+        bench_tps_args: matches
+            .values_of("bench_tps_args")
+            .unwrap_or_default()
+            .flat_map(|arg| {
+                arg.split('=')
+                    .enumerate()
+                    .map(|(idx, s)| {
+                        if idx == 0 {
+                            format!("--{}", s)  // prepend '--' to the key
+                        } else {
+                            s.to_string()  // leave the value as-is
+                        }
+                    })
+                    .collect::<Vec<String>>()
+            })
+            .collect(),
     };
 
     let build_config = BuildConfig {
@@ -563,6 +611,20 @@ async fn main() {
         }
     }
 
+    if client_config.num_clients > 0 {
+        match genesis.create_client_accounts(
+            client_config.num_clients, 
+            DEFAULT_CLIENT_LAMPORTS_PER_SIGNATURE, 
+            client_config.bench_tps_args,
+        ) {
+            Ok(_) => (),
+            Err(err) => {
+                error!("generate client accounts error! {}", err);
+                return;
+            }
+        }
+    }
+
     // creates genesis and writes to binary file
     match genesis.generate() {
         Ok(_) => (),
@@ -613,6 +675,8 @@ async fn main() {
             return;
         }
     }
+
+    std::process::exit(-1);
 
     // Begin Kubernetes Setup and Deployment
     let config_map = match kub_controller.create_genesis_config_map().await {
@@ -793,15 +857,90 @@ async fn main() {
         }
     }
 
-    //TODO, we need to wait for all validators to actually be deployed before starting the client.
-    // Aka need to somehow check that either all validators are connected via gossip and through tpu
-    // or we just check that their replica sets are 1/1
-    info!("Waiting for client_delay_start: {} seconds", setup_config.client_delay_start);
-    thread::sleep(Duration::from_secs(setup_config.client_delay_start));
-
-    if let Some(num_clients) = setup_config.num_clients {
-        for client_index in 0..num_clients {
-            info!("deploying client: {}", client_index);
-        }
+    if client_config.num_clients <= 0 {
+        return;
     }
+    
+    // //TODO, we need to wait for all validators to actually be deployed before starting the client.
+    // // Aka need to somehow check that either all validators are connected via gossip and through tpu
+    // // or we just check that their replica sets are 1/1
+    // info!("Waiting for client_delay_start: {} seconds", client_config.client_delay_start);
+    // thread::sleep(Duration::from_secs(client_config.client_delay_start));
+
+    // for client_index in 0..client_config.num_clients {
+    //     info!("deploying client: {}", client_index);
+    //     let client_secret = match kub_controller.create_client_secret(client_index) {
+    //         Ok(secret) => secret,
+    //         Err(err) => {
+    //             error!("Failed to create client secret! {}", err);
+    //             return;
+    //         }
+    //     };
+    //     match kub_controller.deploy_secret(&client_secret).await {
+    //         Ok(_) => (),
+    //         Err(err) => {
+    //             error!("{}", err);
+    //             return;
+    //         }
+    //     }
+
+    //     let label_selector = kub_controller.create_selector(
+    //         "app.kubernetes.io/name",
+    //         format!("client-{}", client_index).as_str(),
+    //     );
+
+    //     let client_replica_set = match kub_controller
+    //         .create_validator_replicas_set(
+    //             validator_container_name,
+    //             validator_index,
+    //             validator_image_name,
+    //             1,
+    //             config_map.metadata.name.clone(),
+    //             validator_secret.metadata.name.clone(),
+    //             &label_selector,
+    //         )
+    //         .await
+    //     {
+    //         Ok(replica_set) => replica_set,
+    //         Err(err) => {
+    //             error!("Error creating client replicas_set: {}", err);
+    //             return;
+    //         }
+    //     };
+
+    //     let _ = match kub_controller
+    //         .deploy_replicas_set(&validator_replica_set)
+    //         .await
+    //     {
+    //         Ok(rs) => {
+    //             info!(
+    //                 "validator replica set ({}) deployed successfully",
+    //                 validator_index
+    //             );
+    //             rs.metadata.name.unwrap()
+    //         }
+    //         Err(err) => {
+    //             error!(
+    //                 "Error! Failed to deploy validator replica set: {}. err: {:?}",
+    //                 validator_index, err
+    //             );
+    //             return;
+    //         }
+    //     };
+
+    //     let validator_service = kub_controller.create_validator_service(
+    //         format!("validator-{}", validator_index).as_str(),
+    //         &label_selector,
+    //     );
+    //     match kub_controller.deploy_service(&validator_service).await {
+    //         Ok(_) => info!(
+    //             "validator service ({}) deployed successfully",
+    //             validator_index
+    //         ),
+    //         Err(err) => error!(
+    //             "Error! Failed to deploy validator service: {}. err: {:?}",
+    //             validator_index, err
+    //         ),
+    //     }
+    // }
 }

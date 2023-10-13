@@ -129,6 +129,16 @@ impl<'a> Kubernetes<'a> {
             flags.push("--enable-extended-tx-metadata-storage".to_string());
         }
 
+        if let Some(limit_ledger_size) = self.validator_config.max_ledger_size {
+            flags.push("--limit-ledger-size".to_string());
+            flags.push(limit_ledger_size.to_string());
+        }
+
+        flags
+    }
+
+    fn generate_bootstrap_command_flags(&mut self) -> Vec<String> {
+        let mut flags = self.generate_command_flags();
         if let Some(slot) = self.validator_config.wait_for_supermajority {
             flags.push("--wait-for-supermajority".to_string());
             flags.push(slot.to_string());
@@ -139,16 +149,7 @@ impl<'a> Kubernetes<'a> {
             flags.push(bank_hash.to_string());
         }
 
-        if let Some(limit_ledger_size) = self.validator_config.max_ledger_size {
-            flags.push("--limit-ledger-size".to_string());
-            flags.push(limit_ledger_size.to_string());
-        }
-
         flags
-    }
-
-    fn generate_bootstrap_command_flags(&mut self) -> Vec<String> {
-        self.generate_command_flags()
     }
 
     fn generate_validator_command_flags(&mut self) -> Vec<String> {
@@ -468,6 +469,37 @@ impl<'a> Kubernetes<'a> {
         Ok(secret)
     }
 
+    pub fn create_client_secret(&self, client_index: i32) -> Result<Secret, Box<dyn Error>> {
+        let secret_name = format!("client-accounts-secret-{}", client_index);
+        let faucet_key_path = SOLANA_ROOT.join("config-k8s");
+        let faucet_keypair =
+            std::fs::read(faucet_key_path.join("faucet.json")).unwrap_or_else(|_| {
+                panic!("Failed to read faucet.json file! at: {:?}", faucet_key_path)
+            });
+
+        let mut data = BTreeMap::new();
+        data.insert(
+            "faucet.base64".to_string(),
+            ByteString(
+                general_purpose::STANDARD
+                    .encode(faucet_keypair)
+                    .as_bytes()
+                    .to_vec(),
+            ),
+        );
+
+        let secret = Secret {
+            metadata: ObjectMeta {
+                name: Some(secret_name.to_string()),
+                ..Default::default()
+            },
+            data: Some(data),
+            ..Default::default()
+        };
+
+        Ok(secret)
+    }
+
     pub async fn deploy_replicas_set(
         &self,
         replica_set: &ReplicaSet,
@@ -606,6 +638,89 @@ impl<'a> Kubernetes<'a> {
 
         let mut command =
             vec!["/home/solana/k8s-cluster-scripts/validator-startup-script.sh".to_string()];
+        command.extend(self.generate_validator_command_flags());
+
+        for c in command.iter() {
+            debug!("validator command: {}", c);
+        }
+
+        self.create_replicas_set(
+            format!("validator-{}", validator_index).as_str(),
+            label_selector,
+            container_name,
+            image_name,
+            num_validators,
+            env_vars,
+            &command,
+            config_map_name,
+            accounts_volume,
+            accounts_volume_mount,
+        )
+        .await
+    }
+
+    pub async fn create_client_replicas_set(
+        &mut self,
+        container_name: &str,
+        validator_index: i32,
+        image_name: &str,
+        num_validators: i32,
+        config_map_name: Option<String>,
+        secret_name: Option<String>,
+        label_selector: &BTreeMap<String, String>,
+    ) -> Result<ReplicaSet, Box<dyn Error>> {
+        let env_vars = vec![
+            EnvVar {
+                name: "NAMESPACE".to_string(),
+                value_from: Some(EnvVarSource {
+                    field_ref: Some(ObjectFieldSelector {
+                        field_path: "metadata.namespace".to_string(),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            EnvVar {
+                name: "BOOTSTRAP_RPC_ADDRESS".to_string(),
+                value: Some(
+                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8899".to_string(),
+                ),
+                ..Default::default()
+            },
+            EnvVar {
+                name: "BOOTSTRAP_GOSSIP_ADDRESS".to_string(),
+                value: Some(
+                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8001".to_string(),
+                ),
+                ..Default::default()
+            },
+            EnvVar {
+                name: "BOOTSTRAP_FAUCET_ADDRESS".to_string(),
+                value: Some(
+                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:9900".to_string(),
+                ),
+                ..Default::default()
+            },
+        ];
+
+        let accounts_volume = Volume {
+            name: format!("client-accounts-volume-{}", validator_index),
+            secret: Some(SecretVolumeSource {
+                secret_name,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let accounts_volume_mount = VolumeMount {
+            name: format!("client-accounts-volume-{}", validator_index),
+            mount_path: "/home/solana/client-accounts".to_string(),
+            ..Default::default()
+        };
+
+        let mut command =
+            vec!["/home/solana/k8s-cluster-scripts/client-startup-script.sh".to_string()];
         command.extend(self.generate_validator_command_flags());
 
         for c in command.iter() {
