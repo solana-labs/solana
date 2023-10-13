@@ -7,12 +7,15 @@ use {
         *,
     },
     crate::{
-        accounts_background_service::{PrunedBanksRequestHandler, SendDroppedBankCallback},
+        accounts_background_service::{
+            AbsRequestSender, PrunedBanksRequestHandler, SendDroppedBankCallback,
+        },
         bank::replace_account::{
             replace_empty_account_with_upgradeable_program,
             replace_non_upgradeable_program_account, ReplaceAccountError,
         },
         bank_client::BankClient,
+        bank_forks::BankForks,
         epoch_rewards_hasher::hash_rewards_into_partitions,
         genesis_utils::{
             self, activate_all_features, activate_feature, bootstrap_validator_stake_lamports,
@@ -12502,7 +12505,8 @@ fn test_runtime_feature_enable_with_program_cache() {
     genesis_config
         .accounts
         .remove(&feature_set::reject_callx_r10::id());
-    let root_bank = Arc::new(Bank::new_for_tests(&genesis_config));
+    let mut bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
+    let root_bank = bank_forks.root_bank();
 
     // Test a basic transfer
     let amount = genesis_config.rent.minimum_balance(0);
@@ -12532,7 +12536,7 @@ fn test_runtime_feature_enable_with_program_cache() {
 
     // Advance the bank so the next transaction can be submitted.
     goto_end_of_slot(root_bank.clone());
-    let mut bank = new_from_parent(root_bank);
+    let bank = Arc::new(new_from_parent(root_bank));
 
     // Compose second instruction using the same program with a different block hash
     let instruction2 = Instruction::new_with_bytes(program_keypair.pubkey(), &[], Vec::new());
@@ -12558,9 +12562,17 @@ fn test_runtime_feature_enable_with_program_cache() {
         &feature_set::reject_callx_r10::id(),
         &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
     );
-    bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
 
-    // Execute after feature is enabled to check it was pruned and reverified.
+    // Reroot to call LoadedPrograms::prune() and end the current recompilation phase
+    goto_end_of_slot(bank.clone());
+    bank_forks.insert(Arc::into_inner(bank).unwrap());
+    let bank = bank_forks.working_bank();
+    bank_forks.set_root(bank.slot, &AbsRequestSender::default(), None);
+
+    // Advance to next epoch, which starts the next recompilation phase
+    let bank = new_from_parent_next_epoch(bank, 1);
+
+    // Execute after feature is enabled to check it was filtered out and reverified.
     let result_with_feature_enabled = bank.process_transaction(&transaction2);
     assert_eq!(
         result_with_feature_enabled,
