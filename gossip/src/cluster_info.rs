@@ -965,15 +965,19 @@ impl ClusterInfo {
         }
     }
 
-    pub fn push_restart_last_voted_fork_slots(&self, update: &[Slot], last_vote_bankhash: Hash) {
+    pub fn push_restart_last_voted_fork_slots(
+        &self,
+        update: &mut [Slot],
+        last_vote_bankhash: Hash,
+    ) {
         let now = timestamp();
-        let mut last_voted_fork_slots = RestartLastVotedForkSlots::new(
+        let last_voted_fork_slots = RestartLastVotedForkSlots::new(
             self.id(),
             now,
+            update,
             last_vote_bankhash,
             self.my_shred_version(),
         );
-        last_voted_fork_slots.fill(update);
         self.push_message(CrdsValue::new_signed(
             CrdsData::RestartLastVotedForkSlots(last_voted_fork_slots),
             &self.keypair(),
@@ -4607,15 +4611,15 @@ mod tests {
                 update.push(i * 1050 + j);
             }
         }
-        cluster_info.push_restart_last_voted_fork_slots(&update, Hash::default());
+        cluster_info.push_restart_last_voted_fork_slots(&mut update, Hash::default());
         cluster_info.flush_push_queue();
 
         let mut cursor = Cursor::default();
         let slots = cluster_info.get_restart_last_voted_fork_slots(&mut cursor);
         assert_eq!(slots.len(), 1);
         let retrieved_slots = slots[0].to_slots(0);
-        assert_eq!(retrieved_slots.len(), MAX_SLOTS_PER_ENTRY);
-        assert_eq!(retrieved_slots[0], 67816);
+        assert!(retrieved_slots.len() < MAX_SLOTS_PER_ENTRY);
+        assert!(retrieved_slots[0] < 69000);
         assert_eq!(retrieved_slots.last(), Some(84999).as_ref());
 
         let slots = cluster_info.get_restart_last_voted_fork_slots(&mut cursor);
@@ -4651,7 +4655,7 @@ mod tests {
             let mut node = cluster_info.my_contact_info.write().unwrap();
             node.set_shred_version(42);
         }
-        cluster_info.push_restart_last_voted_fork_slots(&update, Hash::default());
+        cluster_info.push_restart_last_voted_fork_slots(&mut update, Hash::default());
         cluster_info.flush_push_queue();
         // Should now include both slots.
         let slots = cluster_info.get_restart_last_voted_fork_slots(&mut Cursor::default());
