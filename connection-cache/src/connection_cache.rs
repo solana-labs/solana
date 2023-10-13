@@ -102,7 +102,7 @@ where
         Self {
             name,
             map: Arc::new(RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS))),
-            connection_manager: connection_manager,
+            connection_manager,
             stats: Arc::new(ConnectionCacheStats::default()),
             last_stats: AtomicInterval::default(),
             connection_pool_size,
@@ -144,7 +144,7 @@ where
     }
 
 
-    pub(crate) fn update_key(&self, key: &Keypair) {
+    pub fn update_key(&self, key: &Keypair) {
         let mut connection_manager =self.connection_manager.write().unwrap();
         connection_manager.update_key(key);
     }

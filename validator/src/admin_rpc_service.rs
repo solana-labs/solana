@@ -48,7 +48,7 @@ pub struct AdminRpcRequestMetadata {
     pub staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     pub post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
     pub rpc_to_plugin_manager_sender: Option<Sender<GeyserPluginManagerRequest>>,
-    notifies: Vec<Arc<dyn NotifyKeyUpdate>>,
+    pub notifies: Vec<Arc<dyn NotifyKeyUpdate + Sync + Send>>,
 }
 
 impl Metadata for AdminRpcRequestMetadata {}
@@ -689,6 +689,8 @@ impl AdminRpcImpl {
                         ))
                     })?;
             }
+
+            meta.update_keypair(&identity_keypair);
 
             solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
             post_init

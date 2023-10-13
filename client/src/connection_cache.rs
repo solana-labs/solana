@@ -48,7 +48,7 @@ impl NotifyKeyUpdate for ConnectionCache {
         match self {
             Self::Udp(_) => {},
             Self::Quic(backend) => {
-                
+                backend.update_key(key);
             }
         }
     }

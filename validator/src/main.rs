@@ -1702,6 +1702,8 @@ pub fn main() {
             tower_storage: validator_config.tower_storage.clone(),
             staked_nodes_overrides,
             rpc_to_plugin_manager_sender,
+            //todo: fix this
+            notifies: Vec::new()
         },
     );
 
