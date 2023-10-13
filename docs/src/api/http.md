@@ -154,11 +154,11 @@ Some methods support providing a `filters` object to enable pre-filtering the da
 Although not a JSON RPC API, a `GET /health` at the RPC HTTP Endpoint provides a
 health-check mechanism for use by load balancers or other network
 infrastructure. This request will always return a HTTP 200 OK response with a body of
-"ok", "behind" or "unknown" based on the following conditions:
+"ok", "behind" or "unknown":
 
-1. If the node is within `HEALTH_CHECK_SLOT_DISTANCE` slots from the latest cluster confirmed slot, "ok" is returned.
-2. If the node is behind more than `HEALTH_CHECK_SLOT_DISTANCE` slots from the latest cluster confirmed slot, an error is returned that will contain more information about far behind the node is.
-3. If the node is unable to determine its' health, an error is returned.
+- `ok`: The node is within `HEALTH_CHECK_SLOT_DISTANCE` slots from the latest cluster confirmed slot
+- `behind { distance }`: The node is behind `distance` slots from the latest cluster confirmed slot where `distance > HEALTH_CHECK_SLOT_DISTANCE`
+- `unknown`: The node is unable to determine where it stands in relation to the cluster
 
 ## JSON RPC API Reference
 
