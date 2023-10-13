@@ -9713,9 +9713,9 @@ fn test_tx_return_data() {
         let mut return_data = [0u8; MAX_RETURN_DATA];
         if !instruction_data.is_empty() {
             let index = usize::from_le_bytes(instruction_data.try_into().unwrap());
-            return_data[index] = 1;
+            return_data[index / 2] = 1;
             transaction_context
-                .set_return_data(mock_program_id, return_data.to_vec())
+                .set_return_data(mock_program_id, return_data[..index + 1].to_vec())
                 .unwrap();
         }
         Ok(())
@@ -9767,8 +9767,9 @@ fn test_tx_return_data() {
         if let Some(index) = index {
             let return_data = return_data.unwrap();
             assert_eq!(return_data.program_id, mock_program_id);
-            let mut expected_data = vec![0u8; index];
-            expected_data.push(1u8);
+            let mut expected_data = vec![0u8; index + 1];
+            // include some trailing zeros
+            expected_data[index / 2] = 1;
             assert_eq!(return_data.data, expected_data);
         } else {
             assert!(return_data.is_none());
