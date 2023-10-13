@@ -704,6 +704,26 @@ pub mod programify_feature_gate_program {
     solana_sdk::declare_id!("8GdovDzVwWU5edz2G697bbB7GZjrUc6aQZLWyNNAtHdg");
 }
 
+pub mod update_hashes_per_tick2 {
+    solana_sdk::declare_id!("EWme9uFqfy1ikK1jhJs8fM5hxWnK336QJpbscNtizkTU");
+}
+
+pub mod update_hashes_per_tick3 {
+    solana_sdk::declare_id!("8C8MCtsab5SsfammbzvYz65HHauuUYdbY2DZ4sznH6h5");
+}
+
+pub mod update_hashes_per_tick4 {
+    solana_sdk::declare_id!("8We4E7DPwF2WfAN8tRTtWQNhi98B99Qpuj7JoZ3Aikgg");
+}
+
+pub mod update_hashes_per_tick5 {
+    solana_sdk::declare_id!("BsKLKAn1WM4HVhPRDsjosmqSg2J8Tq5xP2s2daDS6Ni4");
+}
+
+pub mod update_hashes_per_tick6 {
+    solana_sdk::declare_id!("FKu1qYwLQSiehz644H6Si65U5ZQ2cp9GxsyFUfYcuADv");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -875,6 +895,11 @@ lazy_static! {
         (better_error_codes_for_tx_lamport_check::id(), "better error codes for tx lamport check #33353"),
         (enable_alt_bn128_compression_syscall::id(), "add alt_bn128 compression syscalls"),
         (programify_feature_gate_program::id(), "move feature gate activation logic to an on-chain program #32783"),
+        (update_hashes_per_tick2::id(), "Update desired hashes per tick to 2.8M"),
+        (update_hashes_per_tick3::id(), "Update desired hashes per tick to 4.4M"),
+        (update_hashes_per_tick4::id(), "Update desired hashes per tick to 7.6M"),
+        (update_hashes_per_tick5::id(), "Update desired hashes per tick to 9.2M"),
+        (update_hashes_per_tick6::id(), "Update desired hashes per tick to 10M"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

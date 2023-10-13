@@ -461,6 +461,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
                 AccountShrinkThreshold::default(),
                 true,
                 true,
+                false,
                 true,
                 None,
                 None,

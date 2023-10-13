@@ -240,7 +240,7 @@ struct WriteAncientAccounts<'a> {
 impl AccountsDb {
     /// Combine account data from storages in 'sorted_slots' into packed storages.
     /// This keeps us from accumulating storages for each slot older than an epoch.
-    /// Ater this function the number of alive roots is <= # alive roots when it was called.
+    /// After this function the number of alive roots is <= # alive roots when it was called.
     /// In practice, the # of alive roots after will be significantly less than # alive roots when called.
     /// Trying to reduce # roots and storages (one per root) required to store all the data in ancient slots
     pub(crate) fn combine_ancient_slots_packed(

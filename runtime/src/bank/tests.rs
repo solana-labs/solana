@@ -62,6 +62,8 @@ use {
         clock::{
             BankId, Epoch, Slot, UnixTimestamp, DEFAULT_HASHES_PER_TICK, DEFAULT_SLOTS_PER_EPOCH,
             DEFAULT_TICKS_PER_SLOT, INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES,
+            UPDATED_HASHES_PER_TICK2, UPDATED_HASHES_PER_TICK3, UPDATED_HASHES_PER_TICK4,
+            UPDATED_HASHES_PER_TICK5, UPDATED_HASHES_PER_TICK6,
         },
         compute_budget::ComputeBudgetInstruction,
         entrypoint::MAX_PERMITTED_DATA_INCREASE,
@@ -3606,11 +3608,11 @@ fn test_verify_snapshot_bank() {
     bank.freeze();
     add_root_and_flush_write_cache(&bank);
     bank.update_accounts_hash_for_tests();
-    assert!(bank.verify_snapshot_bank(true, false, bank.slot(), None));
+    assert!(bank.verify_snapshot_bank(true, false, false, bank.slot(), None));
 
     // tamper the bank after freeze!
     bank.increment_signature_count(1);
-    assert!(!bank.verify_snapshot_bank(true, false, bank.slot(), None));
+    assert!(!bank.verify_snapshot_bank(true, false, false, bank.slot(), None));
 }
 
 // Test that two bank forks with the same accounts should not hash to the same value.
@@ -9711,9 +9713,9 @@ fn test_tx_return_data() {
         let mut return_data = [0u8; MAX_RETURN_DATA];
         if !instruction_data.is_empty() {
             let index = usize::from_le_bytes(instruction_data.try_into().unwrap());
-            return_data[index] = 1;
+            return_data[index / 2] = 1;
             transaction_context
-                .set_return_data(mock_program_id, return_data.to_vec())
+                .set_return_data(mock_program_id, return_data[..index + 1].to_vec())
                 .unwrap();
         }
         Ok(())
@@ -9765,8 +9767,9 @@ fn test_tx_return_data() {
         if let Some(index) = index {
             let return_data = return_data.unwrap();
             assert_eq!(return_data.program_id, mock_program_id);
-            let mut expected_data = vec![0u8; index];
-            expected_data.push(1u8);
+            let mut expected_data = vec![0u8; index + 1];
+            // include some trailing zeros
+            expected_data[index / 2] = 1;
             assert_eq!(return_data.data, expected_data);
         } else {
             assert!(return_data.is_none());
@@ -12228,6 +12231,80 @@ fn test_feature_activation_idempotent() {
     // Activate feature "again"
     bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
     assert_eq!(bank.hashes_per_tick, Some(DEFAULT_HASHES_PER_TICK));
+}
+
+#[test]
+fn test_feature_hashes_per_tick() {
+    let mut genesis_config = GenesisConfig::default();
+    const HASHES_PER_TICK_START: u64 = 3;
+    genesis_config.poh_config.hashes_per_tick = Some(HASHES_PER_TICK_START);
+
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    assert_eq!(bank.hashes_per_tick, Some(HASHES_PER_TICK_START));
+
+    // Don't activate feature
+    bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
+    assert_eq!(bank.hashes_per_tick, Some(HASHES_PER_TICK_START));
+
+    // Activate feature
+    let feature_account_balance =
+        std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
+    bank.store_account(
+        &feature_set::update_hashes_per_tick::id(),
+        &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
+    );
+    bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
+    assert_eq!(bank.hashes_per_tick, Some(DEFAULT_HASHES_PER_TICK));
+
+    // Activate feature
+    let feature_account_balance =
+        std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
+    bank.store_account(
+        &feature_set::update_hashes_per_tick2::id(),
+        &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
+    );
+    bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
+    assert_eq!(bank.hashes_per_tick, Some(UPDATED_HASHES_PER_TICK2));
+
+    // Activate feature
+    let feature_account_balance =
+        std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
+    bank.store_account(
+        &feature_set::update_hashes_per_tick3::id(),
+        &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
+    );
+    bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
+    assert_eq!(bank.hashes_per_tick, Some(UPDATED_HASHES_PER_TICK3));
+
+    // Activate feature
+    let feature_account_balance =
+        std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
+    bank.store_account(
+        &feature_set::update_hashes_per_tick4::id(),
+        &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
+    );
+    bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
+    assert_eq!(bank.hashes_per_tick, Some(UPDATED_HASHES_PER_TICK4));
+
+    // Activate feature
+    let feature_account_balance =
+        std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
+    bank.store_account(
+        &feature_set::update_hashes_per_tick5::id(),
+        &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
+    );
+    bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
+    assert_eq!(bank.hashes_per_tick, Some(UPDATED_HASHES_PER_TICK5));
+
+    // Activate feature
+    let feature_account_balance =
+        std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
+    bank.store_account(
+        &feature_set::update_hashes_per_tick6::id(),
+        &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
+    );
+    bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
+    assert_eq!(bank.hashes_per_tick, Some(UPDATED_HASHES_PER_TICK6));
 }
 
 #[test_case(true)]

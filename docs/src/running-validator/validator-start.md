@@ -431,40 +431,6 @@ solana-validator ..."); otherwise, when logrotate sends its signal to the
 validator, the enclosing script will die and take the validator process with
 it.
 
-### Using a ramdisk with spill-over into swap for the accounts database to reduce SSD wear
-
-If your machine has plenty of RAM, a tmpfs ramdisk
-([tmpfs](https://man7.org/linux/man-pages/man5/tmpfs.5.html)) may be used to hold
-the accounts database
-
-When using tmpfs it's essential to also configure swap on your machine as well to
-avoid running out of tmpfs space periodically.
-
-A 300GB tmpfs partition is recommended, with an accompanying 250GB swap
-partition.
-
-Example configuration:
-
-1. `sudo mkdir /mnt/solana-accounts`
-2. Add a 300GB tmpfs partition by adding a new line containing `tmpfs /mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` to `/etc/fstab`
-   (assuming your validator is running under the user "sol"). **CAREFUL: If you
-   incorrectly edit /etc/fstab your machine may no longer boot**
-3. Create at least 250GB of swap space
-
-- Choose a device to use in place of `SWAPDEV` for the remainder of these instructions.
-  Ideally select a free disk partition of 250GB or greater on a fast disk. If one is not
-  available, create a swap file with `sudo dd if=/dev/zero of=/swapfile bs=1MiB count=250KiB`,
-  set its permissions with `sudo chmod 0600 /swapfile` and use `/swapfile` as `SWAPDEV` for
-  the remainder of these instructions
-- Format the device for usage as swap with `sudo mkswap SWAPDEV`
-
-4. Add the swap file to `/etc/fstab` with a new line containing `SWAPDEV swap swap defaults 0 0`
-5. Enable swap with `sudo swapon -a` and mount the tmpfs with `sudo mount /mnt/solana-accounts/`
-6. Confirm swap is active with `free -g` and the tmpfs is mounted with `mount`
-
-Now add the `--accounts /mnt/solana-accounts` argument to your `solana-validator`
-command-line arguments and restart the validator.
-
 ### Account indexing
 
 As the number of populated accounts on the cluster grows, account-data RPC

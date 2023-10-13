@@ -129,7 +129,8 @@ use {
             BankId, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_HASHES_PER_TICK,
             DEFAULT_TICKS_PER_SECOND, INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE,
             MAX_TRANSACTION_FORWARDING_DELAY, MAX_TRANSACTION_FORWARDING_DELAY_GPU,
-            SECONDS_PER_DAY,
+            SECONDS_PER_DAY, UPDATED_HASHES_PER_TICK2, UPDATED_HASHES_PER_TICK3,
+            UPDATED_HASHES_PER_TICK4, UPDATED_HASHES_PER_TICK5, UPDATED_HASHES_PER_TICK6,
         },
         epoch_info::EpochInfo,
         epoch_schedule::EpochSchedule,
@@ -4968,7 +4969,7 @@ impl Bank {
 
         let ExecutionRecord {
             accounts,
-            mut return_data,
+            return_data,
             touched_account_count,
             accounts_resize_delta,
         } = transaction_context.into();
@@ -4990,14 +4991,8 @@ impl Bank {
         saturating_add_assign!(timings.details.changed_account_count, touched_account_count);
         let accounts_data_len_delta = status.as_ref().map_or(0, |_| accounts_resize_delta);
 
-        let return_data = if enable_return_data_recording {
-            if let Some(end_index) = return_data.data.iter().rposition(|&x| x != 0) {
-                let end_index = end_index.saturating_add(1);
-                return_data.data.truncate(end_index);
-                Some(return_data)
-            } else {
-                None
-            }
+        let return_data = if enable_return_data_recording && !return_data.data.is_empty() {
+            Some(return_data)
         } else {
             None
         };
@@ -7622,12 +7617,13 @@ impl Bank {
     pub fn verify_snapshot_bank(
         &self,
         test_hash_calculation: bool,
-        accounts_db_skip_shrink: bool,
+        skip_shrink: bool,
+        force_clean: bool,
         last_full_snapshot_slot: Slot,
         base: Option<(Slot, /*capitalization*/ u64)>,
     ) -> bool {
         let (_, clean_time_us) = measure_us!({
-            let should_clean = !accounts_db_skip_shrink && self.slot() > 0;
+            let should_clean = force_clean || (!skip_shrink && self.slot() > 0);
             if should_clean {
                 info!("Cleaning...");
                 // We cannot clean past the last full snapshot's slot because we are about to
@@ -7647,7 +7643,7 @@ impl Bank {
         });
 
         let (_, shrink_time_us) = measure_us!({
-            let should_shrink = !accounts_db_skip_shrink && self.slot() > 0;
+            let should_shrink = !skip_shrink && self.slot() > 0;
             if should_shrink {
                 info!("Shrinking...");
                 self.rc.accounts.accounts_db.shrink_all_slots(
@@ -8069,6 +8065,26 @@ impl Bank {
 
         if new_feature_activations.contains(&feature_set::update_hashes_per_tick::id()) {
             self.apply_updated_hashes_per_tick(DEFAULT_HASHES_PER_TICK);
+        }
+
+        if new_feature_activations.contains(&feature_set::update_hashes_per_tick2::id()) {
+            self.apply_updated_hashes_per_tick(UPDATED_HASHES_PER_TICK2);
+        }
+
+        if new_feature_activations.contains(&feature_set::update_hashes_per_tick3::id()) {
+            self.apply_updated_hashes_per_tick(UPDATED_HASHES_PER_TICK3);
+        }
+
+        if new_feature_activations.contains(&feature_set::update_hashes_per_tick4::id()) {
+            self.apply_updated_hashes_per_tick(UPDATED_HASHES_PER_TICK4);
+        }
+
+        if new_feature_activations.contains(&feature_set::update_hashes_per_tick5::id()) {
+            self.apply_updated_hashes_per_tick(UPDATED_HASHES_PER_TICK5);
+        }
+
+        if new_feature_activations.contains(&feature_set::update_hashes_per_tick6::id()) {
+            self.apply_updated_hashes_per_tick(UPDATED_HASHES_PER_TICK6);
         }
 
         if new_feature_activations.contains(&feature_set::programify_feature_gate_program::id()) {
