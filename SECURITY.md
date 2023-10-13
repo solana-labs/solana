@@ -96,32 +96,32 @@ for more details. The submitter is not required to provide a
 mitigation to qualify.
 
 #### Loss of Funds:
-$2,000,000 USD in locked SOL tokens (locked for 12 months)
+$2,000,000 USD in unlocked SOL tokens
 * Theft of funds without users signature from any account
 * Theft of funds without users interaction in system, token, stake, vote programs
 * Theft of funds that requires users signature - creating a vote program that drains the delegated stakes.
 
 #### Consensus/Safety Violations:
-$1,000,000 USD in locked SOL tokens (locked for 12 months)
+$1,000,000 USD in unlocked SOL tokens
 * Consensus safety violation
 * Tricking a validator to accept an optimistic confirmation or rooted slot without a double vote, etc.
 
 #### Liveness / Loss of Availability:
-$400,000 USD in locked SOL tokens (locked for 12 months)
+$400,000 USD in unlocked SOL tokens
 * Whereby consensus halts and requires human intervention
 * Eclipse attacks,
 * Remote attacks that partition the network,
 
 #### DoS Attacks:
-$100,000 USD in locked SOL tokens (locked for 12 months)
+$100,000 USD in unlocked SOL tokens
 * Remote resource exaustion via Non-RPC protocols
 
 #### Supply Chain Attacks:
-$100,000 USD in locked SOL tokens (locked for 12 months)
+$100,000 USD in unlocked SOL tokens
 * Non-social attacks against source code change management, automated testing, release build, release publication and release hosting infrastructure of the monorepo.
 
 #### RPC DoS/Crashes:
-$5,000 USD in locked SOL tokens (locked for 12 months)
+$5,000 USD in unlocked SOL tokens
 * RPC attacks
 
 ### Out of Scope:
