@@ -9,12 +9,13 @@ use {
     },
     clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
     log::*,
+    solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
     solana_clap_utils::{
         input_parsers::{pubkey_of, pubkey_of_signer, signer_of},
-        input_validators::is_valid_signer,
+        input_validators::{is_valid_pubkey, is_valid_signer},
         keypair::{DefaultSigner, SignerIndex},
     },
-    solana_cli_output::{CliProgramId, OutputFormat},
+    solana_cli_output::{CliProgramId, CliProgramV4, CliProgramsV4, OutputFormat},
     solana_client::{
         connection_cache::ConnectionCache,
         send_and_confirm_transactions_in_parallel::{
@@ -26,7 +27,10 @@ use {
     solana_rbpf::{elf::Executable, verifier::RequisiteVerifier},
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
-    solana_rpc_client_api::config::RpcSendTransactionConfig,
+    solana_rpc_client_api::{
+        config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSendTransactionConfig},
+        filter::{Memcmp, RpcFilterType},
+    },
     solana_sdk::{
         account::Account,
         commitment_config::CommitmentConfig,
@@ -42,7 +46,14 @@ use {
         system_instruction::{self, SystemError},
         transaction::Transaction,
     },
-    std::{cmp::Ordering, fs::File, io::Read, rc::Rc, sync::Arc},
+    std::{
+        cmp::Ordering,
+        fs::File,
+        io::{Read, Write},
+        mem::size_of,
+        rc::Rc,
+        sync::Arc,
+    },
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -65,6 +76,15 @@ pub enum ProgramV4CliCommand {
     Finalize {
         program_address: Pubkey,
         authority_signer_index: SignerIndex,
+    },
+    Show {
+        account_pubkey: Option<Pubkey>,
+        authority: Pubkey,
+        all: bool,
+    },
+    Dump {
+        account_pubkey: Option<Pubkey>,
+        output_location: String,
     },
 }
 
@@ -175,6 +195,51 @@ impl ProgramV4SubCommands for App<'_, '_> {
                                 .takes_value(true)
                                 .validator(is_valid_signer)
                                 .help("Program authority [default: the default configured keypair]")
+                        ),
+                )
+                .subcommand(
+                    SubCommand::with_name("show")
+                        .about("Display information about a buffer or program")
+                        .arg(
+                            Arg::with_name("account")
+                                .index(1)
+                                .value_name("ACCOUNT_ADDRESS")
+                                .takes_value(true)
+                                .help("Address of the program to show")
+                        )
+                        .arg(
+                            Arg::with_name("all")
+                                .long("all")
+                                .conflicts_with("account")
+                                .conflicts_with("buffer_authority")
+                                .help("Show accounts for all authorities")
+                        )
+                        .arg(
+                            pubkey!(Arg::with_name("authority")
+                                .long("authority")
+                                .value_name("AUTHORITY")
+                                .conflicts_with("all"),
+                                "Authority [default: the default configured keypair]"),
+                        ),
+                )
+                .subcommand(
+                    SubCommand::with_name("dump")
+                        .about("Write the program data to a file")
+                        .arg(
+                            Arg::with_name("account")
+                                .index(1)
+                                .value_name("ACCOUNT_ADDRESS")
+                                .takes_value(true)
+                                .required(true)
+                                .help("Address of the buffer or program")
+                        )
+                        .arg(
+                            Arg::with_name("output_location")
+                                .index(2)
+                                .value_name("OUTPUT_FILEPATH")
+                                .takes_value(true)
+                                .required(true)
+                                .help("/path/to/program.so"),
                         ),
                 )
         )
@@ -306,6 +371,32 @@ pub fn parse_program_v4_subcommand(
                 signers: signer_info.signers,
             }
         }
+        ("show", Some(matches)) => {
+            let authority =
+                if let Some(authority) = pubkey_of_signer(matches, "authority", wallet_manager)? {
+                    authority
+                } else {
+                    default_signer
+                        .signer_from_path(matches, wallet_manager)?
+                        .pubkey()
+                };
+
+            CliCommandInfo {
+                command: CliCommand::ProgramV4(ProgramV4CliCommand::Show {
+                    account_pubkey: pubkey_of(matches, "account"),
+                    authority,
+                    all: matches.is_present("all"),
+                }),
+                signers: vec![],
+            }
+        }
+        ("dump", Some(matches)) => CliCommandInfo {
+            command: CliCommand::ProgramV4(ProgramV4CliCommand::Dump {
+                account_pubkey: pubkey_of(matches, "account"),
+                output_location: matches.value_of("output_location").unwrap().to_string(),
+            }),
+            signers: vec![],
+        },
         _ => unreachable!(),
     };
     Ok(response)
@@ -414,6 +505,20 @@ pub fn process_program_v4_subcommand(
             rpc_client,
             &ProgramV4CommandConfig::new_from_cli_config(config, authority_signer_index),
             program_address,
+        ),
+        ProgramV4CliCommand::Show {
+            account_pubkey,
+            authority,
+            all,
+        } => process_show(rpc_client, config, *account_pubkey, *authority, *all),
+        ProgramV4CliCommand::Dump {
+            account_pubkey,
+            output_location,
+        } => process_dump(
+            rpc_client,
+            config.commitment,
+            *account_pubkey,
+            output_location,
         ),
     }
 }
@@ -599,6 +704,78 @@ fn process_finalize_program(
         program_id: program_address.to_string(),
     };
     Ok(config.output_format.formatted_string(&program_id))
+}
+
+fn process_show(
+    rpc_client: Arc<RpcClient>,
+    config: &CliConfig,
+    account_pubkey: Option<Pubkey>,
+    authority: Pubkey,
+    all: bool,
+) -> ProcessResult {
+    if let Some(account_pubkey) = account_pubkey {
+        if let Some(account) = rpc_client
+            .get_account_with_commitment(&account_pubkey, config.commitment)?
+            .value
+        {
+            if loader_v4::check_id(&account.owner) {
+                if let Ok(state) = solana_loader_v4_program::get_state(&account.data) {
+                    let status = match state.status {
+                        LoaderV4Status::Retracted => "retracted",
+                        LoaderV4Status::Deployed => "deployed",
+                        LoaderV4Status::Finalized => "finalized",
+                    };
+                    Ok(config.output_format.formatted_string(&CliProgramV4 {
+                        program_id: account_pubkey.to_string(),
+                        owner: account.owner.to_string(),
+                        authority: state.authority_address.to_string(),
+                        last_deploy_slot: state.slot,
+                        data_len: account
+                            .data
+                            .len()
+                            .saturating_sub(LoaderV4State::program_data_offset()),
+                        status: status.to_string(),
+                    }))
+                } else {
+                    Err(format!("{account_pubkey} SBF program state is invalid").into())
+                }
+            } else {
+                Err(format!("{account_pubkey} is not an SBF program").into())
+            }
+        } else {
+            Err(format!("Unable to find the account {account_pubkey}").into())
+        }
+    } else {
+        let authority_pubkey = if all { None } else { Some(authority) };
+        let programs = get_programs(rpc_client, authority_pubkey)?;
+        Ok(config.output_format.formatted_string(&programs))
+    }
+}
+
+fn process_dump(
+    rpc_client: Arc<RpcClient>,
+    commitment: CommitmentConfig,
+    account_pubkey: Option<Pubkey>,
+    output_location: &str,
+) -> ProcessResult {
+    if let Some(account_pubkey) = account_pubkey {
+        if let Some(account) = rpc_client
+            .get_account_with_commitment(&account_pubkey, commitment)?
+            .value
+        {
+            if loader_v4::check_id(&account.owner) {
+                let mut f = File::create(output_location)?;
+                f.write_all(&account.data[LoaderV4State::program_data_offset()..])?;
+                Ok(format!("Wrote program to {output_location}"))
+            } else {
+                Err(format!("{account_pubkey} is not an SBF program").into())
+            }
+        } else {
+            Err(format!("Unable to find the account {account_pubkey}").into())
+        }
+    } else {
+        Err("No account specified".into())
+    }
 }
 
 fn check_payer(
@@ -1023,6 +1200,70 @@ fn build_truncate_instructions(
             Ok((vec![truncate_instruction], 0))
         }
     }
+}
+
+fn get_accounts_with_filter(
+    rpc_client: Arc<RpcClient>,
+    filters: Vec<RpcFilterType>,
+    length: usize,
+) -> Result<Vec<(Pubkey, Account)>, Box<dyn std::error::Error>> {
+    let results = rpc_client.get_program_accounts_with_config(
+        &loader_v4::id(),
+        RpcProgramAccountsConfig {
+            filters: Some(filters),
+            account_config: RpcAccountInfoConfig {
+                encoding: Some(UiAccountEncoding::Base64),
+                data_slice: Some(UiDataSliceConfig { offset: 0, length }),
+                ..RpcAccountInfoConfig::default()
+            },
+            ..RpcProgramAccountsConfig::default()
+        },
+    )?;
+    Ok(results)
+}
+
+fn get_programs(
+    rpc_client: Arc<RpcClient>,
+    authority_pubkey: Option<Pubkey>,
+) -> Result<CliProgramsV4, Box<dyn std::error::Error>> {
+    let filters = if let Some(authority_pubkey) = authority_pubkey {
+        vec![
+            (RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+                size_of::<u64>(),
+                authority_pubkey.as_ref(),
+            ))),
+        ]
+    } else {
+        vec![]
+    };
+
+    let results =
+        get_accounts_with_filter(rpc_client, filters, LoaderV4State::program_data_offset())?;
+
+    let mut programs = vec![];
+    for (program, account) in results.iter() {
+        if let Ok(state) = solana_loader_v4_program::get_state(&account.data) {
+            let status = match state.status {
+                LoaderV4Status::Retracted => "retracted",
+                LoaderV4Status::Deployed => "deployed",
+                LoaderV4Status::Finalized => "finalized",
+            };
+            programs.push(CliProgramV4 {
+                program_id: program.to_string(),
+                owner: account.owner.to_string(),
+                authority: state.authority_address.to_string(),
+                last_deploy_slot: state.slot,
+                status: status.to_string(),
+                data_len: account
+                    .data
+                    .len()
+                    .saturating_sub(LoaderV4State::program_data_offset()),
+            });
+        } else {
+            return Err(format!("Error parsing Program account {program}").into());
+        }
+    }
+    Ok(CliProgramsV4 { programs })
 }
 
 #[cfg(test)]
