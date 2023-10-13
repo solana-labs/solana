@@ -118,6 +118,7 @@ fn wait_for_restart_window(
     min_idle_time_in_minutes: usize,
     max_delinquency_percentage: u8,
     skip_new_snapshot_check: bool,
+    skip_health_check: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sleep_interval = Duration::from_secs(5);
 
@@ -161,7 +162,7 @@ fn wait_for_restart_window(
         seen_incremential_snapshot |= snapshot_slot_info_has_incremential;
 
         let epoch_info = rpc_client.get_epoch_info_with_commitment(CommitmentConfig::processed())?;
-        let healthy = rpc_client.get_health().ok().is_some();
+        let healthy = skip_health_check || rpc_client.get_health().ok().is_some();
         let delinquent_stake_percentage = {
             let vote_accounts = rpc_client.get_vote_accounts()?;
             let current_stake: u64 = vote_accounts
@@ -649,6 +650,7 @@ pub fn main() {
             let force = subcommand_matches.is_present("force");
             let monitor = subcommand_matches.is_present("monitor");
             let skip_new_snapshot_check = subcommand_matches.is_present("skip_new_snapshot_check");
+            let skip_health_check = subcommand_matches.is_present("skip_health_check");
             let max_delinquent_stake =
                 value_t_or_exit!(subcommand_matches, "max_delinquent_stake", u8);
 
@@ -659,6 +661,7 @@ pub fn main() {
                     min_idle_time,
                     max_delinquent_stake,
                     skip_new_snapshot_check,
+                    skip_health_check,
                 )
                 .unwrap_or_else(|err| {
                     println!("{err}");
@@ -777,6 +780,7 @@ pub fn main() {
             let max_delinquent_stake =
                 value_t_or_exit!(subcommand_matches, "max_delinquent_stake", u8);
             let skip_new_snapshot_check = subcommand_matches.is_present("skip_new_snapshot_check");
+            let skip_health_check = subcommand_matches.is_present("skip_health_check");
 
             wait_for_restart_window(
                 &ledger_path,
@@ -784,6 +788,7 @@ pub fn main() {
                 min_idle_time,
                 max_delinquent_stake,
                 skip_new_snapshot_check,
+                skip_health_check,
             )
             .unwrap_or_else(|err| {
                 println!("{err}");
