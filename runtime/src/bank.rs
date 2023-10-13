@@ -8251,45 +8251,6 @@ impl Bank {
         only_apply_transitions_for_new_features: bool,
         new_feature_activations: &HashSet<Pubkey>,
     ) {
-        const FEATURES_AFFECTING_RBPF: &[Pubkey] = &[
-            feature_set::error_on_syscall_bpf_function_hash_collisions::id(),
-            feature_set::reject_callx_r10::id(),
-            feature_set::switch_to_new_elf_parser::id(),
-            feature_set::bpf_account_data_direct_mapping::id(),
-            feature_set::enable_alt_bn128_syscall::id(),
-            feature_set::enable_alt_bn128_compression_syscall::id(),
-            feature_set::enable_big_mod_exp_syscall::id(),
-            feature_set::blake3_syscall_enabled::id(),
-            feature_set::curve25519_syscall_enabled::id(),
-            feature_set::disable_fees_sysvar::id(),
-            feature_set::enable_partitioned_epoch_reward::id(),
-            feature_set::disable_deploy_of_alloc_free_syscall::id(),
-            feature_set::last_restart_slot_sysvar::id(),
-            feature_set::remaining_compute_units_syscall_enabled::id(),
-        ];
-        if !only_apply_transitions_for_new_features
-            || FEATURES_AFFECTING_RBPF
-                .iter()
-                .any(|key| new_feature_activations.contains(key))
-        {
-            let program_runtime_environment_v1 = create_program_runtime_environment_v1(
-                &self.feature_set,
-                &self.runtime_config.compute_budget.unwrap_or_default(),
-                false, /* deployment */
-                false, /* debugging_features */
-            )
-            .unwrap();
-            let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
-            loaded_programs_cache.environments.program_runtime_v1 =
-                Arc::new(program_runtime_environment_v1);
-            let program_runtime_environment_v2 =
-                solana_loader_v4_program::create_program_runtime_environment_v2(
-                    &self.runtime_config.compute_budget.unwrap_or_default(),
-                    false, /* debugging_features */
-                );
-            loaded_programs_cache.environments.program_runtime_v2 =
-                Arc::new(program_runtime_environment_v2);
-        }
         for builtin in BUILTINS.iter() {
             if let Some(feature_id) = builtin.feature_id {
                 let should_apply_action_for_feature_transition =
