@@ -1146,44 +1146,20 @@ impl Drop for TestValidator {
 mod test {
     use super::*;
 
-    impl TestValidator {
-        // Wait for the given slot to be observed as confirmed. Returns true if
-        // the slot (or a greater one) is observed as confirmed, false otherwise.
-        fn wait_for_confirmed_slot(&self, slot: Slot) -> bool {
-            let rpc_client =
-                RpcClient::new_with_commitment(self.rpc_url.clone(), CommitmentConfig::confirmed());
-            const MAX_TRIES: u64 = 10;
-            let mut num_tries = 0;
-            loop {
-                num_tries += 1;
-                if num_tries > MAX_TRIES {
-                    break;
-                }
-                debug!("Waiting for slot {slot} to be confirmed {num_tries}...");
-                match rpc_client.get_slot() {
-                    Ok(latest_slot) => {
-                        if latest_slot >= slot {
-                            return true;
-                        }
-                    }
-                    Err(err) => {
-                        warn!("get_slot() failed: {:?}", err);
-                        break;
-                    }
-                }
-                std::thread::sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
-            }
-            false
-        }
-    }
-
     #[test]
     fn get_health() {
         let (test_validator, _payer) = TestValidatorGenesis::default().start();
         test_validator.set_startup_verification_complete_for_tests();
-        assert!(test_validator.wait_for_confirmed_slot(1));
         let rpc_client = test_validator.get_rpc_client();
         rpc_client.get_health().expect("health");
+    }
+
+    #[tokio::test]
+    async fn nonblocking_get_health() {
+        let (test_validator, _payer) = TestValidatorGenesis::default().start_async().await;
+        test_validator.set_startup_verification_complete_for_tests();
+        let rpc_client = test_validator.get_async_rpc_client();
+        rpc_client.get_health().await.expect("health");
     }
 
     #[tokio::test]
