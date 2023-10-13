@@ -299,6 +299,7 @@ impl AccountsDb {
             );
 
         let accounts_to_combine = self.calc_accounts_to_combine(&accounts_per_storage);
+        metrics.number_unpackable_slots += accounts_to_combine.number_unpackable_slots;
 
         // pack the accounts with 1 ref
         let pack = PackedAncientStorage::pack(
@@ -385,6 +386,7 @@ impl AccountsDb {
             store_accounts_timing,
             rewrite_elapsed_us,
             create_and_insert_store_elapsed_us,
+            number_unpackable_slots: 0,
         });
         write_ancient_accounts
             .shrinks_in_progress
@@ -584,6 +586,7 @@ impl AccountsDb {
                 target_slots_sorted.push(info.slot);
             }
         }
+        let number_unpackable_slots = remove.len();
         remove.into_iter().rev().for_each(|i| {
             accounts_to_combine.remove(i);
         });
@@ -591,6 +594,7 @@ impl AccountsDb {
             accounts_to_combine,
             accounts_keep_slots,
             target_slots_sorted,
+            number_unpackable_slots,
         }
     }
 
@@ -718,6 +722,8 @@ struct AccountsToCombine<'a> {
     /// Some of these slots will have ancient append vecs created at them to contain everything in 'accounts_to_combine'
     /// The rest will become dead slots with no accounts in them.
     target_slots_sorted: Vec<Slot>,
+    /// when scanning, this many slots contained accounts that could not be packed because accounts with ref_count > 1 existed.
+    number_unpackable_slots: usize,
 }
 
 #[derive(Default)]
@@ -3135,6 +3141,7 @@ pub mod tests {
                 accounts_keep_slots: HashMap::default(),
                 accounts_to_combine: vec![shrink_collect],
                 target_slots_sorted: Vec::default(),
+                number_unpackable_slots: 0,
             };
             db.addref_accounts_failed_to_shrink_ancient(accounts_to_combine);
             db.accounts_index.scan(
