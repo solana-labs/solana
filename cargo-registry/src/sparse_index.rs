@@ -1,7 +1,11 @@
 use {
-    crate::response_builder,
+    crate::{
+        publisher::{Dependency, Error, PackageMetaData},
+        response_builder,
+    },
     log::info,
     serde::{Deserialize, Serialize},
+    std::{collections::BTreeMap, sync::RwLock},
 };
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -10,14 +14,68 @@ struct RegistryConfig {
     api: Option<String>,
 }
 
-#[derive(Clone)]
-pub struct RegistryIndex {
+pub(crate) struct RegistryIndex {
     pub(crate) index_root: String,
     config: String,
+    index: RwLock<BTreeMap<String, IndexEntry>>,
+}
+
+#[derive(Serialize)]
+pub(crate) struct IndexEntryDep {
+    pub name: String,
+    pub req: String,
+    pub features: Vec<String>,
+    pub optional: bool,
+    pub default_features: bool,
+    pub target: Option<String>,
+    pub kind: String,
+    pub registry: Option<String>,
+    pub package: Option<String>,
+}
+
+impl From<Dependency> for IndexEntryDep {
+    fn from(v: Dependency) -> Self {
+        IndexEntryDep {
+            name: v.name,
+            req: v.version_req,
+            features: v.features,
+            optional: v.optional,
+            default_features: v.default_features,
+            target: v.target,
+            kind: serde_json::to_string(&v.kind).expect("Failed to stringify dep kind"),
+            registry: v.registry,
+            package: None,
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub(crate) struct IndexEntry {
+    pub name: String,
+    pub vers: String,
+    pub deps: Vec<IndexEntryDep>,
+    pub cksum: String,
+    pub features: BTreeMap<String, Vec<String>>,
+    pub yanked: bool,
+    pub links: Option<String>,
+}
+
+impl From<PackageMetaData> for IndexEntry {
+    fn from(v: PackageMetaData) -> Self {
+        IndexEntry {
+            name: v.name,
+            vers: v.vers,
+            deps: v.deps.into_iter().map(|v| v.into()).collect(),
+            cksum: String::new(),
+            features: v.features,
+            yanked: false,
+            links: v.links,
+        }
+    }
 }
 
 impl RegistryIndex {
-    pub fn new(root: &str, server_url: &str) -> Self {
+    pub(crate) fn new(root: &str, server_url: &str) -> Self {
         let registry_config = RegistryConfig {
             dl: format!("{}/api/v1/crates", server_url),
             api: Some(server_url.to_string()),
@@ -29,10 +87,14 @@ impl RegistryIndex {
         Self {
             index_root: root.to_string(),
             config,
+            index: RwLock::new(BTreeMap::new()),
         }
     }
 
-    pub fn handler(&self, request: hyper::Request<hyper::Body>) -> hyper::Response<hyper::Body> {
+    pub(crate) fn handler(
+        &self,
+        request: hyper::Request<hyper::Body>,
+    ) -> hyper::Response<hyper::Body> {
         let path = request.uri().path();
         let expected_root = self.index_root.as_str();
         if !path.starts_with(expected_root) {
@@ -53,7 +115,17 @@ impl RegistryIndex {
             return response_builder::success_response_str(&self.config);
         }
 
-        Self::handle_crate_lookup_request(path)
+        self.handle_crate_lookup_request(path)
+    }
+
+    pub(crate) fn insert_entry(&self, entry: IndexEntry) -> Result<(), Error> {
+        let mut write_index = self
+            .index
+            .write()
+            .map_err(|e| format!("Failed to lock the index for writing: {}", e))?;
+        info!("Inserting {}-{} in registry index", entry.name, entry.vers);
+        write_index.insert(entry.name.clone(), entry);
+        Ok(())
     }
 
     fn get_crate_name_from_path(path: &str) -> Option<&str> {
@@ -78,7 +150,7 @@ impl RegistryIndex {
         .then_some(crate_name)
     }
 
-    fn handle_crate_lookup_request(path: &str) -> hyper::Response<hyper::Body> {
+    fn handle_crate_lookup_request(&self, path: &str) -> hyper::Response<hyper::Body> {
         let Some(crate_name) = Self::get_crate_name_from_path(path) else {
             return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
@@ -86,10 +158,31 @@ impl RegistryIndex {
             );
         };
 
-        // Fetch the index information for the crate
-        info!("Received a request to fetch {:?}", crate_name);
+        info!("Looking up index for {:?}", crate_name);
 
-        response_builder::success_response()
+        let Ok(read_index) = self.index.read() else {
+            return response_builder::error_response(
+                hyper::StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal error. Failed to lock the index for reading",
+            );
+        };
+
+        let Some(entry) = read_index.get(crate_name) else {
+            // The index currently doesn't contain the program entry.
+            // Fetch the program information from the network using RPC client.
+            // In the meanwhile, return empty success response, so that the registry
+            // client continues to poll us for the index information.
+            return response_builder::success_response();
+        };
+
+        let Ok(response) = serde_json::to_string(entry) else {
+            return response_builder::error_response(
+                hyper::StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal error. index entry is corrupted",
+            );
+        };
+
+        response_builder::success_response_str(response.as_str())
     }
 }
 
