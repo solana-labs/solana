@@ -4951,7 +4951,7 @@ impl Bank {
 
         let ExecutionRecord {
             accounts,
-            mut return_data,
+            return_data,
             touched_account_count,
             accounts_resize_delta,
         } = transaction_context.into();
@@ -4981,14 +4981,8 @@ impl Bank {
             accounts_data_len_delta = status.as_ref().map_or(0, |_| accounts_resize_delta);
         }
 
-        let return_data = if enable_return_data_recording {
-            if let Some(end_index) = return_data.data.iter().rposition(|&x| x != 0) {
-                let end_index = end_index.saturating_add(1);
-                return_data.data.truncate(end_index);
-                Some(return_data)
-            } else {
-                None
-            }
+        let return_data = if enable_return_data_recording && !return_data.data.is_empty() {
+            Some(return_data)
         } else {
             None
         };
