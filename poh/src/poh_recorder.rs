@@ -629,7 +629,7 @@ impl PohRecorder {
                     "resetting poh due to hashes per tick change detected at {}",
                     working_bank.bank.slot()
                 );
-                self.reset_poh(working_bank.clone().bank.clone(), false);
+                self.reset_poh(working_bank.bank.clone(), false);
             }
         }
         self.working_bank = Some(working_bank);
