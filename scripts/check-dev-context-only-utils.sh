@@ -31,6 +31,10 @@ source ci/rust-version.sh nightly
 declare tainted_packages=(
   solana-banking-bench
   solana-ledger-tool
+  solana-program-test
+  solana-test-validator
+  solana-validator
+  solana-rpc-test
 )
 
 # convert to comma separeted (ref: https://stackoverflow.com/a/53839433)
@@ -96,11 +100,14 @@ EOF
       "crate": \$this_crate,
       "crateFeatures": \$this_feature,
     }
-  elif .dependencies | any(
-    .name as \$needle | ([$allowed] | index(\$needle))
-  )
+  elif .dependencies
+    | map(select((.kind // "normal") == "normal"))
+    | any(
+      .name as \$needle | ([$allowed] | index(\$needle))
+    )
   then
     .dependencies
+      | map(select((.kind // "normal") == "normal"))
       | map({
         "crate": \$this_crate,
         "crateFeatures": \$this_feature,
@@ -120,7 +127,9 @@ EOF
     misconfigured_crates=$(
       _ cargo "+${rust_nightly}" metadata \
         --format-version=1 \
-        | jq -r "$query"
+        | jq -r "$query" \
+        | sort \
+        | uniq
     )
     if [[ -n "$misconfigured_crates" ]]; then
       cat <<EOF 1>&2
