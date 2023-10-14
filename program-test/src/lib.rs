@@ -882,10 +882,7 @@ impl ProgramTest {
                     .read()
                     .unwrap()
                     .working_bank()
-                    .register_recent_blockhash(
-                        &Hash::new_unique(),
-                        &BankWithScheduler::no_scheduler_available(),
-                    );
+                    .register_unique_recent_blockhash_for_test();
             }
         });
 
@@ -1037,10 +1034,7 @@ impl ProgramTestContext {
                         .read()
                         .unwrap()
                         .working_bank()
-                        .register_recent_blockhash(
-                            &Hash::new_unique(),
-                            &BankWithScheduler::no_scheduler_available(),
-                        );
+                        .register_unique_recent_blockhash_for_test();
                 }
             }),
         );
