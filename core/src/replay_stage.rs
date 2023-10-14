@@ -2871,6 +2871,7 @@ impl ReplayStage {
                     ("hash", bank.hash().to_string(), String),
                 );
                 // report cost tracker stats
+                let a: usize = bank;
                 cost_update_sender
                     .send(CostUpdate::FrozenBank {
                         bank: bank.clone(),
