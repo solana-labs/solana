@@ -65,7 +65,6 @@ use {
             bootstrap_validator_stake_lamports, create_genesis_config,
             create_genesis_config_with_leader_ex, GenesisConfigInfo,
         },
-        installed_scheduler_pool::BankWithScheduler,
     },
     solana_sdk::{
         account::AccountSharedData,
