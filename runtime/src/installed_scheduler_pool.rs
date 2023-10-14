@@ -276,10 +276,6 @@ impl BankWithScheduler {
         self.inner.bank.clone()
     }
 
-    pub fn clone(&self) -> Self {
-        todo!()
-    }
-
     pub fn register_tick(&self, hash: &Hash) {
         self.inner.bank.register_tick(hash, &self.inner.scheduler);
     }
