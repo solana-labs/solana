@@ -2872,9 +2872,7 @@ impl ReplayStage {
                 );
                 // report cost tracker stats
                 cost_update_sender
-                    .send(CostUpdate::FrozenBank {
-                        bank: bank.clone(),
-                    })
+                    .send(CostUpdate::FrozenBank { bank: bank.clone() })
                     .unwrap_or_else(|err| {
                         warn!("cost_update_sender failed sending bank stats: {:?}", err)
                     });

@@ -3650,11 +3650,7 @@ pub mod tests {
         let recyclers = VerifyRecyclers::default();
         process_bank_0(&bank0, &blockstore, &opts, &recyclers, None, None);
         let bank0_last_blockhash = bank0.last_blockhash();
-        let bank1 = bank_forks.insert(Bank::new_from_parent(
-            bank0.clone(),
-            &Pubkey::default(),
-            1,
-        ));
+        let bank1 = bank_forks.insert(Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1));
         confirm_full_slot(
             &blockstore,
             &bank1,
