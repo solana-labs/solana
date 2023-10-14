@@ -22,7 +22,6 @@ use {
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
-        installed_scheduler_pool::BankWithScheduler,
         runtime_config::RuntimeConfig,
     },
     solana_sdk::{
