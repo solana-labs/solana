@@ -1603,7 +1603,7 @@ fn load_frozen_forks(
 
                             // Ensure cluster-confirmed root and parents are set as root in blockstore
                             let mut rooted_slots = vec![];
-                            let mut new_root_bank = Arc::clone(cluster_root_bank);
+                            let mut new_root_bank = cluster_root_bank.clone();
                             loop {
                                 if new_root_bank.slot() == root { break; } // Found the last root in the chain, yay!
                                 assert!(new_root_bank.slot() > root);
