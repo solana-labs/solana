@@ -12,12 +12,11 @@ edition = { workspace = true }
 [dependencies]
 clap = { workspace = true }
 flate2 = { workspace = true }
-git2 = { workspace = true }
 hyper = { workspace = true, features = ["full"] }
-hyper-staticfile = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 solana-clap-utils = { workspace = true }
 solana-cli = { workspace = true }
 solana-cli-config = { workspace = true }

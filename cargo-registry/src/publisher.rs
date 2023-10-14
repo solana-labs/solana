@@ -1,10 +1,14 @@
 use {
-    crate::client::{Client, ClientConfig},
+    crate::{
+        client::{Client, ClientConfig},
+        sparse_index::{IndexEntry, RegistryIndex},
+    },
     flate2::read::GzDecoder,
     hyper::body::Bytes,
     log::*,
     serde::{Deserialize, Serialize},
     serde_json::from_slice,
+    sha2::{Digest, Sha256},
     solana_cli::program_v4::{process_deploy_program, read_and_verify_elf},
     solana_sdk::{
         signature::{Keypair, Signer},
@@ -22,11 +26,11 @@ use {
     tempfile::{tempdir, TempDir},
 };
 
-pub type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
+pub(crate) type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
-enum DependencyType {
+pub(crate) enum DependencyType {
     Dev,
     Build,
     Normal,
@@ -34,39 +38,39 @@ enum DependencyType {
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
-struct Dependency {
-    name: String,
-    version_req: String,
-    features: Vec<String>,
-    optional: bool,
-    default_features: bool,
-    target: Option<String>,
-    kind: DependencyType,
-    registry: Option<String>,
-    explicit_name_in_toml: Option<String>,
+pub(crate) struct Dependency {
+    pub name: String,
+    pub version_req: String,
+    pub features: Vec<String>,
+    pub optional: bool,
+    pub default_features: bool,
+    pub target: Option<String>,
+    pub kind: DependencyType,
+    pub registry: Option<String>,
+    pub explicit_name_in_toml: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 #[allow(unused)]
-struct PackageMetaData {
-    name: String,
-    vers: String,
-    deps: Vec<Dependency>,
-    features: BTreeMap<String, Vec<String>>,
-    authors: Vec<String>,
-    description: Option<String>,
-    documentation: Option<String>,
-    homepage: Option<String>,
-    readme: Option<String>,
-    readme_file: Option<String>,
-    keywords: Vec<String>,
-    categories: Vec<String>,
-    license: Option<String>,
-    license_file: Option<String>,
-    repository: Option<String>,
-    badges: BTreeMap<String, BTreeMap<String, String>>,
-    links: Option<String>,
-    rust_version: Option<String>,
+pub(crate) struct PackageMetaData {
+    pub name: String,
+    pub vers: String,
+    pub deps: Vec<Dependency>,
+    pub features: BTreeMap<String, Vec<String>>,
+    pub authors: Vec<String>,
+    pub description: Option<String>,
+    pub documentation: Option<String>,
+    pub homepage: Option<String>,
+    pub readme: Option<String>,
+    pub readme_file: Option<String>,
+    pub keywords: Vec<String>,
+    pub categories: Vec<String>,
+    pub license: Option<String>,
+    pub license_file: Option<String>,
+    pub repository: Option<String>,
+    pub badges: BTreeMap<String, BTreeMap<String, String>>,
+    pub links: Option<String>,
+    pub rust_version: Option<String>,
 }
 
 impl PackageMetaData {
@@ -86,7 +90,7 @@ impl PackageMetaData {
     }
 }
 
-pub struct Publisher {}
+pub(crate) struct Publisher {}
 
 impl Publisher {
     fn make_path<P: AsRef<Path>>(tempdir: &TempDir, meta: &PackageMetaData, append: P) -> PathBuf {
@@ -107,12 +111,17 @@ impl Publisher {
         Ok(library_name.to_string())
     }
 
-    pub(crate) fn publish_crate(bytes: Bytes, client: Arc<Client>) -> Result<(), Error> {
+    pub(crate) fn publish_crate(
+        bytes: Bytes,
+        client: Arc<Client>,
+        index: Arc<RegistryIndex>,
+    ) -> Result<(), Error> {
         let (meta_data, offset) = PackageMetaData::new(&bytes)?;
 
         let (_crate_file_length, length_size) =
             PackageMetaData::read_u32_length(&bytes.slice(offset..))?;
         let crate_bytes = bytes.slice(offset.saturating_add(length_size)..);
+        let crate_cksum = format!("{:x}", Sha256::digest(&crate_bytes));
 
         let decoder = GzDecoder::new(crate_bytes.as_ref());
         let mut archive = Archive::new(decoder);
@@ -153,6 +162,10 @@ impl Publisher {
             error!("Failed to deploy the program: {}", e);
             format!("Failed to deploy the program: {}", e)
         })?;
+
+        let mut entry: IndexEntry = meta_data.into();
+        entry.cksum = crate_cksum;
+        index.insert_entry(entry)?;
 
         info!("Successfully deployed the program");
         Ok(())

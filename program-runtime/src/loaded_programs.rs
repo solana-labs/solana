@@ -56,8 +56,11 @@ pub trait ForkGraph {
 
 /// Provides information about current working slot, and its ancestors
 pub trait WorkingSlot {
-    /// Returns the current slot value
+    /// Returns the current slot
     fn current_slot(&self) -> Slot;
+
+    /// Returns the epoch of the current slot
+    fn current_epoch(&self) -> Epoch;
 
     /// Returns true if the `other` slot is an ancestor of self, false otherwise
     fn is_ancestor(&self, other: Slot) -> bool;
@@ -95,6 +98,20 @@ impl Debug for LoadedProgramType {
             #[cfg(test)]
             LoadedProgramType::TestLoaded(_) => write!(f, "LoadedProgramType::TestLoaded"),
             LoadedProgramType::Builtin(_) => write!(f, "LoadedProgramType::Builtin"),
+        }
+    }
+}
+
+impl LoadedProgramType {
+    /// Returns a reference to its environment if it has one
+    pub fn get_environment(&self) -> Option<&ProgramRuntimeEnvironment> {
+        match self {
+            LoadedProgramType::LegacyV0(program)
+            | LoadedProgramType::LegacyV1(program)
+            | LoadedProgramType::Typed(program) => Some(program.get_loader()),
+            #[cfg(test)]
+            LoadedProgramType::TestLoaded(environment) => Some(environment),
+            _ => None,
         }
     }
 }
@@ -338,16 +355,8 @@ impl LoadedProgram {
     }
 
     pub fn to_unloaded(&self) -> Option<Self> {
-        let env = match &self.program {
-            LoadedProgramType::LegacyV0(program)
-            | LoadedProgramType::LegacyV1(program)
-            | LoadedProgramType::Typed(program) => program.get_loader().clone(),
-            #[cfg(test)]
-            LoadedProgramType::TestLoaded(env) => env.clone(),
-            _ => return None,
-        };
         Some(Self {
-            program: LoadedProgramType::Unloaded(env),
+            program: LoadedProgramType::Unloaded(self.program.get_environment()?.clone()),
             account_size: self.account_size,
             deployment_slot: self.deployment_slot,
             effective_slot: self.effective_slot,
@@ -523,6 +532,11 @@ pub enum LoadedProgramMatchCriteria {
 }
 
 impl LoadedPrograms {
+    /// Returns the current environments depending on the given epoch
+    pub fn get_environments_for_epoch(&self, _epoch: Epoch) -> &ProgramRuntimeEnvironments {
+        &self.environments
+    }
+
     /// Refill the cache with a single entry. It's typically called during transaction loading,
     /// when the cache doesn't contain the entry corresponding to program `key`.
     /// The function dedupes the cache, in case some other thread replenished the entry in parallel.
@@ -586,41 +600,13 @@ impl LoadedPrograms {
     pub fn prune_feature_set_transition(&mut self) {
         for second_level in self.entries.values_mut() {
             second_level.retain(|entry| {
-                let retain = match &entry.program {
-                    LoadedProgramType::Builtin(_)
-                    | LoadedProgramType::DelayVisibility
-                    | LoadedProgramType::Closed => true,
-                    LoadedProgramType::LegacyV0(program) | LoadedProgramType::LegacyV1(program)
-                        if Arc::ptr_eq(
-                            program.get_loader(),
-                            &self.environments.program_runtime_v1,
-                        ) =>
-                    {
-                        true
-                    }
-                    LoadedProgramType::Unloaded(environment)
-                    | LoadedProgramType::FailedVerification(environment)
-                        if Arc::ptr_eq(environment, &self.environments.program_runtime_v1)
-                            || Arc::ptr_eq(environment, &self.environments.program_runtime_v2) =>
-                    {
-                        true
-                    }
-                    LoadedProgramType::Typed(program)
-                        if Arc::ptr_eq(
-                            program.get_loader(),
-                            &self.environments.program_runtime_v2,
-                        ) =>
-                    {
-                        true
-                    }
-                    _ => false,
-                };
-                if !retain {
-                    self.stats
-                        .prunes_environment
-                        .fetch_add(1, Ordering::Relaxed);
+                if Self::matches_environment(entry, &self.environments) {
+                    return true;
                 }
-                retain
+                self.stats
+                    .prunes_environment
+                    .fetch_add(1, Ordering::Relaxed);
+                false
             });
         }
         self.remove_programs_with_no_entries();
@@ -688,6 +674,17 @@ impl LoadedPrograms {
         }
     }
 
+    fn matches_environment(
+        entry: &Arc<LoadedProgram>,
+        environments: &ProgramRuntimeEnvironments,
+    ) -> bool {
+        let Some(environment) = entry.program.get_environment() else {
+            return true;
+        };
+        Arc::ptr_eq(environment, &environments.program_runtime_v1)
+            || Arc::ptr_eq(environment, &environments.program_runtime_v2)
+    }
+
     fn matches_loaded_program_criteria(
         program: &Arc<LoadedProgram>,
         criteria: &LoadedProgramMatchCriteria,
@@ -727,6 +724,7 @@ impl LoadedPrograms {
         working_slot: &S,
         keys: impl Iterator<Item = (Pubkey, (LoadedProgramMatchCriteria, u64))>,
     ) -> ExtractedPrograms {
+        let environments = self.get_environments_for_epoch(working_slot.current_epoch());
         let mut missing = Vec::new();
         let mut unloaded = Vec::new();
         let found = keys
@@ -738,27 +736,22 @@ impl LoadedPrograms {
                             || entry.deployment_slot == current_slot
                             || working_slot.is_ancestor(entry.deployment_slot)
                         {
-                            if !Self::is_entry_usable(entry, current_slot, &match_criteria) {
-                                missing.push((key, count));
-                                return None;
-                            }
-
-                            if let LoadedProgramType::Unloaded(environment) = &entry.program {
-                                if Arc::ptr_eq(environment, &self.environments.program_runtime_v1)
-                                    || Arc::ptr_eq(
-                                        environment,
-                                        &self.environments.program_runtime_v2,
-                                    )
-                                {
-                                    // if the environment hasn't changed since the entry was unloaded.
-                                    unloaded.push((key, count));
-                                } else {
-                                    missing.push((key, count));
-                                }
-                                return None;
-                            }
-
                             if current_slot >= entry.effective_slot {
+                                if !Self::is_entry_usable(entry, current_slot, &match_criteria) {
+                                    missing.push((key, count));
+                                    return None;
+                                }
+
+                                if !Self::matches_environment(entry, environments) {
+                                    missing.push((key, count));
+                                    return None;
+                                }
+
+                                if let LoadedProgramType::Unloaded(_environment) = &entry.program {
+                                    unloaded.push((key, count));
+                                    return None;
+                                }
+
                                 let mut usage_count =
                                     entry.tx_usage_counter.load(Ordering::Relaxed);
                                 saturating_add_assign!(usage_count, count);
@@ -794,7 +787,7 @@ impl LoadedPrograms {
             loaded: LoadedProgramsForTxBatch {
                 entries: found,
                 slot: working_slot.current_slot(),
-                environments: self.environments.clone(),
+                environments: environments.clone(),
             },
             missing,
             unloaded,
@@ -930,13 +923,16 @@ mod tests {
     use {
         crate::loaded_programs::{
             BlockRelation, ExtractedPrograms, ForkGraph, LoadedProgram, LoadedProgramMatchCriteria,
-            LoadedProgramType, LoadedPrograms, LoadedProgramsForTxBatch, WorkingSlot,
-            DELAY_VISIBILITY_SLOT_OFFSET,
+            LoadedProgramType, LoadedPrograms, LoadedProgramsForTxBatch, ProgramRuntimeEnvironment,
+            WorkingSlot, DELAY_VISIBILITY_SLOT_OFFSET,
         },
         assert_matches::assert_matches,
         percentage::Percentage,
         solana_rbpf::vm::BuiltinProgram,
-        solana_sdk::{clock::Slot, pubkey::Pubkey},
+        solana_sdk::{
+            clock::{Epoch, Slot},
+            pubkey::Pubkey,
+        },
         std::{
             ops::ControlFlow,
             sync::{
@@ -945,6 +941,51 @@ mod tests {
             },
         },
     };
+
+    static MOCK_ENVIRONMENT: std::sync::OnceLock<ProgramRuntimeEnvironment> =
+        std::sync::OnceLock::<ProgramRuntimeEnvironment>::new();
+
+    fn new_mock_cache() -> LoadedPrograms {
+        let mut cache = LoadedPrograms::default();
+        cache.environments.program_runtime_v1 = MOCK_ENVIRONMENT
+            .get_or_init(|| Arc::new(BuiltinProgram::new_mock()))
+            .clone();
+        cache
+    }
+
+    fn new_test_loaded_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
+        new_test_loaded_program_with_usage(deployment_slot, effective_slot, AtomicU64::default())
+    }
+
+    fn new_test_loaded_program_with_usage(
+        deployment_slot: Slot,
+        effective_slot: Slot,
+        usage_counter: AtomicU64,
+    ) -> Arc<LoadedProgram> {
+        new_test_loaded_program_with_usage_and_expiry(
+            deployment_slot,
+            effective_slot,
+            usage_counter,
+            None,
+        )
+    }
+
+    fn new_test_loaded_program_with_usage_and_expiry(
+        deployment_slot: Slot,
+        effective_slot: Slot,
+        usage_counter: AtomicU64,
+        expiry: Option<Slot>,
+    ) -> Arc<LoadedProgram> {
+        Arc::new(LoadedProgram {
+            program: LoadedProgramType::TestLoaded(MOCK_ENVIRONMENT.get().unwrap().clone()),
+            account_size: 0,
+            deployment_slot,
+            effective_slot,
+            maybe_expiration_slot: expiry,
+            tx_usage_counter: usage_counter,
+            ix_usage_counter: AtomicU64::default(),
+        })
+    }
 
     fn new_test_builtin_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
         Arc::new(LoadedProgram {
@@ -1011,7 +1052,7 @@ mod tests {
         let mut programs = vec![];
         let mut num_total_programs: usize = 0;
 
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
 
         let program1 = Pubkey::new_unique();
         let program1_deployment_slots = [0, 10, 20];
@@ -1177,7 +1218,7 @@ mod tests {
 
     #[test]
     fn test_usage_count_of_unloaded_program() {
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
 
         let program = Pubkey::new_unique();
         let num_total_programs = 6;
@@ -1229,7 +1270,7 @@ mod tests {
 
     #[test]
     fn test_replace_tombstones() {
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
         let program1 = Pubkey::new_unique();
         let env = Arc::new(BuiltinProgram::new_mock());
         set_tombstone(
@@ -1261,7 +1302,7 @@ mod tests {
         assert_eq!(tombstone.deployment_slot, 100);
         assert_eq!(tombstone.effective_slot, 100);
 
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
         let program1 = Pubkey::new_unique();
         let tombstone = set_tombstone(
             &mut cache,
@@ -1321,7 +1362,7 @@ mod tests {
 
     #[test]
     fn test_prune_empty() {
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
         let fork_graph = TestForkGraph {
             relation: BlockRelation::Unrelated,
         };
@@ -1332,7 +1373,7 @@ mod tests {
         cache.prune(&fork_graph, 10, 0);
         assert!(cache.entries.is_empty());
 
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
         let fork_graph = TestForkGraph {
             relation: BlockRelation::Ancestor,
         };
@@ -1343,7 +1384,7 @@ mod tests {
         cache.prune(&fork_graph, 10, 0);
         assert!(cache.entries.is_empty());
 
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
         let fork_graph = TestForkGraph {
             relation: BlockRelation::Descendant,
         };
@@ -1354,7 +1395,7 @@ mod tests {
         cache.prune(&fork_graph, 10, 0);
         assert!(cache.entries.is_empty());
 
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
         let fork_graph = TestForkGraph {
             relation: BlockRelation::Unknown,
         };
@@ -1443,6 +1484,10 @@ mod tests {
             self.slot
         }
 
+        fn current_epoch(&self) -> Epoch {
+            0
+        }
+
         fn is_ancestor(&self, other: Slot) -> bool {
             self.fork
                 .iter()
@@ -1450,41 +1495,6 @@ mod tests {
                 .map(|other_pos| other_pos < self.slot_pos)
                 .unwrap_or(false)
         }
-    }
-
-    fn new_test_loaded_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
-        new_test_loaded_program_with_usage(deployment_slot, effective_slot, AtomicU64::default())
-    }
-
-    fn new_test_loaded_program_with_usage(
-        deployment_slot: Slot,
-        effective_slot: Slot,
-        usage_counter: AtomicU64,
-    ) -> Arc<LoadedProgram> {
-        new_test_loaded_program_with_usage_and_expiry(
-            deployment_slot,
-            effective_slot,
-            usage_counter,
-            None,
-        )
-    }
-
-    fn new_test_loaded_program_with_usage_and_expiry(
-        deployment_slot: Slot,
-        effective_slot: Slot,
-        usage_counter: AtomicU64,
-        expiry: Option<Slot>,
-    ) -> Arc<LoadedProgram> {
-        let env = Arc::new(BuiltinProgram::new_mock());
-        Arc::new(LoadedProgram {
-            program: LoadedProgramType::TestLoaded(env),
-            account_size: 0,
-            deployment_slot,
-            effective_slot,
-            maybe_expiration_slot: expiry,
-            tx_usage_counter: usage_counter,
-            ix_usage_counter: AtomicU64::default(),
-        })
     }
 
     fn match_slot(
@@ -1502,7 +1512,7 @@ mod tests {
 
     #[test]
     fn test_fork_extract_and_prune() {
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
 
         // Fork graph created for the test
         //                   0
@@ -1883,7 +1893,7 @@ mod tests {
 
     #[test]
     fn test_extract_using_deployment_slot() {
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
 
         // Fork graph created for the test
         //                   0
@@ -1968,7 +1978,7 @@ mod tests {
 
     #[test]
     fn test_extract_unloaded() {
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
 
         // Fork graph created for the test
         //                   0
@@ -2081,13 +2091,12 @@ mod tests {
         assert!(match_slot(&found, &program1, 20, 22));
 
         assert!(missing.contains(&(program2, 1)));
-        assert!(missing.contains(&(program3, 1)));
-        assert!(unloaded.is_empty());
+        assert!(unloaded.contains(&(program3, 1)));
     }
 
     #[test]
     fn test_prune_expired() {
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
 
         // Fork graph created for the test
         //                   0
@@ -2206,7 +2215,7 @@ mod tests {
 
     #[test]
     fn test_fork_prune_find_first_ancestor() {
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
 
         // Fork graph created for the test
         //                   0
@@ -2252,7 +2261,7 @@ mod tests {
 
     #[test]
     fn test_prune_by_deployment_slot() {
-        let mut cache = LoadedPrograms::default();
+        let mut cache = new_mock_cache();
 
         // Fork graph created for the test
         //                   0
@@ -2371,6 +2380,7 @@ mod tests {
 
     #[test]
     fn test_usable_entries_for_slot() {
+        new_mock_cache();
         let tombstone = Arc::new(LoadedProgram::new_tombstone(0, LoadedProgramType::Closed));
 
         assert!(LoadedPrograms::is_entry_usable(

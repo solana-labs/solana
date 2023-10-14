@@ -3,6 +3,7 @@ use {
     crate::{
         client::Client,
         publisher::{Error, Publisher},
+        sparse_index::RegistryIndex,
     },
     hyper::{
         body,
@@ -30,15 +31,17 @@ impl CargoRegistryService {
     async fn handle_publish_request(
         request: hyper::Request<hyper::Body>,
         client: Arc<Client>,
+        index: Arc<RegistryIndex>,
     ) -> hyper::Response<hyper::Body> {
         info!("Handling request to publish the crate");
         let bytes = body::to_bytes(request.into_body()).await;
 
         match bytes {
             Ok(data) => {
-                let Ok(result) =
-                    tokio::task::spawn_blocking(move || Publisher::publish_crate(data, client))
-                        .await
+                let Ok(result) = tokio::task::spawn_blocking(move || {
+                    Publisher::publish_crate(data, client, index)
+                })
+                .await
                 else {
                     return response_builder::error_response(
                         hyper::StatusCode::INTERNAL_SERVER_ERROR,
@@ -218,7 +221,7 @@ impl CargoRegistryService {
     }
 
     async fn handler(
-        index: sparse_index::RegistryIndex,
+        index: Arc<sparse_index::RegistryIndex>,
         request: hyper::Request<hyper::Body>,
         client: Arc<Client>,
     ) -> Result<hyper::Response<hyper::Body>, Error> {
@@ -257,7 +260,7 @@ impl CargoRegistryService {
                             "Invalid length of the request.",
                         )
                     } else {
-                        Self::handle_publish_request(request, client.clone()).await
+                        Self::handle_publish_request(request, client.clone(), index.clone()).await
                     }
                 }
                 "unyank" => Self::handle_unyank_request(path, &request),
@@ -297,7 +300,10 @@ async fn main() {
     let client = Arc::new(Client::new().expect("Failed to get RPC Client instance"));
 
     let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), client.port);
-    let index = sparse_index::RegistryIndex::new("/index", &client.server_url);
+    let index = Arc::new(sparse_index::RegistryIndex::new(
+        "/index",
+        &client.server_url,
+    ));
 
     let registry_service = make_service_fn(move |_| {
         let client_inner = client.clone();
@@ -310,7 +316,7 @@ async fn main() {
     });
 
     let server = Server::bind(&bind_addr).serve(registry_service);
-    info!("Server running on on http://{}", bind_addr);
+    info!("Server running on http://{}", bind_addr);
 
     let _ = server.await;
 }
