@@ -40,7 +40,6 @@ installDir=
 # will be in target/debug
 buildProfileArg='--profile release'
 buildProfile='release'
-maybeRustFlags=
 validatorOnly=
 
 while [[ -n $1 ]]; do
@@ -52,7 +51,6 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --canary ]]; then
       buildProfileArg='--profile release-with-debug'
       buildProfile='release-with-debug'
-      maybeRustFlags='-C debug-assertions'
       shift
     elif [[ $1 = --validator-only ]]; then
       validatorOnly=true
@@ -147,7 +145,7 @@ mkdir -p "$installDir/bin"
 (
   set -x
   # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-  RUSTFLAGS=$maybeRustFlags "$cargo" $maybeRustVersion build $buildProfileArg "${binArgs[@]}"
+  "$cargo" $maybeRustVersion build $buildProfileArg "${binArgs[@]}"
 
   # Exclude `spl-token` binary for net.sh builds
   if [[ -z "$validatorOnly" ]]; then
