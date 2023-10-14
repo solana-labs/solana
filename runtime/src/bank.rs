@@ -4194,10 +4194,7 @@ impl Bank {
     }
 
     #[cfg(feature = "dev-context-only-utils")]
-    pub fn register_unique_recent_blockhash_for_test(
-        &self,
-        scheduler: &InstalledSchedulerRwLock,
-    ) {
+    pub fn register_unique_recent_blockhash_for_test(&self) {
         self.register_recent_blockhash(
             &Hash::new_unique(),
             &BankWithScheduler::no_scheduler_available(),
