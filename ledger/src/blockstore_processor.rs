@@ -3651,7 +3651,7 @@ pub mod tests {
         process_bank_0(&bank0, &blockstore, &opts, &recyclers, None, None);
         let bank0_last_blockhash = bank0.last_blockhash();
         let bank1 = bank_forks.insert(Bank::new_from_parent(
-            bank0.clone_without_scheduler(),
+            bank0.clone(),
             &Pubkey::default(),
             1,
         ));

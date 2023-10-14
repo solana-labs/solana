@@ -90,7 +90,7 @@ impl BankForks {
     pub fn banks(&self) -> HashMap<Slot, Arc<Bank>> {
         self.banks
             .iter()
-            .map(|(&k, b)| (k, b.clone_without_scheduler()))
+            .map(|(&k, b)| (k, b.clone()))
             .collect()
     }
 
@@ -127,7 +127,7 @@ impl BankForks {
         self.banks
             .iter()
             .filter(|(_, b)| b.is_frozen())
-            .map(|(&k, b)| (k, b.clone_without_scheduler()))
+            .map(|(&k, b)| (k, b.clone()))
             .collect()
     }
 
