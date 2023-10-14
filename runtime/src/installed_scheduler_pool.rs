@@ -276,7 +276,7 @@ impl BankWithScheduler {
         self.inner.bank.clone()
     }
 
-    pub fn clone(&self) -> usize {
+    pub fn clone(&self) -> Self {
         todo!()
     }
 
