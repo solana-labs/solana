@@ -413,7 +413,7 @@ impl Drop for BankWithSchedulerInner {
     }
 }
 
-impl Deref for BankWithScheduler {
+impl Deref for &BankWithScheduler {
     type Target = Arc<Bank>;
 
     fn deref(&self) -> &Self::Target {
