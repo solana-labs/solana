@@ -24,15 +24,17 @@ solana-banks-server = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
 solana-logger = { workspace = true }
 solana-program-runtime = { workspace = true }
-solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
+solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana-vote-program = { workspace = true }
 test-case = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
+[features]
+dev-context-only-utils = [
+  "solana-runtime/dev-context-only-utils"
+]
+
 [dev-dependencies]
 solana-stake-program = { workspace = true }
-
-[features]
-dev-context-only-utils = []
