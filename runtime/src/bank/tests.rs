@@ -274,6 +274,7 @@ fn test_bank_new() {
     assert_eq!(rent.lamports_per_byte_year, 5);
 }
 
+#[cfg(feature = "dev-context-only-utils")]
 pub(crate) fn create_simple_test_bank(lamports: u64) -> Bank {
     let (genesis_config, _mint_keypair) = create_genesis_config(lamports);
     Bank::new_for_tests(&genesis_config)
