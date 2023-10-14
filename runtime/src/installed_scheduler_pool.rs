@@ -271,7 +271,7 @@ impl BankWithScheduler {
 
     // Disambiguated clone helper in the case of naming crash with (&_)::clone()
     // BankWithScheduler intentinally omits to implement .clone(), so that the `.clone()` from
-    // `Arc<Bank>` is picked. 
+    // `Arc<Bank>` is picked via BankWithSchedulerInner's Deref most of time.
     pub fn clone_without_scheduler(&self) -> Arc<Bank> {
         self.inner.bank.clone()
     }
