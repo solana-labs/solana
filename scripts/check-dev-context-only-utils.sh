@@ -35,6 +35,7 @@ declare tainted_packages=(
   solana-test-validator
   solana-validator
   solana-rpc-test
+  solana-client-test
 )
 
 # convert to comma separeted (ref: https://stackoverflow.com/a/53839433)
