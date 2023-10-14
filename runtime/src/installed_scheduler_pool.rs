@@ -276,8 +276,8 @@ impl BankWithScheduler {
         self.inner.bank.clone()
     }
 
-    pub fn clone(&self) -> Arc<Bank> {
-        self.clone_without_scheduler()
+    pub fn clone(&self) -> usize {
+        todo!()
     }
 
     pub fn register_tick(&self, hash: &Hash) {
