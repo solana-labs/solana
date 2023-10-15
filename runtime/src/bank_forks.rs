@@ -228,6 +228,11 @@ impl BankForks {
         bank
     }
 
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn insert_without_schedler(&mut self, mut bank: Bank) -> Arc<Bank> {
+        self.insert(self, bank).clone_without_scheduler()
+    }
+
     pub fn insert_from_ledger(&mut self, bank: Bank) -> BankWithScheduler {
         self.highest_slot_at_startup = std::cmp::max(self.highest_slot_at_startup, bank.slot());
         self.insert(bank)
