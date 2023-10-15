@@ -278,7 +278,7 @@ impl BankWithScheduler {
     }
 
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
-    fn clone_without_scheduler(&self) -> Arc<Bank> {
+    pub(crate) fn clone_without_scheduler(&self) -> Arc<Bank> {
         self.inner.bank.clone()
     }
 
