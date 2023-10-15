@@ -230,7 +230,7 @@ impl SchedulingContext {
 /// for `BankWithScheduler` across codebase.
 ///
 /// BankWithScheduler even implements Deref for convenience. And Clone is omitted to implement to
-/// avoid ambiguity. Use clone() for Arc<Bank>. Otherwise, use
+/// avoid ambiguity. Use clone_without_scheduler() for Arc<Bank>. Otherwise, use
 /// clone_with_scheduler() (this should be unusual outside scheduling code-path)
 pub struct BankWithScheduler {
     inner: Arc<BankWithSchedulerInner>,
