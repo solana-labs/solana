@@ -88,7 +88,10 @@ impl BankForks {
     }
 
     pub fn banks(&self) -> HashMap<Slot, Arc<Bank>> {
-        self.banks.iter().map(|(&k, b)| (k, b.clone_without_scheduler())).collect()
+        self.banks
+            .iter()
+            .map(|(&k, b)| (k, b.clone_without_scheduler()))
+            .collect()
     }
 
     pub fn get_vote_only_mode_signal(&self) -> Arc<AtomicBool> {
