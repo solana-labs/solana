@@ -578,10 +578,7 @@ fn test_epoch_accounts_hash_and_warping() {
 
     let test_environment = TestEnvironment::new();
     let bank_forks = &test_environment.bank_forks;
-    let bank = bank_forks
-        .read()
-        .unwrap()
-        .working_bank();
+    let bank = bank_forks.read().unwrap().working_bank();
     let epoch_schedule = test_environment
         .genesis_config_info
         .genesis_config
@@ -602,18 +599,22 @@ fn test_epoch_accounts_hash_and_warping() {
     );
     // flush the write cache so warping can calculate the accounts hash from storages
     bank.force_flush_accounts_cache();
-    let bank = bank_forks.write().unwrap().insert(Bank::warp_from_parent(
-        bank,
-        &Pubkey::default(),
-        eah_stop_slot_in_next_epoch,
-        CalcAccountsHashDataSource::Storages,
-    )).clone_without_scheduler();
+    let bank = bank_forks
+        .write()
+        .unwrap()
+        .insert(Bank::warp_from_parent(
+            bank,
+            &Pubkey::default(),
+            eah_stop_slot_in_next_epoch,
+            CalcAccountsHashDataSource::Storages,
+        ))
+        .clone_without_scheduler();
     let slot = bank.slot().checked_add(1).unwrap();
-    let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
-        bank,
-        &Pubkey::default(),
-        slot,
-    )).clone_without_scheduler();
+    let bank = bank_forks
+        .write()
+        .unwrap()
+        .insert(Bank::new_from_parent(bank, &Pubkey::default(), slot))
+        .clone_without_scheduler();
     bank_forks.write().unwrap().set_root(
         bank.slot(),
         &test_environment
