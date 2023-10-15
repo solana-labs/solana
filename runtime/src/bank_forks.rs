@@ -282,7 +282,7 @@ impl BankForks {
         // ensure atomic ordering correctness.
         self.root.store(root, Ordering::Release);
 
-        let root_bank: usize = &**self
+        let root_bank = &**self
             .banks
             .get(&root)
             .expect("root bank didn't exist in bank_forks");
