@@ -582,7 +582,7 @@ fn test_epoch_accounts_hash_and_warping() {
         .read()
         .unwrap()
         .working_bank_with_scheduler()
-        .clone_with_scheduler();
+        .clone_without_scheduler();
     let epoch_schedule = test_environment
         .genesis_config_info
         .genesis_config
