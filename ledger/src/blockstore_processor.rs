@@ -85,28 +85,30 @@ lazy_static! {
         .unwrap();
 }
 
-fn first_err(results: &[Result<()>]) -> Result<()> {
+fn first_err<T: Clone + Default>(results: &[Result<T>]) -> Result<T> {
     for r in results {
-        if r.is_err() {
-            return r.clone();
+        if let Err(e) = r{
+            return Err(e.clone());
         }
     }
-    Ok(())
+    Ok(T::default())
 }
 
 // Includes transaction signature for unit-testing
 fn get_first_error(
     batch: &TransactionBatch,
     fee_collection_results: Vec<Result<()>>,
-) -> Option<(Result<()>, Signature)> {
+    receipts: Vec<(Hash,Hash)>
+) -> Option<(Result<Vec<(Hash,Hash)>>, Signature)> {
     let mut first_err = None;
     for (result, transaction) in fee_collection_results
         .iter()
         .zip(batch.sanitized_transactions())
+        // .map(|(res,t| Ok());
     {
         if let Err(ref err) = result {
             if first_err.is_none() {
-                first_err = Some((result.clone(), *transaction.signature()));
+                first_err = Some((Ok(receipts.clone()), *transaction.signature()));
             }
             warn!(
                 "Unexpected validator error: {:?}, transaction: {:?}",
@@ -132,7 +134,8 @@ fn execute_batch(
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
     log_messages_bytes_limit: Option<usize>,
-) -> Result<()> {
+) -> Result<Vec<(Hash,Hash)>> {
+    // info!("chk1 enters execute_batch");
     let TransactionBatchWithIndexes {
         batch,
         transaction_indexes,
@@ -168,11 +171,12 @@ fn execute_batch(
         fee_collection_results,
         execution_results,
         rent_debits,
+        receipts,
         ..
-    } = tx_results;
-
+    } = tx_results.clone();
+    // bank.append_receipts(receipts);
     check_accounts_data_size(bank, &execution_results)?;
-
+    // info!("execrec: {:?} tx_results {:?}",receipts, tx_results);
     if let Some(transaction_status_sender) = transaction_status_sender {
         let transactions = batch.sanitized_transactions().to_vec();
         let post_token_balances = if record_token_balances {
@@ -195,9 +199,20 @@ fn execute_batch(
         );
     }
 
-    let first_err = get_first_error(batch, fee_collection_results);
-    first_err.map(|(result, _)| result).unwrap_or(Ok(()))
+    let first_err = get_first_error(batch, fee_collection_results,receipts.clone());
+    // ExecuteBatchResult{
+        // result: 
+        first_err.map(|(result, _)| result).unwrap_or(Ok(receipts))
+    //     ,receipts,
+    // }
+    
 }
+
+// #[derive(Default)]
+// pub struct ExecuteBatchResult{
+//     result: Result<()>,
+//     receipts: Vec<(Hash,Hash)>
+// }
 
 #[derive(Default)]
 struct ExecuteBatchesInternalMetrics {
@@ -219,14 +234,15 @@ fn execute_batches_internal(
         Mutex::new(HashMap::new());
 
     let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
-    let results: Vec<Result<()>> = PAR_THREAD_POOL.install(|| {
+    info!("chk1 enters execute_batches_internal");
+    let results: Vec<Result<Vec<(Hash,Hash)>>> = PAR_THREAD_POOL.install(|| {
         batches
             .into_par_iter()
             .map(|transaction_batch| {
                 let transaction_count =
                     transaction_batch.batch.sanitized_transactions().len() as u64;
                 let mut timings = ExecuteTimings::default();
-                let (result, execute_batches_time): (Result<()>, Measure) = measure!(
+                let (result, execute_batches_time): (Result<Vec<(Hash,Hash)>>, Measure) = measure!(
                     {
                         let result = execute_batch(
                             transaction_batch,
@@ -272,7 +288,18 @@ fn execute_batches_internal(
     });
     execute_batches_elapsed.stop();
 
+    let receipts: Vec<Vec<(Hash,Hash)>> = results.clone().into_iter().filter(|res| res.is_ok()).map(|res| res.unwrap()).collect();
+    bank.append_receipts(receipts.clone());
+    info!("chk1 done_executing batches {:?}", batches.len());
+    info!("chk1 append_receipts: {:?} results {:?}",receipts, results);
     first_err(&results)?;
+    // let first_err = {for r in results{
+    //     if r.is_err(){
+    //          r
+    //     }
+    // Ok(())
+    // }
+// };
 
     Ok(ExecuteBatchesInternalMetrics {
         execution_timings_per_thread: execution_timings_per_thread.into_inner().unwrap(),
@@ -466,13 +493,19 @@ fn process_entries_with_callback(
     let mut tick_hashes = vec![];
     let mut rng = thread_rng();
     let cost_model = CostModel::new();
-    let block_signatures = entries.iter().filter_map(|e| match &e.entry {
-        EntryType::Transactions(txs) => Some(txs),
-        _ => None,
-    }).flatten()
-    .map(|tx| *tx.signature())
-    .collect::<Vec<Signature>>();
-    bank.set_block_signatures(block_signatures.to_vec());
+    // let block_signatures = entries.iter().filter_map(|e| match &e.entry {
+    //     EntryType::Transactions(txs) => Some(txs),
+    //     _ => None,
+    // }).flatten()
+    // .map(|tx| *tx.signature())
+    // .collect::<Vec<Signature>>();
+    let transaction_message_hashes: Vec<Hash> = entries.iter().filter_map(|e| match &e.entry {
+        EntryType::Transactions(txns) => Some(txns),
+        _ => None
+    })
+    .flatten()
+    .map(|txn| *txn.message_hash()).collect();
+    bank.set_transaction_message_hashes(transaction_message_hashes);
     for ReplayEntry {
         entry,
         starting_index,
@@ -486,6 +519,7 @@ fn process_entries_with_callback(
                 if bank.is_block_boundary(bank.tick_height() + tick_hashes.len() as u64) {
                     // If it's a tick that will cause a new blockhash to be created,
                     // execute the group and register the tick
+                    // info!("chk1 batches before: {:?}",batches.len());
                     execute_batches(
                         bank,
                         &batches,
@@ -497,6 +531,7 @@ fn process_entries_with_callback(
                         log_messages_bytes_limit,
                        
                     )?;
+                    // info!("chk1 batches after: {:?}",batches.len());
                     batches.clear();
                     for hash in &tick_hashes {
                         bank.register_tick(hash);
@@ -3673,6 +3708,7 @@ pub mod tests {
         let (
             TransactionResults {
                 fee_collection_results,
+                receipts,
                 ..
             },
             _balances,
@@ -3686,7 +3722,7 @@ pub mod tests {
             &mut ExecuteTimings::default(),
             None,
         );
-        let (err, signature) = get_first_error(&batch, fee_collection_results).unwrap();
+        let (err, signature) = get_first_error(&batch, fee_collection_results,receipts).unwrap();
         assert_eq!(err.unwrap_err(), TransactionError::AccountNotFound);
         assert_eq!(signature, account_not_found_sig);
     }

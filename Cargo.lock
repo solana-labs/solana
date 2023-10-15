@@ -6137,6 +6137,7 @@ dependencies = [
  "solana-frozen-abi-macro 1.14.24",
  "solana-logger 1.14.24",
  "solana-measure",
+ "solana-merkle-tree",
  "solana-metrics",
  "solana-program-runtime",
  "solana-rayon-threadlimit",

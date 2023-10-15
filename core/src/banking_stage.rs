@@ -52,6 +52,7 @@ use {
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
+        hash::{Hash, hashv},
         clock::{
             Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
             MAX_TRANSACTION_FORWARDING_DELAY_GPU,
@@ -1404,7 +1405,7 @@ impl BankingStage {
             "collect_balances",
         );
         execute_and_commit_timings.collect_balances_us = collect_balances_time.as_us();
-
+        let msg_hashes: Vec<Hash> = batch.sanitized_transactions().iter().map(|txn| *txn.message_hash()).collect();
         let (load_and_execute_transactions_output, load_execute_time) = measure!(
             bank.load_and_execute_transactions(
                 batch,
@@ -1446,7 +1447,12 @@ impl BankingStage {
                 .collect(),
             "execution_results_to_transactions",
         );
-
+        let statuses: Vec<bool> = execution_results.iter().map(|result| result.was_executed_successfully()).collect();
+        let receipts: Vec<(Hash,Hash)> = msg_hashes.into_iter().zip(statuses).map(|rec_data| {
+            let status_code: u8 = if rec_data.1 {1}else {0};
+            let hashed = hashv(&[rec_data.0.as_ref(),status_code.to_be_bytes().as_ref()]);
+            (rec_data.0,hashed)
+        }).collect();
         let (last_blockhash, lamports_per_signature) =
             bank.last_blockhash_and_lamports_per_signature();
         let (freeze_lock, freeze_lock_time) = measure!(bank.freeze_lock(), "freeze_lock");
@@ -1501,6 +1507,7 @@ impl BankingStage {
                     sanitized_txs,
                     &mut loaded_transactions,
                     execution_results,
+                    receipts,
                     last_blockhash,
                     lamports_per_signature,
                     CommitTransactionCounts {
