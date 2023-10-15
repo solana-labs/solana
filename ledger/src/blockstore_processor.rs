@@ -4294,7 +4294,7 @@ pub mod tests {
         prev_entry_hash: Hash,
     ) -> result::Result<(), BlockstoreProcessorError> {
         confirm_slot_entries(
-            &BankWithScheduler::new_without_scheduler(bank.clone_without_scheduler()),
+            &BankWithScheduler::new_without_scheduler(bank.clone()),
             (slot_entries, 0, slot_full),
             &mut ConfirmationTiming::default(),
             &mut ConfirmationProgress::new(prev_entry_hash),
