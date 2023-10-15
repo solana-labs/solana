@@ -269,7 +269,7 @@ impl BankWithScheduler {
         }
     }
 
-    pub(crate) fn clone_without_scheduler(&self) -> Arc<Bank> {
+    pub fn clone_without_scheduler(&self) -> Arc<Bank> {
         self.inner.bank.clone()
     }
 
