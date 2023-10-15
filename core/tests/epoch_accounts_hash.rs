@@ -641,7 +641,7 @@ fn test_epoch_accounts_hash_and_warping() {
     let bank = bank_forks
         .write()
         .unwrap()
-        .insert_for_test(Bank::warp_from_parent(
+        .insert_without_scheduler(Bank::warp_from_parent(
             bank,
             &Pubkey::default(),
             eah_start_slot_in_next_epoch,
