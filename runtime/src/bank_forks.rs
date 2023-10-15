@@ -127,7 +127,7 @@ impl BankForks {
         self.banks
             .iter()
             .filter(|(_, b)| b.is_frozen())
-            .map(|(k, b)| (*k, b.clone_without_scheduler()))
+            .map(|(&k, b)| (k, b.clone_without_scheduler()))
             .collect()
     }
 
