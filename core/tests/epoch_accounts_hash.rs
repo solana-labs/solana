@@ -646,10 +646,10 @@ fn test_epoch_accounts_hash_and_warping() {
     ));
     let slot = bank.slot().checked_add(1).unwrap();
     let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
-        bank.clone(),
+        bank,
         &Pubkey::default(),
         slot,
-    ));
+    )).clone_without_scheduler();
     bank_forks.write().unwrap().set_root(
         bank.slot(),
         &test_environment
