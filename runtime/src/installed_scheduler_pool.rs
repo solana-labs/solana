@@ -218,20 +218,21 @@ impl SchedulingContext {
 
 /// Very thin wrapper around Arc<Bank>
 ///
-/// It brings type-safety against mixing bank and scheduler of different slots, which is a pretty
-/// dangerous condition. Also, it guarantees to call wait_for_termination() via ::drop() inside
-/// BankForks::set_root()'s pruning, perfectly matching to Arc<Bank>'s lifetime by piggybacking on
-/// the pruning.
+/// It brings type-safety against accidental mixing of bank and scheduler with different slots,
+/// which is a pretty dangerous condition. Also, it guarantees to call wait_for_termination() via
+/// ::drop() inside BankForks::set_root()'s pruning, perfectly matching to Arc<Bank>'s lifetime by
+/// piggybacking on the pruning.
 ///
 /// Semantically, a scheduler is tightly coupled with a particular bank. But scheduler wasn't put
 /// into Bank fields to avoid circular-references (a scheduler needs to refer to its accompanied
 /// Arc<Bank>). BankWithScheduler behaves almost like Arc<Bank>. It only adds a few of transaction
-/// scheduling and scheduler management functions. For this reason, `bank` variable names were used
-/// for `BankWithScheduler` across codebase.
+/// scheduling and scheduler management functions. For this reason, `bank` variable names should be
+/// used for `BankWithScheduler` across codebase.
 ///
 /// BankWithScheduler even implements Deref for convenience. And Clone is omitted to implement to
-/// avoid ambiguity. Use clone_without_scheduler() for Arc<Bank>. Otherwise, use
-/// clone_with_scheduler() (this should be unusual outside scheduling code-path)
+/// avoid ambiguity as to which to clone: BankWithScheduler or Arc<Bank>. Use
+/// clone_without_scheduler() for Arc<Bank>. Otherwise, use clone_with_scheduler() (this should be
+/// unusual outside scheduler code-path)
 pub struct BankWithScheduler {
     inner: Arc<BankWithSchedulerInner>,
 }
