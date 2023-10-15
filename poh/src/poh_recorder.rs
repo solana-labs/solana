@@ -614,7 +614,7 @@ impl PohRecorder {
         let working_bank = WorkingBank {
             min_tick_height: bank.tick_height(),
             max_tick_height: bank.max_tick_height(),
-            bank: bank.clone_with_scheduler(),
+            bank,
             start: Arc::new(Instant::now()),
             transaction_index: track_transaction_indexes.then_some(0),
         };
