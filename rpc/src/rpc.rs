@@ -5003,7 +5003,8 @@ pub mod tests {
                 .bank_forks
                 .write()
                 .unwrap()
-                .insert(Bank::new_from_parent(parent_bank, &Pubkey::default(), slot));
+                .insert(Bank::new_from_parent(parent_bank, &Pubkey::default(), slot))
+                .clone_without_scheduler();
 
             let new_block_commitment = BlockCommitmentCache::new(
                 HashMap::new(),
@@ -5011,7 +5012,7 @@ pub mod tests {
                 CommitmentSlots::new_from_slot(self.bank_forks.read().unwrap().highest_slot()),
             );
             *self.block_commitment_cache.write().unwrap() = new_block_commitment;
-            bank.clone()
+            bank
         }
 
         fn store_vote_account(&self, vote_pubkey: &Pubkey, vote_state: VoteState) {
