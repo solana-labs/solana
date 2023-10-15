@@ -4998,11 +4998,15 @@ pub mod tests {
 
         fn advance_bank_to_confirmed_slot(&self, slot: Slot) -> Arc<Bank> {
             let parent_bank = self.working_bank();
-            let bank = self
-                .bank_forks
-                .write()
-                .unwrap()
-                .insert_without_scheduler(Bank::new_from_parent(parent_bank, &Pubkey::default(), slot));
+            let bank =
+                self.bank_forks
+                    .write()
+                    .unwrap()
+                    .insert_without_scheduler(Bank::new_from_parent(
+                        parent_bank,
+                        &Pubkey::default(),
+                        slot,
+                    ));
 
             let new_block_commitment = BlockCommitmentCache::new(
                 HashMap::new(),
