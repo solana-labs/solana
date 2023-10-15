@@ -238,7 +238,7 @@ impl BankForks {
         self.insert(bank)
     }
 
-    pub fn remove(&mut self, slot: Slot) -> Option<BankWithScheduler> {
+    pub fn remove(&mut self, slot: Slot) -> Option<Arc<Bank>> {
         let bank = self.banks.remove(&slot)?;
         for parent in bank.proper_ancestors() {
             let Entry::Occupied(mut entry) = self.descendants.entry(parent) else {
