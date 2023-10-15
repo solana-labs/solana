@@ -640,7 +640,7 @@ impl BankForks {
         let mut prune_remove_time = Measure::start("prune_slots");
         let removed_banks = prune_slots
             .into_iter()
-            .filter_map(|slot| self.remove(slot).map(|b| b.clone_without_scheduler()))
+            .filter_map(|slot| self.remove(slot))
             .collect();
         prune_remove_time.stop();
 
