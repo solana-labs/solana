@@ -4960,8 +4960,7 @@ pub mod tests {
                     .bank_forks
                     .write()
                     .unwrap()
-                    .insert(new_bank)
-                    .clone_without_scheduler();
+                    .insert_without_scheduler(new_bank);
                 let parent = if i > 0 { roots[i - 1] } else { 0 };
                 fill_blockstore_slot_with_ticks(
                     &self.blockstore,
@@ -5003,8 +5002,7 @@ pub mod tests {
                 .bank_forks
                 .write()
                 .unwrap()
-                .insert(Bank::new_from_parent(parent_bank, &Pubkey::default(), slot))
-                .clone_without_scheduler();
+                .insert_without_scheduler(Bank::new_from_parent(parent_bank, &Pubkey::default(), slot));
 
             let new_block_commitment = BlockCommitmentCache::new(
                 HashMap::new(),
