@@ -610,7 +610,7 @@ fn test_epoch_accounts_hash_and_warping() {
     ));
     let slot = bank.slot().checked_add(1).unwrap();
     let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
-        bank.clone(),
+        bank,
         &Pubkey::default(),
         slot,
     ));
@@ -638,7 +638,7 @@ fn test_epoch_accounts_hash_and_warping() {
     // flush the write cache so warping can calculate the accounts hash from storages
     bank.force_flush_accounts_cache();
     let bank = bank_forks.write().unwrap().insert(Bank::warp_from_parent(
-        bank.clone(),
+        bank,
         &Pubkey::default(),
         eah_start_slot_in_next_epoch,
         CalcAccountsHashDataSource::Storages,
