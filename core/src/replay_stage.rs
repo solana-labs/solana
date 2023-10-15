@@ -1509,7 +1509,7 @@ impl ReplayStage {
                     // Clear the banks from BankForks
                     let bank = w_bank_forks
                         .remove(*slot)
-                        .expect("BankForks should not have been purged yet").
+                        .expect("BankForks should not have been purged yet")
                         .clone_without_scheduler();
                     let _ = bank_hash_details::write_bank_hash_details_file(&bank);
                     ((*slot, bank.bank_id()), bank)
