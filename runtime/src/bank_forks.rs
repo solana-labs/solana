@@ -139,13 +139,13 @@ impl BankForks {
             .collect()
     }
 
+    pub fn get_with_scheduler(&self, bank_slot: Slot) -> Option<BankWithScheduler> {
+        self.banks.get(&bank_slot).map(|b| b.clone_with_scheduler())
+    }
+
     pub fn get(&self, bank_slot: Slot) -> Option<Arc<Bank>> {
         self.get_with_scheduler(bank_slot)
             .map(|b| b.clone_without_scheduler())
-    }
-
-    pub fn get_with_scheduler(&self, bank_slot: Slot) -> Option<BankWithScheduler> {
-        self.banks.get(&bank_slot).map(|b| b.clone_with_scheduler())
     }
 
     pub fn get_with_checked_hash(
