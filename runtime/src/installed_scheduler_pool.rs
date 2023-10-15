@@ -272,10 +272,6 @@ impl BankWithScheduler {
     // Disambiguated clone helper in the case of naming crash with (&_)::clone()
     // BankWithScheduler intentinally omits to implement .clone(), so that the `.clone()` from
     // `Arc<Bank>` is picked via BankWithSchedulerInner's Deref most of time.
-    #[allow(clippy::should_implement_trait)]
-    pub fn clone(&self) -> Arc<Bank> {
-        self.clone_without_scheduler()
-    }
 
     pub fn clone_without_scheduler(&self) -> Arc<Bank> {
         self.inner.bank.clone()
