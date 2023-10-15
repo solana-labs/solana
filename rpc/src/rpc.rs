@@ -4952,15 +4952,16 @@ pub mod tests {
                 return;
             }
 
-            let mut parent_bank = self
-                .bank_forks
-                .read()
-                .unwrap()
-                .working_bank();
+            let mut parent_bank = self.bank_forks.read().unwrap().working_bank();
             for (i, root) in roots.iter().enumerate() {
                 let new_bank =
                     Bank::new_from_parent(parent_bank.clone(), parent_bank.collector_id(), *root);
-                parent_bank = self.bank_forks.write().unwrap().insert(new_bank).clone_without_scheduler();
+                parent_bank = self
+                    .bank_forks
+                    .write()
+                    .unwrap()
+                    .insert(new_bank)
+                    .clone_without_scheduler();
                 let parent = if i > 0 { roots[i - 1] } else { 0 };
                 fill_blockstore_slot_with_ticks(
                     &self.blockstore,
