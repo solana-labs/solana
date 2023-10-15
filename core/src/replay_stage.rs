@@ -2933,7 +2933,7 @@ impl ReplayStage {
                 if let Some(sender) = bank_notification_sender {
                     sender
                         .sender
-                        .send(BankNotification::Frozen(bank.clone()))
+                        .send(BankNotification::Frozen(bank.clone_without_scheduler()))
                         .unwrap_or_else(|err| warn!("bank_notification_sender failed: {:?}", err));
                 }
                 blockstore_processor::cache_block_meta(bank, cache_block_meta_sender);
