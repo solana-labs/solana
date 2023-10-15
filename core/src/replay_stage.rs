@@ -1511,7 +1511,7 @@ impl ReplayStage {
                         .remove(*slot)
                         .expect("BankForks should not have been purged yet");
                     let _ = bank_hash_details::write_bank_hash_details_file(&bank);
-                    ((*slot, bank.bank_id()), bank.clone())
+                    ((*slot, bank.bank_id()), bank.clone_without_scheduler())
                 })
                 .unzip()
         };
