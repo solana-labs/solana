@@ -530,7 +530,7 @@ pub fn process_entries_for_tests_without_scheduler(
     entries: Vec<Entry>,
 ) -> Result<()> {
     process_entries_for_tests(
-        &BankWithScheduler::new_without_scheduler(bank.clone_without_scheduler()),
+        &BankWithScheduler::new_without_scheduler(bank.clone()),
         entries,
         None,
         None,
