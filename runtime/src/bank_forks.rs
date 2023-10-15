@@ -285,7 +285,6 @@ impl BankForks {
         let root_bank = &self
             .get(root)
             .expect("root bank didn't exist in bank_forks");
-        let aaa: usize = root_bank;
         let new_epoch = root_bank.epoch();
         if old_epoch != new_epoch {
             info!(
