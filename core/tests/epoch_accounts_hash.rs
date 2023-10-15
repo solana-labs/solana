@@ -607,13 +607,13 @@ fn test_epoch_accounts_hash_and_warping() {
         &Pubkey::default(),
         eah_stop_slot_in_next_epoch,
         CalcAccountsHashDataSource::Storages,
-    )).clone_with_scheduler();
+    )).clone_without_scheduler();
     let slot = bank.slot().checked_add(1).unwrap();
     let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
         bank,
         &Pubkey::default(),
         slot,
-    ));
+    )).clone_without_scheduler();
     bank_forks.write().unwrap().set_root(
         bank.slot(),
         &test_environment
