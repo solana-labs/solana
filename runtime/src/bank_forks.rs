@@ -283,7 +283,7 @@ impl BankForks {
         self.root.store(root, Ordering::Release);
 
         let root_bank = &self
-            .get(&root)
+            .get(root)
             .expect("root bank didn't exist in bank_forks");
         let aaa: usize = root_bank;
         let new_epoch = root_bank.epoch();
