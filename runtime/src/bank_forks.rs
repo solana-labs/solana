@@ -255,7 +255,7 @@ impl BankForks {
         if entry.get().is_empty() {
             entry.remove_entry();
         }
-        Some(bank)
+        Some(bank.clone_without_scheduler())
     }
 
     pub fn highest_slot(&self) -> Slot {
