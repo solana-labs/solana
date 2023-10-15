@@ -229,7 +229,7 @@ impl BankForks {
     }
 
     #[cfg(feature = "dev-context-only-utils")]
-    pub fn insert_without_schedler(&mut self, bank: Bank) -> Arc<Bank> {
+    pub fn insert_without_scheduler(&mut self, bank: Bank) -> Arc<Bank> {
         self.insert(bank).clone_without_scheduler()
     }
 
