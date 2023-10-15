@@ -137,7 +137,7 @@ impl BankForks {
     }
 
     pub fn get(&self, bank_slot: Slot) -> Option<Arc<Bank>> {
-        self.get_with_scheduler(bank_slot).map(|b| b.clone())
+        self.get_with_scheduler(bank_slot).map(|b| b.clone_without_scheduler())
     }
 
     pub fn get_with_scheduler(&self, bank_slot: Slot) -> Option<BankWithScheduler> {
