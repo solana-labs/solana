@@ -4794,7 +4794,7 @@ pub(crate) mod tests {
             assert_eq!(bank0.tick_height(), bank0.max_tick_height());
             let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
             bank_forks.write().unwrap().insert(bank1);
-            let bank1 = bank_forks.read().unwrap().get(1).unwrap();
+            let bank1 = bank_forks.read().unwrap().get_with_scheduler(1).unwrap();
             let bank1_progress = progress
                 .entry(bank1.slot())
                 .or_insert_with(|| ForkProgress::new(bank1.last_blockhash(), None, None, 0, 0));
