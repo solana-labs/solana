@@ -1500,7 +1500,7 @@ impl ReplayStage {
 
         // Grab the Slot and BankId's of the banks we need to purge, then clear the banks
         // from BankForks
-        let (slots_to_purge, removed_banks): (Vec<(Slot, BankId)>, Vec<Arc<Bank>>) = {
+        let (slots_to_purge, removed_banks): (Vec<(Slot, BankId)>, Vec<Arc<BankWithScheduler>>) = {
             let mut w_bank_forks = bank_forks.write().unwrap();
             slot_descendants
                 .iter()
@@ -1509,8 +1509,7 @@ impl ReplayStage {
                     // Clear the banks from BankForks
                     let bank = w_bank_forks
                         .remove(*slot)
-                        .expect("BankForks should not have been purged yet")
-                        .clone_without_scheduler();
+                        .expect("BankForks should not have been purged yet");
                     let _ = bank_hash_details::write_bank_hash_details_file(&bank);
                     ((*slot, bank.bank_id()), bank)
                 })
