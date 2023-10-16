@@ -69,9 +69,7 @@ impl AccountStorage {
 
     /// returns true if shrink in progress is NOT active
     pub(crate) fn no_shrink_in_progress(&self) -> bool {
-        // bprumo NOTE: ancient packer can be running, so need to change the assert below
-        //self.shrink_in_progress_map.is_empty()
-        true
+        self.shrink_in_progress_map.is_empty()
     }
 
     /// return the append vec for 'slot' if it exists

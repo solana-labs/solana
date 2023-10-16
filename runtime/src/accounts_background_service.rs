@@ -505,11 +505,42 @@ pub struct PrunedBanksRequestHandler {
 }
 
 impl PrunedBanksRequestHandler {
-    pub fn handle_request(&self, bank: &Bank) -> usize {
-        bank.rc
-            .accounts
-            .accounts_db
-            .do_handle_pruned_banks_request(&self.pruned_banks_receiver)
+    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
+    fn handle_request(&self, bank: &Bank) -> usize {
+        let mut banks_to_purge: Vec<_> = self.pruned_banks_receiver.try_iter().collect();
+        // We need a stable sort to ensure we purge banks—with the same slot—in the same order
+        // they were sent into the channel.
+        banks_to_purge.sort_by_key(|(slot, _id)| *slot);
+        let num_banks_to_purge = banks_to_purge.len();
+
+        // Group the banks into slices with the same slot
+        let grouped_banks_to_purge: Vec<_> =
+            GroupBy::new(banks_to_purge.as_slice(), |a, b| a.0 == b.0).collect();
+
+        // Log whenever we need to handle banks with the same slot.  Purposely do this *before* we
+        // call `purge_slot()` to ensure we get the datapoint (in case there's an assert/panic).
+        let num_banks_with_same_slot =
+            num_banks_to_purge.saturating_sub(grouped_banks_to_purge.len());
+        if num_banks_with_same_slot > 0 {
+            datapoint_info!(
+                "pruned_banks_request_handler",
+                ("num_pruned_banks", num_banks_to_purge, i64),
+                ("num_banks_with_same_slot", num_banks_with_same_slot, i64),
+            );
+        }
+
+        // Purge all the slots in parallel
+        // Banks for the same slot are purged sequentially
+        let accounts_db = bank.rc.accounts.accounts_db.as_ref();
+        accounts_db.thread_pool_clean.install(|| {
+            grouped_banks_to_purge.into_par_iter().for_each(|group| {
+                group.iter().for_each(|(slot, bank_id)| {
+                    accounts_db.purge_slot(*slot, *bank_id, true);
+                })
+            });
+        });
+
+        num_banks_to_purge
     }
 
     fn remove_dead_slots(
@@ -678,10 +709,7 @@ impl AccountsBackgroundService {
                             last_cleaned_block_height = bank.block_height();
                             bank.shrink_candidate_slots_arc(exit.clone(), &request_handlers.pruned_banks_request_handler.pruned_banks_receiver);
                         }
-                        bank.shrink_candidate_slots_arc(
-                            exit.clone(),
-                            &request_handlers.pruned_banks_request_handler.pruned_banks_receiver,
-                        );
+                        bank.shrink_candidate_slots();
                     }
                     stats.record_and_maybe_submit(start_time.elapsed(), bank.slot());
                     sleep(Duration::from_millis(INTERVAL_MS));

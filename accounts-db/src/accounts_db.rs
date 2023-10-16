@@ -109,7 +109,7 @@ use {
             atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering},
             Arc, Condvar, Mutex, RwLock,
         },
-        thread::{self, sleep, Builder},
+        thread::{sleep, Builder},
         time::{Duration, Instant},
     },
     tempfile::TempDir,

@@ -7731,7 +7731,6 @@ impl Bank {
         self.rc
             .accounts
             .accounts_db
-            .clone()
             .shrink_candidate_slots(self.epoch_schedule())
     }
 
