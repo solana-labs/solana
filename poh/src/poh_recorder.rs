@@ -25,7 +25,7 @@ use {
     },
     solana_measure::{measure, measure_us},
     solana_metrics::poh_timing_point::{send_poh_timing_point, PohTimingSender, SlotPohTimingInfo},
-    solana_runtime::bank::Bank,
+    solana_runtime::{bank::Bank, installed_scheduler_pool::BankWithScheduler},
     solana_sdk::{
         clock::{Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
         hash::Hash,
@@ -264,9 +264,8 @@ impl PohRecorderBank {
     }
 }
 
-#[derive(Clone)]
 pub struct WorkingBank {
-    pub bank: Arc<Bank>,
+    pub bank: BankWithScheduler,
     pub start: Arc<Instant>,
     pub min_tick_height: u64,
     pub max_tick_height: u64,
@@ -596,7 +595,7 @@ impl PohRecorder {
         self.leader_last_tick_height = leader_last_tick_height;
     }
 
-    pub fn set_bank(&mut self, bank: Arc<Bank>, track_transaction_indexes: bool) {
+    pub fn set_bank(&mut self, bank: BankWithScheduler, track_transaction_indexes: bool) {
         assert!(self.working_bank.is_none());
         self.leader_bank_notifier.set_in_progress(&bank);
         let working_bank = WorkingBank {
@@ -644,12 +643,12 @@ impl PohRecorder {
 
     #[cfg(feature = "dev-context-only-utils")]
     pub fn set_bank_for_test(&mut self, bank: Arc<Bank>) {
-        self.set_bank(bank, false)
+        self.set_bank(BankWithScheduler::new_without_scheduler(bank), false)
     }
 
     #[cfg(test)]
     pub fn set_bank_with_transaction_index_for_test(&mut self, bank: Arc<Bank>) {
-        self.set_bank(bank, true)
+        self.set_bank(BankWithScheduler::new_without_scheduler(bank), true)
     }
 
     // Flush cache will delay flushing the cache for a bank until it past the WorkingBank::min_tick_height
@@ -1092,7 +1091,7 @@ pub fn create_test_recorder(
     );
     let ticks_per_slot = bank.ticks_per_slot();
 
-    poh_recorder.set_bank(bank, false);
+    poh_recorder.set_bank(BankWithScheduler::new_without_scheduler(bank), false);
     let poh_recorder = Arc::new(RwLock::new(poh_recorder));
     let poh_service = PohService::new(
         poh_recorder.clone(),

@@ -1129,7 +1129,7 @@ impl ProgramTestContext {
             bank.freeze();
             bank
         } else {
-            bank_forks.insert(Bank::warp_from_parent(
+            bank_forks.insert_without_scheduler(Bank::warp_from_parent(
                 bank,
                 &Pubkey::default(),
                 pre_warp_slot,
