@@ -382,7 +382,6 @@ impl CrdsGossipPull {
         }
         stats.success += num_inserts;
         self.num_pulls.fetch_add(num_inserts, Ordering::Relaxed);
-        owners.insert(*from);
         for owner in owners {
             crds.update_record_timestamp(&owner, now);
         }
