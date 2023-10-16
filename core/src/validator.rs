@@ -495,7 +495,7 @@ impl Validator {
         tpu_connection_pool_size: usize,
         tpu_enable_udp: bool,
         admin_rpc_service_post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
-    ) -> Result<Self, String> {
+    ) -> Result<(Self, Arc<ConnectionCache>), String> {
         let id = identity_keypair.pubkey();
         assert_eq!(&id, node.info.pubkey());
 
@@ -1346,7 +1346,7 @@ impl Validator {
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
-        Ok(Self {
+        Ok((Self {
             stats_reporter_service,
             gossip_service,
             serve_repair_service,
@@ -1382,7 +1382,7 @@ impl Validator {
             repair_quic_endpoint,
             repair_quic_endpoint_runtime,
             repair_quic_endpoint_join_handle,
-        })
+        }, connection_cache))
     }
 
     // Used for notifying many nodes in parallel to exit

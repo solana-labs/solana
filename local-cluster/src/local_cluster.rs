@@ -308,7 +308,7 @@ impl LocalCluster {
         let cluster_leader = ClusterValidatorInfo::new(
             leader_info,
             safe_clone_config(&config.validator_configs[0]),
-            leader_server,
+            leader_server.0,
         );
 
         validators.insert(leader_pubkey, cluster_leader);
@@ -522,7 +522,7 @@ impl LocalCluster {
                 contact_info,
             },
             safe_clone_config(validator_config),
-            validator_server,
+            validator_server.0,
         );
 
         self.validators.insert(validator_pubkey, validator_info);
@@ -909,7 +909,7 @@ impl Cluster for LocalCluster {
             Arc::new(RwLock::new(None)),
         )
         .expect("assume successful validator start");
-        cluster_validator_info.validator = Some(restarted_node);
+        cluster_validator_info.validator = Some(restarted_node.0);
         cluster_validator_info
     }
 

@@ -58,6 +58,7 @@ use {
         hash::Hash,
         pubkey::Pubkey,
         signature::{read_keypair, Keypair, Signer},
+        quic::NotifyKeyUpdate,
     },
     solana_send_transaction_service::send_transaction_service,
     solana_streamer::socket::SocketAddrSpace,
@@ -1690,22 +1691,6 @@ pub fn main() {
         } else {
             (None, None)
         };
-    admin_rpc_service::run(
-        &ledger_path,
-        admin_rpc_service::AdminRpcRequestMetadata {
-            rpc_addr: validator_config.rpc_addrs.map(|(rpc_addr, _)| rpc_addr),
-            start_time: std::time::SystemTime::now(),
-            validator_exit: validator_config.validator_exit.clone(),
-            start_progress: start_progress.clone(),
-            authorized_voter_keypairs: authorized_voter_keypairs.clone(),
-            post_init: admin_service_post_init.clone(),
-            tower_storage: validator_config.tower_storage.clone(),
-            staked_nodes_overrides,
-            rpc_to_plugin_manager_sender,
-            //todo: fix this
-            notifies: Vec::new()
-        },
-    );
 
     let gossip_host: IpAddr = matches
         .value_of("gossip_host")
@@ -1863,27 +1848,44 @@ pub fn main() {
         return;
     }
 
-    let validator = Validator::new(
+    let (validator, connnection_cache) = Validator::new(
         node,
         identity_keypair,
         &ledger_path,
         &vote_account,
-        authorized_voter_keypairs,
+        authorized_voter_keypairs.clone(),
         cluster_entrypoints,
         &validator_config,
         should_check_duplicate_instance,
         rpc_to_plugin_manager_receiver,
-        start_progress,
+        start_progress.clone(),
         socket_addr_space,
         tpu_use_quic,
         tpu_connection_pool_size,
         tpu_enable_udp,
-        admin_service_post_init,
+        admin_service_post_init.clone(),
     )
     .unwrap_or_else(|e| {
         error!("Failed to start validator: {:?}", e);
         exit(1);
     });
+
+    admin_rpc_service::run(
+        &ledger_path,
+        admin_rpc_service::AdminRpcRequestMetadata {
+            rpc_addr: validator_config.rpc_addrs.map(|(rpc_addr, _)| rpc_addr),
+            start_time: std::time::SystemTime::now(),
+            validator_exit: validator_config.validator_exit.clone(),
+            start_progress: start_progress.clone(),
+            authorized_voter_keypairs: authorized_voter_keypairs.clone(),
+            post_init: admin_service_post_init.clone(),
+            tower_storage: validator_config.tower_storage.clone(),
+            staked_nodes_overrides,
+            rpc_to_plugin_manager_sender,
+            //todo: fix this
+            notifies: vec![connnection_cache]
+        },
+    );
 
     if let Some(filename) = init_complete_file {
         File::create(filename).unwrap_or_else(|_| {
