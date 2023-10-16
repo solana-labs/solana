@@ -7952,6 +7952,13 @@ impl Bank {
             .shrink_candidate_slots(self.epoch_schedule())
     }
 
+    pub(crate) fn shrink_ancient_slots(&self) {
+        self.rc
+            .accounts
+            .accounts_db
+            .shrink_ancient_slots(self.epoch_schedule())
+    }
+
     pub fn no_overflow_rent_distribution_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::no_overflow_rent_distribution::id())

@@ -4403,11 +4403,12 @@ impl AccountsDb {
 
     /// get a sorted list of slots older than an epoch
     /// squash those slots into ancient append vecs
-    fn shrink_ancient_slots(&self, oldest_non_ancient_slot: Slot) {
+    pub fn shrink_ancient_slots(&self, epoch_schedule: &EpochSchedule) {
         if self.ancient_append_vec_offset.is_none() {
             return;
         }
 
+        let oldest_non_ancient_slot = self.get_oldest_non_ancient_slot(epoch_schedule);
         let can_randomly_shrink = true;
         let sorted_slots = self.get_sorted_potential_ancient_slots(oldest_non_ancient_slot);
         if self.create_ancient_storage == CreateAncientStorage::Append {
@@ -4752,10 +4753,6 @@ impl AccountsDb {
 
     pub fn shrink_candidate_slots(&self, epoch_schedule: &EpochSchedule) -> usize {
         let oldest_non_ancient_slot = self.get_oldest_non_ancient_slot(epoch_schedule);
-        if !self.shrink_candidate_slots.lock().unwrap().is_empty() {
-            // this can affect 'shrink_candidate_slots', so don't 'take' it until after this completes
-            self.shrink_ancient_slots(oldest_non_ancient_slot);
-        }
 
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
