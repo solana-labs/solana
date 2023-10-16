@@ -272,19 +272,6 @@ pub struct WorkingBank {
     pub transaction_index: Option<usize>,
 }
 
-// Manual Clone impl is intentioal, following intentional lack of Clone impl for BankWithScheduler.
-impl Clone for WorkingBank {
-    fn clone(&self) -> Self {
-        Self {
-            bank: self.bank.clone_with_scheduler(),
-            start: self.start.clone(),
-            min_tick_height: self.min_tick_height,
-            max_tick_height: self.max_tick_height,
-            transaction_index: self.transaction_index,
-        }
-    }
-}
-
 #[derive(Debug, PartialEq, Eq)]
 pub enum PohLeaderStatus {
     NotReached,

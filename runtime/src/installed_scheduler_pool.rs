@@ -315,10 +315,7 @@ impl BankWithScheduler {
     }
 
     pub const fn no_scheduler_available() -> InstalledSchedulerRwLock {
-        #[allow(clippy::declare_interior_mutable_const)]
-        pub const NO_INSTALLED_SCHEDULER_RW_LOCK: InstalledSchedulerRwLock = RwLock::new(None);
-
-        NO_INSTALLED_SCHEDULER_RW_LOCK
+        RwLock::new(None)
     }
 
     #[cfg(feature = "dev-context-only-utils")]

@@ -525,18 +525,6 @@ pub fn process_entries_for_tests(
     result
 }
 
-pub fn process_entries_for_tests_without_scheduler(
-    bank: &Arc<Bank>,
-    entries: Vec<Entry>,
-) -> Result<()> {
-    process_entries_for_tests(
-        &BankWithScheduler::new_without_scheduler(bank.clone()),
-        entries,
-        None,
-        None,
-    )
-}
-
 fn process_entries(
     bank: &BankWithScheduler,
     entries: &mut [ReplayEntry],
@@ -1989,6 +1977,18 @@ pub mod tests {
                 test_process_blockstore(genesis_config, &secondary_blockstore, opts, Arc::default())
             }
         }
+    }
+
+    fn process_entries_for_tests_without_scheduler(
+        bank: &Arc<Bank>,
+        entries: Vec<Entry>,
+    ) -> Result<()> {
+        process_entries_for_tests(
+            &BankWithScheduler::new_without_scheduler(bank.clone()),
+            entries,
+            None,
+            None,
+        )
     }
 
     #[test]
