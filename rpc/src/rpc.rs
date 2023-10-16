@@ -375,14 +375,11 @@ impl JsonRpcRequestProcessor {
             exit.clone(),
         );
 
-<<<<<<< HEAD
-=======
-        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let startup_verification_complete = Arc::clone(bank.get_startup_verification_complete());
         let slot = bank.slot();
-        let optimistically_confirmed_bank =
-            Arc::new(RwLock::new(OptimisticallyConfirmedBank { bank }));
->>>>>>> 8bd0e4cd95 (Change getHealth to compare optimistically confirmed slots (#33651))
+        let optimistically_confirmed_bank = Arc::new(RwLock::new(OptimisticallyConfirmedBank {
+            bank: bank.clone(),
+        }));
         Self {
             config: JsonRpcConfig::default(),
             snapshot_config: None,
@@ -392,36 +389,20 @@ impl JsonRpcRequestProcessor {
                 0,
                 CommitmentSlots::new_from_slot(slot),
             ))),
-<<<<<<< HEAD
-            blockstore,
-            validator_exit: create_validator_exit(&exit),
-=======
             blockstore: Arc::clone(&blockstore),
-            validator_exit: create_validator_exit(exit.clone()),
->>>>>>> 8bd0e4cd95 (Change getHealth to compare optimistically confirmed slots (#33651))
+            validator_exit: create_validator_exit(&exit),
             health: Arc::new(RpcHealth::new(
                 Arc::clone(&optimistically_confirmed_bank),
                 blockstore,
                 0,
-<<<<<<< HEAD
-                exit.clone(),
-                Arc::clone(bank.get_startup_verification_complete()),
-=======
                 exit,
                 startup_verification_complete,
->>>>>>> 8bd0e4cd95 (Change getHealth to compare optimistically confirmed slots (#33651))
             )),
             cluster_info,
             genesis_hash,
             transaction_sender: Arc::new(Mutex::new(sender)),
             bigtable_ledger_storage: None,
-<<<<<<< HEAD
-            optimistically_confirmed_bank: Arc::new(RwLock::new(OptimisticallyConfirmedBank {
-                bank: bank.clone(),
-            })),
-=======
             optimistically_confirmed_bank,
->>>>>>> 8bd0e4cd95 (Change getHealth to compare optimistically confirmed slots (#33651))
             largest_accounts_cache: Arc::new(RwLock::new(LargestAccountsCache::new(30))),
             max_slots: Arc::new(MaxSlots::default()),
             leader_schedule_cache: Arc::new(LeaderScheduleCache::new_from_bank(bank)),
@@ -8371,7 +8352,7 @@ pub mod tests {
             block_commitment_cache,
             blockstore.clone(),
             validator_exit,
-            RpcHealth::stub(optimistically_confirmed_bank.clone(), blockstore.clone()),
+            RpcHealth::stub(optimistically_confirmed_bank.clone(), blockstore),
             cluster_info,
             Hash::default(),
             None,

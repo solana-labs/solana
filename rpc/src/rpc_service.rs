@@ -734,7 +734,7 @@ mod tests {
             health.clone(),
         );
         let rrm_with_snapshot_config = RpcRequestMiddleware::new(
-            ledger_path.clone(),
+            ledger_path,
             Some(SnapshotConfig::default()),
             bank_forks,
             health,
