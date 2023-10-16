@@ -934,7 +934,8 @@ impl Validator {
         // (by both replay stage and banking stage)
         let prioritization_fee_cache = Arc::new(PrioritizationFeeCache::default());
 
-        let rpc_override_health_check = Arc::new(AtomicBool::new(false));
+        let rpc_override_health_check =
+            Arc::new(AtomicBool::new(config.rpc_config.disable_health_check));
         let (
             json_rpc_service,
             pubsub_service,
@@ -971,7 +972,6 @@ impl Validator {
                 ledger_path,
                 config.validator_exit.clone(),
                 exit.clone(),
-                config.known_validators.clone(),
                 rpc_override_health_check.clone(),
                 startup_verification_complete,
                 optimistically_confirmed_bank.clone(),

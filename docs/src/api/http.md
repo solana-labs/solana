@@ -154,13 +154,11 @@ Some methods support providing a `filters` object to enable pre-filtering the da
 Although not a JSON RPC API, a `GET /health` at the RPC HTTP Endpoint provides a
 health-check mechanism for use by load balancers or other network
 infrastructure. This request will always return a HTTP 200 OK response with a body of
-"ok", "behind" or "unknown" based on the following conditions:
+"ok", "behind" or "unknown":
 
-1. If one or more `--known-validator` arguments are provided to `solana-validator` - "ok" is returned
-   when the node has within `HEALTH_CHECK_SLOT_DISTANCE` slots of the highest
-   known validator, otherwise "behind". "unknown" is returned when no slot
-   information from known validators is not yet available.
-2. "ok" is always returned if no known validators are provided.
+- `ok`: The node is within `HEALTH_CHECK_SLOT_DISTANCE` slots from the latest cluster confirmed slot
+- `behind { distance }`: The node is behind `distance` slots from the latest cluster confirmed slot where `distance > HEALTH_CHECK_SLOT_DISTANCE`
+- `unknown`: The node is unable to determine where it stands in relation to the cluster
 
 ## JSON RPC API Reference
 
