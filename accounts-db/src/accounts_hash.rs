@@ -26,6 +26,7 @@ use {
             atomic::{AtomicU64, AtomicUsize, Ordering},
             Arc,
         },
+        thread, time,
     },
     tempfile::tempfile_in,
 };
@@ -87,22 +88,59 @@ impl AccountHashesFile {
         if self.writer.is_none() {
             // we have hashes to write but no file yet, so create a file that will auto-delete on drop
 
-            let mut data = tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
-                panic!(
-                    "Unable to create file within {}: {err}",
-                    self.dir_for_temp_cache_files.display()
-                )
-            });
+            let get_file = || -> Result<_, std::io::Error> {
+                let mut data = tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
+                    panic!(
+                        "Unable to create file within {}: {err}",
+                        self.dir_for_temp_cache_files.display()
+                    )
+                });
 
-            // Theoretical performance optimization: write a zero to the end of
-            // the file so that we won't have to resize it later, which may be
-            // expensive.
-            assert!(self.capacity > 0);
-            data.seek(SeekFrom::Start((self.capacity - 1) as u64))
-                .unwrap();
-            data.write_all(&[0]).unwrap();
-            data.rewind().unwrap();
-            data.flush().unwrap();
+                // Theoretical performance optimization: write a zero to the end of
+                // the file so that we won't have to resize it later, which may be
+                // expensive.
+                assert!(self.capacity > 0);
+                data.seek(SeekFrom::Start((self.capacity - 1) as u64))?;
+                data.write_all(&[0])?;
+                data.rewind()?;
+                data.flush()?;
+                Ok(data)
+            };
+
+            // Retry 5 times to allocate the AccountHashesFile. The memory might be fragmented and
+            // causes memory allocation failure. Therefore, let's retry after failure. Hoping that the
+            // kernel has the chance to defrag the memory between the retries, and retries succeed.
+            let mut num_retries = 0;
+            let data = loop {
+                num_retries += 1;
+
+                match get_file() {
+                    Ok(data) => {
+                        break data;
+                    }
+                    Err(err) => {
+                        info!(
+                            "Unable to create account hashes file within {}: {}, retry counter {}",
+                            self.dir_for_temp_cache_files.display(),
+                            err,
+                            num_retries
+                        );
+
+                        if num_retries > 5 {
+                            panic!(
+                                "Unable to create account hashes file within {}: after {} retries",
+                                self.dir_for_temp_cache_files.display(),
+                                num_retries
+                            );
+                        }
+                        datapoint_info!(
+                            "retry_account_hashes_file_allocation",
+                            ("retry", num_retries, i64)
+                        );
+                        thread::sleep(time::Duration::from_millis(num_retries * 100));
+                    }
+                }
+            };
 
             //UNSAFE: Required to create a Mmap
             let map = unsafe { MmapMut::map_mut(&data) };
