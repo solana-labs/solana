@@ -1,6 +1,6 @@
 use {
     crate::{
-        client::{Client, ClientConfig},
+        client::{Client, RPCCommandConfig},
         sparse_index::{IndexEntry, RegistryIndex},
     },
     flate2::read::GzDecoder,
@@ -129,7 +129,7 @@ impl Publisher {
         let tempdir = tempdir()?;
         archive.unpack(tempdir.path())?;
 
-        let config = ClientConfig::new(client.as_ref());
+        let command_config = RPCCommandConfig::new(client.as_ref());
 
         let lib_name = Self::program_library_name(&tempdir, &meta_data)?;
 
@@ -152,7 +152,7 @@ impl Publisher {
 
         process_deploy_program(
             client.rpc_client.clone(),
-            &config.0,
+            &command_config.0,
             &program_data,
             program_data.len() as u32,
             &program_keypair.pubkey(),
