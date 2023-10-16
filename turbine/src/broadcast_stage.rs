@@ -696,60 +696,60 @@ pub mod test {
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path_auto_delete!();
 
-            // Create the leader scheduler
-            let leader_keypair = Arc::new(Keypair::new());
+        // Create the leader scheduler
+        let leader_keypair = Arc::new(Keypair::new());
 
-            let (entry_sender, entry_receiver) = unbounded();
-            let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
-            let broadcast_service = setup_dummy_broadcast_service(
-                leader_keypair,
-                ledger_path.path(),
-                entry_receiver,
-                retransmit_slots_receiver,
-            );
-            let start_tick_height;
-            let max_tick_height;
-            let ticks_per_slot;
-            let slot;
-            {
-                let bank = broadcast_service.bank;
-                start_tick_height = bank.tick_height();
-                max_tick_height = bank.max_tick_height();
-                ticks_per_slot = bank.ticks_per_slot();
-                slot = bank.slot();
-                let ticks = create_ticks(max_tick_height - start_tick_height, 0, Hash::default());
-                for (i, tick) in ticks.into_iter().enumerate() {
-                    entry_sender
-                        .send((bank.clone(), (tick, i as u64 + 1)))
-                        .expect("Expect successful send to broadcast service");
-                }
+        let (entry_sender, entry_receiver) = unbounded();
+        let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
+        let broadcast_service = setup_dummy_broadcast_service(
+            leader_keypair,
+            ledger_path.path(),
+            entry_receiver,
+            retransmit_slots_receiver,
+        );
+        let start_tick_height;
+        let max_tick_height;
+        let ticks_per_slot;
+        let slot;
+        {
+            let bank = broadcast_service.bank;
+            start_tick_height = bank.tick_height();
+            max_tick_height = bank.max_tick_height();
+            ticks_per_slot = bank.ticks_per_slot();
+            slot = bank.slot();
+            let ticks = create_ticks(max_tick_height - start_tick_height, 0, Hash::default());
+            for (i, tick) in ticks.into_iter().enumerate() {
+                entry_sender
+                    .send((bank.clone(), (tick, i as u64 + 1)))
+                    .expect("Expect successful send to broadcast service");
             }
+        }
 
-            trace!(
-                "[broadcast_ledger] max_tick_height: {}, start_tick_height: {}, ticks_per_slot: {}",
-                max_tick_height,
-                start_tick_height,
-                ticks_per_slot,
-            );
+        trace!(
+            "[broadcast_ledger] max_tick_height: {}, start_tick_height: {}, ticks_per_slot: {}",
+            max_tick_height,
+            start_tick_height,
+            ticks_per_slot,
+        );
 
-            let mut entries = vec![];
-            for _ in 0..10 {
-                entries = broadcast_service
-                    .blockstore
-                    .get_slot_entries(slot, 0)
-                    .expect("Expect entries to be present");
-                if entries.len() >= max_tick_height as usize {
-                    break;
-                }
-                sleep(Duration::from_millis(1000));
+        let mut entries = vec![];
+        for _ in 0..10 {
+            entries = broadcast_service
+                .blockstore
+                .get_slot_entries(slot, 0)
+                .expect("Expect entries to be present");
+            if entries.len() >= max_tick_height as usize {
+                break;
             }
-            assert_eq!(entries.len(), max_tick_height as usize);
+            sleep(Duration::from_millis(1000));
+        }
+        assert_eq!(entries.len(), max_tick_height as usize);
 
-            drop(entry_sender);
-            drop(retransmit_slots_sender);
-            broadcast_service
-                .broadcast_service
-                .join()
-                .expect("Expect successful join of broadcast service");
+        drop(entry_sender);
+        drop(retransmit_slots_sender);
+        broadcast_service
+            .broadcast_service
+            .join()
+            .expect("Expect successful join of broadcast service");
     }
 }

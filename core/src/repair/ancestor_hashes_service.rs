@@ -918,7 +918,10 @@ mod test {
             cluster_info::{ClusterInfo, Node},
             contact_info::{ContactInfo, Protocol},
         },
-        solana_ledger::{blockstore::make_many_slot_entries, get_tmp_ledger_path, get_tmp_ledger_path_auto_delete, shred::Nonce},
+        solana_ledger::{
+            blockstore::make_many_slot_entries, get_tmp_ledger_path,
+            get_tmp_ledger_path_auto_delete, shred::Nonce,
+        },
         solana_runtime::{accounts_background_service::AbsRequestSender, bank_forks::BankForks},
         solana_sdk::{
             hash::Hash,

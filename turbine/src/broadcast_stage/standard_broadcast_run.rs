@@ -502,8 +502,8 @@ mod test {
         solana_entry::entry::create_ticks,
         solana_gossip::cluster_info::{ClusterInfo, Node},
         solana_ledger::{
-            blockstore::Blockstore, genesis_utils::create_genesis_config, get_tmp_ledger_path, get_tmp_ledger_path_auto_delete,
-            shred::max_ticks_per_n_shreds,
+            blockstore::Blockstore, genesis_utils::create_genesis_config, get_tmp_ledger_path,
+            get_tmp_ledger_path_auto_delete, shred::max_ticks_per_n_shreds,
         },
         solana_runtime::bank::Bank,
         solana_sdk::{
@@ -817,7 +817,8 @@ mod test {
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Arc::new(
-            Blockstore::open(ledger_path.path()).expect("Expected to be able to open database ledger"),
+            Blockstore::open(ledger_path.path())
+                .expect("Expected to be able to open database ledger"),
         );
         let mut stats = ProcessShredsStats::default();
 

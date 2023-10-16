@@ -340,8 +340,8 @@ pub(crate) mod tests {
 
         let (transaction_status_sender, transaction_status_receiver) = unbounded();
         let ledger_path = get_tmp_ledger_path_auto_delete!();
-        let blockstore =
-            Blockstore::open(ledger_path.path()).expect("Expected to be able to open database ledger");
+        let blockstore = Blockstore::open(ledger_path.path())
+            .expect("Expected to be able to open database ledger");
         let blockstore = Arc::new(blockstore);
 
         let transaction = build_test_transaction_legacy();
