@@ -299,7 +299,7 @@ impl AccountsDb {
             );
 
         let accounts_to_combine = self.calc_accounts_to_combine(&accounts_per_storage);
-        metrics.number_unpackable_slots += accounts_to_combine.number_unpackable_slots;
+        metrics.count_unpackable_slots += accounts_to_combine.number_unpackable_slots;
 
         // pack the accounts with 1 ref
         let pack = PackedAncientStorage::pack(
@@ -386,7 +386,7 @@ impl AccountsDb {
             store_accounts_timing,
             rewrite_elapsed_us,
             create_and_insert_store_elapsed_us,
-            number_unpackable_slots: 0,
+            count_unpackable_slots: 0,
         });
         write_ancient_accounts
             .shrinks_in_progress
