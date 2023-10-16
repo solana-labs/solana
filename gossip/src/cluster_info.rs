@@ -2184,7 +2184,6 @@ impl ClusterInfo {
         {
             let _st = ScopedTimer::from(&self.stats.process_pull_response);
             self.gossip.process_pull_responses(
-                from,
                 filtered_pulls,
                 filtered_pulls_expired_timeout,
                 failed_inserts,
