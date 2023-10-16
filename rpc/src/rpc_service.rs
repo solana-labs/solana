@@ -37,12 +37,11 @@ use {
     },
     solana_sdk::{
         exit::Exit, genesis_config::DEFAULT_GENESIS_DOWNLOAD_PATH, hash::Hash,
-        native_token::lamports_to_sol, pubkey::Pubkey,
+        native_token::lamports_to_sol,
     },
     solana_send_transaction_service::send_transaction_service::{self, SendTransactionService},
     solana_storage_bigtable::CredentialType,
     std::{
-        collections::HashSet,
         net::SocketAddr,
         path::{Path, PathBuf},
         sync::{
@@ -350,7 +349,6 @@ impl JsonRpcService {
         ledger_path: &Path,
         validator_exit: Arc<RwLock<Exit>>,
         exit: Arc<AtomicBool>,
-        known_validators: Option<HashSet<Pubkey>>,
         override_health_check: Arc<AtomicBool>,
         startup_verification_complete: Arc<AtomicBool>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
@@ -368,8 +366,8 @@ impl JsonRpcService {
         let rpc_niceness_adj = config.rpc_niceness_adj;
 
         let health = Arc::new(RpcHealth::new(
-            cluster_info.clone(),
-            known_validators,
+            Arc::clone(&optimistically_confirmed_bank),
+            Arc::clone(&blockstore),
             config.health_check_slot_distance,
             override_health_check,
             startup_verification_complete,
@@ -586,10 +584,6 @@ mod tests {
     use {
         super::*,
         crate::rpc::{create_validator_exit, tests::new_test_cluster_info},
-        solana_gossip::{
-            crds::GossipRoute,
-            crds_value::{AccountsHashes, CrdsData, CrdsValue},
-        },
         solana_ledger::{
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
             get_tmp_ledger_path,
@@ -643,7 +637,6 @@ mod tests {
             &PathBuf::from("farf"),
             validator_exit,
             exit,
-            None,
             Arc::new(AtomicBool::new(false)),
             Arc::new(AtomicBool::new(true)),
             optimistically_confirmed_bank,
@@ -726,18 +719,25 @@ mod tests {
 
     #[test]
     fn test_is_file_get_path() {
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let bank_forks = create_bank_forks();
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+        let health = RpcHealth::stub(optimistically_confirmed_bank, blockstore);
+
         let bank_forks = create_bank_forks();
         let rrm = RpcRequestMiddleware::new(
-            PathBuf::from("/"),
+            ledger_path.clone(),
             None,
             bank_forks.clone(),
-            RpcHealth::stub(),
+            health.clone(),
         );
         let rrm_with_snapshot_config = RpcRequestMiddleware::new(
-            PathBuf::from("/"),
+            ledger_path.clone(),
             Some(SnapshotConfig::default()),
             bank_forks,
-            RpcHealth::stub(),
+            health,
         );
 
         assert!(rrm.is_file_get_path(DEFAULT_GENESIS_DOWNLOAD_PATH));
@@ -830,14 +830,17 @@ mod tests {
         let runtime = Runtime::new().unwrap();
 
         let ledger_path = get_tmp_ledger_path!();
-        std::fs::create_dir(&ledger_path).unwrap();
-
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let genesis_path = ledger_path.join(DEFAULT_GENESIS_ARCHIVE);
+        let bank_forks = create_bank_forks();
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+
         let rrm = RpcRequestMiddleware::new(
             ledger_path.clone(),
             None,
-            create_bank_forks(),
-            RpcHealth::stub(),
+            bank_forks,
+            RpcHealth::stub(optimistically_confirmed_bank, blockstore),
         );
 
         // File does not exist => request should fail.
@@ -884,107 +887,5 @@ mod tests {
                 panic!("Unexpected RequestMiddlewareAction variant");
             }
         }
-    }
-
-    #[test]
-    fn test_health_check_with_no_known_validators() {
-        let rm = RpcRequestMiddleware::new(
-            PathBuf::from("/"),
-            None,
-            create_bank_forks(),
-            RpcHealth::stub(),
-        );
-        assert_eq!(rm.health_check(), "ok");
-    }
-
-    #[test]
-    fn test_health_check_with_known_validators() {
-        let cluster_info = Arc::new(new_test_cluster_info());
-        let health_check_slot_distance = 123;
-        let override_health_check = Arc::new(AtomicBool::new(false));
-        let startup_verification_complete = Arc::new(AtomicBool::new(true));
-        let known_validators = vec![
-            solana_sdk::pubkey::new_rand(),
-            solana_sdk::pubkey::new_rand(),
-            solana_sdk::pubkey::new_rand(),
-        ];
-
-        let health = Arc::new(RpcHealth::new(
-            cluster_info.clone(),
-            Some(known_validators.clone().into_iter().collect()),
-            health_check_slot_distance,
-            override_health_check.clone(),
-            startup_verification_complete,
-        ));
-
-        let rm = RpcRequestMiddleware::new(PathBuf::from("/"), None, create_bank_forks(), health);
-
-        // No account hashes for this node or any known validators
-        assert_eq!(rm.health_check(), "unknown");
-
-        // No account hashes for any known validators
-        cluster_info.push_accounts_hashes(vec![(1000, Hash::default()), (900, Hash::default())]);
-        cluster_info.flush_push_queue();
-        assert_eq!(rm.health_check(), "unknown");
-
-        // Override health check
-        override_health_check.store(true, Ordering::Relaxed);
-        assert_eq!(rm.health_check(), "ok");
-        override_health_check.store(false, Ordering::Relaxed);
-
-        // This node is ahead of the known validators
-        cluster_info
-            .gossip
-            .crds
-            .write()
-            .unwrap()
-            .insert(
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(AccountsHashes::new(
-                    known_validators[0],
-                    vec![
-                        (1, Hash::default()),
-                        (1001, Hash::default()),
-                        (2, Hash::default()),
-                    ],
-                ))),
-                1,
-                GossipRoute::LocalMessage,
-            )
-            .unwrap();
-        assert_eq!(rm.health_check(), "ok");
-
-        // Node is slightly behind the known validators
-        cluster_info
-            .gossip
-            .crds
-            .write()
-            .unwrap()
-            .insert(
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(AccountsHashes::new(
-                    known_validators[1],
-                    vec![(1000 + health_check_slot_distance - 1, Hash::default())],
-                ))),
-                1,
-                GossipRoute::LocalMessage,
-            )
-            .unwrap();
-        assert_eq!(rm.health_check(), "ok");
-
-        // Node is far behind the known validators
-        cluster_info
-            .gossip
-            .crds
-            .write()
-            .unwrap()
-            .insert(
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(AccountsHashes::new(
-                    known_validators[2],
-                    vec![(1000 + health_check_slot_distance, Hash::default())],
-                ))),
-                1,
-                GossipRoute::LocalMessage,
-            )
-            .unwrap();
-        assert_eq!(rm.health_check(), "behind");
     }
 }
