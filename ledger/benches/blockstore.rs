@@ -8,7 +8,7 @@ use {
     solana_entry::entry::{create_ticks, Entry},
     solana_ledger::{
         blockstore::{entries_to_test_shreds, Blockstore},
-        get_tmp_ledger_path,
+        get_tmp_ledger_path_auto_delete,
     },
     solana_sdk::{clock::Slot, hash::Hash},
     std::path::Path,
@@ -60,7 +60,7 @@ fn bench_write_small(bench: &mut Bencher) {
     let ledger_path = get_tmp_ledger_path_auto_delete!();
     let num_entries = 32 * 1024;
     let entries = create_ticks(num_entries, 0, Hash::default());
-    bench_write_shreds(bench, entries, &ledger_path);
+    bench_write_shreds(bench, entries, ledger_path.path());
 }
 
 // Write big shreds to the ledger
@@ -70,7 +70,7 @@ fn bench_write_big(bench: &mut Bencher) {
     let ledger_path = get_tmp_ledger_path_auto_delete!();
     let num_entries = 32 * 1024;
     let entries = create_ticks(num_entries, 0, Hash::default());
-    bench_write_shreds(bench, entries, &ledger_path);
+    bench_write_shreds(bench, entries, ledger_path.path());
 }
 
 #[bench]
