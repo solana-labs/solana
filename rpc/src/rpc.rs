@@ -4967,7 +4967,8 @@ pub mod tests {
                     .bank_forks
                     .write()
                     .unwrap()
-                    .insert_without_scheduler(new_bank);
+                    .insert(new_bank)
+                    .clone_without_scheduler();
                 let parent = if i > 0 { roots[i - 1] } else { 0 };
                 fill_blockstore_slot_with_ticks(
                     &self.blockstore,
@@ -5005,15 +5006,12 @@ pub mod tests {
 
         fn advance_bank_to_confirmed_slot(&self, slot: Slot) -> Arc<Bank> {
             let parent_bank = self.working_bank();
-            let bank =
-                self.bank_forks
-                    .write()
-                    .unwrap()
-                    .insert_without_scheduler(Bank::new_from_parent(
-                        parent_bank,
-                        &Pubkey::default(),
-                        slot,
-                    ));
+            let bank = self
+                .bank_forks
+                .write()
+                .unwrap()
+                .insert(Bank::new_from_parent(parent_bank, &Pubkey::default(), slot))
+                .clone_without_scheduler();
 
             let new_block_commitment = BlockCommitmentCache::new(
                 HashMap::new(),
