@@ -1,3 +1,6 @@
+//! Currently, there's only one auxiliary type called BankWithScheduler.. This file will be
+//! populated by later PRs to align with the filename.
+
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::qualifiers;
 use {
