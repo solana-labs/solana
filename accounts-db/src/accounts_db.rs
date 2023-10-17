@@ -4773,6 +4773,8 @@ impl AccountsDb {
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
 
+        let shrink_candidates_count = shrink_candidates_slots.len();
+
         let (shrink_slots, shrink_slots_next_batch) = {
             if let AccountShrinkThreshold::TotalSpace { shrink_ratio } = self.shrink_ratio {
                 let (shrink_slots, shrink_slots_next_batch) = self
@@ -4813,7 +4815,6 @@ impl AccountsDb {
 
         let mut measure_shrink_all_candidates = Measure::start("shrink_all_candidate_slots");
         let num_candidates = shrink_slots.len();
-        let shrink_candidates_count = shrink_slots.len();
         self.thread_pool_clean.install(|| {
             shrink_slots
                 .into_par_iter()
@@ -4845,6 +4846,7 @@ impl AccountsDb {
                 i64
             ),
             ("shrink_candidates_count", shrink_candidates_count, i64),
+            ("shrink_candidates_selected_count", num_candidates, i64),
             ("shrink_candidates_pending_count", pended_counts, i64),
         );
 
