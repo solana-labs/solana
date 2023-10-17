@@ -5028,7 +5028,6 @@ fn test_boot_from_local_state() {
 #[serial]
 #[allow(unused_attributes)]
 fn test_duplicate_shreds_switch_failure() {
-    solana_logger::setup_with("info,solana_metrics=off,solana_ledger=off");
     fn wait_for_duplicate_fork_frozen(ledger_path: &Path, dup_slot: Slot) -> Hash {
         // Ensure all the slots <= dup_slot are also full so we know we can replay up to dup_slot
         // on restart
@@ -5110,6 +5109,7 @@ fn test_duplicate_shreds_switch_failure() {
         }
     }
 
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
     let validator_keypairs = [
         "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
         "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",

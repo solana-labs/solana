@@ -6514,7 +6514,7 @@ pub(crate) mod tests {
         // 4 should be the heaviest slot, but should not be votable
         // because of lockout. 5 is no longer valid due to it being a duplicate, however we still
         // reset onto 5.
-        let (vote_fork, reset_fork, _) = run_compute_and_select_forks(
+        let (vote_fork, reset_fork, heaviest_fork_failures) = run_compute_and_select_forks(
             &bank_forks,
             &mut progress,
             &mut tower,
@@ -6524,6 +6524,13 @@ pub(crate) mod tests {
         );
         assert!(vote_fork.is_none());
         assert_eq!(reset_fork, Some(5));
+        assert_eq!(
+            heaviest_fork_failures,
+            vec![
+                HeaviestForkFailures::FailedSwitchThreshold(4, 0, 10000),
+                HeaviestForkFailures::LockedOut(4)
+            ]
+        );
 
         // Continue building on 5
         let forks = tr(5) / (tr(6) / (tr(7) / (tr(8) / (tr(9)))) / tr(10));
@@ -6534,7 +6541,7 @@ pub(crate) mod tests {
         // 4 is still the heaviest slot, but not votable beecause of lockout.
         // 9 is the deepest slot from our last voted fork (5), so it is what we should
         // reset to.
-        let (vote_fork, reset_fork) = run_compute_and_select_forks(
+        let (vote_fork, reset_fork, heaviest_fork_failures) = run_compute_and_select_forks(
             &bank_forks,
             &mut progress,
             &mut tower,
@@ -6544,6 +6551,13 @@ pub(crate) mod tests {
         );
         assert!(vote_fork.is_none());
         assert_eq!(reset_fork, Some(9));
+        assert_eq!(
+            heaviest_fork_failures,
+            vec![
+                HeaviestForkFailures::FailedSwitchThreshold(4, 0, 10000),
+                HeaviestForkFailures::LockedOut(4)
+            ]
+        );
 
         // If slot 5 is marked as confirmed, it becomes the heaviest bank on same slot again
         let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
@@ -6574,7 +6588,7 @@ pub(crate) mod tests {
 
         // We should still reset to slot 9 as it's the heaviest on the now valid
         // fork.
-        let (vote_fork, reset_fork, _) = run_compute_and_select_forks(
+        let (vote_fork, reset_fork, heaviest_fork_failures) = run_compute_and_select_forks(
             &bank_forks,
             &mut progress,
             &mut tower,
@@ -6584,6 +6598,13 @@ pub(crate) mod tests {
         );
         assert!(vote_fork.is_none());
         assert_eq!(reset_fork.unwrap(), 9);
+        assert_eq!(
+            heaviest_fork_failures,
+            vec![
+                HeaviestForkFailures::FailedSwitchThreshold(4, 0, 10000),
+                HeaviestForkFailures::LockedOut(4)
+            ]
+        );
 
         // Resetting our forks back to how it was should allow us to reset to our
         // last vote which was previously marked as invalid and now duplicate confirmed
@@ -6592,7 +6613,7 @@ pub(crate) mod tests {
             .heaviest_subtree_fork_choice
             .split_off(&(6, bank6_hash));
         // Should now pick 5 as the heaviest fork from last vote again.
-        let (vote_fork, reset_fork) = run_compute_and_select_forks(
+        let (vote_fork, reset_fork, heaviest_fork_failures) = run_compute_and_select_forks(
             &bank_forks,
             &mut progress,
             &mut tower,
@@ -6602,6 +6623,13 @@ pub(crate) mod tests {
         );
         assert!(vote_fork.is_none());
         assert_eq!(reset_fork.unwrap(), 5);
+        assert_eq!(
+            heaviest_fork_failures,
+            vec![
+                HeaviestForkFailures::FailedSwitchThreshold(4, 0, 10000),
+                HeaviestForkFailures::LockedOut(4)
+            ]
+        );
     }
 
     #[test]

@@ -16,7 +16,7 @@ use {
     },
     std::{
         borrow::Borrow,
-        cmp::{max, Ordering},
+        cmp::Ordering,
         collections::{
             btree_set::Iter, hash_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet, VecDeque,
         },
@@ -458,7 +458,7 @@ impl HeaviestSubtreeForkChoice {
             .or_insert(ForkInfo {
                 stake_voted_at: 0,
                 stake_voted_subtree: 0,
-                height: 0,
+                height: 1,
                 // The `best_slot` and `deepest_slot` of a leaf is itself
                 best_slot: slot_hash_key,
                 deepest_slot: slot_hash_key,
@@ -598,7 +598,6 @@ impl HeaviestSubtreeForkChoice {
         // Remove node + all children and add to new tree
         let mut split_tree_fork_infos = HashMap::new();
         let mut to_visit = vec![*slot_hash_key];
-        let mut leaves = vec![];
         while let Some(current_node) = to_visit.pop() {
             let current_fork_info = self
                 .fork_infos
@@ -606,9 +605,6 @@ impl HeaviestSubtreeForkChoice {
                 .expect("Node must exist in tree");
 
             to_visit.extend(current_fork_info.children.iter());
-            if current_fork_info.children.is_empty() {
-                leaves.push(current_node);
-            }
             split_tree_fork_infos.insert(current_node, current_fork_info);
         }
 
@@ -631,28 +627,12 @@ impl HeaviestSubtreeForkChoice {
             .retain(|_, node| self.fork_infos.contains_key(node));
 
         // Create a new tree from the split
-        let mut new_tree = HeaviestSubtreeForkChoice {
+        HeaviestSubtreeForkChoice {
             tree_root: *slot_hash_key,
             fork_infos: split_tree_fork_infos,
             latest_votes: split_tree_latest_votes,
             last_root_time: Instant::now(),
-        };
-
-        // Aggregate deepest info in the new tree
-        if leaves.len() == 1 && leaves[0] == *slot_hash_key {
-            // If we split off just a leaf, update the height to 0 in the new tree
-            new_tree
-                .fork_infos
-                .get_mut(slot_hash_key)
-                .expect("split off key must exist")
-                .height = 0;
         }
-        let mut update_operations: UpdateOperations = BTreeMap::new();
-        for slot_hash_key in leaves {
-            new_tree.insert_aggregate_operations(&mut update_operations, slot_hash_key);
-        }
-        new_tree.process_update_operations(update_operations);
-        new_tree
     }
 
     #[cfg(test)]
@@ -746,7 +726,7 @@ impl HeaviestSubtreeForkChoice {
     /// To be called when `slot_hash_key` has been added to `self.fork_infos`, before any
     /// aggregate update operations have taken place.
     ///
-    /// Will update `best_slot` and `deepest_slot` to ancestors.
+    /// Will propagate update `best_slot` and `deepest_slot` to ancestors.
     fn propagate_new_leaf(
         &mut self,
         slot_hash_key: &SlotHashKey,
@@ -774,7 +754,7 @@ impl HeaviestSubtreeForkChoice {
         // Propagate the deepest slot up the tree
         let mut ancestor = Some(*parent_slot_hash_key);
         let mut current_child = *slot_hash_key;
-        let mut current_height = 0;
+        let mut current_height = 1;
         loop {
             if ancestor.is_none() {
                 break;
@@ -863,7 +843,7 @@ impl HeaviestSubtreeForkChoice {
 
     fn aggregate_slot(&mut self, slot_hash_key: SlotHashKey) {
         let mut stake_voted_subtree;
-        let mut height = 0;
+        let mut deepest_child_height = 0;
         let mut best_slot_hash_key = slot_hash_key;
         let mut deepest_slot_hash_key = slot_hash_key;
         let mut is_duplicate_confirmed = false;
@@ -871,7 +851,6 @@ impl HeaviestSubtreeForkChoice {
             stake_voted_subtree = fork_info.stake_voted_at;
             let mut best_child_stake_voted_subtree = 0;
             let mut best_child_slot_key = slot_hash_key;
-            let mut deepest_child_height = 0;
             let mut deepest_child_stake_voted_subtree = 0;
             let mut deepest_child_slot_key = slot_hash_key;
             for child_key in &fork_info.children {
@@ -903,9 +882,6 @@ impl HeaviestSubtreeForkChoice {
 
                 // See comment above for why this check is outside of the `is_candidate` check.
                 stake_voted_subtree += child_stake_voted_subtree;
-
-                // Tree height is the max of children height + 1
-                height = max(height, child_height + 1);
 
                 // Note: If there's no valid children, then the best slot should default to the
                 // input `slot` itself.
@@ -957,7 +933,7 @@ impl HeaviestSubtreeForkChoice {
             fork_info.set_duplicate_confirmed();
         }
         fork_info.stake_voted_subtree = stake_voted_subtree;
-        fork_info.height = height;
+        fork_info.height = deepest_child_height + 1;
         fork_info.best_slot = best_slot_hash_key;
         fork_info.deepest_slot = deepest_slot_hash_key;
     }
@@ -1166,10 +1142,39 @@ impl HeaviestSubtreeForkChoice {
                         // confirmed but not observed because there is no block containing the
                         // required votes.
                         //
-                        // In the case that this fork will never become duplicate confirmed,
-                        // there will either be another version of the duplicate ancestor that will
-                        // be duplicate confirmed, or a non duplicate fork will be created to allow
-                        // validators who received the duplicate block to switch.
+                        // Scenario 1:
+                        // Slot 0 - Slot 1 (90%)
+                        //        |
+                        //        - Slot 1'
+                        //        |
+                        //        - Slot 2 (10%)
+                        //
+                        // Imagine that 90% of validators voted for Slot 1, but because of the existence
+                        // of Slot 1', Slot 1 is marked as invalid in fork choice. It is impossible to reach
+                        // the required switch threshold for these validators to switch off of Slot 1 to Slot 2.
+                        // In this case it is important for someone to build a Slot 3 off of Slot 1 that contains
+                        // the votes for Slot 1. At this point they will see that the fork off of Slot 1 is duplicate
+                        // confirmed, and the rest of the network can repair Slot 1, and mark it is a valid candidate
+                        // allowing fork choice to converge.
+                        //
+                        // This will only occur after Slot 2 has been created, in order to resolve the following
+                        // scenario:
+                        //
+                        // Scenario 2:
+                        // Slot 0 - Slot 1 (30%)
+                        //        |
+                        //        - Slot 1' (30%)
+                        //
+                        // In this scenario only 60% of the network has voted before the duplicate proof for Slot 1 and 1'
+                        // was viewed. Neither version of the slot will reach the duplicate confirmed threshold, so it is
+                        // critical that a new fork Slot 2 from Slot 0 is created to allow the the validators on Slot 1 and
+                        // Slot 1' to switch. Since the `best_slot` is an ancestor of the last vote (Slot 0 is ancestor of last
+                        // vote Slot 1 or Slot 1'), we will trigger `SwitchForkDecision::FailedSwitchDuplicateRollback`, which
+                        // will create an alternate fork off of Slot 0. Once this alternate fork is created, the `best_slot`
+                        // will be Slot 2, at which point we will be in Scenario 1 and continue building off of Slot 1 or Slot 1'.
+                        //
+                        // For more details see the case for
+                        // `SwitchForkDecision::FailedSwitchDuplicateRollback` in `ReplayStage::select_vote_and_reset_forks`.
                         self.deepest_slot(&last_voted_slot_hash)
                     }
                     None => {
@@ -4052,19 +4057,19 @@ mod test {
         let mut heaviest_subtree_fork_choice = setup_complicated_forks();
         assert_eq!(23, heaviest_subtree_fork_choice.deepest_overall_slot().0);
         assert_eq!(
-            8,
+            9,
             heaviest_subtree_fork_choice
                 .height(&(0, Hash::default()))
                 .unwrap()
         );
         assert_eq!(
-            2,
+            3,
             heaviest_subtree_fork_choice
                 .height(&(9, Hash::default()))
                 .unwrap()
         );
         assert_eq!(
-            6,
+            7,
             heaviest_subtree_fork_choice
                 .height(&(12, Hash::default()))
                 .unwrap()
@@ -4074,19 +4079,19 @@ mod test {
         let tree = heaviest_subtree_fork_choice.split_off(&(13, Hash::default()));
         assert_eq!(34, heaviest_subtree_fork_choice.deepest_overall_slot().0);
         assert_eq!(
-            4,
+            5,
             heaviest_subtree_fork_choice
                 .height(&(0, Hash::default()))
                 .unwrap()
         );
         assert_eq!(
-            2,
+            3,
             heaviest_subtree_fork_choice
                 .height(&(9, Hash::default()))
                 .unwrap()
         );
         assert_eq!(
-            0,
+            1,
             heaviest_subtree_fork_choice
                 .height(&(12, Hash::default()))
                 .unwrap()
@@ -4094,9 +4099,9 @@ mod test {
 
         // New tree should have updated heights but still think 23 is the heaviest
         assert_eq!(23, tree.deepest_overall_slot().0);
-        assert_eq!(5, tree.height(&(13, Hash::default())).unwrap());
-        assert_eq!(1, tree.height(&(18, Hash::default())).unwrap());
-        assert_eq!(0, tree.height(&(25, Hash::default())).unwrap());
+        assert_eq!(6, tree.height(&(13, Hash::default())).unwrap());
+        assert_eq!(2, tree.height(&(18, Hash::default())).unwrap());
+        assert_eq!(1, tree.height(&(25, Hash::default())).unwrap());
     }
 
     #[test]
