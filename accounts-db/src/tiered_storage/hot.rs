@@ -223,11 +223,18 @@ pub mod tests {
         super::*,
         crate::tiered_storage::{
             byte_block::ByteBlockWriter,
-            footer::AccountBlockFormat,
+            file::TieredStorageFile,
+            footer::{
+                AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat, TieredStorageFooter,
+                FOOTER_SIZE,
+            },
+            hot::{HotAccountMeta, HotStorageReader},
+            index::AccountIndexFormat,
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
         },
-        ::solana_sdk::{hash::Hash, stake_history::Epoch},
+        ::solana_sdk::{hash::Hash, pubkey::Pubkey, stake_history::Epoch},
         memoffset::offset_of,
+        tempfile::TempDir,
     };
 
     #[test]
@@ -353,5 +360,42 @@ pub mod tests {
             *(meta.account_hash(account_block).unwrap()),
             optional_fields.account_hash.unwrap()
         );
+    }
+
+    #[test]
+    fn test_hot_storage_footer() {
+        // Generate a new temp path that is guaranteed to NOT already have a file.
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("test_hot_storage_footer");
+        let expected_footer = TieredStorageFooter {
+            account_meta_format: AccountMetaFormat::Hot,
+            owners_block_format: OwnersBlockFormat::LocalIndex,
+            account_index_format: AccountIndexFormat::AddressAndOffset,
+            account_block_format: AccountBlockFormat::AlignedRaw,
+            account_entry_count: 300,
+            account_meta_entry_size: 16,
+            account_block_size: 4096,
+            owner_count: 250,
+            owner_entry_size: 32,
+            account_index_offset: 1069600,
+            owners_offset: 1081200,
+            hash: Hash::new_unique(),
+            min_account_address: Pubkey::default(),
+            max_account_address: Pubkey::new_unique(),
+            footer_size: FOOTER_SIZE as u64,
+            format_version: 1,
+        };
+
+        {
+            let file = TieredStorageFile::new_writable(&path).unwrap();
+            expected_footer.write_footer_block(&file).unwrap();
+        }
+
+        // Reopen the same storage, and expect the persisted footer is
+        // the same as what we have written.
+        {
+            let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
+            assert_eq!(expected_footer, *hot_storage.footer());
+        }
     }
 }
