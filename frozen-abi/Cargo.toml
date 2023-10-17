@@ -30,8 +30,8 @@ memmap2 = { workspace = true }
 subtle = { workspace = true }
 
 [target.'cfg(not(target_os = "solana"))'.dev-dependencies]
-solana-logger = { workspace = true }
 bitflags = { workspace = true }
+solana-logger = { workspace = true }
 
 [build-dependencies]
 rustc_version = { workspace = true }
