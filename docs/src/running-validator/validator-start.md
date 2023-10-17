@@ -430,6 +430,7 @@ which starts the solana validator process uses "exec" to do so (example: "exec
 solana-validator ..."); otherwise, when logrotate sends its signal to the
 validator, the enclosing script will die and take the validator process with
 it.
+<<<<<<< HEAD
 
 ### Using a ramdisk with spill-over into swap for the accounts database to reduce SSD wear
 
@@ -479,3 +480,5 @@ by the key field. Currently supports the following parameter values:
 - `program-id`: each account indexed by its owning program; used by [getProgramAccounts](../api/http#getprogramaccounts)
 - `spl-token-mint`: each SPL token account indexed by its token Mint; used by [getTokenAccountsByDelegate](../api/http#gettokenaccountsbydelegate), and [getTokenLargestAccounts](../api/http#gettokenlargestaccounts)
 - `spl-token-owner`: each SPL token account indexed by the token-owner address; used by [getTokenAccountsByOwner](../api/http#gettokenaccountsbyowner), and [getProgramAccounts](../api/http#getprogramaccounts) requests that include an spl-token-owner filter.
+=======
+>>>>>>> 2c6cc4dd7d (docs: move rpc info to rpc docs (#33723))
