@@ -575,7 +575,6 @@ fn network_run_pull(
                         .gossip
                         .filter_pull_responses(&timeouts, rsp, now, &mut stats);
                     node.gossip.process_pull_responses(
-                        &from,
                         vers,
                         vers_expired_timeout,
                         failed_inserts,

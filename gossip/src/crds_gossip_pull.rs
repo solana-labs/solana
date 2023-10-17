@@ -360,7 +360,6 @@ impl CrdsGossipPull {
     pub(crate) fn process_pull_responses(
         &self,
         crds: &RwLock<Crds>,
-        from: &Pubkey,
         responses: Vec<CrdsValue>,
         responses_expired_timeout: Vec<CrdsValue>,
         failed_inserts: Vec<Hash>,
@@ -382,7 +381,6 @@ impl CrdsGossipPull {
         }
         stats.success += num_inserts;
         self.num_pulls.fetch_add(num_inserts, Ordering::Relaxed);
-        owners.insert(*from);
         for owner in owners {
             crds.update_record_timestamp(&owner, now);
         }
@@ -543,7 +541,6 @@ impl CrdsGossipPull {
     fn process_pull_response(
         &self,
         crds: &RwLock<Crds>,
-        from: &Pubkey,
         timeouts: &CrdsTimeouts,
         response: Vec<CrdsValue>,
         now: u64,
@@ -553,7 +550,6 @@ impl CrdsGossipPull {
             self.filter_pull_responses(crds, timeouts, response, now, &mut stats);
         self.process_pull_responses(
             crds,
-            from,
             versioned,
             versioned_expired_timeout,
             failed_inserts,
@@ -1196,7 +1192,6 @@ pub(crate) mod tests {
             let failed = node
                 .process_pull_response(
                     &node_crds,
-                    &node_pubkey,
                     &node.make_timeouts(node_pubkey, &HashMap::new(), Duration::default()),
                     rsp.into_iter().flatten().collect(),
                     1,
@@ -1375,14 +1370,8 @@ pub(crate) mod tests {
         );
         // inserting a fresh value should be fine.
         assert_eq!(
-            node.process_pull_response(
-                &node_crds,
-                &peer_pubkey,
-                &timeouts,
-                vec![peer_entry.clone()],
-                1,
-            )
-            .0,
+            node.process_pull_response(&node_crds, &timeouts, vec![peer_entry.clone()], 1,)
+                .0,
             0
         );
 
@@ -1394,7 +1383,6 @@ pub(crate) mod tests {
         assert_eq!(
             node.process_pull_response(
                 &node_crds,
-                &peer_pubkey,
                 &timeouts,
                 vec![peer_entry.clone(), unstaked_peer_entry],
                 node.crds_timeout + 100,
@@ -1408,7 +1396,6 @@ pub(crate) mod tests {
         assert_eq!(
             node.process_pull_response(
                 &node_crds,
-                &peer_pubkey,
                 &timeouts,
                 vec![peer_entry],
                 node.crds_timeout + 1,
@@ -1425,7 +1412,6 @@ pub(crate) mod tests {
         assert_eq!(
             node.process_pull_response(
                 &node_crds,
-                &peer_pubkey,
                 &timeouts,
                 vec![peer_vote.clone()],
                 node.crds_timeout + 1,
@@ -1439,7 +1425,6 @@ pub(crate) mod tests {
         assert_eq!(
             node.process_pull_response(
                 &node_crds,
-                &peer_pubkey,
                 &timeouts,
                 vec![peer_vote],
                 node.crds_timeout + 2,
