@@ -4,7 +4,7 @@ set -e
 cd "$(dirname "$0")"/../..
 
 deployMethod="$1"
-entrypointIp="$2"
+entrypointIp="$2" # gossip host value we pass into validators
 clientToRun="$3"
 if [[ -n $4 ]]; then
   export RUST_LOG="$4"

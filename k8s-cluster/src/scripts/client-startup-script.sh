@@ -1,7 +1,29 @@
 #!/bin/bash
 set -e
 
-/home/solana/k8s-cluster-scripts/decode-accounts.sh -t "client"
+SECRET_FILE=(
+  "/home/solana/${validator_type}-accounts/faucet.base64"
+)
+DECODED_FILE=(
+  "/home/solana/faucet.json"
+)
+
+# Check if the secret file exists
+if [ -f "$SECRET_FILE" ]; then
+    echo "Secret file found at $SECRET_FILE"
+
+    # Read and decode the base64-encoded secret
+    SECRET_CONTENT=$(base64 -d < "$SECRET_FILE")
+
+    # Save the decoded secret content to a file
+    echo "$SECRET_CONTENT" > "$DECODED_FILE"
+    echo "Decoded secret content saved to $DECODED_FILE"
+else
+    echo "Secret file not found at $SECRET_FILE"
+fi
+
+mkdir -p /home/solana/logs
+
 
 clientToRun="$1"
 benchTpsExtraArgs="$2"

@@ -8,6 +8,7 @@ use {
                 ConfigMap, ConfigMapVolumeSource, Container, EnvVar, EnvVarSource, Namespace,
                 ObjectFieldSelector, PodSecurityContext, PodSpec, PodTemplateSpec, Secret,
                 SecretVolumeSource, Service, ServicePort, ServiceSpec, Volume, VolumeMount,
+                PersistentVolumeClaim, PersistentVolumeClaimSpec
             },
         },
         apimachinery::pkg::apis::meta::v1::LabelSelector,
@@ -18,6 +19,7 @@ use {
         Client,
     },
     log::*,
+    serde_json,
     solana_sdk::hash::Hash,
     std::{collections::BTreeMap, error::Error, fs::File, io::Read},
 };
@@ -576,12 +578,36 @@ impl<'a> Kubernetes<'a> {
         Ok(available_validators >= desired_validators)
     }
 
-    pub async fn create_validator_replicas_set(
+    // pub fn create_client_pvc(&self) -> Result<PersistentVolumeClaim, Box<dyn Error>> {
+    //     let pvc = PersistentVolumeClaim {
+    //         metadata: ObjectMeta {
+    //             name: Some("client-pvc".to_string()),
+    //             namespace: Some(self.namespace.to_string()),
+    //             ..Default::default()
+    //         },
+    //         spec: Some(PersistentVolumeClaimSpec {
+    //             access_modes: Some(vec!["ReadOnlyMany".to_string()]),
+    //             resources: Some(k8s_openapi::api::core::v1::ResourceRequirements {
+    //                 requests: {
+    //                     let mut storage_map = std::collections::BTreeMap::new();
+    //                     storage_map.insert("storage".to_string(), serde_json::json!("1Gi"));
+    //                     Some(storage_map)
+    //                 },
+    //                 ..Default::default()
+    //             }),
+    //             ..Default::default()
+    //         }),
+    //         ..Default::default()
+    //     };
+    //     Ok(pvc)
+    // }
+
+    pub async fn create_validator_replica_set(
         &mut self,
         container_name: &str,
-        validator_index: i32,
+        client_index: i32,
         image_name: &str,
-        num_validators: i32,
+        num_clients: i32,
         config_map_name: Option<String>,
         secret_name: Option<String>,
         label_selector: &BTreeMap<String, String>,
@@ -622,7 +648,7 @@ impl<'a> Kubernetes<'a> {
         ];
 
         let accounts_volume = Volume {
-            name: format!("validator-accounts-volume-{}", validator_index),
+            name: format!("client-accounts-volume-{}", client_index),
             secret: Some(SecretVolumeSource {
                 secret_name,
                 ..Default::default()
@@ -631,8 +657,8 @@ impl<'a> Kubernetes<'a> {
         };
 
         let accounts_volume_mount = VolumeMount {
-            name: format!("validator-accounts-volume-{}", validator_index),
-            mount_path: "/home/solana/validator-accounts".to_string(),
+            name: format!("client-accounts-volume-{}", client_index),
+            mount_path: "/home/solana/client-accounts".to_string(),
             ..Default::default()
         };
 
@@ -644,12 +670,14 @@ impl<'a> Kubernetes<'a> {
             debug!("validator command: {}", c);
         }
 
+
+
         self.create_replicas_set(
-            format!("validator-{}", validator_index).as_str(),
+            format!("validator-{}", client_index).as_str(),
             label_selector,
             container_name,
             image_name,
-            num_validators,
+            num_clients,
             env_vars,
             &command,
             config_map_name,
@@ -659,88 +687,88 @@ impl<'a> Kubernetes<'a> {
         .await
     }
 
-    pub async fn create_client_replicas_set(
-        &mut self,
-        container_name: &str,
-        validator_index: i32,
-        image_name: &str,
-        num_validators: i32,
-        config_map_name: Option<String>,
-        secret_name: Option<String>,
-        label_selector: &BTreeMap<String, String>,
-    ) -> Result<ReplicaSet, Box<dyn Error>> {
-        let env_vars = vec![
-            EnvVar {
-                name: "NAMESPACE".to_string(),
-                value_from: Some(EnvVarSource {
-                    field_ref: Some(ObjectFieldSelector {
-                        field_path: "metadata.namespace".to_string(),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            },
-            EnvVar {
-                name: "BOOTSTRAP_RPC_ADDRESS".to_string(),
-                value: Some(
-                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8899".to_string(),
-                ),
-                ..Default::default()
-            },
-            EnvVar {
-                name: "BOOTSTRAP_GOSSIP_ADDRESS".to_string(),
-                value: Some(
-                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8001".to_string(),
-                ),
-                ..Default::default()
-            },
-            EnvVar {
-                name: "BOOTSTRAP_FAUCET_ADDRESS".to_string(),
-                value: Some(
-                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:9900".to_string(),
-                ),
-                ..Default::default()
-            },
-        ];
+    // pub async fn create_client_replica_set(
+    //     &mut self,
+    //     container_name: &str,
+    //     validator_index: i32,
+    //     image_name: &str,
+    //     num_validators: i32,
+    //     secret_name: Option<String>,
+    //     label_selector: &BTreeMap<String, String>,
+    // ) -> Result<ReplicaSet, Box<dyn Error>> {
+    //     let env_vars = vec![
+    //         EnvVar {
+    //             name: "NAMESPACE".to_string(),
+    //             value_from: Some(EnvVarSource {
+    //                 field_ref: Some(ObjectFieldSelector {
+    //                     field_path: "metadata.namespace".to_string(),
+    //                     ..Default::default()
+    //                 }),
+    //                 ..Default::default()
+    //             }),
+    //             ..Default::default()
+    //         },
+    //         EnvVar {
+    //             name: "BOOTSTRAP_RPC_ADDRESS".to_string(),
+    //             value: Some(
+    //                 "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8899".to_string(),
+    //             ),
+    //             ..Default::default()
+    //         },
+    //         EnvVar {
+    //             name: "BOOTSTRAP_GOSSIP_ADDRESS".to_string(),
+    //             value: Some(
+    //                 "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8001".to_string(),
+    //             ),
+    //             ..Default::default()
+    //         },
+    //         EnvVar {
+    //             name: "BOOTSTRAP_FAUCET_ADDRESS".to_string(),
+    //             value: Some(
+    //                 "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:9900".to_string(),
+    //             ),
+    //             ..Default::default()
+    //         },
+    //     ];
 
-        let accounts_volume = Volume {
-            name: format!("client-accounts-volume-{}", validator_index),
-            secret: Some(SecretVolumeSource {
-                secret_name,
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
+    //     let accounts_volume = Volume {
+    //         name: format!("client-accounts-volume-{}", validator_index),
+    //         secret: Some(SecretVolumeSource {
+    //             secret_name,
+    //             ..Default::default()
+    //         }),
+    //         ..Default::default()
+    //     };
 
-        let accounts_volume_mount = VolumeMount {
-            name: format!("client-accounts-volume-{}", validator_index),
-            mount_path: "/home/solana/client-accounts".to_string(),
-            ..Default::default()
-        };
+    //     let accounts_volume_mount = VolumeMount {
+    //         name: format!("client-accounts-volume-{}", validator_index),
+    //         mount_path: "/home/solana/client-accounts".to_string(),
+    //         ..Default::default()
+    //     };
 
-        let mut command =
-            vec!["/home/solana/k8s-cluster-scripts/client-startup-script.sh".to_string()];
-        command.extend(self.generate_validator_command_flags());
+    //     let mut command =
+    //         vec!["/home/solana/k8s-cluster-scripts/client-startup-script.sh".to_string()];
+    //     command.extend(self.generate_validator_command_flags());
 
-        for c in command.iter() {
-            debug!("validator command: {}", c);
-        }
+    //     for c in command.iter() {
+    //         debug!("validator command: {}", c);
+    //     }
 
-        self.create_replicas_set(
-            format!("validator-{}", validator_index).as_str(),
-            label_selector,
-            container_name,
-            image_name,
-            num_validators,
-            env_vars,
-            &command,
-            config_map_name,
-            accounts_volume,
-            accounts_volume_mount,
-        )
-        .await
-    }
+
+
+    //     self.create_replicas_set(
+    //         format!("client-{}", validator_index).as_str(),
+    //         label_selector,
+    //         container_name,
+    //         image_name,
+    //         num_validators,
+    //         env_vars,
+    //         &command,
+    //         accounts_volume,
+    //         accounts_volume_mount,
+    //     )
+    //     .await
+    // }
 
     pub fn create_validator_service(
         &self,
