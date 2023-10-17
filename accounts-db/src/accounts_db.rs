@@ -4325,16 +4325,12 @@ impl AccountsDb {
         }
         impl Eq for StoreUsageInfo {}
 
-        let mut measure = Measure::start("select_top_sparse_storage_entries-ms");
-
         // create a min-heap to store the StorageUsageInfo by alive ratio
         let mut store_usage: std::collections::BinaryHeap<StoreUsageInfo> =
             std::collections::BinaryHeap::new();
         store_usage.reserve(shrink_slots.len());
         let mut total_alive_bytes: u64 = 0;
-        let mut candidates_count: usize = 0;
         let mut total_bytes: u64 = 0;
-        let mut total_candidate_stores: usize = 0;
         for slot in shrink_slots {
             if oldest_non_ancient_slot
                 .map(|oldest_non_ancient_slot| slot < &oldest_non_ancient_slot)
@@ -4346,7 +4342,6 @@ impl AccountsDb {
             let Some(store) = self.storage.get_slot_storage_entry(*slot) else {
                 continue;
             };
-            candidates_count += 1;
             total_alive_bytes += Self::page_align(store.alive_bytes() as u64);
             total_bytes += store.capacity();
             let alive_ratio =
@@ -4356,7 +4351,6 @@ impl AccountsDb {
                 alive_ratio,
                 store: store.clone(),
             });
-            total_candidate_stores += 1;
         }
 
         // Pop from the heap by alive_ratio from small to large, which are the most sparse and see when we can stop
@@ -4389,19 +4383,6 @@ impl AccountsDb {
                 shrink_slots.insert(usage.slot, store);
             }
         }
-        measure.stop();
-        inc_new_counter_debug!(
-            "shrink_select_top_sparse_storage_entries-ms",
-            measure.as_ms() as usize
-        );
-        inc_new_counter_debug!(
-            "shrink_select_top_sparse_storage_entries-seeds",
-            candidates_count
-        );
-        inc_new_counter_debug!(
-            "shrink_total_preliminary_candidate_stores",
-            total_candidate_stores
-        );
 
         (shrink_slots, shrink_slots_next_batch)
     }
