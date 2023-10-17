@@ -4315,7 +4315,7 @@ impl AccountsDb {
         }
         impl PartialOrd for StoreUsageInfo {
             fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-                other.alive_ratio.partial_cmp(&self.alive_ratio)
+                Some(self.cmp(other))
             }
         }
         impl PartialEq for StoreUsageInfo {
