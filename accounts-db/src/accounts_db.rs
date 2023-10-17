@@ -4787,6 +4787,8 @@ impl AccountsDb {
     pub fn shrink_candidate_slots(&self, epoch_schedule: &EpochSchedule) -> usize {
         let oldest_non_ancient_slot = self.get_oldest_non_ancient_slot(epoch_schedule);
 
+        let mut measure_select_candidates = Measure::start("select_shrink_candidates");
+
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
 
@@ -4824,28 +4826,22 @@ impl AccountsDb {
         {
             return 0;
         }
+        measure_select_candidates.stop();
 
         let _guard = self.active_stats.activate(ActiveStatItem::Shrink);
 
-        let mut measure_shrink_all_candidates = Measure::start("shrink_all_candidate_slots-ms");
+        let mut measure_shrink_all_candidates = Measure::start("shrink_all_candidate_slots");
         let num_candidates = shrink_slots.len();
         let shrink_candidates_count = shrink_slots.len();
         self.thread_pool_clean.install(|| {
             shrink_slots
                 .into_par_iter()
                 .for_each(|(slot, slot_shrink_candidate)| {
-                    let mut measure = Measure::start("shrink_candidate_slots-ms");
                     self.do_shrink_slot_store(slot, &slot_shrink_candidate);
-                    measure.stop();
-                    inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
                 });
         });
         measure_shrink_all_candidates.stop();
-        inc_new_counter_info!(
-            "shrink_all_candidate_slots-ms",
-            measure_shrink_all_candidates.as_ms() as usize
-        );
-        inc_new_counter_info!("shrink_all_candidate_slots-count", shrink_candidates_count);
+
         let mut pended_counts: usize = 0;
         if let Some(shrink_slots_next_batch) = shrink_slots_next_batch {
             let mut shrink_slots = self.shrink_candidate_slots.lock().unwrap();
@@ -4854,7 +4850,22 @@ impl AccountsDb {
                 shrink_slots.insert(slot);
             }
         }
-        inc_new_counter_info!("shrink_pended_stores-count", pended_counts);
+
+        datapoint_info!(
+            "shrink_candidates-stat",
+            (
+                "select_candidates_us",
+                measure_select_candidates.as_us(),
+                i64
+            ),
+            (
+                "shrink_all_candidates_us",
+                measure_shrink_all_candidates.as_us(),
+                i64
+            ),
+            ("shrink_candidates_count", shrink_candidates_count, i64),
+            ("shrink_candidates_pending_count", pended_counts, i64),
+        );
 
         num_candidates
     }
