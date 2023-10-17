@@ -4305,8 +4305,32 @@ impl AccountsDb {
             alive_ratio: f64,
             store: Arc<AccountStorageEntry>,
         }
+        impl Ord for StoreUsageInfo {
+            fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+                other
+                    .alive_ratio
+                    .partial_cmp(&self.alive_ratio)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            }
+        }
+        impl PartialOrd for StoreUsageInfo {
+            fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+                other.alive_ratio.partial_cmp(&self.alive_ratio)
+            }
+        }
+        impl PartialEq for StoreUsageInfo {
+            fn eq(&self, other: &Self) -> bool {
+                self.alive_ratio == other.alive_ratio
+            }
+        }
+        impl Eq for StoreUsageInfo {}
+
         let mut measure = Measure::start("select_top_sparse_storage_entries-ms");
-        let mut store_usage: Vec<StoreUsageInfo> = Vec::with_capacity(shrink_slots.len());
+
+        // create a min-heap to store the StorageUsageInfo by alive ratio
+        let mut store_usage: std::collections::BinaryHeap<StoreUsageInfo> =
+            std::collections::BinaryHeap::new();
+        store_usage.reserve(shrink_slots.len());
         let mut total_alive_bytes: u64 = 0;
         let mut candidates_count: usize = 0;
         let mut total_bytes: u64 = 0;
@@ -4334,21 +4358,17 @@ impl AccountsDb {
             });
             total_candidate_stores += 1;
         }
-        store_usage.sort_by(|a, b| {
-            a.alive_ratio
-                .partial_cmp(&b.alive_ratio)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
 
-        // Working from the beginning of store_usage which are the most sparse and see when we can stop
+        // Pop from the heap by alive_ratio from small to large, which are the most sparse and see when we can stop
         // shrinking while still achieving the overall goals.
         let mut shrink_slots = HashMap::new();
         let mut shrink_slots_next_batch = ShrinkCandidates::default();
-        for usage in &store_usage {
-            let store = &usage.store;
+
+        while let Some(usage) = store_usage.pop() {
+            let store = usage.store;
             let alive_ratio = (total_alive_bytes as f64) / (total_bytes as f64);
             debug!("alive_ratio: {:?} store_id: {:?}, store_ratio: {:?} requirement: {:?}, total_bytes: {:?} total_alive_bytes: {:?}",
-                alive_ratio, usage.store.append_vec_id(), usage.alive_ratio, shrink_ratio, total_bytes, total_alive_bytes);
+                alive_ratio, store.append_vec_id(), usage.alive_ratio, shrink_ratio, total_bytes, total_alive_bytes);
             if alive_ratio > shrink_ratio {
                 // we have reached our goal, stop
                 debug!(
@@ -4366,7 +4386,7 @@ impl AccountsDb {
                 let after_shrink_size = Self::page_align(store.alive_bytes() as u64);
                 let bytes_saved = current_store_size.saturating_sub(after_shrink_size);
                 total_bytes -= bytes_saved;
-                shrink_slots.insert(usage.slot, Arc::clone(store));
+                shrink_slots.insert(usage.slot, store);
             }
         }
         measure.stop();
