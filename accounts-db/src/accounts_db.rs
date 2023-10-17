@@ -2014,10 +2014,10 @@ pub(crate) struct ShrinkStatsSub {
     pub(crate) store_accounts_timing: StoreAccountsTiming,
     pub(crate) rewrite_elapsed_us: u64,
     pub(crate) create_and_insert_store_elapsed_us: u64,
+    pub(crate) unpackable_slots_count: usize,
 }
 
 impl ShrinkStatsSub {
-    #[allow(dead_code)]
     pub(crate) fn accumulate(&mut self, other: &Self) {
         self.store_accounts_timing
             .accumulate(&other.store_accounts_timing);
@@ -2026,6 +2026,7 @@ impl ShrinkStatsSub {
             self.create_and_insert_store_elapsed_us,
             other.create_and_insert_store_elapsed_us
         );
+        saturating_add_assign!(self.unpackable_slots_count, other.unpackable_slots_count);
     }
 }
 
@@ -2041,6 +2042,7 @@ pub struct ShrinkStats {
     handle_reclaims_elapsed: AtomicU64,
     remove_old_stores_shrink_us: AtomicU64,
     rewrite_elapsed: AtomicU64,
+    unpackable_slots_count: AtomicU64,
     drop_storage_entries_elapsed: AtomicU64,
     recycle_stores_write_elapsed: AtomicU64,
     accounts_removed: AtomicUsize,
@@ -2217,6 +2219,13 @@ impl ShrinkAncientStats {
                 (
                     "rewrite_elapsed",
                     self.shrink_stats.rewrite_elapsed.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "unpackable_slots_count",
+                    self.shrink_stats
+                        .unpackable_slots_count
+                        .swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
@@ -4177,6 +4186,9 @@ impl AccountsDb {
         shrink_stats
             .rewrite_elapsed
             .fetch_add(stats_sub.rewrite_elapsed_us, Ordering::Relaxed);
+        shrink_stats
+            .unpackable_slots_count
+            .fetch_add(stats_sub.unpackable_slots_count as u64, Ordering::Relaxed);
     }
 
     /// get stores for 'slot'
