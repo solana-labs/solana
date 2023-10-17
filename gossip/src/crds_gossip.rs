@@ -274,7 +274,6 @@ impl CrdsGossip {
     /// Process a pull response.
     pub fn process_pull_responses(
         &self,
-        from: &Pubkey,
         responses: Vec<CrdsValue>,
         responses_expired_timeout: Vec<CrdsValue>,
         failed_inserts: Vec<Hash>,
@@ -283,7 +282,6 @@ impl CrdsGossip {
     ) {
         self.pull.process_pull_responses(
             &self.crds,
-            from,
             responses,
             responses_expired_timeout,
             failed_inserts,
