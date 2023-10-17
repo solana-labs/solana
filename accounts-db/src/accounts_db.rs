@@ -4554,10 +4554,11 @@ impl AccountsDb {
     /// Combine all account data from storages in 'sorted_slots' into ancient append vecs.
     /// This keeps us from accumulating append vecs for each slot older than an epoch.
     fn combine_ancient_slots(&self, sorted_slots: Vec<Slot>, can_randomly_shrink: bool) {
-        let mut total = Measure::start("combine_ancient_slots");
         if sorted_slots.is_empty() {
             return;
         }
+
+        let mut total = Measure::start("combine_ancient_slots");
         let mut guard = None;
 
         // the ancient append vec currently being written to
