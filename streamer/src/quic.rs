@@ -10,7 +10,7 @@ use {
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::PACKET_DATA_SIZE,
-        quic::{QUIC_MAX_TIMEOUT, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS},
+        quic::{QUIC_MAX_TIMEOUT, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS, NotifyKeyUpdate},
         signature::Keypair,
     },
     std::{
@@ -111,6 +111,18 @@ pub enum QuicServerError {
     CertificateError(#[from] rcgen::RcgenError),
     #[error("TLS error: {0}")]
     TlsError(#[from] rustls::Error),
+}
+
+pub struct EndpointKeyUpdater {
+    endpoint: Arc<Endpoint>,
+    gossip_host: IpAddr,
+}
+
+impl NotifyKeyUpdate for EndpointKeyUpdater {
+    fn update_key(&self, key: &Keypair) {
+        let (config, _) = configure_server(key, self.gossip_host).unwrap();
+        self.endpoint.set_server_config(Some(config))
+    }
 }
 
 #[derive(Default)]
@@ -404,7 +416,7 @@ pub fn spawn_server(
     max_unstaked_connections: usize,
     wait_for_chunk_timeout: Duration,
     coalesce: Duration,
-) -> Result<(Endpoint, thread::JoinHandle<()>), QuicServerError> {
+) -> Result<(Arc<Endpoint>, thread::JoinHandle<()>, Arc<EndpointKeyUpdater>), QuicServerError> {
     let runtime = rt();
     let (endpoint, _stats, task) = {
         let _guard = runtime.enter();
@@ -431,7 +443,12 @@ pub fn spawn_server(
             }
         })
         .unwrap();
-    Ok((endpoint, handle))
+    let endpoint = Arc::new(endpoint);
+    let updater = EndpointKeyUpdater {
+        endpoint: endpoint.clone(),
+        gossip_host
+    };
+    Ok((endpoint, handle, Arc::new(updater)))
 }
 
 #[cfg(test)]

@@ -114,6 +114,7 @@ use {
         shred_version::compute_shred_version,
         signature::{Keypair, Signer},
         timing::timestamp,
+        quic::NotifyKeyUpdate,
     },
     solana_send_transaction_service::send_transaction_service,
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
@@ -495,7 +496,7 @@ impl Validator {
         tpu_connection_pool_size: usize,
         tpu_enable_udp: bool,
         admin_rpc_service_post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
-    ) -> Result<(Self, Arc<ConnectionCache>), String> {
+    ) -> Result<(Self, Vec<Arc<dyn NotifyKeyUpdate + Sync + Send>>), String> {
         let id = identity_keypair.pubkey();
         assert_eq!(&id, node.info.pubkey());
 
@@ -1295,7 +1296,7 @@ impl Validator {
             };
         }
 
-        let tpu = Tpu::new(
+        let (tpu, mut key_notifies) = Tpu::new(
             &cluster_info,
             &poh_recorder,
             entry_receiver,
@@ -1346,6 +1347,7 @@ impl Validator {
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
+        key_notifies.push(connection_cache);
         Ok((Self {
             stats_reporter_service,
             gossip_service,
@@ -1382,7 +1384,7 @@ impl Validator {
             repair_quic_endpoint,
             repair_quic_endpoint_runtime,
             repair_quic_endpoint_join_handle,
-        }, connection_cache))
+        }, key_notifies))
     }
 
     // Used for notifying many nodes in parallel to exit
@@ -2579,7 +2581,7 @@ mod tests {
                     DEFAULT_TPU_ENABLE_UDP,
                     Arc::new(RwLock::new(None)),
                 )
-                .expect("assume successful validator start")
+                .expect("assume successful validator start").0
             })
             .collect();
 

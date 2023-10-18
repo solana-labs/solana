@@ -1848,7 +1848,7 @@ pub fn main() {
         return;
     }
 
-    let (validator, connnection_cache) = Validator::new(
+    let (validator, notifies) = Validator::new(
         node,
         identity_keypair,
         &ledger_path,
@@ -1882,8 +1882,7 @@ pub fn main() {
             tower_storage: validator_config.tower_storage.clone(),
             staked_nodes_overrides,
             rpc_to_plugin_manager_sender,
-            //todo: fix this
-            notifies: vec![connnection_cache]
+            notifies
         },
     );
 
