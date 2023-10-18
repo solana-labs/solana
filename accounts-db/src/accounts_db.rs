@@ -4304,13 +4304,11 @@ impl AccountsDb {
             slot: Slot,
             alive_ratio: f64,
             store: Arc<AccountStorageEntry>,
+            bytes_saved: u64,
         }
         impl Ord for StoreUsageInfo {
             fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-                other
-                    .alive_ratio
-                    .partial_cmp(&self.alive_ratio)
-                    .unwrap_or(std::cmp::Ordering::Equal)
+                self.bytes_saved.cmp(&other.bytes_saved)
             }
         }
         impl PartialOrd for StoreUsageInfo {
@@ -4320,12 +4318,12 @@ impl AccountsDb {
         }
         impl PartialEq for StoreUsageInfo {
             fn eq(&self, other: &Self) -> bool {
-                self.alive_ratio == other.alive_ratio
+                self.bytes_saved == other.bytes_saved
             }
         }
         impl Eq for StoreUsageInfo {}
 
-        // create a min-heap to store the StorageUsageInfo by alive ratio
+        // create a max-heap to store the StorageUsageInfo by saved bytes
         let mut store_usage: std::collections::BinaryHeap<StoreUsageInfo> =
             std::collections::BinaryHeap::new();
         store_usage.reserve(shrink_slots.len());
@@ -4346,15 +4344,21 @@ impl AccountsDb {
             total_bytes += store.capacity();
             let alive_ratio =
                 Self::page_align(store.alive_bytes() as u64) as f64 / store.capacity() as f64;
+
+            let current_store_size = store.capacity();
+            let after_shrink_size = Self::page_align(store.alive_bytes() as u64);
+            let bytes_saved = current_store_size.saturating_sub(after_shrink_size);
+
             store_usage.push(StoreUsageInfo {
                 slot: *slot,
                 alive_ratio,
                 store: store.clone(),
+                bytes_saved,
             });
         }
 
-        // Pop from the heap by alive_ratio from small to large, which are the most sparse and see when we can stop
-        // shrinking while still achieving the overall goals.
+        // Pop from the max-heap by saved_bytes from large to small.
+        // This is a greedy algorithm - shrinking storage with largest saved_bytes will increase alive_ratio the most.
         let mut shrink_slots = HashMap::new();
         let mut shrink_slots_next_batch = ShrinkCandidates::default();
 
@@ -4376,10 +4380,7 @@ impl AccountsDb {
                     break;
                 }
             } else {
-                let current_store_size = store.capacity();
-                let after_shrink_size = Self::page_align(store.alive_bytes() as u64);
-                let bytes_saved = current_store_size.saturating_sub(after_shrink_size);
-                total_bytes -= bytes_saved;
+                total_bytes -= usage.bytes_saved;
                 shrink_slots.insert(usage.slot, store);
             }
         }
