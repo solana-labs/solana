@@ -655,7 +655,6 @@ macro_rules! with_mock_invoke_context {
             compute_budget.max_invoke_stack_height,
             compute_budget.max_instruction_trace_length,
         );
-        $transaction_context.enable_cap_accounts_data_allocations_per_transaction();
         let mut sysvar_cache = SysvarCache::default();
         sysvar_cache.fill_missing_entries(|pubkey, callback| {
             for index in 0..$transaction_context.get_number_of_accounts() {
