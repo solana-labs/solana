@@ -76,7 +76,7 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
         let pubkey = self.accounts.pubkey(index);
         let (hash, write_version) = if self.accounts.has_hash_and_write_version() {
             (
-                self.accounts.hash(index),
+                &self.accounts.hash(index).0,
                 self.accounts.write_version(index),
             )
         } else {

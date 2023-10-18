@@ -1,7 +1,10 @@
 //! trait for abstracting underlying storage of pubkey and account pairs to be written
 use {
-    crate::{account_storage::meta::StoredAccountMeta, accounts_db::IncludeSlotInHash},
-    solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey},
+    crate::{
+        account_storage::meta::StoredAccountMeta, accounts_db::IncludeSlotInHash,
+        accounts_hash::AccountHash,
+    },
+    solana_sdk::{account::ReadableAccount, clock::Slot, pubkey::Pubkey},
 };
 
 /// abstract access to pubkey, account, slot, target_slot of either:
@@ -45,7 +48,7 @@ pub trait StorableAccounts<'a, T: ReadableAccount + Sync>: Sync {
 
     /// return hash for account at 'index'
     /// Should only be called if 'has_hash_and_write_version' = true
-    fn hash(&self, _index: usize) -> &Hash {
+    fn hash(&self, _index: usize) -> &AccountHash {
         // this should never be called if has_hash_and_write_version returns false
         unimplemented!();
     }
@@ -174,8 +177,8 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     fn has_hash_and_write_version(&self) -> bool {
         true
     }
-    fn hash(&self, index: usize) -> &Hash {
-        self.account(index).hash()
+    fn hash(&self, index: usize) -> &AccountHash {
+        bytemuck::cast_ref(self.account(index).hash())
     }
     fn write_version(&self, index: usize) -> u64 {
         self.account(index).write_version()
@@ -278,8 +281,8 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>> for StorableAccountsBySlot<
     fn has_hash_and_write_version(&self) -> bool {
         true
     }
-    fn hash(&self, index: usize) -> &Hash {
-        self.account(index).hash()
+    fn hash(&self, index: usize) -> &AccountHash {
+        bytemuck::cast_ref(self.account(index).hash())
     }
     fn write_version(&self, index: usize) -> u64 {
         self.account(index).write_version()
@@ -318,8 +321,8 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     fn has_hash_and_write_version(&self) -> bool {
         true
     }
-    fn hash(&self, index: usize) -> &Hash {
-        self.account(index).hash()
+    fn hash(&self, index: usize) -> &AccountHash {
+        bytemuck::cast_ref(self.account(index).hash())
     }
     fn write_version(&self, index: usize) -> u64 {
         self.account(index).write_version()
@@ -522,7 +525,9 @@ pub mod tests {
         // each one containing a subset of the overall # of entries (0..4)
         for entries in 0..6 {
             let data = Vec::default();
-            let hashes = (0..entries).map(|_| Hash::new_unique()).collect::<Vec<_>>();
+            let hashes = (0..entries)
+                .map(|_| AccountHash(Hash::new_unique()))
+                .collect::<Vec<_>>();
             let mut raw = Vec::new();
             let mut raw2 = Vec::new();
             for entry in 0..entries {
@@ -559,7 +564,7 @@ pub mod tests {
                     data: &data,
                     offset,
                     stored_size,
-                    hash: &hashes[entry as usize],
+                    hash: &hashes[entry as usize].0,
                 }));
             }
             let raw2_refs = raw2.iter().collect::<Vec<_>>();
@@ -601,7 +606,7 @@ pub mod tests {
                             let index = index as usize;
                             assert_eq!(storable.account(index), &raw2[index]);
                             assert_eq!(storable.pubkey(index), raw2[index].pubkey());
-                            assert_eq!(storable.hash(index), raw2[index].hash());
+                            assert_eq!(&storable.hash(index).0, raw2[index].hash());
                             assert_eq!(storable.slot(index), expected_slots[index]);
                             assert_eq!(storable.write_version(index), raw2[index].write_version());
                         })
