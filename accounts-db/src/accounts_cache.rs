@@ -4,6 +4,7 @@ use {
         accounts_hash::AccountHash,
     },
     dashmap::DashMap,
+    seqlock::SeqLock,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
@@ -77,7 +78,7 @@ impl SlotCacheInner {
         let data_len = account.data().len() as u64;
         let item = Arc::new(CachedAccountInner {
             account,
-            hash: RwLock::new(None),
+            hash: SeqLock::new(None),
             slot,
             pubkey: *pubkey,
             include_slot_in_hash,
@@ -143,7 +144,7 @@ pub type CachedAccount = Arc<CachedAccountInner>;
 #[derive(Debug)]
 pub struct CachedAccountInner {
     pub account: AccountSharedData,
-    hash: RwLock<Option<AccountHash>>,
+    hash: SeqLock<Option<AccountHash>>,
     slot: Slot,
     pubkey: Pubkey,
     /// temporarily here during feature activation
@@ -153,18 +154,17 @@ pub struct CachedAccountInner {
 
 impl CachedAccountInner {
     pub fn hash(&self) -> AccountHash {
-        let hash = self.hash.read().unwrap();
-        match *hash {
+        let hash = self.hash.read();
+        match hash {
             Some(hash) => hash,
             None => {
-                drop(hash);
                 let hash = AccountsDb::hash_account(
                     self.slot,
                     &self.account,
                     &self.pubkey,
                     self.include_slot_in_hash,
                 );
-                *self.hash.write().unwrap() = Some(hash);
+                *self.hash.lock_write() = Some(hash);
                 hash
             }
         }
