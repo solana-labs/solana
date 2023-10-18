@@ -151,6 +151,7 @@ impl ByteBlockReader {
 mod tests {
     use {
         super::*,
+        crate::accounts_hash::AccountHash,
         solana_sdk::{hash::Hash, stake_history::Epoch},
     };
 
@@ -311,7 +312,7 @@ mod tests {
         // prepare a vector of optional fields that contains all combinations
         // of Some and None.
         for rent_epoch in [None, Some(test_epoch)] {
-            for account_hash in [None, Some(Hash::new_unique())] {
+            for account_hash in [None, Some(AccountHash(Hash::new_unique()))] {
                 some_count += rent_epoch.iter().count() + account_hash.iter().count();
 
                 opt_fields_vec.push(AccountMetaOptionalFields {
@@ -351,10 +352,10 @@ mod tests {
                 offset += std::mem::size_of::<Epoch>();
             }
             if let Some(expected_hash) = opt_fields.account_hash {
-                let hash = read_type::<Hash>(&decoded_buffer, offset).unwrap();
+                let hash = read_type::<AccountHash>(&decoded_buffer, offset).unwrap();
                 assert_eq!(hash, &expected_hash);
                 verified_count += 1;
-                offset += std::mem::size_of::<Hash>();
+                offset += std::mem::size_of::<AccountHash>();
             }
         }
 
