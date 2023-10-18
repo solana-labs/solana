@@ -267,7 +267,7 @@ pub fn make_accounts_hashes_message(
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "gPgpX5XKdNFsiqDWuz21oTNkiuR6abKQwqnoRgZgihJ")]
+#[frozen_abi(digest = "7vo6Mf7tvZrd9YySf8iydSiabHGFGzfaLwHNR63kvnqp")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
@@ -3199,7 +3199,6 @@ mod tests {
             crds_gossip_pull::tests::MIN_NUM_BLOOM_FILTERS,
             crds_value::{CrdsValue, CrdsValueLabel, Vote as CrdsVote},
             duplicate_shred::{self, tests::new_rand_shred, MAX_DUPLICATE_SHREDS},
-            epoch_slots::MAX_SLOTS_PER_ENTRY,
         },
         itertools::izip,
         solana_ledger::shred::Shredder,
@@ -4617,8 +4616,7 @@ mod tests {
         let mut cursor = Cursor::default();
         let slots = cluster_info.get_restart_last_voted_fork_slots(&mut cursor);
         assert_eq!(slots.len(), 1);
-        let retrieved_slots = slots[0].to_slots(0);
-        assert!(retrieved_slots.len() < MAX_SLOTS_PER_ENTRY);
+        let retrieved_slots = slots[0].to_slots(0).unwrap();
         assert!(retrieved_slots[0] < 69000);
         assert_eq!(retrieved_slots.last(), Some(84999).as_ref());
 
