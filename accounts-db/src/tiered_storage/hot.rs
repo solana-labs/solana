@@ -7,6 +7,7 @@ use {
         footer::{AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat, TieredStorageFooter},
         index::AccountIndexFormat,
         meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
+        mmap_utils::get_type,
         TieredStorageFormat, TieredStorageResult,
     },
     memmap2::{Mmap, MmapOptions},
@@ -215,6 +216,12 @@ impl HotStorageReader {
     pub fn num_accounts(&self) -> usize {
         self.footer.account_entry_count as usize
     }
+
+    /// Returns the account meta located at the specified offset.
+    fn get_account_meta_from_offset(&self, offset: usize) -> TieredStorageResult<&HotAccountMeta> {
+        let (meta, _) = get_type::<HotAccountMeta>(&self.mmap, offset)?;
+        Ok(meta)
+    }
 }
 
 #[cfg(test)]
@@ -234,6 +241,7 @@ pub mod tests {
         },
         ::solana_sdk::{hash::Hash, pubkey::Pubkey, stake_history::Epoch},
         memoffset::offset_of,
+        rand::Rng,
         tempfile::TempDir,
     };
 
@@ -397,5 +405,54 @@ pub mod tests {
             let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
             assert_eq!(expected_footer, *hot_storage.footer());
         }
+    }
+
+    #[test]
+    fn test_hot_storage_get_account_meta_from_offset() {
+        // Generate a new temp path that is guaranteed to NOT already have a file.
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("test_hot_storage_footer");
+
+        const NUM_ACCOUNTS: u32 = 10;
+        let mut rng = rand::thread_rng();
+
+        let hot_account_metas: Vec<_> = (0..NUM_ACCOUNTS)
+            .map(|_| {
+                HotAccountMeta::new()
+                    .with_lamports(rng.gen_range(0..u64::MAX))
+                    .with_owner_index(rng.gen_range(0..NUM_ACCOUNTS))
+            })
+            .collect();
+
+        let account_offsets: Vec<_>;
+        let footer = TieredStorageFooter {
+            account_meta_format: AccountMetaFormat::Hot,
+            account_entry_count: NUM_ACCOUNTS,
+            ..TieredStorageFooter::default()
+        };
+        {
+            let file = TieredStorageFile::new_writable(&path).unwrap();
+            let mut current_offset = 0;
+
+            account_offsets = hot_account_metas
+                .iter()
+                .map(|meta| {
+                    let prev_offset = current_offset;
+                    current_offset += file.write_type(meta).unwrap();
+                    prev_offset
+                })
+                .collect();
+            // while the test only focuses on account metas, writing a footer
+            // here is necessary to make it a valid tiered-storage file.
+            footer.write_footer_block(&file).unwrap();
+        }
+
+        let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
+
+        for (offset, expected_meta) in account_offsets.iter().zip(hot_account_metas.iter()) {
+            let meta = hot_storage.get_account_meta_from_offset(*offset).unwrap();
+            assert_eq!(meta, expected_meta);
+        }
+        assert_eq!(&footer, hot_storage.footer());
     }
 }
