@@ -273,7 +273,7 @@ impl<'a> Kubernetes<'a> {
         .await
     }
 
-    // mount genesis in bootstrap. validators will pull 
+    // mount genesis in bootstrap. validators will pull
     // genesis from bootstrap
     #[allow(clippy::too_many_arguments)]
     async fn create_replicas_set(
@@ -296,7 +296,7 @@ impl<'a> Kubernetes<'a> {
             let Some(config_map_name) = config_map_name else {
                 return Err(boxed_error!("config_map_name is None!"));
             };
-    
+
             let genesis_volume = Volume {
                 name: "genesis-config-volume".into(),
                 config_map: Some(ConfigMapVolumeSource {
@@ -305,13 +305,13 @@ impl<'a> Kubernetes<'a> {
                 }),
                 ..Default::default()
             };
-    
+
             let genesis_volume_mount = VolumeMount {
                 name: "genesis-config-volume".to_string(),
                 mount_path: "/home/solana/genesis".to_string(),
                 ..Default::default()
             };
-            
+
             volumes.push(genesis_volume);
             volume_mounts.push(genesis_volume_mount);
         }
@@ -359,7 +359,7 @@ impl<'a> Kubernetes<'a> {
             },
             spec: Some(replicas_set_spec),
             ..Default::default()
-        })        
+        })
     }
 
     pub async fn deploy_secret(&self, secret: &Secret) -> Result<Secret, kube::Error> {
