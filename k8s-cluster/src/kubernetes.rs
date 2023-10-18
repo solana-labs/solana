@@ -124,10 +124,6 @@ impl<'a> Kubernetes<'a> {
             flags.push("--enable-rpc-transaction-history".to_string());
             flags.push("--enable-extended-tx-metadata-storage".to_string());
         }
-        if self.validator_config.enable_full_rpc {
-            flags.push("--enable-rpc-transaction-history".to_string());
-            flags.push("--enable-extended-tx-metadata-storage".to_string());
-        }
 
         if let Some(slot) = self.validator_config.wait_for_supermajority {
             flags.push("--wait-for-supermajority".to_string());
@@ -277,6 +273,8 @@ impl<'a> Kubernetes<'a> {
         .await
     }
 
+    // mount genesis in bootstrap. validators will pull
+    // genesis from bootstrap
     #[allow(clippy::too_many_arguments)]
     async fn create_replicas_set(
         &self,
@@ -291,25 +289,32 @@ impl<'a> Kubernetes<'a> {
         accounts_volume: Volume,
         accounts_volume_mount: VolumeMount,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
-        let Some(config_map_name) = config_map_name else {
-            return Err(boxed_error!("config_map_name is None!"));
-        };
+        let mut volumes = vec![accounts_volume];
+        let mut volume_mounts = vec![accounts_volume_mount];
+        if app_name == "bootstrap-validator" {
+            info!("bootstrap create replicaset");
+            let Some(config_map_name) = config_map_name else {
+                return Err(boxed_error!("config_map_name is None!"));
+            };
 
-        let genesis_volume = Volume {
-            name: "genesis-config-volume".into(),
-            config_map: Some(ConfigMapVolumeSource {
-                name: Some(config_map_name.clone()),
+            let genesis_volume = Volume {
+                name: "genesis-config-volume".into(),
+                config_map: Some(ConfigMapVolumeSource {
+                    name: Some(config_map_name.clone()),
+                    ..Default::default()
+                }),
                 ..Default::default()
-            }),
-            ..Default::default()
-        };
+            };
 
-        let genesis_volume_mount = VolumeMount {
-            name: "genesis-config-volume".to_string(),
-            mount_path: "/home/solana/genesis".to_string(),
-            ..Default::default()
-        };
+            let genesis_volume_mount = VolumeMount {
+                name: "genesis-config-volume".to_string(),
+                mount_path: "/home/solana/genesis".to_string(),
+                ..Default::default()
+            };
 
+            volumes.push(genesis_volume);
+            volume_mounts.push(genesis_volume_mount);
+        }
         // Define the pod spec
         let pod_spec = PodTemplateSpec {
             metadata: Some(ObjectMeta {
@@ -323,10 +328,10 @@ impl<'a> Kubernetes<'a> {
                     image_pull_policy: Some("Always".to_string()),
                     env: Some(env_vars),
                     command: Some(command.to_owned()),
-                    volume_mounts: Some(vec![genesis_volume_mount, accounts_volume_mount]),
+                    volume_mounts: Some(volume_mounts),
                     ..Default::default()
                 }],
-                volumes: Some(vec![genesis_volume, accounts_volume]),
+                volumes: Some(volumes),
                 security_context: Some(PodSecurityContext {
                     run_as_user: Some(1000),
                     run_as_group: Some(1000),
