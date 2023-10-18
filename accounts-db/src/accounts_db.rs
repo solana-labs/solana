@@ -4356,33 +4356,34 @@ impl AccountsDb {
             });
         }
 
-        // Pop from the max-heap by saved_bytes from large to small.
+        // Pop from the max-heap by saved_bytes from large to small until alive_ratio meets with shrink_ratio.
         // This is a greedy algorithm - shrinking storage with largest saved_bytes will increase alive_ratio the most.
         let mut shrink_slots = HashMap::new();
-        let mut shrink_slots_next_batch = ShrinkCandidates::default();
-
         while let Some(usage) = store_usage.pop() {
             let store = usage.store;
             let alive_ratio = (total_alive_bytes as f64) / (total_bytes as f64);
             debug!("alive_ratio: {:?} store_id: {:?}, store_ratio: {:?} requirement: {:?}, total_bytes: {:?} total_alive_bytes: {:?}",
                 alive_ratio, store.append_vec_id(), usage.alive_ratio, shrink_ratio, total_bytes, total_alive_bytes);
-            if alive_ratio > shrink_ratio {
+            if alive_ratio < shrink_ratio {
+                total_bytes -= usage.bytes_saved;
+                shrink_slots.insert(usage.slot, store);
+            } else {
                 // we have reached our goal, stop
                 debug!(
                     "Shrinking goal can be achieved at slot {:?}, total_alive_bytes: {:?} \
-                    total_bytes: {:?}, alive_ratio: {:}, shrink_ratio: {:?}",
+                     total_bytes: {:?}, alive_ratio: {:}, shrink_ratio: {:?}",
                     usage.slot, total_alive_bytes, total_bytes, alive_ratio, shrink_ratio
                 );
-                if usage.alive_ratio < shrink_ratio {
-                    shrink_slots_next_batch.insert(usage.slot);
-                } else {
-                    break;
-                }
-            } else {
-                total_bytes -= usage.bytes_saved;
-                shrink_slots.insert(usage.slot, store);
+                break;
             }
         }
+
+        // collect remaining slots whose alive_ratios are smaller than shrink_ratio for next shrinking batch
+        let shrink_slots_next_batch: ShrinkCandidates = store_usage
+            .iter()
+            .filter(|s| s.alive_ratio < shrink_ratio)
+            .map(|s| s.slot)
+            .collect();
 
         (shrink_slots, shrink_slots_next_batch)
     }
