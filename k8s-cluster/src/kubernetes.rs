@@ -114,9 +114,9 @@ impl<'a> Kubernetes<'a> {
         if self.validator_config.skip_poh_verify {
             flags.push("--skip-poh-verify".to_string());
         }
-        // if self.validator_config.no_snapshot_fetch {
-        //     flags.push("--no-snapshot-fetch".to_string());
-        // }
+        if self.validator_config.no_snapshot_fetch {
+            flags.push("--no-snapshot-fetch".to_string());
+        }
         if self.validator_config.skip_require_tower {
             flags.push("--skip-require-tower".to_string());
         }
