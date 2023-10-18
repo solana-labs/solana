@@ -11,6 +11,7 @@ use {
             StoredAccountMeta, StoredMeta, StoredMetaWriteVersion,
         },
         accounts_file::{AccountsFileError, Result, ALIGN_BOUNDARY_OFFSET},
+        accounts_hash::AccountHash,
         storable_accounts::StorableAccounts,
         u64_align,
     },
@@ -575,7 +576,7 @@ impl AppendVec {
         'b,
         T: ReadableAccount + Sync,
         U: StorableAccounts<'a, T>,
-        V: Borrow<Hash>,
+        V: Borrow<AccountHash>,
     >(
         &self,
         accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
@@ -611,7 +612,7 @@ impl AppendVec {
                 .map(|account| account.data())
                 .unwrap_or_default()
                 .as_ptr();
-            let hash_ptr = hash.as_ref().as_ptr();
+            let hash_ptr = hash.0.as_ref().as_ptr();
             let ptrs = [
                 (meta_ptr as *const u8, mem::size_of::<StoredMeta>()),
                 (account_meta_ptr as *const u8, mem::size_of::<AccountMeta>()),
@@ -669,7 +670,7 @@ pub mod tests {
             let accounts = [(&data.0.pubkey, &data.1)];
             let slice = &accounts[..];
             let account_data = (slot_ignored, slice);
-            let hash = Hash::default();
+            let hash = AccountHash(Hash::default());
             let storable_accounts =
                 StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
                     &account_data,
@@ -740,7 +741,7 @@ pub mod tests {
         // for (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash)
         let slot = 0 as Slot;
         let pubkey = Pubkey::default();
-        StorableAccountsWithHashesAndWriteVersions::<'_, '_, _, _, &Hash>::new(&(
+        StorableAccountsWithHashesAndWriteVersions::<'_, '_, _, _, &AccountHash>::new(&(
             slot,
             &[(&pubkey, &account)][..],
             INCLUDE_SLOT_IN_HASH_TESTS,
@@ -755,7 +756,7 @@ pub mod tests {
         // mismatch between lens of accounts, hashes, write_versions
         let mut hashes = Vec::default();
         if correct_hashes {
-            hashes.push(Hash::default());
+            hashes.push(AccountHash(Hash::default()));
         }
         let mut write_versions = Vec::default();
         if correct_write_versions {
@@ -798,7 +799,7 @@ pub mod tests {
         let account = AccountSharedData::default();
         let slot = 0 as Slot;
         let pubkeys = [Pubkey::default()];
-        let hashes = Vec::<Hash>::default();
+        let hashes = Vec::<AccountHash>::default();
         let write_versions = Vec::default();
         let mut accounts = vec![(&pubkeys[0], &account)];
         accounts.clear();
@@ -819,7 +820,10 @@ pub mod tests {
         let account = AccountSharedData::default();
         let slot = 0 as Slot;
         let pubkeys = [Pubkey::from([5; 32]), Pubkey::from([6; 32])];
-        let hashes = vec![Hash::new(&[3; 32]), Hash::new(&[4; 32])];
+        let hashes = vec![
+            AccountHash(Hash::new(&[3; 32])),
+            AccountHash(Hash::new(&[4; 32])),
+        ];
         let write_versions = vec![42, 43];
         let accounts = [(&pubkeys[0], &account), (&pubkeys[1], &account)];
         let accounts2 = (slot, &accounts[..], INCLUDE_SLOT_IN_HASH_TESTS);
@@ -850,7 +854,7 @@ pub mod tests {
         // for (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash)
         let slot = 0 as Slot;
         let pubkey = Pubkey::default();
-        let hashes = vec![Hash::default()];
+        let hashes = vec![AccountHash(Hash::default())];
         let write_versions = vec![0];
         let accounts = [(&pubkey, &account)];
         let accounts2 = (slot, &accounts[..], INCLUDE_SLOT_IN_HASH_TESTS);

@@ -178,7 +178,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
         true
     }
     fn hash(&self, index: usize) -> &AccountHash {
-        bytemuck::cast_ref(self.account(index).hash())
+        self.account(index).hash()
     }
     fn write_version(&self, index: usize) -> u64 {
         self.account(index).write_version()
@@ -282,7 +282,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>> for StorableAccountsBySlot<
         true
     }
     fn hash(&self, index: usize) -> &AccountHash {
-        bytemuck::cast_ref(self.account(index).hash())
+        self.account(index).hash()
     }
     fn write_version(&self, index: usize) -> u64 {
         self.account(index).write_version()
@@ -322,7 +322,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
         true
     }
     fn hash(&self, index: usize) -> &AccountHash {
-        bytemuck::cast_ref(self.account(index).hash())
+        self.account(index).hash()
     }
     fn write_version(&self, index: usize) -> u64 {
         self.account(index).write_version()
@@ -606,7 +606,7 @@ pub mod tests {
                             let index = index as usize;
                             assert_eq!(storable.account(index), &raw2[index]);
                             assert_eq!(storable.pubkey(index), raw2[index].pubkey());
-                            assert_eq!(&storable.hash(index).0, raw2[index].hash());
+                            assert_eq!(storable.hash(index), raw2[index].hash());
                             assert_eq!(storable.slot(index), expected_slots[index]);
                             assert_eq!(storable.write_version(index), raw2[index].write_version());
                         })
