@@ -6640,6 +6640,7 @@ dependencies = [
  "solana-sdk",
  "solana-stake-program",
  "solana-vote-program",
+ "solana_rbpf",
  "test-case",
  "thiserror",
  "tokio",

@@ -220,7 +220,7 @@ mod tests {
             ChangeData { data: u8 },
         }
 
-        declare_process_instruction!(process_instruction, 1, |invoke_context| {
+        declare_process_instruction!(MockBuiltin, 1, |invoke_context| {
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let instruction_data = instruction_context.get_instruction_data();
@@ -271,7 +271,7 @@ mod tests {
         let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
         programs_loaded_for_tx_batch.replenish(
             mock_system_program_id,
-            Arc::new(LoadedProgram::new_builtin(0, 0, process_instruction)),
+            Arc::new(LoadedProgram::new_builtin(0, 0, MockBuiltin::vm)),
         );
         let account_keys = (0..transaction_context.get_number_of_accounts())
             .map(|index| {
@@ -432,7 +432,7 @@ mod tests {
             DoWork { lamports: u64, data: u8 },
         }
 
-        declare_process_instruction!(process_instruction, 1, |invoke_context| {
+        declare_process_instruction!(MockBuiltin, 1, |invoke_context| {
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let instruction_data = instruction_context.get_instruction_data();
@@ -500,7 +500,7 @@ mod tests {
         let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
         programs_loaded_for_tx_batch.replenish(
             mock_program_id,
-            Arc::new(LoadedProgram::new_builtin(0, 0, process_instruction)),
+            Arc::new(LoadedProgram::new_builtin(0, 0, MockBuiltin::vm)),
         );
         let account_metas = vec![
             AccountMeta::new(
@@ -645,7 +645,7 @@ mod tests {
     #[test]
     fn test_precompile() {
         let mock_program_id = Pubkey::new_unique();
-        declare_process_instruction!(process_instruction, 1, |_invoke_context| {
+        declare_process_instruction!(MockBuiltin, 1, |_invoke_context| {
             Err(InstructionError::Custom(0xbabb1e))
         });
 
@@ -684,7 +684,7 @@ mod tests {
         let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
         programs_loaded_for_tx_batch.replenish(
             mock_program_id,
-            Arc::new(LoadedProgram::new_builtin(0, 0, process_instruction)),
+            Arc::new(LoadedProgram::new_builtin(0, 0, MockBuiltin::vm)),
         );
         let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
         let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::default();

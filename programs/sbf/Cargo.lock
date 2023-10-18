@@ -5341,6 +5341,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-vote-program",
+ "solana_rbpf",
  "test-case",
  "thiserror",
  "tokio",
