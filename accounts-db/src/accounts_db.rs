@@ -4325,8 +4325,7 @@ impl AccountsDb {
 
         // create a max-heap to store the StorageUsageInfo by saved bytes
         let mut store_usage: std::collections::BinaryHeap<StoreUsageInfo> =
-            std::collections::BinaryHeap::new();
-        store_usage.reserve(shrink_slots.len());
+            std::collections::BinaryHeap::with_capacity(shrink_slots.len());
         let mut total_alive_bytes: u64 = 0;
         let mut total_bytes: u64 = 0;
         for slot in shrink_slots {
