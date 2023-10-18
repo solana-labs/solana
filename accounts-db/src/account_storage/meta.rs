@@ -1,5 +1,6 @@
 use {
     crate::{
+        accounts_hash::AccountHash,
         append_vec::AppendVecStoredAccountMeta,
         storable_accounts::StorableAccounts,
         tiered_storage::{hot::HotAccountMeta, readable::TieredReadableAccount},
@@ -17,7 +18,7 @@ pub struct StoredAccountInfo {
 }
 
 lazy_static! {
-    static ref DEFAULT_ACCOUNT_HASH: Hash = Hash::default();
+    static ref DEFAULT_ACCOUNT_HASH: AccountHash = AccountHash(Hash::default());
 }
 
 /// Goal is to eliminate copies and data reshaping given various code paths that store accounts.
@@ -30,7 +31,7 @@ pub struct StorableAccountsWithHashesAndWriteVersions<
     'b,
     T: ReadableAccount + Sync + 'b,
     U: StorableAccounts<'a, T>,
-    V: Borrow<Hash>,
+    V: Borrow<AccountHash>,
 > {
     /// accounts to store
     /// always has pubkey and account
@@ -41,8 +42,13 @@ pub struct StorableAccountsWithHashesAndWriteVersions<
     _phantom: PhantomData<&'a T>,
 }
 
-impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: Borrow<Hash>>
-    StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>
+impl<
+        'a: 'b,
+        'b,
+        T: ReadableAccount + Sync + 'b,
+        U: StorableAccounts<'a, T>,
+        V: Borrow<AccountHash>,
+    > StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>
 {
     /// used when accounts contains hash and write version already
     pub fn new(accounts: &'b U) -> Self {
@@ -71,12 +77,12 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
     }
 
     /// get all account fields at 'index'
-    pub fn get(&self, index: usize) -> (Option<&T>, &Pubkey, &Hash, StoredMetaWriteVersion) {
+    pub fn get(&self, index: usize) -> (Option<&T>, &Pubkey, &AccountHash, StoredMetaWriteVersion) {
         let account = self.accounts.account_default_if_zero_lamport(index);
         let pubkey = self.accounts.pubkey(index);
         let (hash, write_version) = if self.accounts.has_hash_and_write_version() {
             (
-                &self.accounts.hash(index).0,
+                self.accounts.hash(index),
                 self.accounts.write_version(index),
             )
         } else {
@@ -119,11 +125,12 @@ impl<'storage> StoredAccountMeta<'storage> {
         }
     }
 
-    pub fn hash(&self) -> &'storage Hash {
-        match self {
+    pub fn hash(&self) -> &'storage AccountHash {
+        let hash = match self {
             Self::AppendVec(av) => av.hash(),
-            Self::Hot(hot) => hot.hash().unwrap_or(&DEFAULT_ACCOUNT_HASH),
-        }
+            Self::Hot(hot) => hot.hash().unwrap_or(&DEFAULT_ACCOUNT_HASH.0),
+        };
+        bytemuck::cast_ref(hash)
     }
 
     pub fn stored_size(&self) -> usize {

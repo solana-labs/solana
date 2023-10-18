@@ -384,7 +384,7 @@ impl CurrentAncientAppendVec {
                 INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
                 accounts_to_store.slot,
             ),
-            None::<Vec<Hash>>,
+            None::<Vec<AccountHash>>,
             self.append_vec(),
             None,
             StoreReclaims::Ignore,
@@ -896,7 +896,7 @@ pub enum LoadedAccount<'a> {
 impl<'a> LoadedAccount<'a> {
     pub fn loaded_hash(&self) -> AccountHash {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => AccountHash(*stored_account_meta.hash()),
+            LoadedAccount::Stored(stored_account_meta) => *stored_account_meta.hash(),
             LoadedAccount::Cached(cached_account) => cached_account.hash(),
         }
     }
@@ -4133,7 +4133,7 @@ impl AccountsDb {
                     &shrink_collect.alive_accounts.alive_accounts()[..],
                     INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
                 ),
-                None::<Vec<&Hash>>,
+                None::<Vec<AccountHash>>,
                 shrink_in_progress.new_storage(),
                 None,
                 StoreReclaims::Ignore,
@@ -6256,7 +6256,7 @@ impl AccountsDb {
         'b,
         T: ReadableAccount + Sync,
         U: StorableAccounts<'a, T>,
-        V: Borrow<Hash>,
+        V: Borrow<AccountHash>,
     >(
         &self,
         slot: Slot,
@@ -6623,7 +6623,7 @@ impl AccountsDb {
                 let pubkeys = self.get_filler_account_pubkeys(filler_accounts as usize);
                 pubkeys.iter().for_each(|key| {
                     accounts.push((key, &account));
-                    hashes.push(hash);
+                    hashes.push(AccountHash(hash));
                 });
                 self.store_accounts_frozen(
                     (slot, &accounts[..], include_slot_in_hash),
@@ -6695,7 +6695,9 @@ impl AccountsDb {
             INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
         );
         let storable =
-            StorableAccountsWithHashesAndWriteVersions::<'_, '_, _, _, &Hash>::new(&to_store);
+            StorableAccountsWithHashesAndWriteVersions::<'_, '_, _, _, &AccountHash>::new(
+                &to_store,
+            );
         storage.accounts.append_accounts(&storable, 0);
 
         Arc::new(storage)
@@ -6807,7 +6809,7 @@ impl AccountsDb {
     >(
         &self,
         accounts: &'c impl StorableAccounts<'b, T>,
-        hashes: Option<Vec<impl Borrow<Hash>>>,
+        hashes: Option<Vec<impl Borrow<AccountHash>>>,
         mut write_version_producer: P,
         store_to: &StoreTo,
         transactions: Option<&[Option<&'a SanitizedTransaction>]>,
@@ -6847,7 +6849,7 @@ impl AccountsDb {
                     self.write_accounts_to_storage(
                         slot,
                         storage,
-                        &StorableAccountsWithHashesAndWriteVersions::<'_, '_, _, _, &Hash>::new(
+                        &StorableAccountsWithHashesAndWriteVersions::<'_, '_, _, _, &AccountHash>::new(
                             accounts,
                         ),
                     )
@@ -8555,7 +8557,7 @@ impl AccountsDb {
         // we use default hashes for now since the same account may be stored to the cache multiple times
         self.store_accounts_unfrozen(
             accounts,
-            None::<Vec<Hash>>,
+            None::<Vec<AccountHash>>,
             store_to,
             transactions,
             reclaim,
@@ -8709,7 +8711,7 @@ impl AccountsDb {
     fn store_accounts_unfrozen<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
         &self,
         accounts: impl StorableAccounts<'a, T>,
-        hashes: Option<Vec<impl Borrow<Hash>>>,
+        hashes: Option<Vec<impl Borrow<AccountHash>>>,
         store_to: &StoreTo,
         transactions: Option<&'a [Option<&'a SanitizedTransaction>]>,
         reclaim: StoreReclaims,
@@ -8738,7 +8740,7 @@ impl AccountsDb {
     pub fn store_accounts_frozen<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
         &self,
         accounts: impl StorableAccounts<'a, T>,
-        hashes: Option<Vec<impl Borrow<Hash>>>,
+        hashes: Option<Vec<impl Borrow<AccountHash>>>,
         storage: &Arc<AccountStorageEntry>,
         write_version_producer: Option<Box<dyn Iterator<Item = StoredMetaWriteVersion>>>,
         reclaim: StoreReclaims,
@@ -8762,7 +8764,7 @@ impl AccountsDb {
     fn store_accounts_custom<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
         &self,
         accounts: impl StorableAccounts<'a, T>,
-        hashes: Option<Vec<impl Borrow<Hash>>>,
+        hashes: Option<Vec<impl Borrow<AccountHash>>>,
         write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
         store_to: &StoreTo,
         reset_accounts: bool,
@@ -10125,7 +10127,10 @@ pub mod tests {
             let expected_accounts_data_len = data.last().unwrap().1.data().len();
             let expected_alive_bytes = aligned_stored_size(expected_accounts_data_len);
             let storable = (slot0, &data[..], INCLUDE_SLOT_IN_HASH_TESTS);
-            let hashes = data.iter().map(|_| Hash::default()).collect::<Vec<_>>();
+            let hashes = data
+                .iter()
+                .map(|_| AccountHash(Hash::default()))
+                .collect::<Vec<_>>();
             let write_versions = data.iter().map(|_| 0).collect::<Vec<_>>();
             let append =
                 StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
@@ -10619,7 +10624,7 @@ pub mod tests {
                 accounts_db.storage.remove(&storage.slot(), false);
             });
 
-            let hash = Hash::default();
+            let hash = AccountHash(Hash::default());
 
             // replace the sample storages, storing default hash values so that we rehash during scan
             let storages = storages
@@ -10666,7 +10671,8 @@ pub mod tests {
             sample_storages_and_accounts(&accounts_db, INCLUDE_SLOT_IN_HASH_TESTS);
         let max_slot = storages.iter().map(|storage| storage.slot()).max().unwrap();
 
-        let hash = Hash::from_str("7JcmM6TFZMkcDkZe6RKVkGaWwN5dXciGC4fa3RxvqQc9").unwrap();
+        let hash =
+            AccountHash(Hash::from_str("7JcmM6TFZMkcDkZe6RKVkGaWwN5dXciGC4fa3RxvqQc9").unwrap());
 
         // replace the sample storages, storing bogus hash values so that we trigger the hash mismatch
         let storages = storages
@@ -11169,7 +11175,7 @@ pub mod tests {
         let accounts = [(pubkey, account)];
         let slice = &accounts[..];
         let account_data = (slot, slice);
-        let hash = Hash::default();
+        let hash = AccountHash(Hash::default());
         let storable_accounts =
             StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
                 &account_data,
@@ -12769,7 +12775,7 @@ pub mod tests {
         // put wrong hash value in store so we get a mismatch
         db.store_accounts_unfrozen(
             (some_slot, &[(&key, &account)][..]),
-            Some(vec![&Hash::default()]),
+            Some(vec![&AccountHash(Hash::default())]),
             &StoreTo::Storage(&db.find_storage_candidate(some_slot, 1)),
             None,
             StoreReclaims::Default,
@@ -13003,7 +13009,7 @@ pub mod tests {
         db.update_accounts_hash_for_tests(some_slot, &ancestors, false, false);
 
         // provide bogus account hashes
-        let some_hash = Hash::new(&[0xca; HASH_BYTES]);
+        let some_hash = AccountHash(Hash::new(&[0xca; HASH_BYTES]));
         db.store_accounts_unfrozen(
             (some_slot, accounts),
             Some(vec![&some_hash]),
@@ -15841,7 +15847,7 @@ pub mod tests {
         accounts.accounts_index.set_startup(Startup::Startup);
 
         let storage = accounts.create_and_insert_store(slot0, 4_000, "flush_slot_cache");
-        let hashes = vec![Hash::default(); 1];
+        let hashes = vec![AccountHash(Hash::default()); 1];
         let write_version = vec![0; 1];
         storage.accounts.append_accounts(
             &StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
@@ -15906,7 +15912,7 @@ pub mod tests {
         let account_big = AccountSharedData::new(1, 1000, AccountSharedData::default().owner());
         let slot0 = 0;
         let storage = accounts.create_and_insert_store(slot0, 4_000, "flush_slot_cache");
-        let hashes = vec![Hash::default(); 2];
+        let hashes = vec![AccountHash(Hash::default()); 2];
         let write_version = vec![0; 2];
         storage.accounts.append_accounts(
             &StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(

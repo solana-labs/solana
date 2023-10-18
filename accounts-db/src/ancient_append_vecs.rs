@@ -12,6 +12,7 @@ use {
             INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
         },
         accounts_file::AccountsFile,
+        accounts_hash::AccountHash,
         accounts_index::{AccountsIndexScanResult, ZeroLamport},
         active_stats::ActiveStatItem,
         append_vec::aligned_stored_size,
@@ -20,9 +21,7 @@ use {
     rand::{thread_rng, Rng},
     rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
     solana_measure::measure_us,
-    solana_sdk::{
-        account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey, saturating_add_assign,
-    },
+    solana_sdk::{account::ReadableAccount, clock::Slot, pubkey::Pubkey, saturating_add_assign},
     std::{
         collections::HashMap,
         num::NonZeroU64,
@@ -372,7 +371,7 @@ impl AccountsDb {
             measure_us!(self.get_store_for_shrink(target_slot, bytes));
         let (store_accounts_timing, rewrite_elapsed_us) = measure_us!(self.store_accounts_frozen(
             accounts_to_write,
-            None::<Vec<Hash>>,
+            None::<Vec<AccountHash>>,
             shrink_in_progress.new_storage(),
             None,
             StoreReclaims::Ignore,
