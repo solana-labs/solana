@@ -145,6 +145,8 @@ where
 
 
     pub fn update_key(&self, key: &Keypair) {
+        let mut map = self.map.write().unwrap();
+        map.clear();
         let mut connection_manager =self.connection_manager.write().unwrap();
         connection_manager.update_key(key);
     }
