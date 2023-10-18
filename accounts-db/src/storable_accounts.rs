@@ -178,7 +178,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
         true
     }
     fn hash(&self, index: usize) -> &AccountHash {
-        bytemuck::cast_ref(self.account(index).hash())
+        self.account(index).hash()
     }
     fn write_version(&self, index: usize) -> u64 {
         self.account(index).write_version()
@@ -282,7 +282,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>> for StorableAccountsBySlot<
         true
     }
     fn hash(&self, index: usize) -> &AccountHash {
-        bytemuck::cast_ref(self.account(index).hash())
+        self.account(index).hash()
     }
     fn write_version(&self, index: usize) -> u64 {
         self.account(index).write_version()
@@ -322,7 +322,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
         true
     }
     fn hash(&self, index: usize) -> &AccountHash {
-        bytemuck::cast_ref(self.account(index).hash())
+        self.account(index).hash()
     }
     fn write_version(&self, index: usize) -> u64 {
         self.account(index).write_version()
