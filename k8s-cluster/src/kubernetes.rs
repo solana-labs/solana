@@ -273,6 +273,8 @@ impl<'a> Kubernetes<'a> {
         .await
     }
 
+    // mount genesis in bootstrap. validators will pull 
+    // genesis from bootstrap
     #[allow(clippy::too_many_arguments)]
     async fn create_replicas_set(
         &self,
@@ -287,6 +289,8 @@ impl<'a> Kubernetes<'a> {
         accounts_volume: Volume,
         accounts_volume_mount: VolumeMount,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
+        let mut volumes = vec![accounts_volume];
+        let mut volume_mounts = vec![accounts_volume_mount];
         if app_name == "bootstrap-validator" {
             info!("bootstrap create replicaset");
             let Some(config_map_name) = config_map_name else {
@@ -307,103 +311,55 @@ impl<'a> Kubernetes<'a> {
                 mount_path: "/home/solana/genesis".to_string(),
                 ..Default::default()
             };
-
-            // Define the pod spec
-            let pod_spec = PodTemplateSpec {
-                metadata: Some(ObjectMeta {
-                    labels: Some(label_selector.clone()),
-                    ..Default::default()
-                }),
-                spec: Some(PodSpec {
-                    containers: vec![Container {
-                        name: container_name.to_string(),
-                        image: Some(image_name.to_string()),
-                        image_pull_policy: Some("Always".to_string()),
-                        env: Some(env_vars),
-                        command: Some(command.to_owned()),
-                        volume_mounts: Some(vec![genesis_volume_mount, accounts_volume_mount]),
-                        ..Default::default()
-                    }],
-                    volumes: Some(vec![genesis_volume, accounts_volume]),
-                    security_context: Some(PodSecurityContext {
-                        run_as_user: Some(1000),
-                        run_as_group: Some(1000),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                }),
-            };
-
-            let replicas_set_spec = ReplicaSetSpec {
-                replicas: Some(num_validators),
-                selector: LabelSelector {
-                    match_labels: Some(label_selector.clone()),
-                    ..Default::default()
-                },
-                template: Some(pod_spec),
-                ..Default::default()
-            };
-
-            Ok(ReplicaSet {
-                metadata: ObjectMeta {
-                    name: Some(format!("{}-replicaset", app_name)),
-                    namespace: Some(self.namespace.to_string()),
-                    ..Default::default()
-                },
-                spec: Some(replicas_set_spec),
-                ..Default::default()
-            })
-        } else {
-            info!("validator create replicaset");
-            let pod_spec = PodTemplateSpec {
-                metadata: Some(ObjectMeta {
-                    labels: Some(label_selector.clone()),
-                    ..Default::default()
-                }),
-                spec: Some(PodSpec {
-                    containers: vec![Container {
-                        name: container_name.to_string(),
-                        image: Some(image_name.to_string()),
-                        image_pull_policy: Some("Always".to_string()),
-                        env: Some(env_vars),
-                        command: Some(command.to_owned()),
-                        volume_mounts: Some(vec![accounts_volume_mount]),
-                        ..Default::default()
-                    }],
-                    volumes: Some(vec![accounts_volume]),
-                    security_context: Some(PodSecurityContext {
-                        run_as_user: Some(1000),
-                        run_as_group: Some(1000),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                }),
-            };
-
-            let replicas_set_spec = ReplicaSetSpec {
-                replicas: Some(num_validators),
-                selector: LabelSelector {
-                    match_labels: Some(label_selector.clone()),
-                    ..Default::default()
-                },
-                template: Some(pod_spec),
-                ..Default::default()
-            };
-
-            Ok(ReplicaSet {
-                metadata: ObjectMeta {
-                    name: Some(format!("{}-replicaset", app_name)),
-                    namespace: Some(self.namespace.to_string()),
-                    ..Default::default()
-                },
-                spec: Some(replicas_set_spec),
-                ..Default::default()
-            })
+            
+            volumes.push(genesis_volume);
+            volume_mounts.push(genesis_volume_mount);
         }
+        // Define the pod spec
+        let pod_spec = PodTemplateSpec {
+            metadata: Some(ObjectMeta {
+                labels: Some(label_selector.clone()),
+                ..Default::default()
+            }),
+            spec: Some(PodSpec {
+                containers: vec![Container {
+                    name: container_name.to_string(),
+                    image: Some(image_name.to_string()),
+                    image_pull_policy: Some("Always".to_string()),
+                    env: Some(env_vars),
+                    command: Some(command.to_owned()),
+                    volume_mounts: Some(volume_mounts),
+                    ..Default::default()
+                }],
+                volumes: Some(volumes),
+                security_context: Some(PodSecurityContext {
+                    run_as_user: Some(1000),
+                    run_as_group: Some(1000),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+        };
 
+        let replicas_set_spec = ReplicaSetSpec {
+            replicas: Some(num_validators),
+            selector: LabelSelector {
+                match_labels: Some(label_selector.clone()),
+                ..Default::default()
+            },
+            template: Some(pod_spec),
+            ..Default::default()
+        };
 
-
-        
+        Ok(ReplicaSet {
+            metadata: ObjectMeta {
+                name: Some(format!("{}-replicaset", app_name)),
+                namespace: Some(self.namespace.to_string()),
+                ..Default::default()
+            },
+            spec: Some(replicas_set_spec),
+            ..Default::default()
+        })        
     }
 
     pub async fn deploy_secret(&self, secret: &Secret) -> Result<Secret, kube::Error> {
