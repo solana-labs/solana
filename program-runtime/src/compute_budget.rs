@@ -181,7 +181,7 @@ impl ComputeBudget {
         }
     }
 
-    pub fn try_new_from<'a>(
+    pub fn try_from_instructions<'a>(
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
         feature_set: &FeatureSet,
     ) -> Result<Self> {

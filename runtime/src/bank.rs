@@ -5186,7 +5186,7 @@ impl Bank {
                         } else {
                             let mut compute_budget_process_transaction_time =
                                 Measure::start("compute_budget_process_transaction_time");
-                            let maybe_compute_budget = ComputeBudget::try_new_from(
+                            let maybe_compute_budget = ComputeBudget::try_from_instructions(
                                 tx.message().program_instructions_iter(),
                                 &self.feature_set,
                             );
