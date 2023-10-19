@@ -127,7 +127,7 @@ impl<'storage> StoredAccountMeta<'storage> {
 
     pub fn hash(&self) -> &'storage AccountHash {
         match self {
-            Self::AppendVec(av) => bytemuck::cast_ref(av.hash()),
+            Self::AppendVec(av) => av.hash(),
             Self::Hot(hot) => hot.hash().unwrap_or(&DEFAULT_ACCOUNT_HASH),
         }
     }
