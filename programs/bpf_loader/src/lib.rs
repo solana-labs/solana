@@ -33,10 +33,10 @@ use {
         entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
             bpf_account_data_direct_mapping, cap_accounts_data_allocations_per_transaction,
-            cap_bpf_program_instruction_accounts, delay_visibility_of_program_deployment,
-            enable_bpf_loader_extend_program_ix, enable_bpf_loader_set_authority_checked_ix,
-            enable_program_redeployment_cooldown, limit_max_instruction_trace_length,
-            native_programs_consume_cu, remove_bpf_loader_incorrect_program_id,
+            delay_visibility_of_program_deployment, enable_bpf_loader_extend_program_ix,
+            enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
+            limit_max_instruction_trace_length, native_programs_consume_cu,
+            remove_bpf_loader_incorrect_program_id,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -1543,9 +1543,6 @@ fn execute<'a, 'b: 'a>(
     let (parameter_bytes, regions, accounts_metadata) = serialization::serialize_parameters(
         invoke_context.transaction_context,
         instruction_context,
-        invoke_context
-            .feature_set
-            .is_active(&cap_bpf_program_instruction_accounts::ID),
         !direct_mapping,
     )?;
     serialize_time.stop();
