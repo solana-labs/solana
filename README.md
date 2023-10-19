@@ -143,3 +143,21 @@ Accordingly, there is a risk to individuals that other persons using any of the
 code contained in this repo, or a derivation thereof, may be sanctioned persons 
 and that transactions with such persons would be a violation of U.S. export 
 controls and sanctions law.
+
+## Contributors ✨
+
+Thanks goes to these wonderful people :
+
+<table>
+  <tr>
+     <td>
+  <a href="https://github.com/solana-labs/solana/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=solana-labs/solana" />
+  </a>
+    </td>
+  </tr>
+</table>
+
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!
+
+<p align="right"><a href="#top">Back to top</a></p>
