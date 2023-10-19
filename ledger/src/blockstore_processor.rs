@@ -289,9 +289,10 @@ fn execute_batches_internal(
     execute_batches_elapsed.stop();
 
     let receipts: Vec<Vec<(Hash,Hash)>> = results.clone().into_iter().filter(|res| res.is_ok()).map(|res| res.unwrap()).collect();
-    bank.append_receipts(receipts.clone());
     info!("chk1 done_executing batches {:?}", batches.len());
     info!("chk1 append_receipts: {:?} results {:?}",receipts, results);
+    bank.append_receipts(receipts.clone());
+   
     first_err(&results)?;
     // let first_err = {for r in results{
     //     if r.is_err(){

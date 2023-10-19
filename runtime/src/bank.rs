@@ -6681,9 +6681,12 @@ impl Bank {
             hashes.par_sort_unstable_by(|a,b| a.0.as_ref().cmp(b.0.as_ref()));
             let receipt_hashes: Vec<Hash> = hashes.par_iter().map(|item| item.1).collect();
            let mt = MerkleTree::new_with_leaves(receipt_hashes.clone());
-           info!("merkle_tree_leaves: {:?} {:?} {:?} {:?}", receipt_hashes,accounts_delta_hash,signature_count_buf,self.signature_count());
+           info!("chk1 merkle_tree_leaves: {:?} {:?} {:?} {:?}", receipt_hashes,signature_count_buf,self.signature_count(),hashes);
            if let Some(root) = mt.get_root(){
             receipt_root = root.to_bytes();
+           }
+           if hashes.len() > 0 {
+            hashes.clear();
            }
         }
       
@@ -6826,12 +6829,13 @@ impl Bank {
 
     pub fn append_receipts(&self, multi_batch_receipts: Vec<Vec<(Hash,Hash)>>){
         if let Ok(mut receipt_queue) = self.receipt_queue.write(){
+            // receipt_queue.clear();
             let mut temp_rec_queue = vec![];
           for mut batch in multi_batch_receipts{
             temp_rec_queue.append(&mut batch);
           }
             // temp_rec_queue.append(&mut receipt_tuples.clone());
-            receipt_queue.clear();
+            
             receipt_queue.append(&mut temp_rec_queue);
         }
     }
