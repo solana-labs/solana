@@ -4363,7 +4363,7 @@ impl AccountsDb {
         // This is a greedy algorithm - shrinking storage with largest saved_bytes will increase alive_ratio the most.
         let mut shrink_slots = HashMap::new();
         while let Some(usage) = store_usage.pop() {
-            let store = usage.store;
+            let store = usage.store.clone();
             let alive_ratio = (total_alive_bytes as f64) / (total_bytes as f64);
             debug!("alive_ratio: {:?} store_id: {:?}, store_ratio: {:?} requirement: {:?}, total_bytes: {:?} total_alive_bytes: {:?}",
                 alive_ratio, store.append_vec_id(), usage.alive_ratio, shrink_ratio, total_bytes, total_alive_bytes);
@@ -4377,6 +4377,7 @@ impl AccountsDb {
                      total_bytes: {:?}, alive_ratio: {:}, shrink_ratio: {:?}",
                     usage.slot, total_alive_bytes, total_bytes, alive_ratio, shrink_ratio
                 );
+                store_usage.push(usage);
                 break;
             }
         }
@@ -13619,6 +13620,61 @@ pub mod tests {
             }
             assert_eq!(0, next_candidates.len());
         }
+    }
+
+    #[test]
+    fn test_select_candidates_by_bytes_savings() {
+        solana_logger::setup();
+        let mut candidates = ShrinkCandidates::default();
+        let db = AccountsDb::new_single_for_tests();
+
+        let common_store_path = Path::new("");
+
+        // create first storage with alive_ration = 6 / 10
+        let slot_id_1 = 12;
+        let store_file_size1 = 10 * PAGE_SIZE;
+        let store1_id = 22;
+        let store1 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            slot_id_1,
+            store1_id,
+            store_file_size1,
+        ));
+        let store1_alive_bytes = (6 * PAGE_SIZE - 1) as usize;
+        store1
+            .alive_bytes
+            .store(store1_alive_bytes, Ordering::Release);
+        candidates.insert(slot_id_1);
+        db.storage.insert(slot_id_1, Arc::clone(&store1));
+
+        // create second storage with alive_ratio = 1 / 2
+        let slot_id_2 = 13;
+        let store_file_size2 = 2 * PAGE_SIZE;
+        let store2_id = 44;
+        let store2 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            slot_id_2,
+            store2_id,
+            store_file_size2,
+        ));
+        let store2_alive_bytes = (PAGE_SIZE - 1) as usize;
+        store2
+            .alive_bytes
+            .store(store2_alive_bytes, Ordering::Release);
+        candidates.insert(slot_id_2);
+        db.storage.insert(slot_id_2, Arc::clone(&store2));
+
+        // Given 0.8 target alive ratio, expect that only first storage to be selected and second storage will be saved for next batch.
+        // This is because shrinking the first storage will be enought to raise the alive ratio up to 7/8 > 0.8.
+        let target_alive_ratio = 0.8;
+        let SelectShrinkCandidateResult {
+            to_shrink: selected_candidates,
+            next_batch: next_candidates,
+        } = db.select_candidates_by_total_usage(&candidates, target_alive_ratio, None);
+        assert_eq!(1, selected_candidates.len());
+        assert!(selected_candidates.contains(&slot_id_1));
+        assert_eq!(1, next_candidates.len());
+        assert!(next_candidates.contains(&slot_id_2));
     }
 
     const UPSERT_POPULATE_RECLAIMS: UpsertReclaim = UpsertReclaim::PopulateReclaims;
