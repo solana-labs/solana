@@ -6623,7 +6623,7 @@ impl AccountsDb {
                 let pubkeys = self.get_filler_account_pubkeys(filler_accounts as usize);
                 pubkeys.iter().for_each(|key| {
                     accounts.push((key, &account));
-                    hashes.push(AccountHash(hash));
+                    hashes.push(hash);
                 });
                 self.store_accounts_frozen(
                     (slot, &accounts[..], include_slot_in_hash),
@@ -9098,9 +9098,9 @@ impl AccountsDb {
     }
 
     /// return 'AccountSharedData' and a hash for a filler account
-    fn get_filler_account(&self, rent: &Rent) -> (AccountSharedData, Hash) {
+    fn get_filler_account(&self, rent: &Rent) -> (AccountSharedData, AccountHash) {
         let string = "FiLLERACCoUNTooooooooooooooooooooooooooooooo";
-        let hash = Hash::from_str(string).unwrap();
+        let hash = AccountHash(Hash::from_str(string).unwrap());
         let owner = Pubkey::from_str(string).unwrap();
         let space = self.filler_accounts_config.size;
         let rent_exempt_reserve = rent.minimum_balance(space);
