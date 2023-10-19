@@ -2,7 +2,7 @@
 use {
     crate::{
         client::Client,
-        publisher::{Error, Publisher},
+        crate_handler::{Error, Publisher},
         sparse_index::RegistryIndex,
     },
     hyper::{
@@ -18,7 +18,7 @@ use {
 };
 
 mod client;
-mod publisher;
+mod crate_handler;
 
 mod response_builder;
 mod sparse_index;

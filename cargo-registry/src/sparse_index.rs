@@ -1,6 +1,6 @@
 use {
     crate::{
-        publisher::{Dependency, Error, PackageMetaData},
+        crate_handler::{Dependency, Error, PackageMetaData},
         response_builder,
     },
     log::info,
