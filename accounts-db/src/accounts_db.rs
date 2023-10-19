@@ -1498,6 +1498,8 @@ pub struct AccountsDb {
 
     pub stats: AccountsStats,
 
+    shrink_candidates_stats: ShrinkCandidatesStats,
+
     clean_accounts_stats: CleanAccountsStats,
 
     // Stats for purges called outside of clean_accounts()
@@ -2442,6 +2444,81 @@ pub struct PubkeyHashAccount {
     pub account: AccountSharedData,
 }
 
+struct SelectedShrinkCandidates {
+    to_shrink: HashMap<Slot, Arc<AccountStorageEntry>>,
+    next_batch: ShrinkCandidates,
+}
+
+#[derive(Debug, Default)]
+pub struct ShrinkCandidatesStats {
+    last_report: AtomicInterval,
+    select_candidates_us: AtomicU64,
+    shrink_candidates_us: AtomicU64,
+    shrink_candidates_count: AtomicUsize,
+    shrink_candidates_selected_count: AtomicUsize,
+    shrink_candidates_pending_count: AtomicUsize,
+}
+
+impl ShrinkCandidatesStats {
+    fn update(
+        &self,
+        select_us: u64,
+        shrink_us: u64,
+        candidate_count: usize,
+        shrink_count: usize,
+        pending_count: usize,
+    ) {
+        self.select_candidates_us
+            .fetch_add(select_us, Ordering::Relaxed);
+        self.shrink_candidates_us
+            .fetch_add(shrink_us, Ordering::Relaxed);
+        self.shrink_candidates_count
+            .fetch_add(candidate_count, Ordering::Relaxed);
+        self.shrink_candidates_selected_count
+            .fetch_add(shrink_count, Ordering::Relaxed);
+        self.shrink_candidates_pending_count
+            .fetch_add(pending_count, Ordering::Relaxed);
+    }
+
+    fn report(&self) {
+        const REPORT_INTERVAL_MS: u64 = 10_000;
+        let should_report = self.last_report.should_update(REPORT_INTERVAL_MS);
+
+        if should_report {
+            datapoint_info!(
+                "shrink_candidates-stat",
+                (
+                    "select_candidates_us",
+                    self.select_candidates_us.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "shrink_all_candidates_us",
+                    self.shrink_candidates_us.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "shrink_candidates_count",
+                    self.shrink_candidates_count.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "shrink_candidates_selected_count",
+                    self.shrink_candidates_selected_count
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "shrink_candidates_pending_count",
+                    self.shrink_candidates_pending_count
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                ),
+            );
+        }
+    }
+}
+
 impl AccountsDb {
     pub const DEFAULT_ACCOUNTS_HASH_CACHE_DIR: &'static str = "accounts_hash_cache";
 
@@ -2531,6 +2608,7 @@ impl AccountsDb {
             shrink_stats: ShrinkStats::default(),
             shrink_ancient_stats: ShrinkAncientStats::default(),
             stats: AccountsStats::default(),
+            shrink_candidates_stats: ShrinkCandidatesStats::default(),
             cluster_type: None,
             account_indexes: AccountSecondaryIndexes::default(),
             #[cfg(test)]
@@ -4287,30 +4365,45 @@ impl AccountsDb {
         self.storage.all_slots()
     }
 
-    /// Given the input `ShrinkCandidates`, this function sorts the stores by their alive ratio
-    /// in increasing order with the most sparse entries in the front. It will then simulate the
-    /// shrinking by working on the most sparse entries first and if the overall alive ratio is
-    /// achieved, it will stop and return:
-    /// first tuple element: the filtered-down candidates and
-    /// second duple element: the candidates which
-    /// are skipped in this round and might be eligible for the future shrink.
+    /// Given the input `ShrinkCandidates`, this function selects the stores by their shrinking byte-savings
+    /// in decreasing order to raise overall alive ratio to achieve the desired `shrink_ratio`.
+    /// Returns SelectShrinkCandidateResult:
+    ///     - the candidates to shrink in this pass
+    ///     - the remaining candidates to retry in next pass
     fn select_candidates_by_total_usage(
         &self,
         shrink_slots: &ShrinkCandidates,
         shrink_ratio: f64,
         oldest_non_ancient_slot: Option<Slot>,
-    ) -> (HashMap<Slot, Arc<AccountStorageEntry>>, ShrinkCandidates) {
+    ) -> SelectedShrinkCandidates {
         struct StoreUsageInfo {
             slot: Slot,
             alive_ratio: f64,
             store: Arc<AccountStorageEntry>,
+            bytes_saved: u64,
         }
-        let mut measure = Measure::start("select_top_sparse_storage_entries-ms");
-        let mut store_usage: Vec<StoreUsageInfo> = Vec::with_capacity(shrink_slots.len());
+        impl Ord for StoreUsageInfo {
+            fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+                self.bytes_saved.cmp(&other.bytes_saved)
+            }
+        }
+        impl PartialOrd for StoreUsageInfo {
+            fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+        impl PartialEq for StoreUsageInfo {
+            fn eq(&self, other: &Self) -> bool {
+                self.bytes_saved == other.bytes_saved
+            }
+        }
+        impl Eq for StoreUsageInfo {}
+
+        // create a max-heap to store the StorageUsageInfo by saved bytes
+        let mut store_usage: std::collections::BinaryHeap<StoreUsageInfo> =
+            std::collections::BinaryHeap::with_capacity(shrink_slots.len());
         let mut total_alive_bytes: u64 = 0;
-        let mut candidates_count: usize = 0;
         let mut total_bytes: u64 = 0;
-        let mut total_candidate_stores: usize = 0;
         for slot in shrink_slots {
             if oldest_non_ancient_slot
                 .map(|oldest_non_ancient_slot| slot < &oldest_non_ancient_slot)
@@ -4322,68 +4415,57 @@ impl AccountsDb {
             let Some(store) = self.storage.get_slot_storage_entry(*slot) else {
                 continue;
             };
-            candidates_count += 1;
             total_alive_bytes += Self::page_align(store.alive_bytes() as u64);
             total_bytes += store.capacity();
             let alive_ratio =
                 Self::page_align(store.alive_bytes() as u64) as f64 / store.capacity() as f64;
+
+            let current_store_size = store.capacity();
+            let after_shrink_size = Self::page_align(store.alive_bytes() as u64);
+            let bytes_saved = current_store_size.saturating_sub(after_shrink_size);
+
             store_usage.push(StoreUsageInfo {
                 slot: *slot,
                 alive_ratio,
                 store: store.clone(),
+                bytes_saved,
             });
-            total_candidate_stores += 1;
         }
-        store_usage.sort_by(|a, b| {
-            a.alive_ratio
-                .partial_cmp(&b.alive_ratio)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
 
-        // Working from the beginning of store_usage which are the most sparse and see when we can stop
-        // shrinking while still achieving the overall goals.
+        // Pop from the max-heap by saved_bytes from large to small until alive_ratio meets with shrink_ratio.
+        // This is a greedy algorithm - shrinking storage with largest saved_bytes will increase alive_ratio the most.
         let mut shrink_slots = HashMap::new();
-        let mut shrink_slots_next_batch = ShrinkCandidates::default();
-        for usage in &store_usage {
-            let store = &usage.store;
+        while let Some(usage) = store_usage.pop() {
+            let store = usage.store.clone();
             let alive_ratio = (total_alive_bytes as f64) / (total_bytes as f64);
             debug!("alive_ratio: {:?} store_id: {:?}, store_ratio: {:?} requirement: {:?}, total_bytes: {:?} total_alive_bytes: {:?}",
-                alive_ratio, usage.store.append_vec_id(), usage.alive_ratio, shrink_ratio, total_bytes, total_alive_bytes);
-            if alive_ratio > shrink_ratio {
+                alive_ratio, store.append_vec_id(), usage.alive_ratio, shrink_ratio, total_bytes, total_alive_bytes);
+            if alive_ratio < shrink_ratio {
+                total_bytes -= usage.bytes_saved;
+                shrink_slots.insert(usage.slot, store);
+            } else {
                 // we have reached our goal, stop
                 debug!(
                     "Shrinking goal can be achieved at slot {:?}, total_alive_bytes: {:?} \
-                    total_bytes: {:?}, alive_ratio: {:}, shrink_ratio: {:?}",
+                     total_bytes: {:?}, alive_ratio: {:}, shrink_ratio: {:?}",
                     usage.slot, total_alive_bytes, total_bytes, alive_ratio, shrink_ratio
                 );
-                if usage.alive_ratio < shrink_ratio {
-                    shrink_slots_next_batch.insert(usage.slot);
-                } else {
-                    break;
-                }
-            } else {
-                let current_store_size = store.capacity();
-                let after_shrink_size = Self::page_align(store.alive_bytes() as u64);
-                let bytes_saved = current_store_size.saturating_sub(after_shrink_size);
-                total_bytes -= bytes_saved;
-                shrink_slots.insert(usage.slot, Arc::clone(store));
+                store_usage.push(usage);
+                break;
             }
         }
-        measure.stop();
-        inc_new_counter_debug!(
-            "shrink_select_top_sparse_storage_entries-ms",
-            measure.as_ms() as usize
-        );
-        inc_new_counter_debug!(
-            "shrink_select_top_sparse_storage_entries-seeds",
-            candidates_count
-        );
-        inc_new_counter_debug!(
-            "shrink_total_preliminary_candidate_stores",
-            total_candidate_stores
-        );
 
-        (shrink_slots, shrink_slots_next_batch)
+        // collect remaining slots whose alive_ratios are smaller than shrink_ratio for next shrinking batch
+        let shrink_slots_next_batch: ShrinkCandidates = store_usage
+            .iter()
+            .filter(|s| s.alive_ratio < shrink_ratio)
+            .map(|s| s.slot)
+            .collect();
+
+        SelectedShrinkCandidates {
+            to_shrink: shrink_slots,
+            next_batch: shrink_slots_next_batch,
+        }
     }
 
     fn get_roots_less_than(&self, slot: Slot) -> Vec<Slot> {
@@ -4772,15 +4854,19 @@ impl AccountsDb {
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
 
+        let shrink_candidates_count = shrink_candidates_slots.len();
+
         let (shrink_slots, shrink_slots_next_batch) = {
             if let AccountShrinkThreshold::TotalSpace { shrink_ratio } = self.shrink_ratio {
-                let (shrink_slots, shrink_slots_next_batch) = self
-                    .select_candidates_by_total_usage(
-                        &shrink_candidates_slots,
-                        shrink_ratio,
-                        self.ancient_append_vec_offset
-                            .map(|_| oldest_non_ancient_slot),
-                    );
+                let SelectedShrinkCandidates {
+                    to_shrink: shrink_slots,
+                    next_batch: shrink_slots_next_batch,
+                } = self.select_candidates_by_total_usage(
+                    &shrink_candidates_slots,
+                    shrink_ratio,
+                    self.ancient_append_vec_offset
+                        .map(|_| oldest_non_ancient_slot),
+                );
                 (shrink_slots, Some(shrink_slots_next_batch))
             } else {
                 (
@@ -4812,7 +4898,6 @@ impl AccountsDb {
 
         let mut measure_shrink_all_candidates = Measure::start("shrink_all_candidate_slots");
         let num_candidates = shrink_slots.len();
-        let shrink_candidates_count = shrink_slots.len();
         self.thread_pool_clean.install(|| {
             shrink_slots
                 .into_par_iter()
@@ -4831,22 +4916,15 @@ impl AccountsDb {
             }
         }
 
-        datapoint_info!(
-            "shrink_candidates-stat",
-            (
-                "select_candidates_us",
-                measure_select_candidates.as_us(),
-                i64
-            ),
-            (
-                "shrink_all_candidates_us",
-                measure_shrink_all_candidates.as_us(),
-                i64
-            ),
-            ("shrink_candidates_count", shrink_candidates_count, i64),
-            ("shrink_candidates_pending_count", pended_counts, i64),
+        self.shrink_candidates_stats.update(
+            measure_select_candidates.as_us(),
+            measure_shrink_all_candidates.as_us(),
+            shrink_candidates_count,
+            num_candidates,
+            pended_counts,
         );
 
+        self.shrink_candidates_stats.report();
         num_candidates
     }
 
@@ -13378,8 +13456,10 @@ pub mod tests {
         let candidates = ShrinkCandidates::default();
         let db = AccountsDb::new_single_for_tests();
 
-        let (selected_candidates, next_candidates) =
-            db.select_candidates_by_total_usage(&candidates, DEFAULT_ACCOUNTS_SHRINK_RATIO, None);
+        let SelectedShrinkCandidates {
+            to_shrink: selected_candidates,
+            next_batch: next_candidates,
+        } = db.select_candidates_by_total_usage(&candidates, DEFAULT_ACCOUNTS_SHRINK_RATIO, None);
 
         assert_eq!(0, selected_candidates.len());
         assert_eq!(0, next_candidates.len());
@@ -13450,8 +13530,10 @@ pub mod tests {
         // The target ratio is also set to larger than store2's alive ratio: 0.5 so that it would be added
         // to the candidates list for next round.
         let target_alive_ratio = 0.6;
-        let (selected_candidates, next_candidates) =
-            db.select_candidates_by_total_usage(&candidates, target_alive_ratio, None);
+        let SelectedShrinkCandidates {
+            to_shrink: selected_candidates,
+            next_batch: next_candidates,
+        } = db.select_candidates_by_total_usage(&candidates, target_alive_ratio, None);
         assert_eq!(1, selected_candidates.len());
         assert!(selected_candidates.contains(&slot_id_1));
         assert_eq!(1, next_candidates.len());
@@ -13516,8 +13598,10 @@ pub mod tests {
 
         // Set the target ratio to default (0.8), both store1 and store2 must be selected and store3 is ignored.
         let target_alive_ratio = DEFAULT_ACCOUNTS_SHRINK_RATIO;
-        let (selected_candidates, next_candidates) =
-            db.select_candidates_by_total_usage(&candidates, target_alive_ratio, None);
+        let SelectedShrinkCandidates {
+            to_shrink: selected_candidates,
+            next_batch: next_candidates,
+        } = db.select_candidates_by_total_usage(&candidates, target_alive_ratio, None);
         assert_eq!(2, selected_candidates.len());
         assert!(selected_candidates.contains(&slot_id_1));
         assert!(selected_candidates.contains(&slot_id_2));
@@ -13573,7 +13657,10 @@ pub mod tests {
         for newest_ancient_slot in [None, Some(slot1), Some(slot2)] {
             // Set the target ratio to default (0.8), both stores from the two different slots must be selected.
             let target_alive_ratio = DEFAULT_ACCOUNTS_SHRINK_RATIO;
-            let (selected_candidates, next_candidates) = db.select_candidates_by_total_usage(
+            let SelectedShrinkCandidates {
+                to_shrink: selected_candidates,
+                next_batch: next_candidates,
+            } = db.select_candidates_by_total_usage(
                 &candidates,
                 target_alive_ratio,
                 newest_ancient_slot.map(|newest_ancient_slot| newest_ancient_slot + 1),
@@ -13598,6 +13685,61 @@ pub mod tests {
             }
             assert_eq!(0, next_candidates.len());
         }
+    }
+
+    #[test]
+    fn test_select_candidates_by_bytes_savings() {
+        solana_logger::setup();
+        let mut candidates = ShrinkCandidates::default();
+        let db = AccountsDb::new_single_for_tests();
+
+        let common_store_path = Path::new("");
+
+        // create first storage with alive_ration = 6 / 10
+        let slot_id_1 = 12;
+        let store_file_size1 = 10 * PAGE_SIZE;
+        let store1_id = 22;
+        let store1 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            slot_id_1,
+            store1_id,
+            store_file_size1,
+        ));
+        let store1_alive_bytes = (6 * PAGE_SIZE - 1) as usize;
+        store1
+            .alive_bytes
+            .store(store1_alive_bytes, Ordering::Release);
+        candidates.insert(slot_id_1);
+        db.storage.insert(slot_id_1, Arc::clone(&store1));
+
+        // create second storage with alive_ratio = 1 / 2
+        let slot_id_2 = 13;
+        let store_file_size2 = 2 * PAGE_SIZE;
+        let store2_id = 44;
+        let store2 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            slot_id_2,
+            store2_id,
+            store_file_size2,
+        ));
+        let store2_alive_bytes = (PAGE_SIZE - 1) as usize;
+        store2
+            .alive_bytes
+            .store(store2_alive_bytes, Ordering::Release);
+        candidates.insert(slot_id_2);
+        db.storage.insert(slot_id_2, Arc::clone(&store2));
+
+        // Given 0.8 target alive ratio, expect that only first storage to be selected and second storage will be saved for next batch.
+        // This is because shrinking the first storage will be enought to raise the alive ratio up to 7/8 > 0.8.
+        let target_alive_ratio = 0.8;
+        let SelectedShrinkCandidates {
+            to_shrink: selected_candidates,
+            next_batch: next_candidates,
+        } = db.select_candidates_by_total_usage(&candidates, target_alive_ratio, None);
+        assert_eq!(1, selected_candidates.len());
+        assert!(selected_candidates.contains(&slot_id_1));
+        assert_eq!(1, next_candidates.len());
+        assert!(next_candidates.contains(&slot_id_2));
     }
 
     const UPSERT_POPULATE_RECLAIMS: UpsertReclaim = UpsertReclaim::PopulateReclaims;
