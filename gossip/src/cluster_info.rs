@@ -971,17 +971,19 @@ impl ClusterInfo {
         last_vote_bankhash: Hash,
     ) {
         let now = timestamp();
-        let last_voted_fork_slots = RestartLastVotedForkSlots::new(
+        match RestartLastVotedForkSlots::new(
             self.id(),
             now,
             update,
             last_vote_bankhash,
             self.my_shred_version(),
-        );
-        self.push_message(CrdsValue::new_signed(
-            CrdsData::RestartLastVotedForkSlots(last_voted_fork_slots),
-            &self.keypair(),
-        ));
+        ) {
+            Ok(last_voted_fork_slots) => self.push_message(CrdsValue::new_signed(
+                CrdsData::RestartLastVotedForkSlots(last_voted_fork_slots),
+                &self.keypair(),
+            )),
+            Err(e) => error!("failed to create RestartLastVotedForkSlots {:?}", e),
+        }
     }
 
     fn time_gossip_read_lock<'a>(

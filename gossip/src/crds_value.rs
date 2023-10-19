@@ -24,7 +24,7 @@ use {
     solana_vote::vote_parser,
     std::{
         borrow::{Borrow, Cow},
-        cmp::Ordering,
+        cmp::{Ordering, Reverse},
         collections::{hash_map::Entry, BTreeSet, HashMap},
         fmt,
     },
@@ -42,7 +42,7 @@ pub type EpochSlotsIndex = u8;
 pub const MAX_EPOCH_SLOTS: EpochSlotsIndex = 255;
 
 // This number is MAX_CRDS_OBJECT_SIZE - empty serialized RestartLastVotedForkSlots.
-const MAX_RESTART_LAST_VOTED_FORK_SLOTS_SPACE: usize = 830;
+const MAX_RESTART_LAST_VOTED_FORK_SLOTS_SPACE: usize = 827;
 
 /// CrdsValue that is replicated across the cluster
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
@@ -522,17 +522,14 @@ impl RestartLastVotedForkSlots {
         last_voted_fork: &mut [Slot],
         last_voted_hash: Hash,
         shred_version: u16,
-    ) -> Self {
+    ) -> Result<Self, String> {
         let last_voted_slot;
         let mut compressed_slots;
         let uncompressed_bytes;
         if last_voted_fork.is_empty() {
-            last_voted_slot = 0;
-            compressed_slots = Vec::with_capacity(1);
-            uncompressed_bytes = 1;
+            return Err("Last voted slot must be specified".to_string());
         } else {
-            last_voted_fork.sort();
-            last_voted_fork.reverse();
+            last_voted_fork.sort_by_key(|a| Reverse(*a));
             last_voted_slot = last_voted_fork[0];
             let max_size = last_voted_slot.saturating_sub(*last_voted_fork.last().unwrap()) + 1;
             let mut uncompressed_bitvec = BitVec::new_fill(false, max_size);
@@ -553,18 +550,22 @@ impl RestartLastVotedForkSlots {
                     let in_bytes = compressor.total_in();
                     uncompressed_bitvec.truncate((in_bytes - 1) * 8);
                     compressor = Compress::new(Compression::best(), false);
-                    let _ = compressor.compress_vec(
+                    if let Err(e) = compressor.compress_vec(
                         &uncompressed_bitvec.into_boxed_slice(),
                         &mut compressed_slots,
                         FlushCompress::Finish,
-                    );
+                    ) {
+                        return Err(e.to_string());
+                    }
                 }
-                Err(e) => error!("Error compressing slots {:?}", e),
-                _ => (),
+                Err(e) => return Err(e.to_string()),
+                // compression ended successfully, proceed.
+                Ok(flate2::Status::StreamEnd) => (),
+                Ok(flate2::Status::BufError) => (),
             }
             uncompressed_bytes = compressor.total_in();
         }
-        Self {
+        Ok(Self {
             from,
             wallclock: now,
             compressed_slots,
@@ -572,7 +573,7 @@ impl RestartLastVotedForkSlots {
             last_voted_slot,
             last_voted_hash,
             shred_version,
-        }
+        })
     }
 
     /// New random Version for tests and benchmarks.
@@ -589,6 +590,7 @@ impl RestartLastVotedForkSlots {
             Hash::new_unique(),
             1,
         )
+        .unwrap()
     }
 
     pub fn to_slots(&self, min_slot: Slot) -> Result<Vec<Slot>, DecompressError> {
@@ -1232,10 +1234,11 @@ mod test {
         let header = RestartLastVotedForkSlots::new(
             keypair.pubkey(),
             timestamp(),
-            &mut [],
+            &mut [1],
             Hash::default(),
             0,
-        );
+        )
+        .unwrap();
         // If the following assert fails, please update MAX_RESTART_LAST_VOTED_FORK_SLOTS_SPACE
         assert_eq!(
             MAX_RESTART_LAST_VOTED_FORK_SLOTS_SPACE,
@@ -1252,7 +1255,8 @@ mod test {
             &mut range,
             Hash::default(),
             0,
-        );
+        )
+        .unwrap();
         assert!(serialized_size(&large_slots).unwrap() <= MAX_CRDS_OBJECT_SIZE as u64);
         let retrieved_slots = large_slots.to_slots(0).unwrap();
         assert!(retrieved_slots.len() <= range.len());
@@ -1271,7 +1275,8 @@ mod test {
             &mut original_slots_vec,
             Hash::default(),
             shred_version,
-        );
+        )
+        .unwrap();
         let value =
             CrdsValue::new_signed(CrdsData::RestartLastVotedForkSlots(slots.clone()), &keypair);
         assert_eq!(value.sanitize(), Ok(()));
@@ -1294,7 +1299,7 @@ mod test {
             Hash::default(),
             shred_version,
         );
-        assert_eq!(bad_value.sanitize(), Err(SanitizeError::InvalidValue));
+        assert!(bad_value.is_err());
 
         let last_slot: Slot = 5000;
         let mut large_slots_vec: Vec<Slot> = (0..last_slot + 1).collect();
@@ -1304,7 +1309,8 @@ mod test {
             &mut large_slots_vec,
             Hash::default(),
             shred_version,
-        );
+        )
+        .unwrap();
         assert!(serialized_size(&large_slots).unwrap() < MAX_CRDS_OBJECT_SIZE as u64);
         let retrieved_slots = large_slots.to_slots(0).unwrap();
         assert!(retrieved_slots.len() >= 5000);
