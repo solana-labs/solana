@@ -2026,7 +2026,7 @@ pub mod tests {
             rent_epoch: 0,
         };
         let offset = 3;
-        let hash = Hash::new(&[2; 32]);
+        let hash = AccountHash(Hash::new(&[2; 32]));
         let stored_meta = StoredMeta {
             // global write version
             write_version_obsolete: 0,
@@ -3009,7 +3009,7 @@ pub mod tests {
         };
         let offset = 99;
         let stored_size = 101;
-        let hash = Hash::new_unique();
+        let hash = AccountHash(Hash::new_unique());
         let stored_account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &meta,
             account_meta: &account_meta,
@@ -3091,7 +3091,7 @@ pub mod tests {
         };
         let offset = 99;
         let stored_size = 1; // size is 1 byte for each entry to test `bytes` later
-        let hash = Hash::new_unique();
+        let hash = AccountHash(Hash::new_unique());
         let stored_account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &meta,
             account_meta: &account_meta,
