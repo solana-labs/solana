@@ -59,6 +59,8 @@ pub enum ProgramError {
     MaxInstructionTraceLengthExceeded,
     #[error("Builtin programs must consume compute units")]
     BuiltinProgramsMustConsumeComputeUnits,
+    #[error("Invalid account owner")]
+    InvalidAccountOwner,
 }
 
 pub trait PrintProgramError {
@@ -107,6 +109,7 @@ impl PrintProgramError for ProgramError {
             Self::BuiltinProgramsMustConsumeComputeUnits => {
                 msg!("Error: BuiltinProgramsMustConsumeComputeUnits")
             }
+            Self::InvalidAccountOwner => msg!("Error: InvalidAccountOwner"),
         }
     }
 }
@@ -141,6 +144,7 @@ pub const MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED: u64 = to_builtin!(19);
 pub const INVALID_ACCOUNT_DATA_REALLOC: u64 = to_builtin!(20);
 pub const MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED: u64 = to_builtin!(21);
 pub const BUILTIN_PROGRAMS_MUST_CONSUME_COMPUTE_UNITS: u64 = to_builtin!(22);
+pub const INVALID_ACCOUNT_OWNER: u64 = to_builtin!(23);
 // Warning: Any new program errors added here must also be:
 // - Added to the below conversions
 // - Added as an equivalent to InstructionError
@@ -177,6 +181,7 @@ impl From<ProgramError> for u64 {
             ProgramError::BuiltinProgramsMustConsumeComputeUnits => {
                 BUILTIN_PROGRAMS_MUST_CONSUME_COMPUTE_UNITS
             }
+            ProgramError::InvalidAccountOwner => INVALID_ACCOUNT_OWNER,
             ProgramError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
@@ -215,6 +220,7 @@ impl From<u64> for ProgramError {
             BUILTIN_PROGRAMS_MUST_CONSUME_COMPUTE_UNITS => {
                 Self::BuiltinProgramsMustConsumeComputeUnits
             }
+            INVALID_ACCOUNT_OWNER => Self::InvalidAccountOwner,
             _ => Self::Custom(error as u32),
         }
     }
@@ -253,6 +259,7 @@ impl TryFrom<InstructionError> for ProgramError {
             Self::Error::BuiltinProgramsMustConsumeComputeUnits => {
                 Ok(Self::BuiltinProgramsMustConsumeComputeUnits)
             }
+            Self::Error::InvalidAccountOwner => Ok(Self::InvalidAccountOwner),
             _ => Err(error),
         }
     }
@@ -289,6 +296,7 @@ where
             BUILTIN_PROGRAMS_MUST_CONSUME_COMPUTE_UNITS => {
                 Self::BuiltinProgramsMustConsumeComputeUnits
             }
+            INVALID_ACCOUNT_OWNER => Self::InvalidAccountOwner,
             _ => {
                 // A valid custom error has no bits set in the upper 32
                 if error >> BUILTIN_BIT_SHIFT == 0 {
