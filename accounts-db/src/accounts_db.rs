@@ -4365,12 +4365,114 @@ impl AccountsDb {
         self.storage.all_slots()
     }
 
+    /// Given the input `ShrinkCandidates`, this function sorts the stores by their alive ratio
+    /// in increasing order with the most sparse entries in the front. It will then simulate the
+    /// shrinking by working on the most sparse entries first and if the overall alive ratio is
+    /// achieved, it will stop and return:
+    /// first tuple element: the filtered-down candidates and
+    /// second duple element: the candidates which
+    /// are skipped in this round and might be eligible for the future shrink.
+    fn select_candidates_by_total_usage(
+        &self,
+        shrink_slots: &ShrinkCandidates,
+        shrink_ratio: f64,
+        oldest_non_ancient_slot: Option<Slot>,
+    ) -> SelectedShrinkCandidates {
+        struct StoreUsageInfo {
+            slot: Slot,
+            alive_ratio: f64,
+            store: Arc<AccountStorageEntry>,
+        }
+        let mut measure = Measure::start("select_top_sparse_storage_entries-ms");
+        let mut store_usage: Vec<StoreUsageInfo> = Vec::with_capacity(shrink_slots.len());
+        let mut total_alive_bytes: u64 = 0;
+        let mut candidates_count: usize = 0;
+        let mut total_bytes: u64 = 0;
+        let mut total_candidate_stores: usize = 0;
+        for slot in shrink_slots {
+            if oldest_non_ancient_slot
+                .map(|oldest_non_ancient_slot| slot < &oldest_non_ancient_slot)
+                .unwrap_or_default()
+            {
+                // this slot will be 'shrunk' by ancient code
+                continue;
+            }
+            let Some(store) = self.storage.get_slot_storage_entry(*slot) else {
+                continue;
+            };
+            candidates_count += 1;
+            total_alive_bytes += Self::page_align(store.alive_bytes() as u64);
+            total_bytes += store.capacity();
+            let alive_ratio =
+                Self::page_align(store.alive_bytes() as u64) as f64 / store.capacity() as f64;
+            store_usage.push(StoreUsageInfo {
+                slot: *slot,
+                alive_ratio,
+                store: store.clone(),
+            });
+            total_candidate_stores += 1;
+        }
+        store_usage.sort_by(|a, b| {
+            a.alive_ratio
+                .partial_cmp(&b.alive_ratio)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        // Working from the beginning of store_usage which are the most sparse and see when we can stop
+        // shrinking while still achieving the overall goals.
+        let mut shrink_slots = HashMap::new();
+        let mut shrink_slots_next_batch = ShrinkCandidates::default();
+        for usage in &store_usage {
+            let store = &usage.store;
+            let alive_ratio = (total_alive_bytes as f64) / (total_bytes as f64);
+            debug!("alive_ratio: {:?} store_id: {:?}, store_ratio: {:?} requirement: {:?}, total_bytes: {:?} total_alive_bytes: {:?}",
+                alive_ratio, usage.store.append_vec_id(), usage.alive_ratio, shrink_ratio, total_bytes, total_alive_bytes);
+            if alive_ratio > shrink_ratio {
+                // we have reached our goal, stop
+                debug!(
+                    "Shrinking goal can be achieved at slot {:?}, total_alive_bytes: {:?} \
+                    total_bytes: {:?}, alive_ratio: {:}, shrink_ratio: {:?}",
+                    usage.slot, total_alive_bytes, total_bytes, alive_ratio, shrink_ratio
+                );
+                if usage.alive_ratio < shrink_ratio {
+                    shrink_slots_next_batch.insert(usage.slot);
+                } else {
+                    break;
+                }
+            } else {
+                let current_store_size = store.capacity();
+                let after_shrink_size = Self::page_align(store.alive_bytes() as u64);
+                let bytes_saved = current_store_size.saturating_sub(after_shrink_size);
+                total_bytes -= bytes_saved;
+                shrink_slots.insert(usage.slot, Arc::clone(store));
+            }
+        }
+        measure.stop();
+        inc_new_counter_debug!(
+            "shrink_select_top_sparse_storage_entries-ms",
+            measure.as_ms() as usize
+        );
+        inc_new_counter_debug!(
+            "shrink_select_top_sparse_storage_entries-seeds",
+            candidates_count
+        );
+        inc_new_counter_debug!(
+            "shrink_total_preliminary_candidate_stores",
+            total_candidate_stores
+        );
+
+        SelectedShrinkCandidates {
+            to_shrink: shrink_slots,
+            next_batch: shrink_slots_next_batch,
+        }
+    }
+
     /// Given the input `ShrinkCandidates`, this function selects the stores by their shrinking byte-savings
     /// in decreasing order to raise overall alive ratio to achieve the desired `shrink_ratio`.
     /// Returns SelectShrinkCandidateResult:
     ///     - the candidates to shrink in this pass
     ///     - the remaining candidates to retry in next pass
-    fn select_candidates_by_total_usage(
+    fn select_candidates_by_total_usage2(
         &self,
         shrink_slots: &ShrinkCandidates,
         shrink_ratio: f64,
