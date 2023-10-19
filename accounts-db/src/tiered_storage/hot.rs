@@ -2,17 +2,22 @@
 //! The account meta and related structs for hot accounts.
 
 use {
-    crate::tiered_storage::{
-        byte_block,
-        footer::{AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat, TieredStorageFooter},
-        index::AccountIndexFormat,
-        meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
-        mmap_utils::get_type,
-        TieredStorageFormat, TieredStorageResult,
+    crate::{
+        accounts_hash::AccountHash,
+        tiered_storage::{
+            byte_block,
+            footer::{
+                AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat, TieredStorageFooter,
+            },
+            index::AccountIndexFormat,
+            meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
+            mmap_utils::get_type,
+            TieredStorageFormat, TieredStorageResult,
+        },
     },
     memmap2::{Mmap, MmapOptions},
     modular_bitfield::prelude::*,
-    solana_sdk::{hash::Hash, stake_history::Epoch},
+    solana_sdk::stake_history::Epoch,
     std::{fs::OpenOptions, option::Option, path::Path},
 };
 
@@ -152,13 +157,13 @@ impl TieredAccountMeta for HotAccountMeta {
 
     /// Returns the account hash by parsing the specified account block.  None
     /// will be returned if this account does not persist this optional field.
-    fn account_hash<'a>(&self, account_block: &'a [u8]) -> Option<&'a Hash> {
+    fn account_hash<'a>(&self, account_block: &'a [u8]) -> Option<&'a AccountHash> {
         self.flags()
             .has_account_hash()
             .then(|| {
                 let offset = self.optional_fields_offset(account_block)
                     + AccountMetaOptionalFields::account_hash_offset(self.flags());
-                byte_block::read_type::<Hash>(account_block, offset)
+                byte_block::read_type::<AccountHash>(account_block, offset)
             })
             .flatten()
     }
@@ -239,9 +244,9 @@ pub mod tests {
             index::AccountIndexFormat,
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
         },
-        ::solana_sdk::{hash::Hash, pubkey::Pubkey, stake_history::Epoch},
         memoffset::offset_of,
         rand::Rng,
+        solana_sdk::{hash::Hash, pubkey::Pubkey, stake_history::Epoch},
         tempfile::TempDir,
     };
 
@@ -304,7 +309,7 @@ pub mod tests {
 
         let optional_fields = AccountMetaOptionalFields {
             rent_epoch: Some(TEST_RENT_EPOCH),
-            account_hash: Some(Hash::new_unique()),
+            account_hash: Some(AccountHash(Hash::new_unique())),
         };
 
         let flags = AccountMetaFlags::new_from(&optional_fields);
@@ -331,7 +336,7 @@ pub mod tests {
 
         let optional_fields = AccountMetaOptionalFields {
             rent_epoch: Some(TEST_RENT_EPOCH),
-            account_hash: Some(Hash::new_unique()),
+            account_hash: Some(AccountHash(Hash::new_unique())),
         };
 
         let flags = AccountMetaFlags::new_from(&optional_fields);

@@ -126,11 +126,10 @@ impl<'storage> StoredAccountMeta<'storage> {
     }
 
     pub fn hash(&self) -> &'storage AccountHash {
-        let hash = match self {
-            Self::AppendVec(av) => av.hash(),
-            Self::Hot(hot) => hot.hash().unwrap_or(&DEFAULT_ACCOUNT_HASH.0),
-        };
-        bytemuck::cast_ref(hash)
+        match self {
+            Self::AppendVec(av) => bytemuck::cast_ref(av.hash()),
+            Self::Hot(hot) => hot.hash().unwrap_or(&DEFAULT_ACCOUNT_HASH),
+        }
     }
 
     pub fn stored_size(&self) -> usize {
