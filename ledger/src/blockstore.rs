@@ -2163,7 +2163,7 @@ impl Blockstore {
                 highest_primary_index_slot = Some(meta.max_slot);
             }
         }
-        if highest_primary_index_slot.is_some() {
+        if highest_primary_index_slot.is_some_and(|slot| slot != 0) {
             self.set_highest_primary_index_slot(highest_primary_index_slot);
         } else {
             self.db.set_clean_slot_0(true);
