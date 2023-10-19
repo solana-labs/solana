@@ -610,7 +610,7 @@ mod tests {
 
     #[test]
     fn test_schedule_priority_guard() {
-        let (mut scheduler, work_receivers, _finished_work_sender) = create_test_frame(2);
+        let (mut scheduler, work_receivers, finished_work_sender) = create_test_frame(2);
         // intentionally shorten the look-ahead window to cause unschedulable conflicts
         scheduler.look_ahead_window_size = 2;
 
@@ -642,7 +642,13 @@ mod tests {
         assert_eq!(num_scheduled, 0);
 
         // Complete batch on thread 0. Remaining txs can be scheduled onto thread 1
-        scheduler.complete_batch(thread_0_work[0].batch_id, &thread_0_work[0].transactions);
+        finished_work_sender
+            .send(FinishedConsumeWork {
+                work: thread_0_work.into_iter().next().unwrap(),
+                retryable_indexes: vec![],
+            })
+            .unwrap();
+        scheduler.receive_completed(&mut container).unwrap();
         let num_scheduled = scheduler.schedule(&mut container).unwrap();
         assert_eq!(num_scheduled, 2);
 
