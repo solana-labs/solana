@@ -16,6 +16,7 @@ use {
     solana_sdk::{pubkey::Pubkey, signature::Signature},
     std::{cmp::min, convert::TryFrom},
 };
+use solana_sdk::offchain_message;
 
 static CHECK_MARK: Emoji = Emoji("✅ ", "");
 
@@ -526,8 +527,8 @@ impl RemoteWallet<hidapi::DeviceInfo> for LedgerWallet {
         message: &[u8],
     ) -> Result<Signature, RemoteWalletError> {
         if message.len()
-            > solana_sdk::offchain_message::v0::OffchainMessage::MAX_LEN_LEDGER
-                + solana_sdk::offchain_message::v0::OffchainMessage::HEADER_LEN
+            > offchain_message::v0::OffchainMessage::max_message_for_ledger(&vec![Pubkey::default()])
+                + offchain_message::v0::OffchainMessage::header_length(&vec![Pubkey::default()])
         {
             return Err(RemoteWalletError::InvalidInput(
                 "Off-chain message to sign is too long".to_string(),

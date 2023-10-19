@@ -1,15 +1,15 @@
 use {
+    clap::{App, Arg, ArgMatches, SubCommand, value_t_or_exit},
     crate::{
         cli::{
-            log_instruction_custom_error, request_and_confirm_airdrop, CliCommand, CliCommandInfo,
-            CliConfig, CliError, ProcessResult,
+            CliCommand, CliCommandInfo, CliConfig, CliError,
+            log_instruction_custom_error, ProcessResult, request_and_confirm_airdrop,
         },
         compute_unit_price::WithComputeUnitPrice,
         memo::WithMemo,
         nonce::check_nonce_account,
         spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
     },
-    clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand},
     hex::FromHex,
     solana_clap_utils::{
         compute_unit_price::{compute_unit_price_arg, COMPUTE_UNIT_PRICE_ARG},
@@ -23,9 +23,9 @@ use {
         offline::*,
     },
     solana_cli_output::{
-        display::{build_balance_message, BuildBalanceMessageConfig},
-        return_signers_with_config, CliAccount, CliBalance, CliFindProgramDerivedAddress,
-        CliSignatureVerificationStatus, CliTransaction, CliTransactionConfirmation, OutputFormat,
+        CliAccount,
+        CliBalance, CliFindProgramDerivedAddress, CliSignatureVerificationStatus, CliTransaction,
+        CliTransactionConfirmation, display::{build_balance_message, BuildBalanceMessageConfig}, OutputFormat, return_signers_with_config,
         ReturnSignersConfig,
     },
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
@@ -49,6 +49,7 @@ use {
     },
     std::{fmt::Write as FmtWrite, fs::File, io::Write, rc::Rc, str::FromStr},
 };
+use solana_sdk::offchain_message::{ApplicationDomain, Version as OffchainHeaderVersion};
 
 pub trait WalletSubCommands {
     fn wallet_subcommands(self) -> Self;
@@ -82,64 +83,64 @@ impl WalletSubCommands for App<'_, '_> {
                         .help("Display balance in lamports instead of SOL"),
                 ),
         )
-        .subcommand(
-            SubCommand::with_name("address")
-                .about("Get your public key")
-                .arg(
-                    Arg::with_name("confirm_key")
-                        .long("confirm-key")
-                        .takes_value(false)
-                        .help("Confirm key on device; only relevant if using remote wallet"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("airdrop")
-                .about("Request SOL from a faucet")
-                .arg(
-                    Arg::with_name("amount")
-                        .index(1)
-                        .value_name("AMOUNT")
-                        .takes_value(true)
-                        .validator(is_amount)
-                        .required(true)
-                        .help("The airdrop amount to request, in SOL"),
-                )
-                .arg(
-                    pubkey!(Arg::with_name("to")
+            .subcommand(
+                SubCommand::with_name("address")
+                    .about("Get your public key")
+                    .arg(
+                        Arg::with_name("confirm_key")
+                            .long("confirm-key")
+                            .takes_value(false)
+                            .help("Confirm key on device; only relevant if using remote wallet"),
+                    ),
+            )
+            .subcommand(
+                SubCommand::with_name("airdrop")
+                    .about("Request SOL from a faucet")
+                    .arg(
+                        Arg::with_name("amount")
+                            .index(1)
+                            .value_name("AMOUNT")
+                            .takes_value(true)
+                            .validator(is_amount)
+                            .required(true)
+                            .help("The airdrop amount to request, in SOL"),
+                    )
+                    .arg(
+                        pubkey!(Arg::with_name("to")
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS"),
                         "The account address of airdrop recipient. "),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("balance")
-                .about("Get your balance")
-                .arg(
-                    pubkey!(Arg::with_name("pubkey")
+                    ),
+            )
+            .subcommand(
+                SubCommand::with_name("balance")
+                    .about("Get your balance")
+                    .arg(
+                        pubkey!(Arg::with_name("pubkey")
                         .index(1)
                         .value_name("ACCOUNT_ADDRESS"),
                         "The account address of the balance to check. ")
-                )
-                .arg(
-                    Arg::with_name("lamports")
-                        .long("lamports")
-                        .takes_value(false)
-                        .help("Display balance in lamports instead of SOL"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("confirm")
-                .about("Confirm transaction by signature")
-                .arg(
-                    Arg::with_name("signature")
-                        .index(1)
-                        .value_name("TRANSACTION_SIGNATURE")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The transaction signature to confirm"),
-                )
-                .after_help(// Formatted specifically for the manually-indented heredoc string
-                   "Note: This will show more detailed information for finalized transactions with verbose mode (-v/--verbose).\
+                    )
+                    .arg(
+                        Arg::with_name("lamports")
+                            .long("lamports")
+                            .takes_value(false)
+                            .help("Display balance in lamports instead of SOL"),
+                    ),
+            )
+            .subcommand(
+                SubCommand::with_name("confirm")
+                    .about("Confirm transaction by signature")
+                    .arg(
+                        Arg::with_name("signature")
+                            .index(1)
+                            .value_name("TRANSACTION_SIGNATURE")
+                            .takes_value(true)
+                            .required(true)
+                            .help("The transaction signature to confirm"),
+                    )
+                    .after_help(// Formatted specifically for the manually-indented heredoc string
+                                "Note: This will show more detailed information for finalized transactions with verbose mode (-v/--verbose).\
                   \n\
                   \nAccount modes:\
                   \n  |srwx|\
@@ -148,56 +149,56 @@ impl WalletSubCommands for App<'_, '_> {
                   \n    w: writable\
                   \n    x: program account (inner instructions excluded)\
                    "
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("create-address-with-seed")
-                .about(
-                    "Generate a derived account address with a seed. \
+                    ),
+            )
+            .subcommand(
+                SubCommand::with_name("create-address-with-seed")
+                    .about(
+                        "Generate a derived account address with a seed. \
                     For program derived addresses (PDAs), use the find-program-derived-address command instead"
-                )
-                .arg(
-                    Arg::with_name("seed")
-                        .index(1)
-                        .value_name("SEED_STRING")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_derived_address_seed)
-                        .help("The seed.  Must not take more than 32 bytes to encode as utf-8"),
-                )
-                .arg(
-                    Arg::with_name("program_id")
-                        .index(2)
-                        .value_name("PROGRAM_ID")
-                        .takes_value(true)
-                        .required(true)
-                        .help(
-                            "The program_id that the address will ultimately be used for, \n\
+                    )
+                    .arg(
+                        Arg::with_name("seed")
+                            .index(1)
+                            .value_name("SEED_STRING")
+                            .takes_value(true)
+                            .required(true)
+                            .validator(is_derived_address_seed)
+                            .help("The seed.  Must not take more than 32 bytes to encode as utf-8"),
+                    )
+                    .arg(
+                        Arg::with_name("program_id")
+                            .index(2)
+                            .value_name("PROGRAM_ID")
+                            .takes_value(true)
+                            .required(true)
+                            .help(
+                                "The program_id that the address will ultimately be used for, \n\
                              or one of NONCE, STAKE, and VOTE keywords",
-                        ),
-                )
-                .arg(
-                    pubkey!(Arg::with_name("from")
+                            ),
+                    )
+                    .arg(
+                        pubkey!(Arg::with_name("from")
                         .long("from")
                         .value_name("FROM_PUBKEY")
                         .required(false),
                         "From (base) key, [default: cli config keypair]. "),
-                ),
-        )
+                    ),
+            )
             .subcommand(
                 SubCommand::with_name("find-program-derived-address")
                     .about("Generate a program derived account address with a seed")
                     .arg(
                         Arg::with_name("program_id")
-                                .index(1)
-                                .value_name("PROGRAM_ID")
-                                .takes_value(true)
-                                .required(true)
-                                .help(
-                                    "The program_id that the address will ultimately be used for, \n\
+                            .index(1)
+                            .value_name("PROGRAM_ID")
+                            .takes_value(true)
+                            .required(true)
+                            .help(
+                                "The program_id that the address will ultimately be used for, \n\
                                     or one of NONCE, STAKE, and VOTE keywords",
-                                ),
-                        )
+                            ),
+                    )
                     .arg(
                         Arg::with_name("seeds")
                             .min_values(0)
@@ -215,167 +216,177 @@ impl WalletSubCommands for App<'_, '_> {
                             ),
                     ),
             )
-        .subcommand(
-            SubCommand::with_name("decode-transaction")
-                .about("Decode a serialized transaction")
-                .arg(
-                    Arg::with_name("transaction")
-                        .index(1)
-                        .value_name("TRANSACTION")
-                        .takes_value(true)
-                        .required(true)
-                        .help("transaction to decode"),
-                )
-                .arg(
-                    Arg::with_name("encoding")
-                        .index(2)
-                        .value_name("ENCODING")
-                        .possible_values(&["base58", "base64"]) // Variants of `TransactionBinaryEncoding` enum
-                        .default_value("base58")
-                        .takes_value(true)
-                        .required(true)
-                        .help("transaction encoding"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("resolve-signer")
-                .about("Checks that a signer is valid, and returns its specific path; useful for signers that may be specified generally, eg. usb://ledger")
-                .arg(
-                    Arg::with_name("signer")
-                        .index(1)
-                        .value_name("SIGNER_KEYPAIR")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_signer)
-                        .help("The signer path to resolve")
-                )
-        )
-        .subcommand(
-            SubCommand::with_name("transfer")
-                .about("Transfer funds between system accounts")
-                .alias("pay")
-                .arg(
-                    pubkey!(Arg::with_name("to")
+            .subcommand(
+                SubCommand::with_name("decode-transaction")
+                    .about("Decode a serialized transaction")
+                    .arg(
+                        Arg::with_name("transaction")
+                            .index(1)
+                            .value_name("TRANSACTION")
+                            .takes_value(true)
+                            .required(true)
+                            .help("transaction to decode"),
+                    )
+                    .arg(
+                        Arg::with_name("encoding")
+                            .index(2)
+                            .value_name("ENCODING")
+                            .possible_values(&["base58", "base64"]) // Variants of `TransactionBinaryEncoding` enum
+                            .default_value("base58")
+                            .takes_value(true)
+                            .required(true)
+                            .help("transaction encoding"),
+                    ),
+            )
+            .subcommand(
+                SubCommand::with_name("resolve-signer")
+                    .about("Checks that a signer is valid, and returns its specific path; useful for signers that may be specified generally, eg. usb://ledger")
+                    .arg(
+                        Arg::with_name("signer")
+                            .index(1)
+                            .value_name("SIGNER_KEYPAIR")
+                            .takes_value(true)
+                            .required(true)
+                            .validator(is_valid_signer)
+                            .help("The signer path to resolve")
+                    )
+            )
+            .subcommand(
+                SubCommand::with_name("transfer")
+                    .about("Transfer funds between system accounts")
+                    .alias("pay")
+                    .arg(
+                        pubkey!(Arg::with_name("to")
                         .index(1)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
                         "The account address of recipient. "),
-                )
-                .arg(
-                    Arg::with_name("amount")
-                        .index(2)
-                        .value_name("AMOUNT")
-                        .takes_value(true)
-                        .validator(is_amount_or_all)
-                        .required(true)
-                        .help("The amount to send, in SOL; accepts keyword ALL"),
-                )
-                .arg(
-                    pubkey!(Arg::with_name("from")
+                    )
+                    .arg(
+                        Arg::with_name("amount")
+                            .index(2)
+                            .value_name("AMOUNT")
+                            .takes_value(true)
+                            .validator(is_amount_or_all)
+                            .required(true)
+                            .help("The amount to send, in SOL; accepts keyword ALL"),
+                    )
+                    .arg(
+                        pubkey!(Arg::with_name("from")
                         .long("from")
                         .value_name("FROM_ADDRESS"),
                         "Source account of funds (if different from client local account). "),
-                )
-                .arg(
-                    Arg::with_name("no_wait")
-                        .long("no-wait")
-                        .takes_value(false)
-                        .help("Return signature immediately after submitting the transaction, instead of waiting for confirmations"),
-                )
-                .arg(
-                    Arg::with_name("derived_address_seed")
-                        .long("derived-address-seed")
-                        .takes_value(true)
-                        .value_name("SEED_STRING")
-                        .requires("derived_address_program_id")
-                        .validator(is_derived_address_seed)
-                        .hidden(hidden_unless_forced())
-                )
-                .arg(
-                    Arg::with_name("derived_address_program_id")
-                        .long("derived-address-program-id")
-                        .takes_value(true)
-                        .value_name("PROGRAM_ID")
-                        .requires("derived_address_seed")
-                        .hidden(hidden_unless_forced())
-                )
-                .arg(
-                    Arg::with_name("allow_unfunded_recipient")
-                        .long("allow-unfunded-recipient")
-                        .takes_value(false)
-                        .help("Complete the transfer even if the recipient address is not funded")
-                )
-                .offline_args()
-                .nonce_args(false)
-                .arg(memo_arg())
-                .arg(fee_payer_arg())
-                .arg(compute_unit_price_arg()),
-        )
-        .subcommand(
-            SubCommand::with_name("sign-offchain-message")
-                .about("Sign off-chain message")
-                .arg(
-                    Arg::with_name("message")
-                        .index(1)
-                        .takes_value(true)
-                        .value_name("STRING")
-                        .required(true)
-                        .help("The message text to be signed")
-                )
-                .arg(
-                    Arg::with_name("version")
-                        .long("version")
-                        .takes_value(true)
-                        .value_name("VERSION")
-                        .required(false)
-                        .default_value("0")
-                        .validator(|p| match p.parse::<u8>() {
-                            Err(_) => Err(String::from("Must be unsigned integer")),
-                            Ok(_) => { Ok(()) }
-                        })
-                        .help("The off-chain message version")
-                )
-        )
-        .subcommand(
-            SubCommand::with_name("verify-offchain-signature")
-                .about("Verify off-chain message signature")
-                .arg(
-                    Arg::with_name("message")
-                        .index(1)
-                        .takes_value(true)
-                        .value_name("STRING")
-                        .required(true)
-                        .help("The text of the original message")
-                )
-                .arg(
-                    Arg::with_name("signature")
-                        .index(2)
-                        .value_name("SIGNATURE")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The message signature to verify")
-                )
-                .arg(
-                    Arg::with_name("version")
-                        .long("version")
-                        .takes_value(true)
-                        .value_name("VERSION")
-                        .required(false)
-                        .default_value("0")
-                        .validator(|p| match p.parse::<u8>() {
-                            Err(_) => Err(String::from("Must be unsigned integer")),
-                            Ok(_) => { Ok(()) }
-                        })
-                        .help("The off-chain message version")
-                )
-                .arg(
-                    pubkey!(Arg::with_name("signer")
+                    )
+                    .arg(
+                        Arg::with_name("no_wait")
+                            .long("no-wait")
+                            .takes_value(false)
+                            .help("Return signature immediately after submitting the transaction, instead of waiting for confirmations"),
+                    )
+                    .arg(
+                        Arg::with_name("derived_address_seed")
+                            .long("derived-address-seed")
+                            .takes_value(true)
+                            .value_name("SEED_STRING")
+                            .requires("derived_address_program_id")
+                            .validator(is_derived_address_seed)
+                            .hidden(hidden_unless_forced())
+                    )
+                    .arg(
+                        Arg::with_name("derived_address_program_id")
+                            .long("derived-address-program-id")
+                            .takes_value(true)
+                            .value_name("PROGRAM_ID")
+                            .requires("derived_address_seed")
+                            .hidden(hidden_unless_forced())
+                    )
+                    .arg(
+                        Arg::with_name("allow_unfunded_recipient")
+                            .long("allow-unfunded-recipient")
+                            .takes_value(false)
+                            .help("Complete the transfer even if the recipient address is not funded")
+                    )
+                    .offline_args()
+                    .nonce_args(false)
+                    .arg(memo_arg())
+                    .arg(fee_payer_arg())
+                    .arg(compute_unit_price_arg()),
+            )
+            .subcommand(
+                SubCommand::with_name("sign-offchain-message")
+                    .about("Sign off-chain message")
+                    .arg(
+                        Arg::with_name("message")
+                            .index(1)
+                            .takes_value(true)
+                            .value_name("STRING")
+                            .required(true)
+                            .help("The message text to be signed")
+                    )
+                    .arg(
+                        Arg::with_name("application_domain")
+                            .long("application-domain")
+                            .takes_value(true)
+                            .value_name("APPLICATION_DOMAIN")
+                            .validator(is_base_58_string)
+                            .required(false)
+                            .help("32byte application identifier, base58 encoded")
+                    )
+                    .arg(
+                        Arg::with_name("version")
+                            .long("version")
+                            .takes_value(true)
+                            .value_name("VERSION")
+                            .required(false)
+                            .default_value("0")
+                            .validator(is_valid_offchain_message_version)
+                            .help("The off-chain message version")
+                    )
+            ).subcommand(
+                SubCommand::with_name("verify-offchain-signature")
+                    .about("Verify off-chain message signature")
+                    .arg(
+                        Arg::with_name("message")
+                            .index(1)
+                            .takes_value(true)
+                            .value_name("STRING")
+                            .required(true)
+                            .help("The text of the original message")
+                    )
+                    .arg(
+                        Arg::with_name("signature")
+                            .index(2)
+                            .value_name("SIGNATURE")
+                            .takes_value(true)
+                            .required(true)
+                            .help("The message signature to verify")
+                    )
+                    .arg(
+                        Arg::with_name("application_domain")
+                            .long("application-domain")
+                            .takes_value(true)
+                            .value_name("APPLICATION_DOMAIN")
+                            .required(false)
+                            .help("32byte application identifier, base58 encoded")
+                    )
+                    .arg(
+                        Arg::with_name("version")
+                            .long("version")
+                            .takes_value(true)
+                            .value_name("VERSION")
+                            .required(false)
+                            .default_value("0")
+                            .validator(is_valid_offchain_message_version)
+                            .help("The off-chain message version")
+                    )
+                    .arg(
+                        pubkey!(Arg::with_name("signer")
                         .long("signer")
                         .value_name("PUBKEY")
                         .required(false),
                         "The pubkey of the message signer (if different from config default)")
-                )
-        )
+                    )
+            )
     }
 }
 
@@ -595,20 +606,40 @@ pub fn parse_transfer(
     })
 }
 
+fn parse_application_domain(
+    matches: &ArgMatches<'_>
+) -> ApplicationDomain {
+    if let Some(application_domain) = value_of::<String>(matches, "application_domain") {
+        let application_domain = &mut bs58::decode(application_domain).into_vec()
+            .map_err(|_| CliError::BadParameter("APPLICATION DOMAIN".to_string())).unwrap();
+        application_domain.resize(32, 0);
+        ApplicationDomain::from_slice(application_domain)
+    } else {
+        //Return empty buffer
+        ApplicationDomain::default()
+    }
+}
+
 pub fn parse_sign_offchain_message(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let version: u8 = value_of(matches, "version").unwrap();
+    let version: OffchainHeaderVersion = value_of(matches, "version").unwrap();
+
+    let application_domain = parse_application_domain(matches);
+
     let message_text: String = value_of(matches, "message")
         .ok_or_else(|| CliError::BadParameter("MESSAGE".to_string()))?;
-    let message = OffchainMessage::new(version, message_text.as_bytes())
+
+    let signer = default_signer.signer_from_path(matches, wallet_manager)?;
+
+    let message = OffchainMessage::new(version, message_text.as_bytes(), vec![signer.pubkey()], application_domain)
         .map_err(|_| CliError::BadParameter("VERSION or MESSAGE".to_string()))?;
 
     Ok(CliCommandInfo {
         command: CliCommand::SignOffchainMessage { message },
-        signers: vec![default_signer.signer_from_path(matches, wallet_manager)?],
+        signers: vec![signer],
     })
 }
 
@@ -617,13 +648,20 @@ pub fn parse_verify_offchain_signature(
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let version: u8 = value_of(matches, "version").unwrap();
+    let version: OffchainHeaderVersion = value_of(matches, "version").unwrap();
+
+    let application_domain = parse_application_domain(matches);
+
     let message_text: String = value_of(matches, "message")
         .ok_or_else(|| CliError::BadParameter("MESSAGE".to_string()))?;
-    let message = OffchainMessage::new(version, message_text.as_bytes())
+
+    let signer = default_signer.signer_from_path(matches, wallet_manager)?;
+
+    let message = OffchainMessage::new(version, message_text.as_bytes(), vec![signer.pubkey()], application_domain)
         .map_err(|_| CliError::BadParameter("VERSION or MESSAGE".to_string()))?;
 
     let signer_pubkey = pubkey_of_signer(matches, "signer", wallet_manager)?;
+
     let signers = if signer_pubkey.is_some() {
         vec![]
     } else {
@@ -893,7 +931,7 @@ pub fn process_transfer(
                                 Add `--allow-unfunded-recipient` to complete the transfer \
                                "
             )
-            .into());
+                .into());
         }
     }
 
@@ -919,8 +957,8 @@ pub fn process_transfer(
                 to,
                 lamports,
             )]
-            .with_memo(memo)
-            .with_compute_unit_price(compute_unit_price)
+                .with_memo(memo)
+                .with_compute_unit_price(compute_unit_price)
         } else {
             vec![system_instruction::transfer(&from_pubkey, to, lamports)]
                 .with_memo(memo)
