@@ -157,7 +157,7 @@ pub fn process_compute_budget_instructions<'a>(
         })
         .min(MAX_COMPUTE_UNIT_LIMIT);
 
-    let compute_unit_price = updated_compute_unit_price.unwrap_or(0).min(u64::MAX);
+    let compute_unit_price = updated_compute_unit_price.unwrap_or(0);
 
     let loaded_accounts_bytes = updated_loaded_accounts_data_size_limit
         .unwrap_or(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES)
@@ -179,10 +179,9 @@ fn sanitize_requested_heap_size(bytes: u32) -> bool {
 // Supports request_units_derpecated ix, returns cu_price if available.
 fn support_deprecated_requested_units(additional_fee: u32, compute_unit_limit: u32) -> Option<u64> {
     // TODO: remove support of 'Deprecated' after feature remove_deprecated_request_unit_ix::id() is activated
-    type MicroLamports = u128;
     const MICRO_LAMPORTS_PER_LAMPORT: u64 = 1_000_000;
 
-    let micro_lamport_fee: MicroLamports =
+    let micro_lamport_fee =
         (additional_fee as u128).saturating_mul(MICRO_LAMPORTS_PER_LAMPORT as u128);
     micro_lamport_fee
         .checked_div(compute_unit_limit as u128)
