@@ -1650,7 +1650,7 @@ pub mod tests {
                 .unwrap();
             let pk_with_2_refs = account_with_2_refs.pubkey();
             let mut account_with_1_ref = account_with_2_refs.to_account_shared_data();
-            _ = account_with_1_ref.checked_add_lamports(1);
+            account_with_1_ref.checked_add_lamports(1).unwrap();
             append_single_account_with_default_hash(
                 &storage,
                 &pk_with_1_ref,
