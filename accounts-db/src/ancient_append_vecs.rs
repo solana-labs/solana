@@ -1659,10 +1659,15 @@ pub mod tests {
                 true,
                 Some(&db.accounts_index),
             );
+            // add the account with 2 refs into the storage we're ignoring.
+            // The storage we're ignoring has a higher slot.
+            // The index entry for pk_with_2_refs will have both slots in it.
+            // The slot of `storage` is lower than the slot of `ignored_storage`.
+            // But, both are 'alive', aka in the index.
             append_single_account_with_default_hash(
                 &ignored_storage,
                 pk_with_2_refs,
-                &account_with_1_ref,
+                &account_with_2_refs.to_account_shared_data(),
                 0,
                 true,
                 Some(&db.accounts_index),
