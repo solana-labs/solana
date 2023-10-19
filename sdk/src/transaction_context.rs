@@ -144,8 +144,6 @@ pub struct TransactionContext {
     accounts_resize_delta: RefCell<i64>,
     #[cfg(not(target_os = "solana"))]
     rent: Rent,
-    #[cfg(not(target_os = "solana"))]
-    is_cap_accounts_data_allocations_per_transaction_enabled: bool,
     /// Useful for debugging to filter by or to look it up on the explorer
     #[cfg(all(not(target_os = "solana"), debug_assertions))]
     signature: Signature,
@@ -174,7 +172,6 @@ impl TransactionContext {
             return_data: TransactionReturnData::default(),
             accounts_resize_delta: RefCell::new(0),
             rent,
-            is_cap_accounts_data_allocations_per_transaction_enabled: false,
             #[cfg(all(not(target_os = "solana"), debug_assertions))]
             signature: Signature::default(),
         }
@@ -439,12 +436,6 @@ impl TransactionContext {
             .try_borrow()
             .map_err(|_| InstructionError::GenericError)
             .map(|value_ref| *value_ref)
-    }
-
-    /// Enables enforcing a maximum accounts data allocation size per transaction
-    #[cfg(not(target_os = "solana"))]
-    pub fn enable_cap_accounts_data_allocations_per_transaction(&mut self) {
-        self.is_cap_accounts_data_allocations_per_transaction_enabled = true;
     }
 }
 
@@ -1114,20 +1105,15 @@ impl<'a> BorrowedAccount<'a> {
         if new_length > MAX_PERMITTED_DATA_LENGTH as usize {
             return Err(InstructionError::InvalidRealloc);
         }
+        // The resize can not exceed the per-transaction maximum
+        let length_delta = (new_length as i64).saturating_sub(old_length as i64);
         if self
             .transaction_context
-            .is_cap_accounts_data_allocations_per_transaction_enabled
+            .accounts_resize_delta()?
+            .saturating_add(length_delta)
+            > MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION
         {
-            // The resize can not exceed the per-transaction maximum
-            let length_delta = (new_length as i64).saturating_sub(old_length as i64);
-            if self
-                .transaction_context
-                .accounts_resize_delta()?
-                .saturating_add(length_delta)
-                > MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION
-            {
-                return Err(InstructionError::MaxAccountsDataAllocationsExceeded);
-            }
+            return Err(InstructionError::MaxAccountsDataAllocationsExceeded);
         }
         Ok(())
     }
