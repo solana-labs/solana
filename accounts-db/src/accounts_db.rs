@@ -1498,6 +1498,8 @@ pub struct AccountsDb {
 
     pub stats: AccountsStats,
 
+    shrink_candidates_stats: ShrinkCandidatesStats,
+
     clean_accounts_stats: CleanAccountsStats,
 
     // Stats for purges called outside of clean_accounts()
@@ -2443,8 +2445,78 @@ pub struct PubkeyHashAccount {
 }
 
 struct SelectedShrinkCandidates {
-    pub to_shrink: HashMap<Slot, Arc<AccountStorageEntry>>,
-    pub next_batch: ShrinkCandidates,
+    to_shrink: HashMap<Slot, Arc<AccountStorageEntry>>,
+    next_batch: ShrinkCandidates,
+}
+
+#[derive(Debug, Default)]
+pub struct ShrinkCandidatesStats {
+    last_report: AtomicInterval,
+    select_candidates_us: AtomicU64,
+    shrink_candidates_us: AtomicU64,
+    shrink_candidates_count: AtomicUsize,
+    shrink_candidates_selected_count: AtomicUsize,
+    shrink_candidates_pending_count: AtomicUsize,
+}
+
+impl ShrinkCandidatesStats {
+    fn update(
+        &self,
+        select_us: u64,
+        shrink_us: u64,
+        candidate_count: usize,
+        shrink_count: usize,
+        pending_count: usize,
+    ) {
+        self.select_candidates_us
+            .fetch_add(select_us, Ordering::Relaxed);
+        self.shrink_candidates_us
+            .fetch_add(shrink_us, Ordering::Relaxed);
+        self.shrink_candidates_count
+            .fetch_add(candidate_count, Ordering::Relaxed);
+        self.shrink_candidates_selected_count
+            .fetch_add(shrink_count, Ordering::Relaxed);
+        self.shrink_candidates_pending_count
+            .fetch_add(pending_count, Ordering::Relaxed);
+    }
+
+    fn report(&self) {
+        const REPORT_INTERVAL_MS: u64 = 10_000;
+        let should_report = self.last_report.should_update(REPORT_INTERVAL_MS);
+
+        if should_report {
+            datapoint_info!(
+                "shrink_candidates-stat",
+                (
+                    "select_candidates_us",
+                    self.select_candidates_us.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "shrink_all_candidates_us",
+                    self.shrink_candidates_us.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "shrink_candidates_count",
+                    self.shrink_candidates_count.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "shrink_candidates_selected_count",
+                    self.shrink_candidates_selected_count
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "shrink_candidates_pending_count",
+                    self.shrink_candidates_pending_count
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                ),
+            );
+        }
+    }
 }
 
 impl AccountsDb {
@@ -2536,6 +2608,7 @@ impl AccountsDb {
             shrink_stats: ShrinkStats::default(),
             shrink_ancient_stats: ShrinkAncientStats::default(),
             stats: AccountsStats::default(),
+            shrink_candidates_stats: ShrinkCandidatesStats::default(),
             cluster_type: None,
             account_indexes: AccountSecondaryIndexes::default(),
             #[cfg(test)]
@@ -4843,23 +4916,15 @@ impl AccountsDb {
             }
         }
 
-        datapoint_info!(
-            "shrink_candidates-stat",
-            (
-                "select_candidates_us",
-                measure_select_candidates.as_us(),
-                i64
-            ),
-            (
-                "shrink_all_candidates_us",
-                measure_shrink_all_candidates.as_us(),
-                i64
-            ),
-            ("shrink_candidates_count", shrink_candidates_count, i64),
-            ("shrink_candidates_selected_count", num_candidates, i64),
-            ("shrink_candidates_pending_count", pended_counts, i64),
+        self.shrink_candidates_stats.update(
+            measure_select_candidates.as_us(),
+            measure_shrink_all_candidates.as_us(),
+            shrink_candidates_count,
+            num_candidates,
+            pended_counts,
         );
 
+        self.shrink_candidates_stats.report();
         num_candidates
     }
 
