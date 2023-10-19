@@ -9,10 +9,11 @@ use {
     crate::banking_stage::{
         consumer::TARGET_NUM_TRANSACTIONS_PER_BATCH,
         read_write_account_set::ReadWriteAccountSet,
-        scheduler_messages::{ConsumeWork, TransactionBatchId, TransactionId},
+        scheduler_messages::{ConsumeWork, FinishedConsumeWork, TransactionBatchId, TransactionId},
         transaction_scheduler::transaction_priority_id::TransactionPriorityId,
     },
-    crossbeam_channel::Sender,
+    crossbeam_channel::{Receiver, Sender, TryRecvError},
+    itertools::izip,
     prio_graph::{AccessKind, PrioGraph},
     solana_sdk::{pubkey::Pubkey, slot_history::Slot, transaction::SanitizedTransaction},
     std::collections::HashMap,
@@ -22,16 +23,21 @@ pub(crate) struct PrioGraphScheduler {
     in_flight_tracker: InFlightTracker,
     account_locks: ThreadAwareAccountLocks,
     consume_work_senders: Vec<Sender<ConsumeWork>>,
+    finished_consume_work_receiver: Receiver<FinishedConsumeWork>,
     look_ahead_window_size: usize,
 }
 
 impl PrioGraphScheduler {
-    pub(crate) fn new(consume_work_senders: Vec<Sender<ConsumeWork>>) -> Self {
+    pub(crate) fn new(
+        consume_work_senders: Vec<Sender<ConsumeWork>>,
+        finished_consume_work_receiver: Receiver<FinishedConsumeWork>,
+    ) -> Self {
         let num_threads = consume_work_senders.len();
         Self {
             in_flight_tracker: InFlightTracker::new(num_threads),
             account_locks: ThreadAwareAccountLocks::new(num_threads),
             consume_work_senders,
+            finished_consume_work_receiver,
             look_ahead_window_size: 2048,
         }
     }
@@ -181,9 +187,68 @@ impl PrioGraphScheduler {
         Ok(num_scheduled)
     }
 
+    /// Receive completed batches of transactions without blocking.
+    pub fn receive_completed(
+        &mut self,
+        container: &mut TransactionStateContainer,
+    ) -> Result<(), SchedulerError> {
+        while self.try_receive_completed(container)? {}
+        Ok(())
+    }
+
+    /// Receive completed batches of transactions.
+    /// Returns `Ok(true)` if a batch was received, `Ok(false)` if no batch was received.
+    fn try_receive_completed(
+        &mut self,
+        container: &mut TransactionStateContainer,
+    ) -> Result<bool, SchedulerError> {
+        match self.finished_consume_work_receiver.try_recv() {
+            Ok(FinishedConsumeWork {
+                work:
+                    ConsumeWork {
+                        batch_id,
+                        ids,
+                        transactions,
+                        max_age_slots,
+                    },
+                retryable_indexes,
+            }) => {
+                // Free the locks
+                self.complete_batch(batch_id, &transactions);
+
+                // Retryable transactions should be inserted back into the container
+                let mut retryable_iter = retryable_indexes.into_iter().peekable();
+                for (index, (id, transaction, max_age_slot)) in
+                    izip!(ids, transactions, max_age_slots).enumerate()
+                {
+                    if let Some(retryable_index) = retryable_iter.peek() {
+                        if *retryable_index == index {
+                            container.retry_transaction(
+                                id,
+                                SanitizedTransactionTTL {
+                                    transaction,
+                                    max_age_slot,
+                                },
+                            );
+                            retryable_iter.next();
+                            continue;
+                        }
+                    }
+                    container.remove_by_id(&id);
+                }
+
+                Ok(true)
+            }
+            Err(TryRecvError::Empty) => Ok(false),
+            Err(TryRecvError::Disconnected) => Err(SchedulerError::DisconnectedRecvChannel(
+                "finished consume work",
+            )),
+        }
+    }
+
     /// Mark a given `TransactionBatchId` as completed.
     /// This will update the internal tracking, including account locks.
-    pub(crate) fn complete_batch(
+    fn complete_batch(
         &mut self,
         batch_id: TransactionBatchId,
         transactions: &[SanitizedTransaction],
@@ -361,11 +426,23 @@ mod tests {
         };
     }
 
-    fn create_test_frame(num_threads: usize) -> (PrioGraphScheduler, Vec<Receiver<ConsumeWork>>) {
+    fn create_test_frame(
+        num_threads: usize,
+    ) -> (
+        PrioGraphScheduler,
+        Vec<Receiver<ConsumeWork>>,
+        Sender<FinishedConsumeWork>,
+    ) {
         let (consume_work_senders, consume_work_receivers) =
             (0..num_threads).map(|_| unbounded()).unzip();
-        let scheduler = PrioGraphScheduler::new(consume_work_senders);
-        (scheduler, consume_work_receivers)
+        let (finished_consume_work_sender, finished_consume_work_receiver) = unbounded();
+        let scheduler =
+            PrioGraphScheduler::new(consume_work_senders, finished_consume_work_receiver);
+        (
+            scheduler,
+            consume_work_receivers,
+            finished_consume_work_sender,
+        )
     }
 
     fn prioritized_tranfers(
@@ -436,7 +513,7 @@ mod tests {
 
     #[test]
     fn test_schedule_disconnected_channel() {
-        let (mut scheduler, work_receivers) = create_test_frame(1);
+        let (mut scheduler, work_receivers, _finished_work_sender) = create_test_frame(1);
         let mut container = create_container([(&Keypair::new(), &[Pubkey::new_unique()], 1, 1)]);
 
         drop(work_receivers); // explicitly drop receivers
@@ -448,7 +525,7 @@ mod tests {
 
     #[test]
     fn test_schedule_single_threaded_no_conflicts() {
-        let (mut scheduler, work_receivers) = create_test_frame(1);
+        let (mut scheduler, work_receivers, _finished_work_sender) = create_test_frame(1);
         let mut container = create_container([
             (&Keypair::new(), &[Pubkey::new_unique()], 1, 1),
             (&Keypair::new(), &[Pubkey::new_unique()], 2, 2),
@@ -461,7 +538,7 @@ mod tests {
 
     #[test]
     fn test_schedule_single_threaded_conflict() {
-        let (mut scheduler, work_receivers) = create_test_frame(1);
+        let (mut scheduler, work_receivers, _finished_work_sender) = create_test_frame(1);
         let pubkey = Pubkey::new_unique();
         let mut container = create_container([
             (&Keypair::new(), &[pubkey], 1, 1),
@@ -478,7 +555,7 @@ mod tests {
 
     #[test]
     fn test_schedule_consume_single_threaded_multi_batch() {
-        let (mut scheduler, work_receivers) = create_test_frame(1);
+        let (mut scheduler, work_receivers, _finished_work_sender) = create_test_frame(1);
         let mut container = create_container(
             (0..4 * TARGET_NUM_TRANSACTIONS_PER_BATCH)
                 .map(|i| (Keypair::new(), [Pubkey::new_unique()], i as u64, 1)),
@@ -497,7 +574,7 @@ mod tests {
 
     #[test]
     fn test_schedule_simple_thread_selection() {
-        let (mut scheduler, work_receivers) = create_test_frame(2);
+        let (mut scheduler, work_receivers, _finished_work_sender) = create_test_frame(2);
         let mut container =
             create_container((0..4).map(|i| (Keypair::new(), [Pubkey::new_unique()], 1, i)));
 
@@ -509,7 +586,7 @@ mod tests {
 
     #[test]
     fn test_schedule_look_ahead() {
-        let (mut scheduler, work_receivers) = create_test_frame(2);
+        let (mut scheduler, work_receivers, _finished_work_sender) = create_test_frame(2);
 
         let accounts = (0..4).map(|_| Keypair::new()).collect_vec();
         let mut container = create_container([
@@ -533,7 +610,7 @@ mod tests {
 
     #[test]
     fn test_schedule_priority_guard() {
-        let (mut scheduler, work_receivers) = create_test_frame(2);
+        let (mut scheduler, work_receivers, _finished_work_sender) = create_test_frame(2);
         // intentionally shorten the look-ahead window to cause unschedulable conflicts
         scheduler.look_ahead_window_size = 2;
 
