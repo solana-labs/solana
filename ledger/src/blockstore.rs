@@ -2109,6 +2109,17 @@ impl Blockstore {
         if !self.is_primary_access() {
             return Ok(());
         }
+
+        // Initialize TransactionStatusIndexMeta if they are not present already
+        if self.transaction_status_index_cf.get(0)?.is_none() {
+            self.transaction_status_index_cf
+                .put(0, &TransactionStatusIndexMeta::default())?;
+        }
+        if self.transaction_status_index_cf.get(1)?.is_none() {
+            self.transaction_status_index_cf
+                .put(1, &TransactionStatusIndexMeta::default())?;
+        }
+
         // If present, delete dummy entries inserted by old software
         // https://github.com/solana-labs/solana/blob/bc2b372/ledger/src/blockstore.rs#L2130-L2137
         let transaction_status_dummy_key = cf::TransactionStatus::as_index(2);
@@ -2152,7 +2163,7 @@ impl Blockstore {
                 highest_primary_index_slot = Some(meta.max_slot);
             }
         }
-        if highest_primary_index_slot.is_some() {
+        if highest_primary_index_slot.is_some_and(|slot| slot != 0) {
             self.set_highest_primary_index_slot(highest_primary_index_slot);
         } else {
             self.db.set_clean_slot_0(true);
