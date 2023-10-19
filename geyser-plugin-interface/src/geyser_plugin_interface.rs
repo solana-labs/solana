@@ -115,7 +115,7 @@ pub struct ReplicaAccountInfoV3<'a> {
 /// If there were a change to the structure of ReplicaAccountInfo,
 /// there would be new enum entry for the newer version, forcing
 /// plugin implementations to handle the change.
-#[repr(C)]
+#[repr(u32)]
 pub enum ReplicaAccountInfoVersions<'a> {
     V0_0_1(&'a ReplicaAccountInfo<'a>),
     V0_0_2(&'a ReplicaAccountInfoV2<'a>),
@@ -163,7 +163,7 @@ pub struct ReplicaTransactionInfoV2<'a> {
 /// If there were a change to the structure of ReplicaTransactionInfo,
 /// there would be new enum entry for the newer version, forcing
 /// plugin implementations to handle the change.
-#[repr(C)]
+#[repr(u32)]
 pub enum ReplicaTransactionInfoVersions<'a> {
     V0_0_1(&'a ReplicaTransactionInfo<'a>),
     V0_0_2(&'a ReplicaTransactionInfoV2<'a>),
@@ -188,7 +188,7 @@ pub struct ReplicaEntryInfo<'a> {
 /// A wrapper to future-proof ReplicaEntryInfo handling. To make a change to the structure of
 /// ReplicaEntryInfo, add an new enum variant wrapping a newer version, which will force plugin
 /// implementations to handle the change.
-#[repr(C)]
+#[repr(u32)]
 pub enum ReplicaEntryInfoVersions<'a> {
     V0_0_1(&'a ReplicaEntryInfo<'a>),
 }
@@ -232,7 +232,7 @@ pub struct ReplicaBlockInfoV3<'a> {
     pub entry_count: u64,
 }
 
-#[repr(C)]
+#[repr(u32)]
 pub enum ReplicaBlockInfoVersions<'a> {
     V0_0_1(&'a ReplicaBlockInfo<'a>),
     V0_0_2(&'a ReplicaBlockInfoV2<'a>),
@@ -241,7 +241,7 @@ pub enum ReplicaBlockInfoVersions<'a> {
 
 /// Errors returned by plugin calls
 #[derive(Error, Debug)]
-#[repr(C)]
+#[repr(u32)]
 pub enum GeyserPluginError {
     /// Error opening the configuration file; for example, when the file
     /// is not found or when the validator process has no permission to read it.
@@ -272,7 +272,7 @@ pub enum GeyserPluginError {
 
 /// The current status of a slot
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(C)]
+#[repr(u32)]
 pub enum SlotStatus {
     /// The highest slot of the heaviest fork processed by the node. Ledger state at this slot is
     /// not derived from a confirmed or finalized block, but if multiple forks are present, is from
