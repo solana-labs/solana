@@ -756,7 +756,7 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext), G: FnMut(&mut Invo
 mod tests {
     use {
         super::*,
-        crate::compute_budget,
+        crate::compute_budget_processor,
         serde::{Deserialize, Serialize},
         solana_sdk::{account::WritableAccount, instruction::Instruction, rent::Rent},
     };
@@ -1084,8 +1084,9 @@ mod tests {
             vec![(solana_sdk::pubkey::new_rand(), AccountSharedData::default())];
 
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
-        invoke_context.compute_budget =
-            ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64);
+        invoke_context.compute_budget = ComputeBudget::new(
+            compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
+        );
 
         invoke_context
             .transaction_context
@@ -1095,7 +1096,9 @@ mod tests {
         invoke_context.push().unwrap();
         assert_eq!(
             *invoke_context.get_compute_budget(),
-            ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64)
+            ComputeBudget::new(
+                compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64
+            )
         );
         invoke_context.pop().unwrap();
     }
