@@ -2442,7 +2442,7 @@ pub struct PubkeyHashAccount {
     pub account: AccountSharedData,
 }
 
-struct SelectShrinkCandidateResult {
+struct SelectedShrinkCandidates {
     pub to_shrink: HashMap<Slot, Arc<AccountStorageEntry>>,
     pub next_batch: ShrinkCandidates,
 }
@@ -4302,7 +4302,7 @@ impl AccountsDb {
         shrink_slots: &ShrinkCandidates,
         shrink_ratio: f64,
         oldest_non_ancient_slot: Option<Slot>,
-    ) -> SelectShrinkCandidateResult {
+    ) -> SelectedShrinkCandidates {
         struct StoreUsageInfo {
             slot: Slot,
             alive_ratio: f64,
@@ -4389,7 +4389,7 @@ impl AccountsDb {
             .map(|s| s.slot)
             .collect();
 
-        SelectShrinkCandidateResult {
+        SelectedShrinkCandidates {
             to_shrink: shrink_slots,
             next_batch: shrink_slots_next_batch,
         }
@@ -4785,7 +4785,7 @@ impl AccountsDb {
 
         let (shrink_slots, shrink_slots_next_batch) = {
             if let AccountShrinkThreshold::TotalSpace { shrink_ratio } = self.shrink_ratio {
-                let SelectShrinkCandidateResult {
+                let SelectedShrinkCandidates {
                     to_shrink: shrink_slots,
                     next_batch: shrink_slots_next_batch,
                 } = self.select_candidates_by_total_usage(
@@ -13391,7 +13391,7 @@ pub mod tests {
         let candidates = ShrinkCandidates::default();
         let db = AccountsDb::new_single_for_tests();
 
-        let SelectShrinkCandidateResult {
+        let SelectedShrinkCandidates {
             to_shrink: selected_candidates,
             next_batch: next_candidates,
         } = db.select_candidates_by_total_usage(&candidates, DEFAULT_ACCOUNTS_SHRINK_RATIO, None);
@@ -13465,7 +13465,7 @@ pub mod tests {
         // The target ratio is also set to larger than store2's alive ratio: 0.5 so that it would be added
         // to the candidates list for next round.
         let target_alive_ratio = 0.6;
-        let SelectShrinkCandidateResult {
+        let SelectedShrinkCandidates {
             to_shrink: selected_candidates,
             next_batch: next_candidates,
         } = db.select_candidates_by_total_usage(&candidates, target_alive_ratio, None);
@@ -13533,7 +13533,7 @@ pub mod tests {
 
         // Set the target ratio to default (0.8), both store1 and store2 must be selected and store3 is ignored.
         let target_alive_ratio = DEFAULT_ACCOUNTS_SHRINK_RATIO;
-        let SelectShrinkCandidateResult {
+        let SelectedShrinkCandidates {
             to_shrink: selected_candidates,
             next_batch: next_candidates,
         } = db.select_candidates_by_total_usage(&candidates, target_alive_ratio, None);
@@ -13592,7 +13592,7 @@ pub mod tests {
         for newest_ancient_slot in [None, Some(slot1), Some(slot2)] {
             // Set the target ratio to default (0.8), both stores from the two different slots must be selected.
             let target_alive_ratio = DEFAULT_ACCOUNTS_SHRINK_RATIO;
-            let SelectShrinkCandidateResult {
+            let SelectedShrinkCandidates {
                 to_shrink: selected_candidates,
                 next_batch: next_candidates,
             } = db.select_candidates_by_total_usage(
@@ -13667,7 +13667,7 @@ pub mod tests {
         // Given 0.8 target alive ratio, expect that only first storage to be selected and second storage will be saved for next batch.
         // This is because shrinking the first storage will be enought to raise the alive ratio up to 7/8 > 0.8.
         let target_alive_ratio = 0.8;
-        let SelectShrinkCandidateResult {
+        let SelectedShrinkCandidates {
             to_shrink: selected_candidates,
             next_batch: next_candidates,
         } = db.select_candidates_by_total_usage(&candidates, target_alive_ratio, None);
