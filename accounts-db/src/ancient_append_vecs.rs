@@ -1623,6 +1623,175 @@ pub mod tests {
     }
 
     #[test]
+    fn test_calc_accounts_to_combine_older_dup() {
+        // looking at 1 storage
+        // with 2 accounts
+        // 1 with 1 ref
+        // 1 with 2 refs (and the other ref is from a newer slot)
+        // So, the other alive ref will cause the account with 2 refs to have to remain in the slot where it currently is.
+        for method in TestWriteMultipleRefs::iter() {
+            let num_slots = 1;
+            // creating 1 more sample slot/storage, but effectively act like 1 slot
+            let (db, mut storages, slots, infos) = get_sample_storages(num_slots + 1, None);
+            let slots = slots.start..slots.start + 1;
+            let storage = storages.first().unwrap().clone();
+            let ignored_storage = storages.pop().unwrap();
+            let original_results = storages
+                .iter()
+                .map(|store| db.get_unique_accounts_from_storage(store))
+                .collect::<Vec<_>>();
+            let pk_with_1_ref = solana_sdk::pubkey::new_rand();
+            let slot1 = slots.start;
+            let account_with_2_refs = original_results
+                .first()
+                .unwrap()
+                .stored_accounts
+                .first()
+                .unwrap();
+            let pk_with_2_refs = account_with_2_refs.pubkey();
+            let mut account_with_1_ref = account_with_2_refs.to_account_shared_data();
+            account_with_1_ref.checked_add_lamports(1).unwrap();
+            append_single_account_with_default_hash(
+                &storage,
+                &pk_with_1_ref,
+                &account_with_1_ref,
+                0,
+                true,
+                Some(&db.accounts_index),
+            );
+            // add the account with 2 refs into the storage we're ignoring.
+            // The storage we're ignoring has a higher slot.
+            // The index entry for pk_with_2_refs will have both slots in it.
+            // The slot of `storage` is lower than the slot of `ignored_storage`.
+            // But, both are 'alive', aka in the index.
+            append_single_account_with_default_hash(
+                &ignored_storage,
+                pk_with_2_refs,
+                &account_with_2_refs.to_account_shared_data(),
+                0,
+                true,
+                Some(&db.accounts_index),
+            );
+
+            // update to get both accounts in the storage
+            let original_results = storages
+                .iter()
+                .map(|store| db.get_unique_accounts_from_storage(store))
+                .collect::<Vec<_>>();
+            assert_eq!(original_results.first().unwrap().stored_accounts.len(), 2);
+            let accounts_per_storage = infos
+                .iter()
+                .zip(original_results.into_iter())
+                .collect::<Vec<_>>();
+
+            let accounts_to_combine = db.calc_accounts_to_combine(&accounts_per_storage);
+            let slots_vec = slots.collect::<Vec<_>>();
+            assert_eq!(accounts_to_combine.accounts_to_combine.len(), num_slots);
+            // all accounts should be in many_refs
+            let mut accounts_keep = accounts_to_combine
+                .accounts_keep_slots
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>();
+            accounts_keep.sort_unstable();
+            assert_eq!(accounts_keep, slots_vec);
+            assert!(accounts_to_combine.target_slots_sorted.is_empty());
+            assert_eq!(accounts_to_combine.accounts_keep_slots.len(), num_slots);
+            assert_eq!(
+                accounts_to_combine
+                    .accounts_keep_slots
+                    .get(&slot1)
+                    .unwrap()
+                    .accounts
+                    .iter()
+                    .map(|meta| meta.pubkey())
+                    .collect::<Vec<_>>(),
+                vec![pk_with_2_refs]
+            );
+            assert_eq!(accounts_to_combine.accounts_to_combine.len(), 1);
+            let one_ref_accounts = &accounts_to_combine
+                .accounts_to_combine
+                .first()
+                .unwrap()
+                .alive_accounts
+                .one_ref
+                .accounts;
+            assert_eq!(
+                one_ref_accounts
+                    .iter()
+                    .map(|meta| meta.pubkey())
+                    .collect::<Vec<_>>(),
+                vec![&pk_with_1_ref]
+            );
+            assert_eq!(
+                one_ref_accounts
+                    .iter()
+                    .map(|meta| meta.to_account_shared_data())
+                    .collect::<Vec<_>>(),
+                vec![account_with_1_ref]
+            );
+            assert!(accounts_to_combine
+                .accounts_to_combine
+                .iter()
+                .all(|shrink_collect| shrink_collect.alive_accounts.many_refs.accounts.is_empty()));
+
+            // test write_ancient_accounts_to_same_slot_multiple_refs since we built interesting 'AccountsToCombine'
+            let write_ancient_accounts = match method {
+                TestWriteMultipleRefs::MultipleRefs => {
+                    let mut write_ancient_accounts = WriteAncientAccounts::default();
+                    db.write_ancient_accounts_to_same_slot_multiple_refs(
+                        accounts_to_combine.accounts_keep_slots.values(),
+                        &mut write_ancient_accounts,
+                    );
+                    write_ancient_accounts
+                }
+                TestWriteMultipleRefs::PackedStorages => {
+                    let packed_contents = Vec::default();
+                    db.write_packed_storages(&accounts_to_combine, packed_contents)
+                }
+            };
+            assert_eq!(write_ancient_accounts.shrinks_in_progress.len(), num_slots);
+            let mut shrinks_in_progress = write_ancient_accounts
+                .shrinks_in_progress
+                .iter()
+                .collect::<Vec<_>>();
+            shrinks_in_progress.sort_unstable_by(|a, b| a.0.cmp(b.0));
+            assert_eq!(
+                shrinks_in_progress
+                    .iter()
+                    .map(|(slot, _)| **slot)
+                    .collect::<Vec<_>>(),
+                slots_vec
+            );
+            assert_eq!(
+                shrinks_in_progress
+                    .iter()
+                    .map(|(_, shrink_in_progress)| shrink_in_progress.old_storage().append_vec_id())
+                    .collect::<Vec<_>>(),
+                storages
+                    .iter()
+                    .map(|storage| storage.append_vec_id())
+                    .collect::<Vec<_>>()
+            );
+            // assert that we wrote the 2_ref account to the newly shrunk append vec
+            let shrink_in_progress = shrinks_in_progress.first().unwrap().1;
+            let accounts_shrunk_same_slot = shrink_in_progress.new_storage().accounts.accounts(0);
+            assert_eq!(accounts_shrunk_same_slot.len(), 1);
+            assert_eq!(
+                accounts_shrunk_same_slot.first().unwrap().pubkey(),
+                pk_with_2_refs
+            );
+            assert_eq!(
+                accounts_shrunk_same_slot
+                    .first()
+                    .unwrap()
+                    .to_account_shared_data(),
+                account_with_2_refs.to_account_shared_data()
+            );
+        }
+    }
+
+    #[test]
     fn test_calc_accounts_to_combine_opposite() {
         // 1 storage
         // 2 accounts
