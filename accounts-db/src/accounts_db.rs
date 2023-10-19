@@ -302,12 +302,14 @@ impl<'a> ShrinkCollectRefs<'a> for ShrinkCollectAliveSeparatedByRefs<'a> {
                 .iter()
                 .any(|(slot_list_slot, _info)| slot_list_slot > &self.many_refs_old_alive.slot)
         {
+            // this entry is alive but is newer than any other slot in the index
             &mut self.many_refs_this_is_newest_alive
         } else {
-            // this entry is alive but is older
+            // This entry is alive but is older than at least one other slot in the index.
+            // We would expect clean to get rid of the entry for THIS slot at some point, but clean hasn't done that yet.
             &mut self.many_refs_old_alive
         };
-        other.add(ref_count, account, &[]);
+        other.add(ref_count, account, slot_list);
     }
     fn len(&self) -> usize {
         self.one_ref

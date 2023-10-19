@@ -274,6 +274,37 @@ impl AccountsDb {
         self.shrink_ancient_stats.report();
     }
 
+    /// return false if `many_refs_newest` accounts cannot be moved into `target_slots_sorted`.
+    /// The slot # would be violated.
+    /// accounts in `many_refs_newest` must be moved a slot >= each account's current slot.
+    /// If that can be done, this fn returns true
+    fn many_ref_accounts_can_be_moved(
+        many_refs_newest: &Vec<AliveAccounts<'_>>,
+        target_slots_sorted: &[Slot],
+        tuning: &PackedAncientStorageTuning,
+    ) -> bool {
+        let alive_bytes = many_refs_newest
+            .iter()
+            .map(|alive| alive.bytes)
+            .sum::<usize>();
+        let required_ideal_packed = (alive_bytes as u64 / tuning.ideal_storage_size + 1) as usize;
+        if alive_bytes == 0 {
+            // nothing required, so no problem moving nothing
+            return true;
+        }
+        if target_slots_sorted.len() < required_ideal_packed {
+            return false;
+        }
+        let i_last = target_slots_sorted
+            .len()
+            .saturating_sub(required_ideal_packed);
+
+        let highest_slot = target_slots_sorted[i_last];
+        many_refs_newest
+            .iter()
+            .all(|many| many.slot <= highest_slot)
+    }
+
     fn combine_ancient_slots_packed_internal(
         &self,
         sorted_slots: Vec<Slot>,
@@ -305,32 +336,24 @@ impl AccountsDb {
                 (!newest_alive.accounts.is_empty()).then_some(newest_alive)
             })
             .collect::<Vec<_>>();
-        // sort highest slot to lowest slot
+
+        // Sort highest slot to lowest slot. This way, we will put the multi ref accounts with the highest slots in the highest
+        // packed slot.
         many_refs_newest.sort_unstable_by(|a, b| b.slot.cmp(&a.slot));
         metrics.newest_alive_packed_count += many_refs_newest.len();
 
-        let highest_slot = accounts_to_combine.target_slots_sorted.last().unwrap();
-
-        for i in 0..accounts_to_combine.target_slots_sorted.len() - 1 {
-            assert!(
-                accounts_to_combine.target_slots_sorted[i]
-                    < accounts_to_combine.target_slots_sorted[i + 1],
-                "{}, {}, {}",
-                accounts_to_combine.target_slots_sorted[i],
-                accounts_to_combine.target_slots_sorted[i + 1],
-                i
-            );
-        }
-        if many_refs_newest
-            .iter()
-            .any(|many| &many.slot < highest_slot)
-        {
+        if !Self::many_ref_accounts_can_be_moved(
+            &many_refs_newest,
+            &accounts_to_combine.target_slots_sorted,
+            &tuning,
+        ) {
             datapoint_info!("shrink_ancient_stats", ("high_slot", 1, i64),);
             self.addref_accounts_failed_to_shrink_ancient(accounts_to_combine);
             return;
         }
 
-        // pack the accounts with 1 ref or
+        // pack the accounts with 1 ref or refs > 1 but the slot we're packing is the highest alive slot for the pubkey.
+        // Note the `chain` below combining the 2 types of refs.
         let pack = PackedAncientStorage::pack(
             many_refs_newest.iter().chain(
                 accounts_to_combine
@@ -600,6 +623,7 @@ impl AccountsDb {
         {
             let many_refs_old_alive = &mut shrink_collect.alive_accounts.many_refs_old_alive;
             if !many_refs_old_alive.accounts.is_empty() {
+                //todo: we could log here
                 // there are accounts with ref_count > 1. This means this account must remain IN this slot.
                 // The same account could exist in a newer or older slot. Moving this account across slots could result
                 // in this alive version of the account now being in a slot OLDER than the non-alive instances.
@@ -3092,6 +3116,75 @@ pub mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_many_ref_accounts_can_be_moved() {
+        let tuning = PackedAncientStorageTuning {
+            // only allow 10k slots old enough to be ancient
+            max_ancient_slots: 10_000,
+            // re-combine/shrink 55% of the data savings this pass
+            percent_of_alive_shrunk_data: 55,
+            ideal_storage_size: NonZeroU64::new(1000).unwrap(),
+            can_randomly_shrink: false,
+        };
+
+        // nothing to move, so no problem fitting it
+        let many_refs_newest = vec![];
+        let target_slots_sorted = vec![];
+        assert!(AccountsDb::many_ref_accounts_can_be_moved(
+            &many_refs_newest,
+            &target_slots_sorted,
+            &tuning
+        ));
+        // something to move, no target slots, so can't fit
+        let slot = 1;
+        let many_refs_newest = vec![AliveAccounts {
+            bytes: 1,
+            slot,
+            accounts: Vec::default(),
+        }];
+        assert!(!AccountsDb::many_ref_accounts_can_be_moved(
+            &many_refs_newest,
+            &target_slots_sorted,
+            &tuning
+        ));
+
+        // something to move, 1 target slot, so can fit
+        let target_slots_sorted = vec![slot];
+        assert!(AccountsDb::many_ref_accounts_can_be_moved(
+            &many_refs_newest,
+            &target_slots_sorted,
+            &tuning
+        ));
+
+        // too much to move to 1 target slot, so can't fit
+        let many_refs_newest = vec![AliveAccounts {
+            bytes: tuning.ideal_storage_size.get() as usize,
+            slot,
+            accounts: Vec::default(),
+        }];
+        assert!(!AccountsDb::many_ref_accounts_can_be_moved(
+            &many_refs_newest,
+            &target_slots_sorted,
+            &tuning
+        ));
+
+        // more than 1 slot to move, 2 target slots, so can fit
+        let target_slots_sorted = vec![slot, slot + 1];
+        assert!(AccountsDb::many_ref_accounts_can_be_moved(
+            &many_refs_newest,
+            &target_slots_sorted,
+            &tuning
+        ));
+
+        // lowest target slot is below required slot
+        let target_slots_sorted = vec![slot - 1, slot];
+        assert!(!AccountsDb::many_ref_accounts_can_be_moved(
+            &many_refs_newest,
+            &target_slots_sorted,
+            &tuning
+        ));
     }
 
     #[test]
