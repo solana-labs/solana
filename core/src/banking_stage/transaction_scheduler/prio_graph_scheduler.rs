@@ -78,6 +78,7 @@ impl PrioGraphScheduler {
             Vec::with_capacity(self.consume_work_senders.len() * TARGET_NUM_TRANSACTIONS_PER_BATCH);
         const MAX_TRANSACTIONS_PER_SCHEDULING_PASS: usize = 100_000;
         let mut num_scheduled = 0;
+        let mut num_sent = 0;
         while num_scheduled < MAX_TRANSACTIONS_PER_SCHEDULING_PASS {
             // If nothing is in the main-queue of the `PrioGraph` then there's nothing left to schedule.
             if prio_graph.is_empty() {
@@ -94,10 +95,6 @@ impl PrioGraphScheduler {
                         next_id,
                         Self::get_transaction_account_access(transaction),
                     );
-                }
-
-                if num_scheduled >= MAX_TRANSACTIONS_PER_SCHEDULING_PASS {
-                    break;
                 }
 
                 // Should always be in the container, but can just skip if it is not for some reason.
@@ -138,6 +135,8 @@ impl PrioGraphScheduler {
                     continue;
                 };
 
+                num_scheduled += 1;
+
                 // Track the chain-id to thread-index mapping.
                 chain_id_to_thread_index.insert(prio_graph.chain_id(&id), thread_id);
 
@@ -158,12 +157,16 @@ impl PrioGraphScheduler {
 
                 // If target batch size is reached, send only this batch.
                 if batches.ids[thread_id].len() >= TARGET_NUM_TRANSACTIONS_PER_BATCH {
-                    num_scheduled += self.send_batch(&mut batches, thread_id)?;
+                    num_sent += self.send_batch(&mut batches, thread_id)?;
+                }
+
+                if num_scheduled >= MAX_TRANSACTIONS_PER_SCHEDULING_PASS {
+                    break;
                 }
             }
 
             // Send all non-empty batches
-            num_scheduled += self.send_batches(&mut batches)?;
+            num_sent += self.send_batches(&mut batches)?;
 
             // Unblock all transactions that were blocked by the transactions that were just sent.
             for id in unblock_this_batch.drain(..) {
@@ -172,7 +175,7 @@ impl PrioGraphScheduler {
         }
 
         // Send batches for any remaining transactions
-        num_scheduled += self.send_batches(&mut batches)?;
+        num_sent += self.send_batches(&mut batches)?;
 
         // Push unschedulable ids back into the container
         for id in unschedulable_ids {
@@ -183,6 +186,11 @@ impl PrioGraphScheduler {
         while let Some(id) = prio_graph.pop_and_unblock() {
             container.push_id_into_queue(id);
         }
+
+        assert_eq!(
+            num_scheduled, num_sent,
+            "number of scheduled and sent transactions must match"
+        );
 
         Ok(num_scheduled)
     }
