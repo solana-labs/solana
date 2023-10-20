@@ -201,8 +201,12 @@ pub(crate) struct AliveAccounts<'a> {
 /// separate pubkeys into those with a single refcount and those with > 1 refcount
 #[derive(Debug)]
 pub(crate) struct ShrinkCollectAliveSeparatedByRefs<'a> {
+    /// accounts where ref_count = 1
     pub(crate) one_ref: AliveAccounts<'a>,
-    pub(crate) many_refs: AliveAccounts<'a>,
+    /// account where ref_count > 1, but this slot contains the alive entry with the highest slot
+    pub(crate) many_refs_this_is_newest_alive: AliveAccounts<'a>,
+    /// account where ref_count > 1, and this slot is NOT the highest alive entry in the index for the pubkey
+    pub(crate) many_refs_old_alive: AliveAccounts<'a>,
 }
 
 /// Configuration Parameters for running accounts hash and total lamports verification
@@ -228,7 +232,12 @@ pub struct VerifyAccountsHashAndLamportsConfig<'a> {
 pub(crate) trait ShrinkCollectRefs<'a>: Sync + Send {
     fn with_capacity(capacity: usize, slot: Slot) -> Self;
     fn collect(&mut self, other: Self);
-    fn add(&mut self, ref_count: u64, account: &'a StoredAccountMeta<'a>);
+    fn add(
+        &mut self,
+        ref_count: u64,
+        account: &'a StoredAccountMeta<'a>,
+        slot_list: &[(Slot, AccountInfo)],
+    );
     fn len(&self) -> usize;
     fn alive_bytes(&self) -> usize;
     fn alive_accounts(&self) -> &Vec<&'a StoredAccountMeta<'a>>;
@@ -246,7 +255,12 @@ impl<'a> ShrinkCollectRefs<'a> for AliveAccounts<'a> {
             slot,
         }
     }
-    fn add(&mut self, _ref_count: u64, account: &'a StoredAccountMeta<'a>) {
+    fn add(
+        &mut self,
+        _ref_count: u64,
+        account: &'a StoredAccountMeta<'a>,
+        _slot_list: &[(Slot, AccountInfo)],
+    ) {
         self.accounts.push(account);
         self.bytes = self.bytes.saturating_add(account.stored_size());
     }
@@ -264,29 +278,50 @@ impl<'a> ShrinkCollectRefs<'a> for AliveAccounts<'a> {
 impl<'a> ShrinkCollectRefs<'a> for ShrinkCollectAliveSeparatedByRefs<'a> {
     fn collect(&mut self, other: Self) {
         self.one_ref.collect(other.one_ref);
-        self.many_refs.collect(other.many_refs);
+        self.many_refs_this_is_newest_alive
+            .collect(other.many_refs_this_is_newest_alive);
+        self.many_refs_old_alive.collect(other.many_refs_old_alive);
     }
     fn with_capacity(capacity: usize, slot: Slot) -> Self {
         Self {
             one_ref: AliveAccounts::with_capacity(capacity, slot),
-            many_refs: AliveAccounts::with_capacity(capacity, slot),
+            many_refs_this_is_newest_alive: AliveAccounts::with_capacity(0, slot),
+            many_refs_old_alive: AliveAccounts::with_capacity(0, slot),
         }
     }
-    fn add(&mut self, ref_count: u64, account: &'a StoredAccountMeta<'a>) {
+    fn add(
+        &mut self,
+        ref_count: u64,
+        account: &'a StoredAccountMeta<'a>,
+        slot_list: &[(Slot, AccountInfo)],
+    ) {
         let other = if ref_count == 1 {
             &mut self.one_ref
+        } else if slot_list.len() == 1
+            || !slot_list
+                .iter()
+                .any(|(slot_list_slot, _info)| slot_list_slot > &self.many_refs_old_alive.slot)
+        {
+            // this entry is alive but is newer than any other slot in the index
+            &mut self.many_refs_this_is_newest_alive
         } else {
-            &mut self.many_refs
+            // This entry is alive but is older than at least one other slot in the index.
+            // We would expect clean to get rid of the entry for THIS slot at some point, but clean hasn't done that yet.
+            &mut self.many_refs_old_alive
         };
-        other.add(ref_count, account);
+        other.add(ref_count, account, slot_list);
     }
     fn len(&self) -> usize {
-        self.one_ref.len().saturating_add(self.many_refs.len())
+        self.one_ref
+            .len()
+            .saturating_add(self.many_refs_old_alive.len())
+            .saturating_add(self.many_refs_this_is_newest_alive.len())
     }
     fn alive_bytes(&self) -> usize {
         self.one_ref
             .alive_bytes()
-            .saturating_add(self.many_refs.alive_bytes())
+            .saturating_add(self.many_refs_old_alive.alive_bytes())
+            .saturating_add(self.many_refs_this_is_newest_alive.alive_bytes())
     }
     fn alive_accounts(&self) -> &Vec<&'a StoredAccountMeta<'a>> {
         unimplemented!("illegal use");
@@ -2015,6 +2050,7 @@ pub(crate) struct ShrinkStatsSub {
     pub(crate) rewrite_elapsed_us: u64,
     pub(crate) create_and_insert_store_elapsed_us: u64,
     pub(crate) unpackable_slots_count: usize,
+    pub(crate) newest_alive_packed_count: usize,
 }
 
 impl ShrinkStatsSub {
@@ -2027,9 +2063,12 @@ impl ShrinkStatsSub {
             other.create_and_insert_store_elapsed_us
         );
         saturating_add_assign!(self.unpackable_slots_count, other.unpackable_slots_count);
+        saturating_add_assign!(
+            self.newest_alive_packed_count,
+            other.newest_alive_packed_count
+        );
     }
 }
-
 #[derive(Debug, Default)]
 pub struct ShrinkStats {
     last_report: AtomicInterval,
@@ -2043,6 +2082,7 @@ pub struct ShrinkStats {
     remove_old_stores_shrink_us: AtomicU64,
     rewrite_elapsed: AtomicU64,
     unpackable_slots_count: AtomicU64,
+    newest_alive_packed_count: AtomicU64,
     drop_storage_entries_elapsed: AtomicU64,
     recycle_stores_write_elapsed: AtomicU64,
     accounts_removed: AtomicUsize,
@@ -2224,6 +2264,13 @@ impl ShrinkAncientStats {
                 "unpackable_slots_count",
                 self.shrink_stats
                     .unpackable_slots_count
+                    .swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "newest_alive_packed_count",
+                self.shrink_stats
+                    .newest_alive_packed_count
                     .swap(0, Ordering::Relaxed) as i64,
                 i64
             ),
@@ -3887,7 +3934,7 @@ impl AccountsDb {
                         // Since we are shrinking these entries, we need to disambiguate append_vec_ids during this period and those only exist in the in-memory accounts index.
                         index_entries_being_shrunk.push(Arc::clone(entry.unwrap()));
                         all_are_zero_lamports &= stored_account.lamports() == 0;
-                        alive_accounts.add(ref_count, stored_account);
+                        alive_accounts.add(ref_count, stored_account, slot_list);
                         alive += 1;
                     }
                 }
@@ -4187,6 +4234,10 @@ impl AccountsDb {
         shrink_stats
             .unpackable_slots_count
             .fetch_add(stats_sub.unpackable_slots_count as u64, Ordering::Relaxed);
+        shrink_stats.newest_alive_packed_count.fetch_add(
+            stats_sub.newest_alive_packed_count as u64,
+            Ordering::Relaxed,
+        );
     }
 
     /// get stores for 'slot'
