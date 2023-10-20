@@ -1,11 +1,11 @@
-use solana_sdk::{message::VersionedMessage, transaction::SanitizedVersionedTransaction};
+use crate::{message::VersionedMessage, transaction::SanitizedVersionedTransaction};
 
 /// Simple vote transaction meets these conditions:
 /// 1. has 1 or 2 signatures;
 /// 2. is legacy message;
 /// 3. has only one instruction;
 /// 4. which must be Vote instruction;
-pub(crate) fn is_simple_vote_transaction(
+pub fn is_simple_vote_transaction(
     sanitized_versioned_transaction: &SanitizedVersionedTransaction,
 ) -> bool {
     let signatures_count = sanitized_versioned_transaction.signatures.len();

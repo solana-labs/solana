@@ -1,12 +1,10 @@
 use {
-    crate::{
-        simple_vote_transaction_checker::is_simple_vote_transaction,
-        transaction_meta::{DynamicMeta, StaticMeta, TransactionMeta},
-    },
+    crate::transaction_meta::{DynamicMeta, StaticMeta, TransactionMeta},
     solana_sdk::{
         hash::Hash,
         message::{AddressLoader, SanitizedMessage, SanitizedVersionedMessage},
         signature::Signature,
+        simple_vote_transaction_checker::is_simple_vote_transaction,
         transaction::{Result, SanitizedVersionedTransaction},
     },
 };

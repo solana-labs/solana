@@ -14,6 +14,7 @@ use {
         pubkey::Pubkey,
         sanitize::Sanitize,
         signature::Signature,
+        simple_vote_transaction_checker::is_simple_vote_transaction,
         solana_sdk::feature_set,
         transaction::{Result, Transaction, TransactionError, VersionedTransaction},
     },
@@ -96,44 +97,19 @@ impl SanitizedTransaction {
         is_simple_vote_tx: Option<bool>,
         address_loader: impl AddressLoader,
     ) -> Result<Self> {
-        tx.sanitize()?;
-
+        let sanitized_versioned_tx = SanitizedVersionedTransaction::try_from(tx)?;
+        let is_simple_vote_tx = is_simple_vote_tx
+            .unwrap_or_else(|| is_simple_vote_transaction(&sanitized_versioned_tx));
         let message_hash = match message_hash.into() {
-            MessageHash::Compute => tx.message.hash(),
+            MessageHash::Compute => sanitized_versioned_tx.message.message.hash(),
             MessageHash::Precomputed(hash) => hash,
         };
-
-        let signatures = tx.signatures;
-        let message = match tx.message {
-            VersionedMessage::Legacy(message) => {
-                SanitizedMessage::Legacy(LegacyMessage::new(message))
-            }
-            VersionedMessage::V0(message) => {
-                let loaded_addresses =
-                    address_loader.load_addresses(&message.address_table_lookups)?;
-                SanitizedMessage::V0(v0::LoadedMessage::new(message, loaded_addresses))
-            }
-        };
-
-        let is_simple_vote_tx = is_simple_vote_tx.unwrap_or_else(|| {
-            if signatures.len() < 3
-                && message.instructions().len() == 1
-                && matches!(message, SanitizedMessage::Legacy(_))
-            {
-                let mut ix_iter = message.program_instructions_iter();
-                ix_iter.next().map(|(program_id, _ix)| program_id)
-                    == Some(&crate::vote::program::id())
-            } else {
-                false
-            }
-        });
-
-        Ok(Self {
-            message,
+        Self::try_new(
+            sanitized_versioned_tx,
             message_hash,
             is_simple_vote_tx,
-            signatures,
-        })
+            address_loader,
+        )
     }
 
     pub fn try_from_legacy_transaction(tx: Transaction) -> Result<Self> {
