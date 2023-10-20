@@ -1,3 +1,5 @@
+#![cfg(feature = "full")]
+
 use crate::{message::VersionedMessage, transaction::SanitizedVersionedTransaction};
 
 /// Simple vote transaction meets these conditions:
