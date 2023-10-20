@@ -81,7 +81,6 @@ impl RangeProof {
         let nm: usize = bit_lengths.iter().sum();
         assert!(nm.is_power_of_two());
 
-        // TODO: double check Pedersen generators and range proof generators does not interfere
         let bp_gens = BulletproofGens::new(nm);
 
         // bit-decompose values and generate their Pedersen vector commitment
