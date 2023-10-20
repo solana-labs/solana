@@ -11,6 +11,7 @@ pub const FEE_PAYER_ARG: ArgConstant<'static> = ArgConstant {
            is also passed. Defaults to the client keypair.",
 };
 
+#[allow(deprecated)]
 pub fn fee_payer_arg<'a>() -> Arg<'a> {
     Arg::new(FEE_PAYER_ARG.name)
         .long(FEE_PAYER_ARG.long)
