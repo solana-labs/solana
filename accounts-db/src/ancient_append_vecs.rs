@@ -631,9 +631,14 @@ impl AccountsDb {
                         account.pubkey()
                     );
                 });
-                // there are accounts with ref_count > 1. This means this account must remain IN this slot.
-                // The same account could exist in a newer or older slot. Moving this account across slots could result
-                // in this alive version of the account now being in a slot OLDER than the non-alive instances.
+                // There are alive accounts with ref_count > 1, where the entry for the account in the index is NOT the highest slot. (`many_refs_old_alive`)
+                // This means this account must remain IN this slot. There could be alive or dead references to this same account in any older slot.
+                // Moving it to a lower slot could move it before an alive or dead entry to this same account.
+                // Moving it to a higher slot could move it ahead of other slots where this account is also alive. We know a higher slot exists that contains this account.
+                // So, moving this account to a different slot could result in the moved account being before or after other instances of this account newer or older.
+                // This would fail the invariant that the highest slot # where an account exists defines the most recent account.
+                // It could be a clean error or a transient condition that will resolve if we encounter this situation.
+                // The count of these accounts per call will be reported by metrics in `unpackable_slots_count`
                 if shrink_collect.unrefed_pubkeys.is_empty()
                     && shrink_collect.alive_accounts.one_ref.accounts.is_empty()
                     && shrink_collect
