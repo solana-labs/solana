@@ -588,23 +588,32 @@ mod tests {
     fn test_schedule_look_ahead() {
         let (mut scheduler, work_receivers, _finished_work_sender) = create_test_frame(2);
 
-        let accounts = (0..4).map(|_| Keypair::new()).collect_vec();
+        let accounts = (0..6).map(|_| Keypair::new()).collect_vec();
         let mut container = create_container([
-            (&accounts[0], &[accounts[1].pubkey()], 1, 2),
-            (&accounts[2], &[accounts[3].pubkey()], 1, 1),
-            (&accounts[1], &[accounts[2].pubkey()], 1, 0),
+            (&accounts[0], &[accounts[1].pubkey()], 1, 4),
+            (&accounts[1], &[accounts[2].pubkey()], 1, 3),
+            (&accounts[3], &[accounts[4].pubkey()], 1, 2),
+            (&accounts[4], &[accounts[5].pubkey()], 1, 1),
+            (&accounts[2], &[accounts[5].pubkey()], 1, 0),
         ]);
 
-        // high priority transactions [0, 1] do not conflict, and would be
-        // scheduled to *different* threads without chain-id look-ahead.
-        // Because low priority transaction [2] conflicts with both, it will
-        // cause transaction [1] to be scheduled onto the same thread as
-        // transaction [0].
+        // The look-ahead window allows the prio-graph to have a limited view of
+        // upcoming transactions, so that un-schedulable transactions are less
+        // likely to occur. In this case, we have 5 transactions that have a
+        // prio-graph that can be visualized as:
+        // [0] --> [1] \
+        //               -> [4]
+        //             /
+        // [2] --> [3]
+        // Even though [0] and [2] could be scheduled to different threads, the
+        // fact they eventually join means that the scheduler will schedule them
+        // onto the same thread to avoid causing [4], which conflicts with both
+        // chains, to be un-schedulable.
         let num_scheduled = scheduler.schedule(&mut container).unwrap();
-        assert_eq!(num_scheduled, 3);
+        assert_eq!(num_scheduled, 5);
         assert_eq!(
             collect_work(&work_receivers[0]).1,
-            [txids!([0, 1]), txids!([2])]
+            [txids!([0, 2]), txids!([1, 3]), txids!([4])]
         );
     }
 
@@ -631,6 +640,15 @@ mod tests {
         // Transaction [5] is technically schedulable, onto thread 1 since it only
         // conflicts with transaction [1]. However, [5] will not be scheduled because
         // it conflicts with a higher-priority transaction [4] that is unschedulable.
+        // The full prio-graph can be visualized as:
+        // [0] \
+        //      -> [4] -> [5]
+        // [1] / ------/
+        // [2]
+        // [3]
+        // Because the look-ahead window is shortened to a size of 4, the scheduler does
+        // not have knowledge of the joining at transaction [4] until after [0] and [1]
+        // have been scheduled.
         let num_scheduled = scheduler.schedule(&mut container).unwrap();
         assert_eq!(num_scheduled, 4);
         let (thread_0_work, thread_0_ids) = collect_work(&work_receivers[0]);
