@@ -91,12 +91,18 @@ impl CargoRegistryService {
             return response_builder::error_incorrect_length();
         }
 
-        let _package = Program::crate_name_to_program_id(crate_name)
+        let package = Program::crate_name_to_program_id(crate_name)
             .and_then(|id| UnpackedCrate::fetch(id, client).ok());
 
         // Return the package to the caller in the response
-
-        response_builder::error_not_implemented()
+        if let Some(package) = package {
+            response_builder::success_response_bytes(package.0)
+        } else {
+            response_builder::error_response(
+                hyper::StatusCode::BAD_REQUEST,
+                "Failed to find the package",
+            )
+        }
     }
 
     fn handle_yank_request(
