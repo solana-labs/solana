@@ -25,7 +25,7 @@ use {
     itertools::Itertools,
     log::*,
     solana_program_runtime::{
-        compute_budget_processor::process_compute_budget_instructions,
+        compute_budget::{self, ComputeBudget},
         loaded_programs::LoadedProgramsForTxBatch,
     },
     solana_sdk::{
@@ -35,8 +35,9 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
         feature_set::{
-            self, include_loaded_accounts_data_size_in_fee_calculation,
-            remove_congestion_multiplier_from_fee_calculation,
+            self, add_set_tx_loaded_accounts_data_size_instruction,
+            include_loaded_accounts_data_size_in_fee_calculation,
+            remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
             simplify_writable_program_account_check, FeatureSet,
         },
         fee::FeeStructure,
@@ -246,16 +247,15 @@ impl Accounts {
         feature_set: &FeatureSet,
     ) -> Result<Option<NonZeroUsize>> {
         if feature_set.is_active(&feature_set::cap_transaction_accounts_data_size::id()) {
-            let compute_budget_limits = process_compute_budget_instructions(
+            let mut compute_budget =
+                ComputeBudget::new(compute_budget::MAX_COMPUTE_UNIT_LIMIT as u64);
+            let _process_transaction_result = compute_budget.process_instructions(
                 tx.message().program_instructions_iter(),
-                feature_set,
-            )
-            .unwrap_or_default();
+                !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+                feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+            );
             // sanitize against setting size limit to zero
-            NonZeroUsize::new(
-                usize::try_from(compute_budget_limits.loaded_accounts_bytes).unwrap_or_default(),
-            )
-            .map_or(
+            NonZeroUsize::new(compute_budget.loaded_accounts_data_size_limit).map_or(
                 Err(TransactionError::InvalidLoadedAccountsDataSizeLimit),
                 |v| Ok(Some(v)),
             )
@@ -722,7 +722,7 @@ impl Accounts {
                         fee_structure.calculate_fee(
                             tx.message(),
                             lamports_per_signature,
-                            &process_compute_budget_instructions(tx.message().program_instructions_iter(), feature_set).unwrap_or_default().into(),
+                            &ComputeBudget::fee_budget_limits(tx.message().program_instructions_iter(), feature_set),
                             feature_set.is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
                             feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                         )
@@ -1474,9 +1474,8 @@ mod tests {
             transaction_results::{DurableNonceFee, TransactionExecutionDetails},
         },
         assert_matches::assert_matches,
-        solana_program_runtime::{
-            compute_budget_processor,
-            prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
+        solana_program_runtime::prioritization_fee::{
+            PrioritizationFeeDetails, PrioritizationFeeType,
         },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
@@ -1752,15 +1751,13 @@ mod tests {
         );
 
         let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&solana_sdk::feature_set::remove_deprecated_request_unit_ix::id());
+        feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
 
         let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
         let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,
-            &process_compute_budget_instructions(message.program_instructions_iter(), &feature_set)
-                .unwrap_or_default()
-                .into(),
+            &ComputeBudget::fee_budget_limits(message.program_instructions_iter(), &feature_set),
             true,
             false,
         );
@@ -4256,11 +4253,7 @@ mod tests {
 
         let result_no_limit = Ok(None);
         let result_default_limit = Ok(Some(
-            NonZeroUsize::new(
-                usize::try_from(compute_budget_processor::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES)
-                    .unwrap(),
-            )
-            .unwrap(),
+            NonZeroUsize::new(compute_budget::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES).unwrap(),
         ));
         let result_requested_limit: Result<Option<NonZeroUsize>> =
             Ok(Some(NonZeroUsize::new(99).unwrap()));
@@ -4288,10 +4281,7 @@ mod tests {
         //    if tx doesn't set limit, then default limit (64MiB)
         //    if tx sets limit, then requested limit
         //    if tx sets limit to zero, then TransactionError::InvalidLoadedAccountsDataSizeLimit
-        feature_set.activate(
-            &solana_sdk::feature_set::add_set_tx_loaded_accounts_data_size_instruction::id(),
-            0,
-        );
+        feature_set.activate(&add_set_tx_loaded_accounts_data_size_instruction::id(), 0);
         test(tx_not_set_limit, &feature_set, &result_default_limit);
         test(tx_set_limit_99, &feature_set, &result_requested_limit);
         test(tx_set_limit_0, &feature_set, &result_invalid_limit);
@@ -4326,15 +4316,13 @@ mod tests {
         );
 
         let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&solana_sdk::feature_set::remove_deprecated_request_unit_ix::id());
+        feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
 
         let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
         let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,
-            &process_compute_budget_instructions(message.program_instructions_iter(), &feature_set)
-                .unwrap_or_default()
-                .into(),
+            &ComputeBudget::fee_budget_limits(message.program_instructions_iter(), &feature_set),
             true,
             false,
         );
