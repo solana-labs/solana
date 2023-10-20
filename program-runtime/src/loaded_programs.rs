@@ -648,6 +648,10 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
             error!("Program cache doesn't have fork graph.");
             return;
         };
+        let Ok(fork_graph) = fork_graph.read() else {
+            error!("Failed to lock fork graph for reading.");
+            return;
+        };
         for second_level in self.entries.values_mut() {
             // Remove entries un/re/deployed on orphan forks
             let mut first_ancestor_found = false;
@@ -655,10 +659,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                 .iter()
                 .rev()
                 .filter(|entry| {
-                    let relation = fork_graph
-                        .read()
-                        .unwrap()
-                        .relationship(entry.deployment_slot, new_root_slot);
+                    let relation = fork_graph.relationship(entry.deployment_slot, new_root_slot);
                     if entry.deployment_slot >= new_root_slot {
                         matches!(relation, BlockRelation::Equal | BlockRelation::Descendant)
                     } else if !first_ancestor_found
