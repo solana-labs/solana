@@ -526,4 +526,56 @@ mod tests {
             .unwrap_err();
         assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
     }
+
+    #[test]
+    fn test_parse_prompt_signer_source() {
+        let command = Command::new("test").arg(
+            Arg::new("keypair")
+                .long("keypair")
+                .takes_value(true)
+                .value_parser(SignerSourceParserBuilder::new().allow_prompt().build()),
+        );
+
+        // success case
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--keypair", "ASK"])
+            .unwrap();
+        let signer_source = matches.get_one::<SignerSource>("keypair").unwrap();
+        assert_matches!(
+            signer_source,
+            SignerSource {
+                kind: SignerSourceKind::Prompt,
+                derivation_path: None,
+                legacy: true,
+            }
+        );
+
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--keypair", "prompt:"])
+            .unwrap();
+        let signer_source = matches.get_one::<SignerSource>("keypair").unwrap();
+        assert_matches!(
+            signer_source,
+            SignerSource {
+                kind: SignerSourceKind::Prompt,
+                derivation_path: None,
+                legacy: false,
+            }
+        );
+
+        // faile cases
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--keypair", "-"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--keypair", "usb::/ledger"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+    }
 }
