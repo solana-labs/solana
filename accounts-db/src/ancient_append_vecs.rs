@@ -347,7 +347,12 @@ impl AccountsDb {
             &accounts_to_combine.target_slots_sorted,
             &tuning,
         ) {
-            datapoint_info!("shrink_ancient_stats", ("high_slot", 1, i64),);
+            datapoint_info!("shrink_ancient_stats", ("high_slot", 1, i64));
+            log::info!(
+                "unable to ancient pack: highest available slot: {:?}, highest required slot: {:?}",
+                accounts_to_combine.target_slots_sorted.last(),
+                many_refs_newest.last().map(|accounts| accounts.slot)
+            );
             self.addref_accounts_failed_to_shrink_ancient(accounts_to_combine);
             return;
         }
