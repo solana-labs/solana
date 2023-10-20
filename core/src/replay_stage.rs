@@ -3859,6 +3859,7 @@ impl ReplayStage {
         epoch_slots_frozen_slots: &mut EpochSlotsFrozenSlots,
         drop_bank_sender: &Sender<Vec<Arc<Bank>>>,
     ) {
+        bank_forks.read().unwrap().prune_program_cache(new_root);
         let removed_banks = bank_forks.write().unwrap().set_root(
             new_root,
             accounts_background_request_sender,

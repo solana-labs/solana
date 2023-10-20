@@ -20,7 +20,6 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
-        hash::Hash,
         pubkey::Pubkey,
         stake_history::Epoch,
     },
@@ -115,7 +114,7 @@ pub struct AppendVecStoredAccountMeta<'append_vec> {
     pub(crate) data: &'append_vec [u8],
     pub(crate) offset: usize,
     pub(crate) stored_size: usize,
-    pub(crate) hash: &'append_vec Hash,
+    pub(crate) hash: &'append_vec AccountHash,
 }
 
 impl<'append_vec> AppendVecStoredAccountMeta<'append_vec> {
@@ -123,7 +122,7 @@ impl<'append_vec> AppendVecStoredAccountMeta<'append_vec> {
         &self.meta.pubkey
     }
 
-    pub fn hash(&self) -> &'append_vec Hash {
+    pub fn hash(&self) -> &'append_vec AccountHash {
         self.hash
     }
 
@@ -488,7 +487,7 @@ impl AppendVec {
     pub fn get_account(&self, offset: usize) -> Option<(StoredAccountMeta, usize)> {
         let (meta, next): (&StoredMeta, _) = self.get_type(offset)?;
         let (account_meta, next): (&AccountMeta, _) = self.get_type(next)?;
-        let (hash, next): (&Hash, _) = self.get_type(next)?;
+        let (hash, next): (&AccountHash, _) = self.get_type(next)?;
         let (data, next) = self.get_slice(next, meta.data_len as usize)?;
         let stored_size = next - offset;
         Some((
@@ -612,11 +611,11 @@ impl AppendVec {
                 .map(|account| account.data())
                 .unwrap_or_default()
                 .as_ptr();
-            let hash_ptr = hash.0.as_ref().as_ptr();
+            let hash_ptr = bytemuck::bytes_of(hash).as_ptr();
             let ptrs = [
                 (meta_ptr as *const u8, mem::size_of::<StoredMeta>()),
                 (account_meta_ptr as *const u8, mem::size_of::<AccountMeta>()),
-                (hash_ptr, mem::size_of::<Hash>()),
+                (hash_ptr, mem::size_of::<AccountHash>()),
                 (data_ptr, data_len),
             ];
             if let Some(res) = self.append_ptrs_locked(&mut offset, &ptrs) {
@@ -655,6 +654,7 @@ pub mod tests {
         rand::{thread_rng, Rng},
         solana_sdk::{
             account::{accounts_equal, Account, AccountSharedData, WritableAccount},
+            hash::Hash,
             timing::duration_as_ms,
         },
         std::{mem::ManuallyDrop, time::Instant},

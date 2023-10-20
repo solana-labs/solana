@@ -39,6 +39,7 @@ pub use solana_sdk::reward_type::RewardType;
 use {
     crate::{
         bank::metrics::*,
+        bank_forks::BankForks,
         builtins::{BuiltinPrototype, BUILTINS},
         epoch_rewards_hasher::hash_rewards_into_partitions,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
@@ -105,9 +106,8 @@ use {
     solana_perf::perf_libs,
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
-        compute_budget::ComputeBudget,
-        compute_budget_processor::process_compute_budget_instructions,
-        invoke_context::ProcessInstructionWithContext,
+        compute_budget::{self, ComputeBudget},
+        invoke_context::BuiltinFunctionWithContext,
         loaded_programs::{
             LoadProgramMetrics, LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType,
             LoadedPrograms, LoadedProgramsForTxBatch, WorkingSlot, DELAY_VISIBILITY_SLOT_OFFSET,
@@ -136,8 +136,10 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{
-            self, include_loaded_accounts_data_size_in_fee_calculation,
-            remove_congestion_multiplier_from_fee_calculation, FeatureSet,
+            self, add_set_tx_loaded_accounts_data_size_instruction,
+            include_loaded_accounts_data_size_in_fee_calculation,
+            remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
+            FeatureSet,
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -819,7 +821,7 @@ pub struct Bank {
 
     pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
 
-    pub loaded_programs_cache: Arc<RwLock<LoadedPrograms>>,
+    pub loaded_programs_cache: Arc<RwLock<LoadedPrograms<BankForks>>>,
 
     pub check_program_modification_slot: bool,
 
@@ -1069,7 +1071,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
+            loaded_programs_cache: Arc::<RwLock<LoadedPrograms<BankForks>>>::default(),
             check_program_modification_slot: false,
             epoch_reward_status: EpochRewardStatus::default(),
         };
@@ -1855,7 +1857,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
+            loaded_programs_cache: Arc::<RwLock<LoadedPrograms<BankForks>>>::default(),
             check_program_modification_slot: false,
             epoch_reward_status: EpochRewardStatus::default(),
         };
@@ -4101,12 +4103,10 @@ impl Bank {
         self.fee_structure.calculate_fee(
             message,
             lamports_per_signature,
-            &process_compute_budget_instructions(
+            &ComputeBudget::fee_budget_limits(
                 message.program_instructions_iter(),
                 &self.feature_set,
-            )
-            .unwrap_or_default()
-            .into(),
+            ),
             self.feature_set
                 .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
             self.feature_set
@@ -5192,28 +5192,36 @@ impl Bank {
             .map(|(accs, tx)| match accs {
                 (Err(e), _nonce) => TransactionExecutionResult::NotExecuted(e.clone()),
                 (Ok(loaded_transaction), nonce) => {
-                    let compute_budget =
-                        if let Some(compute_budget) = self.runtime_config.compute_budget {
-                            compute_budget
-                        } else {
-                            let mut compute_budget_process_transaction_time =
-                                Measure::start("compute_budget_process_transaction_time");
-                            let maybe_compute_budget = ComputeBudget::try_from_instructions(
-                                tx.message().program_instructions_iter(),
-                                &self.feature_set,
-                            );
-                            compute_budget_process_transaction_time.stop();
-                            saturating_add_assign!(
-                                timings
-                                    .execute_accessories
-                                    .compute_budget_process_transaction_us,
-                                compute_budget_process_transaction_time.as_us()
-                            );
-                            if let Err(err) = maybe_compute_budget {
-                                return TransactionExecutionResult::NotExecuted(err);
-                            }
-                            maybe_compute_budget.unwrap()
-                        };
+                    let compute_budget = if let Some(compute_budget) =
+                        self.runtime_config.compute_budget
+                    {
+                        compute_budget
+                    } else {
+                        let mut compute_budget =
+                            ComputeBudget::new(compute_budget::MAX_COMPUTE_UNIT_LIMIT as u64);
+
+                        let mut compute_budget_process_transaction_time =
+                            Measure::start("compute_budget_process_transaction_time");
+                        let process_transaction_result = compute_budget.process_instructions(
+                            tx.message().program_instructions_iter(),
+                            !self
+                                .feature_set
+                                .is_active(&remove_deprecated_request_unit_ix::id()),
+                            self.feature_set
+                                .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+                        );
+                        compute_budget_process_transaction_time.stop();
+                        saturating_add_assign!(
+                            timings
+                                .execute_accessories
+                                .compute_budget_process_transaction_us,
+                            compute_budget_process_transaction_time.as_us()
+                        );
+                        if let Err(err) = process_transaction_result {
+                            return TransactionExecutionResult::NotExecuted(err);
+                        }
+                        compute_budget
+                    };
 
                     let result = self.execute_loaded_transaction(
                         tx,
@@ -7877,12 +7885,12 @@ impl Bank {
     pub fn add_mockup_builtin(
         &mut self,
         program_id: Pubkey,
-        entrypoint: ProcessInstructionWithContext,
+        builtin_function: BuiltinFunctionWithContext,
     ) {
         self.add_builtin(
             program_id,
             "mockup".to_string(),
-            LoadedProgram::new_builtin(self.slot, 0, entrypoint),
+            LoadedProgram::new_builtin(self.slot, 0, builtin_function),
         );
     }
 

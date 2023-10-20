@@ -48,7 +48,7 @@ solana-sdk = { path = "../../sdk", version = "=1.18.0" }
 solana-transaction-status = { path = "../../transaction-status", version = "=1.18.0" }
 solana-validator = { path = "../../validator", version = "=1.18.0" }
 solana-zk-token-sdk = { path = "../../zk-token-sdk", version = "=1.18.0" }
-solana_rbpf = "=0.7.2"
+solana_rbpf = "=0.8.0"
 static_assertions = "1.1.0"
 thiserror = "1.0"
 

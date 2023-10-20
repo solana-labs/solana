@@ -384,7 +384,7 @@ pub mod tests {
         let data = Vec::default();
         let offset = 99;
         let stored_size = 101;
-        let hash = Hash::new_unique();
+        let hash = AccountHash(Hash::new_unique());
         let stored_account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &meta,
             account_meta: &account_meta,
@@ -410,7 +410,7 @@ pub mod tests {
             for entries in 0..2 {
                 for starting_slot in 0..max_slots {
                     let data = Vec::default();
-                    let hash = Hash::new_unique();
+                    let hash = AccountHash(Hash::new_unique());
                     let mut raw = Vec::new();
                     let mut raw2 = Vec::new();
                     let mut raw4 = Vec::new();
@@ -564,7 +564,7 @@ pub mod tests {
                     data: &data,
                     offset,
                     stored_size,
-                    hash: &hashes[entry as usize].0,
+                    hash: &hashes[entry as usize],
                 }));
             }
             let raw2_refs = raw2.iter().collect::<Vec<_>>();

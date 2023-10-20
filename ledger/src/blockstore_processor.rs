@@ -1555,6 +1555,11 @@ fn load_frozen_forks(
                 root = new_root_bank.slot();
 
                 leader_schedule_cache.set_root(new_root_bank);
+                new_root_bank
+                    .loaded_programs_cache
+                    .write()
+                    .unwrap()
+                    .prune(root, new_root_bank.epoch());
                 let _ = bank_forks.write().unwrap().set_root(
                     root,
                     accounts_background_request_sender,
@@ -2989,7 +2994,7 @@ pub mod tests {
             ]
         }
 
-        declare_process_instruction!(mock_processor_ok, 1, |_invoke_context| {
+        declare_process_instruction!(MockBuiltinOk, 1, |_invoke_context| {
             // Always succeeds
             Ok(())
         });
@@ -2997,7 +3002,7 @@ pub mod tests {
         let mock_program_id = solana_sdk::pubkey::new_rand();
 
         let mut bank = Bank::new_for_tests(&genesis_config);
-        bank.add_mockup_builtin(mock_program_id, mock_processor_ok);
+        bank.add_mockup_builtin(mock_program_id, MockBuiltinOk::vm);
 
         let tx = Transaction::new_signed_with_payer(
             &[Instruction::new_with_bincode(
@@ -3018,7 +3023,7 @@ pub mod tests {
         let bankhash_ok = bank.hash();
         assert!(result.is_ok());
 
-        declare_process_instruction!(mock_processor_err, 1, |invoke_context| {
+        declare_process_instruction!(MockBuiltinErr, 1, |invoke_context| {
             let instruction_errors = get_instruction_errors();
 
             let err = invoke_context
@@ -3038,7 +3043,7 @@ pub mod tests {
 
         (0..get_instruction_errors().len()).for_each(|err| {
             let mut bank = Bank::new_for_tests(&genesis_config);
-            bank.add_mockup_builtin(mock_program_id, mock_processor_err);
+            bank.add_mockup_builtin(mock_program_id, MockBuiltinErr::vm);
 
             let tx = Transaction::new_signed_with_payer(
                 &[Instruction::new_with_bincode(
