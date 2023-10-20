@@ -13,7 +13,7 @@ use {
     solana_banks_server::banks_server::start_local_server,
     solana_bpf_loader_program::serialization::serialize_parameters,
     solana_program_runtime::{
-        compute_budget::ComputeBudget, ic_msg, invoke_context::ProcessInstructionWithContext,
+        compute_budget::ComputeBudget, ic_msg, invoke_context::BuiltinFunctionWithContext,
         loaded_programs::LoadedProgram, stable_log, timings::ExecuteTimings,
     },
     solana_runtime::{
@@ -66,6 +66,10 @@ pub use {
     solana_banks_client::{BanksClient, BanksClientError},
     solana_banks_interface::BanksTransactionResultWithMetadata,
     solana_program_runtime::invoke_context::InvokeContext,
+    solana_rbpf::{
+        error::EbpfError,
+        vm::{get_runtime_environment_key, EbpfVm},
+    },
     solana_sdk::transaction_context::IndexOfAccount,
 };
 
@@ -94,10 +98,10 @@ fn get_invoke_context<'a, 'b>() -> &'a mut InvokeContext<'b> {
     unsafe { transmute::<usize, &mut InvokeContext>(ptr) }
 }
 
-pub fn builtin_process_instruction(
-    process_instruction: solana_sdk::entrypoint::ProcessInstruction,
+pub fn invoke_builtin_function(
+    builtin_function: solana_sdk::entrypoint::ProcessInstruction,
     invoke_context: &mut InvokeContext,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<u64, Box<dyn std::error::Error>> {
     set_invoke_context(invoke_context);
 
     let transaction_context = &invoke_context.transaction_context;
@@ -130,9 +134,10 @@ pub fn builtin_process_instruction(
         unsafe { deserialize(&mut parameter_bytes.as_slice_mut()[0] as *mut u8) };
 
     // Execute the program
-    process_instruction(program_id, &account_infos, instruction_data).map_err(|err| {
-        let err: Box<dyn std::error::Error> = Box::new(InstructionError::from(u64::from(err)));
-        stable_log::program_failure(&log_collector, program_id, err.as_ref());
+    builtin_function(program_id, &account_infos, instruction_data).map_err(|err| {
+        let err = InstructionError::from(u64::from(err));
+        stable_log::program_failure(&log_collector, program_id, &err);
+        let err: Box<dyn std::error::Error> = Box::new(err);
         err
     })?;
     stable_log::program_success(&log_collector, program_id);
@@ -169,21 +174,24 @@ pub fn builtin_process_instruction(
         }
     }
 
-    Ok(())
+    Ok(0)
 }
 
 /// Converts a `solana-program`-style entrypoint into the runtime's entrypoint style, for
 /// use with `ProgramTest::add_program`
 #[macro_export]
 macro_rules! processor {
-    ($process_instruction:expr) => {
-        Some(
-            |invoke_context, _arg0, _arg1, _arg2, _arg3, _arg4, _memory_mapping, result| {
-                *result = $crate::builtin_process_instruction($process_instruction, invoke_context)
-                    .map(|_| 0)
+    ($builtin_function:expr) => {
+        Some(|vm, _arg0, _arg1, _arg2, _arg3, _arg4| {
+            let vm = unsafe {
+                &mut *((vm as *mut u64).offset(-($crate::get_runtime_environment_key() as isize))
+                    as *mut $crate::EbpfVm<$crate::InvokeContext>)
+            };
+            vm.program_result =
+                $crate::invoke_builtin_function($builtin_function, vm.context_object_pointer)
+                    .map_err(|err| $crate::EbpfError::SyscallError(err))
                     .into();
-            },
-        )
+        })
     };
 }
 
@@ -506,10 +514,10 @@ impl ProgramTest {
     pub fn new(
         program_name: &str,
         program_id: Pubkey,
-        process_instruction: Option<ProcessInstructionWithContext>,
+        builtin_function: Option<BuiltinFunctionWithContext>,
     ) -> Self {
         let mut me = Self::default();
-        me.add_program(program_name, program_id, process_instruction);
+        me.add_program(program_name, program_id, builtin_function);
         me
     }
 
@@ -600,13 +608,13 @@ impl ProgramTest {
     /// `program_name` will also be used to locate the SBF shared object in the current or fixtures
     /// directory.
     ///
-    /// If `process_instruction` is provided, the natively built-program may be used instead of the
+    /// If `builtin_function` is provided, the natively built-program may be used instead of the
     /// SBF shared object depending on the `BPF_OUT_DIR` environment variable.
     pub fn add_program(
         &mut self,
         program_name: &str,
         program_id: Pubkey,
-        process_instruction: Option<ProcessInstructionWithContext>,
+        builtin_function: Option<BuiltinFunctionWithContext>,
     ) {
         let add_bpf = |this: &mut ProgramTest, program_file: PathBuf| {
             let data = read_file(&program_file);
@@ -680,7 +688,7 @@ impl ProgramTest {
         };
 
         let program_file = find_file(&format!("{program_name}.so"));
-        match (self.prefer_bpf, program_file, process_instruction) {
+        match (self.prefer_bpf, program_file, builtin_function) {
             // If SBF is preferred (i.e., `test-sbf` is invoked) and a BPF shared object exists,
             // use that as the program data.
             (true, Some(file), _) => add_bpf(self, file),
@@ -689,8 +697,8 @@ impl ProgramTest {
             // processor function as is.
             //
             // TODO: figure out why tests hang if a processor panics when running native code.
-            (false, _, Some(process)) => {
-                self.add_builtin_program(program_name, program_id, process)
+            (false, _, Some(builtin_function)) => {
+                self.add_builtin_program(program_name, program_id, builtin_function)
             }
 
             // Invalid: `test-sbf` invocation with no matching SBF shared object.
@@ -713,13 +721,13 @@ impl ProgramTest {
         &mut self,
         program_name: &str,
         program_id: Pubkey,
-        process_instruction: ProcessInstructionWithContext,
+        builtin_function: BuiltinFunctionWithContext,
     ) {
         info!("\"{}\" builtin program", program_name);
         self.builtin_programs.push((
             program_id,
             program_name.to_string(),
-            LoadedProgram::new_builtin(0, program_name.len(), process_instruction),
+            LoadedProgram::new_builtin(0, program_name.len(), builtin_function),
         ));
     }
 

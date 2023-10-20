@@ -101,10 +101,10 @@ pub fn program_success(log_collector: &Option<Rc<RefCell<LogCollector>>>, progra
 /// ```notrust
 /// "Program <address> failed: <program error details>"
 /// ```
-pub fn program_failure(
+pub fn program_failure<E: std::fmt::Display>(
     log_collector: &Option<Rc<RefCell<LogCollector>>>,
     program_id: &Pubkey,
-    err: &dyn std::error::Error,
+    err: &E,
 ) {
     ic_logger_msg!(log_collector, "Program {} failed: {}", program_id, err);
 }

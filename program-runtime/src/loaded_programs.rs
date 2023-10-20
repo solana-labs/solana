@@ -1,6 +1,6 @@
 use {
     crate::{
-        invoke_context::{InvokeContext, ProcessInstructionWithContext},
+        invoke_context::{BuiltinFunctionWithContext, InvokeContext},
         timings::ExecuteDetailsTimings,
     },
     itertools::Itertools,
@@ -8,9 +8,10 @@ use {
     percentage::PercentageInteger,
     solana_measure::measure::Measure,
     solana_rbpf::{
-        elf::{Executable, FunctionRegistry},
+        elf::Executable,
+        program::{BuiltinProgram, FunctionRegistry},
         verifier::RequisiteVerifier,
-        vm::{BuiltinProgram, Config},
+        vm::Config,
     },
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
@@ -370,11 +371,11 @@ impl LoadedProgram {
     pub fn new_builtin(
         deployment_slot: Slot,
         account_size: usize,
-        entrypoint: ProcessInstructionWithContext,
+        builtin_function: BuiltinFunctionWithContext,
     ) -> Self {
         let mut function_registry = FunctionRegistry::default();
         function_registry
-            .register_function_hashed(*b"entrypoint", entrypoint)
+            .register_function_hashed(*b"entrypoint", builtin_function)
             .unwrap();
         Self {
             deployment_slot,
@@ -949,7 +950,7 @@ mod tests {
         },
         assert_matches::assert_matches,
         percentage::Percentage,
-        solana_rbpf::vm::BuiltinProgram,
+        solana_rbpf::program::BuiltinProgram,
         solana_sdk::{
             clock::{Epoch, Slot},
             pubkey::Pubkey,

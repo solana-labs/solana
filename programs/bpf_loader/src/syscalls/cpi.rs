@@ -1,6 +1,6 @@
 use {
     super::*,
-    crate::{declare_syscall, serialization::account_data_region_memory_state},
+    crate::serialization::account_data_region_memory_state,
     scopeguard::defer,
     solana_program_runtime::invoke_context::SerializedAccountMetadata,
     solana_rbpf::{
@@ -455,10 +455,10 @@ trait SyscallInvokeSigned {
     ) -> Result<Vec<Pubkey>, Error>;
 }
 
-declare_syscall!(
+declare_builtin_function!(
     /// Cross-program invocation called from Rust
     SyscallInvokeSignedRust,
-    fn inner_call(
+    fn rust(
         invoke_context: &mut InvokeContext,
         instruction_addr: u64,
         account_infos_addr: u64,
@@ -689,10 +689,10 @@ struct SolSignerSeedsC {
     len: u64,
 }
 
-declare_syscall!(
+declare_builtin_function!(
     /// Cross-program invocation called from C
     SyscallInvokeSignedC,
-    fn inner_call(
+    fn rust(
         invoke_context: &mut InvokeContext,
         instruction_addr: u64,
         account_infos_addr: u64,
@@ -1730,7 +1730,7 @@ mod tests {
             invoke_context::SerializedAccountMetadata, with_mock_invoke_context,
         },
         solana_rbpf::{
-            ebpf::MM_INPUT_START, elf::SBPFVersion, memory_region::MemoryRegion, vm::Config,
+            ebpf::MM_INPUT_START, memory_region::MemoryRegion, program::SBPFVersion, vm::Config,
         },
         solana_sdk::{
             account::{Account, AccountSharedData},

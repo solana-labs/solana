@@ -18,12 +18,14 @@ use {
     },
     solana_rbpf::{
         aligned_memory::AlignedMemory,
+        declare_builtin_function,
         ebpf::{self, HOST_ALIGN, MM_HEAP_START},
         elf::Executable,
-        error::EbpfError,
+        error::{EbpfError, ProgramResult},
         memory_region::{AccessType, MemoryCowCallback, MemoryMapping, MemoryRegion},
+        program::BuiltinProgram,
         verifier::RequisiteVerifier,
-        vm::{BuiltinProgram, ContextObject, EbpfVm, ProgramResult},
+        vm::{ContextObject, EbpfVm},
     },
     solana_sdk::{
         account::WritableAccount,
@@ -265,7 +267,7 @@ pub fn create_vm<'a, 'b>(
         trace_log: Vec::new(),
     })?;
     Ok(EbpfVm::new(
-        program.get_config(),
+        program.get_loader().clone(),
         program.get_sbpf_version(),
         invoke_context,
         memory_mapping,
@@ -317,7 +319,7 @@ macro_rules! create_vm {
 macro_rules! mock_create_vm {
     ($vm:ident, $additional_regions:expr, $accounts_metadata:expr, $invoke_context:expr $(,)?) => {
         let loader = std::sync::Arc::new(BuiltinProgram::new_mock());
-        let function_registry = solana_rbpf::elf::FunctionRegistry::default();
+        let function_registry = solana_rbpf::program::FunctionRegistry::default();
         let executable = solana_rbpf::elf::Executable::<InvokeContext>::from_text_bytes(
             &[0x95, 0, 0, 0, 0, 0, 0, 0],
             loader,
@@ -371,20 +373,22 @@ fn create_memory_mapping<'a, 'b, C: ContextObject>(
     })
 }
 
-pub fn process_instruction(
-    invoke_context: &mut InvokeContext,
-    _arg0: u64,
-    _arg1: u64,
-    _arg2: u64,
-    _arg3: u64,
-    _arg4: u64,
-    _memory_mapping: &mut MemoryMapping,
-    result: &mut ProgramResult,
-) {
-    *result = process_instruction_inner(invoke_context).into();
-}
+declare_builtin_function!(
+    Entrypoint,
+    fn rust(
+        invoke_context: &mut InvokeContext,
+        _arg0: u64,
+        _arg1: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _memory_mapping: &mut MemoryMapping,
+    ) -> Result<u64, Box<dyn std::error::Error>> {
+        process_instruction_inner(invoke_context)
+    }
+);
 
-fn process_instruction_inner(
+pub fn process_instruction_inner(
     invoke_context: &mut InvokeContext,
 ) -> Result<u64, Box<dyn std::error::Error>> {
     let log_collector = invoke_context.get_log_collector();
@@ -1607,13 +1611,12 @@ fn execute<'a, 'b: 'a>(
             }
             ProgramResult::Err(mut error) => {
                 if direct_mapping {
-                    if let Some(EbpfError::AccessViolation(
-                        _pc,
+                    if let EbpfError::AccessViolation(
                         AccessType::Store,
                         address,
                         _size,
                         _section_name,
-                    )) = error.downcast_ref()
+                    ) = error
                     {
                         // If direct_mapping is enabled and a program tries to write to a readonly
                         // region we'll get a memory access violation. Map it to a more specific
@@ -1621,7 +1624,7 @@ fn execute<'a, 'b: 'a>(
                         if let Some((instruction_account_index, _)) = account_region_addrs
                             .iter()
                             .enumerate()
-                            .find(|(_, vm_region)| vm_region.contains(address))
+                            .find(|(_, vm_region)| vm_region.contains(&address))
                         {
                             let transaction_context = &invoke_context.transaction_context;
                             let instruction_context =
@@ -1632,17 +1635,21 @@ fn execute<'a, 'b: 'a>(
                                 instruction_account_index as IndexOfAccount,
                             )?;
 
-                            error = Box::new(if account.is_executable() {
+                            error = EbpfError::SyscallError(Box::new(if account.is_executable() {
                                 InstructionError::ExecutableDataModified
                             } else if account.is_writable() {
                                 InstructionError::ExternalAccountDataModified
                             } else {
                                 InstructionError::ReadonlyDataModified
-                            })
+                            }));
                         }
                     }
                 }
-                Err(error)
+                Err(if let EbpfError::SyscallError(err) = error {
+                    err
+                } else {
+                    error.into()
+                })
             }
             _ => Ok(()),
         }
@@ -1790,7 +1797,7 @@ mod tests {
             transaction_accounts,
             instruction_accounts,
             expected_result,
-            super::process_instruction,
+            Entrypoint::vm,
             |invoke_context| {
                 test_utils::load_all_invoked_programs(invoke_context);
             },
@@ -2009,7 +2016,7 @@ mod tests {
             vec![(program_id, program_account.clone())],
             Vec::new(),
             Err(InstructionError::ProgramFailedToComplete),
-            super::process_instruction,
+            Entrypoint::vm,
             |invoke_context| {
                 invoke_context.mock_set_remaining(0);
                 test_utils::load_all_invoked_programs(invoke_context);
@@ -2555,7 +2562,7 @@ mod tests {
                 transaction_accounts,
                 instruction_accounts,
                 expected_result,
-                super::process_instruction,
+                Entrypoint::vm,
                 |_invoke_context| {},
                 |_invoke_context| {},
             )
