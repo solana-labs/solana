@@ -8,6 +8,9 @@
 //! Hence they are not Option<T> type. Their visibility at different states
 //! are defined in traits.
 //!
+//! The StaticMeta and DynamicMeta traits are accessor traits on the
+//! RuntimeTransaction types, not the TransactionMeta itself.
+//!
 use solana_sdk::hash::Hash;
 
 /// metadata can be extracted statically from sanitized transaction,
@@ -26,8 +29,8 @@ pub trait DynamicMeta: StaticMeta {}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TransactionMeta {
-    pub message_hash: Hash,
-    pub is_simple_vote_tx: bool,
+    pub(crate) message_hash: Hash,
+    pub(crate) is_simple_vote_tx: bool,
 }
 
 impl TransactionMeta {
