@@ -1,7 +1,10 @@
 //! trait for abstracting underlying storage of pubkey and account pairs to be written
 use {
-    crate::{account_storage::meta::StoredAccountMeta, accounts_db::IncludeSlotInHash},
-    solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey},
+    crate::{
+        account_storage::meta::StoredAccountMeta, accounts_db::IncludeSlotInHash,
+        accounts_hash::AccountHash,
+    },
+    solana_sdk::{account::ReadableAccount, clock::Slot, pubkey::Pubkey},
 };
 
 /// abstract access to pubkey, account, slot, target_slot of either:
@@ -45,7 +48,7 @@ pub trait StorableAccounts<'a, T: ReadableAccount + Sync>: Sync {
 
     /// return hash for account at 'index'
     /// Should only be called if 'has_hash_and_write_version' = true
-    fn hash(&self, _index: usize) -> &Hash {
+    fn hash(&self, _index: usize) -> &AccountHash {
         // this should never be called if has_hash_and_write_version returns false
         unimplemented!();
     }
@@ -174,7 +177,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     fn has_hash_and_write_version(&self) -> bool {
         true
     }
-    fn hash(&self, index: usize) -> &Hash {
+    fn hash(&self, index: usize) -> &AccountHash {
         self.account(index).hash()
     }
     fn write_version(&self, index: usize) -> u64 {
@@ -278,7 +281,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>> for StorableAccountsBySlot<
     fn has_hash_and_write_version(&self) -> bool {
         true
     }
-    fn hash(&self, index: usize) -> &Hash {
+    fn hash(&self, index: usize) -> &AccountHash {
         self.account(index).hash()
     }
     fn write_version(&self, index: usize) -> u64 {
@@ -318,7 +321,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     fn has_hash_and_write_version(&self) -> bool {
         true
     }
-    fn hash(&self, index: usize) -> &Hash {
+    fn hash(&self, index: usize) -> &AccountHash {
         self.account(index).hash()
     }
     fn write_version(&self, index: usize) -> u64 {
@@ -381,7 +384,7 @@ pub mod tests {
         let data = Vec::default();
         let offset = 99;
         let stored_size = 101;
-        let hash = Hash::new_unique();
+        let hash = AccountHash(Hash::new_unique());
         let stored_account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &meta,
             account_meta: &account_meta,
@@ -407,7 +410,7 @@ pub mod tests {
             for entries in 0..2 {
                 for starting_slot in 0..max_slots {
                     let data = Vec::default();
-                    let hash = Hash::new_unique();
+                    let hash = AccountHash(Hash::new_unique());
                     let mut raw = Vec::new();
                     let mut raw2 = Vec::new();
                     let mut raw4 = Vec::new();
@@ -522,7 +525,9 @@ pub mod tests {
         // each one containing a subset of the overall # of entries (0..4)
         for entries in 0..6 {
             let data = Vec::default();
-            let hashes = (0..entries).map(|_| Hash::new_unique()).collect::<Vec<_>>();
+            let hashes = (0..entries)
+                .map(|_| AccountHash(Hash::new_unique()))
+                .collect::<Vec<_>>();
             let mut raw = Vec::new();
             let mut raw2 = Vec::new();
             for entry in 0..entries {

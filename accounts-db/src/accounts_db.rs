@@ -384,7 +384,7 @@ impl CurrentAncientAppendVec {
                 INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
                 accounts_to_store.slot,
             ),
-            None::<Vec<Hash>>,
+            None::<Vec<AccountHash>>,
             self.append_vec(),
             None,
             StoreReclaims::Ignore,
@@ -896,7 +896,7 @@ pub enum LoadedAccount<'a> {
 impl<'a> LoadedAccount<'a> {
     pub fn loaded_hash(&self) -> AccountHash {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => AccountHash(*stored_account_meta.hash()),
+            LoadedAccount::Stored(stored_account_meta) => *stored_account_meta.hash(),
             LoadedAccount::Cached(cached_account) => cached_account.hash(),
         }
     }
@@ -2014,10 +2014,10 @@ pub(crate) struct ShrinkStatsSub {
     pub(crate) store_accounts_timing: StoreAccountsTiming,
     pub(crate) rewrite_elapsed_us: u64,
     pub(crate) create_and_insert_store_elapsed_us: u64,
+    pub(crate) unpackable_slots_count: usize,
 }
 
 impl ShrinkStatsSub {
-    #[allow(dead_code)]
     pub(crate) fn accumulate(&mut self, other: &Self) {
         self.store_accounts_timing
             .accumulate(&other.store_accounts_timing);
@@ -2026,6 +2026,7 @@ impl ShrinkStatsSub {
             self.create_and_insert_store_elapsed_us,
             other.create_and_insert_store_elapsed_us
         );
+        saturating_add_assign!(self.unpackable_slots_count, other.unpackable_slots_count);
     }
 }
 
@@ -2041,6 +2042,7 @@ pub struct ShrinkStats {
     handle_reclaims_elapsed: AtomicU64,
     remove_old_stores_shrink_us: AtomicU64,
     rewrite_elapsed: AtomicU64,
+    unpackable_slots_count: AtomicU64,
     drop_storage_entries_elapsed: AtomicU64,
     recycle_stores_write_elapsed: AtomicU64,
     accounts_removed: AtomicUsize,
@@ -2155,148 +2157,153 @@ impl ShrinkStats {
 
 impl ShrinkAncientStats {
     pub(crate) fn report(&self) {
-        if self.shrink_stats.last_report.should_update(1000) {
-            datapoint_info!(
-                "shrink_ancient_stats",
-                (
-                    "num_slots_shrunk",
-                    self.shrink_stats
-                        .num_slots_shrunk
-                        .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "storage_read_elapsed",
-                    self.shrink_stats
-                        .storage_read_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "index_read_elapsed",
-                    self.shrink_stats
-                        .index_read_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "create_and_insert_store_elapsed",
-                    self.shrink_stats
-                        .create_and_insert_store_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "store_accounts_elapsed",
-                    self.shrink_stats
-                        .store_accounts_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "update_index_elapsed",
-                    self.shrink_stats
-                        .update_index_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "handle_reclaims_elapsed",
-                    self.shrink_stats
-                        .handle_reclaims_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "remove_old_stores_shrink_us",
-                    self.shrink_stats
-                        .remove_old_stores_shrink_us
-                        .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "rewrite_elapsed",
-                    self.shrink_stats.rewrite_elapsed.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "drop_storage_entries_elapsed",
-                    self.shrink_stats
-                        .drop_storage_entries_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "recycle_stores_write_time",
-                    self.shrink_stats
-                        .recycle_stores_write_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "accounts_removed",
-                    self.shrink_stats
-                        .accounts_removed
-                        .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "bytes_removed",
-                    self.shrink_stats.bytes_removed.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "bytes_written",
-                    self.shrink_stats.bytes_written.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "alive_accounts",
-                    self.shrink_stats.alive_accounts.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "dead_accounts",
-                    self.shrink_stats.dead_accounts.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "accounts_loaded",
-                    self.shrink_stats.accounts_loaded.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "ancient_append_vecs_shrunk",
-                    self.ancient_append_vecs_shrunk.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "random",
-                    self.random_shrink.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "slots_considered",
-                    self.slots_considered.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "ancient_scanned",
-                    self.ancient_scanned.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "total_us",
-                    self.total_us.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "second_pass_one_ref",
-                    self.second_pass_one_ref.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-            );
-        }
+        datapoint_info!(
+            "shrink_ancient_stats",
+            (
+                "num_slots_shrunk",
+                self.shrink_stats
+                    .num_slots_shrunk
+                    .swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "storage_read_elapsed",
+                self.shrink_stats
+                    .storage_read_elapsed
+                    .swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "index_read_elapsed",
+                self.shrink_stats
+                    .index_read_elapsed
+                    .swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "create_and_insert_store_elapsed",
+                self.shrink_stats
+                    .create_and_insert_store_elapsed
+                    .swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "store_accounts_elapsed",
+                self.shrink_stats
+                    .store_accounts_elapsed
+                    .swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "update_index_elapsed",
+                self.shrink_stats
+                    .update_index_elapsed
+                    .swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "handle_reclaims_elapsed",
+                self.shrink_stats
+                    .handle_reclaims_elapsed
+                    .swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "remove_old_stores_shrink_us",
+                self.shrink_stats
+                    .remove_old_stores_shrink_us
+                    .swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "rewrite_elapsed",
+                self.shrink_stats.rewrite_elapsed.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "unpackable_slots_count",
+                self.shrink_stats
+                    .unpackable_slots_count
+                    .swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "drop_storage_entries_elapsed",
+                self.shrink_stats
+                    .drop_storage_entries_elapsed
+                    .swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "recycle_stores_write_time",
+                self.shrink_stats
+                    .recycle_stores_write_elapsed
+                    .swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "accounts_removed",
+                self.shrink_stats
+                    .accounts_removed
+                    .swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "bytes_removed",
+                self.shrink_stats.bytes_removed.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "bytes_written",
+                self.shrink_stats.bytes_written.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "alive_accounts",
+                self.shrink_stats.alive_accounts.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "dead_accounts",
+                self.shrink_stats.dead_accounts.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "accounts_loaded",
+                self.shrink_stats.accounts_loaded.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "ancient_append_vecs_shrunk",
+                self.ancient_append_vecs_shrunk.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "random",
+                self.random_shrink.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "slots_considered",
+                self.slots_considered.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "ancient_scanned",
+                self.ancient_scanned.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "total_us",
+                self.total_us.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "second_pass_one_ref",
+                self.second_pass_one_ref.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+        );
     }
 }
 
@@ -4126,7 +4133,7 @@ impl AccountsDb {
                     &shrink_collect.alive_accounts.alive_accounts()[..],
                     INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
                 ),
-                None::<Vec<&Hash>>,
+                None::<Vec<AccountHash>>,
                 shrink_in_progress.new_storage(),
                 None,
                 StoreReclaims::Ignore,
@@ -4177,6 +4184,9 @@ impl AccountsDb {
         shrink_stats
             .rewrite_elapsed
             .fetch_add(stats_sub.rewrite_elapsed_us, Ordering::Relaxed);
+        shrink_stats
+            .unpackable_slots_count
+            .fetch_add(stats_sub.unpackable_slots_count as u64, Ordering::Relaxed);
     }
 
     /// get stores for 'slot'
@@ -4335,7 +4345,7 @@ impl AccountsDb {
         for usage in &store_usage {
             let store = &usage.store;
             let alive_ratio = (total_alive_bytes as f64) / (total_bytes as f64);
-            debug!("alive_ratio: {:?} store_id: {:?}, store_ratio: {:?} requirment: {:?}, total_bytes: {:?} total_alive_bytes: {:?}",
+            debug!("alive_ratio: {:?} store_id: {:?}, store_ratio: {:?} requirement: {:?}, total_bytes: {:?} total_alive_bytes: {:?}",
                 alive_ratio, usage.store.append_vec_id(), usage.alive_ratio, shrink_ratio, total_bytes, total_alive_bytes);
             if alive_ratio > shrink_ratio {
                 // we have reached our goal, stop
@@ -4403,11 +4413,12 @@ impl AccountsDb {
 
     /// get a sorted list of slots older than an epoch
     /// squash those slots into ancient append vecs
-    fn shrink_ancient_slots(&self, oldest_non_ancient_slot: Slot) {
+    pub fn shrink_ancient_slots(&self, epoch_schedule: &EpochSchedule) {
         if self.ancient_append_vec_offset.is_none() {
             return;
         }
 
+        let oldest_non_ancient_slot = self.get_oldest_non_ancient_slot(epoch_schedule);
         let can_randomly_shrink = true;
         let sorted_slots = self.get_sorted_potential_ancient_slots(oldest_non_ancient_slot);
         if self.create_ancient_storage == CreateAncientStorage::Append {
@@ -4541,10 +4552,11 @@ impl AccountsDb {
     /// Combine all account data from storages in 'sorted_slots' into ancient append vecs.
     /// This keeps us from accumulating append vecs for each slot older than an epoch.
     fn combine_ancient_slots(&self, sorted_slots: Vec<Slot>, can_randomly_shrink: bool) {
-        let mut total = Measure::start("combine_ancient_slots");
         if sorted_slots.is_empty() {
             return;
         }
+
+        let mut total = Measure::start("combine_ancient_slots");
         let mut guard = None;
 
         // the ancient append vec currently being written to
@@ -4752,10 +4764,6 @@ impl AccountsDb {
 
     pub fn shrink_candidate_slots(&self, epoch_schedule: &EpochSchedule) -> usize {
         let oldest_non_ancient_slot = self.get_oldest_non_ancient_slot(epoch_schedule);
-        if !self.shrink_candidate_slots.lock().unwrap().is_empty() {
-            // this can affect 'shrink_candidate_slots', so don't 'take' it until after this completes
-            self.shrink_ancient_slots(oldest_non_ancient_slot);
-        }
 
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
@@ -6248,7 +6256,7 @@ impl AccountsDb {
         'b,
         T: ReadableAccount + Sync,
         U: StorableAccounts<'a, T>,
-        V: Borrow<Hash>,
+        V: Borrow<AccountHash>,
     >(
         &self,
         slot: Slot,
@@ -6687,7 +6695,9 @@ impl AccountsDb {
             INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
         );
         let storable =
-            StorableAccountsWithHashesAndWriteVersions::<'_, '_, _, _, &Hash>::new(&to_store);
+            StorableAccountsWithHashesAndWriteVersions::<'_, '_, _, _, &AccountHash>::new(
+                &to_store,
+            );
         storage.accounts.append_accounts(&storable, 0);
 
         Arc::new(storage)
@@ -6799,7 +6809,7 @@ impl AccountsDb {
     >(
         &self,
         accounts: &'c impl StorableAccounts<'b, T>,
-        hashes: Option<Vec<impl Borrow<Hash>>>,
+        hashes: Option<Vec<impl Borrow<AccountHash>>>,
         mut write_version_producer: P,
         store_to: &StoreTo,
         transactions: Option<&[Option<&'a SanitizedTransaction>]>,
@@ -6839,7 +6849,7 @@ impl AccountsDb {
                     self.write_accounts_to_storage(
                         slot,
                         storage,
-                        &StorableAccountsWithHashesAndWriteVersions::<'_, '_, _, _, &Hash>::new(
+                        &StorableAccountsWithHashesAndWriteVersions::<'_, '_, _, _, &AccountHash>::new(
                             accounts,
                         ),
                     )
@@ -8547,7 +8557,7 @@ impl AccountsDb {
         // we use default hashes for now since the same account may be stored to the cache multiple times
         self.store_accounts_unfrozen(
             accounts,
-            None::<Vec<Hash>>,
+            None::<Vec<AccountHash>>,
             store_to,
             transactions,
             reclaim,
@@ -8701,7 +8711,7 @@ impl AccountsDb {
     fn store_accounts_unfrozen<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
         &self,
         accounts: impl StorableAccounts<'a, T>,
-        hashes: Option<Vec<impl Borrow<Hash>>>,
+        hashes: Option<Vec<impl Borrow<AccountHash>>>,
         store_to: &StoreTo,
         transactions: Option<&'a [Option<&'a SanitizedTransaction>]>,
         reclaim: StoreReclaims,
@@ -8730,7 +8740,7 @@ impl AccountsDb {
     pub fn store_accounts_frozen<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
         &self,
         accounts: impl StorableAccounts<'a, T>,
-        hashes: Option<Vec<impl Borrow<Hash>>>,
+        hashes: Option<Vec<impl Borrow<AccountHash>>>,
         storage: &Arc<AccountStorageEntry>,
         write_version_producer: Option<Box<dyn Iterator<Item = StoredMetaWriteVersion>>>,
         reclaim: StoreReclaims,
@@ -8754,7 +8764,7 @@ impl AccountsDb {
     fn store_accounts_custom<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
         &self,
         accounts: impl StorableAccounts<'a, T>,
-        hashes: Option<Vec<impl Borrow<Hash>>>,
+        hashes: Option<Vec<impl Borrow<AccountHash>>>,
         write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
         store_to: &StoreTo,
         reset_accounts: bool,
@@ -9088,9 +9098,9 @@ impl AccountsDb {
     }
 
     /// return 'AccountSharedData' and a hash for a filler account
-    fn get_filler_account(&self, rent: &Rent) -> (AccountSharedData, Hash) {
+    fn get_filler_account(&self, rent: &Rent) -> (AccountSharedData, AccountHash) {
         let string = "FiLLERACCoUNTooooooooooooooooooooooooooooooo";
-        let hash = Hash::from_str(string).unwrap();
+        let hash = AccountHash(Hash::from_str(string).unwrap());
         let owner = Pubkey::from_str(string).unwrap();
         let space = self.filler_accounts_config.size;
         let rent_exempt_reserve = rent.minimum_balance(space);
@@ -10117,7 +10127,10 @@ pub mod tests {
             let expected_accounts_data_len = data.last().unwrap().1.data().len();
             let expected_alive_bytes = aligned_stored_size(expected_accounts_data_len);
             let storable = (slot0, &data[..], INCLUDE_SLOT_IN_HASH_TESTS);
-            let hashes = data.iter().map(|_| Hash::default()).collect::<Vec<_>>();
+            let hashes = data
+                .iter()
+                .map(|_| AccountHash(Hash::default()))
+                .collect::<Vec<_>>();
             let write_versions = data.iter().map(|_| 0).collect::<Vec<_>>();
             let append =
                 StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
@@ -10173,7 +10186,7 @@ pub mod tests {
             rent_epoch: 0,
         };
         let offset = 3;
-        let hash = Hash::new(&[2; 32]);
+        let hash = AccountHash(Hash::new(&[2; 32]));
         let stored_meta = StoredMeta {
             // global write version
             write_version_obsolete: 0,
@@ -10276,7 +10289,7 @@ pub mod tests {
         };
         let offset = 99;
         let stored_size = 101;
-        let hash = Hash::new_unique();
+        let hash = AccountHash(Hash::new_unique());
         let stored_account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &meta,
             account_meta: &account_meta,
@@ -10611,7 +10624,7 @@ pub mod tests {
                 accounts_db.storage.remove(&storage.slot(), false);
             });
 
-            let hash = Hash::default();
+            let hash = AccountHash(Hash::default());
 
             // replace the sample storages, storing default hash values so that we rehash during scan
             let storages = storages
@@ -10658,7 +10671,8 @@ pub mod tests {
             sample_storages_and_accounts(&accounts_db, INCLUDE_SLOT_IN_HASH_TESTS);
         let max_slot = storages.iter().map(|storage| storage.slot()).max().unwrap();
 
-        let hash = Hash::from_str("7JcmM6TFZMkcDkZe6RKVkGaWwN5dXciGC4fa3RxvqQc9").unwrap();
+        let hash =
+            AccountHash(Hash::from_str("7JcmM6TFZMkcDkZe6RKVkGaWwN5dXciGC4fa3RxvqQc9").unwrap());
 
         // replace the sample storages, storing bogus hash values so that we trigger the hash mismatch
         let storages = storages
@@ -11161,7 +11175,7 @@ pub mod tests {
         let accounts = [(pubkey, account)];
         let slice = &accounts[..];
         let account_data = (slot, slice);
-        let hash = Hash::default();
+        let hash = AccountHash(Hash::default());
         let storable_accounts =
             StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
                 &account_data,
@@ -12635,7 +12649,7 @@ pub mod tests {
         };
         let offset = 99;
         let stored_size = 101;
-        let hash = Hash::new_unique();
+        let hash = AccountHash(Hash::new_unique());
         let stored_account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &meta,
             account_meta: &account_meta,
@@ -12677,11 +12691,11 @@ pub mod tests {
         const ACCOUNT_DATA_LEN: usize = 3;
         let data: [u8; ACCOUNT_DATA_LEN] = [0x69, 0x6a, 0x6b];
         let offset: usize = 0x6c_6d_6e_6f_70_71_72_73;
-        let hash = Hash::from([
+        let hash = AccountHash(Hash::from([
             0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f, 0x80, 0x81,
             0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f,
             0x90, 0x91, 0x92, 0x93,
-        ]);
+        ]));
 
         let stored_account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &meta,
@@ -12761,7 +12775,7 @@ pub mod tests {
         // put wrong hash value in store so we get a mismatch
         db.store_accounts_unfrozen(
             (some_slot, &[(&key, &account)][..]),
-            Some(vec![&Hash::default()]),
+            Some(vec![&AccountHash(Hash::default())]),
             &StoreTo::Storage(&db.find_storage_candidate(some_slot, 1)),
             None,
             StoreReclaims::Default,
@@ -12995,7 +13009,7 @@ pub mod tests {
         db.update_accounts_hash_for_tests(some_slot, &ancestors, false, false);
 
         // provide bogus account hashes
-        let some_hash = Hash::new(&[0xca; HASH_BYTES]);
+        let some_hash = AccountHash(Hash::new(&[0xca; HASH_BYTES]));
         db.store_accounts_unfrozen(
             (some_slot, accounts),
             Some(vec![&some_hash]),
@@ -15833,7 +15847,7 @@ pub mod tests {
         accounts.accounts_index.set_startup(Startup::Startup);
 
         let storage = accounts.create_and_insert_store(slot0, 4_000, "flush_slot_cache");
-        let hashes = vec![Hash::default(); 1];
+        let hashes = vec![AccountHash(Hash::default()); 1];
         let write_version = vec![0; 1];
         storage.accounts.append_accounts(
             &StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
@@ -15898,7 +15912,7 @@ pub mod tests {
         let account_big = AccountSharedData::new(1, 1000, AccountSharedData::default().owner());
         let slot0 = 0;
         let storage = accounts.create_and_insert_store(slot0, 4_000, "flush_slot_cache");
-        let hashes = vec![Hash::default(); 2];
+        let hashes = vec![AccountHash(Hash::default()); 2];
         let write_version = vec![0; 2];
         storage.accounts.append_accounts(
             &StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(

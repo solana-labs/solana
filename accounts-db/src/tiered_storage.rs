@@ -14,13 +14,14 @@ pub mod writer;
 use {
     crate::{
         account_storage::meta::{StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo},
+        accounts_hash::AccountHash,
         storable_accounts::StorableAccounts,
     },
     error::TieredStorageError,
     footer::{AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat},
     index::AccountIndexFormat,
     readable::TieredStorageReader,
-    solana_sdk::{account::ReadableAccount, hash::Hash},
+    solana_sdk::account::ReadableAccount,
     std::{
         borrow::Borrow,
         fs::OpenOptions,
@@ -96,7 +97,7 @@ impl TieredStorage {
         'b,
         T: ReadableAccount + Sync,
         U: StorableAccounts<'a, T>,
-        V: Borrow<Hash>,
+        V: Borrow<AccountHash>,
     >(
         &self,
         accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
@@ -157,6 +158,7 @@ mod tests {
         solana_sdk::{
             account::{Account, AccountSharedData},
             clock::Slot,
+            hash::Hash,
             pubkey::Pubkey,
             system_instruction::MAX_PERMITTED_DATA_LENGTH,
         },
@@ -182,7 +184,7 @@ mod tests {
         let storable_accounts =
             StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
                 &account_data,
-                Vec::<&Hash>::new(),
+                Vec::<AccountHash>::new(),
                 Vec::<StoredMetaWriteVersion>::new(),
             );
 
@@ -341,7 +343,7 @@ mod tests {
 
         // Slot information is not used here
         let account_data = (Slot::MAX, &account_refs[..]);
-        let hashes: Vec<_> = std::iter::repeat_with(Hash::new_unique)
+        let hashes: Vec<_> = std::iter::repeat_with(|| AccountHash(Hash::new_unique()))
             .take(account_data_sizes.len())
             .collect();
         let write_versions: Vec<_> = accounts

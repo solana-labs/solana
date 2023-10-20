@@ -25,7 +25,6 @@ rand = "0.8"
 rustversion = "1.0.14"
 serde = "1.0.112"
 serde_json = "1.0.56"
-solana_rbpf = "=0.7.2"
 solana-account-decoder = { path = "../../account-decoder", version = "=1.18.0" }
 solana-accounts-db = { path = "../../accounts-db", version = "=1.18.0" }
 solana-bpf-loader-program = { path = "../bpf_loader", version = "=1.18.0" }
@@ -49,6 +48,7 @@ solana-sdk = { path = "../../sdk", version = "=1.18.0" }
 solana-transaction-status = { path = "../../transaction-status", version = "=1.18.0" }
 solana-validator = { path = "../../validator", version = "=1.18.0" }
 solana-zk-token-sdk = { path = "../../zk-token-sdk", version = "=1.18.0" }
+solana_rbpf = "=0.7.2"
 static_assertions = "1.1.0"
 thiserror = "1.0"
 
