@@ -371,7 +371,7 @@ impl DefaultSigner {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct SignerSource {
     pub kind: SignerSourceKind,
     pub derivation_path: Option<DerivationPath>,
@@ -402,6 +402,7 @@ const SIGNER_SOURCE_USB: &str = "usb";
 const SIGNER_SOURCE_STDIN: &str = "stdin";
 const SIGNER_SOURCE_PUBKEY: &str = "pubkey";
 
+#[derive(Clone)]
 pub(crate) enum SignerSourceKind {
     Prompt,
     Filepath(String),
