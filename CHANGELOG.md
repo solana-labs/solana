@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 Please follow the [guidance](#adding-to-this-changelog) at the bottom of this file when making changes
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
-and follows a [Backwards Compatability Policy](https://docs.solana.com/developing/backwards-compatibility)
+and follows a [Backwards Compatibility Policy](https://docs.solana.com/developing/backwards-compatibility)
 
 Release channels have their own copy of this changelog:
 * [edge - v1.18](#edge-channel)

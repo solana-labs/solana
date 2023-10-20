@@ -114,7 +114,7 @@ $400,000 USD in locked SOL tokens (locked for 12 months)
 
 #### DoS Attacks:
 $100,000 USD in locked SOL tokens (locked for 12 months)
-* Remote resource exaustion via Non-RPC protocols
+* Remote resource exhaustion via Non-RPC protocols
 
 #### Supply Chain Attacks:
 $100,000 USD in locked SOL tokens (locked for 12 months)
