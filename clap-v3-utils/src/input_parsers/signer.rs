@@ -578,4 +578,65 @@ mod tests {
             .unwrap_err();
         assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
     }
+
+    #[test]
+    fn test_parse_pubkey_or_keypair_signer_source() {
+        let command = Command::new("test").arg(
+            Arg::new("signer")
+                .long("signer")
+                .takes_value(true)
+                .value_parser(
+                    SignerSourceParserBuilder::new()
+                        .allow_pubkey()
+                        .allow_file_path()
+                        .build(),
+                ),
+        );
+
+        // success cases
+        let pubkey = Pubkey::new_unique();
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--signer", &pubkey.to_string()])
+            .unwrap();
+        let signer_source = matches.get_one::<SignerSource>("signer").unwrap();
+        assert!(matches!(
+            signer_source,
+            SignerSource {
+                kind: SignerSourceKind::Pubkey(p),
+                derivation_path: None,
+                legacy: false,
+            }
+            if *p == pubkey));
+
+        let file0 = NamedTempFile::new().unwrap();
+        let path = file0.path();
+        let path_str = path.to_str().unwrap();
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--signer", path_str])
+            .unwrap();
+        let signer_source = matches.get_one::<SignerSource>("signer").unwrap();
+        assert!(matches!(
+            signer_source,
+            SignerSource {
+                kind: SignerSourceKind::Filepath(p),
+                derivation_path: None,
+                legacy: false,
+            }
+            if p == path_str));
+
+        // faile cases
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--signer", "-"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--signer", "usb::/ledger"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+    }
 }
