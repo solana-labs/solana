@@ -6219,31 +6219,37 @@ impl AccountsDb {
         }
         let mut hasher = blake3::Hasher::new();
 
-        hasher.update(&lamports.to_le_bytes());
+        let mut buffer = Vec::with_capacity(80);
+
+        // collect lamports, slot, rent_epoch into buffer to hash
+        buffer.extend_from_slice(&lamports.to_le_bytes());
 
         match include_slot {
             IncludeSlotInHash::IncludeSlot => {
                 // upon feature activation, stop including slot# in the account hash
-                hasher.update(&slot.to_le_bytes());
+                buffer.extend_from_slice(&slot.to_le_bytes());
             }
             IncludeSlotInHash::RemoveSlot => {}
             IncludeSlotInHash::IrrelevantAssertOnUse => {
                 panic!("IncludeSlotInHash is irrelevant, but we are calculating hash");
             }
         }
+        buffer.extend_from_slice(&rent_epoch.to_le_bytes());
+        hasher.update(&buffer);
+        buffer.clear();
 
-        hasher.update(&rent_epoch.to_le_bytes());
-
+        // hash account's data
         hasher.update(data);
 
+        // collect exec_flag, owner, pubkey into buffer to hash
         if executable {
-            hasher.update(&[1u8; 1]);
+            buffer.push(1_u8);
         } else {
-            hasher.update(&[0u8; 1]);
+            buffer.push(0_u8);
         }
-
-        hasher.update(owner.as_ref());
-        hasher.update(pubkey.as_ref());
+        buffer.extend_from_slice(owner.as_ref());
+        buffer.extend_from_slice(pubkey.as_ref());
+        hasher.update(&buffer);
 
         AccountHash(Hash::new_from_array(hasher.finalize().into()))
     }
