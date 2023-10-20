@@ -1555,6 +1555,11 @@ fn load_frozen_forks(
                 root = new_root_bank.slot();
 
                 leader_schedule_cache.set_root(new_root_bank);
+                new_root_bank
+                    .loaded_programs_cache
+                    .write()
+                    .unwrap()
+                    .prune(root, new_root_bank.epoch());
                 let _ = bank_forks.write().unwrap().set_root(
                     root,
                     accounts_background_request_sender,

@@ -405,6 +405,16 @@ impl BankForks {
         )
     }
 
+    pub fn prune_program_cache(&self, root: Slot) {
+        if let Some(root_bank) = self.banks.get(&root) {
+            root_bank
+                .loaded_programs_cache
+                .write()
+                .unwrap()
+                .prune(root, root_bank.epoch());
+        }
+    }
+
     pub fn set_root(
         &mut self,
         root: Slot,
@@ -412,15 +422,6 @@ impl BankForks {
         highest_super_majority_root: Option<Slot>,
     ) -> Vec<Arc<Bank>> {
         let program_cache_prune_start = Instant::now();
-        let root_bank = self
-            .banks
-            .get(&root)
-            .expect("root bank didn't exist in bank_forks");
-        root_bank
-            .loaded_programs_cache
-            .write()
-            .unwrap()
-            .prune(root, root_bank.epoch());
         let set_root_start = Instant::now();
         let (removed_banks, set_root_metrics) = self.do_set_root_return_metrics(
             root,
