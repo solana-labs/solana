@@ -44,7 +44,7 @@ use {
             remaining_compute_units_syscall_enabled, stop_sibling_instruction_search_at_parent,
             stop_truncating_strings_in_syscalls, switch_to_new_elf_parser,
         },
-        hash::{Hasher, HASH_BYTES},
+        hash::{Hash, Hasher},
         instruction::{
             AccountMeta, InstructionError, ProcessedSiblingInstruction,
             TRANSACTION_LEVEL_STACK_HEIGHT,
@@ -132,6 +132,103 @@ pub enum SyscallError {
 }
 
 type Error = Box<dyn std::error::Error>;
+
+pub trait HasherImpl {
+    const NAME: &'static str;
+    type Output: AsRef<[u8]>;
+
+    fn create_hasher() -> Self;
+    fn hash(&mut self, val: &[u8]);
+    fn result(self) -> Self::Output;
+    fn get_base_cost(compute_budget: &ComputeBudget) -> u64;
+    fn get_byte_cost(compute_budget: &ComputeBudget) -> u64;
+    fn get_max_slices(compute_budget: &ComputeBudget) -> u64;
+}
+
+pub struct Sha256Hasher(Hasher);
+pub struct Blake3Hasher(blake3::Hasher);
+pub struct Keccak256Hasher(keccak::Hasher);
+
+impl HasherImpl for Sha256Hasher {
+    const NAME: &'static str = "Sha256";
+    type Output = Hash;
+
+    fn create_hasher() -> Self {
+        Sha256Hasher(Hasher::default())
+    }
+
+    fn hash(&mut self, val: &[u8]) {
+        self.0.hash(val);
+    }
+
+    fn result(self) -> Self::Output {
+        self.0.result()
+    }
+
+    fn get_base_cost(compute_budget: &ComputeBudget) -> u64 {
+        compute_budget.sha256_base_cost
+    }
+    fn get_byte_cost(compute_budget: &ComputeBudget) -> u64 {
+        compute_budget.sha256_byte_cost
+    }
+    fn get_max_slices(compute_budget: &ComputeBudget) -> u64 {
+        compute_budget.sha256_max_slices
+    }
+}
+
+impl HasherImpl for Blake3Hasher {
+    const NAME: &'static str = "Blake3";
+    type Output = blake3::Hash;
+
+    fn create_hasher() -> Self {
+        Blake3Hasher(blake3::Hasher::default())
+    }
+
+    fn hash(&mut self, val: &[u8]) {
+        self.0.hash(val);
+    }
+
+    fn result(self) -> Self::Output {
+        self.0.result()
+    }
+
+    fn get_base_cost(compute_budget: &ComputeBudget) -> u64 {
+        compute_budget.sha256_base_cost
+    }
+    fn get_byte_cost(compute_budget: &ComputeBudget) -> u64 {
+        compute_budget.sha256_byte_cost
+    }
+    fn get_max_slices(compute_budget: &ComputeBudget) -> u64 {
+        compute_budget.sha256_max_slices
+    }
+}
+
+impl HasherImpl for Keccak256Hasher {
+    const NAME: &'static str = "Keccak256";
+    type Output = keccak::Hash;
+
+    fn create_hasher() -> Self {
+        Keccak256Hasher(keccak::Hasher::default())
+    }
+
+    fn hash(&mut self, val: &[u8]) {
+        self.0.hash(val);
+    }
+
+    fn result(self) -> Self::Output {
+        self.0.result()
+    }
+
+    fn get_base_cost(compute_budget: &ComputeBudget) -> u64 {
+        compute_budget.sha256_base_cost
+    }
+    fn get_byte_cost(compute_budget: &ComputeBudget) -> u64 {
+        compute_budget.sha256_byte_cost
+    }
+    fn get_max_slices(compute_budget: &ComputeBudget) -> u64 {
+        compute_budget.sha256_max_slices
+    }
+}
 
 fn consume_compute_meter(invoke_context: &InvokeContext, amount: u64) -> Result<(), Error> {
     invoke_context.consume_checked(amount)?;
@@ -2043,7 +2140,7 @@ mod tests {
             account::{create_account_shared_data_for_test, AccountSharedData},
             bpf_loader,
             fee_calculator::FeeCalculator,
-            hash::hashv,
+            hash::{hashv, HASH_BYTES},
             instruction::Instruction,
             program::check_type_assumptions,
             stable_layout::stable_instruction::StableInstruction,
