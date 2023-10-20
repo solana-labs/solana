@@ -415,10 +415,7 @@ impl SystemMonitorService {
         recommended_limits.insert("net.core.wmem_max", 134217728);
         recommended_limits.insert("net.core.wmem_default", 134217728);
         recommended_limits.insert("vm.max_map_count", 1000000);
-
-        // Additionally collect the following limits
-        recommended_limits.insert("net.core.optmem_max", 0);
-        recommended_limits.insert("net.core.netdev_max_backlog", 0);
+        recommended_limits.insert("fs.nr_open", 1000000);
 
         recommended_limits
     }
