@@ -6225,9 +6225,6 @@ impl AccountsDb {
         const TOTAL_FIELD_SIZE: usize = 8 /* lamports */ + 8 /* slot */ + 8 /* rent_epoch */ + 1 /* exec_flag */ + 32 /* owner_key */ + 32 /* pubkey */;
         const DATA_SIZE_CAN_FIT: usize = BUF_SIZE - TOTAL_FIELD_SIZE;
 
-        const _: () = assert!(TOTAL_FIELD_SIZE == 89);
-        const _: () = assert!(DATA_SIZE_CAN_FIT == 39);
-
         let mut buffer = SmallVec::<[u8; BUF_SIZE]>::new();
 
         // collect lamports, slot, rent_epoch into buffer to hash
