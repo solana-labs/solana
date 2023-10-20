@@ -1201,6 +1201,7 @@ impl Validator {
                     .expect("Operator must spin up node with valid QUIC serve-repair address")
                     .ip(),
                 repair_quic_endpoint_sender,
+                bank_forks.clone(),
             )
             .unwrap();
 
