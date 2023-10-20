@@ -1184,6 +1184,7 @@ impl Validator {
                 .expect("Operator must spin up node with valid QUIC TVU address")
                 .ip(),
             turbine_quic_endpoint_sender,
+            bank_forks.clone(),
         )
         .unwrap();
 
