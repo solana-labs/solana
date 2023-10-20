@@ -83,11 +83,8 @@ impl BankForks {
         Self::new_from_banks(&[Arc::new(bank)], root)
     }
 
-    pub fn banks(&self) -> HashMap<Slot, Arc<Bank>> {
-        self.banks
-            .iter()
-            .map(|(&k, b)| (k, b.clone_without_scheduler()))
-            .collect()
+    pub fn banks(&self) -> &HashMap<Slot, BankWithScheduler> {
+        &self.banks
     }
 
     pub fn get_vote_only_mode_signal(&self) -> Arc<AtomicBool> {
