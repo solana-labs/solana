@@ -279,7 +279,7 @@ impl AccountsDb {
     /// accounts in `many_refs_newest` must be moved a slot >= each account's current slot.
     /// If that can be done, this fn returns true
     fn many_ref_accounts_can_be_moved(
-        many_refs_newest: &Vec<AliveAccounts<'_>>,
+        many_refs_newest: &[AliveAccounts<'_>],
         target_slots_sorted: &[Slot],
         tuning: &PackedAncientStorageTuning,
     ) -> bool {
