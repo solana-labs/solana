@@ -623,7 +623,14 @@ impl AccountsDb {
         {
             let many_refs_old_alive = &mut shrink_collect.alive_accounts.many_refs_old_alive;
             if !many_refs_old_alive.accounts.is_empty() {
-                //todo: we could log here
+                many_refs_old_alive.accounts.iter().for_each(|account| {
+                    // these accounts could indicate clean bugs or low memory conditions where we are forced to flush non-roots
+                    log::info!(
+                        "ancient append vec: found unpackable account: {}, {}",
+                        many_refs_old_alive.slot,
+                        account.pubkey()
+                    );
+                });
                 // there are accounts with ref_count > 1. This means this account must remain IN this slot.
                 // The same account could exist in a newer or older slot. Moving this account across slots could result
                 // in this alive version of the account now being in a slot OLDER than the non-alive instances.
