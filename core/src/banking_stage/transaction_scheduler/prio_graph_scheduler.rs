@@ -97,9 +97,10 @@ impl PrioGraphScheduler {
                     );
                 }
 
-                // Should always be in the container, but can just skip if it is not for some reason.
+                // Should always be in the container, during initial testing phase panic.
+                // Later, we can replace with a continue in case this does happen.
                 let Some(transaction_state) = container.get_mut_transaction_state(&id.id) else {
-                    continue;
+                    panic!("transaction state must exist")
                 };
 
                 let transaction = &transaction_state.transaction_ttl().transaction;
