@@ -3062,12 +3062,8 @@ pub mod tests {
         let slot = 1;
         let capacity = 0;
         for i in 0..4usize {
-            let mut alive_accounts = ShrinkCollectAliveSeparatedByRefs {
-                one_ref: AliveAccounts::with_capacity(capacity, slot),
-                many_refs_this_is_newest_alive: AliveAccounts::with_capacity(capacity, slot),
-                many_refs_old_alive: AliveAccounts::with_capacity(capacity, slot),
-            };
-
+            let mut alive_accounts =
+                ShrinkCollectAliveSeparatedByRefs::with_capacity(capacity, slot);
             let lamports = 1;
 
             match i {
