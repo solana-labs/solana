@@ -254,6 +254,7 @@ mod tests {
         clap::{Arg, Command},
         solana_sdk::signature::write_keypair_file,
         std::fs,
+        tempfile::NamedTempFile,
     };
 
     fn app<'ab>() -> Command<'ab> {
@@ -385,6 +386,48 @@ mod tests {
         let matches_error = command
             .clone()
             .try_get_matches_from(vec!["test", "--pubkeysig", "this_is_an_invalid_arg"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_parse_keypair_source() {
+        let command = Command::new("test").arg(
+            Arg::new("keypair")
+                .long("keypair")
+                .takes_value(true)
+                .value_parser(SignerSourceParserBuilder::new().allow_file_path().build()),
+        );
+
+        // success case
+        let file0 = NamedTempFile::new().unwrap();
+        let path = file0.path();
+        let path_str = path.to_str().unwrap();
+
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--keypair", path_str])
+            .unwrap();
+
+        let signer_source = matches.get_one::<SignerSource>("keypair").unwrap();
+
+        assert!(matches!(signer_source, SignerSource {
+                kind: SignerSourceKind::Filepath(p),
+                derivation_path: None,
+                legacy: false,
+            }
+            if p == path_str));
+
+        // faile cases
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--keypair", "-"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--keypair", "usb::/ledger"])
             .unwrap_err();
         assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
     }
