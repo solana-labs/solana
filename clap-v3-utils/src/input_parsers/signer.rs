@@ -1,9 +1,12 @@
 use {
     crate::{
         input_parsers::{keypair_of, keypairs_of, pubkey_of, pubkeys_of},
-        keypair::{pubkey_from_path, resolve_signer_from_path, signer_from_path},
+        keypair::{
+            parse_signer_source, pubkey_from_path, resolve_signer_from_path, signer_from_path,
+            SignerSource, SignerSourceError, SignerSourceKind,
+        },
     },
-    clap::ArgMatches,
+    clap::{builder::ValueParser, ArgMatches},
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_sdk::{
         pubkey::Pubkey,
@@ -14,6 +17,90 @@ use {
 
 // Sentinel value used to indicate to write to screen instead of file
 pub const STDOUT_OUTFILE_TOKEN: &str = "-";
+
+#[derive(Debug)]
+pub struct SignerSourceParserBuilder {
+    prompt: bool,
+    file_path: bool,
+    usb: bool,
+    stdin: bool,
+    pubkey: bool,
+    allow_legacy: bool,
+}
+impl Default for SignerSourceParserBuilder {
+    fn default() -> Self {
+        Self {
+            prompt: true,
+            file_path: true,
+            usb: true,
+            stdin: true,
+            pubkey: true,
+            allow_legacy: true,
+        }
+    }
+}
+
+impl SignerSourceParserBuilder {
+    pub fn new() -> Self {
+        Self {
+            prompt: false,
+            file_path: false,
+            usb: false,
+            stdin: false,
+            pubkey: false,
+            allow_legacy: true,
+        }
+    }
+
+    pub fn allow_prompt(mut self) -> Self {
+        self.prompt = true;
+        self
+    }
+
+    pub fn allow_file_path(mut self) -> Self {
+        self.file_path = true;
+        self
+    }
+
+    pub fn allow_usb(mut self) -> Self {
+        self.usb = true;
+        self
+    }
+
+    pub fn allow_stdin(mut self) -> Self {
+        self.stdin = true;
+        self
+    }
+
+    pub fn allow_pubkey(mut self) -> Self {
+        self.pubkey = true;
+        self
+    }
+
+    pub fn disallow_legacy(mut self) -> Self {
+        self.allow_legacy = false;
+        self
+    }
+
+    pub fn build(self) -> ValueParser {
+        ValueParser::from(
+            move |arg: &str| -> Result<SignerSource, SignerSourceError> {
+                let signer_source = parse_signer_source(arg)?;
+                if !self.allow_legacy && signer_source.legacy {
+                    return Err(SignerSourceError::UnsupportedSource);
+                }
+                match signer_source.kind {
+                    SignerSourceKind::Prompt if self.prompt => Ok(signer_source),
+                    SignerSourceKind::Filepath(_) if self.file_path => Ok(signer_source),
+                    SignerSourceKind::Usb(_) if self.usb => Ok(signer_source),
+                    SignerSourceKind::Stdin if self.stdin => Ok(signer_source),
+                    SignerSourceKind::Pubkey(_) if self.pubkey => Ok(signer_source),
+                    _ => Err(SignerSourceError::UnsupportedSource),
+                }
+            },
+        )
+    }
+}
 
 // Return the keypair for an argument with filename `name` or `None` if not present wrapped inside `Result`.
 pub fn try_keypair_of(
