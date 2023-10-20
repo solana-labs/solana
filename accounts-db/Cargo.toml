@@ -41,6 +41,7 @@ rand = { workspace = true }
 rayon = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
+smallvec = { workspace = true }
 serde_derive = { workspace = true }
 solana-bucket-map = { workspace = true }
 solana-config-program = { workspace = true }

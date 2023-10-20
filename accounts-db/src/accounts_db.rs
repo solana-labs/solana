@@ -79,6 +79,7 @@ use {
     rand::{thread_rng, Rng},
     rayon::{prelude::*, ThreadPool},
     serde::{Deserialize, Serialize},
+    smallvec::SmallVec,
     solana_measure::{measure::Measure, measure_us},
     solana_nohash_hasher::IntSet,
     solana_rayon_threadlimit::get_thread_count,
@@ -6219,7 +6220,8 @@ impl AccountsDb {
         }
         let mut hasher = blake3::Hasher::new();
 
-        let mut buffer = Vec::with_capacity(80);
+        // allocate 128 bytes buffer on the stack
+        let mut buffer = SmallVec::<[u8; 128]>::new();
 
         // collect lamports, slot, rent_epoch into buffer to hash
         buffer.extend_from_slice(&lamports.to_le_bytes());
