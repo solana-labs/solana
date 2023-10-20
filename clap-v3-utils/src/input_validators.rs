@@ -90,6 +90,10 @@ where
 }
 
 // Return an error if a keypair file cannot be parsed
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `SignerSourceParseBuilder::new().allow_file_path().allow_prompt().build()` instead"
+)]
 pub fn is_keypair_or_ask_keyword<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
