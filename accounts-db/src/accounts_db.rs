@@ -6221,7 +6221,14 @@ impl AccountsDb {
         let mut hasher = blake3::Hasher::new();
 
         // allocate 128 bytes buffer on the stack
-        let mut buffer = SmallVec::<[u8; 128]>::new();
+        const BUF_SIZE: usize = 128;
+        const TOTAL_FIELD_SIZE: usize = 8 /* lamports */ + 8 /* slot */ + 8 /* rent_epoch */ + 1 /* exec_flag */ + 32 /* owner_key */ + 32 /* pubkey */;
+        const DATA_SIZE_CAN_FIT: usize = BUF_SIZE - TOTAL_FIELD_SIZE;
+
+        const _: () = assert!(TOTAL_FIELD_SIZE == 89);
+        const _: () = assert!(DATA_SIZE_CAN_FIT == 39);
+
+        let mut buffer = SmallVec::<[u8; BUF_SIZE]>::new();
 
         // collect lamports, slot, rent_epoch into buffer to hash
         buffer.extend_from_slice(&lamports.to_le_bytes());
@@ -6237,11 +6244,18 @@ impl AccountsDb {
             }
         }
         buffer.extend_from_slice(&rent_epoch.to_le_bytes());
-        hasher.update(&buffer);
-        buffer.clear();
 
-        // hash account's data
-        hasher.update(data);
+        if data.len() > DATA_SIZE_CAN_FIT {
+            // For larger accounts whose data can't fit into the buffer, update the hash now.
+            hasher.update(&buffer);
+            buffer.clear();
+
+            // hash account's data
+            hasher.update(data);
+        } else {
+            // For small accounts whose data can fit into the buffer, append it to the buffer.
+            buffer.extend_from_slice(data);
+        }
 
         // collect exec_flag, owner, pubkey into buffer to hash
         if executable {
