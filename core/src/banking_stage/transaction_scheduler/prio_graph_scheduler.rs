@@ -71,7 +71,7 @@ impl PrioGraphScheduler {
             };
 
             let transaction = container.get_transaction_ttl(&id.id).unwrap();
-            prio_graph.insert_transaction(id, Self::get_transaction_resource_access(transaction));
+            prio_graph.insert_transaction(id, Self::get_transaction_account_access(transaction));
         }
 
         let mut unblock_this_batch =
@@ -92,7 +92,7 @@ impl PrioGraphScheduler {
                     let transaction = container.get_transaction_ttl(&next_id.id).unwrap();
                     prio_graph.insert_transaction(
                         next_id,
-                        Self::get_transaction_resource_access(transaction),
+                        Self::get_transaction_account_access(transaction),
                     );
                 }
 
@@ -336,8 +336,8 @@ impl PrioGraphScheduler {
             .unwrap()
     }
 
-    /// Gets accessed resources for use in `PrioGraph`.
-    fn get_transaction_resource_access(
+    /// Gets accessed accounts (resources) for use in `PrioGraph`.
+    fn get_transaction_account_access(
         transaction: &SanitizedTransactionTTL,
     ) -> impl Iterator<Item = (Pubkey, AccessKind)> + '_ {
         let message = transaction.transaction.message();
