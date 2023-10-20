@@ -457,7 +457,7 @@ impl ElGamalSecretKey {
             return Err(ElGamalError::SeedLengthTooShort);
         }
         if seed.len() > MAXIMUM_SEED_LEN {
-            return Err(ElGamalError::SeedLengthTooLarge);
+            return Err(ElGamalError::SeedLengthTooLong);
         }
         Ok(ElGamalSecretKey(Scalar::hash_from_bytes::<Sha3_512>(seed)))
     }

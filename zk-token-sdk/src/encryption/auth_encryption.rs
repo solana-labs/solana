@@ -180,7 +180,7 @@ impl SeedDerivable for AeKey {
             return Err(AuthenticatedEncryptionError::SeedLengthTooShort.into());
         }
         if seed.len() > MAXIMUM_SEED_LEN {
-            return Err(AuthenticatedEncryptionError::SeedLengthTooLarge.into());
+            return Err(AuthenticatedEncryptionError::SeedLengthTooLong.into());
         }
 
         let mut hasher = Sha3_512::new();
