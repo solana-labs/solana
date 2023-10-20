@@ -77,7 +77,7 @@ pub enum ElGamalError {
     #[error("seed length too short for derivation")]
     SeedLengthTooShort,
     #[error("seed length too long for derivation")]
-    SeedLengthTooLarge,
+    SeedLengthTooLong,
 }
 
 /// Algorithm handle for the twisted ElGamal encryption scheme

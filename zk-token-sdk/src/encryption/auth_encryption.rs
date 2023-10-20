@@ -51,7 +51,7 @@ pub enum AuthenticatedEncryptionError {
     #[error("seed length too short for derivation")]
     SeedLengthTooShort,
     #[error("seed length too long for derivation")]
-    SeedLengthTooLarge,
+    SeedLengthTooLong,
 }
 
 struct AuthenticatedEncryption;
