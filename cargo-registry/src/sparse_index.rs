@@ -1,11 +1,15 @@
 use {
     crate::{
-        publisher::{Dependency, Error, PackageMetaData},
+        client::Client,
+        crate_handler::{Dependency, Error, PackageMetaData, Program, UnpackedCrate},
         response_builder,
     },
     log::info,
     serde::{Deserialize, Serialize},
-    std::{collections::BTreeMap, sync::RwLock},
+    std::{
+        collections::BTreeMap,
+        sync::{Arc, RwLock},
+    },
 };
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -94,6 +98,7 @@ impl RegistryIndex {
     pub(crate) fn handler(
         &self,
         request: hyper::Request<hyper::Body>,
+        client: Arc<Client>,
     ) -> hyper::Response<hyper::Body> {
         let path = request.uri().path();
         let expected_root = self.index_root.as_str();
@@ -115,7 +120,7 @@ impl RegistryIndex {
             return response_builder::success_response_str(&self.config);
         }
 
-        self.handle_crate_lookup_request(path)
+        self.handle_crate_lookup_request(path, client)
     }
 
     pub(crate) fn insert_entry(&self, entry: IndexEntry) -> Result<(), Error> {
@@ -150,7 +155,11 @@ impl RegistryIndex {
         .then_some(crate_name)
     }
 
-    fn handle_crate_lookup_request(&self, path: &str) -> hyper::Response<hyper::Body> {
+    fn handle_crate_lookup_request(
+        &self,
+        path: &str,
+        client: Arc<Client>,
+    ) -> hyper::Response<hyper::Body> {
         let Some(crate_name) = Self::get_crate_name_from_path(path) else {
             return response_builder::error_response(
                 hyper::StatusCode::BAD_REQUEST,
@@ -167,15 +176,17 @@ impl RegistryIndex {
             );
         };
 
-        let Some(entry) = read_index.get(crate_name) else {
+        let response = if let Some(entry) = read_index.get(crate_name) {
+            Some(serde_json::to_string(entry))
+        } else {
             // The index currently doesn't contain the program entry.
             // Fetch the program information from the network using RPC client.
-            // In the meanwhile, return empty success response, so that the registry
-            // client continues to poll us for the index information.
-            return response_builder::success_response();
+            Program::crate_name_to_program_id(crate_name)
+                .and_then(|id| UnpackedCrate::fetch_index(id, client).ok())
+                .map(|entry| serde_json::to_string(&entry))
         };
 
-        let Ok(response) = serde_json::to_string(entry) else {
+        let Some(Ok(response)) = response else {
             return response_builder::error_response(
                 hyper::StatusCode::INTERNAL_SERVER_ERROR,
                 "Internal error. index entry is corrupted",

@@ -2,7 +2,7 @@
 use {
     crate::{
         client::Client,
-        publisher::{Error, Publisher},
+        crate_handler::{CratePackage, Error, Program, UnpackedCrate},
         sparse_index::RegistryIndex,
     },
     hyper::{
@@ -18,7 +18,7 @@ use {
 };
 
 mod client;
-mod publisher;
+mod crate_handler;
 
 mod response_builder;
 mod sparse_index;
@@ -38,10 +38,14 @@ impl CargoRegistryService {
 
         match bytes {
             Ok(data) => {
-                let Ok(result) = tokio::task::spawn_blocking(move || {
-                    Publisher::publish_crate(data, client, index)
-                })
-                .await
+                let Ok(crate_object) = CratePackage(data).into() else {
+                    return response_builder::error_response(
+                        hyper::StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to parse the crate information",
+                    );
+                };
+                let Ok(result) =
+                    tokio::task::spawn_blocking(move || crate_object.publish(client, index)).await
                 else {
                     return response_builder::error_response(
                         hyper::StatusCode::INTERNAL_SERVER_ERROR,
@@ -72,6 +76,27 @@ impl CargoRegistryService {
                 .rsplit_once('/')
                 .map(|(remainder, name)| (remainder, name, version))
         })
+    }
+
+    fn handle_download_crate_request(
+        path: &str,
+        _request: &hyper::Request<hyper::Body>,
+        client: Arc<Client>,
+    ) -> hyper::Response<hyper::Body> {
+        let Some((path, crate_name, _version)) = Self::get_crate_name_and_version(path) else {
+            return response_builder::error_in_parsing();
+        };
+
+        if path.len() != PATH_PREFIX.len() {
+            return response_builder::error_incorrect_length();
+        }
+
+        let _package = Program::crate_name_to_program_id(crate_name)
+            .and_then(|id| UnpackedCrate::fetch(id, client).ok());
+
+        // Return the package to the caller in the response
+
+        response_builder::error_not_implemented()
     }
 
     fn handle_yank_request(
@@ -183,7 +208,7 @@ impl CargoRegistryService {
         }
 
         if path.starts_with(index.index_root.as_str()) {
-            return Ok(index.handler(request));
+            return Ok(index.handler(request, client.clone()));
         }
 
         if !path.starts_with(PATH_PREFIX) {
@@ -216,6 +241,7 @@ impl CargoRegistryService {
             Method::GET => match endpoint {
                 "crates" => Self::handle_get_crates_request(path, &request),
                 "owners" => Self::handle_get_owners_request(path, &request),
+                "download" => Self::handle_download_crate_request(path, &request, client.clone()),
                 _ => response_builder::error_not_allowed(),
             },
             Method::DELETE => match endpoint {

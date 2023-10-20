@@ -752,7 +752,7 @@ fn process_show(
     }
 }
 
-fn process_dump(
+pub fn process_dump(
     rpc_client: Arc<RpcClient>,
     commitment: CommitmentConfig,
     account_pubkey: Option<Pubkey>,
