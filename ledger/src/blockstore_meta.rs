@@ -138,6 +138,16 @@ pub(crate) struct ErasureConfig {
     num_coding: usize,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct MerkleRootMeta {
+    /// The merkle root
+    merkle_root: Hash,
+    /// The first received shred index
+    first_received_shred_index: u64,
+    /// The shred type of the first received shred
+    first_received_shred_type: ShredType,
+}
+
 #[derive(Deserialize, Serialize)]
 pub struct DuplicateSlotProof {
     #[serde(with = "serde_bytes")]
@@ -393,6 +403,31 @@ impl ErasureMeta {
         } else {
             StillNeed(num_needed)
         }
+    }
+}
+
+impl MerkleRootMeta {
+    pub(crate) fn from_shred(shred: &Shred) -> Self {
+        Self {
+            merkle_root: shred.merkle_root().unwrap_or_default(),
+            first_received_shred_index: u64::from(shred.index()),
+            first_received_shred_type: shred.shred_type(),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn merkle_root(&self) -> Hash {
+        self.merkle_root
+    }
+
+    #[cfg(test)]
+    pub(crate) fn first_received_shred_index(&self) -> u64 {
+        self.first_received_shred_index
+    }
+
+    #[cfg(test)]
+    pub(crate) fn first_received_shred_type(&self) -> ShredType {
+        self.first_received_shred_type
     }
 }
 
