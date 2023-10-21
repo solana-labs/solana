@@ -4,6 +4,7 @@ use {
     crate::{
         accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestKind},
         bank::{epoch_accounts_hash_utils, Bank, SquashTiming},
+        installed_scheduler_pool::BankWithScheduler,
         snapshot_config::SnapshotConfig,
     },
     log::*,
@@ -57,7 +58,7 @@ struct SetRootTimings {
 
 #[derive(Debug)]
 pub struct BankForks {
-    banks: HashMap<Slot, Arc<Bank>>,
+    banks: HashMap<Slot, BankWithScheduler>,
     descendants: HashMap<Slot, HashSet<Slot>>,
     root: Arc<AtomicSlot>,
 
@@ -82,8 +83,8 @@ impl BankForks {
         Self::new_from_banks(&[Arc::new(bank)], root)
     }
 
-    pub fn banks(&self) -> HashMap<Slot, Arc<Bank>> {
-        self.banks.clone()
+    pub fn banks(&self) -> &HashMap<Slot, BankWithScheduler> {
+        &self.banks
     }
 
     pub fn get_vote_only_mode_signal(&self) -> Arc<AtomicBool> {
@@ -119,7 +120,7 @@ impl BankForks {
         self.banks
             .iter()
             .filter(|(_, b)| b.is_frozen())
-            .map(|(k, b)| (*k, b.clone()))
+            .map(|(&k, b)| (k, b.clone_without_scheduler()))
             .collect()
     }
 
@@ -131,8 +132,13 @@ impl BankForks {
             .collect()
     }
 
+    pub fn get_with_scheduler(&self, bank_slot: Slot) -> Option<BankWithScheduler> {
+        self.banks.get(&bank_slot).map(|b| b.clone_with_scheduler())
+    }
+
     pub fn get(&self, bank_slot: Slot) -> Option<Arc<Bank>> {
-        self.banks.get(&bank_slot).cloned()
+        self.get_with_scheduler(bank_slot)
+            .map(|b| b.clone_without_scheduler())
     }
 
     pub fn get_with_checked_hash(
@@ -159,10 +165,19 @@ impl BankForks {
 
         // Iterate through the heads of all the different forks
         for bank in initial_forks {
-            banks.insert(bank.slot(), bank.clone());
+            banks.insert(
+                bank.slot(),
+                BankWithScheduler::new_without_scheduler(bank.clone()),
+            );
             let parents = bank.parents();
             for parent in parents {
-                if banks.insert(parent.slot(), parent.clone()).is_some() {
+                if banks
+                    .insert(
+                        parent.slot(),
+                        BankWithScheduler::new_without_scheduler(parent.clone()),
+                    )
+                    .is_some()
+                {
                     // All ancestors have already been inserted by another fork
                     break;
                 }
@@ -187,12 +202,12 @@ impl BankForks {
         }
     }
 
-    pub fn insert(&mut self, mut bank: Bank) -> Arc<Bank> {
+    pub fn insert(&mut self, mut bank: Bank) -> BankWithScheduler {
         bank.check_program_modification_slot =
             self.root.load(Ordering::Relaxed) < self.highest_slot_at_startup;
 
-        let bank = Arc::new(bank);
-        let prev = self.banks.insert(bank.slot(), bank.clone());
+        let bank = BankWithScheduler::new_without_scheduler(Arc::new(bank));
+        let prev = self.banks.insert(bank.slot(), bank.clone_with_scheduler());
         assert!(prev.is_none());
         let slot = bank.slot();
         self.descendants.entry(slot).or_default();
@@ -202,7 +217,7 @@ impl BankForks {
         bank
     }
 
-    pub fn insert_from_ledger(&mut self, bank: Bank) -> Arc<Bank> {
+    pub fn insert_from_ledger(&mut self, bank: Bank) -> BankWithScheduler {
         self.highest_slot_at_startup = std::cmp::max(self.highest_slot_at_startup, bank.slot());
         self.insert(bank)
     }
@@ -224,7 +239,7 @@ impl BankForks {
         if entry.get().is_empty() {
             entry.remove_entry();
         }
-        Some(bank)
+        Some(bank.clone_without_scheduler())
     }
 
     pub fn highest_slot(&self) -> Slot {
@@ -233,6 +248,10 @@ impl BankForks {
 
     pub fn working_bank(&self) -> Arc<Bank> {
         self[self.highest_slot()].clone()
+    }
+
+    pub fn working_bank_with_scheduler(&self) -> &BankWithScheduler {
+        &self.banks[&self.highest_slot()]
     }
 
     fn do_set_root_return_metrics(
@@ -247,9 +266,8 @@ impl BankForks {
         // ensure atomic ordering correctness.
         self.root.store(root, Ordering::Release);
 
-        let root_bank = self
-            .banks
-            .get(&root)
+        let root_bank = &self
+            .get(root)
             .expect("root bank didn't exist in bank_forks");
         let new_epoch = root_bank.epoch();
         if old_epoch != new_epoch {

@@ -50,6 +50,7 @@ use {
         bank::{Bank, TransactionSimulationResult},
         bank_forks::BankForks,
         commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
+        installed_scheduler_pool::BankWithScheduler,
         non_circulating_supply::calculate_non_circulating_supply,
         prioritization_fee_cache::PrioritizationFeeCache,
         snapshot_config::SnapshotConfig,
@@ -4602,7 +4603,7 @@ pub fn populate_blockstore_for_tests(
     // that they are matched properly by get_rooted_block
     assert_eq!(
         solana_ledger::blockstore_processor::process_entries_for_tests(
-            &bank,
+            &BankWithScheduler::new_without_scheduler(bank),
             entries,
             Some(
                 &solana_ledger::blockstore_processor::TransactionStatusSender {
@@ -4962,7 +4963,12 @@ pub mod tests {
             for (i, root) in roots.iter().enumerate() {
                 let new_bank =
                     Bank::new_from_parent(parent_bank.clone(), parent_bank.collector_id(), *root);
-                parent_bank = self.bank_forks.write().unwrap().insert(new_bank);
+                parent_bank = self
+                    .bank_forks
+                    .write()
+                    .unwrap()
+                    .insert(new_bank)
+                    .clone_without_scheduler();
                 let parent = if i > 0 { roots[i - 1] } else { 0 };
                 fill_blockstore_slot_with_ticks(
                     &self.blockstore,
@@ -5004,7 +5010,8 @@ pub mod tests {
                 .bank_forks
                 .write()
                 .unwrap()
-                .insert(Bank::new_from_parent(parent_bank, &Pubkey::default(), slot));
+                .insert(Bank::new_from_parent(parent_bank, &Pubkey::default(), slot))
+                .clone_without_scheduler();
 
             let new_block_commitment = BlockCommitmentCache::new(
                 HashMap::new(),
