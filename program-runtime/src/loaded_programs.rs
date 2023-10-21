@@ -460,11 +460,12 @@ pub struct LoadedPrograms<FG: ForkGraph> {
 
 impl<FG: ForkGraph> Debug for LoadedPrograms<FG> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "LoadedPrograms Cache\nroot slot {}\nroot epoch {}\n{:#?}\ncached entries {:#?}",
-            self.latest_root_slot, self.latest_root_epoch, self.stats, self.entries
-        )
+        f.debug_struct("LoadedPrograms")
+            .field("root slot", &self.latest_root_slot)
+            .field("root epoch", &self.latest_root_epoch)
+            .field("stats", &self.stats)
+            .field("cache", &self.entries)
+            .finish()
     }
 }
 
