@@ -1,7 +1,6 @@
 use {
     assert_matches::assert_matches,
     common::{assert_ix_error, overwrite_slot_hashes_with_slots, setup_test_context},
-    solana_address_lookup_table_program::processor::process_instruction,
     solana_program_test::*,
     solana_sdk::{
         address_lookup_table::{
@@ -23,7 +22,11 @@ use {
 mod common;
 
 pub async fn setup_test_context_without_authority_feature() -> ProgramTestContext {
-    let mut program_test = ProgramTest::new("", id(), Some(process_instruction));
+    let mut program_test = ProgramTest::new(
+        "",
+        id(),
+        Some(solana_address_lookup_table_program::processor::Entrypoint::vm),
+    );
     program_test.deactivate_feature(
         feature_set::relax_authority_signer_check_for_lookup_table_creation::id(),
     );
