@@ -214,6 +214,7 @@ pub struct Blockstore {
     program_costs_cf: LedgerColumn<cf::ProgramCosts>,
     bank_hash_cf: LedgerColumn<cf::BankHash>,
     optimistic_slots_cf: LedgerColumn<cf::OptimisticSlots>,
+    merkle_root_cf: LedgerColumn<cf::MerkleRoot>,
     last_root: RwLock<Slot>,
     insert_shreds_lock: Mutex<()>,
     new_shreds_signals: Mutex<Vec<Sender<bool>>>,
@@ -315,6 +316,7 @@ impl Blockstore {
         let program_costs_cf = db.column();
         let bank_hash_cf = db.column();
         let optimistic_slots_cf = db.column();
+        let merkle_root_cf = db.column();
 
         let db = Arc::new(db);
 
@@ -352,6 +354,7 @@ impl Blockstore {
             program_costs_cf,
             bank_hash_cf,
             optimistic_slots_cf,
+            merkle_root_cf,
             new_shreds_signals: Mutex::default(),
             completed_slots_senders: Mutex::default(),
             shred_timing_point_sender: None,
@@ -721,6 +724,7 @@ impl Blockstore {
         self.program_costs_cf.submit_rocksdb_cf_metrics();
         self.bank_hash_cf.submit_rocksdb_cf_metrics();
         self.optimistic_slots_cf.submit_rocksdb_cf_metrics();
+        self.merkle_root_cf.submit_rocksdb_cf_metrics();
     }
 
     fn try_shred_recovery(
@@ -3133,6 +3137,14 @@ impl Blockstore {
             .unwrap()
             .map(|versioned| versioned.is_duplicate_confirmed())
             .unwrap_or(false)
+    }
+
+    pub fn insert_merkle_root(&self, slot: Slot, fec_index: u64, hash: &Hash) -> Result<()> {
+        self.merkle_root_cf.put((slot, fec_index), hash)
+    }
+
+    pub fn get_merkle_root(&self, slot: Slot, fec_index: u64) -> Result<Option<Hash>> {
+        self.merkle_root_cf.get((slot, fec_index))
     }
 
     pub fn insert_optimistic_slot(

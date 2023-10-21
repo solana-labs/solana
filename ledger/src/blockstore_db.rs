@@ -29,6 +29,7 @@ use {
     solana_accounts_db::hardened_unpack::UnpackError,
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
+        hash::Hash,
         pubkey::Pubkey,
         signature::Signature,
     },
@@ -103,6 +104,8 @@ const BLOCK_HEIGHT_CF: &str = "block_height";
 const PROGRAM_COSTS_CF: &str = "program_costs";
 /// Column family for optimistic slots
 const OPTIMISTIC_SLOTS_CF: &str = "optimistic_slots";
+/// Column family for merkle roots
+const MERKLE_ROOT_CF: &str = "merkle_root";
 
 #[derive(Error, Debug)]
 pub enum BlockstoreError {
@@ -339,6 +342,19 @@ pub mod columns {
     /// * value type: [`blockstore_meta::OptimisticSlotMetaVersioned`]
     pub struct OptimisticSlots;
 
+    #[derive(Debug)]
+    /// The merkle root column
+    ///
+    /// This column  stores the merkle root for each FEC set.
+    /// Each merkle shred is part of a merkle tree for
+    /// its FEC set. This column stores that merkle root.
+    ///
+    /// Its index type is (Slot, FEC) set index.
+    ///
+    /// * index type: `crate::shred::ErasureSetId` `(Slot, fec_set_index: u64)`
+    /// * value type: [`solana_sdk::hash::Hash`]`
+    pub struct MerkleRoot;
+
     // When adding a new column ...
     // - Add struct below and implement `Column` and `ColumnName` traits
     // - Add descriptor in Rocks::cf_descriptors() and name in Rocks::columns()
@@ -474,6 +490,7 @@ impl Rocks {
             new_cf_descriptor::<BlockHeight>(options, oldest_slot),
             new_cf_descriptor::<ProgramCosts>(options, oldest_slot),
             new_cf_descriptor::<OptimisticSlots>(options, oldest_slot),
+            new_cf_descriptor::<MerkleRoot>(options, oldest_slot),
         ]
     }
 
@@ -501,6 +518,7 @@ impl Rocks {
             BlockHeight::NAME,
             ProgramCosts::NAME,
             OptimisticSlots::NAME,
+            MerkleRoot::NAME,
         ]
     }
 
@@ -1225,6 +1243,39 @@ impl ColumnName for columns::OptimisticSlots {
 }
 impl TypedColumn for columns::OptimisticSlots {
     type Type = blockstore_meta::OptimisticSlotMetaVersioned;
+}
+
+impl Column for columns::MerkleRoot {
+    type Index = (Slot, u64);
+
+    fn index(key: &[u8]) -> (Slot, u64) {
+        let slot = BigEndian::read_u64(&key[..8]);
+        let set_index = BigEndian::read_u64(&key[8..]);
+
+        (slot, set_index)
+    }
+
+    fn key((slot, set_index): (Slot, u64)) -> Vec<u8> {
+        let mut key = vec![0; 16];
+        BigEndian::write_u64(&mut key[..8], slot);
+        BigEndian::write_u64(&mut key[8..], set_index);
+        key
+    }
+
+    fn slot(index: Self::Index) -> Slot {
+        index.0
+    }
+
+    fn as_index(slot: Slot) -> Self::Index {
+        (slot, 0)
+    }
+}
+
+impl ColumnName for columns::MerkleRoot {
+    const NAME: &'static str = MERKLE_ROOT_CF;
+}
+impl TypedColumn for columns::MerkleRoot {
+    type Type = Hash;
 }
 
 #[derive(Debug)]

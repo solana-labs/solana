@@ -220,6 +220,10 @@ impl Blockstore {
             & self
                 .db
                 .delete_range_cf::<cf::OptimisticSlots>(&mut write_batch, from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
+                .delete_range_cf::<cf::MerkleRoot>(&mut write_batch, from_slot, to_slot)
                 .is_ok();
         match purge_type {
             PurgeType::Exact => {
@@ -328,6 +332,10 @@ impl Blockstore {
             & self
                 .db
                 .delete_file_in_range_cf::<cf::OptimisticSlots>(from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
+                .delete_file_in_range_cf::<cf::MerkleRoot>(from_slot, to_slot)
                 .is_ok()
     }
 
