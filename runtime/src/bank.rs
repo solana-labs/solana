@@ -5071,7 +5071,6 @@ impl Bank {
         let ExtractedPrograms {
             loaded: mut loaded_programs_for_txs,
             missing,
-            unloaded,
         } = {
             // Lock the global cache to figure out which programs need to be loaded
             let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
@@ -5087,18 +5086,8 @@ impl Bank {
         // Load missing programs while global cache is unlocked
         let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing
             .iter()
-            .map(|(key, count)| {
-                let program = self.load_program(key, false, None);
-                program.tx_usage_counter.store(*count, Ordering::Relaxed);
-                (*key, program)
-            })
-            .collect();
-
-        // Reload unloaded programs while global cache is unlocked
-        let unloaded_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = unloaded
-            .iter()
-            .map(|(key, count)| {
-                let program = self.load_program(key, true, None);
+            .map(|(key, (count, reloading))| {
+                let program = self.load_program(key, *reloading, None);
                 program.tx_usage_counter.store(*count, Ordering::Relaxed);
                 (*key, program)
             })
@@ -5111,12 +5100,6 @@ impl Bank {
             // Use the returned entry as that might have been deduplicated globally
             loaded_programs_for_txs.replenish(key, entry);
         }
-        for (key, program) in unloaded_programs {
-            let (_was_occupied, entry) = loaded_programs_cache.replenish(key, program);
-            // Use the returned entry as that might have been deduplicated globally
-            loaded_programs_for_txs.replenish(key, entry);
-        }
-
         loaded_programs_for_txs
     }
 

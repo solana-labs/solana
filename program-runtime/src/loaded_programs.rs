@@ -511,8 +511,7 @@ pub struct LoadedProgramsForTxBatch {
 
 pub struct ExtractedPrograms {
     pub loaded: LoadedProgramsForTxBatch,
-    pub missing: Vec<(Pubkey, u64)>,
-    pub unloaded: Vec<(Pubkey, u64)>,
+    pub missing: HashMap<Pubkey, (u64, bool)>,
 }
 
 impl LoadedProgramsForTxBatch {
@@ -804,8 +803,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                 slot: current_slot,
                 environments: environments.clone(),
             },
-            missing: Vec::new(),
-            unloaded: Vec::new(),
+            missing: HashMap::new(),
         }));
         let mut extracting = extracted.lock().unwrap();
         extracting.loaded.entries = keys
@@ -832,18 +830,15 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                             || is_ancestor
                         {
                             if current_slot >= entry.effective_slot {
-                                if !Self::is_entry_usable(entry, current_slot, &match_criteria) {
-                                    extracting.missing.push((key, count));
-                                    return None;
-                                }
-
-                                if !Self::matches_environment(entry, environments) {
-                                    extracting.missing.push((key, count));
+                                if !Self::is_entry_usable(entry, current_slot, &match_criteria)
+                                    || !Self::matches_environment(entry, environments)
+                                {
+                                    extracting.missing.insert(key, (count, false));
                                     return None;
                                 }
 
                                 if let LoadedProgramType::Unloaded(_environment) = &entry.program {
-                                    extracting.unloaded.push((key, count));
+                                    extracting.missing.insert(key, (count, true));
                                     return None;
                                 }
 
@@ -867,7 +862,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                         }
                     }
                 }
-                extracting.missing.push((key, count));
+                extracting.missing.insert(key, (count, false));
                 None
             })
             .collect::<HashMap<Pubkey, Arc<LoadedProgram>>>();
@@ -1646,16 +1641,15 @@ mod tests {
 
     fn match_missing(
         extracted: &Arc<Mutex<ExtractedPrograms>>,
-        program: &Pubkey,
+        key: &Pubkey,
         reload: bool,
     ) -> bool {
         let extracted = extracted.lock().unwrap();
-        let list = if reload {
-            &extracted.unloaded
-        } else {
-            &extracted.missing
-        };
-        list.iter().any(|(key, _count)| key == program)
+        extracted
+            .missing
+            .get(key)
+            .filter(|(_count, reloading)| *reloading == reload)
+            .is_some()
     }
 
     #[test]
