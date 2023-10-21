@@ -918,7 +918,10 @@ mod test {
             cluster_info::{ClusterInfo, Node},
             contact_info::{ContactInfo, Protocol},
         },
-        solana_ledger::{blockstore::make_many_slot_entries, get_tmp_ledger_path, shred::Nonce},
+        solana_ledger::{
+            blockstore::make_many_slot_entries, get_tmp_ledger_path,
+            get_tmp_ledger_path_auto_delete, shred::Nonce,
+        },
         solana_runtime::{accounts_background_service::AbsRequestSender, bank_forks::BankForks},
         solana_sdk::{
             hash::Hash,
@@ -1938,8 +1941,8 @@ mod test {
             ..
         } = ManageAncestorHashesState::new(bank_forks);
 
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         // Create invalid packet with fewer bytes than the size of the nonce
         let mut packet = Packet::default();

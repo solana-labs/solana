@@ -2,7 +2,7 @@ use {
     futures_util::StreamExt,
     rand::Rng,
     serde_json::{json, Value},
-    solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path},
+    solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path_auto_delete},
     solana_pubsub_client::{nonblocking, pubsub_client::PubsubClient},
     solana_rpc::{
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
@@ -233,8 +233,8 @@ fn test_block_subscription() {
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
 
     // setup Blockstore
-    let ledger_path = get_tmp_ledger_path!();
-    let blockstore = Blockstore::open(&ledger_path).unwrap();
+    let ledger_path = get_tmp_ledger_path_auto_delete!();
+    let blockstore = Blockstore::open(ledger_path.path()).unwrap();
     let blockstore = Arc::new(blockstore);
 
     // populate ledger with test txs
