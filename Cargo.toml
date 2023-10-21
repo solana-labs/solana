@@ -418,6 +418,7 @@ wasm-bindgen = "0.2"
 winapi = "0.3.8"
 winreg = "0.50"
 x509-parser = "0.14.0"
+# See "zeroize versioning issues" below if you are updating this version.
 zeroize = { version = "1.3", default-features = false }
 zstd = "0.11.2"
 
@@ -450,3 +451,43 @@ crossbeam-epoch = { git = "https://github.com/solana-labs/crossbeam", rev = "fd2
 # overrides in sync.
 solana-program = { path = "sdk/program" }
 solana-zk-token-sdk = { path = "zk-token-sdk" }
+#
+# === zeroize versioning issues ===
+#
+# A number of packages used explicit upper bound on the `zeroize` package, such
+# as `>=1, <1.4`.  The problem is that cargo still does not duplicate `zeroize`
+# if a newer version is available and requested by another package and just
+# fails the whole dependency resolution process.
+#
+# This is described in
+#
+# https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#multiple-requirements
+#
+# So we have to patch `zeroize` dependency specifications in the projects that
+# introduce these constraints.  They have already removed these constraints in
+# newer versions, but we have not updated yet.  As we update, we need to remove
+# these patch requests.
+#
+# When our dependencies are upgraded, we can remove this patches.  Before that
+# we might need to maintain these patches in sync with our full dependency
+# tree.
+
+# Our dependency tree has `aes-gcm-siv` v0.10.3 and the `zeroize` restriction
+# was removed in the next commit just after the release.  So it seems safe to
+# patch to this commit.
+#
+# `aes-gcm-siv` v0.10.3 release:
+#
+# https://github.com/RustCrypto/AEADs/releases/tag/aes-gcm-siv-v0.10.3
+#
+# Corresponds to commit
+#
+# https://github.com/RustCrypto/AEADs/commit/6f16f4577a1fc839a2346cf8c5531c85a44bf5c0
+#
+# Comparison with `6105d7a5591aefa646a95d12b5e8d3f55a9214ef` pinned here:
+#
+# https://github.com/RustCrypto/AEADs/compare/aes-gcm-siv-v0.10.3..6105d7a5591aefa646a95d12b5e8d3f55a9214ef
+#
+[patch.crates-io.aes-gcm-siv]
+git = "https://github.com/RustCrypto/AEADs"
+rev = "6105d7a5591aefa646a95d12b5e8d3f55a9214ef"
