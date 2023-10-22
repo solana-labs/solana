@@ -214,19 +214,6 @@ impl BankForks {
         bank.check_program_modification_slot =
             self.root.load(Ordering::Relaxed) < self.highest_slot_at_startup;
 
-        if let Some(fork_graph) = &self
-            .root_bank()
-            .loaded_programs_cache
-            .read()
-            .unwrap()
-            .fork_graph
-        {
-            bank.loaded_programs_cache
-                .write()
-                .unwrap()
-                .set_fork_graph(fork_graph.clone());
-        }
-
         let bank = BankWithScheduler::new_without_scheduler(Arc::new(bank));
         let prev = self.banks.insert(bank.slot(), bank.clone_with_scheduler());
         assert!(prev.is_none());
