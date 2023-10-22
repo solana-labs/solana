@@ -116,13 +116,14 @@ impl TestEnvironment {
             ..snapshot_config
         };
 
-        let mut bank_forks = BankForks::new(Bank::new_for_tests_with_config(
+        let bank_forks_arc = BankForks::new(Bank::new_for_tests_with_config(
             &genesis_config_info.genesis_config,
             BankTestConfig::default(),
         ));
+        let mut bank_forks = bank_forks_arc.write().unwrap();
         bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
         bank_forks.set_accounts_hash_interval_slots(Self::ACCOUNTS_HASH_INTERVAL);
-        let bank_forks = Arc::new(RwLock::new(bank_forks));
+        let bank_forks = bank_forks_arc.clone();
 
         let exit = Arc::new(AtomicBool::new(false));
         let node_id = Arc::new(Keypair::new());

@@ -49,7 +49,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
     let bank = Bank::new_for_benches(&genesis_config);
-    let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+    let bank_forks = BankForks::new(bank);
 
     const NUM_SHREDS: usize = 32;
     let shred = Shred::new_from_data(0, 0, 0, &[], ShredFlags::empty(), 0, 0, 0);
