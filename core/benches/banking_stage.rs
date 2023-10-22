@@ -217,7 +217,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
     let mut bank = Bank::new_for_benches(&genesis_config);
     // Allow arbitrary transaction processing time for the purposes of this bench
     bank.ns_per_slot = u128::MAX;
-    let bank_forks = BankForks::new(bank);
+    let bank_forks = BankForks::new_rw_arc(bank);
     let bank = bank_forks.read().unwrap().get(0).unwrap();
 
     // set cost tracker limits to MAX so it will not filter out TXs

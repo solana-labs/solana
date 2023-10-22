@@ -6630,7 +6630,11 @@ pub mod tests {
         genesis_config.fee_rate_governor = FeeRateGovernor::new(TEST_SIGNATURE_FEE, 0);
 
         let bank = Bank::new_for_tests_with_config(&genesis_config, config);
-        (BankForks::new(bank), mint_keypair, Arc::new(voting_keypair))
+        (
+            BankForks::new_rw_arc(bank),
+            mint_keypair,
+            Arc::new(voting_keypair),
+        )
     }
 
     #[test]
@@ -8310,7 +8314,7 @@ pub mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100);
         let bank = Bank::new_for_tests(&genesis_config);
 
-        let bank_forks = BankForks::new(bank);
+        let bank_forks = BankForks::new_rw_arc(bank);
         let bank0 = bank_forks.read().unwrap().get(0).unwrap();
         let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);

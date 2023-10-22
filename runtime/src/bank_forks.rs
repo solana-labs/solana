@@ -77,7 +77,7 @@ impl Index<u64> for BankForks {
 }
 
 impl BankForks {
-    pub fn new(bank: Bank) -> Arc<RwLock<Self>> {
+    pub fn new_rw_arc(bank: Bank) -> Arc<RwLock<Self>> {
         let root = bank.slot();
         Self::new_from_banks(&[Arc::new(bank)], root)
     }
@@ -735,7 +735,7 @@ mod tests {
     fn test_bank_forks_new() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = BankForks::new(bank);
+        let bank_forks = BankForks::new_rw_arc(bank);
         let mut bank_forks = bank_forks.write().unwrap();
         let child_bank = Bank::new_from_parent(bank_forks[0].clone(), &Pubkey::default(), 1);
         child_bank.register_default_tick_for_test();
@@ -763,7 +763,7 @@ mod tests {
     fn test_bank_forks_descendants() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = BankForks::new(bank);
+        let bank_forks = BankForks::new_rw_arc(bank);
         let mut bank_forks = bank_forks.write().unwrap();
         let bank0 = bank_forks[0].clone();
         let bank = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
@@ -781,7 +781,7 @@ mod tests {
     fn test_bank_forks_ancestors() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = BankForks::new(bank);
+        let bank_forks = BankForks::new_rw_arc(bank);
         let mut bank_forks = bank_forks.write().unwrap();
         let bank0 = bank_forks[0].clone();
         let bank = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
@@ -800,7 +800,7 @@ mod tests {
     fn test_bank_forks_frozen_banks() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = BankForks::new(bank);
+        let bank_forks = BankForks::new_rw_arc(bank);
         let mut bank_forks = bank_forks.write().unwrap();
         let bank0 = bank_forks[0].clone();
         let child_bank = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
@@ -813,7 +813,7 @@ mod tests {
     fn test_bank_forks_active_banks() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = BankForks::new(bank);
+        let bank_forks = BankForks::new_rw_arc(bank);
         let mut bank_forks = bank_forks.write().unwrap();
         let bank0 = bank_forks[0].clone();
         let child_bank = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
@@ -866,12 +866,12 @@ mod tests {
         };
 
         let bank0 = Bank::new_for_tests(&genesis_config);
-        let bank_forks0 = BankForks::new(bank0);
+        let bank_forks0 = BankForks::new_rw_arc(bank0);
         let mut bank_forks0 = bank_forks0.write().unwrap();
         bank_forks0.set_root(0, &abs_request_sender, None);
 
         let bank1 = Bank::new_for_tests(&genesis_config);
-        let bank_forks1 = BankForks::new(bank1);
+        let bank_forks1 = BankForks::new_rw_arc(bank1);
         let mut bank_forks1 = bank_forks1.write().unwrap();
 
         let additional_timestamp_secs = 2;
@@ -943,7 +943,7 @@ mod tests {
     fn test_bank_forks_with_set_root() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks_arc = BankForks::new(bank);
+        let bank_forks_arc = BankForks::new_rw_arc(bank);
 
         let parent_child_pairs = vec![(0, 1), (1, 2), (0, 3), (3, 4)];
         extend_bank_forks(bank_forks_arc.clone(), &parent_child_pairs);
@@ -1006,7 +1006,7 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         assert_eq!(bank.slot(), 0);
-        let bank_forks_arc = BankForks::new(bank);
+        let bank_forks_arc = BankForks::new_rw_arc(bank);
 
         let parent_child_pairs = vec![(0, 1), (1, 2), (0, 3), (3, 4)];
         extend_bank_forks(bank_forks_arc.clone(), &parent_child_pairs);
@@ -1075,7 +1075,7 @@ mod tests {
     fn test_fork_graph() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = BankForks::new(bank);
+        let bank_forks = BankForks::new_rw_arc(bank);
 
         let parent_child_pairs = vec![
             (0, 1),

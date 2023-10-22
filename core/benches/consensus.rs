@@ -28,7 +28,7 @@ fn bench_save_tower(bench: &mut Bencher) {
 
     let vote_account_pubkey = &Pubkey::default();
     let node_keypair = Arc::new(Keypair::new());
-    let heaviest_bank = BankForks::new(Bank::default_for_tests()).working_bank();
+    let heaviest_bank = BankForks::new_rw_arc(Bank::default_for_tests()).working_bank();
     let tower_storage = FileTowerStorage::new(dir.path().to_path_buf());
     let tower = Tower::new(
         &node_keypair.pubkey(),
@@ -47,7 +47,7 @@ fn bench_save_tower(bench: &mut Bencher) {
 fn bench_generate_ancestors_descendants(bench: &mut Bencher) {
     let vote_account_pubkey = &Pubkey::default();
     let node_keypair = Arc::new(Keypair::new());
-    let heaviest_bank = BankForks::new(Bank::default_for_tests()).working_bank();
+    let heaviest_bank = BankForks::new_rw_arc(Bank::default_for_tests()).working_bank();
     let mut tower = Tower::new(
         &node_keypair.pubkey(),
         vote_account_pubkey,

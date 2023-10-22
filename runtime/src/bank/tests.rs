@@ -12504,7 +12504,7 @@ fn test_runtime_feature_enable_with_program_cache() {
     genesis_config
         .accounts
         .remove(&feature_set::reject_callx_r10::id());
-    let bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
+    let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests(&genesis_config));
     let root_bank = bank_forks.read().unwrap().root_bank();
 
     // Test a basic transfer

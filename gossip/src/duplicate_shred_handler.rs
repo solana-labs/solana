@@ -271,7 +271,7 @@ mod tests {
         let my_pubkey = my_keypair.pubkey();
         let genesis_config_info = create_genesis_config_with_leader(10_000, &my_pubkey, 10_000);
         let GenesisConfigInfo { genesis_config, .. } = genesis_config_info;
-        let bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
+        let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests(&genesis_config));
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
             &bank_forks.read().unwrap().working_bank(),
         ));
@@ -337,7 +337,7 @@ mod tests {
         let my_pubkey = my_keypair.pubkey();
         let genesis_config_info = create_genesis_config_with_leader(10_000, &my_pubkey, 10_000);
         let GenesisConfigInfo { genesis_config, .. } = genesis_config_info;
-        let bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
+        let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests(&genesis_config));
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
             &bank_forks.read().unwrap().working_bank(),
         ));

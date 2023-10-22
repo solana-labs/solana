@@ -109,7 +109,7 @@ impl SnapshotTestConfig {
         );
         bank0.freeze();
         bank0.set_startup_verification_complete();
-        let bank_forks_arc = BankForks::new(bank0);
+        let bank_forks_arc = BankForks::new_rw_arc(bank0);
         let mut bank_forks = bank_forks_arc.write().unwrap();
         bank_forks.accounts_hash_interval_slots = accounts_hash_interval_slots;
 

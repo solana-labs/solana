@@ -400,7 +400,7 @@ pub mod tests {
         let starting_balance = 10_000;
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(starting_balance);
 
-        let bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
+        let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests(&genesis_config));
 
         let keypair = Arc::new(Keypair::new());
         let (turbine_quic_endpoint_sender, _turbine_quic_endpoint_receiver) =

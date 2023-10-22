@@ -116,7 +116,7 @@ impl TestEnvironment {
             ..snapshot_config
         };
 
-        let bank_forks_arc = BankForks::new(Bank::new_for_tests_with_config(
+        let bank_forks_arc = BankForks::new_rw_arc(Bank::new_for_tests_with_config(
             &genesis_config_info.genesis_config,
             BankTestConfig::default(),
         ));

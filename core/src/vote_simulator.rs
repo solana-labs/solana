@@ -371,7 +371,7 @@ pub fn initialize_state(
         0,
         ForkProgress::new_from_bank(&bank0, bank0.collector_id(), &Pubkey::default(), None, 0, 0),
     );
-    let bank_forks = BankForks::new(bank0);
+    let bank_forks = BankForks::new_rw_arc(bank0);
     let heaviest_subtree_fork_choice =
         HeaviestSubtreeForkChoice::new_from_bank_forks(bank_forks.clone());
     (bank_forks, progress, heaviest_subtree_fork_choice)

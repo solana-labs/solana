@@ -358,5 +358,5 @@ fn bank_forks_from_snapshot(
         incremental: incremental_snapshot_hash,
     };
 
-    (BankForks::new(bank), starting_snapshot_hashes)
+    (BankForks::new_rw_arc(bank), starting_snapshot_hashes)
 }

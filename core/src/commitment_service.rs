@@ -509,7 +509,7 @@ mod tests {
         );
 
         let bank0 = Bank::new_for_tests(&genesis_config);
-        let bank_forks = BankForks::new(bank0);
+        let bank_forks = BankForks::new_rw_arc(bank0);
         let mut bank_forks = bank_forks.write().unwrap();
 
         // Fill bank_forks with banks with votes landing in the next slot
