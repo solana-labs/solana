@@ -200,7 +200,7 @@ impl BankForks {
             highest_slot_at_startup: 0,
         }));
 
-        for (_, bank) in &bank_forks.read().unwrap().banks {
+        for bank in bank_forks.read().unwrap().banks.values() {
             bank.loaded_programs_cache
                 .write()
                 .unwrap()

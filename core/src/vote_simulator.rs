@@ -58,7 +58,7 @@ impl VoteSimulator {
             validator_keypairs,
             node_pubkeys,
             vote_pubkeys,
-            bank_forks: bank_forks,
+            bank_forks,
             progress,
             heaviest_subtree_fork_choice,
             latest_validator_votes_for_frozen_banks: LatestValidatorVotesForFrozenBanks::default(),
@@ -297,6 +297,7 @@ impl VoteSimulator {
         false
     }
 
+    #[allow(clippy::type_complexity)]
     fn init_state(
         num_keypairs: usize,
     ) -> (

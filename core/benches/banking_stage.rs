@@ -56,7 +56,7 @@ use {
     },
     std::{
         iter::repeat_with,
-        sync::{atomic::Ordering, Arc, RwLock},
+        sync::{atomic::Ordering, Arc},
         time::{Duration, Instant},
     },
     test::Bencher,

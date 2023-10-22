@@ -25,12 +25,7 @@ use {
         },
         cluster_nodes::ClusterNodesCache,
     },
-    std::{
-        collections::HashMap,
-        net::UdpSocket,
-        sync::{Arc, RwLock},
-        time::Duration,
-    },
+    std::{collections::HashMap, net::UdpSocket, sync::Arc, time::Duration},
     test::Bencher,
 };
 
