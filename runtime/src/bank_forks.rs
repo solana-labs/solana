@@ -930,14 +930,13 @@ mod tests {
     fn test_bank_forks_with_set_root() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks_arc = BankForks::new_rw_arc(bank);
+        let bank_forks = BankForks::new_rw_arc(bank);
 
         let parent_child_pairs = vec![(0, 1), (1, 2), (0, 3), (3, 4)];
-        extend_bank_forks(bank_forks_arc.clone(), &parent_child_pairs);
+        extend_bank_forks(bank_forks.clone(), &parent_child_pairs);
 
-        let mut bank_forks = bank_forks_arc.write().unwrap();
         assert_eq!(
-            bank_forks.ancestors(),
+            bank_forks.read().unwrap().ancestors(),
             make_hash_map(vec![
                 (0, vec![]),
                 (1, vec![0]),
@@ -947,7 +946,7 @@ mod tests {
             ])
         );
         assert_eq!(
-            bank_forks.descendants(),
+            bank_forks.read().unwrap().descendants(),
             make_hash_map(vec![
                 (0, vec![1, 2, 3, 4]),
                 (1, vec![2]),
@@ -956,28 +955,29 @@ mod tests {
                 (4, vec![]),
             ])
         );
-        bank_forks.set_root(
+        bank_forks.write().unwrap().set_root(
             2,
             &AbsRequestSender::default(),
             None, // highest confirmed root
         );
-        bank_forks[2].squash();
-        assert_eq!(bank_forks.ancestors(), make_hash_map(vec![(2, vec![]),]));
+        bank_forks.read().unwrap().get(2).unwrap().squash();
         assert_eq!(
-            bank_forks.descendants(),
+            bank_forks.read().unwrap().ancestors(),
+            make_hash_map(vec![(2, vec![]),])
+        );
+        assert_eq!(
+            bank_forks.read().unwrap().descendants(),
             make_hash_map(vec![(0, vec![2]), (1, vec![2]), (2, vec![]),])
         );
 
-        let bank_forks = bank_forks_arc.read().unwrap();
-
         let parent_child_pairs = vec![(2, 5), (5, 6)];
-        extend_bank_forks(bank_forks_arc.clone(), &parent_child_pairs);
+        extend_bank_forks(bank_forks.clone(), &parent_child_pairs);
         assert_eq!(
-            bank_forks.ancestors(),
+            bank_forks.read().unwrap().ancestors(),
             make_hash_map(vec![(2, vec![]), (5, vec![2]), (6, vec![2, 5])])
         );
         assert_eq!(
-            bank_forks.descendants(),
+            bank_forks.read().unwrap().descendants(),
             make_hash_map(vec![
                 (0, vec![2]),
                 (1, vec![2]),
@@ -993,14 +993,13 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         assert_eq!(bank.slot(), 0);
-        let bank_forks_arc = BankForks::new_rw_arc(bank);
+        let bank_forks = BankForks::new_rw_arc(bank);
 
         let parent_child_pairs = vec![(0, 1), (1, 2), (0, 3), (3, 4)];
-        extend_bank_forks(bank_forks_arc.clone(), &parent_child_pairs);
+        extend_bank_forks(bank_forks.clone(), &parent_child_pairs);
 
-        let mut bank_forks = bank_forks_arc.write().unwrap();
         assert_eq!(
-            bank_forks.ancestors(),
+            bank_forks.read().unwrap().ancestors(),
             make_hash_map(vec![
                 (0, vec![]),
                 (1, vec![0]),
@@ -1010,7 +1009,7 @@ mod tests {
             ])
         );
         assert_eq!(
-            bank_forks.descendants(),
+            bank_forks.read().unwrap().descendants(),
             make_hash_map(vec![
                 (0, vec![1, 2, 3, 4]),
                 (1, vec![2]),
@@ -1019,26 +1018,25 @@ mod tests {
                 (4, vec![]),
             ])
         );
-        bank_forks.set_root(
+        bank_forks.write().unwrap().set_root(
             2,
             &AbsRequestSender::default(),
             Some(1), // highest confirmed root
         );
-        bank_forks[2].squash();
+        bank_forks.read().unwrap().get(2).unwrap().squash();
         assert_eq!(
-            bank_forks.ancestors(),
+            bank_forks.read().unwrap().ancestors(),
             make_hash_map(vec![(1, vec![]), (2, vec![]),])
         );
         assert_eq!(
-            bank_forks.descendants(),
+            bank_forks.read().unwrap().descendants(),
             make_hash_map(vec![(0, vec![1, 2]), (1, vec![2]), (2, vec![]),])
         );
 
-        let bank_forks = bank_forks_arc.read().unwrap();
         let parent_child_pairs = vec![(2, 5), (5, 6)];
-        extend_bank_forks(bank_forks_arc.clone(), &parent_child_pairs);
+        extend_bank_forks(bank_forks.clone(), &parent_child_pairs);
         assert_eq!(
-            bank_forks.ancestors(),
+            bank_forks.read().unwrap().ancestors(),
             make_hash_map(vec![
                 (1, vec![]),
                 (2, vec![]),
@@ -1047,7 +1045,7 @@ mod tests {
             ])
         );
         assert_eq!(
-            bank_forks.descendants(),
+            bank_forks.read().unwrap().descendants(),
             make_hash_map(vec![
                 (0, vec![1, 2]),
                 (1, vec![2]),
