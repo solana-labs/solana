@@ -626,14 +626,16 @@ fn build_solana_package(
         // The package version directory doesn't contain a valid
         // installation, and it should be removed.
         let target_path_parent = target_path.parent().expect("Invalid package path");
-        fs::remove_dir_all(target_path_parent).unwrap_or_else(|err| {
-            error!(
-                "Failed to remove {} while recovering from installation failure: {}",
-                target_path_parent.to_string_lossy(),
-                err,
-            );
-            exit(1);
-        });
+        if target_path_parent.exists() {
+            fs::remove_dir_all(target_path_parent).unwrap_or_else(|err| {
+                error!(
+                    "Failed to remove {} while recovering from installation failure: {}",
+                    target_path_parent.to_string_lossy(),
+                    err,
+                );
+                exit(1);
+            });
+        }
         error!("Failed to install platform-tools: {}", err);
         exit(1);
     });
