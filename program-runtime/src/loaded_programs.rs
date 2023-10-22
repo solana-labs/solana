@@ -443,7 +443,6 @@ impl Default for ProgramRuntimeEnvironments {
     }
 }
 
-#[derive(Debug)]
 pub struct LoadedPrograms<FG: ForkGraph> {
     /// A two level index:
     ///
@@ -457,6 +456,17 @@ pub struct LoadedPrograms<FG: ForkGraph> {
     pub environments: ProgramRuntimeEnvironments,
     pub stats: Stats,
     fork_graph: Option<Arc<RwLock<FG>>>,
+}
+
+impl<FG: ForkGraph> Debug for LoadedPrograms<FG> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoadedPrograms")
+            .field("root slot", &self.latest_root_slot)
+            .field("root epoch", &self.latest_root_epoch)
+            .field("stats", &self.stats)
+            .field("cache", &self.entries)
+            .finish()
+    }
 }
 
 impl<FG: ForkGraph> Default for LoadedPrograms<FG> {
