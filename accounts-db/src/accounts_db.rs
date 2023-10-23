@@ -1796,7 +1796,7 @@ impl SplitAncientStorages {
     ) -> Vec<Slot> {
         let range = snapshot_storages.range();
         let mut i = 0;
-        let mut len_trucate = 0;
+        let mut len_truncate = 0;
         let mut possible_ancient_slots = snapshot_storages
             .iter_range(&(range.start..oldest_non_ancient_slot))
             .filter_map(|(slot, storage)| {
@@ -1806,13 +1806,13 @@ impl SplitAncientStorages {
                         // even though the slot is in range of being an ancient append vec, if it isn't actually a large append vec,
                         // then we are better off treating all these slots as normally cachable to reduce work in dedup.
                         // Since this one is large, for the moment, this one becomes the highest slot where we want to individually cache files.
-                        len_trucate = i;
+                        len_truncate = i;
                     }
                     slot
                 })
             })
             .collect::<Vec<_>>();
-        possible_ancient_slots.truncate(len_trucate);
+        possible_ancient_slots.truncate(len_truncate);
         possible_ancient_slots
     }
 
