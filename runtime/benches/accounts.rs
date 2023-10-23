@@ -11,7 +11,7 @@ use {
         accounts::{AccountAddressFilter, Accounts},
         accounts_db::{
             test_utils::create_test_accounts, AccountShrinkThreshold,
-            VerifyAccountsHashAndLamportsConfig, INCLUDE_SLOT_IN_HASH_TESTS,
+            VerifyAccountsHashAndLamportsConfig,
         },
         accounts_index::{AccountSecondaryIndexes, ScanConfig},
         ancestors::Ancestors,

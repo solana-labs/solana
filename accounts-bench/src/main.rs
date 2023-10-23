@@ -9,7 +9,7 @@ use {
         accounts::Accounts,
         accounts_db::{
             test_utils::{create_test_accounts, update_accounts_bench},
-            AccountShrinkThreshold, CalcAccountsHashDataSource, INCLUDE_SLOT_IN_HASH_TESTS,
+            AccountShrinkThreshold, CalcAccountsHashDataSource,
         },
         accounts_index::AccountSecondaryIndexes,
         ancestors::Ancestors,

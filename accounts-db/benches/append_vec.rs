@@ -39,7 +39,7 @@ fn append_account(
     let slot_ignored = Slot::MAX;
     let accounts = [(&storage_meta.pubkey, account)];
     let slice = &accounts[..];
-    let accounts = (slot_ignored, slice, INCLUDE_SLOT_IN_HASH_TESTS);
+    let accounts = (slot_ignored, slice);
     let storable_accounts =
         StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
             &accounts,

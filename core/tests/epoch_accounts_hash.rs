@@ -5,9 +5,7 @@ use {
     crate::snapshot_utils::create_tmp_accounts_dir_for_tests,
     log::*,
     solana_accounts_db::{
-        accounts_db::{
-            AccountShrinkThreshold, CalcAccountsHashDataSource, INCLUDE_SLOT_IN_HASH_TESTS,
-        },
+        accounts_db::{AccountShrinkThreshold, CalcAccountsHashDataSource},
         accounts_hash::CalcAccountsHashConfig,
         accounts_index::AccountSecondaryIndexes,
         epoch_accounts_hash::EpochAccountsHash,
