@@ -94,13 +94,15 @@ pub struct QuicConfig {
     // If not specified, the connection cache will create as needed.
     client_endpoint: Option<Endpoint>,
     ip: IpAddr,
+    keypair: Arc<Keypair>,
 }
 
 impl NewConnectionConfig for QuicConfig {
     fn new() -> Result<Self, ClientError> {
         let ip = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
+        let key = Keypair::new();
         let (cert, priv_key) =
-            new_self_signed_tls_certificate(&Keypair::new(), ip)?;
+            new_self_signed_tls_certificate(&key, ip)?;
         Ok(Self {
             client_certificate: Arc::new(QuicClientCertificate {
                 certificate: cert,
@@ -110,6 +112,7 @@ impl NewConnectionConfig for QuicConfig {
             maybe_client_pubkey: None,
             client_endpoint: None,
             ip,
+            keypair: Arc::new(key),
         })
     }
 }
@@ -157,6 +160,7 @@ impl QuicConfig {
             certificate: cert,
             key: priv_key,
         });
+        self.keypair = Arc::new(keypair.insecure_clone());
         Ok(())
     }
 
@@ -225,6 +229,10 @@ impl ConnectionManager for QuicConnectionManager {
 
     fn update_key(&mut self, key: &Keypair) {
         let _ = self.connection_config.update_client_certificate(key, None);
+    }
+
+    fn get_key(&self) -> Option<&Keypair> {
+        Some(&self.connection_config.keypair)
     }
 }
 

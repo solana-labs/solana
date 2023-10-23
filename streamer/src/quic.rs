@@ -116,12 +116,15 @@ pub enum QuicServerError {
 pub struct EndpointKeyUpdater {
     endpoint: Arc<Endpoint>,
     gossip_host: IpAddr,
+    key: Arc<RwLock<Keypair>>
 }
 
 impl NotifyKeyUpdate for EndpointKeyUpdater {
     fn update_key(&self, key: &Keypair) {
         let (config, _) = configure_server(key, self.gossip_host).unwrap();
-        self.endpoint.set_server_config(Some(config))
+        self.endpoint.set_server_config(Some(config));
+        let mut key_guard = self.key.write().unwrap();
+        *key_guard = key.insecure_clone();
     }
 }
 
@@ -418,7 +421,7 @@ pub fn spawn_server(
     coalesce: Duration,
 ) -> Result<(Arc<Endpoint>, thread::JoinHandle<()>, Arc<EndpointKeyUpdater>), QuicServerError> {
     let runtime = rt();
-    let (endpoint, _stats, task) = {
+    let (endpoint, _stats, task, key) = {
         let _guard = runtime.enter();
         crate::nonblocking::quic::spawn_server(
             name,
@@ -446,7 +449,8 @@ pub fn spawn_server(
     let endpoint = Arc::new(endpoint);
     let updater = EndpointKeyUpdater {
         endpoint: endpoint.clone(),
-        gossip_host
+        gossip_host,
+        key
     };
     Ok((endpoint, handle, Arc::new(updater)))
 }

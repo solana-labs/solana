@@ -39,6 +39,7 @@ pub trait ConnectionManager: Send + Sync + 'static {
     fn new_connection_pool(&self) -> Self::ConnectionPool;
     fn new_connection_config(&self) -> Self::NewConnectionConfig;
     fn update_key(&mut self, _key: &Keypair) {}
+    fn get_key(&self) -> Option<&Keypair> {None}
 }
 
 struct ConnectionMap<R, S> {
@@ -249,6 +250,7 @@ where
                             "Sending async connection creation {} for {addr}",
                             pool.num_connections() - 1
                         );
+                        debug!("Using keypair {:?}", conn_man.get_key());
                         sender.send((idx, *addr)).unwrap();
                     };
                 } else {
