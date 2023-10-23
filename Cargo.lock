@@ -5048,9 +5048,9 @@ checksum = "9def91fd1e018fe007022791f865d0ccc9b3a0d5001e01aabb8b40e46000afb5"
 
 [[package]]
 name = "smallvec"
-version = "1.7.0"
+version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ecab6c735a6bb4139c0caafd0cc3635748bbb3acf4550e8138122099251f309"
+checksum = "942b4a808e05215192e39f4ab80813e599068285906cc91aa64f923db842bd5a"
 
 [[package]]
 name = "smpl_jwt"
@@ -5214,6 +5214,7 @@ dependencies = [
  "seqlock",
  "serde",
  "serde_derive",
+ "smallvec",
  "solana-accounts-db",
  "solana-bucket-map",
  "solana-config-program",
