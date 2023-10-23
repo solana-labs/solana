@@ -492,3 +492,36 @@ solana-zk-token-sdk = { path = "zk-token-sdk" }
 [patch.crates-io.aes-gcm-siv]
 git = "https://github.com/RustCrypto/AEADs"
 rev = "6105d7a5591aefa646a95d12b5e8d3f55a9214ef"
+
+# Our dependency tree has `curve25519-dalek` v3.2.1.  They have removed the
+# constrain in the next major release.  Commit that removes `zeroize` constrain
+# was added to multiple release branches.  Bot not to the 3.2 branch.
+#
+# `curve25519-dalek` maintainers are saying they do not want to invest any more
+# time in the 3.2 release:
+#
+# https://github.com/dalek-cryptography/curve25519-dalek/issues/452#issuecomment-1749809428
+#
+# So we have to fork and create our own release, based on v3.2.1.  Commit that
+# removed `zeroize` constrain on the `main` branch cherry picked on top of the
+# v3.2.1 release.
+#
+# `curve25519-dalek` v3.2.1 release:
+#
+# https://github.com/dalek-cryptography/curve25519-dalek/releases/tag/3.2.1
+#
+# Corresponds to commit
+#
+# https://github.com/dalek-cryptography/curve25519-dalek/commit/29e5c29b0e5c6821e4586af58b0d0891dd2ec639
+#
+# Comparison with `c14774464c4d38de553c6ef2f48a10982c1b4801`:
+#
+# https://github.com/dalek-cryptography/curve25519-dalek/compare/3.2.1...solana-labs:curve25519-dalek:c14774464c4d38de553c6ef2f48a10982c1b4801
+#
+# Or, using the branch name instead of the hash:
+#
+# https://github.com/dalek-cryptography/curve25519-dalek/compare/3.2.1...solana-labs:curve25519-dalek:3.2.1-unpin-zeroize
+#
+[patch.crates-io.curve25519-dalek]
+git = "https://github.com/solana-labs/curve25519-dalek.git"
+rev = "c14774464c4d38de553c6ef2f48a10982c1b4801"
