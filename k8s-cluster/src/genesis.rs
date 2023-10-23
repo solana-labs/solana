@@ -135,7 +135,7 @@ impl std::fmt::Display for GenesisFlags {
 pub struct SetupConfig<'a> {
     pub namespace: &'a str,
     pub num_validators: i32,
-    pub prebuild_genesis: bool,
+    pub skip_genesis_build: bool,
 }
 
 pub struct ValidatorAccountKeypairs {

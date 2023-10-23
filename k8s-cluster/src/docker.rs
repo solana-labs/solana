@@ -128,9 +128,7 @@ RUN mkdir -p /home/solana/k8s-cluster-scripts
 COPY ./k8s-cluster/src/scripts /home/solana/k8s-cluster-scripts
 
 RUN mkdir -p /home/solana/ledger
-COPY --chown=solana:solana ./config-k8s/bootstrap-validator/genesis.tar.bz2 /home/solana/ledger
-COPY --chown=solana:solana ./config-k8s/bootstrap-validator/rocksdb /home/solana/ledger/rocksdb
-COPY --chown=solana:solana ./config-k8s/bootstrap-validator/genesis.bin /home/solana/ledger
+COPY --chown=solana:solana ./config-k8s/bootstrap-validator  /home/solana/ledger
 
 RUN mkdir -p /home/solana/.cargo/bin
 

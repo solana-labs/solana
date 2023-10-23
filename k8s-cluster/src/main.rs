@@ -141,9 +141,9 @@ fn parse_matches() -> ArgMatches<'static> {
         )
         // Genesis config
         .arg(
-            Arg::with_name("prebuild_genesis")
-                .long("prebuild-genesis")
-                .help("Prebuild gensis. Generates keys for validators and writes to file"),
+            Arg::with_name("skip_genesis_build")
+                .long("skip-genesis-build")
+                .help("NOT SUPPORTED! TODO: skip genesis build. Don't generate a new genesis and associated validator accounts"),
         )
         .arg(
             Arg::with_name("hashes_per_tick")
@@ -297,7 +297,7 @@ async fn main() {
     let setup_config = SetupConfig {
         namespace: matches.value_of("cluster_namespace").unwrap_or_default(),
         num_validators: value_t_or_exit!(matches, "number_of_validators", i32),
-        prebuild_genesis: matches.is_present("prebuild_genesis"),
+        skip_genesis_build: matches.is_present("skip_genesis_build"),
     };
 
     let build_config = BuildConfig {
@@ -443,27 +443,6 @@ async fn main() {
         }
     }
 
-    // Download validator version and Build docker image
-    let docker_image_config = if build_config.docker_build {
-        Some(DockerImageConfig {
-            base_image: matches.value_of("base_image").unwrap_or_default(),
-            image_name: matches.value_of("image_name").unwrap(),
-            tag: matches.value_of("image_tag").unwrap_or_default(),
-            registry: matches.value_of("registry_name").unwrap(),
-        })
-    } else {
-        None
-    };
-
-    let deploy = Deploy::new(build_config.clone());
-    match deploy.prepare().await {
-        Ok(_) => info!("Validator setup prepared successfully"),
-        Err(err) => {
-            error!("Exiting........ {}", err);
-            return;
-        }
-    }
-
     info!("Creating Genesis");
     let mut genesis = Genesis::new(genesis_flags);
     match genesis.generate_faucet() {
@@ -532,6 +511,27 @@ async fn main() {
         };
     }
 
+    // Download validator version and Build docker image
+    let docker_image_config = if build_config.docker_build {
+        Some(DockerImageConfig {
+            base_image: matches.value_of("base_image").unwrap_or_default(),
+            image_name: matches.value_of("image_name").unwrap(),
+            tag: matches.value_of("image_tag").unwrap_or_default(),
+            registry: matches.value_of("registry_name").unwrap(),
+        })
+    } else {
+        None
+    };
+
+    let deploy = Deploy::new(build_config.clone());
+    match deploy.prepare().await {
+        Ok(_) => info!("Validator setup prepared successfully"),
+        Err(err) => {
+            error!("Exiting........ {}", err);
+            return;
+        }
+    }
+
     if let Some(config) = docker_image_config {
         let docker = DockerConfig::new(config, build_config.deploy_method);
         let image_types = vec![ValidatorType::Bootstrap, ValidatorType::Standard];
@@ -563,26 +563,6 @@ async fn main() {
             }
         }
     }
-
-    // match genesis.package_up() {
-    //     Ok(_) => (),
-    //     Err(err) => {
-    //         error!("package genesis error! {}", err);
-    //         return;
-    //     }
-    // }
-
-    // // Begin Kubernetes Setup and Deployment
-    // let config_map = match kub_controller.create_genesis_config_map().await {
-    //     Ok(config_map) => {
-    //         info!("successfully deployed config map");
-    //         config_map
-    //     }
-    //     Err(err) => {
-    //         error!("Failed to deploy config map: {}", err);
-    //         return;
-    //     }
-    // };
 
     let bootstrap_container_name = matches
         .value_of("bootstrap_container_name")
