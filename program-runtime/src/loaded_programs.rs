@@ -766,8 +766,13 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
             return ExtractedPrograms::all_missing(keys);
         };
 
-        let Some(epoch) = fork_graph.read().unwrap().slot_epoch(current_slot) else {
-            error!("Program cache doesn't have fork graph");
+        let Ok(fork_graph) = fork_graph.read() else {
+            error!("Failed to lock fork graph for reading.");
+            return ExtractedPrograms::all_missing(keys);
+        };
+
+        let Some(epoch) = fork_graph.slot_epoch(current_slot) else {
+            error!("Failed to get epoch for the current slot {}.", current_slot);
             return ExtractedPrograms::all_missing(keys);
         };
 
@@ -781,10 +786,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                         if entry.deployment_slot <= self.latest_root_slot
                             || entry.deployment_slot == current_slot
                             || matches!(
-                                fork_graph
-                                    .read()
-                                    .unwrap()
-                                    .relationship(entry.deployment_slot, current_slot),
+                                fork_graph.relationship(entry.deployment_slot, current_slot),
                                 BlockRelation::Ancestor
                             )
                         {
