@@ -5490,6 +5490,7 @@ version = "1.18.0"
 dependencies = [
  "clap 2.33.3",
  "flate2",
+ "hex",
  "hyper",
  "log",
  "rustc_version 0.4.0",
