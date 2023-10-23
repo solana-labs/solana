@@ -1931,7 +1931,7 @@ mod test {
     #[test]
     fn test_verify_and_process_ancestor_responses_invalid_packet() {
         let bank0 = Bank::default_for_tests();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
+        let bank_forks = BankForks::new_rw_arc(bank0);
 
         let ManageAncestorHashesState {
             ancestor_hashes_request_statuses,

@@ -617,7 +617,7 @@ mod tests {
             ip_addr,
             solana_net_utils::find_available_port_in_range(ip_addr, (10000, 65535)).unwrap(),
         );
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
@@ -674,7 +674,7 @@ mod tests {
         } = create_genesis_config(10_000);
         genesis_config.cluster_type = ClusterType::MainnetBeta;
         let bank = Bank::new_for_tests(&genesis_config);
-        Arc::new(RwLock::new(BankForks::new(bank)))
+        BankForks::new_rw_arc(bank)
     }
 
     #[test]

@@ -1325,7 +1325,7 @@ pub(crate) mod tests {
         } = create_genesis_config(100);
         let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let bank0 = bank_forks.read().unwrap().get(0).unwrap();
         let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
@@ -1471,7 +1471,7 @@ pub(crate) mod tests {
         } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let rent_exempt_amount = bank.get_minimum_balance_for_rent_exemption(0);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -1591,7 +1591,7 @@ pub(crate) mod tests {
         } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let rent_exempt_amount = bank.get_minimum_balance_for_rent_exemption(0);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -1709,7 +1709,7 @@ pub(crate) mod tests {
         } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let rent_exempt_amount = bank.get_minimum_balance_for_rent_exemption(0);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -1827,7 +1827,7 @@ pub(crate) mod tests {
         } = create_genesis_config(100);
         let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let alice = Keypair::new();
         let tx = system_transaction::create_account(
             &mint_keypair,
@@ -1939,7 +1939,7 @@ pub(crate) mod tests {
         bank.lazy_rent_collection.store(true, Relaxed);
 
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
 
         let bank0 = bank_forks.read().unwrap().get(0).unwrap();
         let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
@@ -2134,7 +2134,7 @@ pub(crate) mod tests {
         bank.lazy_rent_collection.store(true, Relaxed);
 
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
 
         let bank0 = bank_forks.read().unwrap().get(0).unwrap();
         let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
@@ -2250,7 +2250,7 @@ pub(crate) mod tests {
         bank.lazy_rent_collection.store(true, Relaxed);
 
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
 
         let bank0 = bank_forks.read().unwrap().get(0).unwrap();
         let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
@@ -2436,7 +2436,8 @@ pub(crate) mod tests {
         } = create_genesis_config(100);
         let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let mut bank_forks = BankForks::new(bank);
+        let bank_forks_arc = BankForks::new_rw_arc(bank);
+        let mut bank_forks = bank_forks_arc.write().unwrap();
         let alice = Keypair::new();
 
         let past_bank_tx =
@@ -2466,8 +2467,6 @@ pub(crate) mod tests {
             .unwrap();
         let bank1 = bank_forks[1].clone();
 
-        let bank_forks = Arc::new(RwLock::new(bank_forks));
-
         let mut cache0 = BlockCommitment::default();
         cache0.increase_confirmation_stake(1, 10);
         let cache1 = BlockCommitment::default();
@@ -2484,16 +2483,19 @@ pub(crate) mod tests {
             },
         );
 
+        // Drop the write locked bank_forks
+        drop(bank_forks);
+
         let exit = Arc::new(AtomicBool::new(false));
         let optimistically_confirmed_bank =
-            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks_arc);
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
-            bank_forks,
+            bank_forks_arc,
             Arc::new(RwLock::new(block_commitment_cache)),
             optimistically_confirmed_bank,
         ));
@@ -2660,7 +2662,7 @@ pub(crate) mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
@@ -2707,7 +2709,7 @@ pub(crate) mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
@@ -2756,7 +2758,7 @@ pub(crate) mod tests {
         } = create_genesis_config(100);
         let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let bank0 = bank_forks.read().unwrap().get(0).unwrap();
         let bank1 = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
@@ -2970,7 +2972,7 @@ pub(crate) mod tests {
         } = create_genesis_config(100);
         let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
 
         let alice = Keypair::new();
 
@@ -3054,7 +3056,7 @@ pub(crate) mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let subscriptions = Arc::new(RpcSubscriptions::default_with_bank_forks(
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,

@@ -700,7 +700,7 @@ mod tests {
     fn subscription_info() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let mut tracker = SubscriptionsTracker::new(bank_forks);
 
         tracker.subscribe(SubscriptionParams::Slot, 0.into(), || 0);
@@ -746,7 +746,7 @@ mod tests {
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let mut tracker = SubscriptionsTracker::new(bank_forks);
 
         tracker.subscribe(SubscriptionParams::Slot, 0.into(), || 0);

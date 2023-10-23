@@ -2619,7 +2619,7 @@ mod tests {
         );
 
         let (genesis_config, _mint_keypair) = create_genesis_config(1);
-        let bank_forks = RwLock::new(BankForks::new(Bank::new_for_tests(&genesis_config)));
+        let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests(&genesis_config));
         let mut config = ValidatorConfig::default_for_test();
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
@@ -2649,11 +2649,11 @@ mod tests {
         );
 
         // bank=1, wait=0, should pass, bank is past the wait slot
-        let bank_forks = RwLock::new(BankForks::new(Bank::new_from_parent(
+        let bank_forks = BankForks::new_rw_arc(Bank::new_from_parent(
             bank_forks.read().unwrap().root_bank(),
             &Pubkey::default(),
             1,
-        )));
+        ));
         config.wait_for_supermajority = Some(0);
         assert!(!wait_for_supermajority(
             &config,

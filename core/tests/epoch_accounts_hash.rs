@@ -116,13 +116,18 @@ impl TestEnvironment {
             ..snapshot_config
         };
 
-        let mut bank_forks = BankForks::new(Bank::new_for_tests_with_config(
+        let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests_with_config(
             &genesis_config_info.genesis_config,
             BankTestConfig::default(),
         ));
-        bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
-        bank_forks.set_accounts_hash_interval_slots(Self::ACCOUNTS_HASH_INTERVAL);
-        let bank_forks = Arc::new(RwLock::new(bank_forks));
+        bank_forks
+            .write()
+            .unwrap()
+            .set_snapshot_config(Some(snapshot_config.clone()));
+        bank_forks
+            .write()
+            .unwrap()
+            .set_accounts_hash_interval_slots(Self::ACCOUNTS_HASH_INTERVAL);
 
         let exit = Arc::new(AtomicBool::new(false));
         let node_id = Arc::new(Keypair::new());
@@ -264,7 +269,7 @@ fn test_epoch_accounts_hash_basic(test_environment: TestEnvironment) {
     const NUM_EPOCHS_TO_TEST: u64 = 2;
     const SET_ROOT_INTERVAL: Slot = 3;
 
-    let bank_forks = &test_environment.bank_forks;
+    let bank_forks = test_environment.bank_forks.clone();
 
     let mut expected_epoch_accounts_hash = None;
 
@@ -299,6 +304,7 @@ fn test_epoch_accounts_hash_basic(test_environment: TestEnvironment) {
         // Set roots so that ABS requests are sent (this is what requests EAH calculations)
         if bank.slot().checked_rem(SET_ROOT_INTERVAL).unwrap() == 0 {
             trace!("rooting bank {}", bank.slot());
+            bank_forks.read().unwrap().prune_program_cache(bank.slot());
             bank_forks.write().unwrap().set_root(
                 bank.slot(),
                 &test_environment
@@ -379,7 +385,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
 
     let test_environment =
         TestEnvironment::new_with_snapshots(FULL_SNAPSHOT_INTERVAL, FULL_SNAPSHOT_INTERVAL);
-    let bank_forks = &test_environment.bank_forks;
+    let bank_forks = test_environment.bank_forks.clone();
 
     let slots_per_epoch = test_environment
         .genesis_config_info
@@ -411,6 +417,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
 
         // Root every bank.  This is what a normal validator does as well.
         // `set_root()` is also what requests snapshots and EAH calculations.
+        bank_forks.read().unwrap().prune_program_cache(bank.slot());
         bank_forks.write().unwrap().set_root(
             bank.slot(),
             &test_environment
@@ -496,7 +503,7 @@ fn test_background_services_request_handling_for_epoch_accounts_hash() {
 
     let test_environment =
         TestEnvironment::new_with_snapshots(FULL_SNAPSHOT_INTERVAL, FULL_SNAPSHOT_INTERVAL);
-    let bank_forks = &test_environment.bank_forks;
+    let bank_forks = test_environment.bank_forks.clone();
     let snapshot_config = &test_environment.snapshot_config;
 
     let slots_per_epoch = test_environment
@@ -534,6 +541,7 @@ fn test_background_services_request_handling_for_epoch_accounts_hash() {
 
         if bank.block_height() == set_root_slot {
             info!("Calling set_root() on bank {}...", bank.slot());
+            bank_forks.read().unwrap().prune_program_cache(bank.slot());
             bank_forks.write().unwrap().set_root(
                 bank.slot(),
                 &test_environment
@@ -577,7 +585,7 @@ fn test_epoch_accounts_hash_and_warping() {
     solana_logger::setup();
 
     let test_environment = TestEnvironment::new();
-    let bank_forks = &test_environment.bank_forks;
+    let bank_forks = test_environment.bank_forks.clone();
     let bank = bank_forks.read().unwrap().working_bank();
     let epoch_schedule = test_environment
         .genesis_config_info
@@ -590,6 +598,7 @@ fn test_epoch_accounts_hash_and_warping() {
     let eah_stop_slot_in_next_epoch =
         epoch_schedule.get_first_slot_in_epoch(bank.epoch() + 1) + eah_stop_offset;
     // have to set root here so that we can flush the write cache
+    bank_forks.read().unwrap().prune_program_cache(bank.slot());
     bank_forks.write().unwrap().set_root(
         bank.slot(),
         &test_environment
@@ -615,6 +624,7 @@ fn test_epoch_accounts_hash_and_warping() {
         .unwrap()
         .insert(Bank::new_from_parent(bank, &Pubkey::default(), slot))
         .clone_without_scheduler();
+    bank_forks.read().unwrap().prune_program_cache(bank.slot());
     bank_forks.write().unwrap().set_root(
         bank.slot(),
         &test_environment
@@ -654,6 +664,7 @@ fn test_epoch_accounts_hash_and_warping() {
         .unwrap()
         .insert(Bank::new_from_parent(bank, &Pubkey::default(), slot))
         .clone_without_scheduler();
+    bank_forks.read().unwrap().prune_program_cache(bank.slot());
     bank_forks.write().unwrap().set_root(
         bank.slot(),
         &test_environment

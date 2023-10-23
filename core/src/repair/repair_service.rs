@@ -1183,7 +1183,7 @@ mod test {
     pub fn test_generate_and_send_duplicate_repairs() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let cluster_slots = ClusterSlots::default();
@@ -1282,7 +1282,7 @@ mod test {
     pub fn test_update_duplicate_slot_repair_addr() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let dummy_addr = Some((
             Pubkey::default(),
             UdpSocket::bind("0.0.0.0:0").unwrap().local_addr().unwrap(),

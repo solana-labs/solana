@@ -1561,7 +1561,7 @@ mod tests {
     fn test_serialize_deserialize_signed_request() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let cluster_info = Arc::new(new_test_cluster_info());
         let serve_repair = ServeRepair::new(
             cluster_info.clone(),
@@ -1611,7 +1611,7 @@ mod tests {
 
         let mut bank = Bank::new_for_tests(&genesis_config);
         bank.feature_set = Arc::new(FeatureSet::all_enabled());
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let serve_repair = ServeRepair::new(
             cluster_info,
             bank_forks,
@@ -1647,7 +1647,7 @@ mod tests {
     fn test_map_requests_signed() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let cluster_info = Arc::new(new_test_cluster_info());
         let serve_repair = ServeRepair::new(
             cluster_info.clone(),
@@ -1968,7 +1968,7 @@ mod tests {
     fn window_index_request() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let cluster_slots = ClusterSlots::default();
         let cluster_info = Arc::new(new_test_cluster_info());
         let serve_repair = ServeRepair::new(
@@ -2299,7 +2299,7 @@ mod tests {
     fn test_repair_with_repair_validators() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let cluster_slots = ClusterSlots::default();
         let cluster_info = Arc::new(new_test_cluster_info());
         let me = cluster_info.my_contact_info();
