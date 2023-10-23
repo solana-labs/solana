@@ -12922,7 +12922,7 @@ fn test_epoch_credit_rewards_and_history_update() {
         .map(|_| StakeReward::new_random())
         .collect::<Vec<_>>();
 
-    bank.store_accounts((bank.slot(), &stake_rewards[..], bank.include_slot_in_hash()));
+    bank.store_accounts((bank.slot(), &stake_rewards[..]));
 
     // Simulate rewards
     let mut expected_rewards = 0;

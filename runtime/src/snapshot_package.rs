@@ -151,7 +151,6 @@ impl AccountsPackage {
             epoch_schedule: *bank.epoch_schedule(),
             rent_collector: bank.rent_collector().clone(),
             is_incremental_accounts_hash_feature_enabled,
-            include_slot_in_hash: bank.include_slot_in_hash(),
             snapshot_info,
             enqueued: Instant::now(),
         }
@@ -171,7 +170,6 @@ impl AccountsPackage {
             epoch_schedule: EpochSchedule::default(),
             rent_collector: RentCollector::default(),
             is_incremental_accounts_hash_feature_enabled: bool::default(),
-            include_slot_in_hash: INCLUDE_SLOT_IN_HASH_TESTS,
             snapshot_info: Some(SupplementalSnapshotInfo {
                 bank_snapshot_dir: PathBuf::default(),
                 archive_format: ArchiveFormat::Tar,

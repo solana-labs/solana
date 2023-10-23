@@ -134,7 +134,6 @@ fn main() {
                 &EpochSchedule::default(),
                 &RentCollector::default(),
                 true,
-                INCLUDE_SLOT_IN_HASH_TESTS,
             );
             time_store.stop();
             if results != results_store {
