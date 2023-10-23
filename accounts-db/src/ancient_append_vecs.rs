@@ -9,7 +9,6 @@ use {
         accounts_db::{
             AccountStorageEntry, AccountsDb, AliveAccounts, GetUniqueAccountsResult, ShrinkCollect,
             ShrinkCollectAliveSeparatedByRefs, ShrinkStatsSub, StoreReclaims,
-            INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
         },
         accounts_file::AccountsFile,
         accounts_hash::AccountHash,
@@ -693,11 +692,7 @@ impl AccountsDb {
             bytes: bytes_total,
             accounts: accounts_to_write,
         } = packed;
-        let accounts_to_write = StorableAccountsBySlot::new(
-            target_slot,
-            accounts_to_write,
-            INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
-        );
+        let accounts_to_write = StorableAccountsBySlot::new(target_slot, accounts_to_write);
 
         self.shrink_ancient_stats
             .bytes_ancient_created
@@ -953,7 +948,7 @@ pub mod tests {
                     create_db_with_storages_and_index, create_storages_and_update_index,
                     get_all_accounts, remove_account_for_tests, CAN_RANDOMLY_SHRINK_FALSE,
                 },
-                ShrinkCollectRefs, INCLUDE_SLOT_IN_HASH_TESTS, MAX_RECYCLE_STORES,
+                ShrinkCollectRefs, MAX_RECYCLE_STORES,
             },
             accounts_index::UpsertReclaim,
             append_vec::{aligned_stored_size, AppendVec, AppendVecStoredAccountMeta},
@@ -2699,11 +2694,7 @@ pub mod tests {
                             .collect::<Vec<_>>();
 
                         let target_slot = slots.clone().nth(combine_into).unwrap_or(slots.start);
-                        let accounts_to_write = StorableAccountsBySlot::new(
-                            target_slot,
-                            &accounts,
-                            INCLUDE_SLOT_IN_HASH_TESTS,
-                        );
+                        let accounts_to_write = StorableAccountsBySlot::new(target_slot, &accounts);
 
                         let bytes = storages
                             .iter()
