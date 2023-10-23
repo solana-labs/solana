@@ -266,7 +266,7 @@ impl AccountsDb {
             &mut stats_sub
         ));
 
-        Self::update_shrink_stats(&self.shrink_ancient_stats.shrink_stats, stats_sub);
+        Self::update_shrink_stats(&self.shrink_ancient_stats.shrink_stats, stats_sub, false);
         self.shrink_ancient_stats
             .total_us
             .fetch_add(total_us, Ordering::Relaxed);
@@ -516,6 +516,9 @@ impl AccountsDb {
         self.thread_pool_clean.install(|| {
             packer.par_iter().for_each(|(target_slot, pack)| {
                 let mut write_ancient_accounts_local = WriteAncientAccounts::default();
+                self.shrink_ancient_stats
+                    .bytes_ancient_created
+                    .fetch_add(pack.bytes, Ordering::Relaxed);
                 self.write_one_packed_storage(
                     pack,
                     **target_slot,
@@ -694,6 +697,13 @@ impl AccountsDb {
             INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
         );
 
+        self.shrink_ancient_stats
+            .bytes_ancient_created
+            .fetch_add(packed.bytes, Ordering::Relaxed);
+        self.shrink_ancient_stats
+            .shrink_stats
+            .num_slots_shrunk
+            .fetch_add(1, Ordering::Relaxed);
         self.write_ancient_accounts(*bytes_total, accounts_to_write, write_ancient_accounts)
     }
 
