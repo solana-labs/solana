@@ -1317,9 +1317,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         durable_nonce: &DurableNonce,
         lamports_per_signature: u64,
-        include_slot_in_hash: crate::accounts_db::IncludeSlotInHash,
-        ancestors: &Ancestors,
-    ) -> Option<u64> {
+    ) {
         let (accounts_to_store, transactions) = self.collect_accounts_to_store(
             txs,
             res,

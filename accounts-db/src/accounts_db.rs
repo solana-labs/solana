@@ -147,22 +147,6 @@ const SHRINK_COLLECT_CHUNK_SIZE: usize = 50;
 static mut PREVIOUS_PACK: Option<Instant> = None;
 const PACK_INTERVAL: Duration = Duration::from_secs(10);
 
-/// temporary enum during feature activation of
-/// ignore slot when calculating an account hash #28420
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum IncludeSlotInHash {
-    /// this is the status quo, prior to feature activation
-    /// INCLUDE the slot in the account hash calculation
-    IncludeSlot,
-    /// this is the value once feature activation occurs
-    /// do NOT include the slot in the account hash calculation
-    RemoveSlot,
-    /// this option should not be used.
-    /// If it is, this is a panic worthy event.
-    /// There are code paths where the feature activation status isn't known, but this value should not possibly be used.
-    IrrelevantAssertOnUse,
-}
-
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum CreateAncientStorage {
     /// ancient storages are created by appending
@@ -11012,7 +10996,7 @@ pub mod tests {
             ));
             let hash = AccountsDb::hash_account(&raw_accounts[i], &raw_expected[i].pubkey);
             assert_eq!(hash, expected_hashes[i]);
-            raw_expected[i].hash = hash;
+            raw_expected[i].hash = hash.0;
         }
 
         let to_store = raw_accounts

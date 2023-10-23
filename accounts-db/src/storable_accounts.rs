@@ -106,6 +106,7 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for (Slot, &'a [(&'a
     }
 }
 
+#[allow(dead_code)]
 impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for (Slot, &'a [&'a (Pubkey, T)]) {
     fn pubkey(&self, index: usize) -> &Pubkey {
         &self.1[index].0
