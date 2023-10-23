@@ -642,22 +642,6 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         entry
     }
 
-    /// On the epoch boundary this removes all programs of the outdated feature set
-    pub fn prune_feature_set_transition(&mut self) {
-        for second_level in self.entries.values_mut() {
-            second_level.retain(|entry| {
-                if Self::matches_environment(entry, &self.environments) {
-                    return true;
-                }
-                self.stats
-                    .prunes_environment
-                    .fetch_add(1, Ordering::Relaxed);
-                false
-            });
-        }
-        self.remove_programs_with_no_entries();
-    }
-
     pub fn prune_by_deployment_slot(&mut self, slot: Slot) {
         self.entries.retain(|_key, second_level| {
             *second_level = second_level
@@ -680,6 +664,14 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
             error!("Failed to lock fork graph for reading.");
             return;
         };
+        let mut recompilation_phase_ends = false;
+        if self.latest_root_epoch != new_root_epoch {
+            self.latest_root_epoch = new_root_epoch;
+            if let Some(upcoming_environments) = self.upcoming_environments.take() {
+                recompilation_phase_ends = true;
+                self.environments = upcoming_environments;
+            }
+        }
         for second_level in self.entries.values_mut() {
             // Remove entries un/re/deployed on orphan forks
             let mut first_ancestor_found = false;
@@ -709,6 +701,15 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                             return false;
                         }
                     }
+                    // Remove outdated environment of previous feature set
+                    if recompilation_phase_ends
+                        && !Self::matches_environment(entry, &self.environments)
+                    {
+                        self.stats
+                            .prunes_environment
+                            .fetch_add(1, Ordering::Relaxed);
+                        return false;
+                    }
                     true
                 })
                 .cloned()
@@ -718,9 +719,6 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         self.remove_programs_with_no_entries();
         debug_assert!(self.latest_root_slot <= new_root_slot);
         self.latest_root_slot = new_root_slot;
-        if self.latest_root_epoch < new_root_epoch {
-            self.latest_root_epoch = new_root_epoch;
-        }
     }
 
     fn matches_environment(
