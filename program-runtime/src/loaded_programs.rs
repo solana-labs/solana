@@ -456,7 +456,7 @@ pub struct LoadedPrograms<FG: ForkGraph> {
     /// Environments of the current epoch
     pub environments: ProgramRuntimeEnvironments,
     pub stats: Stats,
-    fork_graph: Option<Arc<RwLock<FG>>>,
+    pub fork_graph: Option<Arc<RwLock<FG>>>,
 }
 
 impl<FG: ForkGraph> Default for LoadedPrograms<FG> {

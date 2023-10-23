@@ -309,7 +309,7 @@ pub fn cluster_info_scale() {
         vec![100; vote_keypairs.len()],
     );
     let bank0 = Bank::new_for_tests(&genesis_config_info.genesis_config);
-    let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
+    let bank_forks = BankForks::new_rw_arc(bank0);
 
     let nodes: Vec<_> = vote_keypairs
         .into_iter()

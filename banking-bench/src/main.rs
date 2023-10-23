@@ -334,7 +334,7 @@ fn main() {
 
     let (replay_vote_sender, _replay_vote_receiver) = unbounded();
     let bank0 = Bank::new_for_benches(&genesis_config);
-    let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
+    let bank_forks = BankForks::new_rw_arc(bank0);
     let mut bank = bank_forks.read().unwrap().working_bank();
 
     // set cost tracker limits to MAX so it will not filter out TXs
