@@ -163,37 +163,6 @@ impl<'a> Kubernetes<'a> {
         flags
     }
 
-    pub async fn create_genesis_config_map(&self) -> Result<ConfigMap, kube::Error> {
-        let metadata = ObjectMeta {
-            name: Some("genesis-config".to_string()),
-            ..Default::default()
-        };
-        // let genesis_tar_path = LEDGER_DIR.join("genesis-package.tar.bz2");
-        let genesis_tar_path = SOLANA_ROOT.join("config-k8s/genesis-package.tar.bz2");
-
-        let mut genesis_tar_file = File::open(genesis_tar_path).unwrap();
-        let mut buffer = Vec::new();
-
-        match genesis_tar_file.read_to_end(&mut buffer) {
-            Ok(_) => (),
-            Err(err) => panic!("failed to read genesis-package.tar.bz: {}", err),
-        }
-
-        // Define the data for the ConfigMap
-        let mut data = BTreeMap::<String, ByteString>::new();
-        data.insert("genesis-package.tar.bz2".to_string(), ByteString(buffer));
-
-        // Create the ConfigMap
-        let config_map = ConfigMap {
-            metadata,
-            binary_data: Some(data),
-            ..Default::default()
-        };
-
-        let api: Api<ConfigMap> = Api::namespaced(self.client.clone(), self.namespace);
-        api.create(&PostParams::default(), &config_map).await
-    }
-
     pub async fn namespace_exists(&self) -> Result<bool, kube::Error> {
         let namespaces: Api<Namespace> = Api::all(self.client.clone());
         let namespace_list = namespaces.list(&ListParams::default()).await?;
@@ -291,30 +260,30 @@ impl<'a> Kubernetes<'a> {
     ) -> Result<ReplicaSet, Box<dyn Error>> {
         let mut volumes = vec![accounts_volume];
         let mut volume_mounts = vec![accounts_volume_mount];
-        if app_name == "bootstrap-validator" {
-            info!("bootstrap create replicaset");
-            let Some(config_map_name) = config_map_name else {
-                return Err(boxed_error!("config_map_name is None!"));
-            };
+        // if app_name == "bootstrap-validator" {
+        //     info!("bootstrap create replicaset");
+        //     // let Some(config_map_name) = config_map_name else {
+        //     //     return Err(boxed_error!("config_map_name is None!"));
+        //     // };
 
-            let genesis_volume = Volume {
-                name: "genesis-config-volume".into(),
-                config_map: Some(ConfigMapVolumeSource {
-                    name: Some(config_map_name.clone()),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            };
+        //     let genesis_volume = Volume {
+        //         name: "genesis-config-volume".into(),
+        //         config_map: Some(ConfigMapVolumeSource {
+        //             name: Some(config_map_name.clone()),
+        //             ..Default::default()
+        //         }),
+        //         ..Default::default()
+        //     };
 
-            let genesis_volume_mount = VolumeMount {
-                name: "genesis-config-volume".to_string(),
-                mount_path: "/home/solana/genesis".to_string(),
-                ..Default::default()
-            };
+        //     let genesis_volume_mount = VolumeMount {
+        //         name: "genesis-config-volume".to_string(),
+        //         mount_path: "/home/solana/genesis".to_string(),
+        //         ..Default::default()
+        //     };
 
-            volumes.push(genesis_volume);
-            volume_mounts.push(genesis_volume_mount);
-        }
+        //     volumes.push(genesis_volume);
+        //     volume_mounts.push(genesis_volume_mount);
+        // }
         // Define the pod spec
         let pod_spec = PodTemplateSpec {
             metadata: Some(ObjectMeta {

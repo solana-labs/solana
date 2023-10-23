@@ -127,6 +127,9 @@ COPY ./net ./multinode-demo /home/solana/
 RUN mkdir -p /home/solana/k8s-cluster-scripts
 COPY ./k8s-cluster/src/scripts /home/solana/k8s-cluster-scripts
 
+RUN mkdir -p /home/solana/ledger
+COPY --chown=solana:solana ./config-k8s/bootstrap-validator  /home/solana/ledger
+
 RUN mkdir -p /home/solana/.cargo/bin
 
 COPY ./{solana_build_directory}/bin/* /home/solana/.cargo/bin/
@@ -142,7 +145,9 @@ WORKDIR /home/solana
         );
 
         info!("dockerfile: {}", dockerfile);
-
+        // USER root
+        // RUN chown -R solana:solana /home/solana/ledger
+        // USER solana
         std::fs::write(
             docker_path.as_path().join("Dockerfile"),
             content.unwrap_or(dockerfile.as_str()),
