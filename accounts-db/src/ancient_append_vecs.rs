@@ -182,15 +182,17 @@ impl AncientSlotInfos {
         self.shrink_indexes.clear();
         let total_storages = self.all_infos.len();
         let mut cumulative_bytes = 0u64;
+        let low_threshold = max_storages * 50 / 100;
         for (i, info) in self.all_infos.iter().enumerate() {
             saturating_add_assign!(cumulative_bytes, info.alive_bytes);
             let ancient_storages_required = (cumulative_bytes / ideal_storage_size + 1) as usize;
             let storages_remaining = total_storages - i - 1;
+
             // if the remaining uncombined storages and the # of resulting
             // combined ancient storages is less than the threshold, then
             // we've gone too far, so get rid of this entry and all after it.
             // Every storage after this one is larger.
-            if storages_remaining + ancient_storages_required < max_storages {
+            if storages_remaining + ancient_storages_required < low_threshold {
                 self.all_infos.truncate(i);
                 break;
             }
@@ -2387,25 +2389,28 @@ pub mod tests {
 
     #[test]
     fn test_filter_by_smaller_capacity_sort() {
-        // max is 3
-        // 4 storages
-        // storage[3] is big enough to cause us to need another storage
-        // so, storage[0] and [1] can be combined into 1, resulting in 3 remaining storages, which is
-        // the goal, so we only have to combine the first 2 to hit the goal
+        // max is 6
+        // 7 storages
+        // storage[last] is big enough to cause us to need another storage
+        // so, storage[0..=4] can be combined into 1, resulting in 3 remaining storages, which is
+        // the goal, so we only have to combine the first 5 to hit the goal
         for method in TestSmallestCapacity::iter() {
             let ideal_storage_size_large = get_ancient_append_vec_capacity();
             for reorder in [false, true] {
-                let mut infos = create_test_infos(4);
+                let mut infos = create_test_infos(7);
                 infos
                     .all_infos
                     .iter_mut()
                     .enumerate()
                     .for_each(|(i, info)| info.capacity = 1 + i as u64);
                 if reorder {
-                    infos.all_infos[3].capacity = 0; // sort to beginning
+                    infos.all_infos.last_mut().unwrap().capacity = 0; // sort to beginning
                 }
-                infos.all_infos[3].alive_bytes = ideal_storage_size_large;
-                let max_storages = 3;
+                infos.all_infos.last_mut().unwrap().alive_bytes = ideal_storage_size_large;
+                // if we use max_storages = 3 or 4, then the low limit is 1 or 2. To get below 2 requires a result of 1, which packs everyone.
+                // This isn't what we want for this test. So, we make max_storages big enough that we can get to something reasonable (like 3)
+                // for a low mark.
+                let max_storages = 6;
                 match method {
                     TestSmallestCapacity::FilterBySmallestCapacity => {
                         infos.filter_by_smallest_capacity(
@@ -2431,8 +2436,12 @@ pub mod tests {
                         .iter()
                         .map(|info| info.slot)
                         .collect::<Vec<_>>(),
-                    if reorder { vec![3, 0, 1] } else { vec![0, 1] },
-                    "reorder: {reorder}"
+                    if reorder {
+                        vec![6, 0, 1, 2, 3, 4]
+                    } else {
+                        vec![0, 1, 2, 3, 4]
+                    },
+                    "reorder: {reorder}, method: {method:?}"
                 );
             }
         }
@@ -2478,7 +2487,20 @@ pub mod tests {
                 max_storages,
                 NonZeroU64::new(ideal_storage_size_large).unwrap(),
             );
-            assert!(infos.all_infos.is_empty());
+
+            if filter {
+                assert!(infos.all_infos.is_empty());
+            } else {
+                // no short circuit, so truncate to shrink below low water
+                assert_eq!(
+                    infos
+                        .all_infos
+                        .iter()
+                        .map(|info| info.slot)
+                        .collect::<Vec<_>>(),
+                    vec![0]
+                );
+            }
 
             let mut infos = create_test_infos(1);
             infos.all_infos[0].alive_bytes = ideal_storage_size_large + 1;
@@ -2511,14 +2533,14 @@ pub mod tests {
                 assert_eq!(infos.all_infos.len(), 2);
             }
 
-            // max is 3
-            // 4 storages
-            // storage[3] is big enough to cause us to need another storage
-            // so, storage[0] and [1] can be combined into 1, resulting in 3 remaining storages, which is
-            // the goal, so we only have to combine the first 2 to hit the goal
-            let mut infos = create_test_infos(4);
-            infos.all_infos[3].alive_bytes = ideal_storage_size_large;
-            let max_storages = 3;
+            // max is 4
+            // 5 storages
+            // storage[4] is big enough to cause us to need another storage
+            // so, storage[0..=2] can be combined into 1, resulting in 3 remaining storages, which is
+            // the goal, so we only have to combine the first 3 to hit the goal
+            let mut infos = create_test_infos(5);
+            infos.all_infos[4].alive_bytes = ideal_storage_size_large;
+            let max_storages = 4;
             test(
                 &mut infos,
                 max_storages,
@@ -2530,7 +2552,7 @@ pub mod tests {
                     .iter()
                     .map(|info| info.slot)
                     .collect::<Vec<_>>(),
-                vec![0, 1]
+                vec![0, 1, 2, 3, 4]
             );
         }
     }
@@ -2910,8 +2932,10 @@ pub mod tests {
                 let active_slots = (0..num_slots)
                     .filter_map(|slot| db.storage.get_slot_storage_entry((slot as Slot) + slot1))
                     .count();
-                let mut expected_slots = max_ancient_slots.min(num_slots);
-                if max_ancient_slots == 0 {
+                let mut expected_slots = (max_ancient_slots / 2).min(num_slots);
+                if max_ancient_slots >= num_slots {
+                    expected_slots = num_slots;
+                } else if max_ancient_slots == 0 || num_slots > 0 && expected_slots == 0 {
                     expected_slots = 1;
                 }
                 assert_eq!(
