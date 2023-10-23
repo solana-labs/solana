@@ -173,13 +173,6 @@ impl Processor {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
 
-        let lookup_table_account =
-            instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-        if *lookup_table_account.get_owner() != id() {
-            return Err(InstructionError::InvalidAccountOwner);
-        }
-        drop(lookup_table_account);
-
         let authority_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
         let authority_key = *authority_account.get_key();
@@ -191,6 +184,9 @@ impl Processor {
 
         let mut lookup_table_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+        if *lookup_table_account.get_owner() != id() {
+            return Err(InstructionError::InvalidAccountOwner);
+        }
         let lookup_table_data = lookup_table_account.get_data();
         let lookup_table = AddressLookupTable::deserialize(lookup_table_data)?;
 
@@ -227,14 +223,6 @@ impl Processor {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
 
-        let lookup_table_account =
-            instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-        let table_key = *lookup_table_account.get_key();
-        if *lookup_table_account.get_owner() != id() {
-            return Err(InstructionError::InvalidAccountOwner);
-        }
-        drop(lookup_table_account);
-
         let authority_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
         let authority_key = *authority_account.get_key();
@@ -246,6 +234,10 @@ impl Processor {
 
         let mut lookup_table_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+        if *lookup_table_account.get_owner() != id() {
+            return Err(InstructionError::InvalidAccountOwner);
+        }
+        let table_key = *lookup_table_account.get_key();
         let lookup_table_data = lookup_table_account.get_data();
         let lookup_table_lamports = lookup_table_account.get_lamports();
         let mut lookup_table = AddressLookupTable::deserialize(lookup_table_data)?;
@@ -343,13 +335,6 @@ impl Processor {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
 
-        let lookup_table_account =
-            instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-        if *lookup_table_account.get_owner() != id() {
-            return Err(InstructionError::InvalidAccountOwner);
-        }
-        drop(lookup_table_account);
-
         let authority_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
         let authority_key = *authority_account.get_key();
@@ -361,6 +346,9 @@ impl Processor {
 
         let mut lookup_table_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+        if *lookup_table_account.get_owner() != id() {
+            return Err(InstructionError::InvalidAccountOwner);
+        }    
         let lookup_table_data = lookup_table_account.get_data();
         let lookup_table = AddressLookupTable::deserialize(lookup_table_data)?;
 
@@ -392,13 +380,6 @@ impl Processor {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
 
-        let lookup_table_account =
-            instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-        if *lookup_table_account.get_owner() != id() {
-            return Err(InstructionError::InvalidAccountOwner);
-        }
-        drop(lookup_table_account);
-
         let authority_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
         let authority_key = *authority_account.get_key();
@@ -421,6 +402,9 @@ impl Processor {
 
         let lookup_table_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+        if *lookup_table_account.get_owner() != id() {
+            return Err(InstructionError::InvalidAccountOwner);
+        }
         let withdrawn_lamports = lookup_table_account.get_lamports();
         let lookup_table_data = lookup_table_account.get_data();
         let lookup_table = AddressLookupTable::deserialize(lookup_table_data)?;
