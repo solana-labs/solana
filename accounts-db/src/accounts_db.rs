@@ -12598,7 +12598,7 @@ pub mod tests {
         let account = stored_account.to_account_shared_data();
 
         let expected_account_hash =
-            AccountHash(Hash::from_str("6VeAL4x4PVkECKL1hD1avwPE1uMCRoWiZJzVMvVNYhTq").unwrap());
+            AccountHash(Hash::from_str("4xuaE8UfH8EYsPyDZvJXUScoZSyxUJf2BpzVMLTFh497").unwrap());
 
         assert_eq!(
             AccountsDb::hash_account(&stored_account, stored_account.pubkey(),),
