@@ -715,12 +715,7 @@ pub(crate) fn process_blockstore_for_bank_0(
         accounts_update_notifier,
         exit,
     );
-<<<<<<< HEAD
-    let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
-=======
-    let bank0_slot = bank0.slot();
     let bank_forks = BankForks::new_rw_arc(bank0);
->>>>>>> 9d42cd7efe ( Initialize fork graph in program cache during bank_forks creation (#33810))
 
     info!("Processing ledger for slot 0...");
     process_bank_0(
@@ -3564,13 +3559,8 @@ pub mod tests {
         blockstore.set_roots([3, 5].iter()).unwrap();
 
         // Set up bank1
-<<<<<<< HEAD
-        let mut bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
-        let bank0 = bank_forks.get(0).unwrap();
-=======
         let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests(&genesis_config));
-        let bank0 = bank_forks.read().unwrap().get_with_scheduler(0).unwrap();
->>>>>>> 9d42cd7efe ( Initialize fork graph in program cache during bank_forks creation (#33810))
+        let bank0 = bank_forks.read().unwrap().get(0).unwrap();
         let opts = ProcessOptions {
             run_verification: true,
             accounts_db_test_hash_calculation: true,
@@ -3579,15 +3569,11 @@ pub mod tests {
         let recyclers = VerifyRecyclers::default();
         process_bank_0(&bank0, &blockstore, &opts, &recyclers, None, None);
         let bank0_last_blockhash = bank0.last_blockhash();
-<<<<<<< HEAD
-        let bank1 = bank_forks.insert(Bank::new_from_parent(bank0, &Pubkey::default(), 1));
-=======
-        let bank1 = bank_forks.write().unwrap().insert(Bank::new_from_parent(
-            bank0.clone_without_scheduler(),
-            &Pubkey::default(),
-            1,
-        ));
->>>>>>> 9d42cd7efe ( Initialize fork graph in program cache during bank_forks creation (#33810))
+        let bank1 =
+            bank_forks
+                .write()
+                .unwrap()
+                .insert(Bank::new_from_parent(bank0, &Pubkey::default(), 1));
         confirm_full_slot(
             &blockstore,
             &bank1,

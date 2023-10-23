@@ -615,20 +615,11 @@ fn test_epoch_accounts_hash_and_warping() {
         CalcAccountsHashDataSource::Storages,
     ));
     let slot = bank.slot().checked_add(1).unwrap();
-<<<<<<< HEAD
     let bank =
         bank_forks
             .write()
             .unwrap()
             .insert(Bank::new_from_parent(bank, &Pubkey::default(), slot));
-=======
-    let bank = bank_forks
-        .write()
-        .unwrap()
-        .insert(Bank::new_from_parent(bank, &Pubkey::default(), slot))
-        .clone_without_scheduler();
-    bank_forks.read().unwrap().prune_program_cache(bank.slot());
->>>>>>> 9d42cd7efe ( Initialize fork graph in program cache during bank_forks creation (#33810))
     bank_forks.write().unwrap().set_root(
         bank.slot(),
         &test_environment
@@ -659,20 +650,11 @@ fn test_epoch_accounts_hash_and_warping() {
         CalcAccountsHashDataSource::Storages,
     ));
     let slot = bank.slot().checked_add(1).unwrap();
-<<<<<<< HEAD
     let bank =
         bank_forks
             .write()
             .unwrap()
             .insert(Bank::new_from_parent(bank, &Pubkey::default(), slot));
-=======
-    let bank = bank_forks
-        .write()
-        .unwrap()
-        .insert(Bank::new_from_parent(bank, &Pubkey::default(), slot))
-        .clone_without_scheduler();
-    bank_forks.read().unwrap().prune_program_cache(bank.slot());
->>>>>>> 9d42cd7efe ( Initialize fork graph in program cache during bank_forks creation (#33810))
     bank_forks.write().unwrap().set_root(
         bank.slot(),
         &test_environment

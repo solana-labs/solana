@@ -12564,13 +12564,7 @@ fn test_runtime_feature_enable_with_program_cache() {
     );
 
     // Reroot to call LoadedPrograms::prune() and end the current recompilation phase
-<<<<<<< HEAD
     goto_end_of_slot(&bank);
-    bank_forks.insert(Arc::into_inner(bank).unwrap());
-    let bank = bank_forks.working_bank();
-    bank_forks.set_root(bank.slot, &AbsRequestSender::default(), None);
-=======
-    goto_end_of_slot(bank.clone());
     bank_forks
         .write()
         .unwrap()
@@ -12581,7 +12575,6 @@ fn test_runtime_feature_enable_with_program_cache() {
         .write()
         .unwrap()
         .set_root(bank.slot, &AbsRequestSender::default(), None);
->>>>>>> 9d42cd7efe ( Initialize fork graph in program cache during bank_forks creation (#33810))
 
     // Advance to next epoch, which starts the next recompilation phase
     let bank = new_from_parent_next_epoch(bank, 1);
