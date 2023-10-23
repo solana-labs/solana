@@ -598,7 +598,7 @@ mod tests {
             let GenesisConfigInfo { genesis_config, .. } =
                 create_genesis_config(/*mint_lamports:*/ 100_000);
             let bank = Bank::new_for_tests(&genesis_config);
-            Arc::new(RwLock::new(BankForks::new(bank)))
+            BankForks::new_rw_arc(bank)
         };
         let (endpoints, senders, tasks): (Vec<_>, Vec<_>, Vec<_>) =
             multiunzip(keypairs.iter().zip(sockets).zip(senders).map(

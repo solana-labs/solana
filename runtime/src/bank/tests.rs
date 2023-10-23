@@ -12505,8 +12505,8 @@ fn test_runtime_feature_enable_with_program_cache() {
     genesis_config
         .accounts
         .remove(&feature_set::reject_callx_r10::id());
-    let mut bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
-    let root_bank = bank_forks.root_bank();
+    let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests(&genesis_config));
+    let root_bank = bank_forks.read().unwrap().root_bank();
 
     // Test a basic transfer
     let amount = genesis_config.rent.minimum_balance(0);
@@ -12564,10 +12564,24 @@ fn test_runtime_feature_enable_with_program_cache() {
     );
 
     // Reroot to call LoadedPrograms::prune() and end the current recompilation phase
+<<<<<<< HEAD
     goto_end_of_slot(&bank);
     bank_forks.insert(Arc::into_inner(bank).unwrap());
     let bank = bank_forks.working_bank();
     bank_forks.set_root(bank.slot, &AbsRequestSender::default(), None);
+=======
+    goto_end_of_slot(bank.clone());
+    bank_forks
+        .write()
+        .unwrap()
+        .insert(Arc::into_inner(bank).unwrap());
+    let bank = bank_forks.read().unwrap().working_bank();
+    bank_forks.read().unwrap().prune_program_cache(bank.slot);
+    bank_forks
+        .write()
+        .unwrap()
+        .set_root(bank.slot, &AbsRequestSender::default(), None);
+>>>>>>> 9d42cd7efe ( Initialize fork graph in program cache during bank_forks creation (#33810))
 
     // Advance to next epoch, which starts the next recompilation phase
     let bank = new_from_parent_next_epoch(bank, 1);
