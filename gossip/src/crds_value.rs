@@ -10,6 +10,7 @@ use {
     bincode::{serialize, serialized_size},
     bv::BitVec,
     flate2::{Compress, Compression, Decompress, DecompressError, FlushCompress, FlushDecompress},
+    itertools::{Itertools, MinMaxResult::*},
     rand::{CryptoRng, Rng},
     serde::de::{Deserialize, Deserializer},
     solana_sdk::{
@@ -24,7 +25,7 @@ use {
     solana_vote::vote_parser,
     std::{
         borrow::{Borrow, Cow},
-        cmp::{Ordering, Reverse},
+        cmp::Ordering,
         collections::{hash_map::Entry, BTreeSet, HashMap},
         fmt,
     },
@@ -508,9 +509,6 @@ pub struct RestartLastVotedForkSlots {
 
 impl Sanitize for RestartLastVotedForkSlots {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
-        if self.last_voted_slot == 0 {
-            return Err(SanitizeError::InvalidValue);
-        }
         self.last_voted_hash.sanitize()
     }
 }
@@ -523,48 +521,54 @@ impl RestartLastVotedForkSlots {
         last_voted_hash: Hash,
         shred_version: u16,
     ) -> Result<Self, String> {
-        let last_voted_slot;
-        let mut compressed_slots;
-        let uncompressed_bytes;
         if last_voted_fork.is_empty() {
             return Err("Last voted slot must be specified".to_string());
-        } else {
-            last_voted_fork.sort_by_key(|a| Reverse(*a));
-            last_voted_slot = last_voted_fork[0];
-            let max_size = last_voted_slot.saturating_sub(*last_voted_fork.last().unwrap()) + 1;
-            let mut uncompressed_bitvec = BitVec::new_fill(false, max_size);
-            for slot in last_voted_fork {
-                uncompressed_bitvec.set(last_voted_slot - *slot, true);
-            }
-            compressed_slots = Vec::with_capacity(MAX_RESTART_LAST_VOTED_FORK_SLOTS_SPACE);
-            let mut compressor = Compress::new(Compression::best(), false);
-            // If there is more input than we can fit into given output, compress_vec() will return Ok
-            // but will not terminate the output buf correctly for decompress, so we need to start all
-            // over again with shorter input so compress can actually finish.
-            match compressor.compress_vec(
-                &uncompressed_bitvec.clone().into_boxed_slice(),
-                &mut compressed_slots,
-                FlushCompress::Finish,
-            ) {
-                Ok(flate2::Status::Ok) => {
-                    let in_bytes = compressor.total_in();
-                    uncompressed_bitvec.truncate((in_bytes - 1) * 8);
-                    compressor = Compress::new(Compression::best(), false);
-                    if let Err(e) = compressor.compress_vec(
-                        &uncompressed_bitvec.into_boxed_slice(),
-                        &mut compressed_slots,
-                        FlushCompress::Finish,
-                    ) {
-                        return Err(e.to_string());
-                    }
-                }
-                Err(e) => return Err(e.to_string()),
-                // compression ended successfully, proceed.
-                Ok(flate2::Status::StreamEnd) => (),
-                Ok(flate2::Status::BufError) => (),
-            }
-            uncompressed_bytes = compressor.total_in();
         }
+        let max_size;
+        let last_voted_slot;
+        match last_voted_fork.iter().minmax() {
+            NoElements => return Err("Last voted slot must be specified".to_string()),
+            OneElement(e) => {
+                max_size = 1;
+                last_voted_slot = *e;
+            }
+            MinMax(min, max) => {
+                max_size = max - min + 1;
+                last_voted_slot = *max;
+            }
+        }
+        let mut uncompressed_bitvec = BitVec::new_fill(false, max_size);
+        for slot in last_voted_fork {
+            uncompressed_bitvec.set(last_voted_slot - *slot, true);
+        }
+        let mut compressed_slots = Vec::with_capacity(MAX_RESTART_LAST_VOTED_FORK_SLOTS_SPACE);
+        let mut compressor = Compress::new(Compression::best(), false);
+        // If there is more input than we can fit into given output, compress_vec() will return Ok
+        // but will not terminate the output buf correctly for decompress, so we need to start all
+        // over again with shorter input so compress can actually finish.
+        match compressor.compress_vec(
+            &uncompressed_bitvec.clone().into_boxed_slice(),
+            &mut compressed_slots,
+            FlushCompress::Finish,
+        ) {
+            Ok(flate2::Status::Ok) => {
+                let in_bytes = compressor.total_in();
+                uncompressed_bitvec.truncate((in_bytes - 1) * 8);
+                compressor = Compress::new(Compression::best(), false);
+                if let Err(e) = compressor.compress_vec(
+                    &uncompressed_bitvec.into_boxed_slice(),
+                    &mut compressed_slots,
+                    FlushCompress::Finish,
+                ) {
+                    return Err(e.to_string());
+                }
+            }
+            Err(e) => return Err(e.to_string()),
+            // compression ended successfully, proceed.
+            Ok(flate2::Status::StreamEnd) => (),
+            Ok(flate2::Status::BufError) => (),
+        }
+        let uncompressed_bytes = compressor.total_in();
         Ok(Self {
             from,
             wallclock: now,
