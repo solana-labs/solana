@@ -430,3 +430,9 @@ which starts the solana validator process uses "exec" to do so (example: "exec
 solana-validator ..."); otherwise, when logrotate sends its signal to the
 validator, the enclosing script will die and take the validator process with
 it.
+
+## Stake your validator
+
+Until your validator is staked, it will be unable to vote, propose leader blocks, or collect rewards.
+
+Follow the instructions to [stake your validator](validator-stake.md)
