@@ -166,12 +166,14 @@ impl Secp256k1Pubkey {
 ///
 /// To prevent signature malleability, it is common for secp256k1 signature
 /// validators to only accept signatures with low-order `S` values, and reject
-/// signatures with high-order `S` values. The following code will accomplish
-/// this:
+/// signatures with high-order `S` values. A simple way to do this without
+/// having to rely upon libsecp256k1 in your program is to precalculate the curve 
+/// order N/2 and compare it against your S value to ensure it is less than or
+/// equal to N/2. The following code will accomplish this:
 ///
 /// ```rust
 /// # use solana_program::program_error::ProgramError;
-/// # let signature_bytes = [
+/// # let signature_bytes: [u8;64] = [
 /// #     0x83, 0x55, 0x81, 0xDF, 0xB1, 0x02, 0xA7, 0xD2,
 /// #     0x2D, 0x33, 0xA4, 0x07, 0xDD, 0x7E, 0xFA, 0x9A,
 /// #     0xE8, 0x5F, 0x42, 0x6B, 0x2A, 0x05, 0xBB, 0xFB,
@@ -181,20 +183,30 @@ impl Secp256k1Pubkey {
 /// #     0x1E, 0xBF, 0x06, 0x8E, 0x8A, 0x9F, 0xA9, 0xC3,
 /// #     0xA5, 0xEA, 0x21, 0xAC, 0xED, 0x5B, 0x22, 0x13,
 /// # ];
-/// let signature = libsecp256k1::Signature::parse_standard_slice(&signature_bytes)
-///     .map_err(|_| ProgramError::InvalidArgument)?;
+/// #
+/// # const N_DIV_2: [u8; 32] = [
+/// #      0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+/// #      0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+/// #      0x5D, 0x57, 0x6E, 0x73, 0x57, 0xA4, 0x50, 0x1D,
+/// #      0xDF, 0xE9, 0x2F, 0x46, 0x68, 0x1B, 0x20, 0xA0
+/// # ]
 ///
-/// if signature.s.is_high() {
+/// fn is_high(s: &[u8; 64]) -> bool {
+///       for (a, b) in s[32..].iter().zip(N_DIV_2.iter()) {
+///           if a > b {
+///               return true;
+///           } else if a < b {
+///               return false;
+///           }
+///       }
+///       false
+/// }
+/// 
+/// if is_high(&signature_bytes) {
 ///     return Err(ProgramError::InvalidArgument);
 /// }
 /// # Ok::<_, ProgramError>(())
 /// ```
-///
-/// This has the downside that the program must link to the [`libsecp256k1`]
-/// crate and parse the signature just for this check. Note that `libsecp256k1`
-/// version 0.7.0 or greater is required for running on the Solana SBF target.
-///
-/// [`libsecp256k1`]: https://docs.rs/libsecp256k1/latest/libsecp256k1
 ///
 /// For the most accurate description of signature malleability, and its
 /// prevention in secp256k1, refer to comments in [`secp256k1.h`] in the Bitcoin
