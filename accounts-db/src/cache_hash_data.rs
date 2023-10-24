@@ -362,7 +362,7 @@ impl CacheHashData {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, rand::Rng};
+    use {super::*, crate::accounts_hash::AccountHash, rand::Rng};
 
     impl CacheHashData {
         /// load from 'file_name' into 'accumulator'
@@ -503,7 +503,7 @@ mod tests {
                                 }
 
                                 CalculateHashIntermediate {
-                                    hash: solana_sdk::hash::Hash::new_unique(),
+                                    hash: AccountHash(solana_sdk::hash::Hash::new_unique()),
                                     lamports: ct as u64,
                                     pubkey: pk,
                                 }

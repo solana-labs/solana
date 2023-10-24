@@ -1,6 +1,6 @@
 use {
     crate::{
-        accounts_db::{AccountStorageEntry, IncludeSlotInHash, PUBKEY_BINS_FOR_CALCULATING_HASHES},
+        accounts_db::{AccountStorageEntry, PUBKEY_BINS_FOR_CALCULATING_HASHES},
         active_stats::{ActiveStatItem, ActiveStats},
         ancestors::Ancestors,
         pubkey_bins::PubkeyBinCalculator24,
@@ -26,6 +26,7 @@ use {
             atomic::{AtomicU64, AtomicUsize, Ordering},
             Arc,
         },
+        thread, time,
     },
     tempfile::tempfile_in,
 };
@@ -87,22 +88,59 @@ impl AccountHashesFile {
         if self.writer.is_none() {
             // we have hashes to write but no file yet, so create a file that will auto-delete on drop
 
-            let mut data = tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
-                panic!(
-                    "Unable to create file within {}: {err}",
-                    self.dir_for_temp_cache_files.display()
-                )
-            });
+            let get_file = || -> Result<_, std::io::Error> {
+                let mut data = tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
+                    panic!(
+                        "Unable to create file within {}: {err}",
+                        self.dir_for_temp_cache_files.display()
+                    )
+                });
 
-            // Theoretical performance optimization: write a zero to the end of
-            // the file so that we won't have to resize it later, which may be
-            // expensive.
-            assert!(self.capacity > 0);
-            data.seek(SeekFrom::Start((self.capacity - 1) as u64))
-                .unwrap();
-            data.write_all(&[0]).unwrap();
-            data.rewind().unwrap();
-            data.flush().unwrap();
+                // Theoretical performance optimization: write a zero to the end of
+                // the file so that we won't have to resize it later, which may be
+                // expensive.
+                assert!(self.capacity > 0);
+                data.seek(SeekFrom::Start((self.capacity - 1) as u64))?;
+                data.write_all(&[0])?;
+                data.rewind()?;
+                data.flush()?;
+                Ok(data)
+            };
+
+            // Retry 5 times to allocate the AccountHashesFile. The memory might be fragmented and
+            // causes memory allocation failure. Therefore, let's retry after failure. Hoping that the
+            // kernel has the chance to defrag the memory between the retries, and retries succeed.
+            let mut num_retries = 0;
+            let data = loop {
+                num_retries += 1;
+
+                match get_file() {
+                    Ok(data) => {
+                        break data;
+                    }
+                    Err(err) => {
+                        info!(
+                            "Unable to create account hashes file within {}: {}, retry counter {}",
+                            self.dir_for_temp_cache_files.display(),
+                            err,
+                            num_retries
+                        );
+
+                        if num_retries > 5 {
+                            panic!(
+                                "Unable to create account hashes file within {}: after {} retries",
+                                self.dir_for_temp_cache_files.display(),
+                                num_retries
+                            );
+                        }
+                        datapoint_info!(
+                            "retry_account_hashes_file_allocation",
+                            ("retry", num_retries, i64)
+                        );
+                        thread::sleep(time::Duration::from_millis(num_retries * 100));
+                    }
+                }
+            };
 
             //UNSAFE: Required to create a Mmap
             let map = unsafe { MmapMut::map_mut(&data) };
@@ -139,7 +177,6 @@ pub struct CalcAccountsHashConfig<'a> {
     pub rent_collector: &'a RentCollector,
     /// used for tracking down hash mismatches after the fact
     pub store_detailed_debug_info_on_failure: bool,
-    pub include_slot_in_hash: IncludeSlotInHash,
 }
 
 // smallest, 3 quartiles, largest, average
@@ -279,9 +316,9 @@ impl HashStats {
 /// Note this can be saved/loaded during hash calculation to a memory mapped file whose contents are
 /// [CalculateHashIntermediate]
 #[repr(C)]
-#[derive(Default, Debug, PartialEq, Eq, Clone, Copy, Pod, Zeroable)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Pod, Zeroable)]
 pub struct CalculateHashIntermediate {
-    pub hash: Hash,
+    pub hash: AccountHash,
     pub lamports: u64,
     pub pubkey: Pubkey,
 }
@@ -289,7 +326,9 @@ pub struct CalculateHashIntermediate {
 // In order to safely guarantee CalculateHashIntermediate is Pod, it cannot have any padding
 const _: () = assert!(
     std::mem::size_of::<CalculateHashIntermediate>()
-        == std::mem::size_of::<Hash>() + std::mem::size_of::<u64>() + std::mem::size_of::<Pubkey>(),
+        == std::mem::size_of::<AccountHash>()
+            + std::mem::size_of::<u64>()
+            + std::mem::size_of::<Pubkey>(),
     "CalculateHashIntermediate cannot have any padding"
 );
 
@@ -1131,7 +1170,7 @@ impl<'a> AccountsHasher<'a> {
                     overall_sum = Self::checked_cast_for_capitalization(
                         item.lamports as u128 + overall_sum as u128,
                     );
-                    hashes.write(&item.hash);
+                    hashes.write(&item.hash.0);
                 }
             } else {
                 // if lamports == 0, check if they should be included
@@ -1209,12 +1248,6 @@ pub struct AccountHash(pub Hash);
 // Ensure the newtype wrapper never changes size from the underlying Hash
 // This also ensures there are no padding bytes, which is requried to safely implement Pod
 const _: () = assert!(std::mem::size_of::<AccountHash>() == std::mem::size_of::<Hash>());
-
-impl Borrow<Hash> for AccountHash {
-    fn borrow(&self) -> &Hash {
-        &self.0
-    }
-}
 
 /// Hash of accounts
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -1375,7 +1408,7 @@ mod tests {
                         (0..*count).map(move |_| {
                             let binner = PubkeyBinCalculator24::new(bins);
                             CalculateHashIntermediate {
-                                hash: Hash::default(),
+                                hash: AccountHash(Hash::default()),
                                 lamports: 0,
                                 pubkey: binner.lowest_pubkey_from_bin(bin, bins),
                             }
@@ -1527,7 +1560,7 @@ mod tests {
         let mut account_maps = Vec::new();
 
         let pubkey = Pubkey::from([11u8; 32]);
-        let hash = Hash::new(&[1u8; 32]);
+        let hash = AccountHash(Hash::new(&[1u8; 32]));
         let val = CalculateHashIntermediate {
             hash,
             lamports: 88,
@@ -1537,7 +1570,7 @@ mod tests {
 
         // 2nd key - zero lamports, so will be removed
         let pubkey = Pubkey::from([12u8; 32]);
-        let hash = Hash::new(&[2u8; 32]);
+        let hash = AccountHash(Hash::new(&[2u8; 32]));
         let val = CalculateHashIntermediate {
             hash,
             lamports: 0,
@@ -1554,7 +1587,7 @@ mod tests {
 
         // 3rd key - with pubkey value before 1st key so it will be sorted first
         let pubkey = Pubkey::from([10u8; 32]);
-        let hash = Hash::new(&[2u8; 32]);
+        let hash = AccountHash(Hash::new(&[2u8; 32]));
         let val = CalculateHashIntermediate {
             hash,
             lamports: 20,
@@ -1569,7 +1602,7 @@ mod tests {
 
         // 3rd key - with later slot
         let pubkey = Pubkey::from([10u8; 32]);
-        let hash = Hash::new(&[99u8; 32]);
+        let hash = AccountHash(Hash::new(&[99u8; 32]));
         let val = CalculateHashIntermediate {
             hash,
             lamports: 30,
@@ -1595,7 +1628,8 @@ mod tests {
     fn test_accountsdb_de_dup_accounts_zero_chunks() {
         let vec = vec![vec![CalculateHashIntermediate {
             lamports: 1,
-            ..CalculateHashIntermediate::default()
+            hash: AccountHash(Hash::default()),
+            pubkey: Pubkey::default(),
         }]];
         let temp_vec = vec.to_vec();
         let slice = convert_to_slice(&temp_vec);
@@ -1661,7 +1695,7 @@ mod tests {
         let key_b = Pubkey::from([2u8; 32]);
         let key_c = Pubkey::from([3u8; 32]);
         const COUNT: usize = 6;
-        let hashes = (0..COUNT).map(|i| Hash::new(&[i as u8; 32]));
+        let hashes = (0..COUNT).map(|i| AccountHash(Hash::new(&[i as u8; 32])));
         // create this vector
         // abbbcc
         let keys = [key_a, key_b, key_b, key_b, key_c, key_c];
@@ -1825,7 +1859,7 @@ mod tests {
     fn test_accountsdb_compare_two_hash_entries() {
         solana_logger::setup();
         let pubkey = Pubkey::new_unique();
-        let hash = Hash::new_unique();
+        let hash = AccountHash(Hash::new_unique());
         let val = CalculateHashIntermediate {
             hash,
             lamports: 1,
@@ -1833,7 +1867,7 @@ mod tests {
         };
 
         // slot same, version <
-        let hash2 = Hash::new_unique();
+        let hash2 = AccountHash(Hash::new_unique());
         let val2 = CalculateHashIntermediate {
             hash: hash2,
             lamports: 4,
@@ -1845,7 +1879,7 @@ mod tests {
         );
 
         // slot same, vers =
-        let hash3 = Hash::new_unique();
+        let hash3 = AccountHash(Hash::new_unique());
         let val3 = CalculateHashIntermediate {
             hash: hash3,
             lamports: 2,
@@ -1857,7 +1891,7 @@ mod tests {
         );
 
         // slot same, vers >
-        let hash4 = Hash::new_unique();
+        let hash4 = AccountHash(Hash::new_unique());
         let val4 = CalculateHashIntermediate {
             hash: hash4,
             lamports: 6,
@@ -1869,7 +1903,7 @@ mod tests {
         );
 
         // slot >, version <
-        let hash5 = Hash::new_unique();
+        let hash5 = AccountHash(Hash::new_unique());
         let val5 = CalculateHashIntermediate {
             hash: hash5,
             lamports: 8,
@@ -1894,7 +1928,7 @@ mod tests {
         solana_logger::setup();
 
         let pubkey = Pubkey::new_unique();
-        let hash = Hash::new_unique();
+        let hash = AccountHash(Hash::new_unique());
         let mut account_maps = Vec::new();
         let val = CalculateHashIntermediate {
             hash,
@@ -1908,7 +1942,7 @@ mod tests {
         let (hashfile, lamports) = test_de_dup_accounts_in_parallel(&slice);
         assert_eq!(
             (get_vec(hashfile), lamports),
-            (vec![val.hash], val.lamports)
+            (vec![val.hash.0], val.lamports)
         );
 
         // zero original lamports, higher version
@@ -1931,7 +1965,7 @@ mod tests {
         for reverse in [false, true] {
             let key = Pubkey::new_from_array([1; 32]); // key is BEFORE key2
             let key2 = Pubkey::new_from_array([2; 32]);
-            let hash = Hash::new_unique();
+            let hash = AccountHash(Hash::new_unique());
             let mut account_maps = Vec::new();
             let mut account_maps2 = Vec::new();
             let val = CalculateHashIntermediate {
@@ -1962,7 +1996,7 @@ mod tests {
             assert_eq!(
                 (get_vec(hashfile), lamports),
                 (
-                    vec![val.hash, if reverse { val2.hash } else { val3.hash }],
+                    vec![val.hash.0, if reverse { val2.hash.0 } else { val3.hash.0 }],
                     val.lamports
                         + if reverse {
                             val2.lamports
@@ -1981,7 +2015,7 @@ mod tests {
         for reverse in [false, true] {
             let key = Pubkey::new_from_array([3; 32]); // key is AFTER key2
             let key2 = Pubkey::new_from_array([2; 32]);
-            let hash = Hash::new_unique();
+            let hash = AccountHash(Hash::new_unique());
             let mut account_maps = Vec::new();
             let mut account_maps2 = Vec::new();
             let val2 = CalculateHashIntermediate {
@@ -2012,7 +2046,7 @@ mod tests {
             assert_eq!(
                 (get_vec(hashfile), lamports),
                 (
-                    vec![if reverse { val2.hash } else { val3.hash }, val.hash],
+                    vec![if reverse { val2.hash.0 } else { val3.hash.0 }, val.hash.0],
                     val.lamports
                         + if reverse {
                             val2.lamports
@@ -2368,12 +2402,12 @@ mod tests {
         let offset = 2;
         let input = vec![
             CalculateHashIntermediate {
-                hash: Hash::new(&[1u8; 32]),
+                hash: AccountHash(Hash::new(&[1u8; 32])),
                 lamports: u64::MAX - offset,
                 pubkey: Pubkey::new_unique(),
             },
             CalculateHashIntermediate {
-                hash: Hash::new(&[2u8; 32]),
+                hash: AccountHash(Hash::new(&[2u8; 32])),
                 lamports: offset + 1,
                 pubkey: Pubkey::new_unique(),
             },
@@ -2402,12 +2436,12 @@ mod tests {
         let offset = 2;
         let input = vec![
             vec![CalculateHashIntermediate {
-                hash: Hash::new(&[1u8; 32]),
+                hash: AccountHash(Hash::new(&[1u8; 32])),
                 lamports: u64::MAX - offset,
                 pubkey: Pubkey::new_unique(),
             }],
             vec![CalculateHashIntermediate {
-                hash: Hash::new(&[2u8; 32]),
+                hash: AccountHash(Hash::new(&[2u8; 32])),
                 lamports: offset + 1,
                 pubkey: Pubkey::new_unique(),
             }],

@@ -188,7 +188,7 @@ impl TransactionStatusService {
                         if enable_rpc_transaction_history {
                             if let Some(memos) = extract_and_fmt_memos(transaction.message()) {
                                 blockstore
-                                    .write_transaction_memos(transaction.signature(), memos)
+                                    .write_transaction_memos(transaction.signature(), slot, memos)
                                     .expect("Expect database write to succeed: TransactionMemos");
                             }
 
@@ -199,6 +199,7 @@ impl TransactionStatusService {
                                     tx_account_locks.writable,
                                     tx_account_locks.readonly,
                                     transaction_status_meta,
+                                    transaction_index,
                                 )
                                 .expect("Expect database write to succeed: TransactionStatus");
                         }
@@ -229,7 +230,7 @@ pub(crate) mod tests {
             nonce_info::{NonceFull, NoncePartial},
             rent_debits::RentDebits,
         },
-        solana_ledger::{genesis_utils::create_genesis_config, get_tmp_ledger_path},
+        solana_ledger::{genesis_utils::create_genesis_config, get_tmp_ledger_path_auto_delete},
         solana_runtime::bank::{Bank, TransactionBalancesSet},
         solana_sdk::{
             account_utils::StateMut,
@@ -338,9 +339,9 @@ pub(crate) mod tests {
         let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
 
         let (transaction_status_sender, transaction_status_receiver) = unbounded();
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore =
-            Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger");
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path())
+            .expect("Expected to be able to open database ledger");
         let blockstore = Arc::new(blockstore);
 
         let transaction = build_test_transaction_legacy();

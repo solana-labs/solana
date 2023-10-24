@@ -125,13 +125,13 @@ fn do_bench_transactions(
     // freeze bank so that slot hashes is populated
     bank.freeze();
 
-    declare_process_instruction!(process_instruction, 1, |_invoke_context| {
+    declare_process_instruction!(MockBuiltin, 1, |_invoke_context| {
         // Do nothing
         Ok(())
     });
 
     let mut bank = Bank::new_from_parent(Arc::new(bank), &Pubkey::default(), 1);
-    bank.add_mockup_builtin(Pubkey::from(BUILTIN_PROGRAM_ID), process_instruction);
+    bank.add_mockup_builtin(Pubkey::from(BUILTIN_PROGRAM_ID), MockBuiltin::vm);
     bank.add_builtin_account("solana_noop_program", &Pubkey::from(NOOP_PROGRAM_ID), false);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(bank.clone());
@@ -184,7 +184,7 @@ fn bench_bank_async_process_native_loader_transactions(bencher: &mut Bencher) {
 fn bench_bank_update_recent_blockhashes(bencher: &mut Bencher) {
     let (genesis_config, _mint_keypair) = create_genesis_config(100);
     let mut bank = Arc::new(Bank::new_for_benches(&genesis_config));
-    goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+    goto_end_of_slot(bank.clone());
     let genesis_hash = bank.last_blockhash();
     // Prime blockhash_queue
     for i in 0..(MAX_RECENT_BLOCKHASHES + 1) {
@@ -193,7 +193,7 @@ fn bench_bank_update_recent_blockhashes(bencher: &mut Bencher) {
             &Pubkey::default(),
             (i + 1) as u64,
         ));
-        goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+        goto_end_of_slot(bank.clone());
     }
     // Verify blockhash_queue is full (genesis hash has been kicked out)
     assert!(!bank.is_hash_valid_for_age(&genesis_hash, MAX_RECENT_BLOCKHASHES));

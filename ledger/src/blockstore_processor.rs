@@ -39,6 +39,7 @@ use {
         bank_forks::BankForks,
         bank_utils,
         commitment::VOTE_THRESHOLD_SIZE,
+        installed_scheduler_pool::BankWithScheduler,
         prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
@@ -418,13 +419,13 @@ fn execute_batches(
 /// This method is for use testing against a single Bank, and assumes `Bank::transaction_count()`
 /// represents the number of transactions executed in this Bank
 pub fn process_entries_for_tests(
-    bank: &Arc<Bank>,
+    bank: &BankWithScheduler,
     entries: Vec<Entry>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
     let verify_transaction = {
-        let bank = bank.clone();
+        let bank = bank.clone_with_scheduler();
         move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
             bank.verify_transaction(versioned_tx, TransactionVerificationMode::FullVerification)
         }
@@ -463,7 +464,7 @@ pub fn process_entries_for_tests(
 }
 
 fn process_entries(
-    bank: &Arc<Bank>,
+    bank: &BankWithScheduler,
     entries: &mut [ReplayEntry],
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
@@ -610,6 +611,7 @@ pub struct ProcessOptions {
     pub allow_dead_slots: bool,
     pub accounts_db_test_hash_calculation: bool,
     pub accounts_db_skip_shrink: bool,
+    pub accounts_db_force_initial_clean: bool,
     pub accounts_db_config: Option<AccountsDbConfig>,
     pub verify_index: bool,
     pub shrink_ratio: AccountShrinkThreshold,
@@ -714,11 +716,16 @@ pub(crate) fn process_blockstore_for_bank_0(
         accounts_update_notifier,
         exit,
     );
-    let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
+    let bank0_slot = bank0.slot();
+    let bank_forks = BankForks::new_rw_arc(bank0);
 
     info!("Processing ledger for slot 0...");
     process_bank_0(
-        &bank_forks.read().unwrap().root_bank(),
+        &bank_forks
+            .read()
+            .unwrap()
+            .get_with_scheduler(bank0_slot)
+            .unwrap(),
         blockstore,
         opts,
         &VerifyRecyclers::default(),
@@ -888,7 +895,7 @@ fn verify_ticks(
 
 fn confirm_full_slot(
     blockstore: &Blockstore,
-    bank: &Arc<Bank>,
+    bank: &BankWithScheduler,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     progress: &mut ConfirmationProgress,
@@ -1049,7 +1056,7 @@ impl ConfirmationProgress {
 #[allow(clippy::too_many_arguments)]
 pub fn confirm_slot(
     blockstore: &Blockstore,
-    bank: &Arc<Bank>,
+    bank: &BankWithScheduler,
     timing: &mut ConfirmationTiming,
     progress: &mut ConfirmationProgress,
     skip_verification: bool,
@@ -1094,7 +1101,7 @@ pub fn confirm_slot(
 
 #[allow(clippy::too_many_arguments)]
 fn confirm_slot_entries(
-    bank: &Arc<Bank>,
+    bank: &BankWithScheduler,
     slot_entries_load_result: (Vec<Entry>, u64, bool),
     timing: &mut ConfirmationTiming,
     progress: &mut ConfirmationProgress,
@@ -1191,7 +1198,7 @@ fn confirm_slot_entries(
     };
 
     let verify_transaction = {
-        let bank = bank.clone();
+        let bank = bank.clone_with_scheduler();
         move |versioned_tx: VersionedTransaction,
               verification_mode: TransactionVerificationMode|
               -> Result<SanitizedTransaction> {
@@ -1290,7 +1297,7 @@ fn confirm_slot_entries(
 
 // Special handling required for processing the entries in slot 0
 fn process_bank_0(
-    bank0: &Arc<Bank>,
+    bank0: &BankWithScheduler,
     blockstore: &Blockstore,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
@@ -1489,7 +1496,7 @@ fn load_frozen_forks(
             // Block must be frozen by this point; otherwise,
             // process_single_slot() would have errored above.
             assert!(bank.is_frozen());
-            all_banks.insert(bank.slot(), bank.clone());
+            all_banks.insert(bank.slot(), bank.clone_with_scheduler());
             m.stop();
             process_single_slot_us += m.as_us();
 
@@ -1519,7 +1526,7 @@ fn load_frozen_forks(
 
                             // Ensure cluster-confirmed root and parents are set as root in blockstore
                             let mut rooted_slots = vec![];
-                            let mut new_root_bank = cluster_root_bank.clone();
+                            let mut new_root_bank = cluster_root_bank.clone_without_scheduler();
                             loop {
                                 if new_root_bank.slot() == root { break; } // Found the last root in the chain, yay!
                                 assert!(new_root_bank.slot() > root);
@@ -1554,6 +1561,11 @@ fn load_frozen_forks(
                 root = new_root_bank.slot();
 
                 leader_schedule_cache.set_root(new_root_bank);
+                new_root_bank
+                    .loaded_programs_cache
+                    .write()
+                    .unwrap()
+                    .prune(root, new_root_bank.epoch());
                 let _ = bank_forks.write().unwrap().set_root(
                     root,
                     accounts_background_request_sender,
@@ -1669,7 +1681,7 @@ fn supermajority_root_from_vote_accounts(
 #[allow(clippy::too_many_arguments)]
 fn process_single_slot(
     blockstore: &Blockstore,
-    bank: &Arc<Bank>,
+    bank: &BankWithScheduler,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     progress: &mut ConfirmationProgress,
@@ -1899,6 +1911,18 @@ pub mod tests {
                 test_process_blockstore(genesis_config, &secondary_blockstore, opts, Arc::default())
             }
         }
+    }
+
+    fn process_entries_for_tests_without_scheduler(
+        bank: &Arc<Bank>,
+        entries: Vec<Entry>,
+    ) -> Result<()> {
+        process_entries_for_tests(
+            &BankWithScheduler::new_without_scheduler(bank.clone()),
+            entries,
+            None,
+            None,
+        )
     }
 
     #[test]
@@ -2596,7 +2620,7 @@ pub mod tests {
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
-        process_entries_for_tests(&bank, slot_entries, None, None).unwrap();
+        process_entries_for_tests_without_scheduler(&bank, slot_entries).unwrap();
         assert_eq!(bank.process_transaction(&tx), Ok(()));
     }
 
@@ -2731,7 +2755,7 @@ pub mod tests {
         assert_eq!(bank.tick_height(), 0);
         let tick = next_entry(&genesis_config.hash(), 1, vec![]);
         assert_eq!(
-            process_entries_for_tests(&bank, vec![tick], None, None),
+            process_entries_for_tests_without_scheduler(&bank, vec![tick]),
             Ok(())
         );
         assert_eq!(bank.tick_height(), 1);
@@ -2766,7 +2790,7 @@ pub mod tests {
         );
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries_for_tests(&bank, vec![entry_1, entry_2], None, None),
+            process_entries_for_tests_without_scheduler(&bank, vec![entry_1, entry_2]),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair1.pubkey()), 2);
@@ -2822,11 +2846,9 @@ pub mod tests {
         );
 
         assert_eq!(
-            process_entries_for_tests(
+            process_entries_for_tests_without_scheduler(
                 &bank,
                 vec![entry_1_to_mint, entry_2_to_3_mint_to_1],
-                None,
-                None,
             ),
             Ok(())
         );
@@ -2893,11 +2915,9 @@ pub mod tests {
             ],
         );
 
-        assert!(process_entries_for_tests(
+        assert!(process_entries_for_tests_without_scheduler(
             &bank,
             vec![entry_1_to_mint.clone(), entry_2_to_3_mint_to_1.clone()],
-            None,
-            None,
         )
         .is_err());
 
@@ -2988,7 +3008,7 @@ pub mod tests {
             ]
         }
 
-        declare_process_instruction!(mock_processor_ok, 1, |_invoke_context| {
+        declare_process_instruction!(MockBuiltinOk, 1, |_invoke_context| {
             // Always succeeds
             Ok(())
         });
@@ -2996,7 +3016,7 @@ pub mod tests {
         let mock_program_id = solana_sdk::pubkey::new_rand();
 
         let mut bank = Bank::new_for_tests(&genesis_config);
-        bank.add_mockup_builtin(mock_program_id, mock_processor_ok);
+        bank.add_mockup_builtin(mock_program_id, MockBuiltinOk::vm);
 
         let tx = Transaction::new_signed_with_payer(
             &[Instruction::new_with_bincode(
@@ -3011,13 +3031,13 @@ pub mod tests {
 
         let entry = next_entry(&bank.last_blockhash(), 1, vec![tx]);
         let bank = Arc::new(bank);
-        let result = process_entries_for_tests(&bank, vec![entry], None, None);
+        let result = process_entries_for_tests_without_scheduler(&bank, vec![entry]);
         bank.freeze();
         let blockhash_ok = bank.last_blockhash();
         let bankhash_ok = bank.hash();
         assert!(result.is_ok());
 
-        declare_process_instruction!(mock_processor_err, 1, |invoke_context| {
+        declare_process_instruction!(MockBuiltinErr, 1, |invoke_context| {
             let instruction_errors = get_instruction_errors();
 
             let err = invoke_context
@@ -3037,7 +3057,7 @@ pub mod tests {
 
         (0..get_instruction_errors().len()).for_each(|err| {
             let mut bank = Bank::new_for_tests(&genesis_config);
-            bank.add_mockup_builtin(mock_program_id, mock_processor_err);
+            bank.add_mockup_builtin(mock_program_id, MockBuiltinErr::vm);
 
             let tx = Transaction::new_signed_with_payer(
                 &[Instruction::new_with_bincode(
@@ -3052,7 +3072,7 @@ pub mod tests {
 
             let entry = next_entry(&bank.last_blockhash(), 1, vec![tx]);
             let bank = Arc::new(bank);
-            let _result = process_entries_for_tests(&bank, vec![entry], None, None);
+            let _result = process_entries_for_tests_without_scheduler(&bank, vec![entry]);
             bank.freeze();
 
             assert_eq!(blockhash_ok, bank.last_blockhash());
@@ -3144,15 +3164,13 @@ pub mod tests {
         // keypair2=3
         // keypair3=3
 
-        assert!(process_entries_for_tests(
+        assert!(process_entries_for_tests_without_scheduler(
             &bank,
             vec![
                 entry_1_to_mint,
                 entry_2_to_3_and_1_to_mint,
                 entry_conflict_itself,
             ],
-            None,
-            None,
         )
         .is_err());
 
@@ -3200,7 +3218,7 @@ pub mod tests {
             system_transaction::transfer(&keypair2, &keypair4.pubkey(), 1, bank.last_blockhash());
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries_for_tests(&bank, vec![entry_1, entry_2], None, None),
+            process_entries_for_tests_without_scheduler(&bank, vec![entry_1, entry_2]),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
@@ -3261,7 +3279,7 @@ pub mod tests {
             })
             .collect();
         assert_eq!(
-            process_entries_for_tests(&bank, entries, None, None),
+            process_entries_for_tests_without_scheduler(&bank, entries),
             Ok(())
         );
     }
@@ -3324,7 +3342,7 @@ pub mod tests {
         // Transfer lamports to each other
         let entry = next_entry(&bank.last_blockhash(), 1, tx_vector);
         assert_eq!(
-            process_entries_for_tests(&bank, vec![entry], None, None),
+            process_entries_for_tests_without_scheduler(&bank, vec![entry]),
             Ok(())
         );
         bank.squash();
@@ -3373,7 +3391,7 @@ pub mod tests {
 
         let blockhash = bank.last_blockhash();
         while blockhash == bank.last_blockhash() {
-            bank.register_tick(&Hash::default());
+            bank.register_default_tick_for_test();
         }
 
         // ensure bank can process 2 entries that do not have a common account and tick is registered
@@ -3384,7 +3402,10 @@ pub mod tests {
             system_transaction::transfer(&keypair1, &keypair4.pubkey(), 1, bank.last_blockhash());
         let entry_2 = next_entry(&tick.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries_for_tests(&bank, vec![entry_1, tick, entry_2.clone()], None, None,),
+            process_entries_for_tests_without_scheduler(
+                &bank,
+                vec![entry_1, tick, entry_2.clone()],
+            ),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
@@ -3395,7 +3416,7 @@ pub mod tests {
             system_transaction::transfer(&keypair2, &keypair3.pubkey(), 1, bank.last_blockhash());
         let entry_3 = next_entry(&entry_2.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries_for_tests(&bank, vec![entry_3], None, None),
+            process_entries_for_tests_without_scheduler(&bank, vec![entry_3]),
             Err(TransactionError::AccountNotFound)
         );
     }
@@ -3475,7 +3496,7 @@ pub mod tests {
         );
 
         assert_eq!(
-            process_entries_for_tests(&bank, vec![entry_1_to_mint], None, None),
+            process_entries_for_tests_without_scheduler(&bank, vec![entry_1_to_mint]),
             Err(TransactionError::AccountInUse)
         );
 
@@ -3553,8 +3574,8 @@ pub mod tests {
         blockstore.set_roots([3, 5].iter()).unwrap();
 
         // Set up bank1
-        let mut bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
-        let bank0 = bank_forks.get(0).unwrap();
+        let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests(&genesis_config));
+        let bank0 = bank_forks.read().unwrap().get_with_scheduler(0).unwrap();
         let opts = ProcessOptions {
             run_verification: true,
             accounts_db_test_hash_calculation: true,
@@ -3563,7 +3584,11 @@ pub mod tests {
         let recyclers = VerifyRecyclers::default();
         process_bank_0(&bank0, &blockstore, &opts, &recyclers, None, None);
         let bank0_last_blockhash = bank0.last_blockhash();
-        let bank1 = bank_forks.insert(Bank::new_from_parent(bank0, &Pubkey::default(), 1));
+        let bank1 = bank_forks.write().unwrap().insert(Bank::new_from_parent(
+            bank0.clone_without_scheduler(),
+            &Pubkey::default(),
+            1,
+        ));
         confirm_full_slot(
             &blockstore,
             &bank1,
@@ -3576,7 +3601,7 @@ pub mod tests {
             &mut ExecuteTimings::default(),
         )
         .unwrap();
-        bank_forks.set_root(
+        bank_forks.write().unwrap().set_root(
             1,
             &solana_runtime::accounts_background_service::AbsRequestSender::default(),
             None,
@@ -3585,7 +3610,6 @@ pub mod tests {
         let leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank1);
 
         // Test process_blockstore_from_root() from slot 1 onwards
-        let bank_forks = RwLock::new(bank_forks);
         process_blockstore_from_root(
             &blockstore,
             &bank_forks,
@@ -3678,7 +3702,7 @@ pub mod tests {
                 })
                 .collect();
             info!("paying iteration {}", i);
-            process_entries_for_tests(&bank, entries, None, None).expect("paying failed");
+            process_entries_for_tests_without_scheduler(&bank, entries).expect("paying failed");
 
             let entries: Vec<_> = (0..NUM_TRANSFERS)
                 .step_by(NUM_TRANSFERS_PER_ENTRY)
@@ -3701,16 +3725,14 @@ pub mod tests {
                 .collect();
 
             info!("refunding iteration {}", i);
-            process_entries_for_tests(&bank, entries, None, None).expect("refunding failed");
+            process_entries_for_tests_without_scheduler(&bank, entries).expect("refunding failed");
 
             // advance to next block
-            process_entries_for_tests(
+            process_entries_for_tests_without_scheduler(
                 &bank,
                 (0..bank.ticks_per_slot())
                     .map(|_| next_entry_mut(&mut hash, 1, vec![]))
                     .collect::<Vec<_>>(),
-                None,
-                None,
             )
             .expect("process ticks failed");
 
@@ -3750,7 +3772,7 @@ pub mod tests {
         let entry = next_entry(&new_blockhash, 1, vec![tx]);
         entries.push(entry);
 
-        process_entries_for_tests(&bank0, entries, None, None).unwrap();
+        process_entries_for_tests_without_scheduler(&bank0, entries).unwrap();
         assert_eq!(bank0.get_balance(&keypair.pubkey()), 1)
     }
 
@@ -3916,7 +3938,12 @@ pub mod tests {
             .collect();
         let entry = next_entry(&bank_1_blockhash, 1, vote_txs);
         let (replay_vote_sender, replay_vote_receiver) = crossbeam_channel::unbounded();
-        let _ = process_entries_for_tests(&bank1, vec![entry], None, Some(&replay_vote_sender));
+        let _ = process_entries_for_tests(
+            &BankWithScheduler::new_without_scheduler(bank1),
+            vec![entry],
+            None,
+            Some(&replay_vote_sender),
+        );
         let successes: BTreeSet<Pubkey> = replay_vote_receiver
             .try_iter()
             .map(|(vote_pubkey, ..)| vote_pubkey)
@@ -4204,7 +4231,7 @@ pub mod tests {
         prev_entry_hash: Hash,
     ) -> result::Result<(), BlockstoreProcessorError> {
         confirm_slot_entries(
-            bank,
+            &BankWithScheduler::new_without_scheduler(bank.clone()),
             (slot_entries, 0, slot_full),
             &mut ConfirmationTiming::default(),
             &mut ConfirmationProgress::new(prev_entry_hash),
@@ -4226,7 +4253,9 @@ pub mod tests {
             ..
         } = create_genesis_config(100 * LAMPORTS_PER_SOL);
         let genesis_hash = genesis_config.hash();
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = BankWithScheduler::new_without_scheduler(Arc::new(Bank::new_for_tests(
+            &genesis_config,
+        )));
         let mut timing = ConfirmationTiming::default();
         let mut progress = ConfirmationProgress::new(genesis_hash);
         let amount = genesis_config.rent.minimum_balance(0);

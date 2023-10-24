@@ -806,7 +806,6 @@ $(
     install-earlyoom.sh \
     install-iftop.sh \
     install-libssl-compatability.sh \
-    install-redis.sh \
     install-rsync.sh \
     install-perf.sh \
     localtime.sh \

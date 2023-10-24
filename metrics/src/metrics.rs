@@ -25,7 +25,7 @@ type CounterMap = HashMap<(&'static str, u64), CounterPoint>;
 #[derive(Debug, Error)]
 pub enum MetricsError {
     #[error(transparent)]
-    VarError(#[from] std::env::VarError),
+    VarError(#[from] env::VarError),
     #[error(transparent)]
     ReqwestError(#[from] reqwest::Error),
     #[error("SOLANA_METRICS_CONFIG is invalid: '{0}'")]
@@ -405,6 +405,9 @@ impl MetricsConfig {
 fn get_metrics_config() -> Result<MetricsConfig, MetricsError> {
     let mut config = MetricsConfig::default();
     let config_var = env::var("SOLANA_METRICS_CONFIG")?;
+    if config_var.is_empty() {
+        Err(env::VarError::NotPresent)?;
+    }
 
     for pair in config_var.split(',') {
         let nv: Vec<_> = pair.split('=').collect();
@@ -431,7 +434,7 @@ fn get_metrics_config() -> Result<MetricsConfig, MetricsError> {
 pub fn metrics_config_sanity_check(cluster_type: ClusterType) -> Result<(), MetricsError> {
     let config = match get_metrics_config() {
         Ok(config) => config,
-        Err(MetricsError::VarError(std::env::VarError::NotPresent)) => return Ok(()),
+        Err(MetricsError::VarError(env::VarError::NotPresent)) => return Ok(()),
         Err(e) => return Err(e),
     };
     match &config.db[..] {

@@ -1,5 +1,5 @@
 use {
-    clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches},
+    clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches},
     solana_clap_utils::{
         hidden_unless_forced,
         input_validators::is_url_or_moniker,
@@ -19,9 +19,9 @@ use {
     std::{error, sync::Arc, time::Duration},
 };
 
-pub struct ClientConfig<'a>(pub ProgramV4CommandConfig<'a>);
+pub(crate) struct RPCCommandConfig<'a>(pub ProgramV4CommandConfig<'a>);
 
-impl<'a> ClientConfig<'a> {
+impl<'a> RPCCommandConfig<'a> {
     pub fn new(client: &'a Client) -> Self {
         Self(ProgramV4CommandConfig {
             websocket_url: &client.websocket_url,
@@ -34,9 +34,10 @@ impl<'a> ClientConfig<'a> {
     }
 }
 
-pub struct Client {
+pub(crate) struct Client {
     pub rpc_client: Arc<RpcClient>,
     pub port: u16,
+    pub server_url: String,
     websocket_url: String,
     commitment: commitment_config::CommitmentConfig,
     cli_signers: Vec<Keypair>,
@@ -113,6 +114,18 @@ impl Client {
                     .help("Cargo registry's local TCP port. The server will bind to this port and wait for requests."),
             )
             .arg(
+                Arg::with_name("server_url")
+                    .short("s")
+                    .long("server-url")
+                    .value_name("URL_OR_MONIKER")
+                    .takes_value(true)
+                    .global(true)
+                    .validator(is_url_or_moniker)
+                    .help(
+                        "URL where the registry service will be hosted. Default: http://0.0.0.0:<port>",
+                    ),
+            )
+            .arg(
                 Arg::with_name("commitment")
                     .long("commitment")
                     .takes_value(true)
@@ -148,7 +161,7 @@ impl Client {
             )
     }
 
-    pub fn new() -> Result<Client, Box<dyn error::Error>> {
+    pub(crate) fn new() -> Result<Client, Box<dyn error::Error>> {
         let matches = Self::get_clap_app(
             crate_name!(),
             crate_description!(),
@@ -156,7 +169,7 @@ impl Client {
         )
         .get_matches();
 
-        let config = if let Some(config_file) = matches.value_of("config_file") {
+        let cli_config = if let Some(config_file) = matches.value_of("config_file") {
             Config::load(config_file).unwrap_or_default()
         } else {
             Config::default()
@@ -164,19 +177,19 @@ impl Client {
 
         let (_, json_rpc_url) = ConfigInput::compute_json_rpc_url_setting(
             matches.value_of("json_rpc_url").unwrap_or(""),
-            &config.json_rpc_url,
+            &cli_config.json_rpc_url,
         );
 
         let (_, websocket_url) = ConfigInput::compute_websocket_url_setting(
             matches.value_of("websocket_url").unwrap_or(""),
-            &config.websocket_url,
+            &cli_config.websocket_url,
             matches.value_of("json_rpc_url").unwrap_or(""),
-            &config.json_rpc_url,
+            &cli_config.json_rpc_url,
         );
 
         let (_, commitment) = ConfigInput::compute_commitment_config(
             matches.value_of("commitment").unwrap_or(""),
-            &config.commitment,
+            &cli_config.commitment,
         );
 
         let rpc_timeout = value_t_or_exit!(matches, "rpc_timeout", u64);
@@ -187,10 +200,13 @@ impl Client {
         let confirm_transaction_initial_timeout =
             Duration::from_secs(confirm_transaction_initial_timeout);
 
-        let payer_keypair = Self::get_keypair(&matches, &config.keypair_path, "keypair")?;
-        let authority_keypair = Self::get_keypair(&matches, &config.keypair_path, "authority")?;
+        let payer_keypair = Self::get_keypair(&matches, &cli_config.keypair_path, "keypair")?;
+        let authority_keypair = Self::get_keypair(&matches, &cli_config.keypair_path, "authority")?;
 
         let port = value_t_or_exit!(matches, "port", u16);
+
+        let server_url =
+            value_t!(matches, "server_url", String).unwrap_or(format!("http://0.0.0.0:{}", port));
 
         Ok(Client {
             rpc_client: Arc::new(RpcClient::new_with_timeouts_and_commitment(
@@ -200,6 +216,7 @@ impl Client {
                 confirm_transaction_initial_timeout,
             )),
             port,
+            server_url,
             websocket_url,
             commitment,
             cli_signers: vec![payer_keypair, authority_keypair],

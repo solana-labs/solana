@@ -130,7 +130,7 @@ fn process_close_proof_context(invoke_context: &mut InvokeContext) -> Result<(),
     Ok(())
 }
 
-declare_process_instruction!(process_instruction, 0, |invoke_context| {
+declare_process_instruction!(Entrypoint, 0, |invoke_context| {
     // Consume compute units if feature `native_programs_consume_cu` is activated
     let native_programs_consume_cu = invoke_context
         .feature_set

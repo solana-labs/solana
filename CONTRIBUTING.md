@@ -159,7 +159,7 @@ New feature gates should also always have a corresponding tracking issue
 and should be updated each time the feature is activated on a cluster.
 
 * "automerge": When a PR is labelled with "automerge", the PR will be
-automically merged once CI passes.  In general, this label should only
+automatically merged once CI passes.  In general, this label should only
 be used for small hot-fix (fewer than 100 lines) or automatic generated
 PRs.  If you're uncertain, it's usually the case that the PR is not
 qualified as "automerge".
