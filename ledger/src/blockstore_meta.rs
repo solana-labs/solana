@@ -118,24 +118,38 @@ pub struct ShredIndex {
     index: BTreeSet<u64>,
 }
 
+#[deprecated = "Use MerkleErasureMeta"]
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq)]
 /// Erasure coding information
 pub struct ErasureMeta {
     /// Which erasure set in the slot this is
+    pub(crate) set_index: u64,
+    /// First coding index in the FEC set
+    pub(crate) first_coding_index: u64,
+    /// Size of shards in this erasure set
+    #[serde(rename = "size")]
+    pub(crate) __unused_size: usize,
+    /// Erasure configuration for this erasure set
+    pub(crate) config: ErasureConfig,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq)]
+/// Erasure coding information for merkle shreds
+pub struct MerkleErasureMeta {
+    /// Which erasure set in the slot this is
     set_index: u64,
     /// First coding index in the FEC set
     first_coding_index: u64,
-    /// Size of shards in this erasure set
-    #[serde(rename = "size")]
-    __unused_size: usize,
     /// Erasure configuration for this erasure set
     config: ErasureConfig,
+    /// Merkle root for this FEC set
+    merkle_root: Hash,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub(crate) struct ErasureConfig {
-    num_data: usize,
-    num_coding: usize,
+    pub(crate) num_data: usize,
+    pub(crate) num_coding: usize,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -321,7 +335,7 @@ impl SlotMeta {
     }
 }
 
-impl ErasureMeta {
+impl MerkleErasureMeta {
     pub(crate) fn from_coding_shred(shred: &Shred) -> Option<Self> {
         match shred.shred_type() {
             ShredType::Data => None,
@@ -331,11 +345,12 @@ impl ErasureMeta {
                     num_coding: usize::from(shred.num_coding_shreds().ok()?),
                 };
                 let first_coding_index = u64::from(shred.first_coding_index()?);
-                let erasure_meta = ErasureMeta {
+                let merkle_root = Hash::default();
+                let erasure_meta = MerkleErasureMeta {
                     set_index: u64::from(shred.fec_set_index()),
                     config,
                     first_coding_index,
-                    __unused_size: 0,
+                    merkle_root,
                 };
                 Some(erasure_meta)
             }
@@ -345,10 +360,9 @@ impl ErasureMeta {
     // Returns true if the erasure fields on the shred
     // are consistent with the erasure-meta.
     pub(crate) fn check_coding_shred(&self, shred: &Shred) -> bool {
-        let Some(mut other) = Self::from_coding_shred(shred) else {
+        let Some(other) = Self::from_coding_shred(shred) else {
             return false;
         };
-        other.__unused_size = self.__unused_size;
         self == &other
     }
 
@@ -392,6 +406,32 @@ impl ErasureMeta {
             CanRecover
         } else {
             StillNeed(num_needed)
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_index(&self) -> u64 {
+        self.set_index
+    }
+
+    #[cfg(test)]
+    pub(crate) fn first_coding_index(&self) -> u64 {
+        self.first_coding_index
+    }
+
+    #[cfg(test)]
+    pub(crate) fn merkle_root(&self) -> Hash {
+        self.merkle_root
+    }
+}
+
+impl From<ErasureMeta> for MerkleErasureMeta {
+    fn from(erasure_meta: ErasureMeta) -> MerkleErasureMeta {
+        MerkleErasureMeta {
+            set_index: erasure_meta.set_index,
+            first_coding_index: erasure_meta.first_coding_index,
+            config: erasure_meta.config,
+            merkle_root: Hash::default(),
         }
     }
 }
@@ -511,11 +551,11 @@ mod test {
             num_data: 8,
             num_coding: 16,
         };
-        let e_meta = ErasureMeta {
+        let e_meta = MerkleErasureMeta {
             set_index,
             first_coding_index: set_index,
             config: erasure_config,
-            __unused_size: 0,
+            merkle_root: Hash::default(),
         };
         let mut rng = thread_rng();
         let mut index = Index::new(0);

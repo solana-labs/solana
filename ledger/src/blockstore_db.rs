@@ -214,13 +214,13 @@ pub mod columns {
     ///
     /// This column family stores ErasureMeta which includes metadata about
     /// dropped network packets (or erasures) that can be used to recover
-    /// missing data shreds.
+    /// missing data shreds. For merkle shreds, it also stores the merkle root.
     ///
     /// Its index type is `crate::shred::ErasureSetId`, which consists of a Slot ID
     /// and a FEC (Forward Error Correction) set index.
     ///
     /// * index type: `crate::shred::ErasureSetId` `(Slot, fec_set_index: u64)`
-    /// * value type: [`blockstore_meta::ErasureMeta`]
+    /// * value type: [`blockstore_meta::MerkleErasureMeta`]
     pub struct ErasureMeta;
 
     #[derive(Debug)]
@@ -802,6 +802,12 @@ pub trait ColumnIndexDeprecation: Column {
     }
 }
 
+/// Helper trait to transition a column between bincode formats
+pub trait BincodeTypeTransition: Column + TypedColumn {
+    /// This should have a different serialized size than the TypedColumn::Type
+    type OldType: Serialize + DeserializeOwned + Into<Self::Type>;
+}
+
 impl Column for columns::TransactionStatus {
     type Index = (Signature, Slot);
 
@@ -1216,7 +1222,11 @@ impl ColumnName for columns::ErasureMeta {
     const NAME: &'static str = ERASURE_META_CF;
 }
 impl TypedColumn for columns::ErasureMeta {
-    type Type = blockstore_meta::ErasureMeta;
+    type Type = blockstore_meta::MerkleErasureMeta;
+}
+impl BincodeTypeTransition for columns::ErasureMeta {
+    #[allow(deprecated)]
+    type OldType = blockstore_meta::ErasureMeta;
 }
 
 impl SlotColumn for columns::OptimisticSlots {}
@@ -1796,6 +1806,42 @@ where
     }
 }
 
+impl<C> LedgerColumn<C>
+where
+    C: BincodeTypeTransition + ColumnName,
+{
+    /// Read the column in either the `C::Type` or `C::OldType` format.
+    pub fn get_new_or_old(&self, key: C::Index) -> Result<Option<C::Type>> {
+        self.get_new_or_old_raw(&C::key(key))
+    }
+
+    pub fn get_new_or_old_raw(&self, key: &[u8]) -> Result<Option<C::Type>> {
+        let mut result = Ok(None);
+        let is_perf_enabled = maybe_enable_rocksdb_perf(
+            self.column_options.rocks_perf_sample_interval,
+            &self.read_perf_status,
+        );
+        if let Some(pinnable_slice) = self.backend.get_pinned_cf(self.handle(), key)? {
+            let value = if let Ok(value) = deserialize::<C::Type>(pinnable_slice.as_ref()) {
+                value
+            } else {
+                deserialize::<C::OldType>(pinnable_slice.as_ref())?.into()
+            };
+            result = Ok(Some(value))
+        }
+
+        if let Some(op_start_instant) = is_perf_enabled {
+            report_rocksdb_read_perf(
+                C::NAME,
+                PERF_METRIC_OP_NAME_GET,
+                &op_start_instant.elapsed(),
+                &self.column_options,
+            );
+        }
+        result
+    }
+}
+
 impl<'a> WriteBatch<'a> {
     pub fn put_bytes<C: Column + ColumnName>(&mut self, key: C::Index, bytes: &[u8]) -> Result<()> {
         self.write_batch
@@ -2233,6 +2279,17 @@ pub mod tests {
             let serialized_value = serialize(value)?;
             self.backend
                 .put_cf(self.handle(), &C::deprecated_key(key), &serialized_value)
+        }
+    }
+
+    impl<C> LedgerColumn<C>
+    where
+        C: BincodeTypeTransition + ColumnName,
+    {
+        pub fn put_old_type(&self, key: C::Index, value: &C::OldType) -> Result<()> {
+            let serialized_value = serialize(value)?;
+            self.backend
+                .put_cf(self.handle(), &C::key(key), &serialized_value)
         }
     }
 

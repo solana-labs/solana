@@ -457,8 +457,8 @@ impl Blockstore {
         false
     }
 
-    fn erasure_meta(&self, erasure_set: ErasureSetId) -> Result<Option<ErasureMeta>> {
-        self.erasure_meta_cf.get(erasure_set.store_key())
+    fn erasure_meta(&self, erasure_set: ErasureSetId) -> Result<Option<MerkleErasureMeta>> {
+        self.erasure_meta_cf.get_new_or_old(erasure_set.store_key())
     }
 
     /// Check whether the specified slot is an orphan slot which does not
@@ -594,7 +594,7 @@ impl Blockstore {
     fn get_recovery_data_shreds<'a>(
         index: &'a Index,
         slot: Slot,
-        erasure_meta: &'a ErasureMeta,
+        erasure_meta: &'a MerkleErasureMeta,
         prev_inserted_shreds: &'a HashMap<ShredId, Shred>,
         data_cf: &'a LedgerColumn<cf::ShredData>,
     ) -> impl Iterator<Item = Shred> + 'a {
@@ -619,7 +619,7 @@ impl Blockstore {
     fn get_recovery_coding_shreds<'a>(
         index: &'a Index,
         slot: Slot,
-        erasure_meta: &'a ErasureMeta,
+        erasure_meta: &'a MerkleErasureMeta,
         prev_inserted_shreds: &'a HashMap<ShredId, Shred>,
         code_cf: &'a LedgerColumn<cf::ShredCode>,
     ) -> impl Iterator<Item = Shred> + 'a {
@@ -643,7 +643,7 @@ impl Blockstore {
 
     fn recover_shreds(
         index: &Index,
-        erasure_meta: &ErasureMeta,
+        erasure_meta: &MerkleErasureMeta,
         prev_inserted_shreds: &HashMap<ShredId, Shred>,
         recovered_shreds: &mut Vec<Shred>,
         data_cf: &LedgerColumn<cf::ShredData>,
@@ -677,7 +677,7 @@ impl Blockstore {
 
     fn submit_metrics(
         slot: Slot,
-        erasure_meta: &ErasureMeta,
+        erasure_meta: &MerkleErasureMeta,
         attempted: bool,
         status: String,
         recovered: usize,
@@ -725,7 +725,7 @@ impl Blockstore {
 
     fn try_shred_recovery(
         &self,
-        erasure_metas: &HashMap<ErasureSetId, ErasureMeta>,
+        erasure_metas: &HashMap<ErasureSetId, MerkleErasureMeta>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
         prev_inserted_shreds: &HashMap<ShredId, Shred>,
         reed_solomon_cache: &ReedSolomonCache,
@@ -1164,7 +1164,7 @@ impl Blockstore {
     fn check_insert_coding_shred(
         &self,
         shred: Shred,
-        erasure_metas: &mut HashMap<ErasureSetId, ErasureMeta>,
+        erasure_metas: &mut HashMap<ErasureSetId, MerkleErasureMeta>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
         write_batch: &mut WriteBatch,
         just_received_shreds: &mut HashMap<ShredId, Shred>,
@@ -1202,7 +1202,7 @@ impl Blockstore {
         let erasure_meta = erasure_metas.entry(erasure_set).or_insert_with(|| {
             self.erasure_meta(erasure_set)
                 .expect("Expect database get to succeed")
-                .unwrap_or_else(|| ErasureMeta::from_coding_shred(&shred).unwrap())
+                .unwrap_or_else(|| MerkleErasureMeta::from_coding_shred(&shred).unwrap())
         });
 
         if !erasure_meta.check_coding_shred(&shred) {
@@ -1275,7 +1275,7 @@ impl Blockstore {
         &self,
         shred: &Shred,
         slot: Slot,
-        erasure_meta: &ErasureMeta,
+        erasure_meta: &MerkleErasureMeta,
         just_received_shreds: &HashMap<ShredId, Shred>,
     ) -> Option<Vec<u8>> {
         // Search for the shred which set the initial erasure config, either inserted,
@@ -1340,7 +1340,7 @@ impl Blockstore {
     fn check_insert_data_shred(
         &self,
         shred: Shred,
-        erasure_metas: &mut HashMap<ErasureSetId, ErasureMeta>,
+        erasure_metas: &mut HashMap<ErasureSetId, MerkleErasureMeta>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
         slot_meta_working_set: &mut HashMap<u64, SlotMetaWorkingSetEntry>,
         write_batch: &mut WriteBatch,
@@ -7502,6 +7502,56 @@ pub mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(meta.fee, index1_slot * 1000);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_erasure_meta_migration() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+        let erasure_meta_cf = &blockstore.erasure_meta_cf;
+
+        let config = ErasureConfig {
+            num_data: 1,
+            num_coding: 17,
+        };
+        let erasure_meta_old = ErasureMeta {
+            set_index: 5,
+            first_coding_index: 8,
+            config,
+            __unused_size: 0,
+        };
+
+        erasure_meta_cf
+            .put_old_type((100, 5), &erasure_meta_old)
+            .unwrap();
+
+        let erasure_meta = erasure_meta_cf.get_new_or_old((100, 5)).unwrap().unwrap();
+        assert_eq!(erasure_meta.set_index(), erasure_meta_old.set_index);
+        assert_eq!(
+            erasure_meta.first_coding_index(),
+            erasure_meta_old.first_coding_index
+        );
+        assert_eq!(erasure_meta.config(), erasure_meta_old.config);
+        assert_eq!(erasure_meta.merkle_root(), Hash::default());
+
+        let erasure_meta_new = ErasureMeta {
+            set_index: 3,
+            first_coding_index: 2,
+            config,
+            __unused_size: 0,
+        }
+        .into();
+        erasure_meta_cf.put((101, 3), &erasure_meta_new).unwrap();
+
+        let erasure_meta = erasure_meta_cf.get_new_or_old((101, 3)).unwrap().unwrap();
+        assert_eq!(erasure_meta.set_index(), erasure_meta_new.set_index());
+        assert_eq!(
+            erasure_meta.first_coding_index(),
+            erasure_meta_new.first_coding_index()
+        );
+        assert_eq!(erasure_meta.config(), erasure_meta_new.config());
+        assert_eq!(erasure_meta.merkle_root(), Hash::default());
     }
 
     #[test]

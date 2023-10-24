@@ -10,6 +10,7 @@ pub mod block_error;
 pub mod blockstore;
 pub mod ancestor_iterator;
 pub mod blockstore_db;
+#[allow(deprecated)]
 pub mod blockstore_meta;
 pub mod blockstore_metrics;
 pub mod blockstore_options;
