@@ -332,14 +332,14 @@ const _: () = assert!(
     "CalculateHashIntermediate cannot have any padding"
 );
 
-#[derive(Default, Debug, PartialEq, Eq)]
-pub struct CumulativeOffset {
+#[derive(Debug, PartialEq, Eq)]
+struct CumulativeOffset {
     /// Since the source data is at most 2D, two indexes are enough.
-    pub index: [usize; 2],
-    pub start_offset: usize,
+    index: [usize; 2],
+    start_offset: usize,
 }
 
-pub trait ExtractSliceFromRawData<'b, T: 'b> {
+trait ExtractSliceFromRawData<'b, T: 'b> {
     fn extract<'a>(&'b self, offset: &'a CumulativeOffset, start: usize) -> &'b [T];
 }
 
