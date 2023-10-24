@@ -16,6 +16,9 @@ Release channels have their own copy of this changelog:
 * Changes
   * Added a github check to support `changelog` label
   * The default for `--use-snapshot-archives-at-startup` is now `when-newest` (#33883)
+  * Added allow_commission_decrease_at_any_time feature which will allow commission on a vote account to be
+    decreased even in the second half of epochs when the commission_updates_only_allowed_in_first_half_of_epoch
+    feature would have prevented it
 * Upgrade Notes
 
 ## [1.17.0]

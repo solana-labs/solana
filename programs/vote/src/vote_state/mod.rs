@@ -877,11 +877,41 @@ pub fn update_commission<S: std::hash::BuildHasher>(
     vote_account: &mut BorrowedAccount,
     commission: u8,
     signers: &HashSet<Pubkey, S>,
+    epoch_schedule: &EpochSchedule,
+    clock: &Clock,
     feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
-    let mut vote_state: VoteState = vote_account
-        .get_state::<VoteStateVersions>()?
-        .convert_to_current();
+    // Decode vote state only once, and only if needed
+    let mut vote_state = None;
+
+    let enforce_commission_update_rule =
+        if feature_set.is_active(&feature_set::allow_commission_decrease_at_any_time::id()) {
+            if let Ok(decoded_vote_state) = vote_account.get_state::<VoteStateVersions>() {
+                vote_state = Some(decoded_vote_state.convert_to_current());
+                is_commission_increase(vote_state.as_ref().unwrap(), commission)
+            } else {
+                true
+            }
+        } else {
+            true
+        };
+
+    #[allow(clippy::collapsible_if)]
+    if enforce_commission_update_rule
+        && feature_set
+            .is_active(&feature_set::commission_updates_only_allowed_in_first_half_of_epoch::id())
+    {
+        if !is_commission_update_allowed(clock.slot, epoch_schedule) {
+            return Err(VoteError::CommissionUpdateTooLate.into());
+        }
+    }
+
+    let mut vote_state = match vote_state {
+        Some(vote_state) => vote_state,
+        None => vote_account
+            .get_state::<VoteStateVersions>()?
+            .convert_to_current(),
+    };
 
     // current authorized withdrawer must say "yay"
     verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
@@ -889,6 +919,11 @@ pub fn update_commission<S: std::hash::BuildHasher>(
     vote_state.commission = commission;
 
     set_vote_account_state(vote_account, vote_state, feature_set)
+}
+
+/// Given a proposed new commission, returns true if this would be a commission increase, false otherwise
+pub fn is_commission_increase(vote_state: &VoteState, commission: u8) -> bool {
+    commission > vote_state.commission
 }
 
 /// Given the current slot and epoch schedule, determine if a commission change
@@ -1363,6 +1398,192 @@ mod tests {
         process_slot_vote_unchecked(&mut vote_state, slot);
         // First vote and new vote are both stored for a total of 2 votes
         assert_eq!(vote_state.votes.len(), 2);
+    }
+
+    #[test]
+    fn test_update_commission() {
+        let node_pubkey = Pubkey::new_unique();
+        let withdrawer_pubkey = Pubkey::new_unique();
+        let clock = Clock::default();
+        let vote_state = VoteState::new(
+            &VoteInit {
+                node_pubkey,
+                authorized_voter: withdrawer_pubkey,
+                authorized_withdrawer: withdrawer_pubkey,
+                commission: 10,
+            },
+            &clock,
+        );
+
+        let serialized =
+            bincode::serialize(&VoteStateVersions::Current(Box::new(vote_state.clone()))).unwrap();
+        let serialized_len = serialized.len();
+        let rent = Rent::default();
+        let lamports = rent.minimum_balance(serialized_len);
+        let mut vote_account = AccountSharedData::new(lamports, serialized_len, &id());
+        vote_account.set_data_from_slice(&serialized);
+
+        // Create a fake TransactionContext with a fake InstructionContext with a single account which is the
+        // vote account that was just created
+        let processor_account = AccountSharedData::new(0, 0, &solana_sdk::native_loader::id());
+        let transaction_context = TransactionContext::new(
+            vec![(id(), processor_account), (node_pubkey, vote_account)],
+            rent,
+            0,
+            0,
+        );
+        let mut instruction_context = InstructionContext::default();
+        instruction_context.configure(
+            &[0],
+            &[InstructionAccount {
+                index_in_transaction: 1,
+                index_in_caller: 1,
+                index_in_callee: 0,
+                is_signer: false,
+                is_writable: true,
+            }],
+            &[],
+        );
+
+        // Get the BorrowedAccount from the InstructionContext which is what is used to manipulate and inspect account
+        // state
+        let mut borrowed_account = instruction_context
+            .try_borrow_instruction_account(&transaction_context, 0)
+            .unwrap();
+
+        let epoch_schedule = std::sync::Arc::new(EpochSchedule::without_warmup());
+
+        let first_half_clock = std::sync::Arc::new(Clock {
+            slot: epoch_schedule.slots_per_epoch / 4,
+            ..Clock::default()
+        });
+
+        let second_half_clock = std::sync::Arc::new(Clock {
+            slot: (epoch_schedule.slots_per_epoch * 3) / 4,
+            ..Clock::default()
+        });
+
+        let mut feature_set = FeatureSet::default();
+        feature_set.activate(
+            &feature_set::commission_updates_only_allowed_in_first_half_of_epoch::id(),
+            1,
+        );
+
+        let signers: HashSet<Pubkey> = vec![withdrawer_pubkey].into_iter().collect();
+
+        // Increase commission in first half of epoch -- allowed
+        assert_eq!(
+            borrowed_account
+                .get_state::<VoteStateVersions>()
+                .unwrap()
+                .convert_to_current()
+                .commission,
+            10
+        );
+        assert_matches!(
+            update_commission(
+                &mut borrowed_account,
+                11,
+                &signers,
+                &epoch_schedule,
+                &first_half_clock,
+                &feature_set
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            borrowed_account
+                .get_state::<VoteStateVersions>()
+                .unwrap()
+                .convert_to_current()
+                .commission,
+            11
+        );
+
+        // Increase commission in second half of epoch -- disallowed
+        assert_matches!(
+            update_commission(
+                &mut borrowed_account,
+                12,
+                &signers,
+                &epoch_schedule,
+                &second_half_clock,
+                &feature_set
+            ),
+            Err(_)
+        );
+        assert_eq!(
+            borrowed_account
+                .get_state::<VoteStateVersions>()
+                .unwrap()
+                .convert_to_current()
+                .commission,
+            11
+        );
+
+        // Decrease commission in first half of epoch -- allowed
+        assert_matches!(
+            update_commission(
+                &mut borrowed_account,
+                10,
+                &signers,
+                &epoch_schedule,
+                &first_half_clock,
+                &feature_set
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            borrowed_account
+                .get_state::<VoteStateVersions>()
+                .unwrap()
+                .convert_to_current()
+                .commission,
+            10
+        );
+
+        // Decrease commission in second half of epoch -- disallowed because feature_set does not allow it
+        assert_matches!(
+            update_commission(
+                &mut borrowed_account,
+                9,
+                &signers,
+                &epoch_schedule,
+                &second_half_clock,
+                &feature_set
+            ),
+            Err(_)
+        );
+        assert_eq!(
+            borrowed_account
+                .get_state::<VoteStateVersions>()
+                .unwrap()
+                .convert_to_current()
+                .commission,
+            10
+        );
+
+        // Decrease commission in second half of epoch -- allowed because feature_set allows it
+        feature_set.activate(&feature_set::allow_commission_decrease_at_any_time::id(), 1);
+        assert_matches!(
+            update_commission(
+                &mut borrowed_account,
+                9,
+                &signers,
+                &epoch_schedule,
+                &second_half_clock,
+                &feature_set
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            borrowed_account
+                .get_state::<VoteStateVersions>()
+                .unwrap()
+                .convert_to_current()
+                .commission,
+            9
+        );
     }
 
     #[test]
