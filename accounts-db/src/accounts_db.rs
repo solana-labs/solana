@@ -2419,7 +2419,7 @@ impl<'a> AppendVecScan for ScanState<'a> {
             }
         }
         let source_item = CalculateHashIntermediate {
-            hash: loaded_hash.0,
+            hash: loaded_hash,
             lamports: balance,
             pubkey: *pubkey,
         };
@@ -10400,22 +10400,22 @@ pub mod tests {
 
         let mut raw_expected = vec![
             CalculateHashIntermediate {
-                hash: Hash::default(),
+                hash: AccountHash(Hash::default()),
                 lamports: 1,
                 pubkey: pubkey0,
             },
             CalculateHashIntermediate {
-                hash: Hash::default(),
+                hash: AccountHash(Hash::default()),
                 lamports: 128,
                 pubkey: pubkey127,
             },
             CalculateHashIntermediate {
-                hash: Hash::default(),
+                hash: AccountHash(Hash::default()),
                 lamports: 129,
                 pubkey: pubkey128,
             },
             CalculateHashIntermediate {
-                hash: Hash::default(),
+                hash: AccountHash(Hash::default()),
                 lamports: 256,
                 pubkey: pubkey255,
             },
@@ -10438,7 +10438,7 @@ pub mod tests {
             ));
             let hash = AccountsDb::hash_account(&raw_accounts[i], &raw_expected[i].pubkey);
             assert_eq!(hash, expected_hashes[i]);
-            raw_expected[i].hash = hash.0;
+            raw_expected[i].hash = hash;
         }
 
         let to_store = raw_accounts
@@ -10925,7 +10925,7 @@ pub mod tests {
         let (storages, raw_expected) = sample_storages_and_accounts(&db);
         let expected_hash =
             AccountsHasher::compute_merkle_root_loop(raw_expected.clone(), MERKLE_FANOUT, |item| {
-                &item.hash
+                &item.hash.0
             });
         let sum = raw_expected.iter().map(|item| item.lamports).sum();
         let result = db
@@ -10974,7 +10974,7 @@ pub mod tests {
             assert_eq!(loaded_account.pubkey(), &self.pubkey);
             assert_eq!(self.slot_expected, self.current_slot);
             self.accum.push(vec![CalculateHashIntermediate {
-                hash: Hash::default(),
+                hash: AccountHash(Hash::default()),
                 lamports: self.value_to_use_for_lamports,
                 pubkey: self.pubkey,
             }]);
@@ -11035,7 +11035,7 @@ pub mod tests {
         assert_scan(
             result2,
             vec![vec![vec![CalculateHashIntermediate {
-                hash: Hash::default(),
+                hash: AccountHash(Hash::default()),
                 lamports: expected,
                 pubkey,
             }]]],
@@ -11263,7 +11263,7 @@ pub mod tests {
                 assert_eq!(self.accum.len(), 1);
             }
             self.accum.push(vec![CalculateHashIntermediate {
-                hash: Hash::default(),
+                hash: AccountHash(Hash::default()),
                 lamports: loaded_account.lamports(),
                 pubkey: Pubkey::default(),
             }]);
