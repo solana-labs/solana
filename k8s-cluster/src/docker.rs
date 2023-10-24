@@ -84,6 +84,17 @@ impl<'a> DockerConfig<'a> {
         }
     }
 
+    fn insert_client_accounts_if_present(
+        &self,
+    ) -> String {
+        if SOLANA_ROOT.join("config-k8s/client-accounts.yml").exists() {
+            return r#"
+COPY --chown=solana:solana ./config-k8s/client-accounts.yml /home/solana
+            "#.to_string();
+        }
+        "".to_string()
+    }
+
     pub fn create_dockerfile(
         &self,
         validator_type: &ValidatorType,
@@ -115,7 +126,7 @@ impl<'a> DockerConfig<'a> {
             r#"
 FROM {}
 RUN apt-get update
-RUN apt-get install -y iputils-ping curl vim bzip2
+RUN apt-get install -y iputils-ping curl vim bzip2 tmux
 
 RUN useradd -ms /bin/bash solana
 RUN adduser solana sudo
@@ -127,6 +138,9 @@ COPY ./net ./multinode-demo /home/solana/
 RUN mkdir -p /home/solana/k8s-cluster-scripts
 COPY ./k8s-cluster/src/scripts /home/solana/k8s-cluster-scripts
 
+RUN mkdir -p /home/solana/ledger
+COPY --chown=solana:solana ./config-k8s/bootstrap-validator  /home/solana/ledger
+            
 RUN mkdir -p /home/solana/.cargo/bin
 
 COPY ./{solana_build_directory}/bin/* /home/solana/.cargo/bin/
@@ -135,14 +149,17 @@ COPY ./{solana_build_directory}/version.yml /home/solana/
 RUN mkdir -p /home/solana/config
 ENV PATH="/home/solana/.cargo/bin:${{PATH}}"
 
-
 WORKDIR /home/solana
 "#,
             self.image_config.base_image
         );
 
-        info!("dockerfile: {}", dockerfile);
+        let dockerfile = format!("{}\n{}", dockerfile, self.insert_client_accounts_if_present());
 
+        info!("dockerfile: {}", dockerfile);
+        // USER root
+        // RUN chown -R solana:solana /home/solana/ledger
+        // USER solana
         std::fs::write(
             docker_path.as_path().join("Dockerfile"),
             content.unwrap_or(dockerfile.as_str()),

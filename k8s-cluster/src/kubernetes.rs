@@ -8,7 +8,6 @@ use {
                 ConfigMap, ConfigMapVolumeSource, Container, EnvVar, EnvVarSource, Namespace,
                 ObjectFieldSelector, PodSecurityContext, PodSpec, PodTemplateSpec, Secret,
                 SecretVolumeSource, Service, ServicePort, ServiceSpec, Volume, VolumeMount,
-                PersistentVolumeClaim, PersistentVolumeClaimSpec
             },
         },
         apimachinery::pkg::apis::meta::v1::LabelSelector,
@@ -78,21 +77,33 @@ impl<'a> std::fmt::Display for ValidatorConfig<'a> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct ClientConfig {
+    pub num_clients: i32,
+    pub client_delay_start: u64,
+    pub client_type: String,
+    pub client_to_run: String,
+    pub bench_tps_args: Vec<String>,
+}
+
 pub struct Kubernetes<'a> {
     client: Client,
     namespace: &'a str,
     validator_config: &'a mut ValidatorConfig<'a>,
+    client_config: ClientConfig
 }
 
 impl<'a> Kubernetes<'a> {
     pub async fn new(
         namespace: &'a str,
         validator_config: &'a mut ValidatorConfig<'a>,
+        client_config: ClientConfig,
     ) -> Kubernetes<'a> {
         Kubernetes {
             client: Client::try_default().await.unwrap(),
             namespace,
             validator_config,
+            client_config,
         }
     }
 
@@ -121,10 +132,6 @@ impl<'a> Kubernetes<'a> {
         }
         if self.validator_config.skip_require_tower {
             flags.push("--skip-require-tower".to_string());
-        }
-        if self.validator_config.enable_full_rpc {
-            flags.push("--enable-rpc-transaction-history".to_string());
-            flags.push("--enable-extended-tx-metadata-storage".to_string());
         }
         if self.validator_config.enable_full_rpc {
             flags.push("--enable-rpc-transaction-history".to_string());
@@ -170,35 +177,16 @@ impl<'a> Kubernetes<'a> {
         flags
     }
 
-    pub async fn create_genesis_config_map(&self) -> Result<ConfigMap, kube::Error> {
-        let metadata = ObjectMeta {
-            name: Some("genesis-config".to_string()),
-            ..Default::default()
-        };
-        // let genesis_tar_path = LEDGER_DIR.join("genesis-package.tar.bz2");
-        let genesis_tar_path = SOLANA_ROOT.join("config-k8s/genesis-package.tar.bz2");
+    fn generate_client_command_flags(&self) -> Vec<String> {
+        let mut flags = vec![];
 
-        let mut genesis_tar_file = File::open(genesis_tar_path).unwrap();
-        let mut buffer = Vec::new();
+        flags.push(self.client_config.client_to_run.clone()); //client to run
+        let bench_tps_args = self.client_config.bench_tps_args.join(" ");
+        flags.push(bench_tps_args);
+        flags.push(self.client_config.client_type.clone());
 
-        match genesis_tar_file.read_to_end(&mut buffer) {
-            Ok(_) => (),
-            Err(err) => panic!("failed to read genesis-package.tar.bz: {}", err),
-        }
+        flags
 
-        // Define the data for the ConfigMap
-        let mut data = BTreeMap::<String, ByteString>::new();
-        data.insert("genesis-package.tar.bz2".to_string(), ByteString(buffer));
-
-        // Create the ConfigMap
-        let config_map = ConfigMap {
-            metadata,
-            binary_data: Some(data),
-            ..Default::default()
-        };
-
-        let api: Api<ConfigMap> = Api::namespaced(self.client.clone(), self.namespace);
-        api.create(&PostParams::default(), &config_map).await
     }
 
     pub async fn namespace_exists(&self) -> Result<bool, kube::Error> {
@@ -226,7 +214,6 @@ impl<'a> Kubernetes<'a> {
         container_name: &str,
         image_name: &str,
         num_bootstrap_validators: i32,
-        config_map_name: Option<String>,
         secret_name: Option<String>,
         label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
@@ -242,20 +229,24 @@ impl<'a> Kubernetes<'a> {
             ..Default::default()
         }];
 
-        let accounts_volume = Volume {
-            name: "bootstrap-accounts-volume".into(),
-            secret: Some(SecretVolumeSource {
-                secret_name,
+        let accounts_volume = Some(vec![
+            Volume {
+                name: "bootstrap-accounts-volume".into(),
+                secret: Some(SecretVolumeSource {
+                    secret_name,
+                    ..Default::default()
+                }),
                 ..Default::default()
-            }),
-            ..Default::default()
-        };
+            }
+        ]);
 
-        let accounts_volume_mount = VolumeMount {
-            name: "bootstrap-accounts-volume".to_string(),
-            mount_path: "/home/solana/bootstrap-accounts".to_string(),
-            ..Default::default()
-        };
+        let accounts_volume_mount = Some(vec![
+            VolumeMount {
+                name: "bootstrap-accounts-volume".to_string(),
+                mount_path: "/home/solana/bootstrap-accounts".to_string(),
+                ..Default::default()
+            }
+        ]);
 
         let mut command =
             vec!["/home/solana/k8s-cluster-scripts/bootstrap-startup-script.sh".to_string()];
@@ -273,13 +264,14 @@ impl<'a> Kubernetes<'a> {
             num_bootstrap_validators,
             env_var,
             &command,
-            config_map_name,
             accounts_volume,
             accounts_volume_mount,
         )
         .await
     }
 
+    // mount genesis in bootstrap. validators will pull
+    // genesis from bootstrap
     #[allow(clippy::too_many_arguments)]
     async fn create_replicas_set(
         &self,
@@ -290,28 +282,9 @@ impl<'a> Kubernetes<'a> {
         num_validators: i32,
         env_vars: Vec<EnvVar>,
         command: &[String],
-        config_map_name: Option<String>,
-        accounts_volume: Volume,
-        accounts_volume_mount: VolumeMount,
+        volumes: Option<Vec<Volume>>,
+        volume_mounts: Option<Vec<VolumeMount>>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
-        let Some(config_map_name) = config_map_name else {
-            return Err(boxed_error!("config_map_name is None!"));
-        };
-
-        let genesis_volume = Volume {
-            name: "genesis-config-volume".into(),
-            config_map: Some(ConfigMapVolumeSource {
-                name: Some(config_map_name.clone()),
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-
-        let genesis_volume_mount = VolumeMount {
-            name: "genesis-config-volume".to_string(),
-            mount_path: "/home/solana/genesis".to_string(),
-            ..Default::default()
-        };
 
         // Define the pod spec
         let pod_spec = PodTemplateSpec {
@@ -326,10 +299,10 @@ impl<'a> Kubernetes<'a> {
                     image_pull_policy: Some("Always".to_string()),
                     env: Some(env_vars),
                     command: Some(command.to_owned()),
-                    volume_mounts: Some(vec![genesis_volume_mount, accounts_volume_mount]),
+                    volume_mounts: volume_mounts,
                     ..Default::default()
                 }],
-                volumes: Some(vec![genesis_volume, accounts_volume]),
+                volumes: volumes,
                 security_context: Some(PodSecurityContext {
                     run_as_user: Some(1000),
                     run_as_group: Some(1000),
@@ -578,37 +551,12 @@ impl<'a> Kubernetes<'a> {
         Ok(available_validators >= desired_validators)
     }
 
-    // pub fn create_client_pvc(&self) -> Result<PersistentVolumeClaim, Box<dyn Error>> {
-    //     let pvc = PersistentVolumeClaim {
-    //         metadata: ObjectMeta {
-    //             name: Some("client-pvc".to_string()),
-    //             namespace: Some(self.namespace.to_string()),
-    //             ..Default::default()
-    //         },
-    //         spec: Some(PersistentVolumeClaimSpec {
-    //             access_modes: Some(vec!["ReadOnlyMany".to_string()]),
-    //             resources: Some(k8s_openapi::api::core::v1::ResourceRequirements {
-    //                 requests: {
-    //                     let mut storage_map = std::collections::BTreeMap::new();
-    //                     storage_map.insert("storage".to_string(), serde_json::json!("1Gi"));
-    //                     Some(storage_map)
-    //                 },
-    //                 ..Default::default()
-    //             }),
-    //             ..Default::default()
-    //         }),
-    //         ..Default::default()
-    //     };
-    //     Ok(pvc)
-    // }
-
     pub async fn create_validator_replica_set(
         &mut self,
         container_name: &str,
-        client_index: i32,
+        validator_index: i32,
         image_name: &str,
-        num_clients: i32,
-        config_map_name: Option<String>,
+        num_validators: i32,
         secret_name: Option<String>,
         label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
@@ -647,20 +595,24 @@ impl<'a> Kubernetes<'a> {
             },
         ];
 
-        let accounts_volume = Volume {
-            name: format!("client-accounts-volume-{}", client_index),
-            secret: Some(SecretVolumeSource {
-                secret_name,
+        let accounts_volume = Some(vec![
+            Volume {
+                name: format!("validator-accounts-volume-{}", validator_index),
+                secret: Some(SecretVolumeSource {
+                    secret_name,
+                    ..Default::default()
+                }),
                 ..Default::default()
-            }),
-            ..Default::default()
-        };
+            }
+        ]);
 
-        let accounts_volume_mount = VolumeMount {
-            name: format!("client-accounts-volume-{}", client_index),
-            mount_path: "/home/solana/client-accounts".to_string(),
-            ..Default::default()
-        };
+        let accounts_volume_mount = Some(vec![
+            VolumeMount {
+                name: format!("validator-accounts-volume-{}", validator_index),
+                mount_path: "/home/solana/validator-accounts".to_string(),
+                ..Default::default()
+            }
+        ]);
 
         let mut command =
             vec!["/home/solana/k8s-cluster-scripts/validator-startup-script.sh".to_string()];
@@ -670,105 +622,85 @@ impl<'a> Kubernetes<'a> {
             debug!("validator command: {}", c);
         }
 
-
-
         self.create_replicas_set(
-            format!("validator-{}", client_index).as_str(),
+            format!("validator-{}", validator_index).as_str(),
             label_selector,
             container_name,
             image_name,
-            num_clients,
+            num_validators,
             env_vars,
             &command,
-            config_map_name,
             accounts_volume,
             accounts_volume_mount,
         )
         .await
     }
 
-    // pub async fn create_client_replica_set(
-    //     &mut self,
-    //     container_name: &str,
-    //     validator_index: i32,
-    //     image_name: &str,
-    //     num_validators: i32,
-    //     secret_name: Option<String>,
-    //     label_selector: &BTreeMap<String, String>,
-    // ) -> Result<ReplicaSet, Box<dyn Error>> {
-    //     let env_vars = vec![
-    //         EnvVar {
-    //             name: "NAMESPACE".to_string(),
-    //             value_from: Some(EnvVarSource {
-    //                 field_ref: Some(ObjectFieldSelector {
-    //                     field_path: "metadata.namespace".to_string(),
-    //                     ..Default::default()
-    //                 }),
-    //                 ..Default::default()
-    //             }),
-    //             ..Default::default()
-    //         },
-    //         EnvVar {
-    //             name: "BOOTSTRAP_RPC_ADDRESS".to_string(),
-    //             value: Some(
-    //                 "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8899".to_string(),
-    //             ),
-    //             ..Default::default()
-    //         },
-    //         EnvVar {
-    //             name: "BOOTSTRAP_GOSSIP_ADDRESS".to_string(),
-    //             value: Some(
-    //                 "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8001".to_string(),
-    //             ),
-    //             ..Default::default()
-    //         },
-    //         EnvVar {
-    //             name: "BOOTSTRAP_FAUCET_ADDRESS".to_string(),
-    //             value: Some(
-    //                 "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:9900".to_string(),
-    //             ),
-    //             ..Default::default()
-    //         },
-    //     ];
+    pub async fn create_client_replica_set(
+        &mut self,
+        container_name: &str,
+        client_index: i32,
+        image_name: &str,
+        num_clients: i32,
+        secret_name: Option<String>,
+        label_selector: &BTreeMap<String, String>,
+    ) -> Result<ReplicaSet, Box<dyn Error>> {
+        let env_vars = vec![
+            EnvVar {
+                name: "NAMESPACE".to_string(),
+                value_from: Some(EnvVarSource {
+                    field_ref: Some(ObjectFieldSelector {
+                        field_path: "metadata.namespace".to_string(),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            EnvVar {
+                name: "BOOTSTRAP_RPC_ADDRESS".to_string(),
+                value: Some(
+                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8899".to_string(),
+                ),
+                ..Default::default()
+            },
+            EnvVar {
+                name: "BOOTSTRAP_GOSSIP_ADDRESS".to_string(),
+                value: Some(
+                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8001".to_string(),
+                ),
+                ..Default::default()
+            },
+            EnvVar {
+                name: "BOOTSTRAP_FAUCET_ADDRESS".to_string(),
+                value: Some(
+                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:9900".to_string(),
+                ),
+                ..Default::default()
+            },
+        ];
 
-    //     let accounts_volume = Volume {
-    //         name: format!("client-accounts-volume-{}", validator_index),
-    //         secret: Some(SecretVolumeSource {
-    //             secret_name,
-    //             ..Default::default()
-    //         }),
-    //         ..Default::default()
-    //     };
+        let mut command =
+            vec!["/home/solana/k8s-cluster-scripts/client-startup-script.sh".to_string()];
+        command.extend(self.generate_client_command_flags());
 
-    //     let accounts_volume_mount = VolumeMount {
-    //         name: format!("client-accounts-volume-{}", validator_index),
-    //         mount_path: "/home/solana/client-accounts".to_string(),
-    //         ..Default::default()
-    //     };
+        for c in command.iter() {
+            debug!("client command: {}", c);
+        }
 
-    //     let mut command =
-    //         vec!["/home/solana/k8s-cluster-scripts/client-startup-script.sh".to_string()];
-    //     command.extend(self.generate_validator_command_flags());
-
-    //     for c in command.iter() {
-    //         debug!("validator command: {}", c);
-    //     }
-
-
-
-    //     self.create_replicas_set(
-    //         format!("client-{}", validator_index).as_str(),
-    //         label_selector,
-    //         container_name,
-    //         image_name,
-    //         num_validators,
-    //         env_vars,
-    //         &command,
-    //         accounts_volume,
-    //         accounts_volume_mount,
-    //     )
-    //     .await
-    // }
+        self.create_replicas_set(
+            format!("client-{}", client_index).as_str(),
+            label_selector,
+            container_name,
+            image_name,
+            num_clients,
+            env_vars,
+            &command,
+            None,
+            None,
+        )
+        .await
+    }
 
     pub fn create_validator_service(
         &self,
@@ -829,4 +761,5 @@ impl<'a> Kubernetes<'a> {
 
         Ok(())
     }
+   
 }

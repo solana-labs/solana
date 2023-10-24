@@ -255,10 +255,15 @@ impl Genesis {
                 args.extend(bench_tps_args.clone());
             }
 
+            for i in bench_tps_args.iter() {
+                info!("bench_tps_arg: {}", i);
+            }
+
+            info!("generating client accounts...");
             let output = Command::new("solana-bench-tps")
                 .args(&args)
                 .output()
-                .expect("Failed to execute solana-genesis");
+                .expect("Failed to execute solana-bench-tps");
     
             if !output.status.success() {
                 return Err(boxed_error!(format!(
@@ -383,6 +388,10 @@ impl Genesis {
             args.push(lamports_per_signature.to_string());
         }
 
+        if SOLANA_ROOT.join("config-k8s/client-accounts.yml").exists() {
+            args.push("--primordial-accounts-file".to_string());
+            args.push(SOLANA_ROOT.join("config-k8s/client-accounts.yml").to_string_lossy().to_string());
+        }
         args
     }
 
@@ -453,17 +462,10 @@ impl Genesis {
     }
 
     // solana-genesis creates a genesis.tar.bz2 but if we need to create snapshots, these
-    // are not included in the genesis.tar.bz2. So we package everything including genesis,
+    // are not included in the genesis.tar.bz2. So we package everything including genesis.tar.bz2,
     // snapshots, etc into genesis-package.tar.bz2 and we use this as our genesis in the
     // bootstrap validator
     pub fn package_up(&mut self) -> Result<(), Box<dyn Error>> {
-        // delete the genesis.tar.bz2 since its contents will be included in the
-        // tar we're about to create
-        let genesis_path = LEDGER_DIR.join("genesis.tar.bz2");
-        if std::fs::metadata(&genesis_path).is_ok() {
-            std::fs::remove_file(&genesis_path)?;
-        }
-
         info!("Packaging genesis");
         let folder_to_tar = LEDGER_DIR.join("");
         let tar_bz2_file = File::create(SOLANA_ROOT.join("config-k8s/genesis-package.tar.bz2"))?;

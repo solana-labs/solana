@@ -27,16 +27,20 @@ mkdir -p /home/solana/logs
 
 clientToRun="$1"
 benchTpsExtraArgs="$2"
-clientIndex="$3"
-clientType="${4:-thin-client}"
+clientType="${3:-thin-client}"
+
+echo "client to run: $1"
+echo "benchtpsextraargs: $2"
+echo "client type: $3"
+
 
 missing() {
   echo "Error: $1 not specified"
   exit 1
 }
 
-[[ -n $deployMethod ]] || missing deployMethod
-[[ -n $entrypointIp ]] || missing entrypointIp
+# [[ -n $deployMethod ]] || missing deployMethod
+# [[ -n $entrypointIp ]] || missing entrypointIp
 
 threadCount=$(nproc)
 if [[ $threadCount -gt 4 ]]; then
@@ -65,10 +69,7 @@ case "$clientType" in
 esac
 
 case $clientToRun in
-solana-bench-tps)
-  net/scripts/rsync-retry.sh -vPrc \
-    "$entrypointIp":~/solana/config/bench-tps"$clientIndex".yml ./client-accounts.yml
-
+bench-tps)
   args=()
 
   if ${TPU_CLIENT}; then
