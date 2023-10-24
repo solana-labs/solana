@@ -444,7 +444,7 @@ pub mod tests {
         let test = BucketMapHolder::<u64, u64>::new(bins, &Some(AccountsIndexConfig::default()), 1);
         assert_eq!(0, test.current_age());
         assert_eq!(test.ages_to_stay_in_cache, test.future_age_to_flush(false));
-        assert_eq!(u8::MAX, test.future_age_to_flush(true));
+        assert_eq!(Age::MAX, test.future_age_to_flush(true));
         (0..bins).for_each(|_| {
             test.bucket_flushed_at_current_age(false);
         });
