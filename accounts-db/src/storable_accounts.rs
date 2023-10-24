@@ -106,7 +106,6 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for (Slot, &'a [(&'a
     }
 }
 
-#[allow(dead_code)]
 impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for (Slot, &'a [&'a (Pubkey, T)]) {
     fn pubkey(&self, index: usize) -> &Pubkey {
         &self.1[index].0
@@ -172,7 +171,6 @@ pub struct StorableAccountsBySlot<'a> {
 }
 
 impl<'a> StorableAccountsBySlot<'a> {
-    #[allow(dead_code)]
     /// each element of slots_and_accounts is (source slot, accounts moving FROM source slot)
     pub fn new(
         target_slot: Slot,
