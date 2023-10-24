@@ -14,6 +14,7 @@ use {
         kubernetes::{Kubernetes, ValidatorConfig, ClientConfig},
         ledger_helper::LedgerHelper,
         release::{BuildConfig, Deploy},
+        get_solana_root,
         ValidatorType,
     },
     std::{thread, time::Duration},
@@ -143,7 +144,8 @@ fn parse_matches() -> ArgMatches<'static> {
         .arg(
             Arg::with_name("skip_genesis_build")
                 .long("skip-genesis-build")
-                .help("NOT SUPPORTED! TODO: skip genesis build. Don't generate a new genesis and associated validator accounts"),
+                .help("skip genesis build. Don't generate a new genesis and associated validator accounts.
+                    really just for testing. can rerun a basic test without having to build and push a new docker container"),
         )
         .arg(
             Arg::with_name("hashes_per_tick")
@@ -364,6 +366,10 @@ async fn main() {
         skip_genesis_build: matches.is_present("skip_genesis_build"),
     };
 
+    if setup_config.skip_genesis_build && !get_solana_root().join("config-k8s/bootstrap-validator").exists() {
+        error!("Skipping genesis build but there is not previous genesis to use. exiting...");
+    }
+
     let client_config = ClientConfig {
         num_clients: value_t_or_exit!(matches, "number_of_clients", i32),
         client_delay_start: matches
@@ -534,53 +540,56 @@ async fn main() {
         }
     }
 
-    info!("Creating Genesis");
-    let mut genesis = Genesis::new(genesis_flags);
-    match genesis.generate_faucet() {
-        Ok(_) => (),
-        Err(err) => {
-            error!("generate faucet error! {}", err);
-            return;
-        }
-    }
-    match genesis.generate_accounts(ValidatorType::Bootstrap, 1) {
-        Ok(_) => (),
-        Err(err) => {
-            error!("generate accounts error! {}", err);
-            return;
-        }
-    }
-
-    match genesis.generate_accounts(ValidatorType::Standard, setup_config.num_validators) {
-        Ok(_) => (),
-        Err(err) => {
-            error!("generate accounts error! {}", err);
-            return;
-        }
-    }
-
-    if client_config.num_clients > 0 {
-        match genesis.create_client_accounts(
-            client_config.num_clients, 
-            DEFAULT_CLIENT_LAMPORTS_PER_SIGNATURE, 
-            client_config.bench_tps_args,
-        ) {
+    if !setup_config.skip_genesis_build {
+        info!("Creating Genesis");
+        let mut genesis = Genesis::new(genesis_flags);
+        match genesis.generate_faucet() {
             Ok(_) => (),
             Err(err) => {
-                error!("generate client accounts error! {}", err);
+                error!("generate faucet error! {}", err);
+                return;
+            }
+        }
+        match genesis.generate_accounts(ValidatorType::Bootstrap, 1) {
+            Ok(_) => (),
+            Err(err) => {
+                error!("generate accounts error! {}", err);
+                return;
+            }
+        }
+    
+        match genesis.generate_accounts(ValidatorType::Standard, setup_config.num_validators) {
+            Ok(_) => (),
+            Err(err) => {
+                error!("generate accounts error! {}", err);
+                return;
+            }
+        }
+    
+        if client_config.num_clients > 0 {
+            match genesis.create_client_accounts(
+                client_config.num_clients, 
+                DEFAULT_CLIENT_LAMPORTS_PER_SIGNATURE, 
+                client_config.bench_tps_args,
+            ) {
+                Ok(_) => (),
+                Err(err) => {
+                    error!("generate client accounts error! {}", err);
+                    return;
+                }
+            }
+        }
+    
+        // creates genesis and writes to binary file
+        match genesis.generate() {
+            Ok(_) => (),
+            Err(err) => {
+                error!("generate genesis error! {}", err);
                 return;
             }
         }
     }
 
-    // creates genesis and writes to binary file
-    match genesis.generate() {
-        Ok(_) => (),
-        Err(err) => {
-            error!("generate genesis error! {}", err);
-            return;
-        }
-    }
 
     match LedgerHelper::get_shred_version() {
         Ok(shred_version) => kub_controller.set_shred_version(shred_version),
@@ -617,7 +626,7 @@ async fn main() {
     }
 
     // Download validator version and Build docker image
-    let docker_image_config = if build_config.docker_build {
+    let docker_image_config = if build_config.docker_build && !setup_config.skip_genesis_build {
         Some(DockerImageConfig {
             base_image: matches.value_of("base_image").unwrap_or_default(),
             image_name: matches.value_of("image_name").unwrap(),
