@@ -60,6 +60,18 @@ pub trait ForkGraph {
     }
 }
 
+/// Provides information about current working slot, and its ancestors
+pub trait WorkingSlot {
+    /// Returns the current slot
+    fn current_slot(&self) -> Slot;
+
+    /// Returns the epoch of the current slot
+    fn current_epoch(&self) -> Epoch;
+
+    /// Returns true if the `other` slot is an ancestor of self, false otherwise
+    fn is_ancestor(&self, other: Slot) -> bool;
+}
+
 #[derive(Default)]
 pub enum LoadedProgramType {
     /// Tombstone for undeployed, closed or unloadable programs
@@ -490,18 +502,6 @@ pub struct ExtractedPrograms {
     pub unloaded: Vec<(Pubkey, u64)>,
 }
 
-impl ExtractedPrograms {
-    fn all_missing(
-        keys: impl Iterator<Item = (Pubkey, (LoadedProgramMatchCriteria, u64))>,
-    ) -> Self {
-        Self {
-            loaded: LoadedProgramsForTxBatch::default(),
-            missing: keys.map(|(key, (_, count))| (key, count)).collect(),
-            unloaded: vec![],
-        }
-    }
-}
-
 impl LoadedProgramsForTxBatch {
     pub fn new(slot: Slot, environments: ProgramRuntimeEnvironments) -> Self {
         Self {
@@ -756,39 +756,37 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
 
     /// Extracts a subset of the programs relevant to a transaction batch
     /// and returns which program accounts the accounts DB needs to load.
-    pub fn extract(
+    pub fn extract<S: WorkingSlot>(
         &self,
-        current_slot: Slot,
+        working_slot: &S,
         keys: impl Iterator<Item = (Pubkey, (LoadedProgramMatchCriteria, u64))>,
     ) -> ExtractedPrograms {
-        let Some(fork_graph) = &self.fork_graph else {
-            error!("Program cache doesn't have fork graph");
-            return ExtractedPrograms::all_missing(keys);
-        };
-
-        let Ok(fork_graph) = fork_graph.read() else {
-            error!("Failed to lock fork graph for reading.");
-            return ExtractedPrograms::all_missing(keys);
-        };
-
-        let Some(epoch) = fork_graph.slot_epoch(current_slot) else {
-            error!("Failed to get epoch for the current slot {}.", current_slot);
-            return ExtractedPrograms::all_missing(keys);
-        };
-
-        let environments = self.get_environments_for_epoch(epoch);
+        let environments = self.get_environments_for_epoch(working_slot.current_epoch());
         let mut missing = Vec::new();
         let mut unloaded = Vec::new();
+        let current_slot = working_slot.current_slot();
         let found = keys
             .filter_map(|(key, (match_criteria, count))| {
                 if let Some(second_level) = self.entries.get(&key) {
                     for entry in second_level.iter().rev() {
+                        let is_ancestor = if let Some(fork_graph) = &self.fork_graph {
+                            fork_graph
+                                .read()
+                                .map(|fork_graph_r| {
+                                    matches!(
+                                        fork_graph_r
+                                            .relationship(entry.deployment_slot, current_slot),
+                                        BlockRelation::Ancestor
+                                    )
+                                })
+                                .unwrap_or(false)
+                        } else {
+                            working_slot.is_ancestor(entry.deployment_slot)
+                        };
+
                         if entry.deployment_slot <= self.latest_root_slot
                             || entry.deployment_slot == current_slot
-                            || matches!(
-                                fork_graph.relationship(entry.deployment_slot, current_slot),
-                                BlockRelation::Ancestor
-                            )
+                            || is_ancestor
                         {
                             if current_slot >= entry.effective_slot {
                                 if !Self::is_entry_usable(entry, current_slot, &match_criteria) {
@@ -978,12 +976,15 @@ mod tests {
         crate::loaded_programs::{
             BlockRelation, ExtractedPrograms, ForkGraph, LoadedProgram, LoadedProgramMatchCriteria,
             LoadedProgramType, LoadedPrograms, LoadedProgramsForTxBatch, ProgramRuntimeEnvironment,
-            DELAY_VISIBILITY_SLOT_OFFSET,
+            WorkingSlot, DELAY_VISIBILITY_SLOT_OFFSET,
         },
         assert_matches::assert_matches,
         percentage::Percentage,
         solana_rbpf::program::BuiltinProgram,
-        solana_sdk::{clock::Slot, pubkey::Pubkey},
+        solana_sdk::{
+            clock::{Epoch, Slot},
+            pubkey::Pubkey,
+        },
         std::{
             ops::ControlFlow,
             sync::{
@@ -1507,6 +1508,22 @@ mod tests {
         }
     }
 
+    struct TestWorkingSlot(pub Slot);
+
+    impl WorkingSlot for TestWorkingSlot {
+        fn current_slot(&self) -> Slot {
+            self.0
+        }
+
+        fn current_epoch(&self) -> Epoch {
+            0
+        }
+
+        fn is_ancestor(&self, _other: Slot) -> bool {
+            false
+        }
+    }
+
     fn match_slot(
         table: &LoadedProgramsForTxBatch,
         program: &Pubkey,
@@ -1603,7 +1620,7 @@ mod tests {
             missing,
             unloaded,
         } = cache.extract(
-            22,
+            &TestWorkingSlot(22),
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 2)),
@@ -1626,7 +1643,7 @@ mod tests {
             missing,
             unloaded,
         } = cache.extract(
-            15,
+            &TestWorkingSlot(15),
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -1654,7 +1671,7 @@ mod tests {
             missing,
             unloaded,
         } = cache.extract(
-            18,
+            &TestWorkingSlot(18),
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -1679,7 +1696,7 @@ mod tests {
             missing,
             unloaded,
         } = cache.extract(
-            23,
+            &TestWorkingSlot(23),
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -1704,7 +1721,7 @@ mod tests {
             missing,
             unloaded,
         } = cache.extract(
-            11,
+            &TestWorkingSlot(11),
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -1742,7 +1759,7 @@ mod tests {
             missing,
             unloaded,
         } = cache.extract(
-            19,
+            &TestWorkingSlot(19),
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -1767,7 +1784,7 @@ mod tests {
             missing,
             unloaded,
         } = cache.extract(
-            21,
+            &TestWorkingSlot(21),
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -1812,7 +1829,7 @@ mod tests {
             missing,
             unloaded,
         } = cache.extract(
-            21,
+            &TestWorkingSlot(21),
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -1836,7 +1853,7 @@ mod tests {
             missing: _,
             unloaded,
         } = cache.extract(
-            27,
+            &TestWorkingSlot(27),
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -1875,7 +1892,7 @@ mod tests {
             missing,
             unloaded,
         } = cache.extract(
-            23,
+            &TestWorkingSlot(23),
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -1938,7 +1955,7 @@ mod tests {
             missing,
             unloaded,
         } = cache.extract(
-            12,
+            &TestWorkingSlot(12),
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -1959,7 +1976,7 @@ mod tests {
             missing,
             unloaded,
         } = cache.extract(
-            12,
+            &TestWorkingSlot(12),
             vec![
                 (
                     program1,
@@ -2042,7 +2059,7 @@ mod tests {
             missing,
             unloaded,
         } = cache.extract(
-            19,
+            &TestWorkingSlot(19),
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2063,7 +2080,7 @@ mod tests {
             missing,
             unloaded,
         } = cache.extract(
-            27,
+            &TestWorkingSlot(27),
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2084,7 +2101,7 @@ mod tests {
             missing,
             unloaded,
         } = cache.extract(
-            22,
+            &TestWorkingSlot(22),
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2154,7 +2171,7 @@ mod tests {
             missing,
             unloaded,
         } = cache.extract(
-            12,
+            &TestWorkingSlot(12),
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2177,7 +2194,7 @@ mod tests {
             missing,
             unloaded,
         } = cache.extract(
-            15,
+            &TestWorkingSlot(15),
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2249,7 +2266,7 @@ mod tests {
             missing: _,
             unloaded,
         } = cache.extract(
-            20,
+            &TestWorkingSlot(20),
             vec![(program1, (LoadedProgramMatchCriteria::NoCriteria, 1))].into_iter(),
         );
         assert!(unloaded.is_empty());
@@ -2297,7 +2314,7 @@ mod tests {
             missing: _,
             unloaded: _,
         } = cache.extract(
-            20,
+            &TestWorkingSlot(20),
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2313,7 +2330,7 @@ mod tests {
             missing,
             unloaded: _,
         } = cache.extract(
-            6,
+            &TestWorkingSlot(6),
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2333,7 +2350,7 @@ mod tests {
             missing: _,
             unloaded: _,
         } = cache.extract(
-            20,
+            &TestWorkingSlot(20),
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2349,7 +2366,7 @@ mod tests {
             missing,
             unloaded: _,
         } = cache.extract(
-            6,
+            &TestWorkingSlot(6),
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2369,7 +2386,7 @@ mod tests {
             missing: _,
             unloaded: _,
         } = cache.extract(
-            20,
+            &TestWorkingSlot(20),
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),

@@ -110,7 +110,7 @@ use {
         invoke_context::BuiltinFunctionWithContext,
         loaded_programs::{
             LoadProgramMetrics, LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType,
-            LoadedPrograms, LoadedProgramsForTxBatch, DELAY_VISIBILITY_SLOT_OFFSET,
+            LoadedPrograms, LoadedProgramsForTxBatch, WorkingSlot, DELAY_VISIBILITY_SLOT_OFFSET,
         },
         log_collector::LogCollector,
         message_processor::MessageProcessor,
@@ -929,6 +929,19 @@ pub struct CommitTransactionCounts {
     pub signature_count: u64,
 }
 
+impl WorkingSlot for Bank {
+    fn current_slot(&self) -> Slot {
+        self.slot
+    }
+
+    fn current_epoch(&self) -> Epoch {
+        self.epoch
+    }
+
+    fn is_ancestor(&self, other: Slot) -> bool {
+        self.ancestors.contains_key(&other)
+    }
+}
 #[derive(Debug, Default)]
 /// result of calculating the stake rewards at end of epoch
 struct StakeRewardCalculation {
@@ -5017,7 +5030,7 @@ impl Bank {
         } = {
             // Lock the global cache to figure out which programs need to be loaded
             let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
-            loaded_programs_cache.extract(self.slot, programs_and_slots.into_iter())
+            loaded_programs_cache.extract(self, programs_and_slots.into_iter())
         };
 
         // Load missing programs while global cache is unlocked
