@@ -339,21 +339,35 @@ struct CumulativeOffset {
     start_offset: usize,
 }
 
-trait ExtractSliceFromRawData<'b, T: 'b> {
+macro_rules! extract_slice_from_raw_data {
+    (@index 0) => {
+        let s = &s[offset.index[$d]];
+    };
+
+    (@index 1) => {
+        extract_slice_from_raw_data!(@index 0);
+        let s = &s[offset.index[1]];
+    };
+
+     ($ty: ty, $($d:expr),+ ) => {
+        impl<'b, T: 'b> ExtractSliceFromRawData<'b, T> for $ty {
+            fn extract<'a>(&'b self, offset: &'a CumulativeOffset, start: usize) -> &'b [T] {
+                let s = &self;
+                $(
+                    let s = &s[offset.index[$d]];
+                )+
+                &s[start..]
+            }
+        }
+    };
+}
+
+pub trait ExtractSliceFromRawData<'b, T: 'b> {
     fn extract<'a>(&'b self, offset: &'a CumulativeOffset, start: usize) -> &'b [T];
 }
 
-impl<'b, T: 'b> ExtractSliceFromRawData<'b, T> for Vec<Vec<T>> {
-    fn extract<'a>(&'b self, offset: &'a CumulativeOffset, start: usize) -> &'b [T] {
-        &self[offset.index[0]][start..]
-    }
-}
-
-impl<'b, T: 'b> ExtractSliceFromRawData<'b, T> for Vec<Vec<Vec<T>>> {
-    fn extract<'a>(&'b self, offset: &'a CumulativeOffset, start: usize) -> &'b [T] {
-        &self[offset.index[0]][offset.index[1]][start..]
-    }
-}
+extract_slice_from_raw_data!(Vec<Vec<T>>, 0);
+extract_slice_from_raw_data!(Vec<Vec<Vec<T>>>, 0, 1);
 
 // Allow retrieving &[start..end] from a logical src: Vec<T>, where src is really Vec<Vec<T>> (or later Vec<Vec<Vec<T>>>)
 // This model prevents callers from having to flatten which saves both working memory and time.
