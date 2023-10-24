@@ -1,0 +1,45 @@
+[package]
+name = "solana-cargo-registry"
+description = "Solana cargo registry"
+documentation = "https://docs.rs/solana-cargo-registry"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+clap = { workspace = true }
+flate2 = { workspace = true }
+hex = { workspace = true }
+hyper = { workspace = true, features = ["full"] }
+log = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+solana-clap-utils = { workspace = true }
+solana-cli = { workspace = true }
+solana-cli-config = { workspace = true }
+solana-cli-output = { workspace = true }
+solana-logger = { workspace = true }
+solana-remote-wallet = { workspace = true, features = ["default"] }
+solana-rpc-client = { workspace = true, features = ["default"] }
+solana-rpc-client-api = { workspace = true }
+solana-sdk = { workspace = true }
+solana-version = { workspace = true }
+tar = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+toml = { workspace = true }
+
+[dev-dependencies]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[build-dependencies]
+rustc_version = { workspace = true }
+
+[features]
+dev-context-only-utils = []

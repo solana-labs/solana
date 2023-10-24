@@ -21,7 +21,7 @@ use {
     solana_accounts_db::{
         accounts_db::CalcAccountsHashDataSource, accounts_hash::CalcAccountsHashConfig,
     },
-    solana_measure::measure::Measure,
+    solana_measure::{measure::Measure, measure_us},
     solana_sdk::clock::{BankId, Slot},
     stats::StatsManager,
     std::{
@@ -370,7 +370,6 @@ impl SnapshotRequestHandler {
                         epoch_schedule: snapshot_root_bank.epoch_schedule(),
                         rent_collector: snapshot_root_bank.rent_collector(),
                         store_detailed_debug_info_on_failure: false,
-                        include_slot_in_hash: snapshot_root_bank.include_slot_in_hash(),
                     },
                 )
                 .unwrap();
@@ -382,6 +381,8 @@ impl SnapshotRequestHandler {
         let mut clean_time = Measure::start("clean_time");
         snapshot_root_bank.clean_accounts(*last_full_snapshot_slot);
         clean_time.stop();
+
+        let (_, shrink_ancient_time_us) = measure_us!(snapshot_root_bank.shrink_ancient_slots());
 
         let mut shrink_time = Measure::start("shrink_time");
         snapshot_root_bank.shrink_candidate_slots();
@@ -464,6 +465,7 @@ impl SnapshotRequestHandler {
             ("snapshot_time", snapshot_time.as_us(), i64),
             ("total_us", total_time.as_us(), i64),
             ("non_snapshot_time_us", non_snapshot_time_us, i64),
+            ("shrink_ancient_time_us", shrink_ancient_time_us, i64),
         );
         Ok(snapshot_root_bank.block_height())
     }
@@ -705,6 +707,7 @@ impl AccountsBackgroundService {
                             bank.force_flush_accounts_cache();
                             bank.clean_accounts(last_full_snapshot_slot);
                             last_cleaned_block_height = bank.block_height();
+                            bank.shrink_ancient_slots();
                         }
                         bank.shrink_candidate_slots();
                     }

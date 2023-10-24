@@ -72,7 +72,6 @@ impl CrdsGossip {
     pub fn new_push_messages(
         &self,
         pubkey: &Pubkey, // This node.
-        pending_push_messages: Vec<CrdsValue>,
         now: u64,
         stakes: &HashMap<Pubkey, u64>,
     ) -> (
@@ -80,12 +79,6 @@ impl CrdsGossip {
         usize, // number of values
         usize, // number of push messages
     ) {
-        {
-            let mut crds = self.crds.write().unwrap();
-            for entry in pending_push_messages {
-                let _ = crds.insert(entry, now, GossipRoute::LocalMessage);
-            }
-        }
         self.push.new_push_messages(pubkey, &self.crds, now, stakes)
     }
 
@@ -274,7 +267,6 @@ impl CrdsGossip {
     /// Process a pull response.
     pub fn process_pull_responses(
         &self,
-        from: &Pubkey,
         responses: Vec<CrdsValue>,
         responses_expired_timeout: Vec<CrdsValue>,
         failed_inserts: Vec<Hash>,
@@ -283,7 +275,6 @@ impl CrdsGossip {
     ) {
         self.pull.process_pull_responses(
             &self.crds,
-            from,
             responses,
             responses_expired_timeout,
             failed_inserts,

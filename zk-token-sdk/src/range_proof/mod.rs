@@ -1,3 +1,15 @@
+//! The Bulletproofs range-proof implementation over Curve25519 Ristretto points.
+//!
+//! The implementation is based on the dalek-cryptography bulletproofs
+//! [implementation](https://github.com/dalek-cryptography/bulletproofs). Compared to the original
+//! implementation by dalek-cryptography:
+//! - This implementation focuses on the range proof implementation, while the dalek-cryptography
+//! crate additionally implements the general bulletproofs implementation for languages that can be
+//! represented by arithmetic circuits as well as MPC.
+//! - This implementation implements a non-interactive range proof aggregation that is specified in
+//! the original Bulletproofs [paper](https://eprint.iacr.org/2017/1066) (Section 4.3).
+//!
+
 #[cfg(not(target_os = "solana"))]
 use {
     crate::encryption::pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
@@ -69,8 +81,6 @@ impl RangeProof {
         let nm: usize = bit_lengths.iter().sum();
         assert!(nm.is_power_of_two());
 
-        // TODO: precompute generators
-        // TODO: double check Pedersen generators and range proof generators does not interfere
         let bp_gens = BulletproofGens::new(nm);
 
         // bit-decompose values and generate their Pedersen vector commitment

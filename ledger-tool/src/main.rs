@@ -3139,7 +3139,7 @@ fn main() {
 
                         if child_bank_required {
                             while !bank.is_complete() {
-                                bank.register_tick(&Hash::new_unique());
+                                bank.register_unique_tick();
                             }
                         }
 

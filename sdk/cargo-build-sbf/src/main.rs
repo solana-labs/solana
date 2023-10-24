@@ -82,7 +82,7 @@ where
         .iter()
         .map(|arg| arg.as_ref().to_str().unwrap_or("?"))
         .join(" ");
-    info!("spawn: {}", msg);
+    info!("spawn: {:?} {}", program, msg);
 
     let child = Command::new(program)
         .args(args)
@@ -626,14 +626,16 @@ fn build_solana_package(
         // The package version directory doesn't contain a valid
         // installation, and it should be removed.
         let target_path_parent = target_path.parent().expect("Invalid package path");
-        fs::remove_dir_all(target_path_parent).unwrap_or_else(|err| {
-            error!(
-                "Failed to remove {} while recovering from installation failure: {}",
-                target_path_parent.to_string_lossy(),
-                err,
-            );
-            exit(1);
-        });
+        if target_path_parent.exists() {
+            fs::remove_dir_all(target_path_parent).unwrap_or_else(|err| {
+                error!(
+                    "Failed to remove {} while recovering from installation failure: {}",
+                    target_path_parent.to_string_lossy(),
+                    err,
+                );
+                exit(1);
+            });
+        }
         error!("Failed to install platform-tools: {}", err);
         exit(1);
     });
@@ -911,7 +913,7 @@ fn main() {
 
     // The following line is scanned by CI configuration script to
     // separate cargo caches according to the version of platform-tools.
-    let platform_tools_version = String::from("v1.37");
+    let platform_tools_version = String::from("v1.39");
     let rust_base_version = get_base_rust_version(platform_tools_version.as_str());
     let version = format!(
         "{}\nplatform-tools {}\n{}",

@@ -76,6 +76,8 @@ pub enum ElGamalError {
     DerivationMethodNotSupported,
     #[error("seed length too short for derivation")]
     SeedLengthTooShort,
+    #[error("seed length too long for derivation")]
+    SeedLengthTooLong,
 }
 
 /// Algorithm handle for the twisted ElGamal encryption scheme
@@ -449,9 +451,13 @@ impl ElGamalSecretKey {
     /// Derive an ElGamal secret key from an entropy seed.
     pub fn from_seed(seed: &[u8]) -> Result<Self, ElGamalError> {
         const MINIMUM_SEED_LEN: usize = ELGAMAL_SECRET_KEY_LEN;
+        const MAXIMUM_SEED_LEN: usize = 65535;
 
         if seed.len() < MINIMUM_SEED_LEN {
             return Err(ElGamalError::SeedLengthTooShort);
+        }
+        if seed.len() > MAXIMUM_SEED_LEN {
+            return Err(ElGamalError::SeedLengthTooLong);
         }
         Ok(ElGamalSecretKey(Scalar::hash_from_bytes::<Sha3_512>(seed)))
     }
@@ -1026,6 +1032,9 @@ mod tests {
 
         let too_short_seed = vec![0; 31];
         assert!(ElGamalKeypair::from_seed(&too_short_seed).is_err());
+
+        let too_long_seed = vec![0; 65536];
+        assert!(ElGamalKeypair::from_seed(&too_long_seed).is_err());
     }
 
     #[test]

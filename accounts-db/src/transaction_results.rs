@@ -176,13 +176,16 @@ pub fn inner_instructions_list_from_instruction_trace(
 
 #[cfg(test)]
 mod tests {
-    use {super::*, solana_sdk::transaction_context::TransactionContext};
+    use {
+        super::*,
+        solana_sdk::{sysvar::rent::Rent, transaction_context::TransactionContext},
+    };
 
     #[test]
     fn test_inner_instructions_list_from_instruction_trace() {
         let instruction_trace = [1, 2, 1, 1, 2, 3, 2];
         let mut transaction_context =
-            TransactionContext::new(vec![], None, 3, instruction_trace.len());
+            TransactionContext::new(vec![], Rent::default(), 3, instruction_trace.len());
         for (index_in_trace, stack_height) in instruction_trace.into_iter().enumerate() {
             while stack_height <= transaction_context.get_instruction_context_stack_height() {
                 transaction_context.pop().unwrap();

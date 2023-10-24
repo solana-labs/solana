@@ -11,7 +11,7 @@ use {
         accounts::{AccountAddressFilter, Accounts},
         accounts_db::{
             test_utils::create_test_accounts, AccountShrinkThreshold,
-            VerifyAccountsHashAndLamportsConfig, INCLUDE_SLOT_IN_HASH_TESTS,
+            VerifyAccountsHashAndLamportsConfig,
         },
         accounts_index::{AccountSecondaryIndexes, ScanConfig},
         ancestors::Ancestors,
@@ -118,7 +118,6 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
                 ignore_mismatch: false,
                 store_detailed_debug_info: false,
                 use_bg_thread_pool: false,
-                include_slot_in_hash: INCLUDE_SLOT_IN_HASH_TESTS,
             }
         ))
     });

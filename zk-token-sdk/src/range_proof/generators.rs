@@ -6,10 +6,7 @@ use {
     sha3::{Sha3XofReader, Shake256},
 };
 
-/// Generators for Pedersen vector commitments.
-///
-/// The code is copied from https://github.com/dalek-cryptography/bulletproofs for now...
-
+/// Generators for Pedersen vector commitments that are used for inner-product proofs.
 struct GeneratorsChain {
     reader: Sha3XofReader,
 }
@@ -79,14 +76,6 @@ impl BulletproofGens {
         gens.increase_capacity(gens_capacity);
         gens
     }
-
-    // pub fn new_aggregate(gens_capacities: Vec<usize>) -> Vec<BulletproofGens> {
-    //     let mut gens_vector = Vec::new();
-    //     for (capacity, i) in gens_capacities.iter().enumerate() {
-    //         gens_vector.push(BulletproofGens::new(capacity, &i.to_le_bytes()));
-    //     }
-    //     gens_vector
-    // }
 
     /// Increases the generators' capacity to the amount specified.
     /// If less than or equal to the current capacity, does nothing.
