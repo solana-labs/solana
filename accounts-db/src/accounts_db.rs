@@ -486,6 +486,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     exhaustively_verify_refcounts: false,
     create_ancient_storage: CreateAncientStorage::Pack,
     test_partitioned_epoch_rewards: TestPartitionedEpochRewards::CompareResults,
+    test_skip_rewrites_but_include_in_bank_hash: None,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
@@ -498,6 +499,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     exhaustively_verify_refcounts: false,
     create_ancient_storage: CreateAncientStorage::Pack,
     test_partitioned_epoch_rewards: TestPartitionedEpochRewards::None,
+    test_skip_rewrites_but_include_in_bank_hash: None,
 };
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
@@ -557,6 +559,7 @@ pub struct AccountsDbConfig {
     /// if None, ancient append vecs are set to ANCIENT_APPEND_VEC_DEFAULT_OFFSET
     /// Some(offset) means include slots up to (max_slot - (slots_per_epoch - 'offset'))
     pub ancient_append_vec_offset: Option<i64>,
+    pub test_skip_rewrites_but_include_in_bank_hash: Option<bool>,
     pub skip_initial_hash_calc: bool,
     pub exhaustively_verify_refcounts: bool,
     /// how to create ancient storages
@@ -1439,6 +1442,9 @@ pub struct AccountsDb {
     #[allow(dead_code)]
     /// from AccountsDbConfig
     create_ancient_storage: CreateAncientStorage,
+
+    /// true if this client should skip rewrites but still include those rewrites in the bank hash as if rewrites had occurred.
+    pub test_skip_rewrites_but_include_in_bank_hash: bool,
 
     pub accounts_cache: AccountsCache,
 
@@ -2547,6 +2553,7 @@ impl AccountsDb {
             exhaustively_verify_refcounts: false,
             partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig::default(),
             epoch_accounts_hash_manager: EpochAccountsHashManager::new_invalid(),
+            test_skip_rewrites_but_include_in_bank_hash: false,
         }
     }
 
@@ -2622,6 +2629,12 @@ impl AccountsDb {
             .map(|config| config.test_partitioned_epoch_rewards)
             .unwrap_or_default();
 
+        let test_skip_rewrites_but_include_in_bank_hash = accounts_db_config
+            .as_ref()
+            .map(|config| config.test_skip_rewrites_but_include_in_bank_hash)
+            .flatten()
+            .unwrap_or_default();
+
         let partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig =
             PartitionedEpochRewardsConfig::new(test_partitioned_epoch_rewards);
 
@@ -2647,6 +2660,7 @@ impl AccountsDb {
                 .and_then(|x| x.write_cache_limit_bytes),
             partitioned_epoch_rewards_config,
             exhaustively_verify_refcounts,
+            test_skip_rewrites_but_include_in_bank_hash,
             ..Self::default_with_accounts_index(
                 accounts_index,
                 base_working_path,
@@ -5862,7 +5876,7 @@ impl AccountsDb {
             if let Some(min) = removed_slots.clone().min() {
                 info!(
                     "purge_slots_from_cache_and_store: {:?}",
-                    self.get_pubkey_hash_for_slot(*min).0
+                    self.get_pubkey_hash_for_slot(*min, Vec::default()).0
                 );
             }
         }
@@ -7906,8 +7920,13 @@ impl AccountsDb {
     pub fn get_pubkey_hash_for_slot(
         &self,
         slot: Slot,
+        skipped_rewrites: Vec<(Pubkey, AccountHash)>,
     ) -> (Vec<(Pubkey, AccountHash)>, u64, Measure) {
         let mut scan = Measure::start("scan");
+
+        let mut skipped_rewrites = skipped_rewrites
+            .into_iter()
+            .collect::<HashMap<Pubkey, AccountHash>>();
 
         let scan_result: ScanStorageResult<(Pubkey, AccountHash), DashMap<Pubkey, AccountHash>> =
             self.scan_account_storage(
@@ -7924,10 +7943,16 @@ impl AccountsDb {
         scan.stop();
 
         let accumulate = Measure::start("accumulate");
-        let hashes: Vec<_> = match scan_result {
+        let mut hashes: Vec<_> = match scan_result {
             ScanStorageResult::Cached(cached_result) => cached_result,
             ScanStorageResult::Stored(stored_result) => stored_result.into_iter().collect(),
         };
+
+        hashes.iter().for_each(|(k, _h)| {
+            skipped_rewrites.remove(k);
+        });
+        hashes.extend(skipped_rewrites.into_iter());
+
         (hashes, scan.as_us(), accumulate)
     }
 
@@ -7972,8 +7997,12 @@ impl AccountsDb {
     ///
     /// As part of calculating the accounts delta hash, get a list of accounts modified this slot
     /// (aka dirty pubkeys) and add them to `self.uncleaned_pubkeys` for future cleaning.
-    pub fn calculate_accounts_delta_hash(&self, slot: Slot) -> AccountsDeltaHash {
-        self.calculate_accounts_delta_hash_internal(slot, None)
+    pub fn calculate_accounts_delta_hash(
+        &self,
+        slot: Slot,
+        skipped_rewrites: Vec<(Pubkey, AccountHash)>,
+    ) -> AccountsDeltaHash {
+        self.calculate_accounts_delta_hash_internal(slot, None, skipped_rewrites)
     }
 
     /// Calculate accounts delta hash for `slot`
@@ -7984,8 +8013,10 @@ impl AccountsDb {
         &self,
         slot: Slot,
         ignore: Option<Pubkey>,
+        skipped_rewrites: Vec<(Pubkey, AccountHash)>,
     ) -> AccountsDeltaHash {
-        let (mut hashes, scan_us, mut accumulate) = self.get_pubkey_hash_for_slot(slot);
+        let (mut hashes, scan_us, mut accumulate) =
+            self.get_pubkey_hash_for_slot(slot, skipped_rewrites);
         let dirty_keys = hashes.iter().map(|(pubkey, _hash)| *pubkey).collect();
         if let Some(ignore) = ignore {
             hashes.retain(|k| k.0 != ignore);
