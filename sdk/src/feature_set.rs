@@ -724,6 +724,10 @@ pub mod update_hashes_per_tick6 {
     solana_sdk::declare_id!("FKu1qYwLQSiehz644H6Si65U5ZQ2cp9GxsyFUfYcuADv");
 }
 
+pub mod allow_commission_decrease_at_any_time {
+    solana_sdk::declare_id!("9wWpKE7vL7EmZcDTPm8n9pPVGJLynedAdAxh3BzZnAoF");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -900,6 +904,7 @@ lazy_static! {
         (update_hashes_per_tick4::id(), "Update desired hashes per tick to 7.6M"),
         (update_hashes_per_tick5::id(), "Update desired hashes per tick to 9.2M"),
         (update_hashes_per_tick6::id(), "Update desired hashes per tick to 10M"),
+        (allow_commission_decrease_at_any_time::id(), "Allow commission decrease at any time in epoch #33843"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
