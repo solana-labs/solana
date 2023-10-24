@@ -334,7 +334,7 @@ const _: () = assert!(
 
 #[derive(Default, Debug, PartialEq, Eq)]
 pub struct CumulativeOffset {
-    /// Since the source data in at most 2D, two indexes are enough.
+    /// Since the source data is at most 2D, two indexes are enough.
     pub index: [usize; 2],
     pub start_offset: usize,
 }
