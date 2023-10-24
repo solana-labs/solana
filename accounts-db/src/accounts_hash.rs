@@ -334,7 +334,8 @@ const _: () = assert!(
 
 #[derive(Default, Debug, PartialEq, Eq)]
 pub struct CumulativeOffset {
-    pub index: Vec<usize>,
+    /// Since the source data is at most 2D, two indexes are enough.
+    pub index: [usize; 2],
     pub start_offset: usize,
 }
 
@@ -416,7 +417,7 @@ impl CumulativeOffsets {
             .filter_map(|(i, len)| {
                 if len > 0 {
                     let result = CumulativeOffset {
-                        index: vec![i],
+                        index: [i, i],
                         start_offset: total_count,
                     };
                     total_count += len;
@@ -1373,7 +1374,7 @@ mod tests {
                             cumulative_offsets = Vec::with_capacity(raw.len() * v_outer.len());
                         }
                         cumulative_offsets.push(CumulativeOffset {
-                            index: vec![i, j],
+                            index: [i, j],
                             start_offset: total_count,
                         });
                         total_count += len;
@@ -2126,7 +2127,7 @@ mod tests {
     fn test_accountsdb_cumulative_find() {
         let input = CumulativeOffsets {
             cumulative_offsets: vec![CumulativeOffset {
-                index: vec![0],
+                index: [0; 2],
                 start_offset: 0,
             }],
             total_count: 0,
@@ -2136,11 +2137,11 @@ mod tests {
         let input = CumulativeOffsets {
             cumulative_offsets: vec![
                 CumulativeOffset {
-                    index: vec![0],
+                    index: [0; 2],
                     start_offset: 0,
                 },
                 CumulativeOffset {
-                    index: vec![1],
+                    index: [1; 2],
                     start_offset: 2,
                 },
             ],
