@@ -255,6 +255,12 @@ Remember to move your authorized withdrawer keypair into a very secure location 
 
 Read more about [creating and managing a vote account](vote-accounts.md).
 
+## Stake your validator
+
+Until your validator is staked, it will be unable to vote, propose leader blocks, or collect rewards.
+
+Follow the instructions to [stake your validator](validator-stake.md)
+
 ## Known validators
 
 If you know and respect other validator operators, you can specify this on the command line with the `--known-validator <PUBKEY>`
@@ -430,9 +436,3 @@ which starts the solana validator process uses "exec" to do so (example: "exec
 solana-validator ..."); otherwise, when logrotate sends its signal to the
 validator, the enclosing script will die and take the validator process with
 it.
-
-## Stake your validator
-
-Until your validator is staked, it will be unable to vote, propose leader blocks, or collect rewards.
-
-Follow the instructions to [stake your validator](validator-stake.md)
