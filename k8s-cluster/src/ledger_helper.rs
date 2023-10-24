@@ -42,8 +42,8 @@ impl LedgerHelper {
             .arg("create-snapshot")
             .arg("0")
             .arg(LEDGER_DIR.as_os_str())
-            // .arg("--warp-slot")
-            // .arg(warp_slot.to_string())
+            .arg("--warp-slot")
+            .arg(warp_slot.to_string())
             .output()
             .expect("Failed to execute create-snapshot command");
 

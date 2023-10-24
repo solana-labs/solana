@@ -1,13 +1,13 @@
 use {
-    crate::{boxed_error, SOLANA_ROOT},
+    crate::SOLANA_ROOT,
     base64::{engine::general_purpose, Engine as _},
     k8s_openapi::{
         api::{
             apps::v1::{ReplicaSet, ReplicaSetSpec},
             core::v1::{
-                ConfigMap, ConfigMapVolumeSource, Container, EnvVar, EnvVarSource, Namespace,
-                ObjectFieldSelector, PodSecurityContext, PodSpec, PodTemplateSpec, Secret,
-                SecretVolumeSource, Service, ServicePort, ServiceSpec, Volume, VolumeMount,
+                Container, EnvVar, EnvVarSource, Namespace, ObjectFieldSelector,
+                PodSecurityContext, PodSpec, PodTemplateSpec, Secret, SecretVolumeSource, Service,
+                ServicePort, ServiceSpec, Volume, VolumeMount,
             },
         },
         apimachinery::pkg::apis::meta::v1::LabelSelector,
@@ -19,7 +19,7 @@ use {
     },
     log::*,
     solana_sdk::hash::Hash,
-    std::{collections::BTreeMap, error::Error, fs::File, io::Read},
+    std::{collections::BTreeMap, error::Error},
 };
 
 pub struct ValidatorConfig<'a> {
@@ -188,7 +188,6 @@ impl<'a> Kubernetes<'a> {
         container_name: &str,
         image_name: &str,
         num_bootstrap_validators: i32,
-        config_map_name: Option<String>,
         secret_name: Option<String>,
         label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
@@ -235,7 +234,6 @@ impl<'a> Kubernetes<'a> {
             num_bootstrap_validators,
             env_var,
             &command,
-            config_map_name,
             accounts_volume,
             accounts_volume_mount,
         )
@@ -254,36 +252,12 @@ impl<'a> Kubernetes<'a> {
         num_validators: i32,
         env_vars: Vec<EnvVar>,
         command: &[String],
-        config_map_name: Option<String>,
         accounts_volume: Volume,
         accounts_volume_mount: VolumeMount,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
-        let mut volumes = vec![accounts_volume];
-        let mut volume_mounts = vec![accounts_volume_mount];
-        // if app_name == "bootstrap-validator" {
-        //     info!("bootstrap create replicaset");
-        //     // let Some(config_map_name) = config_map_name else {
-        //     //     return Err(boxed_error!("config_map_name is None!"));
-        //     // };
+        let volumes = vec![accounts_volume];
+        let volume_mounts = vec![accounts_volume_mount];
 
-        //     let genesis_volume = Volume {
-        //         name: "genesis-config-volume".into(),
-        //         config_map: Some(ConfigMapVolumeSource {
-        //             name: Some(config_map_name.clone()),
-        //             ..Default::default()
-        //         }),
-        //         ..Default::default()
-        //     };
-
-        //     let genesis_volume_mount = VolumeMount {
-        //         name: "genesis-config-volume".to_string(),
-        //         mount_path: "/home/solana/genesis".to_string(),
-        //         ..Default::default()
-        //     };
-
-        //     volumes.push(genesis_volume);
-        //     volume_mounts.push(genesis_volume_mount);
-        // }
         // Define the pod spec
         let pod_spec = PodTemplateSpec {
             metadata: Some(ObjectMeta {
@@ -524,7 +498,6 @@ impl<'a> Kubernetes<'a> {
         validator_index: i32,
         image_name: &str,
         num_validators: i32,
-        config_map_name: Option<String>,
         secret_name: Option<String>,
         label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
@@ -594,7 +567,6 @@ impl<'a> Kubernetes<'a> {
             num_validators,
             env_vars,
             &command,
-            config_map_name,
             accounts_volume,
             accounts_volume_mount,
         )
