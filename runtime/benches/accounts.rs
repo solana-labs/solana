@@ -154,9 +154,7 @@ fn test_accounts_delta_hash(bencher: &mut Bencher) {
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 100_000, 0);
     bencher.iter(|| {
-        accounts
-            .accounts_db
-            .calculate_accounts_delta_hash(0, Vec::default());
+        accounts.accounts_db.calculate_accounts_delta_hash(0);
     });
 }
 

@@ -235,9 +235,7 @@ mod serde_snapshot_tests {
         create_test_accounts(&accounts, &mut pubkeys, 100, slot);
         check_accounts_local(&accounts, &pubkeys, 100);
         accounts.add_root(slot);
-        let accounts_delta_hash = accounts
-            .accounts_db
-            .calculate_accounts_delta_hash(slot, Vec::default());
+        let accounts_delta_hash = accounts.accounts_db.calculate_accounts_delta_hash(slot);
         let accounts_hash = AccountsHash(Hash::new_unique());
         accounts
             .accounts_db
@@ -272,9 +270,7 @@ mod serde_snapshot_tests {
             .unwrap(),
         );
         check_accounts_local(&daccounts, &pubkeys, 100);
-        let daccounts_delta_hash = daccounts
-            .accounts_db
-            .calculate_accounts_delta_hash(slot, Vec::default());
+        let daccounts_delta_hash = daccounts.accounts_db.calculate_accounts_delta_hash(slot);
         assert_eq!(accounts_delta_hash, daccounts_delta_hash);
         let daccounts_hash = daccounts.accounts_db.get_accounts_hash(slot).unwrap().0;
         assert_eq!(accounts_hash, daccounts_hash);
@@ -304,7 +300,7 @@ mod serde_snapshot_tests {
         db.store_for_tests(new_root, &[(&key2, &account0)]);
         db.add_root_and_flush_write_cache(new_root);
 
-        db.calculate_accounts_delta_hash(new_root, Vec::default());
+        db.calculate_accounts_delta_hash(new_root);
         db.update_accounts_hash_for_tests(new_root, &linear_ancestors(new_root), false, false);
 
         // Simulate reconstruction from snapshot
@@ -343,7 +339,7 @@ mod serde_snapshot_tests {
             accounts.add_root_and_flush_write_cache(0);
             accounts.check_storage(0, 100);
             accounts.check_accounts(&pubkeys, 0, 100, 2);
-            accounts.calculate_accounts_delta_hash(0, Vec::default());
+            accounts.calculate_accounts_delta_hash(0);
 
             let mut pubkeys1: Vec<Pubkey> = vec![];
 
@@ -361,7 +357,7 @@ mod serde_snapshot_tests {
             // accounts
             accounts.create_account(&mut pubkeys1, latest_slot, 10, 0, 0);
 
-            accounts.calculate_accounts_delta_hash(latest_slot, Vec::default());
+            accounts.calculate_accounts_delta_hash(latest_slot);
             accounts.add_root_and_flush_write_cache(latest_slot);
             accounts.check_storage(1, 21);
 
@@ -381,7 +377,7 @@ mod serde_snapshot_tests {
             // 21 + 10 = 31 accounts
             accounts.create_account(&mut pubkeys2, latest_slot, 10, 0, 0);
 
-            accounts.calculate_accounts_delta_hash(latest_slot, Vec::default());
+            accounts.calculate_accounts_delta_hash(latest_slot);
             accounts.add_root_and_flush_write_cache(latest_slot);
             accounts.check_storage(2, 31);
 
@@ -479,7 +475,7 @@ mod serde_snapshot_tests {
 
         accounts.print_accounts_stats("accounts_post_purge");
 
-        accounts.calculate_accounts_delta_hash(current_slot, Vec::default());
+        accounts.calculate_accounts_delta_hash(current_slot);
         accounts.update_accounts_hash_for_tests(
             current_slot,
             &linear_ancestors(current_slot),
@@ -536,7 +532,7 @@ mod serde_snapshot_tests {
         accounts.add_root_and_flush_write_cache(current_slot);
 
         accounts.print_accounts_stats("pre_f");
-        accounts.calculate_accounts_delta_hash(current_slot, Vec::default());
+        accounts.calculate_accounts_delta_hash(current_slot);
         accounts.update_accounts_hash_for_tests(4, &Ancestors::default(), false, false);
 
         let accounts = f(accounts, current_slot);
@@ -633,7 +629,7 @@ mod serde_snapshot_tests {
         accounts.add_root_and_flush_write_cache(current_slot);
 
         accounts.print_count_and_status("before reconstruct");
-        accounts.calculate_accounts_delta_hash(current_slot, Vec::default());
+        accounts.calculate_accounts_delta_hash(current_slot);
         accounts.update_accounts_hash_for_tests(
             current_slot,
             &linear_ancestors(current_slot),
@@ -676,7 +672,7 @@ mod serde_snapshot_tests {
         current_slot += 1;
         accounts.store_for_tests(current_slot, &[(&pubkey1, &account)]);
         accounts.store_for_tests(current_slot, &[(&pubkey2, &account)]);
-        accounts.calculate_accounts_delta_hash(current_slot, Vec::default());
+        accounts.calculate_accounts_delta_hash(current_slot);
         accounts.add_root(current_slot);
 
         // B: Test multiple updates to pubkey1 in a single slot/storage
@@ -691,7 +687,7 @@ mod serde_snapshot_tests {
         // Stores to same pubkey, same slot only count once towards the
         // ref count
         assert_eq!(2, accounts.ref_count_for_pubkey(&pubkey1));
-        accounts.calculate_accounts_delta_hash(current_slot, Vec::default());
+        accounts.calculate_accounts_delta_hash(current_slot);
 
         // C: Yet more update to trigger lazy clean of step A
         current_slot += 1;
@@ -699,7 +695,7 @@ mod serde_snapshot_tests {
         accounts.store_for_tests(current_slot, &[(&pubkey1, &account3)]);
         accounts.add_root_and_flush_write_cache(current_slot);
         assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
-        accounts.calculate_accounts_delta_hash(current_slot, Vec::default());
+        accounts.calculate_accounts_delta_hash(current_slot);
         accounts.add_root_and_flush_write_cache(current_slot);
 
         // D: Make pubkey1 0-lamport; also triggers clean of step B
@@ -731,13 +727,13 @@ mod serde_snapshot_tests {
             3, /* == 3 - 1 + 1 */
             accounts.ref_count_for_pubkey(&pubkey1)
         );
-        accounts.calculate_accounts_delta_hash(current_slot, Vec::default());
+        accounts.calculate_accounts_delta_hash(current_slot);
         accounts.add_root(current_slot);
 
         // E: Avoid missing bank hash error
         current_slot += 1;
         accounts.store_for_tests(current_slot, &[(&dummy_pubkey, &dummy_account)]);
-        accounts.calculate_accounts_delta_hash(current_slot, Vec::default());
+        accounts.calculate_accounts_delta_hash(current_slot);
         accounts.add_root(current_slot);
 
         accounts.assert_load_account(current_slot, pubkey1, zero_lamport);
@@ -768,7 +764,7 @@ mod serde_snapshot_tests {
         // F: Finally, make Step A cleanable
         current_slot += 1;
         accounts.store_for_tests(current_slot, &[(&pubkey2, &account)]);
-        accounts.calculate_accounts_delta_hash(current_slot, Vec::default());
+        accounts.calculate_accounts_delta_hash(current_slot);
         accounts.add_root(current_slot);
 
         // Do clean
@@ -809,7 +805,7 @@ mod serde_snapshot_tests {
                 accounts.store_for_tests(current_slot, &[(pubkey, &account)]);
             }
             let shrink_slot = current_slot;
-            accounts.calculate_accounts_delta_hash(current_slot, Vec::default());
+            accounts.calculate_accounts_delta_hash(current_slot);
             accounts.add_root_and_flush_write_cache(current_slot);
 
             current_slot += 1;
@@ -819,7 +815,7 @@ mod serde_snapshot_tests {
             for pubkey in updated_pubkeys {
                 accounts.store_for_tests(current_slot, &[(pubkey, &account)]);
             }
-            accounts.calculate_accounts_delta_hash(current_slot, Vec::default());
+            accounts.calculate_accounts_delta_hash(current_slot);
             accounts.add_root_and_flush_write_cache(current_slot);
 
             accounts.clean_accounts_for_tests();

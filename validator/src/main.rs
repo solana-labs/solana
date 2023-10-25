@@ -1207,7 +1207,7 @@ pub fn main() {
             .unwrap_or_default(),
         test_partitioned_epoch_rewards,
         test_skip_rewrites_but_include_in_bank_hash: matches
-            .is_present("accounts_db_test_skip_rewrites_but_include_in_bank_hash"),
+            .is_present("accounts_db_test_skip_rewrites"),
         ..AccountsDbConfig::default()
     };
 

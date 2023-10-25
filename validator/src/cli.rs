@@ -1195,9 +1195,9 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .hidden(hidden_unless_forced())
         )
         .arg(
-            Arg::with_name("accounts_db_test_skip_rewrites_but_include_in_bank_hash")
-                .long("accounts-db-test-skip-rewrites-but-include-in-bank-hash")
-                .help("Debug option to skip rewrites for rent exempted accounts but still added them in bank delta hash calculation")
+            Arg::with_name("accounts_db_test_skip_rewrites")
+                .long("accounts-db-test-skip-rewrites")
+                .help("Debug option to skip rewrites for rent-exempt accounts but still add them in bank delta hash calculation")
                 .hidden(hidden_unless_forced())
         )
         .arg(
