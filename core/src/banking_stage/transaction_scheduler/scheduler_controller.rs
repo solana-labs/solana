@@ -60,7 +60,7 @@ impl SchedulerController {
             let decision = self.decision_maker.make_consume_or_forward_decision();
             self.process_transactions(&decision)?;
             self.scheduler.receive_completed(&mut self.container)?;
-            if self.receive_packets(&decision) {
+            if !self.receive_packets(&decision) {
                 break;
             }
         }
@@ -94,7 +94,7 @@ impl SchedulerController {
         }
     }
 
-    /// Returns whether the packet receiver was disconnected.
+    /// Returns whether the packet receiver is still connected.
     fn receive_packets(&mut self, decision: &BufferedPacketsDecision) -> bool {
         let remaining_queue_capacity = self.container.remaining_queue_capacity();
 
@@ -124,10 +124,10 @@ impl SchedulerController {
             }
             (Ok(receive_packet_results), false) => drop(receive_packet_results),
             (Err(RecvTimeoutError::Timeout), _) => {}
-            (Err(RecvTimeoutError::Disconnected), _) => return true,
+            (Err(RecvTimeoutError::Disconnected), _) => return false,
         }
 
-        false
+        true
     }
 
     fn buffer_packets(&mut self, packets: Vec<ImmutableDeserializedPacket>) {
