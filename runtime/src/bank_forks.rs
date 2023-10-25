@@ -248,12 +248,6 @@ impl BankForks {
         self.insert(bank)
     }
 
-    // gating this under #[cfg(feature = "dev-context-only-utils")] isn't easy due to
-    // solana-program-test's usage...
-    pub fn insert_without_scheduler(&mut self, bank: Bank) -> Arc<Bank> {
-        self.insert(bank).clone_without_scheduler()
-    }
-
     pub fn remove(&mut self, slot: Slot) -> Option<Arc<Bank>> {
         let bank = self.banks.remove(&slot)?;
         for parent in bank.proper_ancestors() {
