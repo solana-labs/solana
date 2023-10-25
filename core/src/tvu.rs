@@ -138,6 +138,7 @@ impl Tvu {
         turbine_quic_endpoint_sender: AsyncSender<(SocketAddr, Bytes)>,
         turbine_quic_endpoint_receiver: Receiver<(Pubkey, SocketAddr, Bytes)>,
         repair_quic_endpoint_sender: AsyncSender<LocalRequest>,
+        slots_to_repair_for_wen_restart: Option<Arc<RwLock<Vec<Slot>>>>,
     ) -> Result<Self, String> {
         let TvuSockets {
             repair: repair_socket,
@@ -164,6 +165,7 @@ impl Tvu {
             cluster_info.clone(),
             turbine_disabled,
             exit.clone(),
+            slots_to_repair_for_wen_restart.clone(),
         );
 
         let (verified_sender, verified_receiver) = unbounded();
@@ -205,6 +207,7 @@ impl Tvu {
                 repair_whitelist: tvu_config.repair_whitelist,
                 cluster_info: cluster_info.clone(),
                 cluster_slots: cluster_slots.clone(),
+                slots_to_repair_for_wen_restart: slots_to_repair_for_wen_restart.clone(),
             };
             WindowService::new(
                 blockstore.clone(),
@@ -491,6 +494,7 @@ pub mod tests {
             turbine_quic_endpoint_sender,
             turbine_quic_endpoint_receiver,
             repair_quic_endpoint_sender,
+            None,
         )
         .expect("assume success");
         exit.store(true, Ordering::Relaxed);

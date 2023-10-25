@@ -893,6 +893,7 @@ pub fn should_discard_shred(
     root: Slot,
     max_slot: Slot,
     shred_version: u16,
+    slots_to_repair_for_wen_restart: &Option<Vec<Slot>>,
     stats: &mut ShredFetchStats,
 ) -> bool {
     debug_assert!(root < max_slot);
@@ -924,6 +925,12 @@ pub fn should_discard_shred(
             if slot > max_slot {
                 stats.slot_out_of_range += 1;
                 return true;
+            }
+            if let Some(slots) = slots_to_repair_for_wen_restart {
+                if !slots.contains(&slot) {
+                    stats.slot_out_of_range += 1;
+                    return true;
+                } 
             }
             slot
         }
@@ -1171,6 +1178,7 @@ mod tests {
             root,
             max_slot,
             shred_version,
+            &None,
             &mut stats
         ));
         assert_eq!(stats, ShredFetchStats::default());
@@ -1181,6 +1189,7 @@ mod tests {
             root,
             max_slot,
             shred_version,
+            &None,
             &mut stats
         ));
         assert_eq!(stats.index_overrun, 1);
@@ -1191,6 +1200,7 @@ mod tests {
             root,
             max_slot,
             shred_version,
+            &None,
             &mut stats
         ));
         assert_eq!(stats.index_overrun, 2);
@@ -1201,6 +1211,7 @@ mod tests {
             root,
             max_slot,
             shred_version,
+            &None,
             &mut stats
         ));
         assert_eq!(stats.index_overrun, 3);
@@ -1211,6 +1222,7 @@ mod tests {
             root,
             max_slot,
             shred_version,
+            &None,
             &mut stats
         ));
         assert_eq!(stats.index_overrun, 4);
@@ -1221,6 +1233,7 @@ mod tests {
             root,
             max_slot,
             shred_version,
+            &None,
             &mut stats
         ));
         assert_eq!(stats.bad_parent_offset, 1);
@@ -1241,6 +1254,7 @@ mod tests {
             root,
             max_slot,
             shred_version,
+            &None,
             &mut stats
         ));
 
@@ -1260,6 +1274,7 @@ mod tests {
             root,
             max_slot,
             shred_version,
+            &None,
             &mut stats
         ));
         assert_eq!(1, stats.index_out_of_bounds);
@@ -1280,6 +1295,7 @@ mod tests {
             root,
             max_slot,
             shred_version,
+            &None,
             &mut stats
         ));
         packet.buffer_mut()[OFFSET_OF_SHRED_VARIANT] = u8::MAX;
@@ -1289,6 +1305,7 @@ mod tests {
             root,
             max_slot,
             shred_version,
+            &None,
             &mut stats
         ));
         assert_eq!(1, stats.bad_shred_type);
@@ -1300,10 +1317,42 @@ mod tests {
             root,
             max_slot,
             shred_version,
+            &None,
             &mut stats
         ));
         assert_eq!(1, stats.bad_shred_type);
         assert_eq!(stats.shred_version_mismatch, 1);
+
+        // In wen_restart, only slot in given range should be accepted.
+        let shred = Shred::new_from_data(
+            10,   // slot
+            3,   // index
+            1,   // parent_offset
+            &[], // data
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            0, // reference_tick
+            shred_version,
+            0, // fec_set_index
+        );
+        shred.copy_to_packet(&mut packet);
+        assert!(!should_discard_shred(
+            &packet,
+            root,
+            max_slot,
+            shred_version,
+            &Some(vec![9, 10, 11]),
+            &mut stats
+        ));
+
+        assert!(should_discard_shred(
+            &packet,
+            root,
+            max_slot,
+            shred_version,
+            &Some(vec![11, 12, 13]),
+            &mut stats
+        ));
+        assert_eq!(stats.slot_out_of_range, 1);
     }
 
     // Asserts that ShredType is backward compatible with u8.

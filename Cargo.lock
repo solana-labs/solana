@@ -7560,6 +7560,7 @@ dependencies = [
  "prost-build",
  "prost-types",
  "protobuf-src",
+ "rand 0.8.5",
  "rustc_version 0.4.0",
  "serial_test",
  "solana-entry",

@@ -213,6 +213,8 @@ pub struct RepairInfo {
     pub repair_validators: Option<HashSet<Pubkey>>,
     // Validators which should be given priority when serving
     pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
+    // A given list of slots to repair when in wen_restart
+    pub slots_to_repair_for_wen_restart: Option<Arc<RwLock<Vec<Slot>>>>,
 }
 
 pub struct RepairSlotRange {
@@ -386,17 +388,24 @@ impl RepairService {
                 );
                 add_votes_elapsed.stop();
 
-                let repairs = repair_weight.get_best_weighted_repairs(
-                    blockstore,
-                    root_bank.epoch_stakes_map(),
-                    root_bank.epoch_schedule(),
-                    MAX_ORPHANS,
-                    MAX_REPAIR_LENGTH,
-                    MAX_UNKNOWN_LAST_INDEX_REPAIRS,
-                    MAX_CLOSEST_COMPLETION_REPAIRS,
-                    &mut repair_timing,
-                    &mut best_repairs_stats,
-                );
+                let repairs = match repair_info.slots_to_repair_for_wen_restart.clone() {
+                    Some(slots_to_repair) => Self::generate_repairs_for_wen_restart(
+                        blockstore,
+                        MAX_REPAIR_LENGTH,
+                        &slots_to_repair.read().unwrap().clone(),
+                    ),
+                    None => repair_weight.get_best_weighted_repairs(
+                        blockstore,
+                        root_bank.epoch_stakes_map(),
+                        root_bank.epoch_schedule(),
+                        MAX_ORPHANS,
+                        MAX_REPAIR_LENGTH,
+                        MAX_UNKNOWN_LAST_INDEX_REPAIRS,
+                        MAX_CLOSEST_COMPLETION_REPAIRS,
+                        &mut repair_timing,
+                        &mut best_repairs_stats,
+                    ),
+                };
 
                 let mut popular_pruned_forks = repair_weight.get_popular_pruned_forks(
                     root_bank.epoch_stakes_map(),
@@ -675,6 +684,31 @@ impl RepairService {
                 break;
             }
         }
+    }
+
+    pub(crate) fn generate_repairs_for_wen_restart(
+        blockstore: &Blockstore,
+        max_repairs: usize,
+        slots: &Vec<Slot>,
+    ) -> Vec<ShredRepairType> {
+        let mut result: Vec<ShredRepairType> = Vec::new();
+        for slot in slots {
+            if let Some(slot_meta) = blockstore.meta(*slot).unwrap() {
+                let new_repairs = Self::generate_repairs_for_slot(
+                    blockstore,
+                    *slot,
+                    &slot_meta,
+                    max_repairs - result.len(),
+                );
+                result.extend(new_repairs);
+            } else {
+                result.push(ShredRepairType::HighestShred(*slot, 0));
+            }
+            if result.len() >= max_repairs {
+                break;
+            }
+        }
+        result
     }
 
     /// Generate repairs for all slots `x` in the repair_range.start <= x <= repair_range.end
@@ -1347,5 +1381,65 @@ mod test {
             &None,
         );
         assert_ne!(duplicate_status.repair_pubkey_and_addr, dummy_addr);
+    }
+
+    #[test]
+    fn test_generate_repairs_for_wen_restart() {
+        solana_logger::setup();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let max_repairs = 3;
+
+        let slots: Vec<u64> = vec![2, 3, 5, 7];
+        let num_entries_per_slot = max_ticks_per_n_shreds(1, None) + 1;
+
+        let shreds = make_chaining_slot_entries(&slots, num_entries_per_slot);
+        for (mut slot_shreds, _) in shreds.into_iter() {
+            slot_shreds.remove(1);
+            blockstore.insert_shreds(slot_shreds, None, false).unwrap();
+        }
+        sleep_shred_deferment_period();
+
+        let mut slots_to_repair: Vec<Slot> = vec![];
+
+        // When slots_to_repair is empty, ignore all and return empty result.
+        let result = RepairService::generate_repairs_for_wen_restart(
+            &blockstore,
+            max_repairs,
+            &slots_to_repair,
+        );
+        assert!(result.is_empty());
+
+        // When asked to repair dead_slot and some unknown slot, return correct results.
+        slots_to_repair = vec![2, 81];
+        let result = RepairService::generate_repairs_for_wen_restart(
+            &blockstore,
+            max_repairs,
+            &slots_to_repair,
+        );
+        assert_eq!(
+            result,
+            vec![
+                ShredRepairType::HighestShred(2, 1),
+                ShredRepairType::HighestShred(81, 0),
+            ],
+        );
+
+        // Test that it will not generate more than max_repairs.e().unwrap();
+        slots_to_repair = vec![3, 82, 5, 83, 7, 84];
+        let result = RepairService::generate_repairs_for_wen_restart(
+            &blockstore,
+            max_repairs,
+            &slots_to_repair,
+        );
+        assert_eq!(result.len(), max_repairs);
+        assert_eq!(
+            result,
+            vec![
+                ShredRepairType::HighestShred(3, 1),
+                ShredRepairType::HighestShred(82, 0),
+                ShredRepairType::HighestShred(5, 1),
+            ],
+        );
     }
 }

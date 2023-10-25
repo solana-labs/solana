@@ -1214,6 +1214,11 @@ impl Validator {
             .unwrap();
 
         let in_wen_restart = config.wen_restart_proto_path.is_some() && !waited_for_supermajority;
+        let slots_to_repair_for_wen_restart = if in_wen_restart {
+            Some(Arc::new(RwLock::new(Vec::new())))
+        } else {
+            None
+        };
         let tower = match process_blockstore.process_to_create_tower() {
             Ok(tower) => {
                 info!("Tower state: {:?}", tower);
@@ -1282,6 +1287,7 @@ impl Validator {
             turbine_quic_endpoint_sender.clone(),
             turbine_quic_endpoint_receiver,
             repair_quic_endpoint_sender,
+            slots_to_repair_for_wen_restart.clone(),
         )?;
 
         if in_wen_restart {
@@ -1291,6 +1297,8 @@ impl Validator {
                 last_vote,
                 blockstore.clone(),
                 cluster_info.clone(),
+                bank_forks.clone(),
+                slots_to_repair_for_wen_restart.clone(),
             ) {
                 Ok(()) => {
                     return Err("wen_restart phase one completedy".to_string());
