@@ -188,7 +188,7 @@ fn sanitize_requested_heap_size(bytes: u32) -> bool {
         && bytes % 1024 == 0
 }
 
-// Supports request_units_derpecated ix, returns compute_unit_price from deprecated requested
+// Supports request_units_deprecated ix, returns compute_unit_price from deprecated requested
 // units.
 fn support_deprecated_requested_units(additional_fee: u32, compute_unit_limit: u32) -> Option<u64> {
     // TODO: remove support of 'Deprecated' after feature remove_deprecated_request_unit_ix::id() is activated
