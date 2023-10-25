@@ -98,18 +98,19 @@ impl SchedulerController {
     fn receive_packets(&mut self, decision: &BufferedPacketsDecision) -> bool {
         let remaining_queue_capacity = self.container.remaining_queue_capacity();
 
+        const MAX_PACKET_RECEIVE_TIME: Duration = Duration::from_millis(100);
         let (recv_timeout, should_buffer) = match decision {
             BufferedPacketsDecision::Consume(_) => (
                 if self.container.is_empty() {
-                    Duration::from_millis(100)
+                    MAX_PACKET_RECEIVE_TIME
                 } else {
-                    Duration::from_millis(0)
+                    Duration::ZERO
                 },
                 true,
             ),
-            BufferedPacketsDecision::Forward => (Duration::from_millis(100), false),
+            BufferedPacketsDecision::Forward => (MAX_PACKET_RECEIVE_TIME, false),
             BufferedPacketsDecision::ForwardAndHold | BufferedPacketsDecision::Hold => {
-                (Duration::from_millis(100), true)
+                (MAX_PACKET_RECEIVE_TIME, true)
             }
         };
 
