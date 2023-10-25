@@ -655,7 +655,7 @@ impl RestartLastVotedForkSlots {
     pub fn new(
         from: Pubkey,
         now: u64,
-        last_voted_fork: &mut [Slot],
+        last_voted_fork: &[Slot],
         last_voted_hash: Hash,
         shred_version: u16,
     ) -> Result<Self, String> {
@@ -700,13 +700,13 @@ impl RestartLastVotedForkSlots {
     pub fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
         let pubkey = pubkey.unwrap_or_else(solana_sdk::pubkey::new_rand);
         let num_slots = rng.gen_range(2..20);
-        let mut slots = std::iter::repeat_with(|| 47825632 + rng.gen_range(0..512))
+        let slots = std::iter::repeat_with(|| 47825632 + rng.gen_range(0..512))
             .take(num_slots)
             .collect::<Vec<Slot>>();
         RestartLastVotedForkSlots::new(
             pubkey,
             new_rand_timestamp(rng),
-            &mut slots,
+            &slots,
             Hash::new_unique(),
             1,
         )
@@ -1335,14 +1335,9 @@ mod test {
     #[test]
     fn test_max_restart_last_voted_fork_slots_space() {
         let keypair = Keypair::new();
-        let header = RestartLastVotedForkSlots::new(
-            keypair.pubkey(),
-            timestamp(),
-            &mut [1],
-            Hash::default(),
-            0,
-        )
-        .unwrap();
+        let header =
+            RestartLastVotedForkSlots::new(keypair.pubkey(), timestamp(), &[1], Hash::default(), 0)
+                .unwrap();
         // If the following assert fails, please update MAX_RESTART_LAST_VOTED_FORK_SLOTS_SPACE
         assert_eq!(
             MAX_RESTART_LAST_VOTED_FORK_SLOTS_SPACE,
@@ -1352,11 +1347,11 @@ mod test {
         // Create large enough slots to make sure we are discarding some to make slots fit.
         let mut rng = rand::thread_rng();
         let large_length = 8000;
-        let mut range: Vec<Slot> = make_rand_slots(&mut rng).take(large_length).collect();
+        let range: Vec<Slot> = make_rand_slots(&mut rng).take(large_length).collect();
         let large_slots = RestartLastVotedForkSlots::new(
             keypair.pubkey(),
             timestamp(),
-            &mut range,
+            &range,
             Hash::default(),
             0,
         )
@@ -1373,11 +1368,11 @@ mod test {
         let slot = 53;
         let slot_parent = slot - 5;
         let shred_version = 21;
-        let mut original_slots_vec = [slot_parent, slot];
+        let original_slots_vec = [slot_parent, slot];
         let slots = RestartLastVotedForkSlots::new(
             keypair.pubkey(),
             timestamp(),
-            &mut original_slots_vec,
+            &original_slots_vec,
             Hash::default(),
             shred_version,
         )
@@ -1400,18 +1395,18 @@ mod test {
         let bad_value = RestartLastVotedForkSlots::new(
             keypair.pubkey(),
             timestamp(),
-            &mut [],
+            &[],
             Hash::default(),
             shred_version,
         );
         assert!(bad_value.is_err());
 
         let last_slot: Slot = 5000;
-        let mut large_slots_vec: Vec<Slot> = (0..last_slot + 1).collect();
+        let large_slots_vec: Vec<Slot> = (0..last_slot + 1).collect();
         let large_slots = RestartLastVotedForkSlots::new(
             keypair.pubkey(),
             timestamp(),
-            &mut large_slots_vec,
+            &large_slots_vec,
             Hash::default(),
             shred_version,
         )

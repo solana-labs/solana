@@ -962,11 +962,7 @@ impl ClusterInfo {
         }
     }
 
-    pub fn push_restart_last_voted_fork_slots(
-        &self,
-        update: &mut [Slot],
-        last_vote_bankhash: Hash,
-    ) {
+    pub fn push_restart_last_voted_fork_slots(&self, update: &[Slot], last_vote_bankhash: Hash) {
         let now = timestamp();
         match RestartLastVotedForkSlots::new(
             self.id(),
@@ -4540,7 +4536,7 @@ mod tests {
                 update.push(i * 1050 + j);
             }
         }
-        cluster_info.push_restart_last_voted_fork_slots(&mut update, Hash::default());
+        cluster_info.push_restart_last_voted_fork_slots(&update, Hash::default());
         cluster_info.flush_push_queue();
 
         let mut cursor = Cursor::default();
@@ -4583,7 +4579,7 @@ mod tests {
             let mut node = cluster_info.my_contact_info.write().unwrap();
             node.set_shred_version(42);
         }
-        cluster_info.push_restart_last_voted_fork_slots(&mut update, Hash::default());
+        cluster_info.push_restart_last_voted_fork_slots(&update, Hash::default());
         cluster_info.flush_push_queue();
         // Should now include both slots.
         let slots = cluster_info.get_restart_last_voted_fork_slots(&mut Cursor::default());
