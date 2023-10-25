@@ -821,7 +821,7 @@ pub struct Bank {
 
     /// until the skipped rewrites feature is activated, it is possible to skip rewrites and still include
     /// the account hash of the accounts that would have been rewritten as bank hash expects.
-    skipped_rewrites: RwLock<Vec<(Pubkey, AccountHash)>>,
+    skipped_rewrites: RwLock<HashMap<Pubkey, AccountHash>>,
 
     /// Transaction fee structure
     pub fee_structure: FeeStructure,
@@ -6094,7 +6094,7 @@ impl Bank {
             self.skipped_rewrites
                 .write()
                 .unwrap()
-                .append(&mut skipped_rewrites);
+                .extend(skipped_rewrites.into_iter());
         }
 
         if !accounts_to_store.is_empty() {
