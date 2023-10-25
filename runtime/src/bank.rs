@@ -74,14 +74,14 @@ use {
             AccountAddressFilter, Accounts, LoadedTransaction, PubkeyAccountSlot, RewardInterval,
             TransactionLoadResult,
         },
-        accounts_db::AccountsDb,
         accounts_db::{
-            AccountShrinkThreshold, AccountStorageEntry, AccountsDbConfig,
+            AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig,
             CalcAccountsHashDataSource, VerifyAccountsHashAndLamportsConfig,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
-        accounts_hash::AccountHash,
-        accounts_hash::{AccountsHash, CalcAccountsHashConfig, HashStats, IncrementalAccountsHash},
+        accounts_hash::{
+            AccountHash, AccountsHash, CalcAccountsHashConfig, HashStats, IncrementalAccountsHash,
+        },
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
         accounts_partition::{self, Partition, PartitionIndex},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -6084,7 +6084,7 @@ impl Bank {
                 // This is what consensus requires prior to activation of bank_hash_skips_rent_rewrites.
                 // This code path exists to allow us to test the long term effects on validators when the skipped rewrites
                 // feature is enabled.
-                let hash = AccountsDb::hash_account(account, &pubkey);
+                let hash = AccountsDb::hash_account(account, pubkey);
                 skipped_rewrites.push((*pubkey, hash));
             }
             rent_debits.insert(pubkey, rent_collected_info.rent_amount, account.lamports());

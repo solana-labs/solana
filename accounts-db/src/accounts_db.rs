@@ -7950,7 +7950,7 @@ impl AccountsDb {
         hashes.iter().for_each(|(k, _h)| {
             skipped_rewrites.remove(k);
         });
-        hashes.extend(skipped_rewrites.into_iter());
+        hashes.extend(skipped_rewrites);
 
         (hashes, scan.as_us(), accumulate)
     }
