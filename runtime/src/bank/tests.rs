@@ -2408,22 +2408,6 @@ fn test_transfer_to_sysvar() {
 }
 
 #[test]
-fn test_bank_deposit() {
-    let bank = create_simple_test_bank(100);
-
-    // Test new account
-    let key = solana_sdk::pubkey::new_rand();
-    let new_balance = bank.deposit(&key, 10).unwrap();
-    assert_eq!(new_balance, 10);
-    assert_eq!(bank.get_balance(&key), 10);
-
-    // Existing account
-    let new_balance = bank.deposit(&key, 3).unwrap();
-    assert_eq!(new_balance, 13);
-    assert_eq!(bank.get_balance(&key), 13);
-}
-
-#[test]
 fn test_bank_withdraw() {
     let bank = create_simple_test_bank(100);
 
@@ -2434,7 +2418,7 @@ fn test_bank_withdraw() {
         Err(TransactionError::AccountNotFound)
     );
 
-    bank.deposit(&key, 3).unwrap();
+    test_utils::deposit(&bank, &key, 3).unwrap();
     assert_eq!(bank.get_balance(&key), 3);
 
     // Low balance
@@ -6453,7 +6437,7 @@ fn test_clean_nonrooted() {
     // Store some lamports in bank 1
     let some_lamports = 123;
     let bank1 = Arc::new(Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1));
-    bank1.deposit(&pubkey0, some_lamports).unwrap();
+    test_utils::deposit(&bank1, &pubkey0, some_lamports).unwrap();
     goto_end_of_slot(bank1.clone());
     bank1.freeze();
     bank1.flush_accounts_cache_slot_for_tests();
@@ -6463,7 +6447,7 @@ fn test_clean_nonrooted() {
     // Store some lamports for pubkey1 in bank 2, root bank 2
     // bank2's parent is bank0
     let bank2 = Arc::new(Bank::new_from_parent(bank0, &Pubkey::default(), 2));
-    bank2.deposit(&pubkey1, some_lamports).unwrap();
+    test_utils::deposit(&bank2, &pubkey1, some_lamports).unwrap();
     bank2.store_account(&pubkey0, &account_zero);
     goto_end_of_slot(bank2.clone());
     bank2.freeze();
@@ -6478,7 +6462,7 @@ fn test_clean_nonrooted() {
     bank2.clean_accounts_for_tests();
 
     let bank3 = Arc::new(Bank::new_from_parent(bank2, &Pubkey::default(), 3));
-    bank3.deposit(&pubkey1, some_lamports + 1).unwrap();
+    test_utils::deposit(&bank3, &pubkey1, some_lamports + 1).unwrap();
     goto_end_of_slot(bank3.clone());
     bank3.freeze();
     bank3.squash();
@@ -6532,8 +6516,8 @@ fn test_shrink_candidate_slots_cached() {
     // Store some lamports in bank 1
     let some_lamports = 123;
     let bank1 = Arc::new(new_from_parent(bank0));
-    bank1.deposit(&pubkey1, some_lamports).unwrap();
-    bank1.deposit(&pubkey2, some_lamports).unwrap();
+    test_utils::deposit(&bank1, &pubkey1, some_lamports).unwrap();
+    test_utils::deposit(&bank1, &pubkey2, some_lamports).unwrap();
     goto_end_of_slot(bank1.clone());
     bank1.freeze();
     bank1.squash();
@@ -6543,7 +6527,7 @@ fn test_shrink_candidate_slots_cached() {
 
     // Store some lamports for pubkey1 in bank 2, root bank 2
     let bank2 = Arc::new(new_from_parent(bank1));
-    bank2.deposit(&pubkey1, some_lamports).unwrap();
+    test_utils::deposit(&bank2, &pubkey1, some_lamports).unwrap();
     bank2.store_account(&pubkey0, &account0);
     goto_end_of_slot(bank2.clone());
     bank2.freeze();
@@ -6740,7 +6724,7 @@ fn test_add_builtin_account_inherited_cap_while_replacing() {
             assert_ne!(bank.capitalization(), bank.calculate_capitalization(true));
             continue;
         }
-        bank.deposit(&program_id, 10).unwrap();
+        test_utils::deposit(&bank, &program_id, 10).unwrap();
         if pass == 2 {
             add_root_and_flush_write_cache(&bank);
             assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
@@ -6767,7 +6751,7 @@ fn test_add_builtin_account_squatted_while_not_replacing() {
             assert_ne!(bank.capitalization(), bank.calculate_capitalization(true));
             continue;
         }
-        bank.deposit(&program_id, 10).unwrap();
+        test_utils::deposit(&bank, &program_id, 10).unwrap();
         if pass == 1 {
             add_root_and_flush_write_cache(&bank);
             assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
@@ -6890,7 +6874,7 @@ fn test_add_precompiled_account_inherited_cap_while_replacing() {
             assert_ne!(bank.capitalization(), bank.calculate_capitalization(true));
             continue;
         }
-        bank.deposit(&program_id, 10).unwrap();
+        test_utils::deposit(&bank, &program_id, 10).unwrap();
         if pass == 2 {
             add_root_and_flush_write_cache(&bank);
             assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
@@ -6918,7 +6902,7 @@ fn test_add_precompiled_account_squatted_while_not_replacing() {
             assert_ne!(bank.capitalization(), bank.calculate_capitalization(true));
             continue;
         }
-        bank.deposit(&program_id, 10).unwrap();
+        test_utils::deposit(&bank, &program_id, 10).unwrap();
         if pass == 1 {
             add_root_and_flush_write_cache(&bank);
             assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
@@ -7754,7 +7738,7 @@ fn test_compute_active_feature_set() {
     assert!(!feature_set.is_active(&test_feature));
 
     // Depositing into the `test_feature` account should do nothing
-    bank.deposit(&test_feature, 42).unwrap();
+    test_utils::deposit(&bank, &test_feature, 42).unwrap();
     let (feature_set, new_activations) = bank.compute_active_feature_set(true);
     assert!(new_activations.is_empty());
     assert!(!feature_set.is_active(&test_feature));
