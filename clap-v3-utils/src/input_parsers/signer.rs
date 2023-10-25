@@ -20,21 +20,21 @@ pub const STDOUT_OUTFILE_TOKEN: &str = "-";
 
 #[derive(Debug)]
 pub struct SignerSourceParserBuilder {
-    prompt: bool,
-    file_path: bool,
-    usb: bool,
-    stdin: bool,
-    pubkey: bool,
+    allow_prompt: bool,
+    allow_file_path: bool,
+    allow_usb: bool,
+    allow_stdin: bool,
+    allow_pubkey: bool,
     allow_legacy: bool,
 }
 impl Default for SignerSourceParserBuilder {
     fn default() -> Self {
         Self {
-            prompt: true,
-            file_path: true,
-            usb: true,
-            stdin: true,
-            pubkey: true,
+            allow_prompt: true,
+            allow_file_path: true,
+            allow_usb: true,
+            allow_stdin: true,
+            allow_pubkey: true,
             allow_legacy: true,
         }
     }
@@ -43,37 +43,37 @@ impl Default for SignerSourceParserBuilder {
 impl SignerSourceParserBuilder {
     pub fn new() -> Self {
         Self {
-            prompt: false,
-            file_path: false,
-            usb: false,
-            stdin: false,
-            pubkey: false,
+            allow_prompt: false,
+            allow_file_path: false,
+            allow_usb: false,
+            allow_stdin: false,
+            allow_pubkey: false,
             allow_legacy: true,
         }
     }
 
     pub fn allow_prompt(mut self) -> Self {
-        self.prompt = true;
+        self.allow_prompt = true;
         self
     }
 
     pub fn allow_file_path(mut self) -> Self {
-        self.file_path = true;
+        self.allow_file_path = true;
         self
     }
 
     pub fn allow_usb(mut self) -> Self {
-        self.usb = true;
+        self.allow_usb = true;
         self
     }
 
     pub fn allow_stdin(mut self) -> Self {
-        self.stdin = true;
+        self.allow_stdin = true;
         self
     }
 
     pub fn allow_pubkey(mut self) -> Self {
-        self.pubkey = true;
+        self.allow_pubkey = true;
         self
     }
 
@@ -90,11 +90,11 @@ impl SignerSourceParserBuilder {
                     return Err(SignerSourceError::UnsupportedSource);
                 }
                 match signer_source.kind {
-                    SignerSourceKind::Prompt if self.prompt => Ok(signer_source),
-                    SignerSourceKind::Filepath(_) if self.file_path => Ok(signer_source),
-                    SignerSourceKind::Usb(_) if self.usb => Ok(signer_source),
-                    SignerSourceKind::Stdin if self.stdin => Ok(signer_source),
-                    SignerSourceKind::Pubkey(_) if self.pubkey => Ok(signer_source),
+                    SignerSourceKind::Prompt if self.allow_prompt => Ok(signer_source),
+                    SignerSourceKind::Filepath(_) if self.allow_file_path => Ok(signer_source),
+                    SignerSourceKind::Usb(_) if self.allow_usb => Ok(signer_source),
+                    SignerSourceKind::Stdin if self.allow_stdin => Ok(signer_source),
+                    SignerSourceKind::Pubkey(_) if self.allow_pubkey => Ok(signer_source),
                     _ => Err(SignerSourceError::UnsupportedSource),
                 }
             },
