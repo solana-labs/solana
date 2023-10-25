@@ -7533,6 +7533,10 @@ pub mod tests {
             erasure_meta_old.first_coding_index
         );
         assert_eq!(erasure_meta.config(), erasure_meta_old.config);
+        assert_eq!(
+            erasure_meta.first_received_coding_index(),
+            erasure_meta_old.first_coding_index
+        );
         assert_eq!(erasure_meta.merkle_root(), Hash::default());
 
         let erasure_meta_new = ErasureMetaLegacy {
@@ -7551,6 +7555,10 @@ pub mod tests {
             erasure_meta_new.first_coding_index()
         );
         assert_eq!(erasure_meta.config(), erasure_meta_new.config());
+        assert_eq!(
+            erasure_meta.first_received_coding_index(),
+            erasure_meta_new.first_coding_index()
+        );
         assert_eq!(erasure_meta.merkle_root(), Hash::default());
     }
 

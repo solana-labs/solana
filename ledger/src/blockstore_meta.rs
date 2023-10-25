@@ -140,6 +140,8 @@ pub struct ErasureMeta {
     set_index: u64,
     /// First coding index in the FEC set
     first_coding_index: u64,
+    /// First coding shred received, from which we populated this ErasureMeta
+    first_received_coding_index: u64,
     /// Erasure configuration for this erasure set
     config: ErasureConfig,
     /// Merkle root for this FEC set
@@ -345,11 +347,13 @@ impl ErasureMeta {
                     num_coding: usize::from(shred.num_coding_shreds().ok()?),
                 };
                 let first_coding_index = u64::from(shred.first_coding_index()?);
+                let first_received_coding_index = u64::from(shred.index());
                 let merkle_root = Hash::default();
                 let erasure_meta = ErasureMeta {
                     set_index: u64::from(shred.fec_set_index()),
                     config,
                     first_coding_index,
+                    first_received_coding_index,
                     merkle_root,
                 };
                 Some(erasure_meta)
@@ -360,9 +364,11 @@ impl ErasureMeta {
     // Returns true if the erasure fields on the shred
     // are consistent with the erasure-meta.
     pub(crate) fn check_coding_shred(&self, shred: &Shred) -> bool {
-        let Some(other) = Self::from_coding_shred(shred) else {
+        let Some(mut other) = Self::from_coding_shred(shred) else {
             return false;
         };
+        // The order of received shreds should not impact consistency
+        other.first_received_coding_index = self.first_received_coding_index;
         self == &other
     }
 
@@ -420,6 +426,11 @@ impl ErasureMeta {
     }
 
     #[cfg(test)]
+    pub(crate) fn first_received_coding_index(&self) -> u64 {
+        self.first_received_coding_index
+    }
+
+    #[cfg(test)]
     pub(crate) fn merkle_root(&self) -> Hash {
         self.merkle_root
     }
@@ -430,6 +441,10 @@ impl From<ErasureMetaLegacy> for ErasureMeta {
         ErasureMeta {
             set_index: erasure_meta.set_index,
             first_coding_index: erasure_meta.first_coding_index,
+            // We only use this in the context of merkle_root duplicate shred
+            // proofs, so it's fine to not have the correct value here while
+            // merkle_root is Hash::default()
+            first_received_coding_index: erasure_meta.first_coding_index,
             config: erasure_meta.config,
             merkle_root: Hash::default(),
         }
@@ -554,6 +569,7 @@ mod test {
         let e_meta = ErasureMeta {
             set_index,
             first_coding_index: set_index,
+            first_received_coding_index: 0,
             config: erasure_config,
             merkle_root: Hash::default(),
         };
