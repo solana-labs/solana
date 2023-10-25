@@ -17,6 +17,7 @@ use {
         hash::Hash,
         pubkey::{self, Pubkey},
         sanitize::{Sanitize, SanitizeError},
+        serde_varint,
         signature::{Keypair, Signable, Signature, Signer},
         timing::timestamp,
         transaction::Transaction,
@@ -24,7 +25,7 @@ use {
     solana_vote::vote_parser,
     std::{
         borrow::{Borrow, Cow},
-        cmp::{min, Ordering},
+        cmp::Ordering,
         collections::{hash_map::Entry, BTreeSet, HashMap},
         fmt,
     },
@@ -42,7 +43,7 @@ pub type EpochSlotsIndex = u8;
 pub const MAX_EPOCH_SLOTS: EpochSlotsIndex = 255;
 
 // This number is MAX_CRDS_OBJECT_SIZE - empty serialized RestartLastVotedForkSlots.
-const MAX_RESTART_LAST_VOTED_FORK_SLOTS_SPACE: usize = 825;
+const MAX_RESTART_LAST_VOTED_FORK_SLOTS_SPACE: usize = 833;
 
 /// CrdsValue that is replicated across the cluster
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
@@ -502,77 +503,75 @@ pub enum SlotsOffsets {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, AbiExample)]
+struct U16(#[serde(with = "serde_varint")] u16);
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct RunLengthEncoding {
-    // For every u8 in encoded, the last bit is the encoded bit, the previous
-    // bits are the count of encoded bit. For example, 0xF1 means there are
-    // (0xF0 >> 1) number of one's (the last bit), so this byte encoded
-    // 120 consecutive 1's. Each byte can encode maximum of 127 consecutive 0's
-    // or 1's.
-    encoded: Vec<u8>,
-    len: usize,
+    // The vector always starts with 1. Encode number of 1's and 0's consecutively.
+    // For example, 110000111 is [2, 4, 3].
+    encoded: Vec<U16>,
 }
 
 impl RunLengthEncoding {
-    fn push_new_byte(
-        encoded: &mut Vec<u8>,
-        current_bit: u8,
-        current_bit_count: &mut u8,
-        len: &mut usize,
-    ) {
-        if *current_bit_count > 0 {
-            encoded.push((*current_bit_count << 1) | current_bit);
-            *len += *current_bit_count as usize;
-            *current_bit_count = 0;
+    // Return whether the encoded vec is already full.
+    fn add_number_and_test_full(
+        encoded: &mut Vec<U16>,
+        total_serde_bytes: &mut usize,
+        current_bit_count: u16,
+    ) -> bool {
+        if current_bit_count == 0 {
+            false
+        } else {
+            let serde_bits = 16 - current_bit_count.leading_zeros();
+            let serde_bytes = ((serde_bits + 6) / 7).max(1) as usize;
+            if *total_serde_bytes + serde_bytes > MAX_RESTART_LAST_VOTED_FORK_SLOTS_SPACE {
+                true
+            } else {
+                encoded.push(U16(current_bit_count));
+                *total_serde_bytes += serde_bytes;
+                false
+            }
         }
     }
 
     pub fn new(bits: &BitVec<u8>) -> Self {
-        let mut encoded: Vec<u8> = Vec::new();
-        let mut current_bit: u8 = 1;
-        let mut current_bit_count: u8 = 0;
-        let mut len = 0;
+        let mut encoded: Vec<U16> = Vec::new();
+        let mut current_bit = 1;
+        let mut current_bit_count: u16 = 0;
+        let mut total_serde_bytes = 0;
         for i in 0..bits.len() {
             let bit: u8 = bits.get(i) as u8;
             if bit == current_bit {
                 current_bit_count += 1;
-                if current_bit_count >= 0x7F {
-                    Self::push_new_byte(
-                        &mut encoded,
-                        current_bit,
-                        &mut current_bit_count,
-                        &mut len,
-                    );
-                }
             } else {
-                Self::push_new_byte(&mut encoded, current_bit, &mut current_bit_count, &mut len);
+                if Self::add_number_and_test_full(
+                    &mut encoded,
+                    &mut total_serde_bytes,
+                    current_bit_count,
+                ) {
+                    current_bit_count = 0;
+                    break;
+                }
                 current_bit = bit;
                 current_bit_count = 1;
             }
-            if encoded.len() >= MAX_RESTART_LAST_VOTED_FORK_SLOTS_SPACE {
-                break;
-            }
         }
-        if encoded.len() < MAX_RESTART_LAST_VOTED_FORK_SLOTS_SPACE {
-            Self::push_new_byte(&mut encoded, current_bit, &mut current_bit_count, &mut len);
-        }
-        Self { encoded, len }
+        Self::add_number_and_test_full(&mut encoded, &mut total_serde_bytes, current_bit_count);
+        Self { encoded }
     }
 
-    pub fn len(&self) -> usize {
-        self.len
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
+    pub fn slots_count(&self) -> usize {
+        self.encoded.iter().map(|x| x.0 as usize).sum::<usize>()
     }
 
     pub fn to_slots(&self, last_slot: Slot, min_slot: Slot) -> Vec<Slot> {
         let mut result: Vec<Slot> = Vec::new();
         let mut offset = 0;
-        for byte in &self.encoded {
-            let bit_length = byte >> 1;
-            if (byte & 0x1) > 0 {
-                for i in 0..bit_length {
+        let mut current_bit = 1;
+        for bit_count in &self.encoded {
+            let count: u16 = bit_count.0;
+            if current_bit > 0 {
+                for i in 0..count {
                     let slot = last_slot.saturating_sub(offset).saturating_sub(i as Slot);
                     if slot < min_slot {
                         return result;
@@ -583,7 +582,8 @@ impl RunLengthEncoding {
                     }
                 }
             }
-            offset += bit_length as Slot;
+            offset += count as Slot;
+            current_bit = 1 - current_bit;
         }
         result.reverse();
         result
@@ -593,23 +593,13 @@ impl RunLengthEncoding {
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct RawOffsets {
     bytes: Vec<u8>,
-    len: usize,
 }
 
 impl RawOffsets {
     pub fn new(bits: &BitVec<u8>) -> Self {
         let mut bytes = bits.clone().into_boxed_slice().to_vec();
         bytes.truncate(MAX_RESTART_LAST_VOTED_FORK_SLOTS_SPACE);
-        let len = min(bits.len() as usize, bytes.len() * 8);
-        Self { bytes, len }
-    }
-
-    pub fn len(&self) -> usize {
-        self.len
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
+        Self { bytes }
     }
 
     pub fn to_slots(&self, last_slot: Slot, min_slot: Slot) -> Vec<Slot> {
@@ -681,11 +671,12 @@ impl RestartLastVotedForkSlots {
         }
         let run_length_encoding = RunLengthEncoding::new(&uncompressed_bitvec);
         let raw_offsets = RawOffsets::new(&uncompressed_bitvec);
-        let offsets = if run_length_encoding.len() > raw_offsets.len() {
-            SlotsOffsets::RunLengthEncoding(run_length_encoding)
-        } else {
-            SlotsOffsets::RawOffsets(raw_offsets)
-        };
+        let offsets =
+            if run_length_encoding.slots_count() > MAX_RESTART_LAST_VOTED_FORK_SLOTS_SPACE * 8 {
+                SlotsOffsets::RunLengthEncoding(run_length_encoding)
+            } else {
+                SlotsOffsets::RawOffsets(raw_offsets)
+            };
         Ok(Self {
             from,
             wallclock: now,
@@ -1401,7 +1392,7 @@ mod test {
         );
         assert!(bad_value.is_err());
 
-        let last_slot: Slot = 5000;
+        let last_slot: Slot = 8000;
         let large_slots_vec: Vec<Slot> = (0..last_slot + 1).collect();
         let large_slots = RestartLastVotedForkSlots::new(
             keypair.pubkey(),
