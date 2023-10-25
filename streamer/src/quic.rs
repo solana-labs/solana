@@ -10,7 +10,7 @@ use {
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::PACKET_DATA_SIZE,
-        quic::{QUIC_MAX_TIMEOUT, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS, NotifyKeyUpdate},
+        quic::{NotifyKeyUpdate, QUIC_MAX_TIMEOUT, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS},
         signature::Keypair,
     },
     std::{
@@ -116,7 +116,7 @@ pub enum QuicServerError {
 pub struct EndpointKeyUpdater {
     endpoint: Arc<Endpoint>,
     gossip_host: IpAddr,
-    key: Arc<RwLock<Keypair>>
+    key: Arc<RwLock<Keypair>>,
 }
 
 impl NotifyKeyUpdate for EndpointKeyUpdater {
@@ -405,7 +405,7 @@ impl StreamStats {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn spawn_server(
     name: &'static str,
     sock: UdpSocket,
@@ -419,7 +419,14 @@ pub fn spawn_server(
     max_unstaked_connections: usize,
     wait_for_chunk_timeout: Duration,
     coalesce: Duration,
-) -> Result<(Arc<Endpoint>, thread::JoinHandle<()>, Arc<EndpointKeyUpdater>), QuicServerError> {
+) -> Result<
+    (
+        Arc<Endpoint>,
+        thread::JoinHandle<()>,
+        Arc<EndpointKeyUpdater>,
+    ),
+    QuicServerError,
+> {
     let runtime = rt();
     let (endpoint, _stats, task, key) = {
         let _guard = runtime.enter();
@@ -450,7 +457,7 @@ pub fn spawn_server(
     let updater = EndpointKeyUpdater {
         endpoint: endpoint.clone(),
         gossip_host,
-        key
+        key,
     };
     Ok((endpoint, handle, Arc::new(updater)))
 }

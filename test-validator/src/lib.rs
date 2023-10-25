@@ -972,23 +972,26 @@ impl TestValidator {
             validator_config.tower_storage = tower_storage.clone();
         }
 
-        let validator = Some(Validator::new(
-            node,
-            Arc::new(validator_identity),
-            &ledger_path,
-            &vote_account_address,
-            config.authorized_voter_keypairs.clone(),
-            vec![],
-            &validator_config,
-            true, // should_check_duplicate_instance
-            rpc_to_plugin_manager_receiver,
-            config.start_progress.clone(),
-            socket_addr_space,
-            DEFAULT_TPU_USE_QUIC,
-            DEFAULT_TPU_CONNECTION_POOL_SIZE,
-            config.tpu_enable_udp,
-            config.admin_rpc_service_post_init.clone(),
-        )?.0);
+        let validator = Some(
+            Validator::new(
+                node,
+                Arc::new(validator_identity),
+                &ledger_path,
+                &vote_account_address,
+                config.authorized_voter_keypairs.clone(),
+                vec![],
+                &validator_config,
+                true, // should_check_duplicate_instance
+                rpc_to_plugin_manager_receiver,
+                config.start_progress.clone(),
+                socket_addr_space,
+                DEFAULT_TPU_USE_QUIC,
+                DEFAULT_TPU_CONNECTION_POOL_SIZE,
+                config.tpu_enable_udp,
+                config.admin_rpc_service_post_init.clone(),
+            )?
+            .0,
+        );
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of
         // test validators concurrently...

@@ -1,5 +1,5 @@
 //! Definitions related to Solana over QUIC.
-use {std::time::Duration, crate::signature::Keypair};
+use {crate::signature::Keypair, std::time::Duration};
 
 pub const QUIC_PORT_OFFSET: u16 = 6;
 // Empirically found max number of concurrent streams

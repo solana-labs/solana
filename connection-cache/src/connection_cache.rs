@@ -9,7 +9,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
-    solana_sdk::{timing::AtomicInterval, signature::Keypair},
+    solana_sdk::{signature::Keypair, timing::AtomicInterval},
     std::{
         net::SocketAddr,
         sync::{atomic::Ordering, Arc, RwLock},
@@ -39,12 +39,9 @@ pub trait ConnectionManager: Send + Sync + 'static {
     fn new_connection_pool(&self) -> Self::ConnectionPool;
     fn new_connection_config(&self) -> Self::NewConnectionConfig;
     fn update_key(&mut self, _key: &Keypair) {}
-    fn get_key(&self) -> Option<&Keypair> {None}
-}
-
-struct ConnectionMap<R, S> {
-    pub map: IndexMap<SocketAddr, /*ConnectionPool:*/ R>,
-    pub connection_manager: Arc<S>,
+    fn get_key(&self) -> Option<&Keypair> {
+        None
+    }
 }
 
 pub struct ConnectionCache<
@@ -144,11 +141,10 @@ where
             .unwrap()
     }
 
-
     pub fn update_key(&self, key: &Keypair) {
         let mut map = self.map.write().unwrap();
         map.clear();
-        let mut connection_manager =self.connection_manager.write().unwrap();
+        let mut connection_manager = self.connection_manager.write().unwrap();
         connection_manager.update_key(key);
     }
     /// Create a lazy connection object under the exclusive lock of the cache map if there is not
@@ -171,7 +167,7 @@ where
             .map(|pool| pool.check_pool_status(self.connection_pool_size))
             .unwrap_or(PoolStatus::Empty);
 
-            let (cache_hit, num_evictions, eviction_timing_ms) =
+        let (cache_hit, num_evictions, eviction_timing_ms) =
             if matches!(pool_status, PoolStatus::Empty) {
                 Self::create_connection_internal(
                     &self.connection_config,

@@ -406,7 +406,7 @@ fn main() {
             tower_storage: tower_storage.clone(),
             rpc_to_plugin_manager_sender,
             //todo: is this right?
-            notifies: Vec::new()
+            notifies: Vec::new(),
         },
     );
     let dashboard = if output == Output::Dashboard {

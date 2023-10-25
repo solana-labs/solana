@@ -22,8 +22,8 @@ use {
     solana_sdk::{
         exit::Exit,
         pubkey::Pubkey,
-        signature::{read_keypair_file, Keypair, Signer},
         quic::NotifyKeyUpdate,
+        signature::{read_keypair_file, Keypair, Signer},
     },
     std::{
         collections::{HashMap, HashSet},

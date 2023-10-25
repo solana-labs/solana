@@ -101,8 +101,7 @@ impl NewConnectionConfig for QuicConfig {
     fn new() -> Result<Self, ClientError> {
         let ip = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let key = Keypair::new();
-        let (cert, priv_key) =
-            new_self_signed_tls_certificate(&key, ip)?;
+        let (cert, priv_key) = new_self_signed_tls_certificate(&key, ip)?;
         Ok(Self {
             client_certificate: Arc::new(QuicClientCertificate {
                 certificate: cert,
@@ -152,9 +151,8 @@ impl QuicConfig {
             let res = new_self_signed_tls_certificate(keypair, ip)?;
             self.ip = ip;
             res
-        } 
-            else {
-                new_self_signed_tls_certificate(keypair, self.ip)?
+        } else {
+            new_self_signed_tls_certificate(keypair, self.ip)?
         };
         self.client_certificate = Arc::new(QuicClientCertificate {
             certificate: cert,

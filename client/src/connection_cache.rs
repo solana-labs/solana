@@ -9,7 +9,10 @@ use {
         },
     },
     solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool},
-    solana_sdk::{quic::NotifyKeyUpdate, pubkey::Pubkey, signature::Keypair, transport::Result as TransportResult},
+    solana_sdk::{
+        pubkey::Pubkey, quic::NotifyKeyUpdate, signature::Keypair,
+        transport::Result as TransportResult,
+    },
     solana_streamer::streamer::StakedNodes,
     solana_udp_client::{UdpConfig, UdpConnectionManager, UdpPool},
     std::{
@@ -46,7 +49,7 @@ pub enum NonblockingClientConnection {
 impl NotifyKeyUpdate for ConnectionCache {
     fn update_key(&self, key: &Keypair) {
         match self {
-            Self::Udp(_) => {},
+            Self::Udp(_) => {}
             Self::Quic(backend) => {
                 backend.update_key(key);
             }

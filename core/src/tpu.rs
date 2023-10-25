@@ -31,7 +31,7 @@ use {
         rpc_subscriptions::RpcSubscriptions,
     },
     solana_runtime::{bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache},
-    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair, quic::NotifyKeyUpdate},
+    solana_sdk::{clock::Slot, pubkey::Pubkey, quic::NotifyKeyUpdate, signature::Keypair},
     solana_streamer::{
         nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
         quic::{spawn_server, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
@@ -259,19 +259,22 @@ impl Tpu {
             turbine_quic_endpoint_sender,
         );
 
-        (Self {
-            fetch_stage,
-            sigverify_stage,
-            vote_sigverify_stage,
-            banking_stage,
-            cluster_info_vote_listener,
-            broadcast_stage,
-            tpu_quic_t,
-            tpu_forwards_quic_t,
-            tpu_entry_notifier,
-            staked_nodes_updater_service,
-            tracer_thread_hdl,
-        }, vec![key_updater, forwards_key_updater])
+        (
+            Self {
+                fetch_stage,
+                sigverify_stage,
+                vote_sigverify_stage,
+                banking_stage,
+                cluster_info_vote_listener,
+                broadcast_stage,
+                tpu_quic_t,
+                tpu_forwards_quic_t,
+                tpu_entry_notifier,
+                staked_nodes_updater_service,
+                tracer_thread_hdl,
+            },
+            vec![key_updater, forwards_key_updater],
+        )
     }
 
     pub fn join(self) -> thread::Result<()> {

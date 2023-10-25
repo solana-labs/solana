@@ -111,10 +111,10 @@ use {
         genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,
+        quic::NotifyKeyUpdate,
         shred_version::compute_shred_version,
         signature::{Keypair, Signer},
         timing::timestamp,
-        quic::NotifyKeyUpdate,
     },
     solana_send_transaction_service::send_transaction_service,
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
@@ -2581,7 +2581,8 @@ mod tests {
                     DEFAULT_TPU_ENABLE_UDP,
                     Arc::new(RwLock::new(None)),
                 )
-                .expect("assume successful validator start").0
+                .expect("assume successful validator start")
+                .0
             })
             .collect();
 

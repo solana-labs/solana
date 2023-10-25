@@ -58,7 +58,6 @@ use {
         hash::Hash,
         pubkey::Pubkey,
         signature::{read_keypair, Keypair, Signer},
-        quic::NotifyKeyUpdate,
     },
     solana_send_transaction_service::send_transaction_service,
     solana_streamer::socket::SocketAddrSpace,
@@ -1882,7 +1881,7 @@ pub fn main() {
             tower_storage: validator_config.tower_storage.clone(),
             staked_nodes_overrides,
             rpc_to_plugin_manager_sender,
-            notifies
+            notifies,
         },
     );
 

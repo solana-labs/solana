@@ -80,7 +80,7 @@ struct PacketAccumulator {
     pub chunks: Vec<PacketChunk>,
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn spawn_server(
     name: &'static str,
     sock: UdpSocket,
@@ -94,7 +94,15 @@ pub fn spawn_server(
     max_unstaked_connections: usize,
     wait_for_chunk_timeout: Duration,
     coalesce: Duration,
-) -> Result<(Endpoint, Arc<StreamStats>, JoinHandle<()>, Arc<RwLock<Keypair>>), QuicServerError> {
+) -> Result<
+    (
+        Endpoint,
+        Arc<StreamStats>,
+        JoinHandle<()>,
+        Arc<RwLock<Keypair>>,
+    ),
+    QuicServerError,
+> {
     info!("Start {name} quic server on {sock:?}");
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
@@ -119,7 +127,7 @@ pub fn spawn_server(
         stats.clone(),
         wait_for_chunk_timeout,
         coalesce,
-        key.clone()
+        key.clone(),
     ));
     Ok((endpoint, stats, handle, key))
 }
@@ -137,7 +145,7 @@ async fn run_server(
     stats: Arc<StreamStats>,
     wait_for_chunk_timeout: Duration,
     coalesce: Duration,
-    key: Arc<RwLock<Keypair>>
+    key: Arc<RwLock<Keypair>>,
 ) {
     const WAIT_FOR_CONNECTION_TIMEOUT: Duration = Duration::from_secs(1);
     debug!("spawn quic server");
@@ -165,7 +173,11 @@ async fn run_server(
 
         if let Ok(Some(connection)) = timeout_connection {
             let key_guard = key.read().unwrap();
-            info!("Got a connection {:?} using keypair {:?}", connection.remote_address(), key_guard);
+            info!(
+                "Got a connection {:?} using keypair {:?}",
+                connection.remote_address(),
+                key_guard
+            );
             tokio::spawn(setup_connection(
                 connection,
                 unstaked_connection_table.clone(),
