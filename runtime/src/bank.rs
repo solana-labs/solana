@@ -148,7 +148,6 @@ use {
         incinerator,
         inflation::Inflation,
         instruction::InstructionError,
-        lamports::LamportsError,
         loader_v4::{self, LoaderV4State, LoaderV4Status},
         message::{AccountKeys, SanitizedMessage},
         native_loader,
@@ -3805,7 +3804,7 @@ impl Bank {
             .stakes_cache
             .stakes()
             .highest_staked_node()
-            .unwrap_or_default();
+            .unwrap_or_else(Pubkey::new_unique);
 
         self.blockhash_queue.write().unwrap().genesis_hash(
             &genesis_config.hash(),
@@ -7697,6 +7696,11 @@ impl Bank {
     pub fn prevent_rent_paying_rent_recipients(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::prevent_rent_paying_rent_recipients::id())
+    }
+
+    pub fn validate_fee_collector_account(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::validate_fee_collector_account::id())
     }
 
     pub fn read_cost_tracker(&self) -> LockResult<RwLockReadGuard<CostTracker>> {
