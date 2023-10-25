@@ -510,12 +510,11 @@ mod tests {
 
         let bank0 = Bank::new_for_tests(&genesis_config);
         let bank_forks = BankForks::new_rw_arc(bank0);
-        let mut bank_forks = bank_forks.write().unwrap();
 
         // Fill bank_forks with banks with votes landing in the next slot
         // Create enough banks such that vote account will root slots 0 and 1
         for x in 0..33 {
-            let previous_bank = bank_forks.get(x).unwrap();
+            let previous_bank = bank_forks.read().unwrap().get(x).unwrap();
             let bank = Bank::new_from_parent(previous_bank.clone(), &Pubkey::default(), x + 1);
             let vote = vote_transaction::new_vote_transaction(
                 vec![x],
@@ -527,20 +526,23 @@ mod tests {
                 None,
             );
             bank.process_transaction(&vote).unwrap();
-            bank_forks.insert(bank);
+            bank_forks.write().unwrap().insert(bank);
         }
 
-        let working_bank = bank_forks.working_bank();
+        let working_bank = bank_forks.read().unwrap().working_bank();
         let root = get_vote_account_root_slot(
             validator_vote_keypairs.vote_keypair.pubkey(),
             &working_bank,
         );
         for x in 0..root {
-            bank_forks.set_root(x, &AbsRequestSender::default(), None);
+            bank_forks
+                .write()
+                .unwrap()
+                .set_root(x, &AbsRequestSender::default(), None);
         }
 
         // Add an additional bank/vote that will root slot 2
-        let bank33 = bank_forks.get(33).unwrap();
+        let bank33 = bank_forks.read().unwrap().get(33).unwrap();
         let bank34 = Bank::new_from_parent(bank33.clone(), &Pubkey::default(), 34);
         let vote33 = vote_transaction::new_vote_transaction(
             vec![33],
@@ -552,9 +554,9 @@ mod tests {
             None,
         );
         bank34.process_transaction(&vote33).unwrap();
-        bank_forks.insert(bank34);
+        bank_forks.write().unwrap().insert(bank34);
 
-        let working_bank = bank_forks.working_bank();
+        let working_bank = bank_forks.read().unwrap().working_bank();
         let root = get_vote_account_root_slot(
             validator_vote_keypairs.vote_keypair.pubkey(),
             &working_bank,
@@ -573,21 +575,22 @@ mod tests {
             .read()
             .unwrap()
             .highest_super_majority_root();
-        bank_forks.set_root(
+        bank_forks.write().unwrap().set_root(
             root,
             &AbsRequestSender::default(),
             Some(highest_super_majority_root),
         );
-        let highest_super_majority_root_bank = bank_forks.get(highest_super_majority_root);
+        let highest_super_majority_root_bank =
+            bank_forks.read().unwrap().get(highest_super_majority_root);
         assert!(highest_super_majority_root_bank.is_some());
 
         // Add a forked bank. Because the vote for bank 33 landed in the non-ancestor, the vote
         // account's root (and thus the highest_super_majority_root) rolls back to slot 1
-        let bank33 = bank_forks.get(33).unwrap();
+        let bank33 = bank_forks.read().unwrap().get(33).unwrap();
         let bank35 = Bank::new_from_parent(bank33, &Pubkey::default(), 35);
-        bank_forks.insert(bank35);
+        bank_forks.write().unwrap().insert(bank35);
 
-        let working_bank = bank_forks.working_bank();
+        let working_bank = bank_forks.read().unwrap().working_bank();
         let ancestors = working_bank.status_cache_ancestors();
         let _ = AggregateCommitmentService::update_commitment_cache(
             &block_commitment_cache,
@@ -602,13 +605,14 @@ mod tests {
             .read()
             .unwrap()
             .highest_super_majority_root();
-        let highest_super_majority_root_bank = bank_forks.get(highest_super_majority_root);
+        let highest_super_majority_root_bank =
+            bank_forks.read().unwrap().get(highest_super_majority_root);
         assert!(highest_super_majority_root_bank.is_some());
 
         // Add additional banks beyond lockout built on the new fork to ensure that behavior
         // continues normally
         for x in 35..=37 {
-            let previous_bank = bank_forks.get(x).unwrap();
+            let previous_bank = bank_forks.read().unwrap().get(x).unwrap();
             let bank = Bank::new_from_parent(previous_bank.clone(), &Pubkey::default(), x + 1);
             let vote = vote_transaction::new_vote_transaction(
                 vec![x],
@@ -620,10 +624,10 @@ mod tests {
                 None,
             );
             bank.process_transaction(&vote).unwrap();
-            bank_forks.insert(bank);
+            bank_forks.write().unwrap().insert(bank);
         }
 
-        let working_bank = bank_forks.working_bank();
+        let working_bank = bank_forks.read().unwrap().working_bank();
         let root = get_vote_account_root_slot(
             validator_vote_keypairs.vote_keypair.pubkey(),
             &working_bank,
@@ -642,12 +646,13 @@ mod tests {
             .read()
             .unwrap()
             .highest_super_majority_root();
-        bank_forks.set_root(
+        bank_forks.write().unwrap().set_root(
             root,
             &AbsRequestSender::default(),
             Some(highest_super_majority_root),
         );
-        let highest_super_majority_root_bank = bank_forks.get(highest_super_majority_root);
+        let highest_super_majority_root_bank =
+            bank_forks.read().unwrap().get(highest_super_majority_root);
         assert!(highest_super_majority_root_bank.is_some());
     }
 }

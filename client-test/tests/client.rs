@@ -168,7 +168,7 @@ fn test_account_subscription() {
     // Transfer 100 lamports from alice to bob
     let tx = system_transaction::transfer(&alice, &bob.pubkey(), 100, blockhash);
     bank_forks
-        .write()
+        .read()
         .unwrap()
         .get(1)
         .unwrap()
@@ -373,7 +373,7 @@ fn test_program_subscription() {
     // Create new program account at bob's address
     let tx = system_transaction::create_account(&alice, &bob, blockhash, 100, 0, &program_id);
     bank_forks
-        .write()
+        .read()
         .unwrap()
         .get(1)
         .unwrap()
