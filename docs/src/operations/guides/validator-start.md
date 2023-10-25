@@ -257,6 +257,12 @@ after running the above command.
 
 Read more about [creating and managing a vote account](./vote-accounts.md).
 
+## Stake your validator
+
+Until your validator is staked, it will be unable to vote, propose leader blocks, or collect rewards.
+
+Follow the instructions to [stake your validator](validator-stake.md)
+
 ## Known validators
 
 If you know and respect other validator operators, you can specify this on the
