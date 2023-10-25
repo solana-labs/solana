@@ -36,6 +36,8 @@ RUN apt-get update && \
   gnupg \
   lld \
   cmake \
+  # docs
+  mscgen \
   # solana compiling
   libssl-dev \
   libudev-dev \
