@@ -98,6 +98,14 @@ impl SchedulerController {
     fn receive_packets(&mut self, decision: &BufferedPacketsDecision) -> bool {
         let remaining_queue_capacity = self.container.remaining_queue_capacity();
 
+        // BufferedPacketsDecision is shared with legacy BankingStage, which will forward
+        // packets. Initially, not renaming these decision variants but the actions taken
+        // are different, since new BankingStage will not forward packets.
+        // For `Forward` and `ForwardAndHold`, we want to receive packets but will not
+        // forward them to the next leader. Without holding, this means `Forward` would
+        // immediately drop them from the buffer anyway; instead we can bypass the buffer
+        // entirely and drop the packets immediately.
+        // In this case, `ForwardAndHold` is indistiguishable from `Hold`.
         const MAX_PACKET_RECEIVE_TIME: Duration = Duration::from_millis(100);
         let (recv_timeout, should_buffer) = match decision {
             BufferedPacketsDecision::Consume(_) => (
