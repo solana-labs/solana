@@ -109,7 +109,7 @@ if [[ ! -e criterion-$version.md || ! -e criterion ]]; then
 fi
 
 # Install platform tools
-version=v1.37
+version=v1.39
 if [[ ! -e platform-tools-$version.md || ! -e platform-tools ]]; then
   (
     set -e

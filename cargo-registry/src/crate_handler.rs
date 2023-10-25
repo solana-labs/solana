@@ -25,10 +25,9 @@ use {
         mem::size_of,
         ops::Deref,
         path::{Path, PathBuf},
-        str::FromStr,
         sync::Arc,
     },
-    tar::{Archive, Builder},
+    tar::{Archive, Builder, HeaderMode},
     tempfile::{tempdir, TempDir},
 };
 
@@ -148,9 +147,9 @@ impl Program {
     }
 
     pub(crate) fn crate_name_to_program_id(crate_name: &str) -> Option<Pubkey> {
-        crate_name
-            .split_once('-')
-            .and_then(|(_prefix, id_str)| Pubkey::from_str(id_str).ok())
+        hex::decode(crate_name)
+            .ok()
+            .and_then(|bytes| Pubkey::try_from(bytes).ok())
     }
 }
 
@@ -169,34 +168,21 @@ pub(crate) struct CratePackage(pub(crate) Bytes);
 impl From<UnpackedCrate> for Result<CratePackage, Error> {
     fn from(value: UnpackedCrate) -> Self {
         let mut archive = Builder::new(Vec::new());
-        archive.append_dir_all(".", value.tempdir.path())?;
+        archive.mode(HeaderMode::Deterministic);
+
+        let base_path = UnpackedCrate::make_path(&value.tempdir, &value.meta, "out");
+        archive.append_dir_all(
+            format!("{}-{}/out", value.meta.name, value.meta.vers),
+            base_path,
+        )?;
         let data = archive.into_inner()?;
+
         let reader = Cursor::new(data);
-        let mut encoder = GzEncoder::new(reader, Compression::fast());
+        let mut encoder = GzEncoder::new(reader, Compression::default());
         let mut zipped_data = Vec::new();
         encoder.read_to_end(&mut zipped_data)?;
 
-        let meta_str = serde_json::to_string(&value.meta)?;
-
-        let sizeof_length = size_of::<u32>();
-        let mut packed = Vec::with_capacity(
-            sizeof_length
-                .saturating_add(meta_str.len())
-                .saturating_add(sizeof_length)
-                .saturating_add(zipped_data.len()),
-        );
-
-        packed[..sizeof_length].copy_from_slice(&u32::to_le_bytes(meta_str.len() as u32));
-        let offset = sizeof_length;
-        let end = offset.saturating_add(meta_str.len());
-        packed[offset..end].copy_from_slice(meta_str.as_bytes());
-        let offset = end;
-        let end = offset.saturating_add(sizeof_length);
-        packed[offset..end].copy_from_slice(&u32::to_le_bytes(zipped_data.len() as u32));
-        let offset = end;
-        packed[offset..].copy_from_slice(&zipped_data);
-
-        Ok(CratePackage(Bytes::from(packed)))
+        Ok(CratePackage(Bytes::from(zipped_data)))
     }
 }
 
@@ -226,6 +212,10 @@ impl From<CratePackage> for Result<UnpackedCrate, Error> {
         archive.unpack(tempdir.path())?;
 
         let lib_name = UnpackedCrate::program_library_name(&tempdir, &meta)?;
+
+        let base_path = UnpackedCrate::make_path(&tempdir, &meta, "out");
+        fs::create_dir_all(base_path)
+            .map_err(|_| "Failed to create the base directory for output")?;
 
         let program_path =
             UnpackedCrate::make_path(&tempdir, &meta, format!("out/{}.so", lib_name))
@@ -273,14 +263,15 @@ impl UnpackedCrate {
 
     pub(crate) fn fetch_index(id: Pubkey, client: Arc<Client>) -> Result<IndexEntry, Error> {
         let (_program, unpacked_crate) = Self::fetch_program(id, client)?;
-
         let mut entry: IndexEntry = unpacked_crate.meta.clone().into();
-        entry.cksum = unpacked_crate.cksum.clone();
 
+        let packed_crate: Result<CratePackage, Error> = UnpackedCrate::into(unpacked_crate);
+        let packed_crate = packed_crate?;
+
+        entry.cksum = format!("{:x}", Sha256::digest(&packed_crate.0));
         Ok(entry)
     }
 
-    #[allow(dead_code)]
     pub(crate) fn fetch(id: Pubkey, client: Arc<Client>) -> Result<CratePackage, Error> {
         let (_program, unpacked_crate) = Self::fetch_program(id, client)?;
         UnpackedCrate::into(unpacked_crate)
@@ -299,8 +290,8 @@ impl UnpackedCrate {
 
     fn new_empty(id: Pubkey) -> Result<Self, Error> {
         let meta = PackageMetaData {
-            name: id.to_string(),
-            vers: "0.1".to_string(),
+            name: hex::encode(id.to_bytes()),
+            vers: "0.1.0".to_string(),
             deps: vec![],
             features: BTreeMap::new(),
             authors: vec![],
@@ -320,6 +311,10 @@ impl UnpackedCrate {
         };
 
         let tempdir = tempdir()?;
+
+        let base_path = UnpackedCrate::make_path(&tempdir, &meta, "out");
+        fs::create_dir_all(base_path)
+            .map_err(|_| "Failed to create the base directory for output")?;
 
         let program_path = Self::make_path(&tempdir, &meta, format!("out/{}.so", id))
             .into_os_string()

@@ -1439,7 +1439,7 @@ mod tests {
             );
         let bank = Bank::new_for_tests(&genesis_config);
         let exit = Arc::new(AtomicBool::new(false));
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let bank = bank_forks.read().unwrap().get(0).unwrap();
         let vote_tracker = VoteTracker::default();
         let optimistically_confirmed_bank =
@@ -1556,7 +1556,7 @@ mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let vote_tracker = VoteTracker::default();
         let exit = Arc::new(AtomicBool::new(false));
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let bank = bank_forks.read().unwrap().get(0).unwrap();
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
@@ -1584,7 +1584,7 @@ mod tests {
         solana_logger::setup();
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = RwLock::new(BankForks::new(bank));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let votes = vec![];
         let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, &bank_forks);
         assert!(vote_txs.is_empty());
@@ -1629,7 +1629,7 @@ mod tests {
                 vec![100; voting_keypairs.len()], // stakes
             );
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = RwLock::new(BankForks::new(bank));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let vote_tx = test_vote_tx(voting_keypairs.first(), hash);
         let votes = vec![vote_tx];
         let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, &bank_forks);
@@ -1654,7 +1654,7 @@ mod tests {
                 vec![100; voting_keypairs.len()], // stakes
             );
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = RwLock::new(BankForks::new(bank));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let vote_tx = test_vote_tx(voting_keypairs.first(), hash);
         let mut bad_vote = vote_tx.clone();
         bad_vote.signatures[0] = Signature::default();

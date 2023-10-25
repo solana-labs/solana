@@ -347,10 +347,7 @@ impl JsonRpcRequestProcessor {
         connection_cache: Arc<ConnectionCache>,
     ) -> Self {
         let genesis_hash = bank.hash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(
-            &[bank.clone()],
-            bank.slot(),
-        )));
+        let bank_forks = BankForks::new_from_banks(&[bank.clone()], bank.slot());
         let blockstore = Arc::new(Blockstore::open(&get_tmp_ledger_path!()).unwrap());
         let exit = Arc::new(AtomicBool::new(false));
         let cluster_info = Arc::new({
@@ -6634,7 +6631,7 @@ pub mod tests {
 
         let bank = Bank::new_for_tests_with_config(&genesis_config, config);
         (
-            Arc::new(RwLock::new(BankForks::new(bank))),
+            BankForks::new_rw_arc(bank),
             mint_keypair,
             Arc::new(voting_keypair),
         )
@@ -8317,7 +8314,7 @@ pub mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100);
         let bank = Bank::new_for_tests(&genesis_config);
 
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let bank0 = bank_forks.read().unwrap().get(0).unwrap();
         let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);

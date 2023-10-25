@@ -462,7 +462,8 @@ mod tests {
         solana_logger::setup();
 
         let bank = Bank::default_for_tests();
-        let mut bank_forks = BankForks::new(bank);
+        let bank_forks = BankForks::new_rw_arc(bank);
+        let mut bank_forks = bank_forks.write().unwrap();
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
             DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
@@ -482,7 +483,8 @@ mod tests {
             DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
 
         let bank = Bank::default_for_tests();
-        let mut bank_forks = BankForks::new(bank);
+        let bank_forks = BankForks::new_rw_arc(bank);
+        let mut bank_forks = bank_forks.write().unwrap();
 
         // existing banks in bank_forks shouldn't process transactions anymore in general, so
         // shouldn't be touched

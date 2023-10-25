@@ -3,10 +3,9 @@ use {
         account_overrides::AccountOverrides,
         account_rent_state::{check_rent_state_with_account, RentState},
         accounts_db::{
-            AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig,
-            IncludeSlotInHash, LoadHint, LoadedAccount, ScanStorageResult,
-            VerifyAccountsHashAndLamportsConfig, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS,
-            ACCOUNTS_DB_CONFIG_FOR_TESTING,
+            AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig, LoadHint,
+            LoadedAccount, ScanStorageResult, VerifyAccountsHashAndLamportsConfig,
+            ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{
             AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ScanResult, ZeroLamport,
@@ -1311,7 +1310,6 @@ impl Accounts {
         rent_collector: &RentCollector,
         durable_nonce: &DurableNonce,
         lamports_per_signature: u64,
-        include_slot_in_hash: IncludeSlotInHash,
     ) {
         let (accounts_to_store, transactions) = self.collect_accounts_to_store(
             txs,
@@ -1321,10 +1319,8 @@ impl Accounts {
             durable_nonce,
             lamports_per_signature,
         );
-        self.accounts_db.store_cached_inline_update_index(
-            (slot, &accounts_to_store[..], include_slot_in_hash),
-            Some(&transactions),
-        );
+        self.accounts_db
+            .store_cached_inline_update_index((slot, &accounts_to_store[..]), Some(&transactions));
     }
 
     pub fn store_accounts_cached<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(

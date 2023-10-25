@@ -670,7 +670,7 @@ mod tests {
     fn test_banking_stage_shutdown1() {
         let genesis_config = create_genesis_config(2).genesis_config;
         let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let bank = bank_forks.read().unwrap().get(0).unwrap();
         let banking_tracer = BankingTracer::new_disabled();
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
@@ -722,7 +722,7 @@ mod tests {
         genesis_config.ticks_per_slot = 4;
         let num_extra_ticks = 2;
         let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let bank = bank_forks.read().unwrap().get(0).unwrap();
         let start_hash = bank.last_blockhash();
         let banking_tracer = BankingTracer::new_disabled();
@@ -802,7 +802,7 @@ mod tests {
             ..
         } = create_slow_genesis_config(10);
         let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let bank = bank_forks.read().unwrap().get(0).unwrap();
         let start_hash = bank.last_blockhash();
         let banking_tracer = BankingTracer::new_disabled();
@@ -974,7 +974,7 @@ mod tests {
             let entry_receiver = {
                 // start a banking_stage to eat verified receiver
                 let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
-                let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+                let bank_forks = BankForks::new_rw_arc(bank);
                 let bank = bank_forks.read().unwrap().get(0).unwrap();
                 let blockstore = Arc::new(
                     Blockstore::open(ledger_path.path())
@@ -1158,7 +1158,7 @@ mod tests {
             ..
         } = create_slow_genesis_config(10000);
         let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let bank = bank_forks.read().unwrap().get(0).unwrap();
         let start_hash = bank.last_blockhash();
         let banking_tracer = BankingTracer::new_disabled();

@@ -58,7 +58,7 @@ impl VoteSimulator {
             validator_keypairs,
             node_pubkeys,
             vote_pubkeys,
-            bank_forks: Arc::new(RwLock::new(bank_forks)),
+            bank_forks,
             progress,
             heaviest_subtree_fork_choice,
             latest_validator_votes_for_frozen_banks: LatestValidatorVotesForFrozenBanks::default(),
@@ -297,13 +297,14 @@ impl VoteSimulator {
         false
     }
 
+    #[allow(clippy::type_complexity)]
     fn init_state(
         num_keypairs: usize,
     ) -> (
         HashMap<Pubkey, ValidatorVoteKeypairs>,
         Vec<Pubkey>,
         Vec<Pubkey>,
-        BankForks,
+        Arc<RwLock<BankForks>>,
         ProgressMap,
         HeaviestSubtreeForkChoice,
     ) {
@@ -339,7 +340,11 @@ impl VoteSimulator {
 pub fn initialize_state(
     validator_keypairs_map: &HashMap<Pubkey, ValidatorVoteKeypairs>,
     stake: u64,
-) -> (BankForks, ProgressMap, HeaviestSubtreeForkChoice) {
+) -> (
+    Arc<RwLock<BankForks>>,
+    ProgressMap,
+    HeaviestSubtreeForkChoice,
+) {
     let validator_keypairs: Vec<_> = validator_keypairs_map.values().collect();
     let GenesisConfigInfo {
         mut genesis_config,
@@ -367,7 +372,8 @@ pub fn initialize_state(
         0,
         ForkProgress::new_from_bank(&bank0, bank0.collector_id(), &Pubkey::default(), None, 0, 0),
     );
-    let bank_forks = BankForks::new(bank0);
-    let heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_bank_forks(&bank_forks);
+    let bank_forks = BankForks::new_rw_arc(bank0);
+    let heaviest_subtree_fork_choice =
+        HeaviestSubtreeForkChoice::new_from_bank_forks(bank_forks.clone());
     (bank_forks, progress, heaviest_subtree_fork_choice)
 }

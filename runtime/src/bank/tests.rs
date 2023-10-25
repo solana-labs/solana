@@ -6556,25 +6556,25 @@ fn test_bank_hash_consistency() {
         if bank.slot == 0 {
             assert_eq!(
                 bank.hash().to_string(),
-                "3kzRo3M5q9j47Dxfdp9ZeEXfUTA5rxVud7jRKuttHxFz"
+                "3KE2bigpBiiMLGYNqmWkgbrQGSqMt5ccG6ED87CFCVpt"
             );
         }
         if bank.slot == 32 {
             assert_eq!(
                 bank.hash().to_string(),
-                "bWPR5AQjsfhMypn1nLUjugmitbjHwV4rmnyTDFqCdv1"
+                "FpNDsd21HXznXf6tRpMNiWhFyhZ4aCCECQm3gL4jGV22"
             );
         }
         if bank.slot == 64 {
             assert_eq!(
                 bank.hash().to_string(),
-                "74hNYEVcvKU5JZwSNBYUcUWgf9Jw2Mag4b55967VPVjG"
+                "7gDCoXPfFtKPALi212akhhQHEuLdAqyf7DE3yUN4bR2p"
             );
         }
         if bank.slot == 128 {
             assert_eq!(
                 bank.hash().to_string(),
-                "BvYViztQiksU8vDvMqZYBo9Lc4cgjJEmijPpqktBRMkS"
+                "6FREbeHdTNYnEXg4zobL2mqGfevukg75frkQJqKpYnk4"
             );
             break;
         }
@@ -12505,8 +12505,8 @@ fn test_runtime_feature_enable_with_program_cache() {
     genesis_config
         .accounts
         .remove(&feature_set::reject_callx_r10::id());
-    let mut bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
-    let root_bank = bank_forks.root_bank();
+    let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests(&genesis_config));
+    let root_bank = bank_forks.read().unwrap().root_bank();
 
     // Test a basic transfer
     let amount = genesis_config.rent.minimum_balance(0);
@@ -12565,9 +12565,16 @@ fn test_runtime_feature_enable_with_program_cache() {
 
     // Reroot to call LoadedPrograms::prune() and end the current recompilation phase
     goto_end_of_slot(bank.clone());
-    bank_forks.insert(Arc::into_inner(bank).unwrap());
-    let bank = bank_forks.working_bank();
-    bank_forks.set_root(bank.slot, &AbsRequestSender::default(), None);
+    bank_forks
+        .write()
+        .unwrap()
+        .insert(Arc::into_inner(bank).unwrap());
+    let bank = bank_forks.read().unwrap().working_bank();
+    bank_forks.read().unwrap().prune_program_cache(bank.slot);
+    bank_forks
+        .write()
+        .unwrap()
+        .set_root(bank.slot, &AbsRequestSender::default(), None);
 
     // Advance to next epoch, which starts the next recompilation phase
     let bank = new_from_parent_next_epoch(bank, 1);
@@ -12916,7 +12923,7 @@ fn test_epoch_credit_rewards_and_history_update() {
         .map(|_| StakeReward::new_random())
         .collect::<Vec<_>>();
 
-    bank.store_accounts((bank.slot(), &stake_rewards[..], bank.include_slot_in_hash()));
+    bank.store_accounts((bank.slot(), &stake_rewards[..]));
 
     // Simulate rewards
     let mut expected_rewards = 0;

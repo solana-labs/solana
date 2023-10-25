@@ -119,9 +119,7 @@ members = [
     "zk-token-sdk",
 ]
 
-exclude = [
-    "programs/sbf",
-]
+exclude = ["programs/sbf"]
 
 # This prevents a Travis CI error when building for Windows.
 resolver = "2"
@@ -138,7 +136,7 @@ edition = "2021"
 Inflector = "0.11.4"
 aquamarine = "0.3.1"
 aes-gcm-siv = "0.10.3"
-ahash = "0.8.3"
+ahash = "0.8.5"
 anyhow = "1.0.75"
 ark-bn254 = "0.4.0"
 ark-ec = "0.4.0"
@@ -153,7 +151,7 @@ async-mutex = "1.4.0"
 async-trait = "0.1.74"
 atty = "0.2.11"
 backoff = "0.4.0"
-base64 = "0.21.4"
+base64 = "0.21.5"
 bincode = "1.3.3"
 bitflags = { version = "2.3.3", features = ["serde"] }
 blake3 = "1.5.0"
@@ -224,7 +222,9 @@ index_list = "0.2.7"
 indexmap = "2.0.2"
 indicatif = "0.17.7"
 itertools = "0.10.5"
-jemallocator = { package = "tikv-jemallocator", version = "0.4.1", features = ["unprefixed_malloc_on_supported_platforms"] }
+jemallocator = { package = "tikv-jemallocator", version = "0.4.1", features = [
+    "unprefixed_malloc_on_supported_platforms",
+] }
 js-sys = "0.3.64"
 json5 = "0.4.1"
 jsonrpc-core = "18.0.0"
@@ -265,6 +265,7 @@ pickledb = { version = "0.5.1", default-features = false }
 pkcs8 = "0.8.0"
 predicates = "2.1"
 pretty-hex = "0.3.0"
+prio-graph = "0.1.0"
 proc-macro2 = "1.0.69"
 proptest = "1.3"
 prost = "0.11.9"
@@ -303,8 +304,9 @@ sha2 = "0.10.8"
 sha3 = "0.10.4"
 signal-hook = "0.3.17"
 siphasher = "0.3.11"
+smallvec = "1.11.1"
 smpl_jwt = "0.7.1"
-socket2 = "0.5.4"
+socket2 = "0.5.5"
 soketto = "0.7"
 solana-account-decoder = { path = "account-decoder", version = "=1.18.0" }
 solana-accounts-db = { path = "accounts-db", version = "=1.18.0" }
@@ -407,7 +409,7 @@ tar = "0.4.40"
 tarpc = "0.29.0"
 tempfile = "3.8.0"
 test-case = "3.2.1"
-thiserror = "1.0.49"
+thiserror = "1.0.50"
 tiny-bip39 = "0.8.2"
 tokio = "1.29.1"
 tokio-serde = "0.8"
@@ -498,3 +500,36 @@ solana-zk-token-sdk = { path = "zk-token-sdk" }
 [patch.crates-io.aes-gcm-siv]
 git = "https://github.com/RustCrypto/AEADs"
 rev = "6105d7a5591aefa646a95d12b5e8d3f55a9214ef"
+
+# Our dependency tree has `curve25519-dalek` v3.2.1.  They have removed the
+# constrain in the next major release.  Commit that removes `zeroize` constrain
+# was added to multiple release branches.  Bot not to the 3.2 branch.
+#
+# `curve25519-dalek` maintainers are saying they do not want to invest any more
+# time in the 3.2 release:
+#
+# https://github.com/dalek-cryptography/curve25519-dalek/issues/452#issuecomment-1749809428
+#
+# So we have to fork and create our own release, based on v3.2.1.  Commit that
+# removed `zeroize` constrain on the `main` branch cherry picked on top of the
+# v3.2.1 release.
+#
+# `curve25519-dalek` v3.2.1 release:
+#
+# https://github.com/dalek-cryptography/curve25519-dalek/releases/tag/3.2.1
+#
+# Corresponds to commit
+#
+# https://github.com/dalek-cryptography/curve25519-dalek/commit/29e5c29b0e5c6821e4586af58b0d0891dd2ec639
+#
+# Comparison with `c14774464c4d38de553c6ef2f48a10982c1b4801`:
+#
+# https://github.com/dalek-cryptography/curve25519-dalek/compare/3.2.1...solana-labs:curve25519-dalek:c14774464c4d38de553c6ef2f48a10982c1b4801
+#
+# Or, using the branch name instead of the hash:
+#
+# https://github.com/dalek-cryptography/curve25519-dalek/compare/3.2.1...solana-labs:curve25519-dalek:3.2.1-unpin-zeroize
+#
+[patch.crates-io.curve25519-dalek]
+git = "https://github.com/solana-labs/curve25519-dalek.git"
+rev = "c14774464c4d38de553c6ef2f48a10982c1b4801"

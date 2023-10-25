@@ -1,6 +1,6 @@
 use {
     crate::{
-        accounts_db::{AccountStorageEntry, IncludeSlotInHash, PUBKEY_BINS_FOR_CALCULATING_HASHES},
+        accounts_db::{AccountStorageEntry, PUBKEY_BINS_FOR_CALCULATING_HASHES},
         active_stats::{ActiveStatItem, ActiveStats},
         ancestors::Ancestors,
         pubkey_bins::PubkeyBinCalculator24,
@@ -177,7 +177,6 @@ pub struct CalcAccountsHashConfig<'a> {
     pub rent_collector: &'a RentCollector,
     /// used for tracking down hash mismatches after the fact
     pub store_detailed_debug_info_on_failure: bool,
-    pub include_slot_in_hash: IncludeSlotInHash,
 }
 
 // smallest, 3 quartiles, largest, average
@@ -317,9 +316,9 @@ impl HashStats {
 /// Note this can be saved/loaded during hash calculation to a memory mapped file whose contents are
 /// [CalculateHashIntermediate]
 #[repr(C)]
-#[derive(Default, Debug, PartialEq, Eq, Clone, Copy, Pod, Zeroable)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Pod, Zeroable)]
 pub struct CalculateHashIntermediate {
-    pub hash: Hash,
+    pub hash: AccountHash,
     pub lamports: u64,
     pub pubkey: Pubkey,
 }
@@ -327,17 +326,20 @@ pub struct CalculateHashIntermediate {
 // In order to safely guarantee CalculateHashIntermediate is Pod, it cannot have any padding
 const _: () = assert!(
     std::mem::size_of::<CalculateHashIntermediate>()
-        == std::mem::size_of::<Hash>() + std::mem::size_of::<u64>() + std::mem::size_of::<Pubkey>(),
+        == std::mem::size_of::<AccountHash>()
+            + std::mem::size_of::<u64>()
+            + std::mem::size_of::<Pubkey>(),
     "CalculateHashIntermediate cannot have any padding"
 );
 
-#[derive(Default, Debug, PartialEq, Eq)]
-pub struct CumulativeOffset {
-    pub index: Vec<usize>,
-    pub start_offset: usize,
+#[derive(Debug, PartialEq, Eq)]
+struct CumulativeOffset {
+    /// Since the source data is at most 2D, two indexes are enough.
+    index: [usize; 2],
+    start_offset: usize,
 }
 
-pub trait ExtractSliceFromRawData<'b, T: 'b> {
+trait ExtractSliceFromRawData<'b, T: 'b> {
     fn extract<'a>(&'b self, offset: &'a CumulativeOffset, start: usize) -> &'b [T];
 }
 
@@ -415,7 +417,7 @@ impl CumulativeOffsets {
             .filter_map(|(i, len)| {
                 if len > 0 {
                     let result = CumulativeOffset {
-                        index: vec![i],
+                        index: [i, i],
                         start_offset: total_count,
                     };
                     total_count += len;
@@ -1169,7 +1171,7 @@ impl<'a> AccountsHasher<'a> {
                     overall_sum = Self::checked_cast_for_capitalization(
                         item.lamports as u128 + overall_sum as u128,
                     );
-                    hashes.write(&item.hash);
+                    hashes.write(&item.hash.0);
                 }
             } else {
                 // if lamports == 0, check if they should be included
@@ -1372,7 +1374,7 @@ mod tests {
                             cumulative_offsets = Vec::with_capacity(raw.len() * v_outer.len());
                         }
                         cumulative_offsets.push(CumulativeOffset {
-                            index: vec![i, j],
+                            index: [i, j],
                             start_offset: total_count,
                         });
                         total_count += len;
@@ -1407,7 +1409,7 @@ mod tests {
                         (0..*count).map(move |_| {
                             let binner = PubkeyBinCalculator24::new(bins);
                             CalculateHashIntermediate {
-                                hash: Hash::default(),
+                                hash: AccountHash(Hash::default()),
                                 lamports: 0,
                                 pubkey: binner.lowest_pubkey_from_bin(bin, bins),
                             }
@@ -1559,7 +1561,7 @@ mod tests {
         let mut account_maps = Vec::new();
 
         let pubkey = Pubkey::from([11u8; 32]);
-        let hash = Hash::new(&[1u8; 32]);
+        let hash = AccountHash(Hash::new(&[1u8; 32]));
         let val = CalculateHashIntermediate {
             hash,
             lamports: 88,
@@ -1569,7 +1571,7 @@ mod tests {
 
         // 2nd key - zero lamports, so will be removed
         let pubkey = Pubkey::from([12u8; 32]);
-        let hash = Hash::new(&[2u8; 32]);
+        let hash = AccountHash(Hash::new(&[2u8; 32]));
         let val = CalculateHashIntermediate {
             hash,
             lamports: 0,
@@ -1586,7 +1588,7 @@ mod tests {
 
         // 3rd key - with pubkey value before 1st key so it will be sorted first
         let pubkey = Pubkey::from([10u8; 32]);
-        let hash = Hash::new(&[2u8; 32]);
+        let hash = AccountHash(Hash::new(&[2u8; 32]));
         let val = CalculateHashIntermediate {
             hash,
             lamports: 20,
@@ -1601,7 +1603,7 @@ mod tests {
 
         // 3rd key - with later slot
         let pubkey = Pubkey::from([10u8; 32]);
-        let hash = Hash::new(&[99u8; 32]);
+        let hash = AccountHash(Hash::new(&[99u8; 32]));
         let val = CalculateHashIntermediate {
             hash,
             lamports: 30,
@@ -1627,7 +1629,8 @@ mod tests {
     fn test_accountsdb_de_dup_accounts_zero_chunks() {
         let vec = vec![vec![CalculateHashIntermediate {
             lamports: 1,
-            ..CalculateHashIntermediate::default()
+            hash: AccountHash(Hash::default()),
+            pubkey: Pubkey::default(),
         }]];
         let temp_vec = vec.to_vec();
         let slice = convert_to_slice(&temp_vec);
@@ -1693,7 +1696,7 @@ mod tests {
         let key_b = Pubkey::from([2u8; 32]);
         let key_c = Pubkey::from([3u8; 32]);
         const COUNT: usize = 6;
-        let hashes = (0..COUNT).map(|i| Hash::new(&[i as u8; 32]));
+        let hashes = (0..COUNT).map(|i| AccountHash(Hash::new(&[i as u8; 32])));
         // create this vector
         // abbbcc
         let keys = [key_a, key_b, key_b, key_b, key_c, key_c];
@@ -1857,7 +1860,7 @@ mod tests {
     fn test_accountsdb_compare_two_hash_entries() {
         solana_logger::setup();
         let pubkey = Pubkey::new_unique();
-        let hash = Hash::new_unique();
+        let hash = AccountHash(Hash::new_unique());
         let val = CalculateHashIntermediate {
             hash,
             lamports: 1,
@@ -1865,7 +1868,7 @@ mod tests {
         };
 
         // slot same, version <
-        let hash2 = Hash::new_unique();
+        let hash2 = AccountHash(Hash::new_unique());
         let val2 = CalculateHashIntermediate {
             hash: hash2,
             lamports: 4,
@@ -1877,7 +1880,7 @@ mod tests {
         );
 
         // slot same, vers =
-        let hash3 = Hash::new_unique();
+        let hash3 = AccountHash(Hash::new_unique());
         let val3 = CalculateHashIntermediate {
             hash: hash3,
             lamports: 2,
@@ -1889,7 +1892,7 @@ mod tests {
         );
 
         // slot same, vers >
-        let hash4 = Hash::new_unique();
+        let hash4 = AccountHash(Hash::new_unique());
         let val4 = CalculateHashIntermediate {
             hash: hash4,
             lamports: 6,
@@ -1901,7 +1904,7 @@ mod tests {
         );
 
         // slot >, version <
-        let hash5 = Hash::new_unique();
+        let hash5 = AccountHash(Hash::new_unique());
         let val5 = CalculateHashIntermediate {
             hash: hash5,
             lamports: 8,
@@ -1926,7 +1929,7 @@ mod tests {
         solana_logger::setup();
 
         let pubkey = Pubkey::new_unique();
-        let hash = Hash::new_unique();
+        let hash = AccountHash(Hash::new_unique());
         let mut account_maps = Vec::new();
         let val = CalculateHashIntermediate {
             hash,
@@ -1940,7 +1943,7 @@ mod tests {
         let (hashfile, lamports) = test_de_dup_accounts_in_parallel(&slice);
         assert_eq!(
             (get_vec(hashfile), lamports),
-            (vec![val.hash], val.lamports)
+            (vec![val.hash.0], val.lamports)
         );
 
         // zero original lamports, higher version
@@ -1963,7 +1966,7 @@ mod tests {
         for reverse in [false, true] {
             let key = Pubkey::new_from_array([1; 32]); // key is BEFORE key2
             let key2 = Pubkey::new_from_array([2; 32]);
-            let hash = Hash::new_unique();
+            let hash = AccountHash(Hash::new_unique());
             let mut account_maps = Vec::new();
             let mut account_maps2 = Vec::new();
             let val = CalculateHashIntermediate {
@@ -1994,7 +1997,7 @@ mod tests {
             assert_eq!(
                 (get_vec(hashfile), lamports),
                 (
-                    vec![val.hash, if reverse { val2.hash } else { val3.hash }],
+                    vec![val.hash.0, if reverse { val2.hash.0 } else { val3.hash.0 }],
                     val.lamports
                         + if reverse {
                             val2.lamports
@@ -2013,7 +2016,7 @@ mod tests {
         for reverse in [false, true] {
             let key = Pubkey::new_from_array([3; 32]); // key is AFTER key2
             let key2 = Pubkey::new_from_array([2; 32]);
-            let hash = Hash::new_unique();
+            let hash = AccountHash(Hash::new_unique());
             let mut account_maps = Vec::new();
             let mut account_maps2 = Vec::new();
             let val2 = CalculateHashIntermediate {
@@ -2044,7 +2047,7 @@ mod tests {
             assert_eq!(
                 (get_vec(hashfile), lamports),
                 (
-                    vec![if reverse { val2.hash } else { val3.hash }, val.hash],
+                    vec![if reverse { val2.hash.0 } else { val3.hash.0 }, val.hash.0],
                     val.lamports
                         + if reverse {
                             val2.lamports
@@ -2124,7 +2127,7 @@ mod tests {
     fn test_accountsdb_cumulative_find() {
         let input = CumulativeOffsets {
             cumulative_offsets: vec![CumulativeOffset {
-                index: vec![0],
+                index: [0; 2],
                 start_offset: 0,
             }],
             total_count: 0,
@@ -2134,11 +2137,11 @@ mod tests {
         let input = CumulativeOffsets {
             cumulative_offsets: vec![
                 CumulativeOffset {
-                    index: vec![0],
+                    index: [0; 2],
                     start_offset: 0,
                 },
                 CumulativeOffset {
-                    index: vec![1],
+                    index: [1; 2],
                     start_offset: 2,
                 },
             ],
@@ -2400,12 +2403,12 @@ mod tests {
         let offset = 2;
         let input = vec![
             CalculateHashIntermediate {
-                hash: Hash::new(&[1u8; 32]),
+                hash: AccountHash(Hash::new(&[1u8; 32])),
                 lamports: u64::MAX - offset,
                 pubkey: Pubkey::new_unique(),
             },
             CalculateHashIntermediate {
-                hash: Hash::new(&[2u8; 32]),
+                hash: AccountHash(Hash::new(&[2u8; 32])),
                 lamports: offset + 1,
                 pubkey: Pubkey::new_unique(),
             },
@@ -2434,12 +2437,12 @@ mod tests {
         let offset = 2;
         let input = vec![
             vec![CalculateHashIntermediate {
-                hash: Hash::new(&[1u8; 32]),
+                hash: AccountHash(Hash::new(&[1u8; 32])),
                 lamports: u64::MAX - offset,
                 pubkey: Pubkey::new_unique(),
             }],
             vec![CalculateHashIntermediate {
-                hash: Hash::new(&[2u8; 32]),
+                hash: AccountHash(Hash::new(&[2u8; 32])),
                 lamports: offset + 1,
                 pubkey: Pubkey::new_unique(),
             }],
