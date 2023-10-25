@@ -243,6 +243,33 @@ impl CrateTarGz {
 
         Self::new(unpacked)
     }
+
+    fn version(&self) -> String {
+        let decoder = GzDecoder::new(self.0.as_ref());
+        let mut archive = Archive::new(decoder);
+
+        if let Some(Ok(entry)) = archive
+            .entries()
+            .ok()
+            .and_then(|mut entries| entries.nth(0))
+        {
+            if let Ok(path) = entry.path() {
+                if let Some(path_str) = path.to_str() {
+                    if let Some((_, vers)) = path_str.rsplit_once('-') {
+                        let mut version = vers.to_string();
+                        // Removing trailing '/'
+                        if version.ends_with('/') {
+                            version.pop();
+                        }
+                        return version;
+                    }
+                }
+            }
+        }
+
+        // Placeholder version.
+        "0.1.0".to_string()
+    }
 }
 
 pub(crate) struct CratePackage(pub(crate) Bytes);
@@ -325,7 +352,7 @@ impl UnpackedCrate {
     }
 
     pub(crate) fn fetch_index(id: Pubkey, client: Arc<Client>) -> Result<IndexEntry, Error> {
-        let (packed_crate, meta) = Self::fetch(id, "0.1.0", client)?;
+        let (packed_crate, meta) = Self::fetch(id, "", client)?;
         let mut entry: IndexEntry = meta.into();
         entry.cksum = format!("{:x}", Sha256::digest(&packed_crate.0));
         Ok(entry)
@@ -343,9 +370,11 @@ impl UnpackedCrate {
         // Decompile the program
         // Generate a Cargo.toml
 
-        let meta = crate_obj.meta.clone();
+        let mut meta = crate_obj.meta.clone();
 
         if APPEND_CRATE_TO_ELF {
+            let version = program.crate_bytes.version();
+            meta.vers = version;
             Ok((program.crate_bytes, meta))
         } else {
             CrateTarGz::new(crate_obj).map(|file| (file, meta))
