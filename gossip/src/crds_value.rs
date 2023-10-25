@@ -9,7 +9,10 @@ use {
     },
     bincode::{serialize, serialized_size},
     bv::BitVec,
-    itertools::{Itertools, MinMaxResult::*},
+    itertools::{
+        Itertools,
+        MinMaxResult::{MinMax, NoElements, OneElement},
+    },
     rand::{CryptoRng, Rng},
     serde::de::{Deserialize, Deserializer},
     solana_sdk::{
@@ -606,7 +609,7 @@ impl RawOffsets {
         let mut result = Vec::new();
         for (i, byte) in self.bytes.iter().enumerate() {
             let mut current_byte = *byte;
-            for j in 0..16 {
+            for j in 0..8 {
                 if (current_byte & 0x1) > 0 {
                     let slot = last_slot.saturating_sub(i as Slot * 8).saturating_sub(j);
                     if slot < min_slot {
