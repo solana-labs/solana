@@ -695,7 +695,7 @@ mod tests {
             MAX_COMPUTE_UNIT_LIMIT + 606_002,
         );
 
-        // requesting cu limit more than MAX, div resoult will round up
+        // requesting cu limit more than MAX, div result will round up
         try_prioritization_fee_from_deprecated_requested_units(
             764,
             MAX_COMPUTE_UNIT_LIMIT + 606_004,
