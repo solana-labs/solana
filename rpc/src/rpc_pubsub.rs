@@ -659,7 +659,7 @@ mod tests {
         current_slot: Slot,
     ) -> transaction::Result<()> {
         bank_forks
-            .write()
+            .read()
             .unwrap()
             .get(current_slot)
             .unwrap()
@@ -1166,7 +1166,7 @@ mod tests {
 
         let tx = system_transaction::transfer(&alice, &bob.pubkey(), 100, blockhash);
         bank_forks
-            .write()
+            .read()
             .unwrap()
             .get(1)
             .unwrap()
@@ -1221,7 +1221,7 @@ mod tests {
 
         let tx = system_transaction::transfer(&alice, &bob.pubkey(), 100, blockhash);
         bank_forks
-            .write()
+            .read()
             .unwrap()
             .get(1)
             .unwrap()
