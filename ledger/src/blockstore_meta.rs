@@ -150,8 +150,18 @@ pub struct ErasureMeta {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub(crate) struct ErasureConfig {
-    pub(crate) num_data: usize,
-    pub(crate) num_coding: usize,
+    num_data: usize,
+    num_coding: usize,
+}
+
+#[cfg(test)]
+impl ErasureConfig {
+    pub(crate) fn new(num_data: usize, num_coding: usize) -> Self {
+        ErasureConfig {
+            num_data,
+            num_coding,
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize)]

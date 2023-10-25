@@ -7511,10 +7511,7 @@ pub mod tests {
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let erasure_meta_cf = &blockstore.erasure_meta_cf;
 
-        let config = ErasureConfig {
-            num_data: 1,
-            num_coding: 17,
-        };
+        let config = ErasureConfig::new(1, 17);
         let erasure_meta_old = ErasureMetaLegacy {
             set_index: 5,
             first_coding_index: 8,
