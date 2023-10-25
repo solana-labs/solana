@@ -3119,8 +3119,8 @@ impl Blockstore {
         match self.db.get::<cf::Root>(slot).ok().flatten() {
             Some(_) => false,
             None => {
-                slot < self.max_root() && slot > self.min_root(),
-            }
+                slot > self.min_root() && slot < self.max_root()
+            },
         }
     }
 
