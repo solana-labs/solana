@@ -228,15 +228,15 @@ impl HotStorageReader {
         Ok(meta)
     }
 
-    /// Returns the offset of the account associated with the specified index.
-    fn get_account_offset(&self, index: usize) -> usize {
+    /// Returns the offset to the account stored in the underlying TieredStorage
+    /// file associated with the specified index.
+    fn get_account_offset(&self, index: usize) -> TieredStorageResult<u64> {
         // As Hot storage currently don't support compression, each account has
         // its own account block.  As a result, the account block offset is the
         // account offset.
         self.footer
             .account_index_format
             .get_account_block_offset(&self.mmap, &self.footer, index)
-            .unwrap() as usize
     }
 }
 
@@ -518,7 +518,7 @@ pub mod tests {
         for (i, index_entry) in index_entries.iter().enumerate() {
             assert_eq!(
                 index_entry.block_offset,
-                hot_storage.get_account_offset(i) as u64,
+                hot_storage.get_account_offset(i).unwrap(),
             );
         }
         assert_eq!(&footer, hot_storage.footer());
