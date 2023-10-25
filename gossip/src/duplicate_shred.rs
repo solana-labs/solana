@@ -3,7 +3,7 @@ use {
     itertools::Itertools,
     solana_ledger::{
         blockstore::BlockstoreError,
-        blockstore_meta::{DuplicateSlotProof, MerkleErasureMeta},
+        blockstore_meta::{DuplicateSlotProof, ErasureMeta},
         shred::{self, Shred, ShredType},
     },
     solana_sdk::{
@@ -141,7 +141,7 @@ where
     // a part of the same fec set. Further work to enhance detection is planned in
     // https://github.com/solana-labs/solana/issues/33037
     if shred1.fec_set_index() == shred2.fec_set_index()
-        && !MerkleErasureMeta::check_erasure_consistency(shred1, shred2)
+        && !ErasureMeta::check_erasure_consistency(shred1, shred2)
     {
         return Ok(());
     }

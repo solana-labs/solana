@@ -220,7 +220,7 @@ pub mod columns {
     /// and a FEC (Forward Error Correction) set index.
     ///
     /// * index type: `crate::shred::ErasureSetId` `(Slot, fec_set_index: u64)`
-    /// * value type: [`blockstore_meta::MerkleErasureMeta`]
+    /// * value type: [`blockstore_meta::ErasureMeta`]
     pub struct ErasureMeta;
 
     #[derive(Debug)]
@@ -1222,11 +1222,11 @@ impl ColumnName for columns::ErasureMeta {
     const NAME: &'static str = ERASURE_META_CF;
 }
 impl TypedColumn for columns::ErasureMeta {
-    type Type = blockstore_meta::MerkleErasureMeta;
+    type Type = blockstore_meta::ErasureMeta;
 }
 impl BincodeTypeTransition for columns::ErasureMeta {
     #[allow(deprecated)]
-    type OldType = blockstore_meta::ErasureMeta;
+    type OldType = blockstore_meta::ErasureMetaLegacy;
 }
 
 impl SlotColumn for columns::OptimisticSlots {}

@@ -118,10 +118,10 @@ pub struct ShredIndex {
     index: BTreeSet<u64>,
 }
 
-#[deprecated = "Use MerkleErasureMeta"]
+#[deprecated = "Use ErasureMeta"]
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq)]
 /// Erasure coding information
-pub struct ErasureMeta {
+pub struct ErasureMetaLegacy {
     /// Which erasure set in the slot this is
     pub(crate) set_index: u64,
     /// First coding index in the FEC set
@@ -135,7 +135,7 @@ pub struct ErasureMeta {
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq)]
 /// Erasure coding information for merkle shreds
-pub struct MerkleErasureMeta {
+pub struct ErasureMeta {
     /// Which erasure set in the slot this is
     set_index: u64,
     /// First coding index in the FEC set
@@ -335,7 +335,7 @@ impl SlotMeta {
     }
 }
 
-impl MerkleErasureMeta {
+impl ErasureMeta {
     pub(crate) fn from_coding_shred(shred: &Shred) -> Option<Self> {
         match shred.shred_type() {
             ShredType::Data => None,
@@ -346,7 +346,7 @@ impl MerkleErasureMeta {
                 };
                 let first_coding_index = u64::from(shred.first_coding_index()?);
                 let merkle_root = Hash::default();
-                let erasure_meta = MerkleErasureMeta {
+                let erasure_meta = ErasureMeta {
                     set_index: u64::from(shred.fec_set_index()),
                     config,
                     first_coding_index,
@@ -425,9 +425,9 @@ impl MerkleErasureMeta {
     }
 }
 
-impl From<ErasureMeta> for MerkleErasureMeta {
-    fn from(erasure_meta: ErasureMeta) -> MerkleErasureMeta {
-        MerkleErasureMeta {
+impl From<ErasureMetaLegacy> for ErasureMeta {
+    fn from(erasure_meta: ErasureMetaLegacy) -> ErasureMeta {
+        ErasureMeta {
             set_index: erasure_meta.set_index,
             first_coding_index: erasure_meta.first_coding_index,
             config: erasure_meta.config,
@@ -551,7 +551,7 @@ mod test {
             num_data: 8,
             num_coding: 16,
         };
-        let e_meta = MerkleErasureMeta {
+        let e_meta = ErasureMeta {
             set_index,
             first_coding_index: set_index,
             config: erasure_config,
