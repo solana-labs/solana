@@ -1128,6 +1128,12 @@ fn main() {
             "Debug option to scan all AppendVecs and verify account index refcounts prior to clean",
         )
         .hidden(hidden_unless_forced());
+    let accountsdb_test_skip_rewrites_but_include_in_bank_hash = Arg::with_name("accounts_db_test_skip_rewrites_but_include_in_bank_hash")
+        .long("accounts-db-test-skip-rewrites-but-include-in-bank-hash")
+        .help(
+            "Debug option to skip rewrites for rent exempted accounts but still added them in bank delta hash calculation",
+        )
+        .hidden(hidden_unless_forced());
     let accounts_filler_count = Arg::with_name("accounts_filler_count")
         .long("accounts-filler-count")
         .value_name("COUNT")

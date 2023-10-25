@@ -1957,7 +1957,7 @@ fn test_collect_rent_from_accounts() {
             .rc
             .accounts
             .accounts_db
-            .get_pubkey_hash_for_slot(later_slot)
+            .get_pubkey_hash_for_slot(later_slot, Vec::default())
             .0;
         assert_eq!(
             !deltas
@@ -14074,7 +14074,7 @@ fn test_last_restart_slot() {
             .rc
             .accounts
             .accounts_db
-            .get_pubkey_hash_for_slot(bank.slot());
+            .get_pubkey_hash_for_slot(bank.slot(), Vec::default());
         let dirty_accounts: HashSet<_> = dirty_accounts
             .into_iter()
             .map(|(pubkey, _hash)| pubkey)
