@@ -419,7 +419,7 @@ mod tests {
             }
             if p == path_str));
 
-        // faile cases
+        // failure cases
         let matches_error = command
             .clone()
             .try_get_matches_from(vec!["test", "--keypair", "-"])
@@ -428,7 +428,7 @@ mod tests {
 
         let matches_error = command
             .clone()
-            .try_get_matches_from(vec!["test", "--keypair", "usb::/ledger"])
+            .try_get_matches_from(vec!["test", "--keypair", "usb://ledger"])
             .unwrap_err();
         assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
     }
@@ -493,7 +493,7 @@ mod tests {
             }
         );
 
-        // faile cases
+        // failure cases
         let matches_error = command
             .clone()
             .try_get_matches_from(vec!["test", "--keypair", "-"])
@@ -502,7 +502,7 @@ mod tests {
 
         let matches_error = command
             .clone()
-            .try_get_matches_from(vec!["test", "--keypair", "usb::/ledger"])
+            .try_get_matches_from(vec!["test", "--keypair", "usb://ledger"])
             .unwrap_err();
         assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
 
@@ -565,7 +565,7 @@ mod tests {
             }
         );
 
-        // faile cases
+        // failure cases
         let matches_error = command
             .clone()
             .try_get_matches_from(vec!["test", "--keypair", "-"])
@@ -574,7 +574,7 @@ mod tests {
 
         let matches_error = command
             .clone()
-            .try_get_matches_from(vec!["test", "--keypair", "usb::/ledger"])
+            .try_get_matches_from(vec!["test", "--keypair", "usb://ledger"])
             .unwrap_err();
         assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
     }
@@ -626,7 +626,7 @@ mod tests {
             }
             if p == path_str));
 
-        // faile cases
+        // failure cases
         let matches_error = command
             .clone()
             .try_get_matches_from(vec!["test", "--signer", "-"])
@@ -635,7 +635,7 @@ mod tests {
 
         let matches_error = command
             .clone()
-            .try_get_matches_from(vec!["test", "--signer", "usb::/ledger"])
+            .try_get_matches_from(vec!["test", "--signer", "usb://ledger"])
             .unwrap_err();
         assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
     }
