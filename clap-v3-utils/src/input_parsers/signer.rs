@@ -18,7 +18,7 @@ use {
 // Sentinel value used to indicate to write to screen instead of file
 pub const STDOUT_OUTFILE_TOKEN: &str = "-";
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SignerSourceParserBuilder {
     allow_prompt: bool,
     allow_file_path: bool,
@@ -27,29 +27,16 @@ pub struct SignerSourceParserBuilder {
     allow_pubkey: bool,
     allow_legacy: bool,
 }
-impl Default for SignerSourceParserBuilder {
-    fn default() -> Self {
-        Self {
-            allow_prompt: true,
-            allow_file_path: true,
-            allow_usb: true,
-            allow_stdin: true,
-            allow_pubkey: true,
-            allow_legacy: true,
-        }
-    }
-}
 
 impl SignerSourceParserBuilder {
-    pub fn new() -> Self {
-        Self {
-            allow_prompt: false,
-            allow_file_path: false,
-            allow_usb: false,
-            allow_stdin: false,
-            allow_pubkey: false,
-            allow_legacy: true,
-        }
+    pub fn allow_all(mut self) -> Self {
+        self.allow_prompt = true;
+        self.allow_file_path = true;
+        self.allow_usb = true;
+        self.allow_stdin = true;
+        self.allow_pubkey = true;
+        self.allow_legacy = true;
+        self
     }
 
     pub fn allow_prompt(mut self) -> Self {
@@ -77,8 +64,8 @@ impl SignerSourceParserBuilder {
         self
     }
 
-    pub fn disallow_legacy(mut self) -> Self {
-        self.allow_legacy = false;
+    pub fn allow_legacy(mut self) -> Self {
+        self.allow_legacy = true;
         self
     }
 
@@ -397,7 +384,11 @@ mod tests {
             Arg::new("keypair")
                 .long("keypair")
                 .takes_value(true)
-                .value_parser(SignerSourceParserBuilder::new().allow_file_path().build()),
+                .value_parser(
+                    SignerSourceParserBuilder::default()
+                        .allow_file_path()
+                        .build(),
+                ),
         );
 
         // success case
@@ -441,9 +432,10 @@ mod tests {
                 .long("keypair")
                 .takes_value(true)
                 .value_parser(
-                    SignerSourceParserBuilder::new()
+                    SignerSourceParserBuilder::default()
                         .allow_file_path()
                         .allow_prompt()
+                        .allow_legacy()
                         .build(),
                 ),
         );
@@ -512,10 +504,9 @@ mod tests {
                 .long("keypair")
                 .takes_value(true)
                 .value_parser(
-                    SignerSourceParserBuilder::new()
+                    SignerSourceParserBuilder::default()
                         .allow_file_path()
                         .allow_prompt()
-                        .disallow_legacy()
                         .build(),
                 ),
         );
@@ -533,7 +524,12 @@ mod tests {
             Arg::new("keypair")
                 .long("keypair")
                 .takes_value(true)
-                .value_parser(SignerSourceParserBuilder::new().allow_prompt().build()),
+                .value_parser(
+                    SignerSourceParserBuilder::default()
+                        .allow_prompt()
+                        .allow_legacy()
+                        .build(),
+                ),
         );
 
         // success case
@@ -586,7 +582,7 @@ mod tests {
                 .long("signer")
                 .takes_value(true)
                 .value_parser(
-                    SignerSourceParserBuilder::new()
+                    SignerSourceParserBuilder::default()
                         .allow_pubkey()
                         .allow_file_path()
                         .build(),

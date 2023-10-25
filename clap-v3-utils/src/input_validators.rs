@@ -82,7 +82,7 @@ where
 // Return an error if a keypair file cannot be parsed.
 #[deprecated(
     since = "1.17.2",
-    note = "please use `SignerSourceParserBuilder::new().allow_file_path().build()` instead"
+    note = "please use `SignerSourceParserBuilder::default().allow_file_path().build()` instead"
 )]
 pub fn is_keypair<T>(string: T) -> Result<(), String>
 where
@@ -96,7 +96,7 @@ where
 // Return an error if a keypair file cannot be parsed
 #[deprecated(
     since = "1.17.2",
-    note = "please use `SignerSourceParserBuilder::new().allow_file_path().allow_prompt().build()` instead"
+    note = "please use `SignerSourceParserBuilder::default().allow_file_path().allow_prompt().allow_legacy().build()` instead"
 )]
 pub fn is_keypair_or_ask_keyword<T>(string: T) -> Result<(), String>
 where
@@ -113,7 +113,7 @@ where
 // Return an error if a `SignerSourceKind::Prompt` cannot be parsed
 #[deprecated(
     since = "1.17.2",
-    note = "please use `SignerSourceParserBuilder::new().allow_prompt().build()` instead"
+    note = "please use `SignerSourceParserBuilder::default().allow_prompt().allow_legacy().build()` instead"
 )]
 pub fn is_prompt_signer_source(string: &str) -> Result<(), String> {
     if string == ASK_KEYWORD {
@@ -133,7 +133,7 @@ pub fn is_prompt_signer_source(string: &str) -> Result<(), String> {
 // Return an error if string cannot be parsed as pubkey string or keypair file location
 #[deprecated(
     since = "1.17.2",
-    note = "please use `SignerSourceParserBuilder::new().allow_pubkey().allow_file_path().build()` instead"
+    note = "please use `SignerSourceParserBuilder::default().allow_pubkey().allow_file_path().build()` instead"
 )]
 #[allow(deprecated)]
 pub fn is_pubkey_or_keypair<T>(string: T) -> Result<(), String>
@@ -147,7 +147,7 @@ where
 // produce a pubkey()
 #[deprecated(
     since = "1.17.2",
-    note = "please use `SignerSourceParserBuilder::new().allow_pubkey().allow_file_path().build()` instead"
+    note = "please use `SignerSourceParserBuilder::default().allow_pubkey().allow_file_path().build()` instead"
 )]
 #[allow(deprecated)]
 pub fn is_valid_pubkey<T>(string: T) -> Result<(), String>
@@ -173,7 +173,7 @@ where
 // also provided and correct happens in parsing, not in validation.
 #[deprecated(
     since = "1.17.2",
-    note = "please use `SignerSourceParserBuilder::new().build()` instead"
+    note = "please use `SignerSourceParserBuilder::default().build()` instead"
 )]
 #[allow(deprecated)]
 pub fn is_valid_signer<T>(string: T) -> Result<(), String>
