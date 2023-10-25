@@ -38,7 +38,7 @@ impl CargoRegistryService {
 
         match bytes {
             Ok(data) => {
-                let Ok(crate_object) = CratePackage(data).into() else {
+                let Ok(crate_object) = UnpackedCrate::unpack(CratePackage(data)) else {
                     return response_builder::error_response(
                         hyper::StatusCode::INTERNAL_SERVER_ERROR,
                         "Failed to parse the crate information",
@@ -83,7 +83,7 @@ impl CargoRegistryService {
         _request: &hyper::Request<hyper::Body>,
         client: Arc<Client>,
     ) -> hyper::Response<hyper::Body> {
-        let Some((path, crate_name, _version)) = Self::get_crate_name_and_version(path) else {
+        let Some((path, crate_name, version)) = Self::get_crate_name_and_version(path) else {
             return response_builder::error_in_parsing();
         };
 
@@ -92,10 +92,10 @@ impl CargoRegistryService {
         }
 
         let package = Program::crate_name_to_program_id(crate_name)
-            .and_then(|id| UnpackedCrate::fetch(id, client).ok());
+            .and_then(|id| UnpackedCrate::fetch(id, version, client).ok());
 
         // Return the package to the caller in the response
-        if let Some(package) = package {
+        if let Some((package, _meta)) = package {
             response_builder::success_response_bytes(package.0)
         } else {
             response_builder::error_response(

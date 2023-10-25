@@ -31,6 +31,8 @@ use {
     tempfile::{tempdir, TempDir},
 };
 
+const APPEND_CRATE_TO_ELF: bool = true;
+
 pub(crate) type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -99,6 +101,8 @@ pub(crate) struct Program {
     path: String,
     id: Pubkey,
     _tempdir: Arc<TempDir>,
+    meta: PackageMetaData,
+    crate_bytes: CrateTarGz,
 }
 
 impl Program {
@@ -107,9 +111,17 @@ impl Program {
             return Err("Signer doesn't match program ID".into());
         }
 
-        let program_data = read_and_verify_elf(self.path.as_ref())
+        let mut program_data = read_and_verify_elf(self.path.as_ref())
             .map_err(|e| format!("failed to read the program: {}", e))?;
 
+        if APPEND_CRATE_TO_ELF {
+            let program_id_str = Program::program_id_to_crate_name(self.id);
+            let crate_tar_gz =
+                CrateTarGz::new_rebased(&self.crate_bytes, &self.meta, &program_id_str)?;
+            let crate_len = u32::to_le_bytes(crate_tar_gz.0.len() as u32);
+            program_data.extend_from_slice(&crate_tar_gz.0);
+            program_data.extend_from_slice(&crate_len);
+        }
         let command_config = RPCCommandConfig::new(client.as_ref());
 
         process_deploy_program(
@@ -128,7 +140,7 @@ impl Program {
         Ok(())
     }
 
-    fn dump(&self, client: Arc<Client>) -> Result<(), Error> {
+    fn dump(&mut self, client: Arc<Client>) -> Result<(), Error> {
         info!("Fetching program {:?}", self.id);
         let command_config = RPCCommandConfig::new(client.as_ref());
 
@@ -143,13 +155,41 @@ impl Program {
             format!("Failed to fetch the program: {}", e)
         })?;
 
+        if APPEND_CRATE_TO_ELF {
+            let Ok(buffer) = fs::read(&self.path) else {
+                return Err("Failed to read the program file".into());
+            };
+
+            let data = Bytes::from(buffer);
+
+            let data_len = data.len();
+            let sizeof_length = size_of::<u32>();
+
+            // The crate length is at the tail of the data buffer, as 4 LE bytes.
+            let length_le = data.slice(data_len.saturating_sub(sizeof_length)..data_len);
+            let length =
+                u32::from_le_bytes(length_le.deref().try_into().expect("Failed to read length"));
+
+            let crate_start = data_len
+                .saturating_sub(sizeof_length)
+                .saturating_sub(length as usize);
+            let crate_end = data_len.saturating_sub(sizeof_length);
+
+            let crate_bytes = CrateTarGz(Bytes::copy_from_slice(&data[crate_start..crate_end]));
+            self.crate_bytes = crate_bytes;
+        }
         Ok(())
     }
 
     pub(crate) fn crate_name_to_program_id(crate_name: &str) -> Option<Pubkey> {
-        hex::decode(crate_name)
+        let (_, id_str) = crate_name.split_once('-')?;
+        hex::decode(id_str)
             .ok()
             .and_then(|bytes| Pubkey::try_from(bytes).ok())
+    }
+
+    fn program_id_to_crate_name(id: Pubkey) -> String {
+        format!("sol-{}", hex::encode(id.to_bytes()))
     }
 }
 
@@ -159,20 +199,23 @@ impl From<&UnpackedCrate> for Program {
             path: value.program_path.clone(),
             id: value.program_id,
             _tempdir: value.tempdir.clone(),
+            meta: value.meta.clone(),
+            crate_bytes: value.crate_bytes.clone(),
         }
     }
 }
 
-pub(crate) struct CratePackage(pub(crate) Bytes);
+#[derive(Clone, Default)]
+pub(crate) struct CrateTarGz(pub(crate) Bytes);
 
-impl From<UnpackedCrate> for Result<CratePackage, Error> {
-    fn from(value: UnpackedCrate) -> Self {
+impl CrateTarGz {
+    fn new(value: UnpackedCrate) -> Result<Self, Error> {
         let mut archive = Builder::new(Vec::new());
         archive.mode(HeaderMode::Deterministic);
 
-        let base_path = UnpackedCrate::make_path(&value.tempdir, &value.meta, "out");
+        let base_path = UnpackedCrate::make_path(&value.tempdir, &value.meta, "");
         archive.append_dir_all(
-            format!("{}-{}/out", value.meta.name, value.meta.vers),
+            format!("{}-{}/", value.meta.name, value.meta.vers),
             base_path,
         )?;
         let data = archive.into_inner()?;
@@ -182,9 +225,27 @@ impl From<UnpackedCrate> for Result<CratePackage, Error> {
         let mut zipped_data = Vec::new();
         encoder.read_to_end(&mut zipped_data)?;
 
-        Ok(CratePackage(Bytes::from(zipped_data)))
+        Ok(CrateTarGz(Bytes::from(zipped_data)))
+    }
+
+    fn new_rebased(&self, meta: &PackageMetaData, target_base: &str) -> Result<Self, Error> {
+        let mut unpacked = UnpackedCrate::decompress(self.clone(), meta.clone())?;
+
+        let name = Program::program_id_to_crate_name(unpacked.program_id);
+        UnpackedCrate::fixup_toml(&unpacked.tempdir, "Cargo.toml.orig", &unpacked.meta, &name)?;
+        UnpackedCrate::fixup_toml(&unpacked.tempdir, "Cargo.toml", &unpacked.meta, &name)?;
+
+        let source_path = UnpackedCrate::make_path(&unpacked.tempdir, &unpacked.meta, "");
+        unpacked.meta.name = target_base.to_string();
+        let target_path = UnpackedCrate::make_path(&unpacked.tempdir, &unpacked.meta, "");
+        fs::rename(source_path, target_path.clone())
+            .map_err(|_| "Failed to rename the crate folder")?;
+
+        Self::new(unpacked)
     }
 }
+
+pub(crate) struct CratePackage(pub(crate) Bytes);
 
 pub(crate) struct UnpackedCrate {
     meta: PackageMetaData,
@@ -193,29 +254,20 @@ pub(crate) struct UnpackedCrate {
     program_path: String,
     program_id: Pubkey,
     keypair: Option<Keypair>,
+    crate_bytes: CrateTarGz,
 }
 
-impl From<CratePackage> for Result<UnpackedCrate, Error> {
-    fn from(value: CratePackage) -> Self {
-        let bytes = value.0;
-        let (meta, offset) = PackageMetaData::new(&bytes)?;
+impl UnpackedCrate {
+    fn decompress(crate_bytes: CrateTarGz, meta: PackageMetaData) -> Result<Self, Error> {
+        let cksum = format!("{:x}", Sha256::digest(&crate_bytes.0));
 
-        let (_crate_file_length, length_size) =
-            PackageMetaData::read_u32_length(&bytes.slice(offset..))?;
-        let crate_bytes = bytes.slice(offset.saturating_add(length_size)..);
-        let cksum = format!("{:x}", Sha256::digest(&crate_bytes));
-
-        let decoder = GzDecoder::new(crate_bytes.as_ref());
+        let decoder = GzDecoder::new(crate_bytes.0.as_ref());
         let mut archive = Archive::new(decoder);
 
         let tempdir = tempdir()?;
         archive.unpack(tempdir.path())?;
 
         let lib_name = UnpackedCrate::program_library_name(&tempdir, &meta)?;
-
-        let base_path = UnpackedCrate::make_path(&tempdir, &meta, "out");
-        fs::create_dir_all(base_path)
-            .map_err(|_| "Failed to create the base directory for output")?;
 
         let program_path =
             UnpackedCrate::make_path(&tempdir, &meta, format!("out/{}.so", lib_name))
@@ -237,7 +289,18 @@ impl From<CratePackage> for Result<UnpackedCrate, Error> {
             program_path,
             program_id: keypair.pubkey(),
             keypair: Some(keypair),
+            crate_bytes,
         })
+    }
+
+    pub(crate) fn unpack(value: CratePackage) -> Result<Self, Error> {
+        let bytes = value.0;
+        let (meta, offset) = PackageMetaData::new(&bytes)?;
+
+        let (_crate_file_length, length_size) =
+            PackageMetaData::read_u32_length(&bytes.slice(offset..))?;
+        let crate_bytes = CrateTarGz(bytes.slice(offset.saturating_add(length_size)..));
+        UnpackedCrate::decompress(crate_bytes, meta)
     }
 }
 
@@ -262,36 +325,37 @@ impl UnpackedCrate {
     }
 
     pub(crate) fn fetch_index(id: Pubkey, client: Arc<Client>) -> Result<IndexEntry, Error> {
-        let (_program, unpacked_crate) = Self::fetch_program(id, client)?;
-        let mut entry: IndexEntry = unpacked_crate.meta.clone().into();
-
-        let packed_crate: Result<CratePackage, Error> = UnpackedCrate::into(unpacked_crate);
-        let packed_crate = packed_crate?;
-
+        let (packed_crate, meta) = Self::fetch(id, "0.1.0", client)?;
+        let mut entry: IndexEntry = meta.into();
         entry.cksum = format!("{:x}", Sha256::digest(&packed_crate.0));
         Ok(entry)
     }
 
-    pub(crate) fn fetch(id: Pubkey, client: Arc<Client>) -> Result<CratePackage, Error> {
-        let (_program, unpacked_crate) = Self::fetch_program(id, client)?;
-        UnpackedCrate::into(unpacked_crate)
-    }
-
-    fn fetch_program(id: Pubkey, client: Arc<Client>) -> Result<(Program, UnpackedCrate), Error> {
-        let crate_obj = Self::new_empty(id)?;
-        let program = Program::from(&crate_obj);
+    pub(crate) fn fetch(
+        id: Pubkey,
+        vers: &str,
+        client: Arc<Client>,
+    ) -> Result<(CrateTarGz, PackageMetaData), Error> {
+        let crate_obj = Self::new_empty(id, vers)?;
+        let mut program = Program::from(&crate_obj);
         program.dump(client)?;
 
         // Decompile the program
         // Generate a Cargo.toml
 
-        Ok((program, crate_obj))
+        let meta = crate_obj.meta.clone();
+
+        if APPEND_CRATE_TO_ELF {
+            Ok((program.crate_bytes, meta))
+        } else {
+            CrateTarGz::new(crate_obj).map(|file| (file, meta))
+        }
     }
 
-    fn new_empty(id: Pubkey) -> Result<Self, Error> {
+    fn new_empty(id: Pubkey, vers: &str) -> Result<Self, Error> {
         let meta = PackageMetaData {
-            name: hex::encode(id.to_bytes()),
-            vers: "0.1.0".to_string(),
+            name: Program::program_id_to_crate_name(id),
+            vers: vers.to_string(),
             deps: vec![],
             features: BTreeMap::new(),
             authors: vec![],
@@ -328,6 +392,7 @@ impl UnpackedCrate {
             program_path,
             program_id: id,
             keypair: None,
+            crate_bytes: CrateTarGz::default(),
         })
     }
 
@@ -347,5 +412,23 @@ impl UnpackedCrate {
             .and_then(|v| v.as_str())
             .ok_or("Failed to get module name")?;
         Ok(library_name.to_string())
+    }
+
+    fn fixup_toml(
+        tempdir: &TempDir,
+        cargo_toml_name: &str,
+        meta: &PackageMetaData,
+        name: &str,
+    ) -> Result<(), Error> {
+        let toml_orig_path = Self::make_path(tempdir, meta, cargo_toml_name);
+        let toml_content = fs::read_to_string(&toml_orig_path)?;
+        let mut toml = toml_content.parse::<toml::Table>()?;
+        toml.get_mut("package")
+            .and_then(|v| v.get_mut("name"))
+            .map(|v| *v = toml::Value::String(name.to_string()))
+            .ok_or("Failed to set package name")?;
+
+        fs::write(toml_orig_path, toml.to_string())?;
+        Ok(())
     }
 }
