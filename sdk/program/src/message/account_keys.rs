@@ -4,11 +4,12 @@ use {
         message::{v0::LoadedAddresses, CompileError},
         pubkey::Pubkey,
     },
-    std::{collections::BTreeMap, ops::Index},
+    std::{collections::BTreeMap, iter::zip, ops::Index},
 };
 
 /// Collection of static and dynamically loaded keys used to load accounts
 /// during transaction processing.
+#[derive(Clone, Default, Debug, Eq)]
 pub struct AccountKeys<'a> {
     static_keys: &'a [Pubkey],
     dynamic_keys: Option<&'a LoadedAddresses>,
@@ -135,6 +136,12 @@ impl<'a> AccountKeys<'a> {
                 })
             })
             .collect()
+    }
+}
+
+impl PartialEq for AccountKeys<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        zip(self.iter(), other.iter()).all(|(a, b)| a == b)
     }
 }
 

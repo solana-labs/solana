@@ -965,7 +965,8 @@ impl Validator {
             )),
         };
 
-        let rpc_override_health_check = Arc::new(AtomicBool::new(false));
+        let rpc_override_health_check =
+            Arc::new(AtomicBool::new(config.rpc_config.disable_health_check));
         let (
             json_rpc_service,
             pubsub_service,
@@ -1002,7 +1003,6 @@ impl Validator {
                 ledger_path,
                 config.validator_exit.clone(),
                 exit.clone(),
-                config.known_validators.clone(),
                 rpc_override_health_check.clone(),
                 startup_verification_complete,
                 optimistically_confirmed_bank.clone(),
@@ -1206,6 +1206,7 @@ impl Validator {
                 .expect("Operator must spin up node with valid QUIC TVU address")
                 .ip(),
             turbine_quic_endpoint_sender,
+            bank_forks.clone(),
         )
         .unwrap();
 
@@ -1230,6 +1231,7 @@ impl Validator {
                     .expect("Operator must spin up node with valid QUIC serve-repair address")
                     .ip(),
                 repair_quic_endpoint_sender,
+                bank_forks.clone(),
             )
             .unwrap();
 

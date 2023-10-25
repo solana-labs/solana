@@ -50,6 +50,8 @@ pub enum AuthenticatedEncryptionError {
     DerivationMethodNotSupported,
     #[error("seed length too short for derivation")]
     SeedLengthTooShort,
+    #[error("seed length too long for derivation")]
+    SeedLengthTooLong,
 }
 
 struct AuthenticatedEncryption;
@@ -172,9 +174,13 @@ impl EncodableKey for AeKey {
 impl SeedDerivable for AeKey {
     fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
         const MINIMUM_SEED_LEN: usize = AE_KEY_LEN;
+        const MAXIMUM_SEED_LEN: usize = 65535;
 
         if seed.len() < MINIMUM_SEED_LEN {
             return Err(AuthenticatedEncryptionError::SeedLengthTooShort.into());
+        }
+        if seed.len() > MAXIMUM_SEED_LEN {
+            return Err(AuthenticatedEncryptionError::SeedLengthTooLong.into());
         }
 
         let mut hasher = Sha3_512::new();
@@ -277,5 +283,17 @@ mod tests {
 
         let null_signer = NullSigner::new(&Pubkey::default());
         assert!(AeKey::new_from_signer(&null_signer, Pubkey::default().as_ref()).is_err());
+    }
+
+    #[test]
+    fn test_aes_key_from_seed() {
+        let good_seed = vec![0; 32];
+        assert!(AeKey::from_seed(&good_seed).is_ok());
+
+        let too_short_seed = vec![0; 15];
+        assert!(AeKey::from_seed(&too_short_seed).is_err());
+
+        let too_long_seed = vec![0; 65536];
+        assert!(AeKey::from_seed(&too_long_seed).is_err());
     }
 }

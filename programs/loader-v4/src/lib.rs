@@ -12,10 +12,12 @@ use {
     },
     solana_rbpf::{
         aligned_memory::AlignedMemory,
-        ebpf,
-        elf::{Executable, FunctionRegistry},
+        declare_builtin_function, ebpf,
+        elf::Executable,
+        error::ProgramResult,
         memory_region::{MemoryMapping, MemoryRegion},
-        vm::{BuiltinProgram, Config, ContextObject, EbpfVm, ProgramResult},
+        program::{BuiltinProgram, FunctionRegistry},
+        vm::{Config, ContextObject, EbpfVm},
     },
     solana_sdk::{
         entrypoint::SUCCESS,
@@ -81,7 +83,6 @@ pub fn create_program_runtime_environment_v2<'a>(
         reject_broken_elfs: true,
         noop_instruction_rate: 256,
         sanitize_user_provided_values: true,
-        encrypt_runtime_environment: true,
         external_internal_function_hash_collision: true,
         reject_callx_r10: true,
         enable_sbpf_v1: false,
@@ -131,7 +132,7 @@ pub fn create_vm<'a, 'b>(
         Box::new(InstructionError::ProgramEnvironmentSetupFailure)
     })?;
     Ok(EbpfVm::new(
-        config,
+        program.get_loader().clone(),
         sbpf_version,
         invoke_context,
         memory_mapping,
@@ -182,9 +183,9 @@ fn execute<'a, 'b: 'a>(
     match result {
         ProgramResult::Ok(status) if status != SUCCESS => {
             let error: InstructionError = status.into();
-            Err(Box::new(error) as Box<dyn std::error::Error>)
+            Err(error.into())
         }
-        ProgramResult::Err(error) => Err(error),
+        ProgramResult::Err(error) => Err(error.into()),
         _ => Ok(()),
     }
 }
@@ -527,18 +528,20 @@ pub fn process_instruction_transfer_authority(
     Ok(())
 }
 
-pub fn process_instruction(
-    invoke_context: &mut InvokeContext,
-    _arg0: u64,
-    _arg1: u64,
-    _arg2: u64,
-    _arg3: u64,
-    _arg4: u64,
-    _memory_mapping: &mut MemoryMapping,
-    result: &mut ProgramResult,
-) {
-    *result = process_instruction_inner(invoke_context).into();
-}
+declare_builtin_function!(
+    Entrypoint,
+    fn rust(
+        invoke_context: &mut InvokeContext,
+        _arg0: u64,
+        _arg1: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _memory_mapping: &mut MemoryMapping,
+    ) -> Result<u64, Box<dyn std::error::Error>> {
+        process_instruction_inner(invoke_context)
+    }
+);
 
 pub fn process_instruction_inner(
     invoke_context: &mut InvokeContext,
@@ -700,7 +703,7 @@ mod tests {
             transaction_accounts,
             instruction_accounts,
             expected_result,
-            super::process_instruction,
+            Entrypoint::vm,
             |invoke_context| {
                 invoke_context
                     .programs_modified_by_tx

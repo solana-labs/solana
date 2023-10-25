@@ -602,17 +602,19 @@ fn test_epoch_accounts_hash_and_warping() {
     let bank = bank_forks
         .write()
         .unwrap()
-        .insert_without_scheduler(Bank::warp_from_parent(
+        .insert(Bank::warp_from_parent(
             bank,
             &Pubkey::default(),
             eah_stop_slot_in_next_epoch,
             CalcAccountsHashDataSource::Storages,
-        ));
+        ))
+        .clone_without_scheduler();
     let slot = bank.slot().checked_add(1).unwrap();
     let bank = bank_forks
         .write()
         .unwrap()
-        .insert_without_scheduler(Bank::new_from_parent(bank, &Pubkey::default(), slot));
+        .insert(Bank::new_from_parent(bank, &Pubkey::default(), slot))
+        .clone_without_scheduler();
     bank_forks.write().unwrap().set_root(
         bank.slot(),
         &test_environment
@@ -639,17 +641,19 @@ fn test_epoch_accounts_hash_and_warping() {
     let bank = bank_forks
         .write()
         .unwrap()
-        .insert_without_scheduler(Bank::warp_from_parent(
+        .insert(Bank::warp_from_parent(
             bank,
             &Pubkey::default(),
             eah_start_slot_in_next_epoch,
             CalcAccountsHashDataSource::Storages,
-        ));
+        ))
+        .clone_without_scheduler();
     let slot = bank.slot().checked_add(1).unwrap();
     let bank = bank_forks
         .write()
         .unwrap()
-        .insert_without_scheduler(Bank::new_from_parent(bank, &Pubkey::default(), slot));
+        .insert(Bank::new_from_parent(bank, &Pubkey::default(), slot))
+        .clone_without_scheduler();
     bank_forks.write().unwrap().set_root(
         bank.slot(),
         &test_environment

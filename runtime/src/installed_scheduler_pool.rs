@@ -233,6 +233,7 @@ impl SchedulingContext {
 /// avoid ambiguity as to which to clone: BankWithScheduler or Arc<Bank>. Use
 /// clone_without_scheduler() for Arc<Bank>. Otherwise, use clone_with_scheduler() (this should be
 /// unusual outside scheduler code-path)
+#[derive(Debug)]
 pub struct BankWithScheduler {
     inner: Arc<BankWithSchedulerInner>,
 }

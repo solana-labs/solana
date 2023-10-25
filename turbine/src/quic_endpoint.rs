@@ -10,28 +10,34 @@ use {
     rcgen::RcgenError,
     rustls::{Certificate, PrivateKey},
     solana_quic_client::nonblocking::quic_client::SkipServerVerification,
+    solana_runtime::bank_forks::BankForks,
     solana_sdk::{pubkey::Pubkey, signature::Keypair},
     solana_streamer::{
         quic::SkipClientVerification, tls_certificates::new_self_signed_tls_certificate,
     },
     std::{
+        cmp::Reverse,
         collections::{hash_map::Entry, HashMap},
         io::Error as IoError,
         net::{IpAddr, SocketAddr, UdpSocket},
-        ops::Deref,
-        sync::Arc,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
     },
     thiserror::Error,
     tokio::{
         sync::{
-            mpsc::{Receiver as AsyncReceiver, Sender as AsyncSender},
-            RwLock,
+            mpsc::{error::TrySendError, Receiver as AsyncReceiver, Sender as AsyncSender},
+            Mutex, RwLock as AsyncRwLock,
         },
         task::JoinHandle,
     },
 };
 
-const CLIENT_CHANNEL_CAPACITY: usize = 1 << 20;
+const CLIENT_CHANNEL_BUFFER: usize = 1 << 14;
+const ROUTER_CHANNEL_BUFFER: usize = 64;
+const CONNECTION_CACHE_CAPACITY: usize = 3072;
 const INITIAL_MAXIMUM_TRANSMISSION_UNIT: u16 = 1280;
 const ALPN_TURBINE_PROTOCOL_ID: &[u8] = b"solana-turbine";
 const CONNECT_SERVER_NAME: &str = "solana-turbine";
@@ -40,14 +46,15 @@ const CONNECTION_CLOSE_ERROR_CODE_SHUTDOWN: VarInt = VarInt::from_u32(1);
 const CONNECTION_CLOSE_ERROR_CODE_DROPPED: VarInt = VarInt::from_u32(2);
 const CONNECTION_CLOSE_ERROR_CODE_INVALID_IDENTITY: VarInt = VarInt::from_u32(3);
 const CONNECTION_CLOSE_ERROR_CODE_REPLACED: VarInt = VarInt::from_u32(4);
+const CONNECTION_CLOSE_ERROR_CODE_PRUNED: VarInt = VarInt::from_u32(5);
 
 const CONNECTION_CLOSE_REASON_SHUTDOWN: &[u8] = b"SHUTDOWN";
 const CONNECTION_CLOSE_REASON_DROPPED: &[u8] = b"DROPPED";
 const CONNECTION_CLOSE_REASON_INVALID_IDENTITY: &[u8] = b"INVALID_IDENTITY";
 const CONNECTION_CLOSE_REASON_REPLACED: &[u8] = b"REPLACED";
+const CONNECTION_CLOSE_REASON_PRUNED: &[u8] = b"PRUNED";
 
 pub type AsyncTryJoinHandle = TryJoin<JoinHandle<()>, JoinHandle<()>>;
-type ConnectionCache = HashMap<(SocketAddr, Option<Pubkey>), Arc<RwLock<Option<Connection>>>>;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -76,6 +83,7 @@ pub fn new_quic_endpoint(
     socket: UdpSocket,
     address: IpAddr,
     sender: Sender<(Pubkey, SocketAddr, Bytes)>,
+    bank_forks: Arc<RwLock<BankForks>>,
 ) -> Result<
     (
         Endpoint,
@@ -99,10 +107,27 @@ pub fn new_quic_endpoint(
         )?
     };
     endpoint.set_default_client_config(client_config);
-    let cache = Arc::<RwLock<ConnectionCache>>::default();
-    let (client_sender, client_receiver) = tokio::sync::mpsc::channel(CLIENT_CHANNEL_CAPACITY);
-    let server_task = runtime.spawn(run_server(endpoint.clone(), sender.clone(), cache.clone()));
-    let client_task = runtime.spawn(run_client(endpoint.clone(), client_receiver, sender, cache));
+    let prune_cache_pending = Arc::<AtomicBool>::default();
+    let cache = Arc::<Mutex<HashMap<Pubkey, Connection>>>::default();
+    let router = Arc::<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>::default();
+    let (client_sender, client_receiver) = tokio::sync::mpsc::channel(CLIENT_CHANNEL_BUFFER);
+    let server_task = runtime.spawn(run_server(
+        endpoint.clone(),
+        sender.clone(),
+        bank_forks.clone(),
+        prune_cache_pending.clone(),
+        router.clone(),
+        cache.clone(),
+    ));
+    let client_task = runtime.spawn(run_client(
+        endpoint.clone(),
+        client_receiver,
+        sender,
+        bank_forks,
+        prune_cache_pending,
+        router,
+        cache,
+    ));
     let task = futures::future::try_join(server_task, client_task);
     Ok((endpoint, client_sender, task))
 }
@@ -152,13 +177,19 @@ fn new_transport_config() -> TransportConfig {
 async fn run_server(
     endpoint: Endpoint,
     sender: Sender<(Pubkey, SocketAddr, Bytes)>,
-    cache: Arc<RwLock<ConnectionCache>>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
+    router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
+    cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
 ) {
     while let Some(connecting) = endpoint.accept().await {
         tokio::task::spawn(handle_connecting_error(
             endpoint.clone(),
             connecting,
             sender.clone(),
+            bank_forks.clone(),
+            prune_cache_pending.clone(),
+            router.clone(),
             cache.clone(),
         ));
     }
@@ -168,27 +199,79 @@ async fn run_client(
     endpoint: Endpoint,
     mut receiver: AsyncReceiver<(SocketAddr, Bytes)>,
     sender: Sender<(Pubkey, SocketAddr, Bytes)>,
-    cache: Arc<RwLock<ConnectionCache>>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
+    router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
+    cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
 ) {
     while let Some((remote_address, bytes)) = receiver.recv().await {
-        tokio::task::spawn(send_datagram_task(
+        let Some(bytes) = try_route_bytes(&remote_address, bytes, &*router.read().await) else {
+            continue;
+        };
+        let receiver = {
+            let mut router = router.write().await;
+            let Some(bytes) = try_route_bytes(&remote_address, bytes, &router) else {
+                continue;
+            };
+            let (sender, receiver) = tokio::sync::mpsc::channel(ROUTER_CHANNEL_BUFFER);
+            sender.try_send(bytes).unwrap();
+            router.insert(remote_address, sender);
+            receiver
+        };
+        tokio::task::spawn(make_connection_task(
             endpoint.clone(),
             remote_address,
-            bytes,
             sender.clone(),
+            receiver,
+            bank_forks.clone(),
+            prune_cache_pending.clone(),
+            router.clone(),
             cache.clone(),
         ));
     }
     close_quic_endpoint(&endpoint);
+    // Drop sender channels to unblock threads waiting on the receiving end.
+    router.write().await.clear();
+}
+
+fn try_route_bytes(
+    remote_address: &SocketAddr,
+    bytes: Bytes,
+    router: &HashMap<SocketAddr, AsyncSender<Bytes>>,
+) -> Option<Bytes> {
+    match router.get(remote_address) {
+        None => Some(bytes),
+        Some(sender) => match sender.try_send(bytes) {
+            Ok(()) => None,
+            Err(TrySendError::Full(_)) => {
+                error!("TrySendError::Full {remote_address}");
+                None
+            }
+            Err(TrySendError::Closed(bytes)) => Some(bytes),
+        },
+    }
 }
 
 async fn handle_connecting_error(
     endpoint: Endpoint,
     connecting: Connecting,
     sender: Sender<(Pubkey, SocketAddr, Bytes)>,
-    cache: Arc<RwLock<ConnectionCache>>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
+    router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
+    cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
 ) {
-    if let Err(err) = handle_connecting(endpoint, connecting, sender, cache).await {
+    if let Err(err) = handle_connecting(
+        endpoint,
+        connecting,
+        sender,
+        bank_forks,
+        prune_cache_pending,
+        router,
+        cache,
+    )
+    .await
+    {
         error!("handle_connecting: {err:?}");
     }
 }
@@ -197,52 +280,90 @@ async fn handle_connecting(
     endpoint: Endpoint,
     connecting: Connecting,
     sender: Sender<(Pubkey, SocketAddr, Bytes)>,
-    cache: Arc<RwLock<ConnectionCache>>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
+    router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
+    cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
 ) -> Result<(), Error> {
     let connection = connecting.await?;
     let remote_address = connection.remote_address();
     let remote_pubkey = get_remote_pubkey(&connection)?;
-    handle_connection_error(
+    let receiver = {
+        let (sender, receiver) = tokio::sync::mpsc::channel(ROUTER_CHANNEL_BUFFER);
+        router.write().await.insert(remote_address, sender);
+        receiver
+    };
+    handle_connection(
         endpoint,
         remote_address,
         remote_pubkey,
         connection,
         sender,
+        receiver,
+        bank_forks,
+        prune_cache_pending,
+        router,
         cache,
     )
     .await;
     Ok(())
 }
 
-async fn handle_connection_error(
+#[allow(clippy::too_many_arguments)]
+async fn handle_connection(
     endpoint: Endpoint,
     remote_address: SocketAddr,
     remote_pubkey: Pubkey,
     connection: Connection,
     sender: Sender<(Pubkey, SocketAddr, Bytes)>,
-    cache: Arc<RwLock<ConnectionCache>>,
+    receiver: AsyncReceiver<Bytes>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
+    router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
+    cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
 ) {
-    cache_connection(remote_address, remote_pubkey, connection.clone(), &cache).await;
-    if let Err(err) = handle_connection(
-        &endpoint,
+    cache_connection(
+        remote_pubkey,
+        connection.clone(),
+        bank_forks,
+        prune_cache_pending,
+        router.clone(),
+        cache.clone(),
+    )
+    .await;
+    let send_datagram_task = tokio::task::spawn(send_datagram_task(connection.clone(), receiver));
+    let read_datagram_task = tokio::task::spawn(read_datagram_task(
+        endpoint,
         remote_address,
         remote_pubkey,
-        &connection,
-        &sender,
-    )
-    .await
-    {
-        drop_connection(remote_address, remote_pubkey, &connection, &cache).await;
-        error!("handle_connection: {remote_pubkey}, {remote_address}, {err:?}");
+        connection.clone(),
+        sender,
+    ));
+    match futures::future::try_join(send_datagram_task, read_datagram_task).await {
+        Err(err) => error!("handle_connection: {remote_pubkey}, {remote_address}, {err:?}"),
+        Ok(out) => {
+            if let (Err(ref err), _) = out {
+                error!("send_datagram_task: {remote_pubkey}, {remote_address}, {err:?}");
+            }
+            if let (_, Err(ref err)) = out {
+                error!("read_datagram_task: {remote_pubkey}, {remote_address}, {err:?}");
+            }
+        }
+    }
+    drop_connection(remote_pubkey, &connection, &cache).await;
+    if let Entry::Occupied(entry) = router.write().await.entry(remote_address) {
+        if entry.get().is_closed() {
+            entry.remove();
+        }
     }
 }
 
-async fn handle_connection(
-    endpoint: &Endpoint,
+async fn read_datagram_task(
+    endpoint: Endpoint,
     remote_address: SocketAddr,
     remote_pubkey: Pubkey,
-    connection: &Connection,
-    sender: &Sender<(Pubkey, SocketAddr, Bytes)>,
+    connection: Connection,
+    sender: Sender<(Pubkey, SocketAddr, Bytes)>,
 ) -> Result<(), Error> {
     // Assert that send won't block.
     debug_assert_eq!(sender.capacity(), None);
@@ -250,7 +371,7 @@ async fn handle_connection(
         match connection.read_datagram().await {
             Ok(bytes) => {
                 if let Err(err) = sender.send((remote_pubkey, remote_address, bytes)) {
-                    close_quic_endpoint(endpoint);
+                    close_quic_endpoint(&endpoint);
                     return Err(Error::from(err));
                 }
             }
@@ -265,67 +386,68 @@ async fn handle_connection(
 }
 
 async fn send_datagram_task(
-    endpoint: Endpoint,
-    remote_address: SocketAddr,
-    bytes: Bytes,
-    sender: Sender<(Pubkey, SocketAddr, Bytes)>,
-    cache: Arc<RwLock<ConnectionCache>>,
-) {
-    if let Err(err) = send_datagram(&endpoint, remote_address, bytes, sender, cache).await {
-        error!("send_datagram: {remote_address}, {err:?}");
-    }
-}
-
-async fn send_datagram(
-    endpoint: &Endpoint,
-    remote_address: SocketAddr,
-    bytes: Bytes,
-    sender: Sender<(Pubkey, SocketAddr, Bytes)>,
-    cache: Arc<RwLock<ConnectionCache>>,
+    connection: Connection,
+    mut receiver: AsyncReceiver<Bytes>,
 ) -> Result<(), Error> {
-    let connection = get_connection(endpoint, remote_address, sender, cache).await?;
-    connection.send_datagram(bytes)?;
+    while let Some(bytes) = receiver.recv().await {
+        connection.send_datagram(bytes)?;
+    }
     Ok(())
 }
 
-async fn get_connection(
-    endpoint: &Endpoint,
+async fn make_connection_task(
+    endpoint: Endpoint,
     remote_address: SocketAddr,
     sender: Sender<(Pubkey, SocketAddr, Bytes)>,
-    cache: Arc<RwLock<ConnectionCache>>,
-) -> Result<Connection, Error> {
-    let entry = get_cache_entry(remote_address, &cache).await;
+    receiver: AsyncReceiver<Bytes>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
+    router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
+    cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
+) {
+    if let Err(err) = make_connection(
+        endpoint,
+        remote_address,
+        sender,
+        receiver,
+        bank_forks,
+        prune_cache_pending,
+        router,
+        cache,
+    )
+    .await
     {
-        let connection: Option<Connection> = entry.read().await.clone();
-        if let Some(connection) = connection {
-            if connection.close_reason().is_none() {
-                return Ok(connection);
-            }
-        }
+        error!("make_connection: {remote_address}, {err:?}");
     }
-    let connection = {
-        // Need to write lock here so that only one task initiates
-        // a new connection to the same remote_address.
-        let mut entry = entry.write().await;
-        if let Some(connection) = entry.deref() {
-            if connection.close_reason().is_none() {
-                return Ok(connection.clone());
-            }
-        }
-        let connection = endpoint
-            .connect(remote_address, CONNECT_SERVER_NAME)?
-            .await?;
-        entry.insert(connection).clone()
-    };
-    tokio::task::spawn(handle_connection_error(
-        endpoint.clone(),
+}
+
+async fn make_connection(
+    endpoint: Endpoint,
+    remote_address: SocketAddr,
+    sender: Sender<(Pubkey, SocketAddr, Bytes)>,
+    receiver: AsyncReceiver<Bytes>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
+    router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
+    cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
+) -> Result<(), Error> {
+    let connection = endpoint
+        .connect(remote_address, CONNECT_SERVER_NAME)?
+        .await?;
+    handle_connection(
+        endpoint,
         connection.remote_address(),
         get_remote_pubkey(&connection)?,
-        connection.clone(),
+        connection,
         sender,
+        receiver,
+        bank_forks,
+        prune_cache_pending,
+        router,
         cache,
-    ));
-    Ok(connection)
+    )
+    .await;
+    Ok(())
 }
 
 fn get_remote_pubkey(connection: &Connection) -> Result<Pubkey, Error> {
@@ -341,62 +463,95 @@ fn get_remote_pubkey(connection: &Connection) -> Result<Pubkey, Error> {
     }
 }
 
-async fn get_cache_entry(
-    remote_address: SocketAddr,
-    cache: &RwLock<ConnectionCache>,
-) -> Arc<RwLock<Option<Connection>>> {
-    let key = (remote_address, /*remote_pubkey:*/ None);
-    if let Some(entry) = cache.read().await.get(&key) {
-        return entry.clone();
-    }
-    cache.write().await.entry(key).or_default().clone()
-}
-
 async fn cache_connection(
-    remote_address: SocketAddr,
     remote_pubkey: Pubkey,
     connection: Connection,
-    cache: &RwLock<ConnectionCache>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
+    router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
+    cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
 ) {
-    let entries: [Arc<RwLock<Option<Connection>>>; 2] = {
-        let mut cache = cache.write().await;
-        [Some(remote_pubkey), None].map(|remote_pubkey| {
-            let key = (remote_address, remote_pubkey);
-            cache.entry(key).or_default().clone()
-        })
+    let (old, should_prune_cache) = {
+        let mut cache = cache.lock().await;
+        (
+            cache.insert(remote_pubkey, connection),
+            cache.len() >= CONNECTION_CACHE_CAPACITY.saturating_mul(2),
+        )
     };
-    let mut entry = entries[0].write().await;
-    *entries[1].write().await = Some(connection.clone());
-    if let Some(old) = entry.replace(connection) {
-        drop(entry);
+    if let Some(old) = old {
         old.close(
             CONNECTION_CLOSE_ERROR_CODE_REPLACED,
             CONNECTION_CLOSE_REASON_REPLACED,
         );
     }
+    if should_prune_cache && !prune_cache_pending.swap(true, Ordering::Relaxed) {
+        tokio::task::spawn(prune_connection_cache(
+            bank_forks,
+            prune_cache_pending,
+            router,
+            cache,
+        ));
+    }
 }
 
 async fn drop_connection(
-    remote_address: SocketAddr,
     remote_pubkey: Pubkey,
     connection: &Connection,
-    cache: &RwLock<ConnectionCache>,
+    cache: &Mutex<HashMap<Pubkey, Connection>>,
 ) {
-    if connection.close_reason().is_none() {
-        connection.close(
-            CONNECTION_CLOSE_ERROR_CODE_DROPPED,
-            CONNECTION_CLOSE_REASON_DROPPED,
-        );
-    }
-    let key = (remote_address, Some(remote_pubkey));
-    if let Entry::Occupied(entry) = cache.write().await.entry(key) {
-        if matches!(entry.get().read().await.deref(),
-                    Some(entry) if entry.stable_id() == connection.stable_id())
-        {
+    connection.close(
+        CONNECTION_CLOSE_ERROR_CODE_DROPPED,
+        CONNECTION_CLOSE_REASON_DROPPED,
+    );
+    if let Entry::Occupied(entry) = cache.lock().await.entry(remote_pubkey) {
+        if entry.get().stable_id() == connection.stable_id() {
             entry.remove();
         }
     }
-    // Cache entry for (remote_address, None) will be lazily evicted.
+}
+
+async fn prune_connection_cache(
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
+    router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
+    cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
+) {
+    debug_assert!(prune_cache_pending.load(Ordering::Relaxed));
+    let staked_nodes = {
+        let root_bank = bank_forks.read().unwrap().root_bank();
+        root_bank.staked_nodes()
+    };
+    {
+        let mut cache = cache.lock().await;
+        if cache.len() < CONNECTION_CACHE_CAPACITY.saturating_mul(2) {
+            prune_cache_pending.store(false, Ordering::Relaxed);
+            return;
+        }
+        let mut connections: Vec<_> = cache
+            .drain()
+            .filter(|(_, connection)| connection.close_reason().is_none())
+            .map(|entry @ (pubkey, _)| {
+                let stake = staked_nodes.get(&pubkey).copied().unwrap_or_default();
+                (stake, entry)
+            })
+            .collect();
+        connections
+            .select_nth_unstable_by_key(CONNECTION_CACHE_CAPACITY, |&(stake, _)| Reverse(stake));
+        for (_, (_, connection)) in &connections[CONNECTION_CACHE_CAPACITY..] {
+            connection.close(
+                CONNECTION_CLOSE_ERROR_CODE_PRUNED,
+                CONNECTION_CLOSE_REASON_PRUNED,
+            );
+        }
+        cache.extend(
+            connections
+                .into_iter()
+                .take(CONNECTION_CACHE_CAPACITY)
+                .map(|(_, entry)| entry),
+        );
+        prune_cache_pending.store(false, Ordering::Relaxed);
+    }
+    router.write().await.retain(|_, sender| !sender.is_closed());
 }
 
 impl<T> From<crossbeam_channel::SendError<T>> for Error {
@@ -410,6 +565,8 @@ mod tests {
     use {
         super::*,
         itertools::{izip, multiunzip},
+        solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        solana_runtime::bank::Bank,
         solana_sdk::signature::Signer,
         std::{iter::repeat_with, net::Ipv4Addr, time::Duration},
     };
@@ -437,6 +594,12 @@ mod tests {
             repeat_with(crossbeam_channel::unbounded::<(Pubkey, SocketAddr, Bytes)>)
                 .take(NUM_ENDPOINTS)
                 .unzip();
+        let bank_forks = {
+            let GenesisConfigInfo { genesis_config, .. } =
+                create_genesis_config(/*mint_lamports:*/ 100_000);
+            let bank = Bank::new_for_tests(&genesis_config);
+            Arc::new(RwLock::new(BankForks::new(bank)))
+        };
         let (endpoints, senders, tasks): (Vec<_>, Vec<_>, Vec<_>) =
             multiunzip(keypairs.iter().zip(sockets).zip(senders).map(
                 |((keypair, socket), sender)| {
@@ -446,6 +609,7 @@ mod tests {
                         socket,
                         IpAddr::V4(Ipv4Addr::LOCALHOST),
                         sender,
+                        bank_forks.clone(),
                     )
                     .unwrap()
                 },

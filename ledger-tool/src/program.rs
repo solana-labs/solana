@@ -573,7 +573,6 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
             .transaction_context
             .get_current_instruction_context()
             .unwrap(),
-        true, // should_cap_ix_accounts
         true, // copy_account_data
     )
     .unwrap();

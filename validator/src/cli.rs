@@ -258,11 +258,9 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("SLOT_DISTANCE")
                 .takes_value(true)
                 .default_value(&default_args.health_check_slot_distance)
-                .help("If --known-validators are specified, report this validator healthy \
-                       if its latest account hash is no further behind than this number of \
-                       slots from the latest known validator account hash. \
-                       If no --known-validators are specified, the validator will always \
-                       report itself to be healthy")
+                .help("Report this validator healthy if its latest optimistically confirmed slot \
+                       that has been replayed is no further behind than this number of slots from \
+                       the cluster latest optimistically confirmed slot")
         )
         .arg(
             Arg::with_name("rpc_faucet_addr")

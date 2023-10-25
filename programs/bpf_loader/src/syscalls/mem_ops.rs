@@ -1,6 +1,5 @@
 use {
     super::*,
-    crate::declare_syscall,
     solana_rbpf::{error::EbpfError, memory_region::MemoryRegion},
     std::slice,
 };
@@ -14,10 +13,10 @@ fn mem_op_consume(invoke_context: &mut InvokeContext, n: u64) -> Result<(), Erro
     consume_compute_meter(invoke_context, cost)
 }
 
-declare_syscall!(
+declare_builtin_function!(
     /// memcpy
     SyscallMemcpy,
-    fn inner_call(
+    fn rust(
         invoke_context: &mut InvokeContext,
         dst_addr: u64,
         src_addr: u64,
@@ -37,10 +36,10 @@ declare_syscall!(
     }
 );
 
-declare_syscall!(
+declare_builtin_function!(
     /// memmove
     SyscallMemmove,
-    fn inner_call(
+    fn rust(
         invoke_context: &mut InvokeContext,
         dst_addr: u64,
         src_addr: u64,
@@ -55,10 +54,10 @@ declare_syscall!(
     }
 );
 
-declare_syscall!(
+declare_builtin_function!(
     /// memcmp
     SyscallMemcmp,
-    fn inner_call(
+    fn rust(
         invoke_context: &mut InvokeContext,
         s1_addr: u64,
         s2_addr: u64,
@@ -113,10 +112,10 @@ declare_syscall!(
     }
 );
 
-declare_syscall!(
+declare_builtin_function!(
     /// memset
     SyscallMemset,
-    fn inner_call(
+    fn rust(
         invoke_context: &mut InvokeContext,
         dst_addr: u64,
         c: u64,
@@ -375,7 +374,6 @@ impl<'a> MemoryChunkIterator<'a> {
         len: u64,
     ) -> Result<MemoryChunkIterator<'a>, EbpfError> {
         let vm_addr_end = vm_addr.checked_add(len).ok_or(EbpfError::AccessViolation(
-            0,
             access_type,
             vm_addr,
             len,
@@ -394,26 +392,19 @@ impl<'a> MemoryChunkIterator<'a> {
     fn region(&mut self, vm_addr: u64) -> Result<&'a MemoryRegion, Error> {
         match self.memory_mapping.region(self.access_type, vm_addr) {
             Ok(region) => Ok(region),
-            Err(error) => match error.downcast_ref() {
-                Some(EbpfError::AccessViolation(pc, access_type, _vm_addr, _len, name)) => {
-                    Err(Box::new(EbpfError::AccessViolation(
-                        *pc,
-                        *access_type,
-                        self.initial_vm_addr,
-                        self.len,
-                        name,
-                    )))
-                }
-                Some(EbpfError::StackAccessViolation(pc, access_type, _vm_addr, _len, frame)) => {
+            Err(error) => match error {
+                EbpfError::AccessViolation(access_type, _vm_addr, _len, name) => Err(Box::new(
+                    EbpfError::AccessViolation(access_type, self.initial_vm_addr, self.len, name),
+                )),
+                EbpfError::StackAccessViolation(access_type, _vm_addr, _len, frame) => {
                     Err(Box::new(EbpfError::StackAccessViolation(
-                        *pc,
-                        *access_type,
+                        access_type,
                         self.initial_vm_addr,
                         self.len,
-                        *frame,
+                        frame,
                     )))
                 }
-                _ => Err(error),
+                _ => Err(error.into()),
             },
         }
     }
@@ -489,7 +480,7 @@ mod tests {
     use {
         super::*,
         assert_matches::assert_matches,
-        solana_rbpf::{ebpf::MM_PROGRAM_START, elf::SBPFVersion},
+        solana_rbpf::{ebpf::MM_PROGRAM_START, program::SBPFVersion},
     };
 
     fn to_chunk_vec<'a>(
@@ -547,7 +538,7 @@ mod tests {
                 .unwrap();
         assert_matches!(
             src_chunk_iter.next().unwrap().unwrap_err().downcast_ref().unwrap(),
-            EbpfError::AccessViolation(0, AccessType::Load, addr, 42, "unknown") if *addr == MM_PROGRAM_START - 1
+            EbpfError::AccessViolation(AccessType::Load, addr, 42, "unknown") if *addr == MM_PROGRAM_START - 1
         );
 
         // check oob at the upper bound. Since the memory mapping isn't empty,
@@ -558,7 +549,7 @@ mod tests {
         assert!(src_chunk_iter.next().unwrap().is_ok());
         assert_matches!(
             src_chunk_iter.next().unwrap().unwrap_err().downcast_ref().unwrap(),
-            EbpfError::AccessViolation(0, AccessType::Load, addr, 43, "program") if *addr == MM_PROGRAM_START
+            EbpfError::AccessViolation(AccessType::Load, addr, 43, "program") if *addr == MM_PROGRAM_START
         );
 
         // check oob at the upper bound on the first next_back()
@@ -568,7 +559,7 @@ mod tests {
                 .rev();
         assert_matches!(
             src_chunk_iter.next().unwrap().unwrap_err().downcast_ref().unwrap(),
-            EbpfError::AccessViolation(0, AccessType::Load, addr, 43, "program") if *addr == MM_PROGRAM_START
+            EbpfError::AccessViolation(AccessType::Load, addr, 43, "program") if *addr == MM_PROGRAM_START
         );
 
         // check oob at the upper bound on the 2nd next_back()
@@ -579,7 +570,7 @@ mod tests {
         assert!(src_chunk_iter.next().unwrap().is_ok());
         assert_matches!(
             src_chunk_iter.next().unwrap().unwrap_err().downcast_ref().unwrap(),
-            EbpfError::AccessViolation(0, AccessType::Load, addr, 43, "unknown") if *addr == MM_PROGRAM_START - 1
+            EbpfError::AccessViolation(AccessType::Load, addr, 43, "unknown") if *addr == MM_PROGRAM_START - 1
         );
     }
 
@@ -707,7 +698,7 @@ mod tests {
                 false,
                 |_src, _dst, _len| Ok::<_, Error>(0),
             ).unwrap_err().downcast_ref().unwrap(),
-            EbpfError::AccessViolation(0, AccessType::Load, addr, 8, "program") if *addr == MM_PROGRAM_START + 8
+            EbpfError::AccessViolation(AccessType::Load, addr, 8, "program") if *addr == MM_PROGRAM_START + 8
         );
 
         // src is shorter than dst
@@ -722,12 +713,12 @@ mod tests {
                 false,
                 |_src, _dst, _len| Ok::<_, Error>(0),
             ).unwrap_err().downcast_ref().unwrap(),
-            EbpfError::AccessViolation(0, AccessType::Load, addr, 3, "program") if *addr == MM_PROGRAM_START + 10
+            EbpfError::AccessViolation(AccessType::Load, addr, 3, "program") if *addr == MM_PROGRAM_START + 10
         );
     }
 
     #[test]
-    #[should_panic(expected = "AccessViolation(0, Store, 4294967296, 4")]
+    #[should_panic(expected = "AccessViolation(Store, 4294967296, 4")]
     fn test_memmove_non_contiguous_readonly() {
         let config = Config {
             aligned_memory_mapping: false,
@@ -817,7 +808,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "AccessViolation(0, Store, 4294967296, 9")]
+    #[should_panic(expected = "AccessViolation(Store, 4294967296, 9")]
     fn test_memset_non_contiguous_readonly() {
         let config = Config {
             aligned_memory_mapping: false,

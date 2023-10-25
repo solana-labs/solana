@@ -3,13 +3,14 @@
 use {
     crate::{
         account_storage::meta::{StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo},
+        accounts_hash::AccountHash,
         storable_accounts::StorableAccounts,
         tiered_storage::{
             error::TieredStorageError, file::TieredStorageFile, footer::TieredStorageFooter,
             TieredStorageFormat, TieredStorageResult,
         },
     },
-    solana_sdk::{account::ReadableAccount, hash::Hash},
+    solana_sdk::account::ReadableAccount,
     std::{borrow::Borrow, path::Path},
 };
 
@@ -35,7 +36,7 @@ impl<'format> TieredStorageWriter<'format> {
         'b,
         T: ReadableAccount + Sync,
         U: StorableAccounts<'a, T>,
-        V: Borrow<Hash>,
+        V: Borrow<AccountHash>,
     >(
         &self,
         accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,

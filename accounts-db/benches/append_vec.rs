@@ -8,6 +8,7 @@ use {
             StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo, StoredMeta,
         },
         accounts_db::INCLUDE_SLOT_IN_HASH_TESTS,
+        accounts_hash::AccountHash,
         append_vec::{
             test_utils::{create_test_account, get_append_vec_path},
             AppendVec,
@@ -33,7 +34,7 @@ fn append_account(
     vec: &AppendVec,
     storage_meta: StoredMeta,
     account: &AccountSharedData,
-    hash: Hash,
+    hash: AccountHash,
 ) -> Option<StoredAccountInfo> {
     let slot_ignored = Slot::MAX;
     let accounts = [(&storage_meta.pubkey, account)];
@@ -55,7 +56,7 @@ fn append_vec_append(bencher: &mut Bencher) {
     let vec = AppendVec::new(&path.path, true, 64 * 1024);
     bencher.iter(|| {
         let (meta, account) = create_test_account(0);
-        if append_account(&vec, meta, &account, Hash::default()).is_none() {
+        if append_account(&vec, meta, &account, AccountHash(Hash::default())).is_none() {
             vec.reset();
         }
     });
@@ -65,7 +66,8 @@ fn add_test_accounts(vec: &AppendVec, size: usize) -> Vec<(usize, usize)> {
     (0..size)
         .filter_map(|sample| {
             let (meta, account) = create_test_account(sample);
-            append_account(vec, meta, &account, Hash::default()).map(|info| (sample, info.offset))
+            append_account(vec, meta, &account, AccountHash(Hash::default()))
+                .map(|info| (sample, info.offset))
         })
         .collect()
 }
@@ -110,7 +112,7 @@ fn append_vec_concurrent_append_read(bencher: &mut Bencher) {
     spawn(move || loop {
         let sample = indexes1.lock().unwrap().len();
         let (meta, account) = create_test_account(sample);
-        if let Some(info) = append_account(&vec1, meta, &account, Hash::default()) {
+        if let Some(info) = append_account(&vec1, meta, &account, AccountHash(Hash::default())) {
             indexes1.lock().unwrap().push((sample, info.offset))
         } else {
             break;
@@ -150,7 +152,7 @@ fn append_vec_concurrent_read_append(bencher: &mut Bencher) {
     bencher.iter(|| {
         let sample: usize = thread_rng().gen_range(0..256);
         let (meta, account) = create_test_account(sample);
-        if let Some(info) = append_account(&vec, meta, &account, Hash::default()) {
+        if let Some(info) = append_account(&vec, meta, &account, AccountHash(Hash::default())) {
             indexes.lock().unwrap().push((sample, info.offset))
         }
     });

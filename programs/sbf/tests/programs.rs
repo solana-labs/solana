@@ -1449,7 +1449,7 @@ fn assert_instruction_count() {
             transaction_accounts,
             instruction_accounts,
             Ok(()),
-            solana_bpf_loader_program::process_instruction,
+            solana_bpf_loader_program::Entrypoint::vm,
             |invoke_context| {
                 *prev_compute_meter.borrow_mut() = invoke_context.get_remaining();
                 solana_bpf_loader_program::test_utils::load_all_invoked_programs(invoke_context);
@@ -4397,7 +4397,7 @@ fn test_cpi_change_account_data_memory_allocation() {
     let feature_set = FeatureSet::all_enabled();
     bank.feature_set = Arc::new(feature_set);
 
-    declare_process_instruction!(process_instruction, 42, |invoke_context| {
+    declare_process_instruction!(MockBuiltin, 42, |invoke_context| {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let instruction_data = instruction_context.get_instruction_data();
@@ -4428,7 +4428,7 @@ fn test_cpi_change_account_data_memory_allocation() {
     bank.add_builtin(
         builtin_program_id,
         "test_cpi_change_account_data_memory_allocation_builtin".to_string(),
-        LoadedProgram::new_builtin(0, 42, process_instruction),
+        LoadedProgram::new_builtin(0, 42, MockBuiltin::vm),
     );
 
     let bank = Arc::new(bank);
