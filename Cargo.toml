@@ -421,6 +421,10 @@ winapi = "0.3.8"
 winreg = "0.50"
 x509-parser = "0.14.0"
 # See "zeroize versioning issues" below if you are updating this version.
+#
+# TL;DR: We can not increment this until we move to a never version of
+# `aes-gcm-siv` and `curve25519-dalek` and remove `[patch]` exceptions below for
+# both crates.
 zeroize = { version = "1.3", default-features = false }
 zstd = "0.11.2"
 
@@ -473,6 +477,13 @@ solana-zk-token-sdk = { path = "zk-token-sdk" }
 # When our dependencies are upgraded, we can remove this patches.  Before that
 # we might need to maintain these patches in sync with our full dependency
 # tree.
+#
+# Same patches are applied to the following `Cargo.toml` files, make sure to
+# update both in sync:
+#
+#  - programs/sbf/Cargo.toml
+#  - sdk/cargo-build-sbf/tests/crates/fail/Cargo.toml
+#  - sdk/cargo-build-sbf/tests/crates/noop/Cargo.toml
 
 # Our dependency tree has `aes-gcm-siv` v0.10.3 and the `zeroize` restriction
 # was removed in the next commit just after the release.  So it seems safe to
