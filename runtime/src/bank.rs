@@ -943,7 +943,6 @@ impl WorkingSlot for Bank {
         self.ancestors.contains_key(&other)
     }
 }
-
 #[derive(Debug, Default)]
 /// result of calculating the stake rewards at end of epoch
 struct StakeRewardCalculation {
