@@ -38,7 +38,7 @@ impl CargoRegistryService {
 
         match bytes {
             Ok(data) => {
-                let Ok(crate_object) = CratePackage(data).into() else {
+                let Ok(crate_object) = UnpackedCrate::unpack(CratePackage(data)) else {
                     return response_builder::error_response(
                         hyper::StatusCode::INTERNAL_SERVER_ERROR,
                         "Failed to parse the crate information",

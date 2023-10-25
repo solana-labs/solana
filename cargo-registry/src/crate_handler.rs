@@ -208,8 +208,8 @@ impl From<&UnpackedCrate> for Program {
 #[derive(Clone, Default)]
 pub(crate) struct CrateTarGz(pub(crate) Bytes);
 
-impl From<UnpackedCrate> for Result<CrateTarGz, Error> {
-    fn from(value: UnpackedCrate) -> Self {
+impl CrateTarGz {
+    fn new(value: UnpackedCrate) -> Result<Self, Error> {
         let mut archive = Builder::new(Vec::new());
         archive.mode(HeaderMode::Deterministic);
 
@@ -227,11 +227,9 @@ impl From<UnpackedCrate> for Result<CrateTarGz, Error> {
 
         Ok(CrateTarGz(Bytes::from(zipped_data)))
     }
-}
 
-impl CrateTarGz {
     fn new_rebased(&self, meta: &PackageMetaData, target_base: &str) -> Result<Self, Error> {
-        let mut unpacked = UnpackedCrate::from(self.clone(), meta.clone())?;
+        let mut unpacked = UnpackedCrate::decompress(self.clone(), meta.clone())?;
 
         let name = Program::program_id_to_crate_name(unpacked.program_id);
         UnpackedCrate::fixup_toml(&unpacked.tempdir, "Cargo.toml.orig", &unpacked.meta, &name)?;
@@ -243,7 +241,7 @@ impl CrateTarGz {
         fs::rename(source_path, target_path.clone())
             .map_err(|_| "Failed to rename the crate folder")?;
 
-        UnpackedCrate::into(unpacked)
+        Self::new(unpacked)
     }
 }
 
@@ -260,7 +258,7 @@ pub(crate) struct UnpackedCrate {
 }
 
 impl UnpackedCrate {
-    fn from(crate_bytes: CrateTarGz, meta: PackageMetaData) -> Result<Self, Error> {
+    fn decompress(crate_bytes: CrateTarGz, meta: PackageMetaData) -> Result<Self, Error> {
         let cksum = format!("{:x}", Sha256::digest(&crate_bytes.0));
 
         let decoder = GzDecoder::new(crate_bytes.0.as_ref());
@@ -294,17 +292,15 @@ impl UnpackedCrate {
             crate_bytes,
         })
     }
-}
 
-impl From<CratePackage> for Result<UnpackedCrate, Error> {
-    fn from(value: CratePackage) -> Self {
+    pub(crate) fn unpack(value: CratePackage) -> Result<Self, Error> {
         let bytes = value.0;
         let (meta, offset) = PackageMetaData::new(&bytes)?;
 
         let (_crate_file_length, length_size) =
             PackageMetaData::read_u32_length(&bytes.slice(offset..))?;
         let crate_bytes = CrateTarGz(bytes.slice(offset.saturating_add(length_size)..));
-        UnpackedCrate::from(crate_bytes, meta)
+        UnpackedCrate::decompress(crate_bytes, meta)
     }
 }
 
@@ -352,8 +348,7 @@ impl UnpackedCrate {
         if APPEND_CRATE_TO_ELF {
             Ok((program.crate_bytes, meta))
         } else {
-            let crate_tar_gz: Result<CrateTarGz, Error> = UnpackedCrate::into(crate_obj);
-            crate_tar_gz.map(|file| (file, meta))
+            CrateTarGz::new(crate_obj).map(|file| (file, meta))
         }
     }
 
