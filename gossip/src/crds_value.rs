@@ -9,10 +9,7 @@ use {
     },
     bincode::{serialize, serialized_size},
     bv::BitVec,
-    itertools::{
-        Itertools,
-        MinMaxResult::{MinMax, NoElements, OneElement},
-    },
+    itertools::{Itertools, MinMaxResult::MinMax},
     rand::{CryptoRng, Rng},
     serde::de::{Deserialize, Deserializer},
     solana_sdk::{
@@ -44,9 +41,6 @@ pub const MAX_VOTES: VoteIndex = 32;
 
 pub type EpochSlotsIndex = u8;
 pub const MAX_EPOCH_SLOTS: EpochSlotsIndex = 255;
-
-// This number is MAX_CRDS_OBJECT_SIZE - empty serialized RestartLastVotedForkSlots.
-const MAX_RESTART_LAST_VOTED_FORK_SLOTS_SPACE: usize = 833;
 
 /// CrdsValue that is replicated across the cluster
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
@@ -527,7 +521,7 @@ impl RunLengthEncoding {
         } else {
             let serde_bits = 16 - current_bit_count.leading_zeros();
             let serde_bytes = ((serde_bits + 6) / 7).max(1) as usize;
-            if *total_serde_bytes + serde_bytes > MAX_RESTART_LAST_VOTED_FORK_SLOTS_SPACE {
+            if *total_serde_bytes + serde_bytes > RestartLastVotedForkSlots::MAX_SPACE {
                 true
             } else {
                 encoded.push(U16(current_bit_count));
@@ -601,7 +595,7 @@ pub struct RawOffsets {
 impl RawOffsets {
     pub fn new(bits: &BitVec<u8>) -> Self {
         let mut bytes = bits.clone().into_boxed_slice().to_vec();
-        bytes.truncate(MAX_RESTART_LAST_VOTED_FORK_SLOTS_SPACE);
+        bytes.truncate(RestartLastVotedForkSlots::MAX_SPACE);
         Self { bytes }
     }
 
@@ -645,6 +639,9 @@ impl Sanitize for RestartLastVotedForkSlots {
 }
 
 impl RestartLastVotedForkSlots {
+    // This number is MAX_CRDS_OBJECT_SIZE - empty serialized RestartLastVotedForkSlots.
+    const MAX_SPACE: usize = 833;
+
     pub fn new(
         from: Pubkey,
         now: u64,
@@ -655,19 +652,10 @@ impl RestartLastVotedForkSlots {
         if last_voted_fork.is_empty() {
             return Err("Last voted slot must be specified".to_string());
         }
-        let max_size;
-        let last_voted_slot;
-        match last_voted_fork.iter().minmax() {
-            NoElements => return Err("Last voted slot must be specified".to_string()),
-            OneElement(e) => {
-                max_size = 1;
-                last_voted_slot = *e;
-            }
-            MinMax(min, max) => {
-                max_size = max - min + 1;
-                last_voted_slot = *max;
-            }
-        }
+        let MinMax(first_voted_slot, last_voted_slot) = last_voted_fork.iter().minmax() else {
+            return Err("Last voted fork should have at least two elements".to_string());
+        };
+        let max_size = last_voted_slot.saturating_sub(*first_voted_slot) + 1;
         let mut uncompressed_bitvec = BitVec::new_fill(false, max_size);
         for slot in last_voted_fork {
             uncompressed_bitvec.set(last_voted_slot - *slot, true);
@@ -675,7 +663,7 @@ impl RestartLastVotedForkSlots {
         let run_length_encoding = RunLengthEncoding::new(&uncompressed_bitvec);
         let raw_offsets = RawOffsets::new(&uncompressed_bitvec);
         let offsets =
-            if run_length_encoding.slots_count() > MAX_RESTART_LAST_VOTED_FORK_SLOTS_SPACE * 8 {
+            if run_length_encoding.slots_count() > RestartLastVotedForkSlots::MAX_SPACE * 8 {
                 SlotsOffsets::RunLengthEncoding(run_length_encoding)
             } else {
                 SlotsOffsets::RawOffsets(raw_offsets)
@@ -684,7 +672,7 @@ impl RestartLastVotedForkSlots {
             from,
             wallclock: now,
             offsets,
-            last_voted_slot,
+            last_voted_slot: *last_voted_slot,
             last_voted_hash,
             shred_version,
         })
@@ -1327,14 +1315,19 @@ mod test {
     }
 
     #[test]
-    fn test_max_restart_last_voted_fork_slots_space() {
+    fn test_restart_last_voted_fork_slots_max_space() {
         let keypair = Keypair::new();
-        let header =
-            RestartLastVotedForkSlots::new(keypair.pubkey(), timestamp(), &[1], Hash::default(), 0)
-                .unwrap();
-        // If the following assert fails, please update MAX_RESTART_LAST_VOTED_FORK_SLOTS_SPACE
+        let header = RestartLastVotedForkSlots::new(
+            keypair.pubkey(),
+            timestamp(),
+            &[1, 2],
+            Hash::default(),
+            0,
+        )
+        .unwrap();
+        // If the following assert fails, please update RestartLastVotedForkSlots::MAX_SPACE
         assert_eq!(
-            MAX_RESTART_LAST_VOTED_FORK_SLOTS_SPACE,
+            RestartLastVotedForkSlots::MAX_SPACE,
             MAX_CRDS_OBJECT_SIZE - serialized_size(&header).unwrap() as usize
         );
 
