@@ -102,7 +102,7 @@ pub(crate) struct Program {
     id: Pubkey,
     _tempdir: Arc<TempDir>,
     meta: PackageMetaData,
-    crate_bytes: CrateTarGz,
+    packed_crate: PackedCrate,
 }
 
 impl Program {
@@ -117,7 +117,7 @@ impl Program {
         if APPEND_CRATE_TO_ELF {
             let program_id_str = Program::program_id_to_crate_name(self.id);
             let crate_tar_gz =
-                CrateTarGz::new_rebased(&self.crate_bytes, &self.meta, &program_id_str)?;
+                PackedCrate::new_rebased(&self.packed_crate, &self.meta, &program_id_str)?;
             let crate_len = u32::to_le_bytes(crate_tar_gz.0.len() as u32);
             program_data.extend_from_slice(&crate_tar_gz.0);
             program_data.extend_from_slice(&crate_len);
@@ -175,8 +175,7 @@ impl Program {
                 .saturating_sub(length as usize);
             let crate_end = data_len.saturating_sub(sizeof_length);
 
-            let crate_bytes = CrateTarGz(Bytes::copy_from_slice(&data[crate_start..crate_end]));
-            self.crate_bytes = crate_bytes;
+            self.packed_crate = PackedCrate(Bytes::copy_from_slice(&data[crate_start..crate_end]));
         }
         Ok(())
     }
@@ -200,15 +199,16 @@ impl From<&UnpackedCrate> for Program {
             id: value.program_id,
             _tempdir: value.tempdir.clone(),
             meta: value.meta.clone(),
-            crate_bytes: value.crate_bytes.clone(),
+            packed_crate: value.packed_crate.clone(),
         }
     }
 }
 
+/// Contents of a .crate file
 #[derive(Clone, Default)]
-pub(crate) struct CrateTarGz(pub(crate) Bytes);
+pub(crate) struct PackedCrate(pub(crate) Bytes);
 
-impl CrateTarGz {
+impl PackedCrate {
     fn new(value: UnpackedCrate) -> Result<Self, Error> {
         let mut archive = Builder::new(Vec::new());
         archive.mode(HeaderMode::Deterministic);
@@ -225,7 +225,7 @@ impl CrateTarGz {
         let mut zipped_data = Vec::new();
         encoder.read_to_end(&mut zipped_data)?;
 
-        Ok(CrateTarGz(Bytes::from(zipped_data)))
+        Ok(PackedCrate(Bytes::from(zipped_data)))
     }
 
     fn new_rebased(&self, meta: &PackageMetaData, target_base: &str) -> Result<Self, Error> {
@@ -272,8 +272,6 @@ impl CrateTarGz {
     }
 }
 
-pub(crate) struct CratePackage(pub(crate) Bytes);
-
 pub(crate) struct UnpackedCrate {
     meta: PackageMetaData,
     cksum: String,
@@ -281,14 +279,14 @@ pub(crate) struct UnpackedCrate {
     program_path: String,
     program_id: Pubkey,
     keypair: Option<Keypair>,
-    crate_bytes: CrateTarGz,
+    packed_crate: PackedCrate,
 }
 
 impl UnpackedCrate {
-    fn decompress(crate_bytes: CrateTarGz, meta: PackageMetaData) -> Result<Self, Error> {
-        let cksum = format!("{:x}", Sha256::digest(&crate_bytes.0));
+    fn decompress(packed_crate: PackedCrate, meta: PackageMetaData) -> Result<Self, Error> {
+        let cksum = format!("{:x}", Sha256::digest(&packed_crate.0));
 
-        let decoder = GzDecoder::new(crate_bytes.0.as_ref());
+        let decoder = GzDecoder::new(packed_crate.0.as_ref());
         let mut archive = Archive::new(decoder);
 
         let tempdir = tempdir()?;
@@ -316,22 +314,19 @@ impl UnpackedCrate {
             program_path,
             program_id: keypair.pubkey(),
             keypair: Some(keypair),
-            crate_bytes,
+            packed_crate,
         })
     }
 
-    pub(crate) fn unpack(value: CratePackage) -> Result<Self, Error> {
-        let bytes = value.0;
+    pub(crate) fn new(bytes: Bytes) -> Result<Self, Error> {
         let (meta, offset) = PackageMetaData::new(&bytes)?;
 
         let (_crate_file_length, length_size) =
             PackageMetaData::read_u32_length(&bytes.slice(offset..))?;
-        let crate_bytes = CrateTarGz(bytes.slice(offset.saturating_add(length_size)..));
-        UnpackedCrate::decompress(crate_bytes, meta)
+        let packed_crate = PackedCrate(bytes.slice(offset.saturating_add(length_size)..));
+        UnpackedCrate::decompress(packed_crate, meta)
     }
-}
 
-impl UnpackedCrate {
     pub(crate) fn publish(
         &self,
         client: Arc<Client>,
@@ -362,22 +357,21 @@ impl UnpackedCrate {
         id: Pubkey,
         vers: &str,
         client: Arc<Client>,
-    ) -> Result<(CrateTarGz, PackageMetaData), Error> {
-        let crate_obj = Self::new_empty(id, vers)?;
-        let mut program = Program::from(&crate_obj);
+    ) -> Result<(PackedCrate, PackageMetaData), Error> {
+        let unpacked = Self::new_empty(id, vers)?;
+        let mut program = Program::from(&unpacked);
         program.dump(client)?;
 
         // Decompile the program
         // Generate a Cargo.toml
 
-        let mut meta = crate_obj.meta.clone();
+        let mut meta = unpacked.meta.clone();
 
         if APPEND_CRATE_TO_ELF {
-            let version = program.crate_bytes.version();
-            meta.vers = version;
-            Ok((program.crate_bytes, meta))
+            meta.vers = program.packed_crate.version();
+            Ok((program.packed_crate, meta))
         } else {
-            CrateTarGz::new(crate_obj).map(|file| (file, meta))
+            PackedCrate::new(unpacked).map(|file| (file, meta))
         }
     }
 
@@ -421,7 +415,7 @@ impl UnpackedCrate {
             program_path,
             program_id: id,
             keypair: None,
-            crate_bytes: CrateTarGz::default(),
+            packed_crate: PackedCrate::default(),
         })
     }
 
