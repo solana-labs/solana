@@ -1968,6 +1968,18 @@ impl Blockstore {
         self.blocktime_cf.get(slot)
     }
 
+    pub fn get_rooted_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
+        datapoint_info!(
+            "blockstore-rpc-api",
+            ("method", "get_rooted_block_time", String)
+        );
+        let _lock = self.check_lowest_cleanup_slot(slot)?;
+        if self.is_root(slot) {
+            return self.blocktime_cf.get(slot);
+        }
+        Err(BlockstoreError::SlotNotRooted)
+    }
+
     pub fn cache_block_time(&self, slot: Slot, timestamp: UnixTimestamp) -> Result<()> {
         self.blocktime_cf.put(slot, &timestamp)
     }
