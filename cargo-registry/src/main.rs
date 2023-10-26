@@ -2,7 +2,7 @@
 use {
     crate::{
         client::Client,
-        crate_handler::{CratePackage, Error, Program, UnpackedCrate},
+        crate_handler::{Error, Program, UnpackedCrate},
         sparse_index::RegistryIndex,
     },
     hyper::{
@@ -38,14 +38,15 @@ impl CargoRegistryService {
 
         match bytes {
             Ok(data) => {
-                let Ok(crate_object) = UnpackedCrate::unpack(CratePackage(data)) else {
+                let Ok(unpacked_crate) = UnpackedCrate::new(data) else {
                     return response_builder::error_response(
                         hyper::StatusCode::INTERNAL_SERVER_ERROR,
                         "Failed to parse the crate information",
                     );
                 };
                 let Ok(result) =
-                    tokio::task::spawn_blocking(move || crate_object.publish(client, index)).await
+                    tokio::task::spawn_blocking(move || unpacked_crate.publish(client, index))
+                        .await
                 else {
                     return response_builder::error_response(
                         hyper::StatusCode::INTERNAL_SERVER_ERROR,
