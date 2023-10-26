@@ -593,8 +593,7 @@ pub struct RawOffsets {
 }
 
 impl RawOffsets {
-    pub fn new(new_bits: &BitVec<u8>) -> Self {
-        let mut bits = new_bits.clone();
+    pub fn new(mut bits: BitVec<u8>) -> Self {
         bits.truncate(RestartLastVotedForkSlots::MAX_SPACE as u64 * 8);
         bits.shrink_to_fit();
         Self { bits }
@@ -658,7 +657,7 @@ impl RestartLastVotedForkSlots {
             uncompressed_bitvec.set(last_voted_slot - *slot, true);
         }
         let run_length_encoding = RunLengthEncoding::new(&uncompressed_bitvec);
-        let raw_offsets = RawOffsets::new(&uncompressed_bitvec);
+        let raw_offsets = RawOffsets::new(uncompressed_bitvec);
         let offsets =
             if run_length_encoding.slots_count() > RestartLastVotedForkSlots::MAX_SPACE * 8 {
                 SlotsOffsets::RunLengthEncoding(run_length_encoding)
