@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+# set -e
 
 SECRET_FILE=(
   "/home/solana/${validator_type}-accounts/faucet.base64"
@@ -96,59 +96,11 @@ idle)
   # In net/remote/remote-client.sh, we add faucet keypair here
   # but in this case we already do that in the docker container
   # by default
-  exit 0
+  while true; do sleep 3600; done
   ;;
 *)
   echo "Unknown client name: $clientToRun"
   exit 1
 esac
 
-sleep 3600
-
-# cat > ~/solana/on-reboot <<EOF
-# #!/usr/bin/env bash
-# cd ~/solana
-
-# PATH="$HOME"/.cargo/bin:"$PATH"
-# export USE_INSTALL=1
-
-# echo "$(date) | $0 $*" >> client.log
-
-# ! tmux list-sessions || tmux kill-session
-
-# tmux new -s "$clientToRun" -d "
-#   while true; do
-#     echo === Client start: \$(date) | tee -a client.log
-#     $metricsWriteDatapoint 'testnet-deploy client-begin=1'
-#     echo '$ $clientCommand' | tee -a client.log
-#     $clientCommand >> client.log 2>&1
-#     $metricsWriteDatapoint 'testnet-deploy client-complete=1'
-#   done
-# "
-# EOF
-# chmod +x ~/solana/on-reboot
-# echo "@reboot ~/solana/on-reboot" | crontab -
-
-# ~/solana/on-reboot
-
-# sleep 1
-# tmux capture-pane -t "$clientToRun" -p -S -100
-
-
-echo "$(date) | $0 $*" >> /home/solana/logs/client.log
-
-tmux &
-
-! tmux list-sessions || tmux kill-session
-
-tmux new -s "$clientToRun" -d "
-  while true; do
-    echo === Client start: \$(date) | tee -a /home/solana/logs/client.log
-    echo '$ $clientCommand' | tee -a /home/solana/logs/client.log
-    $clientCommand >> /home/solana/logs/client.log 2>&1
-  done
-"
-
-sleep 1
-
-tmux capture-pane -t "$clientToRun" -p -S -100
+$clientCommand >> client.log 2>&1
