@@ -5882,7 +5882,7 @@ impl AccountsDb {
                 self.purge_slot_cache(*remove_slot, slot_cache);
                 remove_cache_elapsed.stop();
                 remove_cache_elapsed_across_slots += remove_cache_elapsed.as_us();
-                // Nobody else shoud have removed the slot cache entry yet
+                // Nobody else should have removed the slot cache entry yet
                 assert!(self.accounts_cache.remove_slot(*remove_slot).is_some());
             } else {
                 self.purge_slot_storage(*remove_slot, purge_stats);
