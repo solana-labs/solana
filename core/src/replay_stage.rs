@@ -2952,9 +2952,13 @@ impl ReplayStage {
                 Self::record_rewards(bank, rewards_recorder_sender);
                 if let Some(ref block_metadata_notifier) = block_metadata_notifier {
                     let block_metadata_notifier = block_metadata_notifier.read().unwrap();
+                    let parent_blockhash = bank
+                        .parent()
+                        .map(|bank| bank.last_blockhash())
+                        .unwrap_or_default();
                     block_metadata_notifier.notify_block_metadata(
                         bank.parent_slot(),
-                        &bank.parent_hash().to_string(),
+                        &parent_blockhash.to_string(),
                         bank.slot(),
                         &bank.last_blockhash().to_string(),
                         &bank.rewards,
