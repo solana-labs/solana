@@ -1386,8 +1386,8 @@ mod test {
     #[test]
     fn test_generate_repairs_for_wen_restart() {
         solana_logger::setup();
-        let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let max_repairs = 3;
 
         let slots: Vec<u64> = vec![2, 3, 5, 7];

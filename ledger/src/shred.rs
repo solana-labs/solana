@@ -930,7 +930,7 @@ pub fn should_discard_shred(
                 if !slots.contains(&slot) {
                     stats.slot_out_of_range += 1;
                     return true;
-                } 
+                }
             }
             slot
         }
@@ -1325,7 +1325,7 @@ mod tests {
 
         // In wen_restart, only slot in given range should be accepted.
         let shred = Shred::new_from_data(
-            10,   // slot
+            10,  // slot
             3,   // index
             1,   // parent_offset
             &[], // data

@@ -10,7 +10,7 @@ use {
     solana_perf::packet::{PacketBatch, PacketBatchRecycler, PacketFlags, PACKETS_PER_BATCH},
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
-        clock::{DEFAULT_MS_PER_SLOT, Slot},
+        clock::{Slot, DEFAULT_MS_PER_SLOT},
         packet::{Meta, PACKET_DATA_SIZE},
         pubkey::Pubkey,
     },
@@ -62,8 +62,8 @@ impl ShredFetchStage {
         };
         let mut stats = ShredFetchStats::default();
 
-        let my_slots_to_repair_for_wen_restart = slots_to_repair_for_wen_restart.map(
-            |slots| slots.read().unwrap().clone());
+        let my_slots_to_repair_for_wen_restart =
+            slots_to_repair_for_wen_restart.map(|slots| slots.read().unwrap().clone());
         for mut packet_batch in recvr {
             if last_updated.elapsed().as_millis() as u64 > DEFAULT_MS_PER_SLOT {
                 last_updated = Instant::now();
@@ -104,7 +104,8 @@ impl ShredFetchStage {
                         max_slot,
                         shred_version,
                         &my_slots_to_repair_for_wen_restart,
-                        &mut stats)
+                        &mut stats,
+                    )
                 {
                     packet.meta_mut().set_discard(true);
                 } else {
@@ -543,14 +544,23 @@ mod tests {
         ));
 
         // Should respect wen_restart list.
-        let shred = Shred::new_from_data(last_root+1, 2, 1, &[], ShredFlags::LAST_SHRED_IN_SLOT, 0, shred_version, 0);
+        let shred = Shred::new_from_data(
+            last_root + 1,
+            2,
+            1,
+            &[],
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            0,
+            shred_version,
+            0,
+        );
         shred.copy_to_packet(&mut packet);
         assert!(!should_discard_shred(
             &packet,
             last_root,
             max_slot,
             shred_version,
-            &Some(vec![last_root+1, last_root+2]),
+            &Some(vec![last_root + 1, last_root + 2]),
             &mut stats,
         ));
         assert!(should_discard_shred(
@@ -558,7 +568,7 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            &Some(vec![last_root+3]),
+            &Some(vec![last_root + 3]),
             &mut stats,
         ));
     }

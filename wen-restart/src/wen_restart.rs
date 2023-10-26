@@ -20,7 +20,7 @@ use {
     solana_vote_program::vote_state::VoteTransaction,
     std::{
         collections::HashSet,
-        fs::{File, read},
+        fs::{read, File},
         io::{Cursor, Error, Write},
         path::PathBuf,
         str::FromStr,
@@ -42,14 +42,14 @@ fn send_restart_last_voted_fork_slots(
         Some(my_last_voted_fork_slots) => {
             last_vote_slot = my_last_voted_fork_slots.last_vote_slot;
             last_vote_hash = Hash::from_str(&my_last_voted_fork_slots.last_vote_bankhash).unwrap();
-        },
+        }
         None => {
             // repair and restart option does not work without last voted slot.
             last_vote_slot = last_vote
                 .last_voted_slot()
                 .expect("wen_restart doesn't work if local tower is wiped");
             last_vote_hash = last_vote.hash();
-        },
+        }
     }
     let mut last_vote_fork: Vec<u64> = AncestorIterator::new_inclusive(last_vote_slot, &blockstore)
         .take(MAX_SLOTS_PER_ENTRY)
@@ -73,7 +73,7 @@ fn aggregate_restart_last_voted_fork_slots(
     cluster_info: Arc<ClusterInfo>,
     bank_forks: Arc<RwLock<BankForks>>,
     slots_to_repair_for_wen_restart: Arc<RwLock<Vec<Slot>>>,
-    progress: &mut WenRestartProgress
+    progress: &mut WenRestartProgress,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let root_bank;
     {
@@ -94,22 +94,28 @@ fn aggregate_restart_last_voted_fork_slots(
         let mut filtered_slots: Vec<Slot>;
         {
             let my_bank_forks = bank_forks.read().unwrap();
-            filtered_slots = result.slots_to_repair
+            filtered_slots = result
+                .slots_to_repair
                 .into_iter()
                 .filter(|slot| {
                     if slot <= &root_slot || is_full_slots.contains(slot) {
                         return false;
                     }
-                    let is_full = my_bank_forks.get(*slot).map_or(false, |bank| bank.is_frozen());
+                    let is_full = my_bank_forks
+                        .get(*slot)
+                        .map_or(false, |bank| bank.is_frozen());
                     if is_full {
-                        is_full_slots.insert(slot.clone());
+                        is_full_slots.insert(*slot);
                     }
                     !is_full
                 })
                 .collect();
         }
         filtered_slots.sort();
-        info!("Active peers: {} Slots to repair: {:?}", result.active_percenage, &filtered_slots);
+        info!(
+            "Active peers: {} Slots to repair: {:?}",
+            result.active_percenage, &filtered_slots
+        );
         if filtered_slots.is_empty() && result.active_percenage > 0.80 {
             *slots_to_repair_for_wen_restart.write().unwrap() = vec![];
             break;
@@ -117,9 +123,9 @@ fn aggregate_restart_last_voted_fork_slots(
         {
             *slots_to_repair_for_wen_restart.write().unwrap() = filtered_slots;
         }
-        let elapsed = timestamp() - start;
-        if elapsed < GOSSIP_SLEEP_MILLIS {
-            let time_left = GOSSIP_SLEEP_MILLIS - elapsed;
+        let elapsed = timestamp().saturating_sub(start);
+        let time_left = GOSSIP_SLEEP_MILLIS.saturating_sub(elapsed);
+        if time_left > 0 {
             sleep(Duration::from_millis(time_left));
         }
     }
@@ -139,9 +145,17 @@ pub fn wait_for_wen_restart(
     while progress.state() != RestartState::Done {
         match progress.state() {
             RestartState::Init => send_restart_last_voted_fork_slots(
-                last_vote.clone(), blockstore.clone(), cluster_info.clone(), &mut progress)?,
+                last_vote.clone(),
+                blockstore.clone(),
+                cluster_info.clone(),
+                &mut progress,
+            )?,
             RestartState::LastVotedForkSlots => aggregate_restart_last_voted_fork_slots(
-                cluster_info.clone(), bank_forks.clone(), slots_to_repair_for_wen_restart.clone().unwrap(), &mut progress)?,
+                cluster_info.clone(),
+                bank_forks.clone(),
+                slots_to_repair_for_wen_restart.clone().unwrap(),
+                &mut progress,
+            )?,
             // Place holder to make the code compile and run for now.
             _ => progress.set_state(RestartState::Done),
         }
@@ -156,10 +170,13 @@ fn read_wen_restart_records(records_path: &PathBuf) -> Result<WenRestartProgress
             let progress = WenRestartProgress::decode(&mut Cursor::new(buffer))?;
             info!("read record {:?}", progress);
             Ok(progress)
-        },
+        }
         Err(e) => {
             warn!("cannot read record {:?}: {:?}", records_path, e);
-            Ok(WenRestartProgress { state: RestartState::Init.into(), my_last_voted_fork_slots: None })
+            Ok(WenRestartProgress {
+                state: RestartState::Init.into(),
+                my_last_voted_fork_slots: None,
+            })
         }
     }
 }
@@ -193,13 +210,11 @@ mod tests {
         solana_program::{hash::Hash, vote::state::Vote},
         solana_runtime::{
             bank::Bank,
-            genesis_utils::{create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs},
+            genesis_utils::{
+                create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
+            },
         },
-        solana_sdk::{
-            pubkey::Pubkey,
-            signature::Signer,
-            timing::timestamp,
-        },
+        solana_sdk::{pubkey::Pubkey, signature::Signer, timing::timestamp},
         solana_streamer::socket::SocketAddrSpace,
         std::{fs::read, sync::Arc, thread::Builder},
     };
@@ -225,14 +240,13 @@ mod tests {
         wen_restart_proto_path.push("wen_restart_status.proto");
         let slots_to_repair_for_wen_restart = Some(Arc::new(RwLock::new(Vec::new())));
         let blockstore = Arc::new(blockstore::Blockstore::open(ledger_path.path()).unwrap());
-        let GenesisConfigInfo { genesis_config, .. } =
-            create_genesis_config_with_vote_accounts(
-                10_000,
-                &validator_voting_keypairs,
-                vec![100; validator_voting_keypairs.len()],
-            );
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config_with_vote_accounts(
+            10_000,
+            &validator_voting_keypairs,
+            vec![100; validator_voting_keypairs.len()],
+        );
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let expected_slots = 400;
         let last_vote_slot = (MAX_SLOTS_PER_ENTRY + expected_slots).try_into().unwrap();
         let last_parent = (MAX_SLOTS_PER_ENTRY >> 1).try_into().unwrap();
@@ -267,31 +281,41 @@ mod tests {
         let last_vote_bankhash = Hash::new_unique();
         let wen_restart_proto_path_clone = wen_restart_proto_path.clone();
         let cluster_info_clone = cluster_info.clone();
-        let expected_slots_to_repair: Vec<Slot> = (last_vote_slot+1..last_vote_slot+3).collect();
+        let expected_slots_to_repair: Vec<Slot> =
+            (last_vote_slot + 1..last_vote_slot + 3).collect();
         let bank_forks_clone = bank_forks.clone();
         let wen_restart_thread_handle = Builder::new()
-        .name("solana-wen-restart".to_string())
-        .spawn(move || {
-            assert!(wait_for_wen_restart(
-                &wen_restart_proto_path_clone,
-                VoteTransaction::from(Vote::new(vec![last_vote_slot], last_vote_bankhash)),
-                blockstore,
-                cluster_info_clone,
-                bank_forks_clone,
-                slots_to_repair_for_wen_restart.clone(),
-            )
-            .is_ok());
-        }).unwrap();
+            .name("solana-wen-restart".to_string())
+            .spawn(move || {
+                assert!(wait_for_wen_restart(
+                    &wen_restart_proto_path_clone,
+                    VoteTransaction::from(Vote::new(vec![last_vote_slot], last_vote_bankhash)),
+                    blockstore,
+                    cluster_info_clone,
+                    bank_forks_clone,
+                    slots_to_repair_for_wen_restart.clone(),
+                )
+                .is_ok());
+            })
+            .unwrap();
         let mut rng = rand::thread_rng();
-        for i in 1..10 {
-            let keypairs = &validator_voting_keypairs[i];
+        for keypairs in validator_voting_keypairs.iter().skip(1) {
             let node_pubkey = keypairs.node_keypair.pubkey();
             let node = LegacyContactInfo::new_rand(&mut rng, Some(node_pubkey));
-            let mut slots = RestartLastVotedForkSlots::new(node_pubkey, timestamp(), Hash::new_unique(), shred_version);
-            slots.fill(&expected_slots_to_repair);
+            let slots = RestartLastVotedForkSlots::new(
+                node_pubkey,
+                timestamp(),
+                &expected_slots_to_repair,
+                Hash::new_unique(),
+                shred_version,
+            )
+            .unwrap();
             let entries = vec![
                 CrdsValue::new_signed(CrdsData::LegacyContactInfo(node), &keypairs.node_keypair),
-                CrdsValue::new_signed(CrdsData::RestartLastVotedForkSlots(slots), &keypairs.node_keypair),
+                CrdsValue::new_signed(
+                    CrdsData::RestartLastVotedForkSlots(slots),
+                    &keypairs.node_keypair,
+                ),
             ];
             {
                 let mut gossip_crds = cluster_info.gossip.crds.write().unwrap();
@@ -305,7 +329,11 @@ mod tests {
         let mut parent_bank = bank_forks.read().unwrap().root_bank();
         for slot in expected_slots_to_repair {
             let mut my_bank_forks = bank_forks.write().unwrap();
-            my_bank_forks.insert(Bank::new_from_parent(parent_bank.clone(), &Pubkey::default(), slot));
+            my_bank_forks.insert(Bank::new_from_parent(
+                parent_bank.clone(),
+                &Pubkey::default(),
+                slot,
+            ));
             parent_bank = my_bank_forks.get(slot).unwrap();
             parent_bank.freeze();
         }

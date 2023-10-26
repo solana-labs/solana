@@ -1,13 +1,15 @@
 use {
     crate::{
-        cluster_info::{MAX_ACCOUNTS_HASHES, MAX_CRDS_OBJECT_SIZE},
+        cluster_info::MAX_ACCOUNTS_HASHES,
         contact_info::ContactInfo,
         deprecated,
         duplicate_shred::{DuplicateShred, DuplicateShredIndex, MAX_DUPLICATE_SHREDS},
-        epoch_slots::{CompressedSlots, EpochSlots, MAX_SLOTS_PER_ENTRY},
+        epoch_slots::{EpochSlots, MAX_SLOTS_PER_ENTRY},
         legacy_contact_info::LegacyContactInfo,
     },
     bincode::{serialize, serialized_size},
+    bv::BitVec,
+    itertools::{Itertools, MinMaxResult::MinMax},
     rand::{CryptoRng, Rng},
     serde::de::{Deserialize, Deserializer},
     solana_sdk::{
@@ -15,6 +17,7 @@ use {
         hash::Hash,
         pubkey::{self, Pubkey},
         sanitize::{Sanitize, SanitizeError},
+        serde_varint,
         signature::{Keypair, Signable, Signature, Signer},
         timing::timestamp,
         transaction::Transaction,
@@ -490,84 +493,213 @@ impl Sanitize for NodeInstance {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Default, PartialEq, Eq, AbiExample, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample, AbiEnumVisitor)]
+pub enum SlotsOffsets {
+    RunLengthEncoding(RunLengthEncoding),
+    RawOffsets(RawOffsets),
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, AbiExample)]
+struct U16(#[serde(with = "serde_varint")] u16);
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, AbiExample)]
+pub struct RunLengthEncoding {
+    // The vector always starts with 1. Encode number of 1's and 0's consecutively.
+    // For example, 110000111 is [2, 4, 3].
+    encoded: Vec<U16>,
+}
+
+impl RunLengthEncoding {
+    // Return whether the encoded vec is already full.
+    fn add_number_and_test_full(
+        encoded: &mut Vec<U16>,
+        total_serde_bytes: &mut usize,
+        current_bit_count: u16,
+    ) -> bool {
+        if current_bit_count == 0 {
+            false
+        } else {
+            let serde_bits = 16 - current_bit_count.leading_zeros();
+            let serde_bytes = ((serde_bits + 6) / 7).max(1) as usize;
+            if *total_serde_bytes + serde_bytes > RestartLastVotedForkSlots::MAX_SPACE {
+                true
+            } else {
+                encoded.push(U16(current_bit_count));
+                *total_serde_bytes += serde_bytes;
+                false
+            }
+        }
+    }
+
+    pub fn new(bits: &BitVec<u8>) -> Self {
+        let mut encoded: Vec<U16> = Vec::new();
+        let mut current_bit = 1;
+        let mut current_bit_count: u16 = 0;
+        let mut total_serde_bytes = 0;
+        for i in 0..bits.len() {
+            let bit: u8 = bits.get(i) as u8;
+            if bit == current_bit {
+                current_bit_count += 1;
+            } else {
+                if Self::add_number_and_test_full(
+                    &mut encoded,
+                    &mut total_serde_bytes,
+                    current_bit_count,
+                ) {
+                    current_bit_count = 0;
+                    break;
+                }
+                current_bit = bit;
+                current_bit_count = 1;
+            }
+        }
+        Self::add_number_and_test_full(&mut encoded, &mut total_serde_bytes, current_bit_count);
+        Self { encoded }
+    }
+
+    pub fn slots_count(&self) -> usize {
+        self.encoded.iter().map(|x| x.0 as usize).sum::<usize>()
+    }
+
+    pub fn to_slots(&self, last_slot: Slot, min_slot: Slot) -> Vec<Slot> {
+        let mut result: Vec<Slot> = Vec::new();
+        let mut offset = 0;
+        let mut current_bit = 1;
+        for bit_count in &self.encoded {
+            let count: u16 = bit_count.0;
+            if current_bit > 0 {
+                for i in 0..count {
+                    let slot = last_slot.saturating_sub(offset).saturating_sub(i as Slot);
+                    if slot < min_slot {
+                        return result;
+                    }
+                    result.push(slot);
+                    if result.len() > MAX_SLOTS_PER_ENTRY {
+                        break;
+                    }
+                }
+            }
+            offset += count as Slot;
+            current_bit = 1 - current_bit;
+        }
+        result.reverse();
+        result
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, AbiExample)]
+pub struct RawOffsets {
+    bits: BitVec<u8>,
+}
+
+impl RawOffsets {
+    pub fn new(mut bits: BitVec<u8>) -> Self {
+        bits.truncate(RestartLastVotedForkSlots::MAX_SPACE as u64 * 8);
+        bits.shrink_to_fit();
+        Self { bits }
+    }
+
+    pub fn to_slots(&self, last_slot: Slot, min_slot: Slot) -> Vec<Slot> {
+        let mut result = Vec::new();
+        for i in 0..self.bits.len() {
+            if self.bits.get(i) {
+                let slot = last_slot.saturating_sub(i as Slot);
+                if slot < min_slot {
+                    return result;
+                }
+                result.push(slot);
+                if result.len() > MAX_SLOTS_PER_ENTRY {
+                    break;
+                }
+            }
+        }
+        result.reverse();
+        result
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, AbiExample, Debug)]
 pub struct RestartLastVotedForkSlots {
     pub from: Pubkey,
     pub wallclock: u64,
-    pub slots: Vec<CompressedSlots>,
+    offsets: SlotsOffsets,
+    pub last_voted_slot: Slot,
     pub last_voted_hash: Hash,
     pub shred_version: u16,
 }
 
 impl Sanitize for RestartLastVotedForkSlots {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
-        if self.slots.is_empty() {
-            return Err(SanitizeError::InvalidValue);
-        }
-        self.slots.sanitize()?;
         self.last_voted_hash.sanitize()
     }
 }
 
 impl RestartLastVotedForkSlots {
-    pub fn new(from: Pubkey, now: u64, last_voted_hash: Hash, shred_version: u16) -> Self {
-        Self {
+    // This number is MAX_CRDS_OBJECT_SIZE - empty serialized RestartLastVotedForkSlots.
+    const MAX_SPACE: usize = 824;
+
+    pub fn new(
+        from: Pubkey,
+        now: u64,
+        last_voted_fork: &[Slot],
+        last_voted_hash: Hash,
+        shred_version: u16,
+    ) -> Result<Self, String> {
+        if last_voted_fork.is_empty() {
+            return Err("Last voted slot must be specified".to_string());
+        }
+        let MinMax(first_voted_slot, last_voted_slot) = last_voted_fork.iter().minmax() else {
+            return Err("Last voted fork should have at least two elements".to_string());
+        };
+        let max_size = last_voted_slot.saturating_sub(*first_voted_slot) + 1;
+        let mut uncompressed_bitvec = BitVec::new_fill(false, max_size);
+        for slot in last_voted_fork {
+            uncompressed_bitvec.set(last_voted_slot - *slot, true);
+        }
+        let run_length_encoding = RunLengthEncoding::new(&uncompressed_bitvec);
+        let raw_offsets = RawOffsets::new(uncompressed_bitvec);
+        let offsets =
+            if run_length_encoding.slots_count() > RestartLastVotedForkSlots::MAX_SPACE * 8 {
+                SlotsOffsets::RunLengthEncoding(run_length_encoding)
+            } else {
+                SlotsOffsets::RawOffsets(raw_offsets)
+            };
+        Ok(Self {
             from,
             wallclock: now,
-            slots: Vec::new(),
+            offsets,
+            last_voted_slot: *last_voted_slot,
             last_voted_hash,
             shred_version,
-        }
+        })
     }
 
     /// New random Version for tests and benchmarks.
     pub fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
         let pubkey = pubkey.unwrap_or_else(solana_sdk::pubkey::new_rand);
-        let mut result =
-            RestartLastVotedForkSlots::new(pubkey, new_rand_timestamp(rng), Hash::new_unique(), 1);
         let num_slots = rng.gen_range(2..20);
-        let mut slots = std::iter::repeat_with(|| 47825632 + rng.gen_range(0..512))
+        let slots = std::iter::repeat_with(|| 47825632 + rng.gen_range(0..512))
             .take(num_slots)
             .collect::<Vec<Slot>>();
-        slots.sort();
-        result.fill(&slots);
-        result
-    }
-
-    pub fn fill(&mut self, slots: &[Slot]) -> usize {
-        let slots = &slots[slots.len().saturating_sub(MAX_SLOTS_PER_ENTRY)..];
-        let mut num = 0;
-        let space = self.max_compressed_slot_size();
-        if space == 0 {
-            return 0;
-        }
-        while num < slots.len() {
-            let mut cslot = CompressedSlots::new(space as usize);
-            num += cslot.add(&slots[num..]);
-            self.slots.push(cslot);
-        }
-        num
-    }
-
-    pub fn deflate(&mut self) {
-        for s in self.slots.iter_mut() {
-            let _ = s.deflate();
-        }
-    }
-
-    pub fn max_compressed_slot_size(&self) -> isize {
-        let len_header = serialized_size(self).unwrap();
-        let len_slot = serialized_size(&CompressedSlots::default()).unwrap();
-        MAX_CRDS_OBJECT_SIZE as isize - (len_header + len_slot) as isize
+        RestartLastVotedForkSlots::new(
+            pubkey,
+            new_rand_timestamp(rng),
+            &slots,
+            Hash::new_unique(),
+            1,
+        )
+        .unwrap()
     }
 
     pub fn to_slots(&self, min_slot: Slot) -> Vec<Slot> {
-        self.slots
-            .iter()
-            .filter(|s| min_slot < s.first_slot() + s.num_slots() as u64)
-            .filter_map(|s| s.to_slots(min_slot).ok())
-            .flatten()
-            .collect()
+        match &self.offsets {
+            SlotsOffsets::RunLengthEncoding(run_length_encoding) => {
+                run_length_encoding.to_slots(self.last_voted_slot, min_slot)
+            }
+            SlotsOffsets::RawOffsets(raw_offsets) => {
+                raw_offsets.to_slots(self.last_voted_slot, min_slot)
+            }
+        }
     }
 }
 
@@ -797,6 +929,7 @@ pub(crate) fn sanitize_wallclock(wallclock: u64) -> Result<(), SanitizeError> {
 mod test {
     use {
         super::*,
+        crate::cluster_info::MAX_CRDS_OBJECT_SIZE,
         bincode::{deserialize, Options},
         rand::SeedableRng,
         rand_chacha::ChaChaRng,
@@ -1170,20 +1303,63 @@ mod test {
         assert!(!node.should_force_push(&Pubkey::new_unique()));
     }
 
+    fn make_rand_slots<R: Rng>(rng: &mut R) -> impl Iterator<Item = Slot> + '_ {
+        repeat_with(|| rng.gen_range(1..5)).scan(0, |slot, step| {
+            *slot += step;
+            Some(*slot)
+        })
+    }
+
+    #[test]
+    fn test_restart_last_voted_fork_slots_max_space() {
+        let keypair = Keypair::new();
+        let header = RestartLastVotedForkSlots::new(
+            keypair.pubkey(),
+            timestamp(),
+            &[1, 2],
+            Hash::default(),
+            0,
+        )
+        .unwrap();
+        // If the following assert fails, please update RestartLastVotedForkSlots::MAX_SPACE
+        assert_eq!(
+            RestartLastVotedForkSlots::MAX_SPACE,
+            MAX_CRDS_OBJECT_SIZE - serialized_size(&header).unwrap() as usize
+        );
+
+        // Create large enough slots to make sure we are discarding some to make slots fit.
+        let mut rng = rand::thread_rng();
+        let large_length = 8000;
+        let range: Vec<Slot> = make_rand_slots(&mut rng).take(large_length).collect();
+        let large_slots = RestartLastVotedForkSlots::new(
+            keypair.pubkey(),
+            timestamp(),
+            &range,
+            Hash::default(),
+            0,
+        )
+        .unwrap();
+        assert!(serialized_size(&large_slots).unwrap() <= MAX_CRDS_OBJECT_SIZE as u64);
+        let retrieved_slots = large_slots.to_slots(0);
+        assert!(retrieved_slots.len() <= range.len());
+        assert!(retrieved_slots.last().unwrap() - retrieved_slots.first().unwrap() > 5000);
+    }
+
     #[test]
     fn test_restart_last_voted_fork_slots() {
         let keypair = Keypair::new();
         let slot = 53;
         let slot_parent = slot - 5;
         let shred_version = 21;
-        let mut slots = RestartLastVotedForkSlots::new(
+        let original_slots_vec = [slot_parent, slot];
+        let slots = RestartLastVotedForkSlots::new(
             keypair.pubkey(),
             timestamp(),
+            &original_slots_vec,
             Hash::default(),
             shred_version,
-        );
-        let original_slots_vec = [slot_parent, slot];
-        slots.fill(&original_slots_vec);
+        )
+        .unwrap();
         let value =
             CrdsValue::new_signed(CrdsData::RestartLastVotedForkSlots(slots.clone()), &keypair);
         assert_eq!(value.sanitize(), Ok(()));
@@ -1194,33 +1370,32 @@ mod test {
         );
         assert_eq!(label.pubkey(), keypair.pubkey());
         assert_eq!(value.wallclock(), slots.wallclock);
-        let retrived_slots = slots.to_slots(0);
-        assert_eq!(retrived_slots.len(), 2);
-        assert_eq!(retrived_slots[0], slot_parent);
-        assert_eq!(retrived_slots[1], slot);
+        let retrieved_slots = slots.to_slots(0);
+        assert_eq!(retrieved_slots.len(), 2);
+        assert_eq!(retrieved_slots[0], slot_parent);
+        assert_eq!(retrieved_slots[1], slot);
 
-        let empty_slots = RestartLastVotedForkSlots::new(
+        let bad_value = RestartLastVotedForkSlots::new(
             keypair.pubkey(),
             timestamp(),
+            &[],
             Hash::default(),
             shred_version,
         );
-        let bad_value =
-            CrdsValue::new_signed(CrdsData::RestartLastVotedForkSlots(empty_slots), &keypair);
-        assert_eq!(bad_value.sanitize(), Err(SanitizeError::InvalidValue));
+        assert!(bad_value.is_err());
 
-        let last_slot: Slot = (MAX_SLOTS_PER_ENTRY + 10).try_into().unwrap();
-        let mut large_slots = RestartLastVotedForkSlots::new(
-            keypair.pubkey(),
-            timestamp(),
-            Hash::default(),
-            shred_version,
-        );
+        let last_slot: Slot = 8000;
         let large_slots_vec: Vec<Slot> = (0..last_slot + 1).collect();
-        large_slots.fill(&large_slots_vec);
-        let retrived_slots = large_slots.to_slots(0);
-        assert_eq!(retrived_slots.len(), MAX_SLOTS_PER_ENTRY);
-        assert_eq!(retrived_slots.first(), Some(&11));
-        assert_eq!(retrived_slots.last(), Some(&last_slot));
+        let large_slots = RestartLastVotedForkSlots::new(
+            keypair.pubkey(),
+            timestamp(),
+            &large_slots_vec,
+            Hash::default(),
+            shred_version,
+        )
+        .unwrap();
+        assert!(serialized_size(&large_slots).unwrap() < MAX_CRDS_OBJECT_SIZE as u64);
+        let retrieved_slots = large_slots.to_slots(0);
+        assert_eq!(retrieved_slots, large_slots_vec);
     }
 }
