@@ -6877,6 +6877,24 @@ impl Bank {
             }
         }
 
+        let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
+        loaded_programs_cache.latest_root_slot = self.slot();
+        loaded_programs_cache.latest_root_epoch = self.epoch();
+        loaded_programs_cache.environments.program_runtime_v1 = Arc::new(
+            create_program_runtime_environment_v1(
+                &self.feature_set,
+                &self.runtime_config.compute_budget.unwrap_or_default(),
+                false, /* deployment */
+                false, /* debugging_features */
+            )
+            .unwrap(),
+        );
+        loaded_programs_cache.environments.program_runtime_v2 =
+            Arc::new(create_program_runtime_environment_v2(
+                &self.runtime_config.compute_budget.unwrap_or_default(),
+                false, /* debugging_features */
+            ));
+
         if self
             .feature_set
             .is_active(&feature_set::cap_accounts_data_len::id())
