@@ -183,6 +183,7 @@ use {
     solana_system_program::{get_system_account_kind, SystemAccountKind},
     solana_vote::vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
     solana_vote_program::vote_state::VoteState,
+    std::sync::Mutex,
     std::{
         borrow::Cow,
         cell::RefCell,
@@ -821,7 +822,7 @@ pub struct Bank {
 
     /// until the skipped rewrites feature is activated, it is possible to skip rewrites and still include
     /// the account hash of the accounts that would have been rewritten as bank hash expects.
-    skipped_rewrites: RwLock<HashMap<Pubkey, AccountHash>>,
+    skipped_rewrites: Mutex<HashMap<Pubkey, AccountHash>>,
 
     /// Transaction fee structure
     pub fee_structure: FeeStructure,
@@ -1021,7 +1022,7 @@ impl Bank {
 
     fn default_with_accounts(accounts: Accounts) -> Self {
         let mut bank = Self {
-            skipped_rewrites: RwLock::default(),
+            skipped_rewrites: Mutex::default(),
             incremental_snapshot_persistence: None,
             rc: BankRc::new(accounts, Slot::default()),
             status_cache: Arc::<RwLock<BankStatusCache>>::default(),
@@ -1353,7 +1354,7 @@ impl Bank {
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
         let mut new = Self {
-            skipped_rewrites: RwLock::default(),
+            skipped_rewrites: Mutex::default(),
             incremental_snapshot_persistence: None,
             rc,
             status_cache,
@@ -1808,7 +1809,7 @@ impl Bank {
         );
         let stakes_accounts_load_duration = now.elapsed();
         let mut bank = Self {
-            skipped_rewrites: RwLock::default(),
+            skipped_rewrites: Mutex::default(),
             incremental_snapshot_persistence: fields.incremental_snapshot_persistence,
             rc: bank_rc,
             status_cache: Arc::<RwLock<BankStatusCache>>::default(),
@@ -6203,7 +6204,7 @@ impl Bank {
                 );
 
             self.skipped_rewrites
-                .write()
+                .lock()
                 .unwrap()
                 .extend(&mut results.skipped_rewrites.into_iter());
 
@@ -7103,7 +7104,7 @@ impl Bank {
             .calculate_accounts_delta_hash_internal(
                 slot,
                 ignore,
-                std::mem::take(&mut self.skipped_rewrites.write().unwrap()),
+                std::mem::take(&mut self.skipped_rewrites.lock().unwrap()),
             );
 
         let mut signature_count_buf = [0u8; 8];
