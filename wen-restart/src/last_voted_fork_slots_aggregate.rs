@@ -23,20 +23,36 @@ pub struct LastVotedForkSlotsAggregateResult {
 }
 
 impl LastVotedForkSlotsAggregate {
-    pub(crate) fn new(root_slot: Slot, repair_threshold: f64, epoch_stakes: &EpochStakes) -> Self {
+    pub(crate) fn new(
+        root_slot: Slot,
+        repair_threshold: f64,
+        epoch_stakes: &EpochStakes,
+        last_voted_fork_slots: &Vec<Slot>,
+        my_pubkey: &Pubkey,
+    ) -> Self {
+        let mut active_peers = HashSet::new();
+        let my_stake = Self::validator_stake(epoch_stakes, my_pubkey);
+        active_peers.insert(*my_pubkey);
+        let mut slots_stake_map = HashMap::new();
+        for slot in last_voted_fork_slots {
+            if slot <= &root_slot {
+                break;
+            }
+            slots_stake_map.insert(*slot, my_stake);
+        }
         Self {
             root_slot,
             repair_threshold,
             epoch_stakes: epoch_stakes.clone(),
             last_voted_fork_slots: HashMap::new(),
-            slots_stake_map: HashMap::new(),
-            active_peers: HashSet::new(),
+            slots_stake_map,
+            active_peers,
             slots_to_repair: HashSet::new(),
         }
     }
 
-    fn validator_stake(&self, pubkey: &Pubkey) -> u64 {
-        self.epoch_stakes
+    fn validator_stake(epoch_stakes: &EpochStakes, pubkey: &Pubkey) -> u64 {
+        epoch_stakes
             .node_id_to_vote_accounts()
             .get(pubkey)
             .map(|x| x.total_stake)
@@ -52,7 +68,7 @@ impl LastVotedForkSlotsAggregate {
         for new_slots in new_last_voted_fork_slots {
             let from = &new_slots.from;
             self.active_peers.insert(*from);
-            let my_stake = self.validator_stake(from);
+            let my_stake = Self::validator_stake(&self.epoch_stakes, from);
             if my_stake == 0 {
                 warn!(
                     "Gossip should not accept zero-stake RestartLastVotedFork from {:?}",
@@ -82,7 +98,7 @@ impl LastVotedForkSlotsAggregate {
             }
         }
         let total_active_stake = self.active_peers.iter().fold(0, |sum: u64, pubkey| {
-            sum.saturating_add(self.validator_stake(pubkey))
+            sum.saturating_add(Self::validator_stake(&self.epoch_stakes, pubkey))
         });
         let active_percenage = total_active_stake as f64 / total_stake as f64;
         LastVotedForkSlotsAggregateResult {
@@ -121,23 +137,27 @@ mod tests {
         let bank_forks = BankForks::new_rw_arc(bank);
         let root_bank = bank_forks.read().unwrap().root_bank();
         let root_slot = root_bank.slot();
+        let shred_version = 52;
+        let mut slots_vec = Vec::new();
+        let last_voted_fork = vec![root_slot + 1, root_slot + 2, root_slot + 3];
         let mut slots_aggregate = LastVotedForkSlotsAggregate::new(
             root_slot,
             0.42,
             root_bank.epoch_stakes(root_bank.epoch()).unwrap(),
+            &last_voted_fork,
+            &validator_voting_keypairs[9].node_keypair.pubkey(),
         );
-        let shred_version = 52;
-        let mut slots_vec = Vec::new();
-        let last_voted_fork = vec![root_slot + 1, root_slot + 2, root_slot + 3];
-        for validator_voting_keypair in validator_voting_keypairs.iter().take(4) {
-            slots_vec.push(RestartLastVotedForkSlots::new(
-                validator_voting_keypair.node_keypair.pubkey(),
-                timestamp(),
-                &last_voted_fork,
-                Hash::default(),
-                shred_version,
-            )
-            .unwrap());
+        for validator_voting_keypair in validator_voting_keypairs.iter().take(3) {
+            slots_vec.push(
+                RestartLastVotedForkSlots::new(
+                    validator_voting_keypair.node_keypair.pubkey(),
+                    timestamp(),
+                    &last_voted_fork,
+                    Hash::default(),
+                    shred_version,
+                )
+                .unwrap(),
+            );
         }
         let result = slots_aggregate.aggregate(slots_vec);
         assert_eq!(result.active_percenage, 0.4);
@@ -158,15 +178,15 @@ mod tests {
         assert_eq!(actual_slots, last_voted_fork);
 
         // Allow specific validator to replace message.
-        let new_message3 = RestartLastVotedForkSlots::new(
-            validator_voting_keypairs[3].node_keypair.pubkey(),
+        let new_message2 = RestartLastVotedForkSlots::new(
+            validator_voting_keypairs[2].node_keypair.pubkey(),
             timestamp(),
             &[root_slot + 1, root_slot + 4, root_slot + 5],
             Hash::default(),
             shred_version,
         )
         .unwrap();
-        let result = slots_aggregate.aggregate(vec![new_message3]);
+        let result = slots_aggregate.aggregate(vec![new_message2]);
         assert_eq!(result.active_percenage, 0.5);
         let mut actual_slots = Vec::from_iter(result.slots_to_repair);
         actual_slots.sort();
