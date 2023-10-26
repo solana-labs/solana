@@ -589,32 +589,29 @@ impl RunLengthEncoding {
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct RawOffsets {
-    bytes: Vec<u8>,
+    bits: BitVec<u8>,
 }
 
 impl RawOffsets {
-    pub fn new(bits: &BitVec<u8>) -> Self {
-        let mut bytes = bits.clone().into_boxed_slice().to_vec();
-        bytes.truncate(RestartLastVotedForkSlots::MAX_SPACE);
-        Self { bytes }
+    pub fn new(new_bits: &BitVec<u8>) -> Self {
+        let mut bits = new_bits.clone();
+        bits.truncate(RestartLastVotedForkSlots::MAX_SPACE as u64 * 8);
+        bits.shrink_to_fit();
+        Self { bits }
     }
 
     pub fn to_slots(&self, last_slot: Slot, min_slot: Slot) -> Vec<Slot> {
         let mut result = Vec::new();
-        for (i, byte) in self.bytes.iter().enumerate() {
-            let mut current_byte = *byte;
-            for j in 0..8 {
-                if (current_byte & 0x1) > 0 {
-                    let slot = last_slot.saturating_sub(i as Slot * 8).saturating_sub(j);
-                    if slot < min_slot {
-                        return result;
-                    }
-                    result.push(slot);
-                    if result.len() > MAX_SLOTS_PER_ENTRY {
-                        break;
-                    }
+        for i in 0..self.bits.len() {
+            if self.bits.get(i) {
+                let slot = last_slot.saturating_sub(i as Slot);
+                if slot < min_slot {
+                    return result;
                 }
-                current_byte >>= 1;
+                result.push(slot);
+                if result.len() > MAX_SLOTS_PER_ENTRY {
+                    break;
+                }
             }
         }
         result.reverse();
@@ -640,7 +637,7 @@ impl Sanitize for RestartLastVotedForkSlots {
 
 impl RestartLastVotedForkSlots {
     // This number is MAX_CRDS_OBJECT_SIZE - empty serialized RestartLastVotedForkSlots.
-    const MAX_SPACE: usize = 833;
+    const MAX_SPACE: usize = 824;
 
     pub fn new(
         from: Pubkey,
