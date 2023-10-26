@@ -7646,12 +7646,7 @@ impl Bank {
         });
 
         let (verified_accounts, verify_accounts_time_us) = measure_us!({
-            let should_verify_accounts = !self.rc.accounts.accounts_db.skip_initial_hash_calc
-                && !self
-                    .rc
-                    .accounts
-                    .accounts_db
-                    .test_skip_rewrites_but_include_in_bank_hash;
+            let should_verify_accounts = !self.rc.accounts.accounts_db.skip_initial_hash_calc;
             if should_verify_accounts {
                 info!("Verifying accounts...");
                 let verified = self.verify_accounts_hash(
@@ -7679,7 +7674,12 @@ impl Bank {
 
         let (verified_bank, verify_bank_time_us) = measure_us!({
             info!("Verifying bank...");
-            let verified = self.verify_hash();
+            let verified = self
+                .rc
+                .accounts
+                .accounts_db
+                .test_skip_rewrites_but_include_in_bank_hash
+                || self.verify_hash();
             info!("Verifying bank... Done.");
             verified
         });
