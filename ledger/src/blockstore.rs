@@ -1962,8 +1962,7 @@ impl Blockstore {
         }
     }
 
-    pub fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
-        datapoint_info!("blockstore-rpc-api", ("method", "get_block_time", String));
+    fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
         let _lock = self.check_lowest_cleanup_slot(slot)?;
         self.blocktime_cf.get(slot)
     }
