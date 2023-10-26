@@ -1,6 +1,8 @@
 use {
     crate::tiered_storage::{
-        file::TieredStorageFile, footer::TieredStorageFooter, mmap_utils::get_type,
+        file::{TieredStorageFile, TieredStorageOffset},
+        footer::TieredStorageFooter,
+        mmap_utils::get_type,
         TieredStorageResult,
     },
     memmap2::Mmap,
@@ -13,8 +15,8 @@ use {
 #[derive(Debug)]
 pub struct AccountIndexWriterEntry<'a> {
     pub address: &'a Pubkey,
-    pub block_offset: u64,
-    pub intra_block_offset: u64,
+    pub block_offset: TieredStorageOffset,
+    pub intra_block_offset: TieredStorageOffset,
 }
 
 /// The index format of a tiered accounts file.
@@ -83,12 +85,12 @@ impl AccountIndexFormat {
         map: &Mmap,
         footer: &TieredStorageFooter,
         index: usize,
-    ) -> TieredStorageResult<u64> {
+    ) -> TieredStorageResult<TieredStorageOffset> {
         match self {
             Self::AddressAndOffset => {
                 let offset = footer.account_index_offset as usize
                     + std::mem::size_of::<Pubkey>() * footer.account_entry_count as usize
-                    + index * std::mem::size_of::<u64>();
+                    + index * std::mem::size_of::<TieredStorageOffset>();
                 let (account_block_offset, _) = get_type(map, offset)?;
                 Ok(*account_block_offset)
             }
@@ -98,7 +100,9 @@ impl AccountIndexFormat {
     /// Returns the size of one index entry.
     pub fn entry_size(&self) -> usize {
         match self {
-            Self::AddressAndOffset => std::mem::size_of::<Pubkey>() + std::mem::size_of::<u64>(),
+            Self::AddressAndOffset => {
+                std::mem::size_of::<Pubkey>() + std::mem::size_of::<TieredStorageOffset>()
+            }
         }
     }
 }

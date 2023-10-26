@@ -1,7 +1,10 @@
 use {
     crate::tiered_storage::{
-        error::TieredStorageError, file::TieredStorageFile, index::AccountIndexFormat,
-        mmap_utils::get_type, TieredStorageResult as TsResult,
+        error::TieredStorageError,
+        file::{TieredStorageFile, TieredStorageOffset},
+        index::AccountIndexFormat,
+        mmap_utils::get_type,
+        TieredStorageResult as TsResult,
     },
     memmap2::Mmap,
     solana_sdk::{hash::Hash, pubkey::Pubkey},
@@ -120,9 +123,9 @@ pub struct TieredStorageFooter {
     // Offsets
     // Note that offset to the account blocks is omitted as it's always 0.
     /// The offset pointing to the first byte of the account index block.
-    pub account_index_offset: u64,
+    pub account_index_offset: TieredStorageOffset,
     /// The offset pointing to the first byte of the owners block.
-    pub owners_offset: u64,
+    pub owners_offset: TieredStorageOffset,
 
     // account range
     /// The smallest account address in this file.
@@ -206,8 +209,8 @@ impl TieredStorageFooter {
 
     pub fn new_from_mmap(map: &Mmap) -> TsResult<&TieredStorageFooter> {
         let offset = map.len().saturating_sub(FOOTER_TAIL_SIZE);
-        let (footer_size, offset) = get_type::<u64>(map, offset)?;
-        let (_footer_version, offset) = get_type::<u64>(map, offset)?;
+        let (footer_size, offset) = get_type::<TieredStorageOffset>(map, offset)?;
+        let (_footer_version, offset) = get_type::<TieredStorageOffset>(map, offset)?;
         let (magic_number, _offset) = get_type::<TieredStorageMagicNumber>(map, offset)?;
 
         if *magic_number != TieredStorageMagicNumber::default() {

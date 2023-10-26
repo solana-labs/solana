@@ -5,6 +5,9 @@ use std::{
     path::Path,
 };
 
+pub type TieredStorageOffset = u64;
+pub type TieredStorageSeekOffset = i64;
+
 #[derive(Debug)]
 pub struct TieredStorageFile(pub File);
 
@@ -50,11 +53,14 @@ impl TieredStorageFile {
         Ok(())
     }
 
-    pub fn seek(&self, offset: u64) -> Result<u64, std::io::Error> {
+    pub fn seek(&self, offset: TieredStorageOffset) -> Result<TieredStorageOffset, std::io::Error> {
         (&self.0).seek(SeekFrom::Start(offset))
     }
 
-    pub fn seek_from_end(&self, offset: i64) -> Result<u64, std::io::Error> {
+    pub fn seek_from_end(
+        &self,
+        offset: TieredStorageSeekOffset,
+    ) -> Result<TieredStorageOffset, std::io::Error> {
         (&self.0).seek(SeekFrom::End(offset))
     }
 
