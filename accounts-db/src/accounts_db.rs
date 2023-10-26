@@ -65,6 +65,7 @@ use {
         pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
         rent_collector::RentCollector,
+        rolling_bit_field::RollingBitField,
         sorted_storages::SortedStorages,
         storable_accounts::StorableAccounts,
         verify_accounts_hash_in_background::VerifyAccountsHashInBackground,
@@ -778,7 +779,11 @@ type AccountSlots = HashMap<Pubkey, HashSet<Slot>>;
 type SlotOffsets = HashMap<Slot, HashSet<usize>>;
 type ReclaimResult = (AccountSlots, SlotOffsets);
 type PubkeysRemovedFromAccountsIndex = HashSet<Pubkey>;
-type ShrinkCandidates = IntSet<Slot>;
+type ShrinkCandidates = RollingBitField;
+
+/// Set the default width for ShrinkCandidates.  Must be non-zero, a power of two,
+/// and should cover at least an epoch (i.e. greater than 432,000).
+const DEFAULT_SHRINK_CANDIDATES_WIDTH: u64 = 1 << 19;
 
 // Some hints for applicability of additional sanity checks for the do_load fast-path;
 // Slower fallback code path will be taken if the fast path has failed over the retry
@@ -2518,7 +2523,9 @@ impl AccountsDb {
             recycle_stores: RwLock::new(RecycleStores::default()),
             uncleaned_pubkeys: DashMap::new(),
             next_id: AtomicAppendVecId::new(0),
-            shrink_candidate_slots: Mutex::new(ShrinkCandidates::default()),
+            shrink_candidate_slots: Mutex::new(ShrinkCandidates::new(
+                DEFAULT_SHRINK_CANDIDATES_WIDTH,
+            )),
             write_cache_limit_bytes: None,
             write_version: AtomicU64::new(0),
             paths: vec![],
@@ -3855,9 +3862,9 @@ impl AccountsDb {
         // If the slot is dead, remove the need to shrink the storages as
         // the storage entries will be purged.
         {
-            let mut list = self.shrink_candidate_slots.lock().unwrap();
+            let mut shrink_candidate_slots = self.shrink_candidate_slots.lock().unwrap();
             for slot in dead_slots {
-                list.remove(slot);
+                shrink_candidate_slots.remove(slot);
             }
         }
 
@@ -4340,15 +4347,14 @@ impl AccountsDb {
         let mut candidates_count: usize = 0;
         let mut total_bytes: u64 = 0;
         let mut total_candidate_stores: usize = 0;
-        for slot in shrink_slots {
+        for slot in shrink_slots.iter_ones() {
             if oldest_non_ancient_slot
-                .map(|oldest_non_ancient_slot| slot < &oldest_non_ancient_slot)
-                .unwrap_or_default()
+                .is_some_and(|oldest_non_ancient_slot| slot < oldest_non_ancient_slot)
             {
                 // this slot will be 'shrunk' by ancient code
                 continue;
             }
-            let Some(store) = self.storage.get_slot_storage_entry(*slot) else {
+            let Some(store) = self.storage.get_slot_storage_entry(slot) else {
                 continue;
             };
             candidates_count += 1;
@@ -4357,7 +4363,7 @@ impl AccountsDb {
             let alive_ratio =
                 Self::page_align(store.alive_bytes() as u64) as f64 / store.capacity() as f64;
             store_usage.push(StoreUsageInfo {
-                slot: *slot,
+                slot,
                 alive_ratio,
                 store: store.clone(),
             });
@@ -4372,7 +4378,7 @@ impl AccountsDb {
         // Working from the beginning of store_usage which are the most sparse and see when we can stop
         // shrinking while still achieving the overall goals.
         let mut shrink_slots = HashMap::new();
-        let mut shrink_slots_next_batch = ShrinkCandidates::default();
+        let mut shrink_slots_next_batch = ShrinkCandidates::new(DEFAULT_SHRINK_CANDIDATES_WIDTH);
         for usage in &store_usage {
             let store = &usage.store;
             let alive_ratio = (total_alive_bytes as f64) / (total_bytes as f64);
@@ -4796,14 +4802,16 @@ impl AccountsDb {
     pub fn shrink_candidate_slots(&self, epoch_schedule: &EpochSchedule) -> usize {
         let oldest_non_ancient_slot = self.get_oldest_non_ancient_slot(epoch_schedule);
 
-        let shrink_candidates_slots =
-            std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
+        let shrink_candidate_slots = std::mem::replace(
+            &mut *self.shrink_candidate_slots.lock().unwrap(),
+            ShrinkCandidates::new(DEFAULT_SHRINK_CANDIDATES_WIDTH),
+        );
 
         let (shrink_slots, shrink_slots_next_batch) = {
             if let AccountShrinkThreshold::TotalSpace { shrink_ratio } = self.shrink_ratio {
                 let (shrink_slots, shrink_slots_next_batch) = self
                     .select_candidates_by_total_usage(
-                        &shrink_candidates_slots,
+                        &shrink_candidate_slots,
                         shrink_ratio,
                         self.ancient_append_vec_offset
                             .map(|_| oldest_non_ancient_slot),
@@ -4812,8 +4820,8 @@ impl AccountsDb {
             } else {
                 (
                     // lookup storage for each slot
-                    shrink_candidates_slots
-                        .into_iter()
+                    shrink_candidate_slots
+                        .iter_ones()
                         .filter_map(|slot| {
                             self.storage
                                 .get_slot_storage_entry(slot)
@@ -4837,7 +4845,6 @@ impl AccountsDb {
         let _guard = self.active_stats.activate(ActiveStatItem::Shrink);
 
         let mut measure_shrink_all_candidates = Measure::start("shrink_all_candidate_slots-ms");
-        let num_candidates = shrink_slots.len();
         let shrink_candidates_count = shrink_slots.len();
         self.thread_pool_clean.install(|| {
             shrink_slots
@@ -4859,13 +4866,13 @@ impl AccountsDb {
         if let Some(shrink_slots_next_batch) = shrink_slots_next_batch {
             let mut shrink_slots = self.shrink_candidate_slots.lock().unwrap();
             pended_counts += shrink_slots_next_batch.len();
-            for slot in shrink_slots_next_batch {
+            for slot in shrink_slots_next_batch.iter_ones() {
                 shrink_slots.insert(slot);
             }
         }
         inc_new_counter_info!("shrink_pended_stores-count", pended_counts);
 
-        num_candidates
+        shrink_candidates_count
     }
 
     pub fn shrink_all_slots(
@@ -8258,7 +8265,7 @@ impl AccountsDb {
         assert!(self.storage.no_shrink_in_progress());
 
         let mut dead_slots = IntSet::default();
-        let mut new_shrink_candidates = ShrinkCandidates::default();
+        let mut new_shrink_candidates = ShrinkCandidates::new(DEFAULT_SHRINK_CANDIDATES_WIDTH);
         let mut measure = Measure::start("remove");
         for (slot, account_info) in reclaims {
             // No cached accounts should make it here
@@ -8295,9 +8302,7 @@ impl AccountsDb {
                     // should be a sufficient indication that the slot is ready to be shrunk
                     // because slots should only have one storage entry, namely the one that was
                     // created by `flush_slot_cache()`.
-                    {
-                        new_shrink_candidates.insert(*slot);
-                    }
+                    new_shrink_candidates.insert(*slot);
                 }
             }
         }
@@ -8308,7 +8313,7 @@ impl AccountsDb {
 
         let mut measure = Measure::start("shrink");
         let mut shrink_candidate_slots = self.shrink_candidate_slots.lock().unwrap();
-        for slot in new_shrink_candidates {
+        for slot in new_shrink_candidates.iter_ones() {
             shrink_candidate_slots.insert(slot);
         }
         drop(shrink_candidate_slots);
@@ -13308,7 +13313,7 @@ pub mod tests {
     fn test_select_candidates_by_total_usage_no_candidates() {
         // no input candidates -- none should be selected
         solana_logger::setup();
-        let candidates = ShrinkCandidates::default();
+        let candidates = ShrinkCandidates::new(DEFAULT_SHRINK_CANDIDATES_WIDTH);
         let db = AccountsDb::new_single_for_tests();
 
         let (selected_candidates, next_candidates) =
@@ -13322,7 +13327,7 @@ pub mod tests {
     fn test_select_candidates_by_total_usage_3_way_split_condition() {
         // three candidates, one selected for shrink, one is put back to the candidate list and one is ignored
         solana_logger::setup();
-        let mut candidates = ShrinkCandidates::default();
+        let mut candidates = ShrinkCandidates::new(DEFAULT_SHRINK_CANDIDATES_WIDTH);
         let db = AccountsDb::new_single_for_tests();
 
         let common_store_path = Path::new("");
@@ -13396,7 +13401,7 @@ pub mod tests {
         // three candidates, 2 are selected for shrink, one is ignored
         solana_logger::setup();
         let db = AccountsDb::new_single_for_tests();
-        let mut candidates = ShrinkCandidates::default();
+        let mut candidates = ShrinkCandidates::new(DEFAULT_SHRINK_CANDIDATES_WIDTH);
 
         let common_store_path = Path::new("");
         let slot_id_1 = 12;
@@ -13462,7 +13467,7 @@ pub mod tests {
         // 2 candidates, they must be selected to achieve the target alive ratio
         solana_logger::setup();
         let db = AccountsDb::new_single_for_tests();
-        let mut candidates = ShrinkCandidates::default();
+        let mut candidates = ShrinkCandidates::new(DEFAULT_SHRINK_CANDIDATES_WIDTH);
 
         let slot1 = 12;
         let common_store_path = Path::new("");
