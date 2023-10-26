@@ -67,15 +67,12 @@ impl RollingBitField {
         } else if self.excess.is_empty() {
             Some(self.min)
         } else {
-            let mut min = if self.all_items_in_excess() {
-                u64::MAX
+            let excess_min = self.excess.iter().min().copied();
+            if self.all_items_in_excess() {
+                excess_min
             } else {
-                self.min
-            };
-            for item in &self.excess {
-                min = std::cmp::min(min, *item);
+                Some(std::cmp::min(self.min, excess_min.unwrap_or(u64::MAX)))
             }
-            Some(min)
         }
     }
 
