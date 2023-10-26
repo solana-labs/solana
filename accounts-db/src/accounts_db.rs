@@ -1579,6 +1579,7 @@ pub struct AccountsStats {
     delta_hash_scan_time_total_us: AtomicU64,
     delta_hash_accumulate_time_total_us: AtomicU64,
     delta_hash_num: AtomicU64,
+    skipped_rewrites_num: AtomicUsize,
 
     last_store_report: AtomicInterval,
     store_hash_accounts: AtomicU64,
@@ -6957,6 +6958,11 @@ impl AccountsDb {
                     .swap(0, Ordering::Relaxed),
                 i64
             ),
+            (
+                "skipped_rewrites_num",
+                self.stats.skipped_rewrites_num.swap(0, Ordering::Relaxed),
+                i64
+            ),
         );
     }
 
@@ -8005,7 +8011,11 @@ impl AccountsDb {
         hashes.iter().for_each(|(k, _h)| {
             skipped_rewrites.remove(k);
         });
+
+        let num_skipped_rewrites = skipped_rewrites.len();
         hashes.extend(skipped_rewrites);
+
+        info!("skipped rewrite hashes {} {}", slot, num_skipped_rewrites);
 
         if let Some(ignore) = ignore {
             hashes.retain(|k| k.0 != ignore);
@@ -8035,6 +8045,10 @@ impl AccountsDb {
             .delta_hash_accumulate_time_total_us
             .fetch_add(accumulate.as_us(), Ordering::Relaxed);
         self.stats.delta_hash_num.fetch_add(1, Ordering::Relaxed);
+        self.stats
+            .skipped_rewrites_num
+            .fetch_add(num_skipped_rewrites, Ordering::Relaxed);
+
         accounts_delta_hash
     }
 
