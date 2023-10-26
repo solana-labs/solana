@@ -183,7 +183,6 @@ use {
     solana_system_program::{get_system_account_kind, SystemAccountKind},
     solana_vote::vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
     solana_vote_program::vote_state::VoteState,
-    std::sync::Mutex,
     std::{
         borrow::Cow,
         cell::RefCell,
@@ -199,7 +198,7 @@ use {
                 AtomicBool, AtomicI64, AtomicU64, AtomicUsize,
                 Ordering::{self, AcqRel, Acquire, Relaxed},
             },
-            Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard,
+            Arc, LockResult, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
         thread::Builder,
         time::{Duration, Instant},
