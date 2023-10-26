@@ -7673,15 +7673,20 @@ impl Bank {
         });
 
         let (verified_bank, verify_bank_time_us) = measure_us!({
-            info!("Verifying bank...");
-            let verified = self
+            let should_verify_bank = !self
                 .rc
                 .accounts
                 .accounts_db
-                .test_skip_rewrites_but_include_in_bank_hash
-                || self.verify_hash();
-            info!("Verifying bank... Done.");
-            verified
+                .test_skip_rewrites_but_include_in_bank_hash;
+            if should_verify_bank {
+                info!("Verifying bank...");
+                let verified = self.verify_hash();
+                info!("Verifying bank... Done.");
+                verified
+            } else {
+                info!("Verifying bank... Skipped.");
+                true
+            }
         });
 
         datapoint_info!(
