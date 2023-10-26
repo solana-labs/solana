@@ -130,16 +130,14 @@ mod tests {
         let mut slots_vec = Vec::new();
         let last_voted_fork = vec![root_slot + 1, root_slot + 2, root_slot + 3];
         for validator_voting_keypair in validator_voting_keypairs.iter().take(4) {
-            let pubkey = validator_voting_keypair.node_keypair.pubkey();
-            let new_message = RestartLastVotedForkSlots::new(
-                pubkey,
+            slots_vec.push(RestartLastVotedForkSlots::new(
+                validator_voting_keypair.node_keypair.pubkey(),
                 timestamp(),
                 &last_voted_fork,
                 Hash::default(),
                 shred_version,
             )
-            .unwrap();
-            slots_vec.push(new_message);
+            .unwrap());
         }
         let result = slots_aggregate.aggregate(slots_vec);
         assert_eq!(result.active_percenage, 0.4);
