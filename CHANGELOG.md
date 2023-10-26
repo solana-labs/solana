@@ -14,7 +14,7 @@ Release channels have their own copy of this changelog:
 <a name="edge-channel"></a>
 ## [1.18.0] - Unreleased
 * Changes
-  * Added a github check to support `changelog` label
+  * Added a GitHub check to support `changelog` label
 * Upgrade Notes
 
 ## [1.17.0]
@@ -49,7 +49,7 @@ makes the feature code complete.
     * dapp or client developers to make changes.
 * Link to any relevant feature gate issues or SIMDs.
 * If you add entries on multiple branches use the same wording if possible.
-This simplifies the process of diffing between versions of the log.
+This simplifies the process of differentiating between versions of the log.
 
 ## Maintaining This Changelog
 ### When creating a new release branch:
