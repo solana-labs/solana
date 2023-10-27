@@ -7,9 +7,7 @@ use {
         *,
     },
     crate::{
-        accounts_background_service::{
-            AbsRequestSender, PrunedBanksRequestHandler, SendDroppedBankCallback,
-        },
+        accounts_background_service::{PrunedBanksRequestHandler, SendDroppedBankCallback},
         bank_client::BankClient,
         bank_forks::BankForks,
         epoch_rewards_hasher::hash_rewards_into_partitions,
@@ -12145,7 +12143,7 @@ fn test_is_in_slot_hashes_history() {
 }
 
 #[test]
-fn test_runtime_feature_enable_with_program_cache() {
+fn test_feature_activation_loaded_programs_recompilation_phase() {
     solana_logger::setup();
 
     // Bank Setup
@@ -12211,20 +12209,8 @@ fn test_runtime_feature_enable_with_program_cache() {
         &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
     );
 
-    // Reroot to call LoadedPrograms::prune() and end the current recompilation phase
     goto_end_of_slot(bank.clone());
-    bank_forks
-        .write()
-        .unwrap()
-        .insert(Arc::into_inner(bank).unwrap());
-    let bank = bank_forks.read().unwrap().working_bank();
-    bank_forks.read().unwrap().prune_program_cache(bank.slot);
-    bank_forks
-        .write()
-        .unwrap()
-        .set_root(bank.slot, &AbsRequestSender::default(), None);
-
-    // Advance to next epoch, which starts the next recompilation phase
+    // Advance to next epoch, which starts the recompilation phase
     let bank = new_from_parent_next_epoch(bank, 1);
 
     // Execute after feature is enabled to check it was filtered out and reverified.
