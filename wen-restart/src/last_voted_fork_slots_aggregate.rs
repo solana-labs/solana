@@ -1,4 +1,7 @@
 use {
+    crate::solana::wen_restart_proto::{
+        LastVotedForkSlotsAggregateRecord, LastVotedForkSlotsRecord,
+    },
     log::*,
     solana_gossip::crds_value::RestartLastVotedForkSlots,
     solana_runtime::epoch_stakes::EpochStakes,
@@ -62,6 +65,7 @@ impl LastVotedForkSlotsAggregate {
     pub(crate) fn aggregate(
         &mut self,
         new_last_voted_fork_slots: Vec<RestartLastVotedForkSlots>,
+        last_voted_fork_slots_aggregate_record: &mut LastVotedForkSlotsAggregateRecord,
     ) -> LastVotedForkSlotsAggregateResult {
         let total_stake = self.epoch_stakes.total_stake();
         let threshold_stake = (total_stake as f64 * self.repair_threshold) as u64;
@@ -76,8 +80,16 @@ impl LastVotedForkSlotsAggregate {
                 );
                 continue;
             }
-            let new_slots_set: HashSet<Slot> =
-                HashSet::from_iter(new_slots.to_slots(self.root_slot));
+            let new_slots_vec = new_slots.to_slots(self.root_slot);
+            last_voted_fork_slots_aggregate_record.received.insert(
+                from.to_string(),
+                LastVotedForkSlotsRecord {
+                    last_vote_fork_slots: new_slots_vec.clone(),
+                    last_vote_bankhash: new_slots.last_voted_hash.to_string(),
+                    shred_version: new_slots.shred_version as u32,
+                },
+            );
+            let new_slots_set: HashSet<Slot> = HashSet::from_iter(new_slots_vec);
             let old_slots_set = match self.last_voted_fork_slots.insert(new_slots.from, new_slots) {
                 Some(old_slots) => HashSet::from_iter(old_slots.to_slots(self.root_slot)),
                 None => HashSet::new(),
@@ -111,7 +123,12 @@ impl LastVotedForkSlotsAggregate {
 #[cfg(test)]
 mod tests {
     use {
-        crate::last_voted_fork_slots_aggregate::LastVotedForkSlotsAggregate,
+        crate::{
+            last_voted_fork_slots_aggregate::LastVotedForkSlotsAggregate,
+            solana::wen_restart_proto::{
+                LastVotedForkSlotsAggregateRecord, LastVotedForkSlotsRecord,
+            },
+        },
         solana_gossip::crds_value::RestartLastVotedForkSlots,
         solana_runtime::{
             bank::Bank,
@@ -121,6 +138,7 @@ mod tests {
             },
         },
         solana_sdk::{hash::Hash, signature::Signer, timing::timestamp},
+        std::collections::HashMap,
     };
 
     #[test]
@@ -147,10 +165,12 @@ mod tests {
             &last_voted_fork,
             &validator_voting_keypairs[9].node_keypair.pubkey(),
         );
+        let mut expected_aggregate_record = HashMap::new();
         for validator_voting_keypair in validator_voting_keypairs.iter().take(3) {
+            let pubkey = validator_voting_keypair.node_keypair.pubkey();
             slots_vec.push(
                 RestartLastVotedForkSlots::new(
-                    validator_voting_keypair.node_keypair.pubkey(),
+                    pubkey,
                     timestamp(),
                     &last_voted_fork,
                     Hash::default(),
@@ -158,36 +178,68 @@ mod tests {
                 )
                 .unwrap(),
             );
+            expected_aggregate_record.insert(
+                pubkey.to_string(),
+                LastVotedForkSlotsRecord {
+                    last_vote_fork_slots: last_voted_fork.clone(),
+                    last_vote_bankhash: Hash::default().to_string(),
+                    shred_version: shred_version as u32,
+                },
+            );
         }
-        let result = slots_aggregate.aggregate(slots_vec);
+        let mut aggregate_record = LastVotedForkSlotsAggregateRecord {
+            received: HashMap::new(),
+        };
+        let result = slots_aggregate.aggregate(slots_vec, &mut aggregate_record);
         assert_eq!(result.active_percenage, 0.4);
         assert!(result.slots_to_repair.is_empty());
+        assert_eq!(aggregate_record.received, expected_aggregate_record);
 
+        let from = validator_voting_keypairs[4].node_keypair.pubkey();
         let message5 = RestartLastVotedForkSlots::new(
-            validator_voting_keypairs[4].node_keypair.pubkey(),
+            from,
             timestamp(),
             &last_voted_fork,
             Hash::default(),
             shred_version,
         )
         .unwrap();
-        let result = slots_aggregate.aggregate(vec![message5]);
+        expected_aggregate_record.insert(
+            from.to_string(),
+            LastVotedForkSlotsRecord {
+                last_vote_fork_slots: last_voted_fork.clone(),
+                last_vote_bankhash: Hash::default().to_string(),
+                shred_version: shred_version as u32,
+            },
+        );
+        let result = slots_aggregate.aggregate(vec![message5], &mut aggregate_record);
         assert_eq!(result.active_percenage, 0.5);
         let mut actual_slots = Vec::from_iter(result.slots_to_repair);
         actual_slots.sort();
         assert_eq!(actual_slots, last_voted_fork);
+        assert_eq!(aggregate_record.received, expected_aggregate_record);
 
+        let from = validator_voting_keypairs[2].node_keypair.pubkey();
         // Allow specific validator to replace message.
         let new_message2 = RestartLastVotedForkSlots::new(
-            validator_voting_keypairs[2].node_keypair.pubkey(),
+            from,
             timestamp(),
             &[root_slot + 1, root_slot + 4, root_slot + 5],
             Hash::default(),
             shred_version,
         )
         .unwrap();
-        let result = slots_aggregate.aggregate(vec![new_message2]);
+        expected_aggregate_record.insert(
+            from.to_string(),
+            LastVotedForkSlotsRecord {
+                last_vote_fork_slots: vec![root_slot + 1, root_slot + 4, root_slot + 5],
+                last_vote_bankhash: Hash::default().to_string(),
+                shred_version: shred_version as u32,
+            },
+        );
+        let result = slots_aggregate.aggregate(vec![new_message2], &mut aggregate_record);
         assert_eq!(result.active_percenage, 0.5);
+        assert_eq!(aggregate_record.received, expected_aggregate_record);
         let mut actual_slots = Vec::from_iter(result.slots_to_repair);
         actual_slots.sort();
         assert_eq!(actual_slots, vec![root_slot + 1]);
