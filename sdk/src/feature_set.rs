@@ -700,10 +700,6 @@ pub mod better_error_codes_for_tx_lamport_check {
     solana_sdk::declare_id!("Ffswd3egL3tccB6Rv3XY6oqfdzn913vUcjCSnpvCKpfx");
 }
 
-pub mod programify_feature_gate_program {
-    solana_sdk::declare_id!("8GdovDzVwWU5edz2G697bbB7GZjrUc6aQZLWyNNAtHdg");
-}
-
 pub mod update_hashes_per_tick2 {
     solana_sdk::declare_id!("EWme9uFqfy1ikK1jhJs8fM5hxWnK336QJpbscNtizkTU");
 }
@@ -894,7 +890,6 @@ lazy_static! {
         (require_rent_exempt_split_destination::id(), "Require stake split destination account to be rent exempt"),
         (better_error_codes_for_tx_lamport_check::id(), "better error codes for tx lamport check #33353"),
         (enable_alt_bn128_compression_syscall::id(), "add alt_bn128 compression syscalls"),
-        (programify_feature_gate_program::id(), "move feature gate activation logic to an on-chain program #32783"),
         (update_hashes_per_tick2::id(), "Update desired hashes per tick to 2.8M"),
         (update_hashes_per_tick3::id(), "Update desired hashes per tick to 4.4M"),
         (update_hashes_per_tick4::id(), "Update desired hashes per tick to 7.6M"),
