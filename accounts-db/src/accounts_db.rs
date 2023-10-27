@@ -1738,11 +1738,12 @@ impl SplitAncientStorages {
         // 2. first unevenly divided chunk starting at 1 epoch old slot (may be empty)
         // 3. evenly divided full chunks in the middle
         // 4. unevenly divided chunk of most recent slots (may be empty)
-        let ancient_slots =
+        let mut ancient_slots =
             Self::get_ancient_slots(oldest_non_ancient_slot, snapshot_storages, |storage| {
                 storage.capacity() > get_ancient_append_vec_capacity() * 50 / 100
             });
 
+        ancient_slots.clear();
         let first_non_ancient_slot = ancient_slots
             .last()
             .map(|last_ancient_slot| last_ancient_slot.saturating_add(1))
