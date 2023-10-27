@@ -8044,8 +8044,8 @@ impl Bank {
             let datapoint_name = "bank-progamify_feature_gate_program";
             if let Err(e) = replace_account::replace_empty_account_with_upgradeable_program(
                 self,
-                &feature::id(),
                 &inline_feature_gate_program::noop_program::id(),
+                &feature::id(),
                 datapoint_name,
             ) {
                 warn!(
