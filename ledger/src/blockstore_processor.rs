@@ -307,6 +307,16 @@ fn execute_batches_internal(
     })
 }
 
+// This fn diverts the code-path into two variants. Both must provide exactly the same set of
+// validations. For this reason, this fn is deliberately inserted into the code path to be called
+// inside process_entries(), so that Bank::prepare_sanitized_batch() has been called on all of
+// batches already, while minimizing code duplication (thus divergent behavior risk) at the cost of
+// acceptable overhead of meaningless buffering of batches for the scheduler variant.
+//
+// Also note that the scheduler variant can't implement the batch-level sanitization naively, due
+// to the nature of individual tx processing. That's another reason of this particular placement of
+// divergent point in the code-path (i.e. not one layer up with its own prepare_sanitized_batch()
+// invocation).
 fn process_batches(
     bank: &BankWithScheduler,
     batches: &[TransactionBatchWithIndexes],
@@ -316,7 +326,17 @@ fn process_batches(
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
-    if !bank.has_installed_scheduler() {
+    if bank.has_installed_scheduler() {
+        debug!(
+            "process_batches()/schedule_batches_for_execution({} batches)",
+            batches.len()
+        );
+        // scheduling always succeeds here without being blocked on actual transaction executions.
+        // The transaction execution errors will be collected via the blocking fn called
+        // BankWithScheduler::wait_for_completed_scheduler(), if any.
+        schedule_batches_for_execution(bank, batches);
+        Ok(())
+    } else {
         debug!(
             "process_batches()/rebatch_and_execute_batches({} batches)",
             batches.len()
@@ -330,30 +350,25 @@ fn process_batches(
             log_messages_bytes_limit,
             prioritization_fee_cache,
         )
-    } else {
-        debug!(
-            "process_batches()/schedule_batches_for_execution({} batches)",
-            batches.len()
-        );
-        schedule_batches_for_execution(bank, batches)
     }
 }
 
 fn schedule_batches_for_execution(
     bank: &BankWithScheduler,
     batches: &[TransactionBatchWithIndexes],
-) -> Result<()> {
+) {
     for TransactionBatchWithIndexes {
         batch,
         transaction_indexes,
     } in batches
     {
         bank.schedule_transaction_executions(
-            batch.sanitized_transactions(),
-            transaction_indexes.iter(),
+            batch
+                .sanitized_transactions()
+                .iter()
+                .zip(transaction_indexes.iter()),
         );
     }
-    Ok(())
 }
 
 fn rebatch_transactions<'a>(

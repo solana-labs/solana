@@ -733,7 +733,7 @@ mod tests {
         assert_eq!(bank.transaction_count(), 0);
 
         // schedule but not immediately execute transaction
-        bank.schedule_transaction_executions(&[very_old_valid_tx], [0].iter());
+        bank.schedule_transaction_executions([(&very_old_valid_tx, &0)].into_iter());
         // this calls register_recent_blockhash internally
         bank.fill_bank_with_ticks_for_tests();
 

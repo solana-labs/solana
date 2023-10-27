@@ -297,20 +297,20 @@ impl BankWithScheduler {
         BankWithSchedulerInner::wait_for_reusable_scheduler(bank, scheduler);
     }
 
+    // 'a is needed; anonymous_lifetime_in_impl_trait isn't stabilized yet...
     pub fn schedule_transaction_executions<'a>(
         &self,
-        transactions: &[SanitizedTransaction],
-        transaction_indexes: impl Iterator<Item = &'a usize>,
+        transactions_with_indexes: impl ExactSizeIterator<Item = (&'a SanitizedTransaction, &'a usize)>,
     ) {
         trace!(
             "schedule_transaction_executions(): {} txs",
-            transactions.len()
+            transactions_with_indexes.len()
         );
 
         let scheduler_guard = self.inner.scheduler.read().unwrap();
         let scheduler = scheduler_guard.as_ref().unwrap();
 
-        for (sanitized_transaction, &index) in transactions.iter().zip(transaction_indexes) {
+        for (sanitized_transaction, &index) in transactions_with_indexes {
             scheduler.schedule_execution(&(sanitized_transaction, index));
         }
     }
@@ -585,6 +585,6 @@ mod tests {
         );
 
         let bank = BankWithScheduler::new(bank, Some(mocked_scheduler));
-        bank.schedule_transaction_executions(&[tx0], [0].iter());
+        bank.schedule_transaction_executions([(&tx0, &0)].into_iter());
     }
 }
