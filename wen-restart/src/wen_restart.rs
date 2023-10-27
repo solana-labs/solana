@@ -31,6 +31,11 @@ use {
     },
 };
 
+// If >42% of the validators have this block, repair this block locally.
+const REPAIR_THRESHOLD: f64 = 0.42;
+// Wait until 80% responded before proceeding to next stage.
+const RESTART_SUPERMAJORITY_THRESHOLD: f64 = 0.80;
+
 fn send_restart_last_voted_fork_slots(
     last_vote: VoteTransaction,
     blockstore: Arc<Blockstore>,
@@ -83,7 +88,7 @@ fn aggregate_restart_last_voted_fork_slots(
     let root_slot = root_bank.slot();
     let mut last_voted_fork_slots_aggregate = LastVotedForkSlotsAggregate::new(
         root_slot,
-        0.42,
+        REPAIR_THRESHOLD,
         root_bank.epoch_stakes(root_bank.epoch()).unwrap(),
         &progress
             .my_last_voted_fork_slots
@@ -127,9 +132,9 @@ fn aggregate_restart_last_voted_fork_slots(
         filtered_slots.sort();
         info!(
             "Active peers: {} Slots to repair: {:?}",
-            result.active_percenage, &filtered_slots
+            result.active_percentage, &filtered_slots
         );
-        if filtered_slots.is_empty() && result.active_percenage > 0.80 {
+        if filtered_slots.is_empty() && result.active_percentage > RESTART_SUPERMAJORITY_THRESHOLD {
             *slots_to_repair_for_wen_restart.write().unwrap() = vec![];
             break;
         }
