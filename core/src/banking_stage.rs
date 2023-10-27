@@ -959,8 +959,7 @@ mod tests {
         with_vers.into_iter().map(|(b, _)| b).collect()
     }
 
-    #[test]
-    fn test_banking_stage_entries_only() {
+    fn test_banking_stage_entries_only(block_production_method: BlockProductionMethod) {
         solana_logger::setup();
         let GenesisConfigInfo {
             genesis_config,
@@ -995,7 +994,7 @@ mod tests {
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let banking_stage = BankingStage::new(
-                BlockProductionMethod::ThreadLocalMultiIterator,
+                block_production_method,
                 &cluster_info,
                 &poh_recorder,
                 non_vote_receiver,
@@ -1086,6 +1085,16 @@ mod tests {
             drop(entry_receiver);
         }
         Blockstore::destroy(ledger_path.path()).unwrap();
+    }
+
+    #[test]
+    fn test_banking_stage_entries_only_thread_local_multi_iterator() {
+        test_banking_stage_entries_only(BlockProductionMethod::ThreadLocalMultiIterator);
+    }
+
+    #[test]
+    fn test_banking_stage_entries_only_central_scheduler() {
+        test_banking_stage_entries_only(BlockProductionMethod::CentralScheduler);
     }
 
     #[test]
