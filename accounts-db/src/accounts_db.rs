@@ -2926,6 +2926,7 @@ impl AccountsDb {
     }
 
     fn background_hasher(receiver: Receiver<CachedAccount>) {
+        info!("Background account hasher has started");
         loop {
             let result = receiver.recv();
             match result {
@@ -2936,11 +2937,13 @@ impl AccountsDb {
                         let _ = (*account).hash();
                     };
                 }
-                Err(_) => {
+                Err(err) => {
+                    info!("Background account hasher is stopping because: {err}");
                     break;
                 }
             }
         }
+        info!("Background account hasher has stopped");
     }
 
     fn start_background_hasher(&mut self) {
