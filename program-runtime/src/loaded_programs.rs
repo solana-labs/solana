@@ -465,6 +465,8 @@ pub struct LoadedPrograms<FG: ForkGraph> {
     /// More precisely, it starts with the recompilation phase a few hundred slots before the epoch boundary,
     /// and it ends with the first rerooting after the epoch boundary.
     pub upcoming_environments: Option<ProgramRuntimeEnvironments>,
+    /// List of loaded programs which should be recompiled before the next epoch (but don't have to).
+    pub programs_to_recompile: Vec<(Pubkey, Arc<LoadedProgram>)>,
     pub stats: Stats,
     pub fork_graph: Option<Arc<RwLock<FG>>>,
 }
@@ -488,6 +490,7 @@ impl<FG: ForkGraph> Default for LoadedPrograms<FG> {
             latest_root_epoch: 0,
             environments: ProgramRuntimeEnvironments::default(),
             upcoming_environments: None,
+            programs_to_recompile: Vec::default(),
             stats: Stats::default(),
             fork_graph: None,
         }
@@ -670,6 +673,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
             if let Some(upcoming_environments) = self.upcoming_environments.take() {
                 recompilation_phase_ends = true;
                 self.environments = upcoming_environments;
+                self.programs_to_recompile.clear();
             }
         }
         for second_level in self.entries.values_mut() {
