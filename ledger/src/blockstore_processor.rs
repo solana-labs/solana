@@ -297,8 +297,13 @@ fn execute_batches_internal(
 // This fn diverts the code-path into two variants. Both must provide exactly the same set of
 // validations. For this reason, this fn is deliberately inserted into the code path to be called
 // inside process_entries(), so that Bank::prepare_sanitized_batch() has been called on all of
-// batches already. That's because the scheduler variant can't implement the batch sanitization
-// naively, due to the nature of individual tx processing.
+// batches already, while minimizing code duplication (thus divergent behavior risk) at the cost of
+// acceptable overhead of meaningless buffering of batches for the scheduler variant.
+//
+// Also note that the scheduler variant can't implement the batch-level sanitization naively, due
+// to the nature of individual tx processing. That's another reason of this particular placement of
+// divergent point in the code-path (i.e. not one layer up with its own prepare_sanitized_batch()
+// invocation).
 fn process_batches(
     bank: &BankWithScheduler,
     batches: &[TransactionBatchWithIndexes],
