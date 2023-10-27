@@ -7178,19 +7178,19 @@ impl AccountsDb {
             // oldest_non_ancient_slot is only applicable, when ancient storages are created with `Append`. When ancient storage are created with `Pack`, ancient storage
             // can be created in between non-ancient storages. Return None, because oldest_non_ancient_slot is not applicable here.
             None
-        } else {
-            if self.ancient_append_vec_offset.is_some() {
-                // For performance, this is required when ancient appendvecs are enabled
-                Some(self.get_oldest_non_ancient_slot_from_slot(
+        } else if self.ancient_append_vec_offset.is_some() {
+            // For performance, this is required when ancient appendvecs are enabled
+            Some(
+                self.get_oldest_non_ancient_slot_from_slot(
                     config.epoch_schedule,
                     max_slot_inclusive,
-                ))
-            } else {
-                // This causes the entire range to be chunked together, treating older append vecs just like new ones.
-                // This performs well if there are many old append vecs that haven't been cleaned yet.
-                // 0 will have the effect of causing ALL older append vecs to be chunked together, just like every other append vec.
-                Some(0)
-            }
+                ),
+            )
+        } else {
+            // This causes the entire range to be chunked together, treating older append vecs just like new ones.
+            // This performs well if there are many old append vecs that haven't been cleaned yet.
+            // 0 will have the effect of causing ALL older append vecs to be chunked together, just like every other append vec.
+            Some(0)
         }
     }
 
