@@ -1,6 +1,7 @@
 use {
-    solana_program_runtime::compute_budget::ComputeBudget,
+    solana_program_runtime::compute_budget_processor::process_compute_budget_instructions,
     solana_sdk::{
+        feature_set::FeatureSet,
         instruction::CompiledInstruction,
         pubkey::Pubkey,
         transaction::{SanitizedTransaction, SanitizedVersionedTransaction},
@@ -23,18 +24,17 @@ pub trait GetTransactionPriorityDetails {
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
         _round_compute_unit_price_enabled: bool,
     ) -> Option<TransactionPriorityDetails> {
-        let mut compute_budget = ComputeBudget::default();
-        let prioritization_fee_details = compute_budget
-            .process_instructions(
-                instructions,
-                true, // supports prioritization by request_units_deprecated instruction
-                true, // enable support set accounts data size instruction
-                      // TODO: round_compute_unit_price_enabled: bool
-            )
-            .ok()?;
+        let mut feature_set = FeatureSet::default();
+        feature_set.activate(
+            &solana_sdk::feature_set::add_set_tx_loaded_accounts_data_size_instruction::id(),
+            0,
+        );
+
+        let compute_budget_limits =
+            process_compute_budget_instructions(instructions, &feature_set).ok()?;
         Some(TransactionPriorityDetails {
-            priority: prioritization_fee_details.get_priority(),
-            compute_unit_limit: compute_budget.compute_unit_limit,
+            priority: compute_budget_limits.compute_unit_price,
+            compute_unit_limit: u64::from(compute_budget_limits.compute_unit_limit),
         })
     }
 }
@@ -98,8 +98,8 @@ mod tests {
             Some(TransactionPriorityDetails {
                 priority: 0,
                 compute_unit_limit:
-                    solana_program_runtime::compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
-                        as u64
+                    solana_program_runtime::compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
+                    as u64,
             })
         );
 
@@ -111,8 +111,8 @@ mod tests {
             Some(TransactionPriorityDetails {
                 priority: 0,
                 compute_unit_limit:
-                    solana_program_runtime::compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
-                        as u64
+                    solana_program_runtime::compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
+                    as u64,
             })
         );
     }
@@ -174,8 +174,8 @@ mod tests {
             Some(TransactionPriorityDetails {
                 priority: requested_price,
                 compute_unit_limit:
-                    solana_program_runtime::compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
-                        as u64
+                    solana_program_runtime::compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
+                    as u64,
             })
         );
 
@@ -187,8 +187,8 @@ mod tests {
             Some(TransactionPriorityDetails {
                 priority: requested_price,
                 compute_unit_limit:
-                    solana_program_runtime::compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
-                        as u64
+                    solana_program_runtime::compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
+                    as u64,
             })
         );
     }
