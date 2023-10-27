@@ -1439,7 +1439,6 @@ pub struct AccountsDb {
 
     pub storage: AccountStorage,
 
-    #[allow(dead_code)]
     /// from AccountsDbConfig
     create_ancient_storage: CreateAncientStorage,
 
