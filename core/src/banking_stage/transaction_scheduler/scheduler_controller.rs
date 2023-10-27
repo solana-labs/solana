@@ -15,6 +15,7 @@ use {
         TOTAL_BUFFERED_PACKETS,
     },
     crossbeam_channel::RecvTimeoutError,
+    solana_measure::measure_us,
     solana_runtime::bank_forks::BankForks,
     solana_sdk::timing::AtomicInterval,
     std::{
@@ -39,6 +40,8 @@ pub(crate) struct SchedulerController {
     scheduler: PrioGraphScheduler,
     /// Metrics tracking counts on transactions in different states.
     count_metrics: SchedulerCountMetrics,
+    /// Metrics tracking time spent in different code sections.
+    timing_metrics: SchedulerTimingMetrics,
 }
 
 impl SchedulerController {
@@ -56,6 +59,7 @@ impl SchedulerController {
             container: TransactionStateContainer::with_capacity(TOTAL_BUFFERED_PACKETS),
             scheduler,
             count_metrics: SchedulerCountMetrics::default(),
+            timing_metrics: SchedulerTimingMetrics::default(),
         }
     }
 
@@ -71,15 +75,18 @@ impl SchedulerController {
             // `Forward` will drop packets from the buffer instead of forwarding.
             // During receiving, since packets would be dropped from buffer anyway, we can
             // bypass sanitization and buffering and immediately drop the packets.
-            let decision = self.decision_maker.make_consume_or_forward_decision();
+            let (decision, decision_time_us) =
+                measure_us!(self.decision_maker.make_consume_or_forward_decision());
+            self.timing_metrics.decision_time_us += decision_time_us;
 
             self.process_transactions(&decision)?;
             self.receive_completed()?;
-            if !self.receive_packets(&decision) {
+            if !self.receive_and_buffer_packets(&decision) {
                 break;
             }
 
             self.count_metrics.maybe_report_and_reset();
+            self.timing_metrics.maybe_report_and_reset();
         }
 
         Ok(())
@@ -92,11 +99,14 @@ impl SchedulerController {
     ) -> Result<(), SchedulerError> {
         match decision {
             BufferedPacketsDecision::Consume(_bank_start) => {
-                let num_scheduled = self.scheduler.schedule(&mut self.container)?;
+                let (num_scheduled, schedule_time_us) =
+                    measure_us!(self.scheduler.schedule(&mut self.container)?);
                 self.count_metrics.num_scheduled += num_scheduled;
+                self.timing_metrics.schedule_time_us += schedule_time_us;
             }
             BufferedPacketsDecision::Forward => {
-                self.clear_container();
+                let (_, clear_time_us) = measure_us!(self.clear_container());
+                self.timing_metrics.clear_time_us += clear_time_us;
             }
             BufferedPacketsDecision::ForwardAndHold | BufferedPacketsDecision::Hold => {}
         }
@@ -115,15 +125,16 @@ impl SchedulerController {
 
     /// Receives completed transactions from the workers and updates metrics.
     fn receive_completed(&mut self) -> Result<(), SchedulerError> {
-        let (num_transactions, num_retryable) =
-            self.scheduler.receive_completed(&mut self.container)?;
+        let ((num_transactions, num_retryable), receive_completed_time_us) =
+            measure_us!(self.scheduler.receive_completed(&mut self.container)?);
         self.count_metrics.num_finished += num_transactions;
         self.count_metrics.num_retryable += num_retryable;
+        self.timing_metrics.receive_completed_time_us += receive_completed_time_us;
         Ok(())
     }
 
     /// Returns whether the packet receiver is still connected.
-    fn receive_packets(&mut self, decision: &BufferedPacketsDecision) -> bool {
+    fn receive_and_buffer_packets(&mut self, decision: &BufferedPacketsDecision) -> bool {
         let remaining_queue_capacity = self.container.remaining_queue_capacity();
 
         const MAX_PACKET_RECEIVE_TIME: Duration = Duration::from_millis(100);
@@ -142,16 +153,20 @@ impl SchedulerController {
             }
         };
 
-        let received_packet_results = self
+        let (received_packet_results, receive_time_us) = measure_us!(self
             .packet_receiver
-            .receive_packets(recv_timeout, remaining_queue_capacity);
+            .receive_packets(recv_timeout, remaining_queue_capacity));
+        self.timing_metrics.receive_time_us += receive_time_us;
 
         match received_packet_results {
             Ok(receive_packet_results) => {
                 let num_received_packets = receive_packet_results.deserialized_packets.len();
                 self.count_metrics.num_received += num_received_packets;
                 if should_buffer {
-                    self.buffer_packets(receive_packet_results.deserialized_packets)
+                    let (_, buffer_time_us) = measure_us!(
+                        self.buffer_packets(receive_packet_results.deserialized_packets)
+                    );
+                    self.timing_metrics.buffer_time_us += buffer_time_us;
                 } else {
                     self.count_metrics.num_dropped_on_receive += num_received_packets;
                 }
@@ -259,6 +274,56 @@ impl SchedulerCountMetrics {
         self.num_dropped_on_sanitization = 0;
         self.num_dropped_on_clear = 0;
         self.num_dropped_on_capacity = 0;
+    }
+}
+
+#[derive(Default)]
+struct SchedulerTimingMetrics {
+    interval: AtomicInterval,
+    /// Time spent making processing decisions.
+    decision_time_us: u64,
+    /// Time spent receiving packets.
+    receive_time_us: u64,
+    /// Time spent buffering packets.
+    buffer_time_us: u64,
+    /// Time spent scheduling transactions.
+    schedule_time_us: u64,
+    /// Time spent clearing transactions from the container.
+    clear_time_us: u64,
+    /// Time spent receiving completed transactions.
+    receive_completed_time_us: u64,
+}
+
+impl SchedulerTimingMetrics {
+    fn maybe_report_and_reset(&mut self) {
+        const REPORT_INTERVAL_MS: u64 = 1000;
+        if self.interval.should_update(REPORT_INTERVAL_MS) {
+            self.report();
+            self.reset();
+        }
+    }
+
+    fn report(&self) {
+        datapoint_info!(
+            "banking_stage_scheduler_timing",
+            ("decision_time", self.decision_time_us, i64),
+            ("receive_time", self.receive_time_us, i64),
+            ("buffer_time", self.buffer_time_us, i64),
+            ("schedule_time", self.schedule_time_us, i64),
+            ("clear_time", self.clear_time_us, i64),
+            (
+                "receive_completed_time",
+                self.receive_completed_time_us,
+                i64
+            )
+        );
+    }
+
+    fn reset(&mut self) {
+        self.receive_time_us = 0;
+        self.buffer_time_us = 0;
+        self.schedule_time_us = 0;
+        self.receive_completed_time_us = 0;
     }
 }
 
