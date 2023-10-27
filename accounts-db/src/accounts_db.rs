@@ -486,6 +486,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     exhaustively_verify_refcounts: false,
     create_ancient_storage: CreateAncientStorage::Pack,
     test_partitioned_epoch_rewards: TestPartitionedEpochRewards::CompareResults,
+    test_skip_rewrites_but_include_in_bank_hash: false,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
@@ -498,6 +499,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     exhaustively_verify_refcounts: false,
     create_ancient_storage: CreateAncientStorage::Pack,
     test_partitioned_epoch_rewards: TestPartitionedEpochRewards::None,
+    test_skip_rewrites_but_include_in_bank_hash: false,
 };
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
@@ -557,6 +559,7 @@ pub struct AccountsDbConfig {
     /// if None, ancient append vecs are set to ANCIENT_APPEND_VEC_DEFAULT_OFFSET
     /// Some(offset) means include slots up to (max_slot - (slots_per_epoch - 'offset'))
     pub ancient_append_vec_offset: Option<i64>,
+    pub test_skip_rewrites_but_include_in_bank_hash: bool,
     pub skip_initial_hash_calc: bool,
     pub exhaustively_verify_refcounts: bool,
     /// how to create ancient storages
@@ -1440,6 +1443,9 @@ pub struct AccountsDb {
     /// from AccountsDbConfig
     create_ancient_storage: CreateAncientStorage,
 
+    /// true if this client should skip rewrites but still include those rewrites in the bank hash as if rewrites had occurred.
+    pub test_skip_rewrites_but_include_in_bank_hash: bool,
+
     pub accounts_cache: AccountsCache,
 
     write_cache_limit_bytes: Option<u64>,
@@ -1573,6 +1579,7 @@ pub struct AccountsStats {
     delta_hash_scan_time_total_us: AtomicU64,
     delta_hash_accumulate_time_total_us: AtomicU64,
     delta_hash_num: AtomicU64,
+    skipped_rewrites_num: AtomicUsize,
 
     last_store_report: AtomicInterval,
     store_hash_accounts: AtomicU64,
@@ -2547,6 +2554,7 @@ impl AccountsDb {
             exhaustively_verify_refcounts: false,
             partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig::default(),
             epoch_accounts_hash_manager: EpochAccountsHashManager::new_invalid(),
+            test_skip_rewrites_but_include_in_bank_hash: false,
         }
     }
 
@@ -2622,6 +2630,11 @@ impl AccountsDb {
             .map(|config| config.test_partitioned_epoch_rewards)
             .unwrap_or_default();
 
+        let test_skip_rewrites_but_include_in_bank_hash = accounts_db_config
+            .as_ref()
+            .map(|config| config.test_skip_rewrites_but_include_in_bank_hash)
+            .unwrap_or_default();
+
         let partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig =
             PartitionedEpochRewardsConfig::new(test_partitioned_epoch_rewards);
 
@@ -2647,6 +2660,7 @@ impl AccountsDb {
                 .and_then(|x| x.write_cache_limit_bytes),
             partitioned_epoch_rewards_config,
             exhaustively_verify_refcounts,
+            test_skip_rewrites_but_include_in_bank_hash,
             ..Self::default_with_accounts_index(
                 accounts_index,
                 base_working_path,
@@ -6944,6 +6958,11 @@ impl AccountsDb {
                     .swap(0, Ordering::Relaxed),
                 i64
             ),
+            (
+                "skipped_rewrites_num",
+                self.stats.skipped_rewrites_num.swap(0, Ordering::Relaxed),
+                i64
+            ),
         );
     }
 
@@ -7908,7 +7927,6 @@ impl AccountsDb {
         slot: Slot,
     ) -> (Vec<(Pubkey, AccountHash)>, u64, Measure) {
         let mut scan = Measure::start("scan");
-
         let scan_result: ScanStorageResult<(Pubkey, AccountHash), DashMap<Pubkey, AccountHash>> =
             self.scan_account_storage(
                 slot,
@@ -7928,6 +7946,7 @@ impl AccountsDb {
             ScanStorageResult::Cached(cached_result) => cached_result,
             ScanStorageResult::Stored(stored_result) => stored_result.into_iter().collect(),
         };
+
         (hashes, scan.as_us(), accumulate)
     }
 
@@ -7968,12 +7987,12 @@ impl AccountsDb {
         }
     }
 
-    /// Calculate accounts delta hash for `slot`
+    /// Wrapper function to calculate accounts delta hash for `slot` (only used for testing and benchmarking.)
     ///
     /// As part of calculating the accounts delta hash, get a list of accounts modified this slot
     /// (aka dirty pubkeys) and add them to `self.uncleaned_pubkeys` for future cleaning.
     pub fn calculate_accounts_delta_hash(&self, slot: Slot) -> AccountsDeltaHash {
-        self.calculate_accounts_delta_hash_internal(slot, None)
+        self.calculate_accounts_delta_hash_internal(slot, None, HashMap::default())
     }
 
     /// Calculate accounts delta hash for `slot`
@@ -7984,9 +8003,20 @@ impl AccountsDb {
         &self,
         slot: Slot,
         ignore: Option<Pubkey>,
+        mut skipped_rewrites: HashMap<Pubkey, AccountHash>,
     ) -> AccountsDeltaHash {
         let (mut hashes, scan_us, mut accumulate) = self.get_pubkey_hash_for_slot(slot);
         let dirty_keys = hashes.iter().map(|(pubkey, _hash)| *pubkey).collect();
+
+        hashes.iter().for_each(|(k, _h)| {
+            skipped_rewrites.remove(k);
+        });
+
+        let num_skipped_rewrites = skipped_rewrites.len();
+        hashes.extend(skipped_rewrites);
+
+        info!("skipped rewrite hashes {} {}", slot, num_skipped_rewrites);
+
         if let Some(ignore) = ignore {
             hashes.retain(|k| k.0 != ignore);
         }
@@ -8015,6 +8045,10 @@ impl AccountsDb {
             .delta_hash_accumulate_time_total_us
             .fetch_add(accumulate.as_us(), Ordering::Relaxed);
         self.stats.delta_hash_num.fetch_add(1, Ordering::Relaxed);
+        self.stats
+            .skipped_rewrites_num
+            .fetch_add(num_skipped_rewrites, Ordering::Relaxed);
+
         accounts_delta_hash
     }
 
@@ -15020,7 +15054,6 @@ pub mod tests {
         db.store_uncached(1, &[(&account_key1, &account2)]);
         db.calculate_accounts_delta_hash(0);
         db.calculate_accounts_delta_hash(1);
-
         db.print_accounts_stats("pre-clean1");
 
         // clean accounts - no accounts should be cleaned, since no rooted slots
@@ -15042,7 +15075,6 @@ pub mod tests {
         db.store_uncached(2, &[(&account_key2, &account3)]);
         db.store_uncached(2, &[(&account_key1, &account3)]);
         db.calculate_accounts_delta_hash(2);
-
         db.clean_accounts_for_tests();
         db.print_accounts_stats("post-clean2");
 
