@@ -20,7 +20,10 @@ use {
         TransactionResults,
     },
     solana_ledger::token_balances::collect_token_balances,
-    solana_program_runtime::{compute_budget::ComputeBudget, timings::ExecuteTimings},
+    solana_program_runtime::{
+        compute_budget::ComputeBudget,
+        compute_budget_processor::process_compute_budget_instructions, timings::ExecuteTimings,
+    },
     solana_rbpf::vm::ContextObject,
     solana_runtime::{
         bank::TransactionBalancesSet,
@@ -3835,10 +3838,12 @@ fn test_program_fees() {
     let expected_normal_fee = fee_structure.calculate_fee(
         &sanitized_message,
         congestion_multiplier,
-        &ComputeBudget::fee_budget_limits(
+        &process_compute_budget_instructions(
             sanitized_message.program_instructions_iter(),
             &feature_set,
-        ),
+        )
+        .unwrap_or_default()
+        .into(),
         true,
         false,
     );
@@ -3862,10 +3867,12 @@ fn test_program_fees() {
     let expected_prioritized_fee = fee_structure.calculate_fee(
         &sanitized_message,
         congestion_multiplier,
-        &ComputeBudget::fee_budget_limits(
+        &process_compute_budget_instructions(
             sanitized_message.program_instructions_iter(),
             &feature_set,
-        ),
+        )
+        .unwrap_or_default()
+        .into(),
         true,
         false,
     );

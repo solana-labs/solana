@@ -96,6 +96,10 @@ impl ImmutableDeserializedPacket {
         self.priority_details.compute_unit_limit
     }
 
+    pub fn priority_details(&self) -> TransactionPriorityDetails {
+        self.priority_details.clone()
+    }
+
     // This function deserializes packets into transactions, computes the blake3 hash of transaction
     // messages, and verifies secp256k1 instructions.
     pub fn build_sanitized_transaction(
