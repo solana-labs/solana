@@ -16,6 +16,7 @@ use {
     },
     crossbeam_channel::RecvTimeoutError,
     solana_runtime::bank_forks::BankForks,
+    solana_sdk::timing::AtomicInterval,
     std::{
         sync::{Arc, RwLock},
         time::Duration,
@@ -77,6 +78,8 @@ impl SchedulerController {
             if !self.receive_packets(&decision) {
                 break;
             }
+
+            self.count_metrics.maybe_report_and_reset();
         }
 
         Ok(())
@@ -194,6 +197,8 @@ impl SchedulerController {
 
 #[derive(Default)]
 struct SchedulerCountMetrics {
+    interval: AtomicInterval,
+
     /// Number of packets received.
     num_received: usize,
     /// Number of packets buffered.
@@ -217,8 +222,43 @@ struct SchedulerCountMetrics {
 }
 
 impl SchedulerCountMetrics {
-    pub fn report(&self) {
-        todo!()
+    fn maybe_report_and_reset(&mut self) {
+        const REPORT_INTERVAL_MS: u64 = 1000;
+        if self.interval.should_update(REPORT_INTERVAL_MS) {
+            self.report();
+            self.reset();
+        }
+    }
+
+    fn report(&self) {
+        datapoint_info!(
+            "banking_stage_scheduler_counts",
+            ("num_received", self.num_received, i64),
+            ("num_buffered", self.num_buffered, i64),
+            ("num_scheduled", self.num_scheduled, i64),
+            ("num_finished", self.num_finished, i64),
+            ("num_retryable", self.num_retryable, i64),
+            ("num_dropped_on_receive", self.num_dropped_on_receive, i64),
+            (
+                "num_dropped_on_sanitization",
+                self.num_dropped_on_sanitization,
+                i64
+            ),
+            ("num_dropped_on_clear", self.num_dropped_on_clear, i64),
+            ("num_dropped_on_capacity", self.num_dropped_on_capacity, i64)
+        );
+    }
+
+    fn reset(&mut self) {
+        self.num_received = 0;
+        self.num_buffered = 0;
+        self.num_scheduled = 0;
+        self.num_finished = 0;
+        self.num_retryable = 0;
+        self.num_dropped_on_receive = 0;
+        self.num_dropped_on_sanitization = 0;
+        self.num_dropped_on_clear = 0;
+        self.num_dropped_on_capacity = 0;
     }
 }
 
