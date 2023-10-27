@@ -303,7 +303,13 @@ fn process_batches(
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
-    if !bank.has_installed_scheduler() {
+    if bank.has_installed_scheduler() {
+        debug!(
+            "process_batches()/schedule_batches_for_execution({} batches)",
+            batches.len()
+        );
+        schedule_batches_for_execution(bank, batches)
+    } else {
         debug!(
             "process_batches()/rebatch_and_execute_batches({} batches)",
             batches.len()
@@ -317,12 +323,6 @@ fn process_batches(
             log_messages_bytes_limit,
             prioritization_fee_cache,
         )
-    } else {
-        debug!(
-            "process_batches()/schedule_batches_for_execution({} batches)",
-            batches.len()
-        );
-        schedule_batches_for_execution(bank, batches)
     }
 }
 
