@@ -1728,25 +1728,33 @@ impl SplitAncientStorages {
     /// So a slot remains in the same chunk whenever it is included in the accounts hash.
     /// When the slot gets deleted or gets consumed in an ancient append vec, it will no longer be in its chunk.
     /// The results of scanning a chunk of appendvecs can be cached to avoid scanning large amounts of data over and over.
-    fn new(oldest_non_ancient_slot: Slot, snapshot_storages: &SortedStorages) -> Self {
+    fn new(oldest_non_ancient_slot: Option<Slot>, snapshot_storages: &SortedStorages) -> Self {
         let range = snapshot_storages.range();
 
-        // any ancient append vecs should definitely be cached
-        // We need to break the ranges into:
-        // 1. individual ancient append vecs (may be empty)
-        // 2. first unevenly divided chunk starting at 1 epoch old slot (may be empty)
-        // 3. evenly divided full chunks in the middle
-        // 4. unevenly divided chunk of most recent slots (may be empty)
-        let mut ancient_slots =
-            Self::get_ancient_slots(oldest_non_ancient_slot, snapshot_storages, |storage| {
-                storage.capacity() > get_ancient_append_vec_capacity() * 50 / 100
-            });
+        let (ancient_slots, first_non_ancient_slot) = if let Some(oldest_non_ancient_slot) =
+            oldest_non_ancient_slot
+        {
+            // any ancient append vecs should definitely be cached
+            // We need to break the ranges into:
+            // 1. individual ancient append vecs (may be empty)
+            // 2. first unevenly divided chunk starting at 1 epoch old slot (may be empty)
+            // 3. evenly divided full chunks in the middle
+            // 4. unevenly divided chunk of most recent slots (may be empty)
+            let ancient_slots =
+                Self::get_ancient_slots(oldest_non_ancient_slot, snapshot_storages, |storage| {
+                    storage.capacity() > get_ancient_append_vec_capacity() * 50 / 100
+                });
 
-        ancient_slots.clear();
-        let first_non_ancient_slot = ancient_slots
-            .last()
-            .map(|last_ancient_slot| last_ancient_slot.saturating_add(1))
-            .unwrap_or(range.start);
+            let first_non_ancient_slot = ancient_slots
+                .last()
+                .map(|last_ancient_slot| last_ancient_slot.saturating_add(1))
+                .unwrap_or(range.start);
+
+            (ancient_slots, first_non_ancient_slot)
+        } else {
+            (vec![], range.start)
+        };
+
         Self::new_with_ancient_info(range, ancient_slots, first_non_ancient_slot)
     }
 
@@ -7165,15 +7173,24 @@ impl AccountsDb {
         &self,
         max_slot_inclusive: Slot,
         config: &CalcAccountsHashConfig<'_>,
-    ) -> Slot {
-        if self.ancient_append_vec_offset.is_some() {
-            // For performance, this is required when ancient appendvecs are enabled
-            self.get_oldest_non_ancient_slot_from_slot(config.epoch_schedule, max_slot_inclusive)
+    ) -> Option<Slot> {
+        if self.create_ancient_storage == CreateAncientStorage::Pack {
+            // oldest_non_ancient_slot is only applicable, when ancient storages are created with `Append`. When ancient storage are created with `Pack`, ancient storage
+            // can be created in between non-ancient storages. Return None, because oldest_non_ancient_slot is not applicable here.
+            None
         } else {
-            // This causes the entire range to be chunked together, treating older append vecs just like new ones.
-            // This performs well if there are many old append vecs that haven't been cleaned yet.
-            // 0 will have the effect of causing ALL older append vecs to be chunked together, just like every other append vec.
-            0
+            if self.ancient_append_vec_offset.is_some() {
+                // For performance, this is required when ancient appendvecs are enabled
+                Some(self.get_oldest_non_ancient_slot_from_slot(
+                    config.epoch_schedule,
+                    max_slot_inclusive,
+                ))
+            } else {
+                // This causes the entire range to be chunked together, treating older append vecs just like new ones.
+                // This performs well if there are many old append vecs that haven't been cleaned yet.
+                // 0 will have the effect of causing ALL older append vecs to be chunked together, just like every other append vec.
+                Some(0)
+            }
         }
     }
 
@@ -7313,7 +7330,11 @@ impl AccountsDb {
                         let mut init_accum = true;
                         // load from cache failed, so create the cache file for this chunk
                         for (slot, storage) in snapshot_storages.iter_range(&range_this_chunk) {
-                            let ancient = slot < oldest_non_ancient_slot;
+                            let ancient =
+                                oldest_non_ancient_slot.is_some_and(|oldest_non_ancient_slot| {
+                                    slot < oldest_non_ancient_slot
+                                });
+
                             let (_, scan_us) = measure_us!(if let Some(storage) = storage {
                                 if init_accum {
                                     let range = bin_range.end - bin_range.start;
