@@ -16777,7 +16777,7 @@ pub mod tests {
             // 1 = all storages are non-ancient
             // 2 = ancient slots: 1
             // 3 = ancient slots: 1, 2
-            // 4 = ancient slots: 1, 2, 3 (except 2 is large, 3 is not, so treat 3 as non-ancient)
+            // 4 = ancient slots: 1, 2 (except 2 is large, 3 is not, so treat 3 as non-ancient)
             // 5 = ...
             for oldest_non_ancient_slot in 0..6 {
                 let ancient_slots = SplitAncientStorages::get_ancient_slots(
