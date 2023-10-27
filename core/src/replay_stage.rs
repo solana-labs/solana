@@ -2786,7 +2786,6 @@ impl ReplayStage {
                 match replay_result {
                     Ok(replay_tx_count) => tx_count += replay_tx_count,
                     Err(err) => {
-                        // Error means the slot needs to be marked as dead
                         Self::mark_dead_slot(
                             blockstore,
                             bank,
@@ -2802,8 +2801,7 @@ impl ReplayStage {
                             ancestor_hashes_replay_update_sender,
                             purge_repair_slot_counter,
                         );
-                        // If the bank was corrupted, don't try to run the below logic to check if the
-                        // bank is completed
+                        // don't try to run the below logic to check if the bank is completed
                         continue;
                     }
                 }
