@@ -243,10 +243,14 @@ impl QosService {
                 // Only transactions that the qos service included have to be
                 // checked for update
                 if let Ok(tx_cost) = tx_cost {
-                    if let CommitTransactionDetails::Committed { compute_units } =
-                        transaction_committed_details
+                    if let CommitTransactionDetails::Committed {
+                        executed_units,
+                        executed_us: _,
+                        adjust_units,
+                    } = transaction_committed_details
                     {
-                        cost_tracker.update_execution_cost(tx_cost, *compute_units)
+                        let compute_units = executed_units.saturating_add(*adjust_units);
+                        cost_tracker.update_execution_cost(tx_cost, compute_units)
                     }
                 }
             });
@@ -359,6 +363,27 @@ impl QosService {
             .stats
             .actual_execute_time_us
             .fetch_add(micro_sec, Ordering::Relaxed);
+    }
+
+    pub fn accumulate_committed_execute_cu(&self, units: u64) {
+        self.metrics
+            .stats
+            .committed_execute_cu
+            .fetch_add(units, Ordering::Relaxed);
+    }
+
+    pub fn accumulate_committed_execute_time(&self, micro_sec: u64) {
+        self.metrics
+            .stats
+            .committed_execute_time_us
+            .fetch_add(micro_sec, Ordering::Relaxed);
+    }
+
+    pub fn accumulate_committed_adjust_cu(&self, units: u64) {
+        self.metrics
+            .stats
+            .committed_adjust_cu
+            .fetch_add(units, Ordering::Relaxed);
     }
 
     // rollup transaction cost details, eg signature_cost, write_lock_cost, data_bytes_cost and
@@ -508,6 +533,15 @@ struct QosServiceMetricsStats {
 
     /// accumulated actual program execute micro-sec that have been packed into block
     actual_execute_time_us: AtomicU64,
+
+    /// accumulated executtion units for all committed transactions
+    committed_execute_cu: AtomicU64,
+
+    /// accumulated execution time for all committed transactions
+    committed_execute_time_us: AtomicU64,
+
+    /// accumulated adjustment units for committed transactions that might have been under-priced
+    committed_adjust_cu: AtomicU64,
 }
 
 #[derive(Debug, Default)]
@@ -606,6 +640,23 @@ impl QosServiceMetrics {
                 (
                     "actual_execute_time_us",
                     self.stats.actual_execute_time_us.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "committed_execute_cu",
+                    self.stats.committed_execute_cu.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "committed_execute_time_us",
+                    self.stats
+                        .committed_execute_time_us
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "committed_adjust_cu",
+                    self.stats.committed_adjust_cu.swap(0, Ordering::Relaxed),
                     i64
                 ),
             );
@@ -803,8 +854,10 @@ mod tests {
             let commited_status: Vec<CommitTransactionDetails> = qos_cost_results
                 .iter()
                 .map(|tx_cost| CommitTransactionDetails::Committed {
-                    compute_units: tx_cost.as_ref().unwrap().bpf_execution_cost
+                    executed_units: tx_cost.as_ref().unwrap().bpf_execution_cost
                         + execute_units_adjustment,
+                    executed_us: 0,
+                    adjust_units: 0,
                 })
                 .collect();
             let final_txs_cost = total_txs_cost + execute_units_adjustment * transaction_count;
@@ -930,8 +983,10 @@ mod tests {
                         CommitTransactionDetails::NotCommitted
                     } else {
                         CommitTransactionDetails::Committed {
-                            compute_units: tx_cost.as_ref().unwrap().bpf_execution_cost
+                            executed_units: tx_cost.as_ref().unwrap().bpf_execution_cost
                                 + execute_units_adjustment,
+                            executed_us: 0,
+                            adjust_units: 0,
                         }
                     }
                 })

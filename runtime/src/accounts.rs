@@ -1519,6 +1519,7 @@ mod tests {
                 durable_nonce_fee: nonce.map(DurableNonceFee::from),
                 return_data: None,
                 executed_units: 0,
+                executed_us: 0,
                 accounts_data_len_delta: 0,
             },
             programs_modified_by_tx: Box::<LoadedProgramsForTxBatch>::default(),
