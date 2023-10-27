@@ -83,6 +83,8 @@ pub fn get_accounts_db_config(
         exhaustively_verify_refcounts: arg_matches.is_present("accounts_db_verify_refcounts"),
         skip_initial_hash_calc: arg_matches.is_present("accounts_db_skip_initial_hash_calculation"),
         test_partitioned_epoch_rewards,
+        test_skip_rewrites_but_include_in_bank_hash: arg_matches
+            .is_present("accounts_db_test_skip_rewrites"),
         ..AccountsDbConfig::default()
     }
 }

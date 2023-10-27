@@ -812,6 +812,12 @@ impl Validator {
             config.block_verification_method, config.block_production_method
         );
 
+        let (replay_vote_sender, replay_vote_receiver) = unbounded();
+
+        // block min prioritization fee cache should be readable by RPC, and writable by validator
+        // (by both replay stage and banking stage)
+        let prioritization_fee_cache = Arc::new(PrioritizationFeeCache::default());
+
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let entry_notification_sender = entry_notifier_service
             .as_ref()
@@ -926,7 +932,7 @@ impl Validator {
                         &identity_keypair,
                         node.info
                             .tpu(Protocol::UDP)
-                            .expect("Operator must spin up node with valid TPU address")
+                            .map_err(|err| format!("Invalid TPU address: {err:?}"))?
                             .ip(),
                     )),
                     Some((&staked_nodes, &identity_keypair.pubkey())),
@@ -938,10 +944,6 @@ impl Validator {
                 tpu_connection_pool_size,
             )),
         };
-
-        // block min prioritization fee cache should be readable by RPC, and writable by validator
-        // (by both replay stage and banking stage)
-        let prioritization_fee_cache = Arc::new(PrioritizationFeeCache::default());
 
         let rpc_override_health_check =
             Arc::new(AtomicBool::new(config.rpc_config.disable_health_check));
@@ -1181,9 +1183,10 @@ impl Validator {
             node.sockets.tvu_quic,
             node.info
                 .tvu(Protocol::QUIC)
-                .expect("Operator must spin up node with valid QUIC TVU address")
+                .map_err(|err| format!("Invalid QUIC TVU address: {err:?}"))?
                 .ip(),
             turbine_quic_endpoint_sender,
+            bank_forks.clone(),
         )
         .unwrap();
 
@@ -1205,7 +1208,7 @@ impl Validator {
                 node.sockets.serve_repair_quic,
                 node.info
                     .serve_repair(Protocol::QUIC)
-                    .expect("Operator must spin up node with valid QUIC serve-repair address")
+                    .map_err(|err| format!("Invalid QUIC serve-repair address: {err:?}"))?
                     .ip(),
                 repair_quic_endpoint_sender,
                 bank_forks.clone(),
@@ -1228,7 +1231,6 @@ impl Validator {
         };
         let last_vote = tower.last_vote();
 
-        let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,
@@ -1740,7 +1742,8 @@ fn load_blockstore(
         completed_slots_receiver,
         ..
     } = Blockstore::open_with_signal(ledger_path, blockstore_options_from_config(config))
-        .expect("Failed to open ledger database");
+        .map_err(|err| format!("Failed to open Blockstore: {err:?}"))?;
+
     blockstore.shred_timing_point_sender = poh_timing_point_sender;
     // following boot sequence (esp BankForks) could set root. so stash the original value
     // of blockstore root away here as soon as possible.
@@ -2618,7 +2621,7 @@ mod tests {
         );
 
         let (genesis_config, _mint_keypair) = create_genesis_config(1);
-        let bank_forks = RwLock::new(BankForks::new(Bank::new_for_tests(&genesis_config)));
+        let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests(&genesis_config));
         let mut config = ValidatorConfig::default_for_test();
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
@@ -2648,11 +2651,11 @@ mod tests {
         );
 
         // bank=1, wait=0, should pass, bank is past the wait slot
-        let bank_forks = RwLock::new(BankForks::new(Bank::new_from_parent(
+        let bank_forks = BankForks::new_rw_arc(Bank::new_from_parent(
             bank_forks.read().unwrap().root_bank(),
             &Pubkey::default(),
             1,
-        )));
+        ));
         config.wait_for_supermajority = Some(0);
         assert!(!wait_for_supermajority(
             &config,

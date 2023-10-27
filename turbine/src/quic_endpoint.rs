@@ -10,15 +10,21 @@ use {
     rcgen::RcgenError,
     rustls::{Certificate, PrivateKey},
     solana_quic_client::nonblocking::quic_client::SkipServerVerification,
+    solana_runtime::bank_forks::BankForks,
     solana_sdk::{pubkey::Pubkey, signature::Keypair},
     solana_streamer::{
         quic::SkipClientVerification, tls_certificates::new_self_signed_tls_certificate,
     },
     std::{
+        cmp::Reverse,
         collections::{hash_map::Entry, HashMap},
         io::Error as IoError,
         net::{IpAddr, SocketAddr, UdpSocket},
-        sync::Arc,
+        sync::{
+            atomic::{AtomicBool, AtomicU64, Ordering},
+            Arc, RwLock,
+        },
+        time::Duration,
     },
     thiserror::Error,
     tokio::{
@@ -32,6 +38,7 @@ use {
 
 const CLIENT_CHANNEL_BUFFER: usize = 1 << 14;
 const ROUTER_CHANNEL_BUFFER: usize = 64;
+const CONNECTION_CACHE_CAPACITY: usize = 3072;
 const INITIAL_MAXIMUM_TRANSMISSION_UNIT: u16 = 1280;
 const ALPN_TURBINE_PROTOCOL_ID: &[u8] = b"solana-turbine";
 const CONNECT_SERVER_NAME: &str = "solana-turbine";
@@ -40,11 +47,13 @@ const CONNECTION_CLOSE_ERROR_CODE_SHUTDOWN: VarInt = VarInt::from_u32(1);
 const CONNECTION_CLOSE_ERROR_CODE_DROPPED: VarInt = VarInt::from_u32(2);
 const CONNECTION_CLOSE_ERROR_CODE_INVALID_IDENTITY: VarInt = VarInt::from_u32(3);
 const CONNECTION_CLOSE_ERROR_CODE_REPLACED: VarInt = VarInt::from_u32(4);
+const CONNECTION_CLOSE_ERROR_CODE_PRUNED: VarInt = VarInt::from_u32(5);
 
 const CONNECTION_CLOSE_REASON_SHUTDOWN: &[u8] = b"SHUTDOWN";
 const CONNECTION_CLOSE_REASON_DROPPED: &[u8] = b"DROPPED";
 const CONNECTION_CLOSE_REASON_INVALID_IDENTITY: &[u8] = b"INVALID_IDENTITY";
 const CONNECTION_CLOSE_REASON_REPLACED: &[u8] = b"REPLACED";
+const CONNECTION_CLOSE_REASON_PRUNED: &[u8] = b"PRUNED";
 
 pub type AsyncTryJoinHandle = TryJoin<JoinHandle<()>, JoinHandle<()>>;
 
@@ -52,12 +61,12 @@ pub type AsyncTryJoinHandle = TryJoin<JoinHandle<()>, JoinHandle<()>>;
 pub enum Error {
     #[error(transparent)]
     CertificateError(#[from] RcgenError),
+    #[error("Channel Send Error")]
+    ChannelSendError,
     #[error(transparent)]
     ConnectError(#[from] ConnectError),
     #[error(transparent)]
     ConnectionError(#[from] ConnectionError),
-    #[error("Channel Send Error")]
-    ChannelSendError,
     #[error("Invalid Identity: {0:?}")]
     InvalidIdentity(SocketAddr),
     #[error(transparent)]
@@ -68,6 +77,12 @@ pub enum Error {
     TlsError(#[from] rustls::Error),
 }
 
+macro_rules! add_metric {
+    ($metric: expr) => {{
+        $metric.fetch_add(1, Ordering::Relaxed);
+    }};
+}
+
 #[allow(clippy::type_complexity)]
 pub fn new_quic_endpoint(
     runtime: &tokio::runtime::Handle,
@@ -75,6 +90,7 @@ pub fn new_quic_endpoint(
     socket: UdpSocket,
     address: IpAddr,
     sender: Sender<(Pubkey, SocketAddr, Bytes)>,
+    bank_forks: Arc<RwLock<BankForks>>,
 ) -> Result<
     (
         Endpoint,
@@ -98,12 +114,15 @@ pub fn new_quic_endpoint(
         )?
     };
     endpoint.set_default_client_config(client_config);
+    let prune_cache_pending = Arc::<AtomicBool>::default();
     let cache = Arc::<Mutex<HashMap<Pubkey, Connection>>>::default();
     let router = Arc::<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>::default();
     let (client_sender, client_receiver) = tokio::sync::mpsc::channel(CLIENT_CHANNEL_BUFFER);
     let server_task = runtime.spawn(run_server(
         endpoint.clone(),
         sender.clone(),
+        bank_forks.clone(),
+        prune_cache_pending.clone(),
         router.clone(),
         cache.clone(),
     ));
@@ -111,6 +130,8 @@ pub fn new_quic_endpoint(
         endpoint.clone(),
         client_receiver,
         sender,
+        bank_forks,
+        prune_cache_pending,
         router,
         cache,
     ));
@@ -163,34 +184,49 @@ fn new_transport_config() -> TransportConfig {
 async fn run_server(
     endpoint: Endpoint,
     sender: Sender<(Pubkey, SocketAddr, Bytes)>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
     router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
     cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
 ) {
+    let stats = Arc::<TurbineQuicStats>::default();
+    let report_metrics_task =
+        tokio::task::spawn(report_metrics_task("repair_quic_server", stats.clone()));
     while let Some(connecting) = endpoint.accept().await {
-        tokio::task::spawn(handle_connecting_error(
+        tokio::task::spawn(handle_connecting_task(
             endpoint.clone(),
             connecting,
             sender.clone(),
+            bank_forks.clone(),
+            prune_cache_pending.clone(),
             router.clone(),
             cache.clone(),
+            stats.clone(),
         ));
     }
+    report_metrics_task.abort();
 }
 
 async fn run_client(
     endpoint: Endpoint,
     mut receiver: AsyncReceiver<(SocketAddr, Bytes)>,
     sender: Sender<(Pubkey, SocketAddr, Bytes)>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
     router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
     cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
 ) {
+    let stats = Arc::<TurbineQuicStats>::default();
+    let report_metrics_task =
+        tokio::task::spawn(report_metrics_task("repair_quic_client", stats.clone()));
     while let Some((remote_address, bytes)) = receiver.recv().await {
-        let Some(bytes) = try_route_bytes(&remote_address, bytes, &*router.read().await) else {
+        let Some(bytes) = try_route_bytes(&remote_address, bytes, &*router.read().await, &stats)
+        else {
             continue;
         };
         let receiver = {
             let mut router = router.write().await;
-            let Some(bytes) = try_route_bytes(&remote_address, bytes, &router) else {
+            let Some(bytes) = try_route_bytes(&remote_address, bytes, &router, &stats) else {
                 continue;
             };
             let (sender, receiver) = tokio::sync::mpsc::channel(ROUTER_CHANNEL_BUFFER);
@@ -203,26 +239,32 @@ async fn run_client(
             remote_address,
             sender.clone(),
             receiver,
+            bank_forks.clone(),
+            prune_cache_pending.clone(),
             router.clone(),
             cache.clone(),
+            stats.clone(),
         ));
     }
     close_quic_endpoint(&endpoint);
     // Drop sender channels to unblock threads waiting on the receiving end.
     router.write().await.clear();
+    report_metrics_task.abort();
 }
 
 fn try_route_bytes(
     remote_address: &SocketAddr,
     bytes: Bytes,
     router: &HashMap<SocketAddr, AsyncSender<Bytes>>,
+    stats: &TurbineQuicStats,
 ) -> Option<Bytes> {
     match router.get(remote_address) {
         None => Some(bytes),
         Some(sender) => match sender.try_send(bytes) {
             Ok(()) => None,
             Err(TrySendError::Full(_)) => {
-                error!("TrySendError::Full {remote_address}");
+                debug!("TrySendError::Full {remote_address}");
+                add_metric!(stats.router_try_send_error_full);
                 None
             }
             Err(TrySendError::Closed(bytes)) => Some(bytes),
@@ -230,15 +272,30 @@ fn try_route_bytes(
     }
 }
 
-async fn handle_connecting_error(
+async fn handle_connecting_task(
     endpoint: Endpoint,
     connecting: Connecting,
     sender: Sender<(Pubkey, SocketAddr, Bytes)>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
     router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
     cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
+    stats: Arc<TurbineQuicStats>,
 ) {
-    if let Err(err) = handle_connecting(endpoint, connecting, sender, router, cache).await {
-        error!("handle_connecting: {err:?}");
+    if let Err(err) = handle_connecting(
+        endpoint,
+        connecting,
+        sender,
+        bank_forks,
+        prune_cache_pending,
+        router,
+        cache,
+        stats.clone(),
+    )
+    .await
+    {
+        debug!("handle_connecting: {err:?}");
+        record_error(&err, &stats);
     }
 }
 
@@ -246,8 +303,11 @@ async fn handle_connecting(
     endpoint: Endpoint,
     connecting: Connecting,
     sender: Sender<(Pubkey, SocketAddr, Bytes)>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
     router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
     cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
+    stats: Arc<TurbineQuicStats>,
 ) -> Result<(), Error> {
     let connection = connecting.await?;
     let remote_address = connection.remote_address();
@@ -264,13 +324,17 @@ async fn handle_connecting(
         connection,
         sender,
         receiver,
+        bank_forks,
+        prune_cache_pending,
         router,
         cache,
+        stats,
     )
     .await;
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_connection(
     endpoint: Endpoint,
     remote_address: SocketAddr,
@@ -278,10 +342,21 @@ async fn handle_connection(
     connection: Connection,
     sender: Sender<(Pubkey, SocketAddr, Bytes)>,
     receiver: AsyncReceiver<Bytes>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
     router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
     cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
+    stats: Arc<TurbineQuicStats>,
 ) {
-    cache_connection(remote_pubkey, connection.clone(), &cache).await;
+    cache_connection(
+        remote_pubkey,
+        connection.clone(),
+        bank_forks,
+        prune_cache_pending,
+        router.clone(),
+        cache.clone(),
+    )
+    .await;
     let send_datagram_task = tokio::task::spawn(send_datagram_task(connection.clone(), receiver));
     let read_datagram_task = tokio::task::spawn(read_datagram_task(
         endpoint,
@@ -289,15 +364,18 @@ async fn handle_connection(
         remote_pubkey,
         connection.clone(),
         sender,
+        stats.clone(),
     ));
     match futures::future::try_join(send_datagram_task, read_datagram_task).await {
         Err(err) => error!("handle_connection: {remote_pubkey}, {remote_address}, {err:?}"),
         Ok(out) => {
             if let (Err(ref err), _) = out {
-                error!("send_datagram_task: {remote_pubkey}, {remote_address}, {err:?}");
+                debug!("send_datagram_task: {remote_pubkey}, {remote_address}, {err:?}");
+                record_error(err, &stats);
             }
             if let (_, Err(ref err)) = out {
-                error!("read_datagram_task: {remote_pubkey}, {remote_address}, {err:?}");
+                debug!("read_datagram_task: {remote_pubkey}, {remote_address}, {err:?}");
+                record_error(err, &stats);
             }
         }
     }
@@ -315,6 +393,7 @@ async fn read_datagram_task(
     remote_pubkey: Pubkey,
     connection: Connection,
     sender: Sender<(Pubkey, SocketAddr, Bytes)>,
+    stats: Arc<TurbineQuicStats>,
 ) -> Result<(), Error> {
     // Assert that send won't block.
     debug_assert_eq!(sender.capacity(), None);
@@ -330,7 +409,8 @@ async fn read_datagram_task(
                 if let Some(err) = connection.close_reason() {
                     return Err(Error::from(err));
                 }
-                error!("connection.read_datagram: {remote_pubkey}, {remote_address}, {err:?}");
+                debug!("connection.read_datagram: {remote_pubkey}, {remote_address}, {err:?}");
+                record_error(&Error::from(err), &stats);
             }
         };
     }
@@ -351,13 +431,27 @@ async fn make_connection_task(
     remote_address: SocketAddr,
     sender: Sender<(Pubkey, SocketAddr, Bytes)>,
     receiver: AsyncReceiver<Bytes>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
     router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
     cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
+    stats: Arc<TurbineQuicStats>,
 ) {
-    if let Err(err) =
-        make_connection(endpoint, remote_address, sender, receiver, router, cache).await
+    if let Err(err) = make_connection(
+        endpoint,
+        remote_address,
+        sender,
+        receiver,
+        bank_forks,
+        prune_cache_pending,
+        router,
+        cache,
+        stats.clone(),
+    )
+    .await
     {
-        error!("make_connection: {remote_address}, {err:?}");
+        debug!("make_connection: {remote_address}, {err:?}");
+        record_error(&err, &stats);
     }
 }
 
@@ -366,8 +460,11 @@ async fn make_connection(
     remote_address: SocketAddr,
     sender: Sender<(Pubkey, SocketAddr, Bytes)>,
     receiver: AsyncReceiver<Bytes>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
     router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
     cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
+    stats: Arc<TurbineQuicStats>,
 ) -> Result<(), Error> {
     let connection = endpoint
         .connect(remote_address, CONNECT_SERVER_NAME)?
@@ -379,8 +476,11 @@ async fn make_connection(
         connection,
         sender,
         receiver,
+        bank_forks,
+        prune_cache_pending,
         router,
         cache,
+        stats,
     )
     .await;
     Ok(())
@@ -402,15 +502,32 @@ fn get_remote_pubkey(connection: &Connection) -> Result<Pubkey, Error> {
 async fn cache_connection(
     remote_pubkey: Pubkey,
     connection: Connection,
-    cache: &Mutex<HashMap<Pubkey, Connection>>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
+    router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
+    cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
 ) {
-    let Some(old) = cache.lock().await.insert(remote_pubkey, connection) else {
-        return;
+    let (old, should_prune_cache) = {
+        let mut cache = cache.lock().await;
+        (
+            cache.insert(remote_pubkey, connection),
+            cache.len() >= CONNECTION_CACHE_CAPACITY.saturating_mul(2),
+        )
     };
-    old.close(
-        CONNECTION_CLOSE_ERROR_CODE_REPLACED,
-        CONNECTION_CLOSE_REASON_REPLACED,
-    );
+    if let Some(old) = old {
+        old.close(
+            CONNECTION_CLOSE_ERROR_CODE_REPLACED,
+            CONNECTION_CLOSE_REASON_REPLACED,
+        );
+    }
+    if should_prune_cache && !prune_cache_pending.swap(true, Ordering::Relaxed) {
+        tokio::task::spawn(prune_connection_cache(
+            bank_forks,
+            prune_cache_pending,
+            router,
+            cache,
+        ));
+    }
 }
 
 async fn drop_connection(
@@ -429,10 +546,223 @@ async fn drop_connection(
     }
 }
 
+async fn prune_connection_cache(
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
+    router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
+    cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
+) {
+    debug_assert!(prune_cache_pending.load(Ordering::Relaxed));
+    let staked_nodes = {
+        let root_bank = bank_forks.read().unwrap().root_bank();
+        root_bank.staked_nodes()
+    };
+    {
+        let mut cache = cache.lock().await;
+        if cache.len() < CONNECTION_CACHE_CAPACITY.saturating_mul(2) {
+            prune_cache_pending.store(false, Ordering::Relaxed);
+            return;
+        }
+        let mut connections: Vec<_> = cache
+            .drain()
+            .filter(|(_, connection)| connection.close_reason().is_none())
+            .map(|entry @ (pubkey, _)| {
+                let stake = staked_nodes.get(&pubkey).copied().unwrap_or_default();
+                (stake, entry)
+            })
+            .collect();
+        connections
+            .select_nth_unstable_by_key(CONNECTION_CACHE_CAPACITY, |&(stake, _)| Reverse(stake));
+        for (_, (_, connection)) in &connections[CONNECTION_CACHE_CAPACITY..] {
+            connection.close(
+                CONNECTION_CLOSE_ERROR_CODE_PRUNED,
+                CONNECTION_CLOSE_REASON_PRUNED,
+            );
+        }
+        cache.extend(
+            connections
+                .into_iter()
+                .take(CONNECTION_CACHE_CAPACITY)
+                .map(|(_, entry)| entry),
+        );
+        prune_cache_pending.store(false, Ordering::Relaxed);
+    }
+    router.write().await.retain(|_, sender| !sender.is_closed());
+}
+
 impl<T> From<crossbeam_channel::SendError<T>> for Error {
     fn from(_: crossbeam_channel::SendError<T>) -> Self {
         Error::ChannelSendError
     }
+}
+
+#[derive(Default)]
+struct TurbineQuicStats {
+    connect_error_invalid_remote_address: AtomicU64,
+    connect_error_other: AtomicU64,
+    connect_error_too_many_connections: AtomicU64,
+    connection_error_application_closed: AtomicU64,
+    connection_error_connection_closed: AtomicU64,
+    connection_error_locally_closed: AtomicU64,
+    connection_error_reset: AtomicU64,
+    connection_error_timed_out: AtomicU64,
+    connection_error_transport_error: AtomicU64,
+    connection_error_version_mismatch: AtomicU64,
+    invalid_identity: AtomicU64,
+    router_try_send_error_full: AtomicU64,
+    send_datagram_error_connection_lost: AtomicU64,
+    send_datagram_error_too_large: AtomicU64,
+    send_datagram_error_unsupported_by_peer: AtomicU64,
+}
+
+async fn report_metrics_task(name: &'static str, stats: Arc<TurbineQuicStats>) {
+    loop {
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        report_metrics(name, &stats);
+    }
+}
+
+fn record_error(err: &Error, stats: &TurbineQuicStats) {
+    match err {
+        Error::CertificateError(_) => (),
+        Error::ChannelSendError => (),
+        Error::ConnectError(ConnectError::EndpointStopping) => {
+            add_metric!(stats.connect_error_other)
+        }
+        Error::ConnectError(ConnectError::TooManyConnections) => {
+            add_metric!(stats.connect_error_too_many_connections)
+        }
+        Error::ConnectError(ConnectError::InvalidDnsName(_)) => {
+            add_metric!(stats.connect_error_other)
+        }
+        Error::ConnectError(ConnectError::InvalidRemoteAddress(_)) => {
+            add_metric!(stats.connect_error_invalid_remote_address)
+        }
+        Error::ConnectError(ConnectError::NoDefaultClientConfig) => {
+            add_metric!(stats.connect_error_other)
+        }
+        Error::ConnectError(ConnectError::UnsupportedVersion) => {
+            add_metric!(stats.connect_error_other)
+        }
+        Error::ConnectionError(ConnectionError::VersionMismatch) => {
+            add_metric!(stats.connection_error_version_mismatch)
+        }
+        Error::ConnectionError(ConnectionError::TransportError(_)) => {
+            add_metric!(stats.connection_error_transport_error)
+        }
+        Error::ConnectionError(ConnectionError::ConnectionClosed(_)) => {
+            add_metric!(stats.connection_error_connection_closed)
+        }
+        Error::ConnectionError(ConnectionError::ApplicationClosed(_)) => {
+            add_metric!(stats.connection_error_application_closed)
+        }
+        Error::ConnectionError(ConnectionError::Reset) => add_metric!(stats.connection_error_reset),
+        Error::ConnectionError(ConnectionError::TimedOut) => {
+            add_metric!(stats.connection_error_timed_out)
+        }
+        Error::ConnectionError(ConnectionError::LocallyClosed) => {
+            add_metric!(stats.connection_error_locally_closed)
+        }
+        Error::InvalidIdentity(_) => add_metric!(stats.invalid_identity),
+        Error::IoError(_) => (),
+        Error::SendDatagramError(SendDatagramError::UnsupportedByPeer) => {
+            add_metric!(stats.send_datagram_error_unsupported_by_peer)
+        }
+        Error::SendDatagramError(SendDatagramError::Disabled) => (),
+        Error::SendDatagramError(SendDatagramError::TooLarge) => {
+            add_metric!(stats.send_datagram_error_too_large)
+        }
+        Error::SendDatagramError(SendDatagramError::ConnectionLost(_)) => {
+            add_metric!(stats.send_datagram_error_connection_lost)
+        }
+        Error::TlsError(_) => (),
+    }
+}
+
+fn report_metrics(name: &'static str, stats: &TurbineQuicStats) {
+    macro_rules! reset_metric {
+        ($metric: expr) => {
+            $metric.swap(0, Ordering::Relaxed)
+        };
+    }
+    datapoint_info!(
+        name,
+        (
+            "connect_error_invalid_remote_address",
+            reset_metric!(stats.connect_error_invalid_remote_address),
+            i64
+        ),
+        (
+            "connect_error_other",
+            reset_metric!(stats.connect_error_other),
+            i64
+        ),
+        (
+            "connect_error_too_many_connections",
+            reset_metric!(stats.connect_error_too_many_connections),
+            i64
+        ),
+        (
+            "connection_error_application_closed",
+            reset_metric!(stats.connection_error_application_closed),
+            i64
+        ),
+        (
+            "connection_error_connection_closed",
+            reset_metric!(stats.connection_error_connection_closed),
+            i64
+        ),
+        (
+            "connection_error_locally_closed",
+            reset_metric!(stats.connection_error_locally_closed),
+            i64
+        ),
+        (
+            "connection_error_reset",
+            reset_metric!(stats.connection_error_reset),
+            i64
+        ),
+        (
+            "connection_error_timed_out",
+            reset_metric!(stats.connection_error_timed_out),
+            i64
+        ),
+        (
+            "connection_error_transport_error",
+            reset_metric!(stats.connection_error_transport_error),
+            i64
+        ),
+        (
+            "connection_error_version_mismatch",
+            reset_metric!(stats.connection_error_version_mismatch),
+            i64
+        ),
+        (
+            "invalid_identity",
+            reset_metric!(stats.invalid_identity),
+            i64
+        ),
+        (
+            "router_try_send_error_full",
+            reset_metric!(stats.router_try_send_error_full),
+            i64
+        ),
+        (
+            "send_datagram_error_connection_lost",
+            reset_metric!(stats.send_datagram_error_connection_lost),
+            i64
+        ),
+        (
+            "send_datagram_error_too_large",
+            reset_metric!(stats.send_datagram_error_too_large),
+            i64
+        ),
+        (
+            "send_datagram_error_unsupported_by_peer",
+            reset_metric!(stats.send_datagram_error_unsupported_by_peer),
+            i64
+        ),
+    );
 }
 
 #[cfg(test)]
@@ -440,6 +770,8 @@ mod tests {
     use {
         super::*,
         itertools::{izip, multiunzip},
+        solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        solana_runtime::bank::Bank,
         solana_sdk::signature::Signer,
         std::{iter::repeat_with, net::Ipv4Addr, time::Duration},
     };
@@ -467,6 +799,12 @@ mod tests {
             repeat_with(crossbeam_channel::unbounded::<(Pubkey, SocketAddr, Bytes)>)
                 .take(NUM_ENDPOINTS)
                 .unzip();
+        let bank_forks = {
+            let GenesisConfigInfo { genesis_config, .. } =
+                create_genesis_config(/*mint_lamports:*/ 100_000);
+            let bank = Bank::new_for_tests(&genesis_config);
+            BankForks::new_rw_arc(bank)
+        };
         let (endpoints, senders, tasks): (Vec<_>, Vec<_>, Vec<_>) =
             multiunzip(keypairs.iter().zip(sockets).zip(senders).map(
                 |((keypair, socket), sender)| {
@@ -476,6 +814,7 @@ mod tests {
                         socket,
                         IpAddr::V4(Ipv4Addr::LOCALHOST),
                         sender,
+                        bank_forks.clone(),
                     )
                     .unwrap()
                 },

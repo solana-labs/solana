@@ -12,6 +12,7 @@ edition = { workspace = true }
 [dependencies]
 clap = { workspace = true }
 flate2 = { workspace = true }
+hex = { workspace = true }
 hyper = { workspace = true, features = ["full"] }
 log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

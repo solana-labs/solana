@@ -846,7 +846,7 @@ impl ProgramTest {
         };
         let slot = bank.slot();
         let last_blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let block_commitment_cache = Arc::new(RwLock::new(
             BlockCommitmentCache::new_for_tests_with_slots(slot, slot),
         ));
@@ -888,7 +888,7 @@ impl ProgramTest {
                     .read()
                     .unwrap()
                     .working_bank()
-                    .register_recent_blockhash(&Hash::new_unique());
+                    .register_unique_recent_blockhash_for_test();
             }
         });
 
@@ -1040,7 +1040,7 @@ impl ProgramTestContext {
                         .read()
                         .unwrap()
                         .working_bank()
-                        .register_recent_blockhash(&Hash::new_unique());
+                        .register_unique_recent_blockhash_for_test();
                 }
             }),
         );
@@ -1129,13 +1129,15 @@ impl ProgramTestContext {
             bank.freeze();
             bank
         } else {
-            bank_forks.insert(Bank::warp_from_parent(
-                bank,
-                &Pubkey::default(),
-                pre_warp_slot,
-                // some warping tests cannot use the append vecs because of the sequence of adding roots and flushing
-                solana_accounts_db::accounts_db::CalcAccountsHashDataSource::IndexForTests,
-            ))
+            bank_forks
+                .insert(Bank::warp_from_parent(
+                    bank,
+                    &Pubkey::default(),
+                    pre_warp_slot,
+                    // some warping tests cannot use the append vecs because of the sequence of adding roots and flushing
+                    solana_accounts_db::accounts_db::CalcAccountsHashDataSource::IndexForTests,
+                ))
+                .clone_without_scheduler()
         };
 
         let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
