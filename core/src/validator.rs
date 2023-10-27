@@ -168,6 +168,7 @@ impl BlockVerificationMethod {
 pub enum BlockProductionMethod {
     #[default]
     ThreadLocalMultiIterator,
+    CentralScheduler,
 }
 
 impl BlockProductionMethod {
