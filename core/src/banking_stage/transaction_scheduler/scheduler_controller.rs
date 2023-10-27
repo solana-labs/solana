@@ -36,6 +36,8 @@ pub(crate) struct SchedulerController {
     container: TransactionStateContainer,
     /// State for scheduling and communicating with worker threads.
     scheduler: PrioGraphScheduler,
+    /// Metrics tracking counts on transactions in different states.
+    count_metrics: SchedulerCountMetrics,
 }
 
 impl SchedulerController {
@@ -52,6 +54,7 @@ impl SchedulerController {
             transaction_id_generator: TransactionIdGenerator::default(),
             container: TransactionStateContainer::with_capacity(TOTAL_BUFFERED_PACKETS),
             scheduler,
+            count_metrics: SchedulerCountMetrics::default(),
         }
     }
 
@@ -70,7 +73,7 @@ impl SchedulerController {
             let decision = self.decision_maker.make_consume_or_forward_decision();
 
             self.process_transactions(&decision)?;
-            self.scheduler.receive_completed(&mut self.container)?;
+            self.receive_completed()?;
             if !self.receive_packets(&decision) {
                 break;
             }
@@ -86,7 +89,8 @@ impl SchedulerController {
     ) -> Result<(), SchedulerError> {
         match decision {
             BufferedPacketsDecision::Consume(_bank_start) => {
-                let _num_scheduled = self.scheduler.schedule(&mut self.container)?;
+                let num_scheduled = self.scheduler.schedule(&mut self.container)?;
+                self.count_metrics.num_scheduled += num_scheduled;
             }
             BufferedPacketsDecision::Forward => {
                 self.clear_container();
@@ -102,7 +106,17 @@ impl SchedulerController {
     fn clear_container(&mut self) {
         while let Some(id) = self.container.pop() {
             self.container.remove_by_id(&id.id);
+            self.count_metrics.num_dropped_on_clear += 1;
         }
+    }
+
+    /// Receives completed transactions from the workers and updates metrics.
+    fn receive_completed(&mut self) -> Result<(), SchedulerError> {
+        let (num_transactions, num_retryable) =
+            self.scheduler.receive_completed(&mut self.container)?;
+        self.count_metrics.num_finished += num_transactions;
+        self.count_metrics.num_retryable += num_retryable;
+        Ok(())
     }
 
     /// Returns whether the packet receiver is still connected.
@@ -129,13 +143,18 @@ impl SchedulerController {
             .packet_receiver
             .receive_packets(recv_timeout, remaining_queue_capacity);
 
-        match (received_packet_results, should_buffer) {
-            (Ok(receive_packet_results), true) => {
-                self.buffer_packets(receive_packet_results.deserialized_packets)
+        match received_packet_results {
+            Ok(receive_packet_results) => {
+                let num_received_packets = receive_packet_results.deserialized_packets.len();
+                self.count_metrics.num_received += num_received_packets;
+                if should_buffer {
+                    self.buffer_packets(receive_packet_results.deserialized_packets)
+                } else {
+                    self.count_metrics.num_dropped_on_receive += num_received_packets;
+                }
             }
-            (Ok(receive_packet_results), false) => drop(receive_packet_results),
-            (Err(RecvTimeoutError::Timeout), _) => {}
-            (Err(RecvTimeoutError::Disconnected), _) => return false,
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => return false,
         }
 
         true
@@ -151,6 +170,7 @@ impl SchedulerController {
             let Some(transaction) =
                 packet.build_sanitized_transaction(feature_set, vote_only, bank.as_ref())
             else {
+                self.count_metrics.num_dropped_on_sanitization += 1;
                 continue;
             };
 
@@ -160,12 +180,45 @@ impl SchedulerController {
                 max_age_slot: last_slot_in_epoch,
             };
             let transaction_priority_details = packet.priority_details();
-            self.container.insert_new_transaction(
+            if self.container.insert_new_transaction(
                 transaction_id,
                 transaction_ttl,
                 transaction_priority_details,
-            );
+            ) {
+                self.count_metrics.num_dropped_on_capacity += 1;
+            }
+            self.count_metrics.num_buffered += 1;
         }
+    }
+}
+
+#[derive(Default)]
+struct SchedulerCountMetrics {
+    /// Number of packets received.
+    num_received: usize,
+    /// Number of packets buffered.
+    num_buffered: usize,
+
+    /// Number of transactions scheduled.
+    num_scheduled: usize,
+    /// Number of completed transactions received from workers.
+    num_finished: usize,
+    /// Number of transactions that were retryable.
+    num_retryable: usize,
+
+    /// Number of transactions that were immediately dropped on receive.
+    num_dropped_on_receive: usize,
+    /// Number of transactions that were dropped due to sanitization failure.
+    num_dropped_on_sanitization: usize,
+    /// Number of transactions that were dropped due to clearing.
+    num_dropped_on_clear: usize,
+    /// Number of transactions that were dropped due to exceeded capacity.
+    num_dropped_on_capacity: usize,
+}
+
+impl SchedulerCountMetrics {
+    pub fn report(&self) {
+        todo!()
     }
 }
 
