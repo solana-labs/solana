@@ -4013,7 +4013,7 @@ fn test_cpi_account_ownership_writability() {
                 TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLEE,
                 TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLER,
             ] {
-                bank.register_recent_blockhash(&Hash::new_unique());
+                bank.register_unique_recent_blockhash_for_test();
                 let account = AccountSharedData::new(42, account_size, &invoke_program_id);
                 bank.store_account(&account_keypair.pubkey(), &account);
 
