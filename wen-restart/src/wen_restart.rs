@@ -325,7 +325,7 @@ mod tests {
             .unwrap();
         let mut rng = rand::thread_rng();
         let mut expected_messages = HashMap::new();
-        // Skip the first 2 validators, because 0 is myself, we only need 8 more to reach 80%.
+        // Skip the first 2 validators, because 0 is myself, we only need 8 more to reach > 80%.
         for keypairs in validator_voting_keypairs.iter().skip(2) {
             let node_pubkey = keypairs.node_keypair.pubkey();
             let node = LegacyContactInfo::new_rand(&mut rng, Some(node_pubkey));
