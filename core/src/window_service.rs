@@ -148,6 +148,7 @@ fn run_check_duplicate(
         let (shred1, shred2) = match shred {
             PossibleDuplicateShred::LastIndexConflict(shred, conflict) => (shred, conflict),
             PossibleDuplicateShred::ErasureConflict(shred, conflict) => (shred, conflict),
+            PossibleDuplicateShred::MerkleRootConflict(shred, conflict) => (shred, conflict),
             PossibleDuplicateShred::Exists(shred) => {
                 // Unlike the other cases we have to wait until here to decide to handle the duplicate and store
                 // in blockstore. This is because the duplicate could have been part of the same insert batch,

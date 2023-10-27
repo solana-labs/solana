@@ -287,6 +287,10 @@ impl ErasureSetId {
     pub(crate) fn store_key(&self) -> (Slot, /*fec_set_index:*/ u64) {
         (self.0, u64::from(self.1))
     }
+
+    pub(crate) fn key(&self) -> (Slot, /*fec_set_index:*/ u32) {
+        (self.0, self.1)
+    }
 }
 
 macro_rules! dispatch {
@@ -336,6 +340,8 @@ impl Shred {
     dispatch!(pub fn into_payload(self) -> Vec<u8>);
     dispatch!(pub fn payload(&self) -> &Vec<u8>);
     dispatch!(pub fn sanitize(&self) -> Result<(), Error>);
+
+    dispatch!(pub fn merkle_root(&self) -> Option<Hash>);
 
     // Only for tests.
     dispatch!(pub fn set_index(&mut self, index: u32));
