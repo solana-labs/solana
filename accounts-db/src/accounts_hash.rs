@@ -332,13 +332,14 @@ const _: () = assert!(
     "CalculateHashIntermediate cannot have any padding"
 );
 
-#[derive(Default, Debug, PartialEq, Eq)]
-pub struct CumulativeOffset {
-    pub index: Vec<usize>,
-    pub start_offset: usize,
+#[derive(Debug, PartialEq, Eq)]
+struct CumulativeOffset {
+    /// Since the source data is at most 2D, two indexes are enough.
+    index: [usize; 2],
+    start_offset: usize,
 }
 
-pub trait ExtractSliceFromRawData<'b, T: 'b> {
+trait ExtractSliceFromRawData<'b, T: 'b> {
     fn extract<'a>(&'b self, offset: &'a CumulativeOffset, start: usize) -> &'b [T];
 }
 
@@ -416,7 +417,7 @@ impl CumulativeOffsets {
             .filter_map(|(i, len)| {
                 if len > 0 {
                     let result = CumulativeOffset {
-                        index: vec![i],
+                        index: [i, i],
                         start_offset: total_count,
                     };
                     total_count += len;
@@ -1373,7 +1374,7 @@ mod tests {
                             cumulative_offsets = Vec::with_capacity(raw.len() * v_outer.len());
                         }
                         cumulative_offsets.push(CumulativeOffset {
-                            index: vec![i, j],
+                            index: [i, j],
                             start_offset: total_count,
                         });
                         total_count += len;
@@ -1516,18 +1517,18 @@ mod tests {
             let len = combined.len();
             assert_eq!(cumulative.total_count(), len);
             (0..combined.len()).for_each(|start| {
-                let mut retreived = Vec::default();
+                let mut retrieved = Vec::default();
                 let mut cumulative_start = start;
                 // read all data
-                while retreived.len() < (len - start) {
+                while retrieved.len() < (len - start) {
                     let this_one = cumulative.get_slice(cumulative_start);
-                    retreived.extend(this_one.iter());
+                    retrieved.extend(this_one.iter());
                     cumulative_start += this_one.len();
                     assert_ne!(0, this_one.len());
                 }
                 assert_eq!(
                     &combined[start..],
-                    &retreived[..],
+                    &retrieved[..],
                     "permutation: {permutation}"
                 );
             });
@@ -2126,7 +2127,7 @@ mod tests {
     fn test_accountsdb_cumulative_find() {
         let input = CumulativeOffsets {
             cumulative_offsets: vec![CumulativeOffset {
-                index: vec![0],
+                index: [0; 2],
                 start_offset: 0,
             }],
             total_count: 0,
@@ -2136,11 +2137,11 @@ mod tests {
         let input = CumulativeOffsets {
             cumulative_offsets: vec![
                 CumulativeOffset {
-                    index: vec![0],
+                    index: [0; 2],
                     start_offset: 0,
                 },
                 CumulativeOffset {
-                    index: vec![1],
+                    index: [1; 2],
                     start_offset: 2,
                 },
             ],

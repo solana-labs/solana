@@ -926,7 +926,7 @@ impl Validator {
                         &identity_keypair,
                         node.info
                             .tpu(Protocol::UDP)
-                            .expect("Operator must spin up node with valid TPU address")
+                            .map_err(|err| format!("Invalid TPU address: {err:?}"))?
                             .ip(),
                     )),
                     Some((&staked_nodes, &identity_keypair.pubkey())),
@@ -1181,7 +1181,7 @@ impl Validator {
             node.sockets.tvu_quic,
             node.info
                 .tvu(Protocol::QUIC)
-                .expect("Operator must spin up node with valid QUIC TVU address")
+                .map_err(|err| format!("Invalid QUIC TVU address: {err:?}"))?
                 .ip(),
             turbine_quic_endpoint_sender,
             bank_forks.clone(),
@@ -1206,7 +1206,7 @@ impl Validator {
                 node.sockets.serve_repair_quic,
                 node.info
                     .serve_repair(Protocol::QUIC)
-                    .expect("Operator must spin up node with valid QUIC serve-repair address")
+                    .map_err(|err| format!("Invalid QUIC serve-repair address: {err:?}"))?
                     .ip(),
                 repair_quic_endpoint_sender,
                 bank_forks.clone(),
@@ -1741,7 +1741,8 @@ fn load_blockstore(
         completed_slots_receiver,
         ..
     } = Blockstore::open_with_signal(ledger_path, blockstore_options_from_config(config))
-        .expect("Failed to open ledger database");
+        .map_err(|err| format!("Failed to open Blockstore: {err:?}"))?;
+
     blockstore.shred_timing_point_sender = poh_timing_point_sender;
     // following boot sequence (esp BankForks) could set root. so stash the original value
     // of blockstore root away here as soon as possible.

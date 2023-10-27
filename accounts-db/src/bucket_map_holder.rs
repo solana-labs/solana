@@ -22,6 +22,8 @@ use {
     },
 };
 pub type Age = u8;
+pub type AtomicAge = AtomicU8;
+const _: () = assert!(std::mem::size_of::<Age>() == std::mem::size_of::<AtomicAge>());
 
 const AGE_MS: u64 = DEFAULT_MS_PER_SLOT; // match one age per slot time
 
@@ -37,12 +39,12 @@ pub struct BucketMapHolder<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>>
     /// Instead of accessing the single age and doing math each time, each value is incremented each time the age occurs, which is ~400ms.
     /// Callers can ask for the precomputed value they already want.
     /// rolling 'current' age
-    pub age: AtomicU8,
+    pub age: AtomicAge,
     /// rolling age that is 'ages_to_stay_in_cache' + 'age'
-    pub future_age_to_flush: AtomicU8,
+    pub future_age_to_flush: AtomicAge,
     /// rolling age that is effectively 'age' - 1
     /// these items are expected to be flushed from the accounts write cache or otherwise modified before this age occurs
-    pub future_age_to_flush_cached: AtomicU8,
+    pub future_age_to_flush_cached: AtomicAge,
 
     pub stats: BucketMapHolderStats,
 
@@ -255,11 +257,11 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> BucketMapHolder<T, U>
             ages_to_stay_in_cache,
             count_buckets_flushed: AtomicUsize::default(),
             // age = 0
-            age: AtomicU8::default(),
+            age: AtomicAge::default(),
             // future age = age (=0) + ages_to_stay_in_cache
-            future_age_to_flush: AtomicU8::new(ages_to_stay_in_cache),
+            future_age_to_flush: AtomicAge::new(ages_to_stay_in_cache),
             // effectively age (0) - 1. So, the oldest possible age from 'now'
-            future_age_to_flush_cached: AtomicU8::new(0_u8.wrapping_sub(1)),
+            future_age_to_flush_cached: AtomicAge::new(Age::MAX),
             stats: BucketMapHolderStats::new(bins),
             wait_dirty_or_aged: Arc::default(),
             next_bucket_to_flush: AtomicUsize::new(0),
@@ -442,7 +444,7 @@ pub mod tests {
         let test = BucketMapHolder::<u64, u64>::new(bins, &Some(AccountsIndexConfig::default()), 1);
         assert_eq!(0, test.current_age());
         assert_eq!(test.ages_to_stay_in_cache, test.future_age_to_flush(false));
-        assert_eq!(u8::MAX, test.future_age_to_flush(true));
+        assert_eq!(Age::MAX, test.future_age_to_flush(true));
         (0..bins).for_each(|_| {
             test.bucket_flushed_at_current_age(false);
         });

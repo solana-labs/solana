@@ -9,8 +9,13 @@ use {
     },
     log::*,
     solana_measure::measure::Measure,
-    solana_program_runtime::loaded_programs::{BlockRelation, ForkGraph, WorkingSlot},
-    solana_sdk::{clock::Slot, feature_set, hash::Hash, timing},
+    solana_program_runtime::loaded_programs::{BlockRelation, ForkGraph},
+    solana_sdk::{
+        clock::{Epoch, Slot},
+        feature_set,
+        hash::Hash,
+        timing,
+    },
     std::{
         collections::{hash_map::Entry, HashMap, HashSet},
         ops::Index,
@@ -680,9 +685,11 @@ impl ForkGraph for BankForks {
                 (a == b)
                     .then_some(BlockRelation::Equal)
                     .or_else(|| {
-                        self.banks
-                            .get(&b)
-                            .and_then(|bank| bank.is_ancestor(a).then_some(BlockRelation::Ancestor))
+                        self.banks.get(&b).and_then(|bank| {
+                            bank.ancestors
+                                .contains_key(&a)
+                                .then_some(BlockRelation::Ancestor)
+                        })
                     })
                     .or_else(|| {
                         self.descendants.get(&b).and_then(|slots| {
@@ -692,6 +699,10 @@ impl ForkGraph for BankForks {
                     .unwrap_or(BlockRelation::Unrelated)
             })
             .unwrap_or(BlockRelation::Unknown)
+    }
+
+    fn slot_epoch(&self, slot: Slot) -> Option<Epoch> {
+        self.banks.get(&slot).map(|bank| bank.epoch())
     }
 }
 

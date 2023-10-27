@@ -7,7 +7,7 @@ use {
     },
 };
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TransactionPriorityDetails {
     pub priority: u64,
     pub compute_unit_limit: u64,

@@ -221,12 +221,13 @@ fn run_bank_forks_snapshot_n<F>(
         accounts_package_sender,
     };
     for slot in 1..=last_slot {
-        let mut bank_forks_w = bank_forks.write().unwrap();
-        let mut bank =
-            Bank::new_from_parent(bank_forks_w[slot - 1].clone(), &Pubkey::default(), slot);
+        let mut bank = Bank::new_from_parent(
+            bank_forks.read().unwrap().get(slot - 1).unwrap().clone(),
+            &Pubkey::default(),
+            slot,
+        );
         f(&mut bank, mint_keypair);
-        let bank = bank_forks_w.insert(bank);
-        drop(bank_forks_w);
+        let bank = bank_forks.write().unwrap().insert(bank);
         // Set root to make sure we don't end up with too many account storage entries
         // and to allow snapshotting of bank and the purging logic on status_cache to
         // kick in
@@ -352,7 +353,7 @@ fn test_concurrent_snapshot_packaging(
         DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
     );
 
-    let mut bank_forks = snapshot_test_config.bank_forks.write().unwrap();
+    let bank_forks = snapshot_test_config.bank_forks.clone();
     let snapshot_config = &snapshot_test_config.snapshot_config;
     let bank_snapshots_dir = &snapshot_config.bank_snapshots_dir;
     let full_snapshot_archives_dir = &snapshot_config.full_snapshot_archives_dir;
@@ -361,7 +362,7 @@ fn test_concurrent_snapshot_packaging(
     let genesis_config = &snapshot_test_config.genesis_config_info.genesis_config;
 
     // Take snapshot of zeroth bank
-    let bank0 = bank_forks.get(0).unwrap();
+    let bank0 = bank_forks.read().unwrap().get(0).unwrap();
     let storages = bank0.get_snapshot_storages(None);
     let slot_deltas = bank0.status_cache.read().unwrap().root_slot_deltas();
     snapshot_bank_utils::add_bank_snapshot(
@@ -394,7 +395,7 @@ fn test_concurrent_snapshot_packaging(
     for i in 0..MAX_BANK_SNAPSHOTS_TO_RETAIN + 2 {
         let parent_slot = i as Slot;
         let bank = Bank::new_from_parent(
-            bank_forks[parent_slot].clone(),
+            bank_forks.read().unwrap().get(parent_slot).unwrap().clone(),
             &Pubkey::default(),
             parent_slot + 1,
         );
@@ -438,10 +439,14 @@ fn test_concurrent_snapshot_packaging(
         );
         accounts_package_sender.send(accounts_package).unwrap();
 
-        bank_forks.insert(bank);
+        bank_forks.write().unwrap().insert(bank);
         if slot == saved_slot {
             // Find the relevant snapshot storages
-            let snapshot_storage_files: HashSet<_> = bank_forks[slot]
+            let snapshot_storage_files: HashSet<_> = bank_forks
+                .read()
+                .unwrap()
+                .get(slot)
+                .unwrap()
                 .get_snapshot_storages(None)
                 .into_iter()
                 .map(|s| s.get_path())
