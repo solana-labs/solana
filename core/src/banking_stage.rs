@@ -26,7 +26,7 @@ use {
     solana_ledger::blockstore_processor::TransactionStatusSender,
     solana_measure::{measure, measure_us},
     solana_perf::{data_budget::DataBudget, packet::PACKETS_PER_BATCH},
-    solana_poh::poh_recorder::PohRecorder,
+    solana_poh::poh_recorder::{PohRecorder, TransactionRecorder},
     solana_runtime::{bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache},
     solana_sdk::timing::AtomicInterval,
     solana_vote::vote_sender_types::ReplayVoteSender,
@@ -405,6 +405,15 @@ impl BankingStage {
             TOTAL_BUFFERED_PACKETS / ((num_threads - NUM_VOTE_PROCESSING_THREADS) as usize);
         // Keeps track of extraneous vote transactions for the vote threads
         let latest_unprocessed_votes = Arc::new(LatestUnprocessedVotes::new());
+
+        let decision_maker = DecisionMaker::new(cluster_info.id(), poh_recorder.clone());
+        let committer = Committer::new(
+            transaction_status_sender.clone(),
+            replay_vote_sender.clone(),
+            prioritization_fee_cache.clone(),
+        );
+        let transaction_recorder = poh_recorder.read().unwrap().new_recorder();
+
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
             .map(|id| {
@@ -432,16 +441,6 @@ impl BankingStage {
                     ),
                 };
 
-                let mut packet_receiver =
-                    PacketReceiver::new(id, packet_receiver, bank_forks.clone());
-                let poh_recorder = poh_recorder.clone();
-
-                let committer = Committer::new(
-                    transaction_status_sender.clone(),
-                    replay_vote_sender.clone(),
-                    prioritization_fee_cache.clone(),
-                );
-                let decision_maker = DecisionMaker::new(cluster_info.id(), poh_recorder.clone());
                 let forwarder = Forwarder::new(
                     poh_recorder.clone(),
                     bank_forks.clone(),
@@ -449,29 +448,55 @@ impl BankingStage {
                     connection_cache.clone(),
                     data_budget.clone(),
                 );
-                let consumer = Consumer::new(
-                    committer,
-                    poh_recorder.read().unwrap().new_recorder(),
-                    QosService::new(id),
-                    log_messages_bytes_limit,
-                );
 
-                Builder::new()
-                    .name(format!("solBanknStgTx{id:02}"))
-                    .spawn(move || {
-                        Self::process_loop(
-                            &mut packet_receiver,
-                            &decision_maker,
-                            &forwarder,
-                            &consumer,
-                            id,
-                            unprocessed_transaction_storage,
-                        );
-                    })
-                    .unwrap()
+                Self::spawn_thread_local_multi_iterator_thread(
+                    id,
+                    packet_receiver,
+                    bank_forks.clone(),
+                    decision_maker.clone(),
+                    committer.clone(),
+                    transaction_recorder.clone(),
+                    log_messages_bytes_limit,
+                    forwarder,
+                    unprocessed_transaction_storage,
+                )
             })
             .collect();
         Self { bank_thread_hdls }
+    }
+
+    fn spawn_thread_local_multi_iterator_thread(
+        id: u32,
+        packet_receiver: BankingPacketReceiver,
+        bank_forks: Arc<RwLock<BankForks>>,
+        decision_maker: DecisionMaker,
+        committer: Committer,
+        transaction_recorder: TransactionRecorder,
+        log_messages_bytes_limit: Option<usize>,
+        forwarder: Forwarder,
+        unprocessed_transaction_storage: UnprocessedTransactionStorage,
+    ) -> JoinHandle<()> {
+        let mut packet_receiver = PacketReceiver::new(id, packet_receiver, bank_forks);
+        let consumer = Consumer::new(
+            committer,
+            transaction_recorder,
+            QosService::new(id),
+            log_messages_bytes_limit,
+        );
+
+        Builder::new()
+            .name(format!("solBanknStgTx{id:02}"))
+            .spawn(move || {
+                Self::process_loop(
+                    &mut packet_receiver,
+                    &decision_maker,
+                    &forwarder,
+                    &consumer,
+                    id,
+                    unprocessed_transaction_storage,
+                )
+            })
+            .unwrap()
     }
 
     #[allow(clippy::too_many_arguments)]
