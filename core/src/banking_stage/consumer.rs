@@ -1275,7 +1275,10 @@ mod tests {
 
             let expected_block_cost = if !apply_cost_tracker_during_replay_enabled {
                 let actual_bpf_execution_cost = match commit_transactions_result.first().unwrap() {
-                    CommitTransactionDetails::Committed { compute_units } => *compute_units,
+                    CommitTransactionDetails::Committed {
+                        executed_units,
+                        executed_us: _,
+                    } => *executed_units,
                     CommitTransactionDetails::NotCommitted => {
                         unreachable!()
                     }

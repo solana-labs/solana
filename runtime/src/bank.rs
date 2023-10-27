@@ -5015,6 +5015,7 @@ impl Bank {
                 durable_nonce_fee,
                 return_data,
                 executed_units,
+                executed_us: timings.execute_accessories.process_instructions.total_us,
                 accounts_data_len_delta,
             },
             programs_modified_by_tx: Box::new(programs_modified_by_tx),

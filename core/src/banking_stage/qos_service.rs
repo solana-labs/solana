@@ -192,13 +192,40 @@ impl QosService {
                 // Only transactions that the qos service included have to be
                 // checked for update
                 if let Ok(tx_cost) = tx_cost {
-                    if let CommitTransactionDetails::Committed { compute_units } =
-                        transaction_committed_details
+                    if let CommitTransactionDetails::Committed {
+                        executed_units,
+                        executed_us,
+                    } = transaction_committed_details
                     {
-                        cost_tracker.update_execution_cost(tx_cost, *compute_units)
+                        let compute_units = Self::adjust_compute_units_for_potential_underpricing(
+                            *executed_units,
+                            *executed_us,
+                        );
+                        cost_tracker.update_execution_cost(tx_cost, compute_units)
                     }
                 }
             });
+    }
+
+    // If transaction's actual CU/us ratio is below cluster average COMPUTE_UNIT_TO_US_RATIO,
+    // it is likely has been under priced. To prevent extending replay time significantly,
+    // we can pad additional CUs to transaction's actual CUs during packing to compensate
+    // additional executing time it needs.
+    // adjustment is u64 for now, meaning only add more CUs when transactions are under priced,
+    // but not to reduce CU if transactions are over priced.
+    fn adjust_compute_units_for_potential_underpricing(
+        executed_units: u64,
+        executed_us: u64,
+    ) -> u64 {
+        // "actual executed units" is consistent cross cluster, but "adjustment" are only based
+        // on current leader node. Add a 50% taper to reduce local variance.
+        const TAPER: u64 = 2;
+        let adjustment = solana_cost_model::block_cost_limits::COMPUTE_UNIT_TO_US_RATIO
+            .saturating_mul(executed_us)
+            .saturating_sub(executed_units)
+            .saturating_div(TAPER);
+
+        executed_units + adjustment
     }
 
     fn remove_transaction_costs<'a>(
@@ -735,8 +762,9 @@ mod tests {
             let commited_status: Vec<CommitTransactionDetails> = qos_cost_results
                 .iter()
                 .map(|tx_cost| CommitTransactionDetails::Committed {
-                    compute_units: tx_cost.as_ref().unwrap().bpf_execution_cost()
+                    executed_units: tx_cost.as_ref().unwrap().bpf_execution_cost()
                         + execute_units_adjustment,
+                    executed_us: 0,
                 })
                 .collect();
             let final_txs_cost = total_txs_cost + execute_units_adjustment * transaction_count;
@@ -862,8 +890,9 @@ mod tests {
                         CommitTransactionDetails::NotCommitted
                     } else {
                         CommitTransactionDetails::Committed {
-                            compute_units: tx_cost.as_ref().unwrap().bpf_execution_cost()
+                            executed_units: tx_cost.as_ref().unwrap().bpf_execution_cost()
                                 + execute_units_adjustment,
+                            executed_us: 0,
                         }
                     }
                 })

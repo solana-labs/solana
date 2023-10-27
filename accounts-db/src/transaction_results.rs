@@ -76,6 +76,7 @@ pub struct TransactionExecutionDetails {
     pub durable_nonce_fee: Option<DurableNonceFee>,
     pub return_data: Option<TransactionReturnData>,
     pub executed_units: u64,
+    pub executed_us: u64,
     /// The change in accounts data len for this transaction.
     /// NOTE: This value is valid IFF `status` is `Ok`.
     pub accounts_data_len_delta: i64,

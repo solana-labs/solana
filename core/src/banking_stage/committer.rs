@@ -25,7 +25,10 @@ use {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CommitTransactionDetails {
-    Committed { compute_units: u64 },
+    Committed {
+        executed_units: u64,
+        executed_us: u64,
+    },
     NotCommitted,
 }
 
@@ -107,7 +110,8 @@ impl Committer {
             .iter()
             .map(|execution_result| match execution_result.details() {
                 Some(details) => CommitTransactionDetails::Committed {
-                    compute_units: details.executed_units,
+                    executed_units: details.executed_units,
+                    executed_us: details.executed_us,
                 },
                 None => CommitTransactionDetails::NotCommitted,
             })
