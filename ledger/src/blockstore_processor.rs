@@ -350,8 +350,10 @@ fn schedule_batches_for_execution(
     } in batches
     {
         bank.schedule_transaction_executions(
-            batch.sanitized_transactions(),
-            transaction_indexes.iter(),
+            batch
+                .sanitized_transactions()
+                .iter()
+                .zip(transaction_indexes.iter()),
         );
     }
 }
