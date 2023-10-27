@@ -668,11 +668,13 @@ impl fmt::Display for Pubkey {
     }
 }
 
+#[cfg(feature = "borsh0-9")]
 impl borsh0_9::de::BorshDeserialize for Pubkey {
     fn deserialize(buf: &mut &[u8]) -> ::core::result::Result<Self, borsh0_9::maybestd::io::Error> {
         Ok(Self(borsh0_9::BorshDeserialize::deserialize(buf)?))
     }
 }
+#[cfg(feature = "borsh0-9")]
 impl borsh0_9::BorshSchema for Pubkey
 where
     [u8; 32]: borsh0_9::BorshSchema,
@@ -700,6 +702,7 @@ where
         <[u8; 32] as borsh0_9::BorshSchema>::add_definitions_recursively(definitions);
     }
 }
+#[cfg(feature = "borsh0-9")]
 impl borsh0_9::ser::BorshSerialize for Pubkey {
     fn serialize<W: borsh0_9::maybestd::io::Write>(
         &self,

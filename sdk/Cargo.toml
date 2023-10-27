@@ -11,6 +11,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [features]
+borsh0-9 = ["solana-program/borsh0-9"]
 # "program" feature is a legacy feature retained to support v1.3 and older
 # programs.  New development should not use this feature.  Instead use the
 # solana-program crate

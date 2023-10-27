@@ -478,6 +478,7 @@ pub mod big_mod_exp;
 pub mod blake3;
 pub mod borsh;
 pub mod borsh0_10;
+#[cfg(feature = "borsh0-9")]
 pub mod borsh0_9;
 pub mod bpf_loader;
 pub mod bpf_loader_deprecated;
