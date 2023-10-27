@@ -294,6 +294,11 @@ fn execute_batches_internal(
     })
 }
 
+// This fn diverts the code-path into two variants. Both must provide exactly the same set of
+// validations. For this reason, this fn is deliberately inserted into the code path to be called
+// inside process_entries(), so that Bank::prepare_sanitized_batch() has been called on all of
+// batches already. That's because the scheduler variant can't implement the batch sanitization
+// naively, due to the nature of individual tx processing.
 fn process_batches(
     bank: &BankWithScheduler,
     batches: &[TransactionBatchWithIndexes],
@@ -308,7 +313,11 @@ fn process_batches(
             "process_batches()/schedule_batches_for_execution({} batches)",
             batches.len()
         );
-        schedule_batches_for_execution(bank, batches)
+        // scheduling always succeeds here without being blocked on actual transaction executions.
+        // The transaction execution errors will be collected via the blocking fn called
+        // BankWithScheduler::wait_for_completed_scheduler(), if any.
+        schedule_batches_for_execution(bank, batches);
+        Ok(())
     } else {
         debug!(
             "process_batches()/rebatch_and_execute_batches({} batches)",
@@ -329,7 +338,7 @@ fn process_batches(
 fn schedule_batches_for_execution(
     bank: &BankWithScheduler,
     batches: &[TransactionBatchWithIndexes],
-) -> Result<()> {
+) {
     for TransactionBatchWithIndexes {
         batch,
         transaction_indexes,
@@ -340,7 +349,6 @@ fn schedule_batches_for_execution(
             transaction_indexes.iter(),
         );
     }
-    Ok(())
 }
 
 fn rebatch_transactions<'a>(
