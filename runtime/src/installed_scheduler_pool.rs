@@ -1,19 +1,35 @@
-//! Currently, there's only one auxiliary type called BankWithScheduler.. This file will be
-//! populated by later PRs to align with the filename.
+//! Currently, there are only two things: minimal InstalledScheduler trait and an auxiliary type
+//! called BankWithScheduler.. This file will be populated by later PRs to align with the filename.
 
-#[cfg(feature = "dev-context-only-utils")]
-use qualifier_attr::qualifiers;
 use {
     crate::bank::Bank,
+    log::*,
+    solana_sdk::transaction::SanitizedTransaction,
     std::{
         fmt::Debug,
         ops::Deref,
         sync::{Arc, RwLock},
     },
 };
+#[cfg(feature = "dev-context-only-utils")]
+use {mockall::automock, qualifier_attr::qualifiers};
 
-// currently dummy type; will be replaced with the introduction of real type by upcoming pr...
-pub type DefaultInstalledSchedulerBox = ();
+#[cfg_attr(feature = "dev-context-only-utils", automock)]
+// suppress false clippy complaints arising from mockall-derive:
+//   warning: `#[must_use]` has no effect when applied to a struct field
+//   warning: the following explicit lifetimes could be elided: 'a
+#[cfg_attr(
+    feature = "dev-context-only-utils",
+    allow(unused_attributes, clippy::needless_lifetimes)
+)]
+pub trait InstalledScheduler: Send + Sync + Debug + 'static {
+    fn schedule_execution<'a>(
+        &'a self,
+        transaction_with_index: &'a (&'a SanitizedTransaction, usize),
+    );
+}
+
+pub type DefaultInstalledSchedulerBox = Box<dyn InstalledScheduler>;
 
 /// Very thin wrapper around Arc<Bank>
 ///
@@ -40,7 +56,6 @@ pub struct BankWithScheduler {
 #[derive(Debug)]
 pub struct BankWithSchedulerInner {
     bank: Arc<Bank>,
-    #[allow(dead_code)]
     scheduler: InstalledSchedulerRwLock,
 }
 pub type InstalledSchedulerRwLock = RwLock<Option<DefaultInstalledSchedulerBox>>;
@@ -68,6 +83,28 @@ impl BankWithScheduler {
 
     pub fn clone_without_scheduler(&self) -> Arc<Bank> {
         self.inner.bank.clone()
+    }
+
+    pub fn has_installed_scheduler(&self) -> bool {
+        self.inner.scheduler.read().unwrap().is_some()
+    }
+
+    // 'a is needed; anonymous_lifetime_in_impl_trait isn't stabilized yet...
+    pub fn schedule_transaction_executions<'a>(
+        &self,
+        transactions_with_indexes: impl ExactSizeIterator<Item = (&'a SanitizedTransaction, &'a usize)>,
+    ) {
+        trace!(
+            "schedule_transaction_executions(): {} txs",
+            transactions_with_indexes.len()
+        );
+
+        let scheduler_guard = self.inner.scheduler.read().unwrap();
+        let scheduler = scheduler_guard.as_ref().unwrap();
+
+        for (sanitized_transaction, &index) in transactions_with_indexes {
+            scheduler.schedule_execution(&(sanitized_transaction, index));
+        }
     }
 
     pub const fn no_scheduler_available() -> InstalledSchedulerRwLock {
