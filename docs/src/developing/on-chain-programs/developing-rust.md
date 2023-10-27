@@ -386,5 +386,10 @@ $ cargo build-bpf --dump
 ## Examples
 
 The [Solana Program Library
-github](https://github.com/solana-labs/solana-program-library/tree/master/examples/rust)
+GitHub](https://github.com/solana-labs/solana-program-library/tree/master/examples/rust)
 repo contains a collection of Rust examples.
+
+The [Solana Developers
+Program Examples GitHub](https://github.com/solana-developers/program-examples)
+repo also contains a collection of beginner to intermediate Rust program
+examples.
