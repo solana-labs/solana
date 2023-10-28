@@ -6298,6 +6298,7 @@ dependencies = [
  "libc",
  "log",
  "lru",
+ "mockall",
  "num_cpus",
  "num_enum 0.7.0",
  "prost",

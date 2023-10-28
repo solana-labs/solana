@@ -1943,7 +1943,9 @@ pub mod tests {
             genesis_utils::{
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
             },
-            installed_scheduler_pool::{MockInstalledScheduler, MockInstalledSchedulerPool},
+            installed_scheduler_pool::{
+                MockInstalledScheduler, MockInstalledSchedulerPool, WaitReason,
+            },
         },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
@@ -4529,9 +4531,11 @@ pub mod tests {
         let txs = create_test_transactions(&mint_keypair, &genesis_config.hash());
 
         let mut mocked_scheduler = MockInstalledScheduler::new();
+        let mut seq = mockall::Sequence::new();
         mocked_scheduler
             .expect_context()
             .times(1)
+            .in_sequence(&mut seq)
             .returning(|| None);
         mocked_scheduler
             .expect_schedule_execution()
@@ -4539,16 +4543,23 @@ pub mod tests {
             .returning(|_| ());
         mocked_scheduler
             .expect_wait_for_termination()
+            .with(mockall::predicate::eq(WaitReason::DroppedFromBankForks))
             .times(1)
+            .in_sequence(&mut seq)
             .returning(|_| None);
-        mocked_scheduler.expect_pool().returning(move || {
-            let mut mocked_pool = MockInstalledSchedulerPool::new();
-            mocked_pool
-                .expect_return_to_pool()
-                .times(1)
-                .returning(|_| ());
-            Arc::new(mocked_pool)
-        });
+        mocked_scheduler
+            .expect_pool()
+            .times(1)
+            .in_sequence(&mut seq)
+            .returning(move || {
+                let mut mocked_pool = MockInstalledSchedulerPool::new();
+                mocked_pool
+                    .expect_return_to_pool()
+                    .times(1)
+                    .in_sequence(&mut seq)
+                    .returning(|_| ());
+                Arc::new(mocked_pool)
+            });
         let bank = BankWithScheduler::new(bank, Some(Box::new(mocked_scheduler)));
 
         let batch = bank.prepare_sanitized_batch(&txs);
