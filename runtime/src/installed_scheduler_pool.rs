@@ -113,7 +113,7 @@ pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + '
     fn id(&self) -> SchedulerId;
     fn pool(&self) -> InstalledSchedulerPoolArc<SEA>;
 
-    // Calling this is illegal as soon as wait_for_termination is called on &self.
+    // Calling this is illegal as soon as wait_for_termination is called.
     fn schedule_execution<'a>(&'a self, transaction_with_index: SEA::TransactionWithIndex<'a>);
 
     #[must_use]
@@ -162,9 +162,9 @@ pub enum WaitReason {
     // most normal termination waiting mode; couldn't be done implicitly inside Bank::freeze() -> () to return
     // the result and timing in some way to higher-layer subsystems;
     TerminatedToFreeze,
+    // just behaves like TerminatedToFreeze but hint that this is called from Drop::drop().
     DroppedFromBankForks,
-    // scheduler is paused without being returned to pool in order to collect ResultWithTimings
-    // later.
+    // scheduler is paused without being returned to the pool to collect ResultWithTimings later.
     PausedForRecentBlockhash,
 }
 
@@ -395,7 +395,7 @@ impl BankWithSchedulerInner {
     fn drop_scheduler(&self) {
         if std::thread::panicking() {
             error!(
-                "BankWithSchedulerInner::drop(): slot: {} skipping due to already panicking...",
+                "BankWithSchedulerInner::drop_scheduler(): slot: {} skipping due to already panicking...",
                 self.bank.slot(),
             );
             return;
@@ -407,7 +407,7 @@ impl BankWithSchedulerInner {
             .map(|(result, _timings)| result)
         {
             warn!(
-                "BankWithSchedulerInner::drop(): slot: {} discarding error from scheduler: {:?}",
+                "BankWithSchedulerInner::drop_scheduler(): slot: {} discarding error from scheduler: {:?}",
                 self.bank.slot(),
                 err,
             );
