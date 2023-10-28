@@ -1128,6 +1128,12 @@ fn main() {
             "Debug option to scan all AppendVecs and verify account index refcounts prior to clean",
         )
         .hidden(hidden_unless_forced());
+    let accounts_db_test_skip_rewrites_but_include_in_bank_hash = Arg::with_name("accounts_db_test_skip_rewrites")
+        .long("accounts-db-test-skip-rewrites")
+        .help(
+            "Debug option to skip rewrites for rent-exempt accounts but still add them in bank delta hash calculation",
+        )
+        .hidden(hidden_unless_forced());
     let accounts_filler_count = Arg::with_name("accounts_filler_count")
         .long("accounts-filler-count")
         .value_name("COUNT")
@@ -1556,6 +1562,7 @@ fn main() {
             .arg(&disable_disk_index)
             .arg(&accountsdb_verify_refcounts)
             .arg(&accounts_db_skip_initial_hash_calc_arg)
+            .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash)
         )
         .subcommand(
             SubCommand::with_name("shred-meta")
@@ -1573,6 +1580,7 @@ fn main() {
             .arg(&disable_disk_index)
             .arg(&accountsdb_verify_refcounts)
             .arg(&accounts_db_skip_initial_hash_calc_arg)
+            .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash)
         )
         .subcommand(
             SubCommand::with_name("bounds")
@@ -1608,6 +1616,7 @@ fn main() {
             .arg(&disable_disk_index)
             .arg(&accountsdb_skip_shrink)
             .arg(&accountsdb_verify_refcounts)
+            .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash)
             .arg(&accounts_filler_count)
             .arg(&accounts_filler_size)
             .arg(&verify_index_arg)
@@ -1688,6 +1697,7 @@ fn main() {
             .arg(&accounts_index_limit)
             .arg(&disable_disk_index)
             .arg(&accountsdb_verify_refcounts)
+            .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash)
             .arg(&accounts_db_skip_initial_hash_calc_arg)
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
@@ -1724,6 +1734,7 @@ fn main() {
             .arg(&accounts_index_limit)
             .arg(&disable_disk_index)
             .arg(&accountsdb_verify_refcounts)
+            .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash)
             .arg(&accounts_db_skip_initial_hash_calc_arg)
             .arg(&accountsdb_skip_shrink)
             .arg(&ancient_append_vecs)
@@ -1918,6 +1929,7 @@ fn main() {
             .arg(&accounts_index_limit)
             .arg(&disable_disk_index)
             .arg(&accountsdb_verify_refcounts)
+            .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash)
             .arg(&accounts_db_skip_initial_hash_calc_arg)
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
@@ -1952,6 +1964,7 @@ fn main() {
             .arg(&accounts_index_limit)
             .arg(&disable_disk_index)
             .arg(&accountsdb_verify_refcounts)
+            .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash)
             .arg(&accounts_db_skip_initial_hash_calc_arg)
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
