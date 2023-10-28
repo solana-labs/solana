@@ -534,6 +534,18 @@ mod tests {
     }
 
     #[test]
+    fn test_no_scheduler_termination() {
+        solana_logger::setup();
+
+        let bank = Arc::new(Bank::default_for_tests());
+        let bank = BankWithScheduler::new_without_scheduler(bank);
+
+        // Calling wait_for_completed_scheduler() is noop, when no scheduler is installed.
+        assert!(!bank.has_installed_scheduler());
+        assert_matches!(bank.wait_for_completed_scheduler(), None);
+    }
+
+    #[test]
     fn test_scheduler_termination_from_drop() {
         solana_logger::setup();
 
