@@ -96,16 +96,6 @@ impl AccountHashesFile {
                     )
                 });
 
-<<<<<<< HEAD
-            // Theoretical performance optimization: write a zero to the end of
-            // the file so that we won't have to resize it later, which may be
-            // expensive.
-            data.seek(SeekFrom::Start((self.capacity - 1) as u64))
-                .unwrap();
-            data.write_all(&[0]).unwrap();
-            data.rewind().unwrap();
-            data.flush().unwrap();
-=======
                 // Theoretical performance optimization: write a zero to the end of
                 // the file so that we won't have to resize it later, which may be
                 // expensive.
@@ -151,7 +141,6 @@ impl AccountHashesFile {
                     }
                 }
             };
->>>>>>> 167dac204f (Retry hash file allocation (#33565))
 
             //UNSAFE: Required to create a Mmap
             let map = unsafe { MmapMut::map_mut(&data) };
