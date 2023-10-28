@@ -297,33 +297,6 @@ impl BankWithScheduler {
         self.inner.scheduler.read().unwrap().is_some()
     }
 
-    #[must_use]
-    pub fn wait_for_completed_scheduler(&self) -> Option<ResultWithTimings> {
-        BankWithSchedulerInner::wait_for_scheduler(
-            &self.inner.bank,
-            &self.inner.scheduler,
-            WaitReason::TerminatedToFreeze,
-        )
-    }
-
-    pub(crate) fn wait_for_paused_scheduler(bank: &Bank, scheduler: &InstalledSchedulerRwLock) {
-        let maybe_result_with_timings = BankWithSchedulerInner::wait_for_scheduler(
-            bank,
-            scheduler,
-            WaitReason::PausedForRecentBlockhash,
-        );
-        assert!(
-            maybe_result_with_timings.is_none(),
-            "Premature result was returned from scheduler after paused"
-        );
-    }
-
-    // take needless &mut only to communicate its semantic mutability to humans...
-    #[cfg(feature = "dev-context-only-utils")]
-    pub fn drop_scheduler(&mut self) {
-        self.inner.drop_scheduler();
-    }
-
     // 'a is needed; anonymous_lifetime_in_impl_trait isn't stabilized yet...
     pub fn schedule_transaction_executions<'a>(
         &self,
@@ -342,12 +315,48 @@ impl BankWithScheduler {
         }
     }
 
+    // take needless &mut only to communicate its semantic mutability to humans...
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn drop_scheduler(&mut self) {
+        self.inner.drop_scheduler();
+    }
+
+    pub(crate) fn wait_for_paused_scheduler(bank: &Bank, scheduler: &InstalledSchedulerRwLock) {
+        let maybe_result_with_timings = BankWithSchedulerInner::wait_for_scheduler(
+            bank,
+            scheduler,
+            WaitReason::PausedForRecentBlockhash,
+        );
+        assert!(
+            maybe_result_with_timings.is_none(),
+            "Premature result was returned from scheduler after paused"
+        );
+    }
+
+    #[must_use]
+    pub fn wait_for_completed_scheduler(&self) -> Option<ResultWithTimings> {
+        BankWithSchedulerInner::wait_for_scheduler(
+            &self.inner.bank,
+            &self.inner.scheduler,
+            WaitReason::TerminatedToFreeze,
+        )
+    }
+
     pub const fn no_scheduler_available() -> InstalledSchedulerRwLock {
         RwLock::new(None)
     }
 }
 
 impl BankWithSchedulerInner {
+    #[must_use]
+    fn wait_for_completed_scheduler_from_drop(&self) -> Option<ResultWithTimings> {
+        Self::wait_for_scheduler(
+            &self.bank,
+            &self.scheduler,
+            WaitReason::DroppedFromBankForks,
+        )
+    }
+
     #[must_use]
     fn wait_for_scheduler(
         bank: &Bank,
@@ -383,16 +392,6 @@ impl BankWithSchedulerInner {
         result_with_timings
     }
 
-    #[must_use]
-    fn wait_for_completed_scheduler_from_drop(&self) -> Option<Result<()>> {
-        let maybe_result_with_timings = Self::wait_for_scheduler(
-            &self.bank,
-            &self.scheduler,
-            WaitReason::DroppedFromBankForks,
-        );
-        maybe_result_with_timings.map(|(result, _timings)| result)
-    }
-
     fn drop_scheduler(&self) {
         if std::thread::panicking() {
             error!(
@@ -403,7 +402,10 @@ impl BankWithSchedulerInner {
         }
 
         // There's no guarantee ResultWithTimings is available or not at all when being dropped.
-        if let Some(Err(err)) = self.wait_for_completed_scheduler_from_drop() {
+        if let Some(Err(err)) = self
+            .wait_for_completed_scheduler_from_drop()
+            .map(|(result, _timings)| result)
+        {
             warn!(
                 "BankWithSchedulerInner::drop(): slot: {} discarding error from scheduler: {:?}",
                 self.bank.slot(),
