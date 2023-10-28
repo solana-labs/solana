@@ -307,6 +307,12 @@ impl BankWithScheduler {
         BankWithSchedulerInner::wait_for_reusable_scheduler(bank, scheduler);
     }
 
+    // take needless &mut only to communicate its semantic mutability to humans...
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn drop_scheduler(&mut self) {
+        self.inner.drop_scheduler();
+    }
+
     // 'a is needed; anonymous_lifetime_in_impl_trait isn't stabilized yet...
     pub fn schedule_transaction_executions<'a>(
         &self,
@@ -327,11 +333,6 @@ impl BankWithScheduler {
 
     pub const fn no_scheduler_available() -> InstalledSchedulerRwLock {
         RwLock::new(None)
-    }
-
-    #[cfg(feature = "dev-context-only-utils")]
-    pub fn drop_scheduler(&self) {
-        self.inner.drop_scheduler();
     }
 }
 

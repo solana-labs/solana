@@ -493,7 +493,7 @@ mod tests {
             .working_bank_with_scheduler()
             .has_installed_scheduler());
 
-        let child_bank = bank_forks.insert(child_bank);
+        let mut child_bank = bank_forks.insert(child_bank);
         assert!(child_bank.has_installed_scheduler());
         bank_forks.remove(child_bank.slot());
         child_bank.drop_scheduler();
