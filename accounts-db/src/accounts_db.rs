@@ -7300,11 +7300,13 @@ impl AccountsDb {
                     if let Ok(mapped_file) =
                         cache_hash_data.get_file_reference_to_map_later(&file_name)
                     {
+                        stats.cache_file_load_hits.fetch_add(1, Ordering::Relaxed);
                         return Some(ScanAccountStorageResult::CacheFileAlreadyExists(
                             mapped_file,
                         ));
                     }
                 }
+                stats.cache_file_load_misses.fetch_add(1, Ordering::Relaxed);
 
                 // fall through and load normally - we failed to load from a cache file but there are storages present
                 Some(ScanAccountStorageResult::CacheFileNeedsToBeCreated((
@@ -7326,6 +7328,7 @@ impl AccountsDb {
                         file_name,
                         range_this_chunk,
                     )) => {
+                        stats.cache_file_created.fetch_add(1, Ordering::Relaxed);
                         let mut scanner = scanner.clone();
                         let mut init_accum = true;
                         // load from cache failed, so create the cache file for this chunk

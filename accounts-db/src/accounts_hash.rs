@@ -194,6 +194,9 @@ pub struct HashStats {
     pub hash_total: usize,
     pub num_snapshot_storage: usize,
     pub scan_chunks: usize,
+    pub cache_file_load_hits: AtomicU64,
+    pub cache_file_load_misses: AtomicU64,
+    pub cache_file_created: AtomicU64,
     pub num_slots: usize,
     pub num_dirty_slots: usize,
     pub collect_snapshots_us: u64,
@@ -250,6 +253,21 @@ impl HashStats {
             ("collect_snapshots_us", self.collect_snapshots_us, i64),
             ("num_snapshot_storage", self.num_snapshot_storage, i64),
             ("scan_chunks", self.scan_chunks, i64),
+            (
+                "cache_file_load_hits",
+                self.cache_file_load_hits.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "cache_file_load_misses",
+                self.cache_file_load_misses.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "cache_file_created",
+                self.cache_file_created.load(Ordering::Relaxed),
+                i64
+            ),
             ("num_slots", self.num_slots, i64),
             ("num_dirty_slots", self.num_dirty_slots, i64),
             ("storage_size_min", self.storage_size_quartiles[0], i64),
