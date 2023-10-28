@@ -299,12 +299,23 @@ impl BankWithScheduler {
 
     #[must_use]
     pub fn wait_for_completed_scheduler(&self) -> Option<ResultWithTimings> {
-        self.inner
-            .wait_for_scheduler(WaitReason::TerminatedToFreeze)
+        BankWithSchedulerInner::wait_for_scheduler(
+            &self.inner.bank,
+            &self.inner.scheduler,
+            WaitReason::TerminatedToFreeze,
+        )
     }
 
-    pub(crate) fn wait_for_reusable_scheduler(bank: &Bank, scheduler: &InstalledSchedulerRwLock) {
-        BankWithSchedulerInner::wait_for_reusable_scheduler(bank, scheduler);
+    pub(crate) fn wait_for_paused_scheduler(bank: &Bank, scheduler: &InstalledSchedulerRwLock) {
+        let maybe_result_with_timings = BankWithSchedulerInner::wait_for_scheduler(
+            bank,
+            scheduler,
+            WaitReason::PausedForRecentBlockhash,
+        );
+        assert!(
+            maybe_result_with_timings.is_none(),
+            "Premature result was returned from scheduler after paused"
+        );
     }
 
     // take needless &mut only to communicate its semantic mutability to humans...
@@ -338,12 +349,7 @@ impl BankWithScheduler {
 
 impl BankWithSchedulerInner {
     #[must_use]
-    fn wait_for_scheduler(&self, reason: WaitReason) -> Option<ResultWithTimings> {
-        Self::do_wait_for_scheduler(&self.bank, &self.scheduler, reason)
-    }
-
-    #[must_use]
-    fn do_wait_for_scheduler(
+    fn wait_for_scheduler(
         bank: &Bank,
         scheduler: &InstalledSchedulerRwLock,
         reason: WaitReason,
@@ -379,17 +385,12 @@ impl BankWithSchedulerInner {
 
     #[must_use]
     fn wait_for_completed_scheduler_from_drop(&self) -> Option<Result<()>> {
-        let maybe_result_with_timings = self.wait_for_scheduler(WaitReason::DroppedFromBankForks);
-        maybe_result_with_timings.map(|(result, _timings)| result)
-    }
-
-    fn wait_for_reusable_scheduler(bank: &Bank, scheduler: &InstalledSchedulerRwLock) {
-        let maybe_result_with_timings =
-            Self::do_wait_for_scheduler(bank, scheduler, WaitReason::PausedForRecentBlockhash);
-        assert!(
-            maybe_result_with_timings.is_none(),
-            "Premature result was returned from scheduler after paused"
+        let maybe_result_with_timings = Self::wait_for_scheduler(
+            &self.bank,
+            &self.scheduler,
+            WaitReason::DroppedFromBankForks,
         );
+        maybe_result_with_timings.map(|(result, _timings)| result)
     }
 
     fn drop_scheduler(&self) {

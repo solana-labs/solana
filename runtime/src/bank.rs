@@ -4193,7 +4193,7 @@ impl Bank {
     ) {
         // This is needed because recent_blockhash updates necessitate synchronizations for
         // consistent tx check_age handling.
-        BankWithScheduler::wait_for_reusable_scheduler(self, scheduler);
+        BankWithScheduler::wait_for_paused_scheduler(self, scheduler);
 
         // Only acquire the write lock for the blockhash queue on block boundaries because
         // readers can starve this write lock acquisition and ticks would be slowed down too

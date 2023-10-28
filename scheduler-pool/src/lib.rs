@@ -638,7 +638,7 @@ mod tests {
 
         fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings> {
             if TRIGGER_RACE_CONDITION && matches!(reason, WaitReason::PausedForRecentBlockhash) {
-                // this is equivalent to NOT calling wait_for_reusable_scheduler() in
+                // this is equivalent to NOT calling wait_for_paused_scheduler() in
                 // register_recent_blockhash().
                 return None;
             }
