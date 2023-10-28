@@ -524,7 +524,13 @@ mod tests {
                 [WaitReason::TerminatedToFreeze].into_iter(),
             )),
         );
+        assert!(bank.has_installed_scheduler());
         assert_matches!(bank.wait_for_completed_scheduler(), Some(_));
+
+        // Repeating to call wait_for_completed_scheduler() is okay with no ResultWithTimings being
+        // returned.
+        assert!(!bank.has_installed_scheduler());
+        assert_matches!(bank.wait_for_completed_scheduler(), None);
     }
 
     #[test]
