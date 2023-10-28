@@ -157,14 +157,24 @@ impl ScheduleExecutionArg for DefaultScheduleExecutionArg {
     type TransactionWithIndex<'tx> = &'tx (&'tx SanitizedTransaction, usize);
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum WaitReason {
     // most normal termination waiting mode; couldn't be done implicitly inside Bank::freeze() -> () to return
     // the result and timing in some way to higher-layer subsystems;
     TerminatedToFreeze,
     DroppedFromBankForks,
-    // scheduler will be restarted without being returned to pool in order to reuse it immediately.
-    ReinitializedForRecentBlockhash,
+    // scheduler is paused without being returned to pool in order to collect ResultWithTimings
+    // later.
+    PausedForRecentBlockhash,
+}
+
+impl WaitReason {
+    pub fn is_paused(&self) -> bool {
+        match self {
+            WaitReason::PausedForRecentBlockhash => true,
+            WaitReason::TerminatedToFreeze | WaitReason::DroppedFromBankForks => false,
+        }
+    }
 }
 
 pub type DefaultInstalledSchedulerBox = Box<dyn InstalledScheduler<DefaultScheduleExecutionArg>>;
@@ -348,7 +358,7 @@ impl BankWithSchedulerInner {
             let result_with_timings = scheduler
                 .as_mut()
                 .and_then(|scheduler| scheduler.wait_for_termination(&reason));
-            if !matches!(reason, WaitReason::ReinitializedForRecentBlockhash) {
+            if !reason.is_paused() {
                 let scheduler = scheduler.take().expect("scheduler after waiting");
                 scheduler.pool().return_to_pool(scheduler);
             }
@@ -373,14 +383,11 @@ impl BankWithSchedulerInner {
     }
 
     fn wait_for_reusable_scheduler(bank: &Bank, scheduler: &InstalledSchedulerRwLock) {
-        let maybe_result_with_timings = Self::do_wait_for_scheduler(
-            bank,
-            scheduler,
-            WaitReason::ReinitializedForRecentBlockhash,
-        );
+        let maybe_result_with_timings =
+            Self::do_wait_for_scheduler(bank, scheduler, WaitReason::PausedForRecentBlockhash);
         assert!(
             maybe_result_with_timings.is_none(),
-            "Premature result was returned from scheduler after reinitialized"
+            "Premature result was returned from scheduler after paused"
         );
     }
 
@@ -393,6 +400,7 @@ impl BankWithSchedulerInner {
             return;
         }
 
+        // There's no guarantee ResultWithTimings is available or not at all when being dropped.
         if let Some(Err(err)) = self.wait_for_completed_scheduler_from_drop() {
             warn!(
                 "BankWithSchedulerInner::drop(): slot: {} discarding error from scheduler: {:?}",
@@ -425,6 +433,7 @@ mod tests {
             bank::test_utils::goto_end_of_slot_with_scheduler,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
         },
+        assert_matches::assert_matches,
         mockall::Sequence,
         solana_sdk::system_transaction,
     };
@@ -457,7 +466,13 @@ mod tests {
                 .with(mockall::predicate::eq(wait_reason))
                 .times(1)
                 .in_sequence(&mut seq)
-                .returning(|_| None);
+                .returning(move |_| {
+                    if wait_reason.is_paused() {
+                        None
+                    } else {
+                        Some((Ok(()), ExecuteTimings::default()))
+                    }
+                });
         }
 
         mock.expect_pool()
@@ -508,7 +523,7 @@ mod tests {
                 [WaitReason::TerminatedToFreeze].into_iter(),
             )),
         );
-        assert!(bank.wait_for_completed_scheduler().is_none());
+        assert_matches!(bank.wait_for_completed_scheduler(), Some(_));
     }
 
     #[test]
@@ -526,7 +541,7 @@ mod tests {
     }
 
     #[test]
-    fn test_scheduler_reinitialization() {
+    fn test_scheduler_pause() {
         solana_logger::setup();
 
         let bank = Arc::new(crate::bank::tests::create_simple_test_bank(42));
@@ -534,13 +549,14 @@ mod tests {
             bank,
             Some(setup_mocked_scheduler(
                 [
-                    WaitReason::ReinitializedForRecentBlockhash,
-                    WaitReason::DroppedFromBankForks,
+                    WaitReason::PausedForRecentBlockhash,
+                    WaitReason::TerminatedToFreeze,
                 ]
                 .into_iter(),
             )),
         );
         goto_end_of_slot_with_scheduler(&bank);
+        assert_matches!(bank.wait_for_completed_scheduler(), Some(_));
     }
 
     #[test]

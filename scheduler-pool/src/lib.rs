@@ -287,10 +287,7 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
     }
 
     fn wait_for_termination(&mut self, wait_reason: &WaitReason) -> Option<ResultWithTimings> {
-        let keep_result_with_timings = match wait_reason {
-            WaitReason::ReinitializedForRecentBlockhash => true,
-            WaitReason::TerminatedToFreeze | WaitReason::DroppedFromBankForks => false,
-        };
+        let keep_result_with_timings = wait_reason.is_paused();
 
         if keep_result_with_timings {
             None
@@ -417,7 +414,7 @@ mod tests {
 
         assert!(scheduler.context().is_some());
         assert_matches!(
-            scheduler.wait_for_termination(&WaitReason::ReinitializedForRecentBlockhash),
+            scheduler.wait_for_termination(&WaitReason::PausedForRecentBlockhash),
             None
         );
         assert!(scheduler.context().is_some());
@@ -640,9 +637,7 @@ mod tests {
         }
 
         fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings> {
-            if TRIGGER_RACE_CONDITION
-                && matches!(reason, WaitReason::ReinitializedForRecentBlockhash)
-            {
+            if TRIGGER_RACE_CONDITION && matches!(reason, WaitReason::PausedForRecentBlockhash) {
                 // this is equivalent to NOT calling wait_for_reusable_scheduler() in
                 // register_recent_blockhash().
                 return None;
