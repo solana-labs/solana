@@ -42,7 +42,8 @@ use {
         block_error::BlockError,
         blockstore::Blockstore,
         blockstore_processor::{
-            self, BlockstoreProcessorError, ConfirmationProgress, TransactionStatusSender,
+            self, BlockstoreProcessorError, ConfirmationProgress, ExecuteBatchesInternalMetrics,
+            TransactionStatusSender,
         },
         entry_notifier_service::EntryNotifierSender,
         leader_schedule_cache::LeaderScheduleCache,
@@ -2815,6 +2816,40 @@ impl ReplayStage {
                     .expect("Bank fork progress entry missing for completed bank");
 
                 let replay_stats = bank_progress.replay_stats.clone();
+
+                if let Some((result, completed_execute_timings)) =
+                    bank.wait_for_completed_scheduler()
+                {
+                    let metrics = ExecuteBatchesInternalMetrics::new_with_timings_from_all_threads(
+                        completed_execute_timings,
+                    );
+                    replay_stats
+                        .write()
+                        .unwrap()
+                        .batch_execute
+                        .accumulate(metrics);
+
+                    if let Err(err) = result {
+                        Self::mark_dead_slot(
+                            blockstore,
+                            bank,
+                            bank_forks.read().unwrap().root(),
+                            &BlockstoreProcessorError::InvalidTransaction(err),
+                            rpc_subscriptions,
+                            duplicate_slots_tracker,
+                            gossip_duplicate_confirmed_slots,
+                            epoch_slots_frozen_slots,
+                            progress,
+                            heaviest_subtree_fork_choice,
+                            duplicate_slots_to_repair,
+                            ancestor_hashes_replay_update_sender,
+                            purge_repair_slot_counter,
+                        );
+                        // don't try to run the remaining normal processing for the completed bank
+                        continue;
+                    }
+                }
+
                 let r_replay_stats = replay_stats.read().unwrap();
                 let replay_progress = bank_progress.replay_progress.clone();
                 let r_replay_progress = replay_progress.read().unwrap();
