@@ -24,7 +24,7 @@
 //! See [InstalledScheduler] for visualized interaction.
 
 use {
-    crate::{bank::Bank, bank_forks::BankForks},
+    crate::bank::Bank,
     log::*,
     solana_program_runtime::timings::ExecuteTimings,
     solana_scheduler::{SchedulingMode, WithSchedulingMode},
@@ -414,19 +414,6 @@ impl Deref for BankWithScheduler {
 
     fn deref(&self) -> &Self::Target {
         &self.inner.bank
-    }
-}
-
-impl BankForks {
-    pub fn install_scheduler_pool(
-        &mut self,
-        pool: InstalledSchedulerPoolArc<DefaultScheduleExecutionArg>,
-    ) {
-        info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
-        assert!(
-            self.scheduler_pool.replace(pool).is_none(),
-            "Reinstalling scheduler pool isn't supported"
-        );
     }
 }
 

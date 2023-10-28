@@ -76,7 +76,7 @@ pub struct BankForks {
     last_accounts_hash_slot: Slot,
     in_vote_only_mode: Arc<AtomicBool>,
     highest_slot_at_startup: Slot,
-    pub(crate) scheduler_pool: Option<InstalledSchedulerPoolArc<DefaultScheduleExecutionArg>>,
+    scheduler_pool: Option<InstalledSchedulerPoolArc<DefaultScheduleExecutionArg>>,
 }
 
 impl Index<u64> for BankForks {
@@ -219,6 +219,17 @@ impl BankForks {
         }
 
         bank_forks
+    }
+
+    pub fn install_scheduler_pool(
+        &mut self,
+        pool: InstalledSchedulerPoolArc<DefaultScheduleExecutionArg>,
+    ) {
+        info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
+        assert!(
+            self.scheduler_pool.replace(pool).is_none(),
+            "Reinstalling scheduler pool isn't supported"
+        );
     }
 
     pub fn insert(&mut self, mut bank: Bank) -> BankWithScheduler {
