@@ -224,13 +224,15 @@ pub struct ExecuteBatchesInternalMetrics {
 
 impl ExecuteBatchesInternalMetrics {
     pub fn new_with_timings_from_all_threads(execute_timings: ExecuteTimings) -> Self {
-        let thread_timings = ThreadExecuteTimings {
-            execute_timings,
-            ..ThreadExecuteTimings::default()
-        };
+        const DUMMY_THREAD_INDEX: usize = 999;
         let mut new = Self::default();
-        new.execution_timings_per_thread.insert(0, thread_timings);
-
+        new.execution_timings_per_thread.insert(
+            DUMMY_THREAD_INDEX,
+            ThreadExecuteTimings {
+                execute_timings,
+                ..ThreadExecuteTimings::default()
+            },
+        );
         new
     }
 }
