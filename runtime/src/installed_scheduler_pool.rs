@@ -123,6 +123,8 @@ pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + '
     fn replace_context(&mut self, context: SchedulingContext);
 }
 
+pub type DefaultInstalledSchedulerBox = Box<dyn InstalledScheduler<DefaultScheduleExecutionArg>>;
+
 pub type InstalledSchedulerPoolArc<SEA> = Arc<dyn InstalledSchedulerPool<SEA>>;
 
 pub type SchedulerId = u64;
@@ -176,8 +178,6 @@ impl WaitReason {
         }
     }
 }
-
-pub type DefaultInstalledSchedulerBox = Box<dyn InstalledScheduler<DefaultScheduleExecutionArg>>;
 
 /// A small context to propagate a bank and its scheduling mode to the scheduler subsystem.
 ///
