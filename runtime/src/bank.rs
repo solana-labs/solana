@@ -4239,18 +4239,12 @@ impl Bank {
 
     #[cfg(feature = "dev-context-only-utils")]
     pub fn register_default_tick_for_test(&self) {
-        self.register_tick(
-            &Hash::default(),
-            &BankWithScheduler::no_scheduler_available(),
-        )
+        self.register_tick_for_test(&Hash::default())
     }
 
     #[cfg(feature = "dev-context-only-utils")]
     pub fn register_unique_tick(&self) {
-        self.register_tick(
-            &Hash::new_unique(),
-            &BankWithScheduler::no_scheduler_available(),
-        )
+        self.register_tick_for_test(&Hash::new_unique())
     }
 
     pub fn is_complete(&self) -> bool {
@@ -8021,7 +8015,7 @@ impl Bank {
     }
 
     pub fn fill_bank_with_ticks_for_tests(&self) {
-        self.do_fill_bank_with_ticks_for_tests(&BankWithScheduler::no_scheduler_available());
+        self.do_fill_bank_with_ticks_for_tests(&BankWithScheduler::no_scheduler_available())
     }
 
     pub(crate) fn do_fill_bank_with_ticks_for_tests(&self, scheduler: &InstalledSchedulerRwLock) {
