@@ -2817,11 +2817,11 @@ impl ReplayStage {
 
                 let replay_stats = bank_progress.replay_stats.clone();
 
-                if let Some((result, complete_execute_timings)) =
+                if let Some((result, completed_execute_timings)) =
                     bank.wait_for_completed_scheduler()
                 {
                     let metrics = ExecuteBatchesInternalMetrics::new_with_timings_from_all_threads(
-                        complete_execute_timings,
+                        completed_execute_timings,
                     );
                     replay_stats
                         .write()
