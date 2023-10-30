@@ -152,7 +152,7 @@ impl BankWithScheduler {
     }
 
     pub(crate) fn wait_for_paused_scheduler(bank: &Bank, scheduler: &InstalledSchedulerRwLock) {
-        let maybe_result_with_timings = BankWithSchedulerInner::wait_for_scheduler(
+        let maybe_result_with_timings = BankWithSchedulerInner::wait_for_scheduler_termination(
             bank,
             scheduler,
             WaitReason::PausedForRecentBlockhash,
@@ -165,7 +165,7 @@ impl BankWithScheduler {
 
     #[must_use]
     pub fn wait_for_completed_scheduler(&self) -> Option<ResultWithTimings> {
-        BankWithSchedulerInner::wait_for_scheduler(
+        BankWithSchedulerInner::wait_for_scheduler_termination(
             &self.inner.bank,
             &self.inner.scheduler,
             WaitReason::TerminatedToFreeze,
@@ -180,7 +180,7 @@ impl BankWithScheduler {
 impl BankWithSchedulerInner {
     #[must_use]
     fn wait_for_completed_scheduler_from_drop(&self) -> Option<ResultWithTimings> {
-        Self::wait_for_scheduler(
+        Self::wait_for_scheduler_termination(
             &self.bank,
             &self.scheduler,
             WaitReason::DroppedFromBankForks,
@@ -188,13 +188,13 @@ impl BankWithSchedulerInner {
     }
 
     #[must_use]
-    fn wait_for_scheduler(
+    fn wait_for_scheduler_termination(
         bank: &Bank,
         scheduler: &InstalledSchedulerRwLock,
         reason: WaitReason,
     ) -> Option<ResultWithTimings> {
         debug!(
-            "wait_for_scheduler(slot: {}, reason: {:?}): started...",
+            "wait_for_scheduler_termination(slot: {}, reason: {:?}): started...",
             bank.slot(),
             reason,
         );
@@ -212,7 +212,7 @@ impl BankWithSchedulerInner {
             None
         };
         debug!(
-            "wait_for_scheduler(slot: {}, reason: {:?}): finished with: {:?}...",
+            "wait_for_scheduler_termination(slot: {}, reason: {:?}): finished with: {:?}...",
             bank.slot(),
             reason,
             result_with_timings.as_ref().map(|(result, _)| result),
