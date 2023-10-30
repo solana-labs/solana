@@ -19,7 +19,7 @@ struct DepositFeeOptions {
     check_rent_paying: bool,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 enum DepositFeeError {
     #[error("fee account became rent paying")]
     InvalidRentPayingAccount,
@@ -70,14 +70,10 @@ impl Bank {
                         ));
                     }
                     Err(err) => {
+                        // notify validator that their fees were burned
                         error!(
-                            "Burning {} fee instead of crediting {} due to {err}",
-                            deposit, self.collector_id
-                        );
-                        datapoint_error!(
-                            "bank-burned_fee",
-                            ("slot", self.slot(), i64),
-                            ("num_lamports", deposit, i64)
+                            "Burned {deposit} lamport transaction fee instead of sending to {} due to {err}",
+                            self.collector_id
                         );
                         burn += deposit;
                     }
@@ -233,18 +229,15 @@ impl Bank {
                                 },
                             ));
                         }
-                        Err(_) => {
+                        Err(err) => {
                             // overflow adding lamports or resulting account is invalid
                             self.capitalization.fetch_sub(rent_to_be_paid, Relaxed);
-                            error!(
-                                "Burned {} rent lamports instead of sending to {}",
-                                rent_to_be_paid, pubkey
-                            );
-                            datapoint_error!(
-                                "bank-burned_rent",
-                                ("slot", self.slot(), i64),
-                                ("num_lamports", rent_to_be_paid, i64)
-                            );
+                            // notify validator that their fees were burned
+                            if self.collector_id == pubkey {
+                                error!(
+                                    "Burned {rent_to_be_paid} lamport rent fee instead of sending to {pubkey} due to {err}",
+                                );
+                            }
                         }
                     }
                 }
@@ -499,20 +492,11 @@ pub mod tests {
             check_rent_paying: true,
         };
 
-        // Call the deposit_fees function
-        let result = bank.deposit_fees(&pubkey, deposit_amount, options);
-
-        // Check the result
-        match result {
-            Ok(new_balance) => {
-                assert_eq!(
-                    new_balance,
-                    initial_balance + deposit_amount,
-                    "New balance should be the sum of the initial balance and deposit amount"
-                );
-            }
-            Err(e) => panic!("Unexpected error: {:?}", e),
-        }
+        assert_eq!(
+            bank.deposit_fees(&pubkey, deposit_amount, options),
+            Ok(initial_balance + deposit_amount),
+            "New balance should be the sum of the initial balance and deposit amount"
+        );
     }
 
     #[test]
@@ -528,19 +512,11 @@ pub mod tests {
             check_rent_paying: false,
         };
 
-        // Call the deposit_fees function
-        let result = bank.deposit_fees(&pubkey, deposit_amount, options);
-
-        // Check the result
-        match result {
-            Ok(_) => panic!("Expected an error due to lamport overflow, but received Ok"),
-            Err(e) => {
-                match e {
-                    DepositFeeError::LamportOverflow => {} // This is the expected error
-                    _ => panic!("Unexpected error: {:?}", e),
-                }
-            }
-        }
+        assert_eq!(
+            bank.deposit_fees(&pubkey, deposit_amount, options),
+            Err(DepositFeeError::LamportOverflow),
+            "Expected an error due to lamport overflow"
+        );
     }
 
     #[test]
@@ -559,19 +535,11 @@ pub mod tests {
                 check_rent_paying: false,
             };
 
-            // Call the deposit_fees function
-            let result = bank.deposit_fees(&pubkey, deposit_amount, options);
-
-            // Check the result
-            match result {
-                Ok(_) => panic!("Expected an error due to invalid account owner, but received Ok"),
-                Err(e) => {
-                    match e {
-                        DepositFeeError::InvalidAccountOwner => {} // This is the expected error
-                        _ => panic!("Unexpected error: {:?}", e),
-                    }
-                }
-            }
+            assert_eq!(
+                bank.deposit_fees(&pubkey, deposit_amount, options),
+                Err(DepositFeeError::InvalidAccountOwner),
+                "Expected an error due to invalid account owner"
+            );
         }
 
         // disable check_account_owner
@@ -581,20 +549,11 @@ pub mod tests {
                 check_rent_paying: false,
             };
 
-            // Call the deposit_fees function
-            let result = bank.deposit_fees(&pubkey, deposit_amount, options);
-
-            // Check the result
-            match result {
-                Ok(new_balance) => {
-                    assert_eq!(
-                        new_balance,
-                        initial_balance + deposit_amount,
-                        "New balance should be the sum of the initial balance and deposit amount"
-                    );
-                }
-                Err(e) => panic!("Unexpected error: {:?}", e),
-            }
+            assert_eq!(
+                bank.deposit_fees(&pubkey, deposit_amount, options),
+                Ok(initial_balance + deposit_amount),
+                "New balance should be the sum of the initial balance and deposit amount"
+            );
         }
     }
 
@@ -619,21 +578,11 @@ pub mod tests {
                 check_rent_paying: true,
             };
 
-            // Call the deposit_fees function
-            let result = bank.deposit_fees(&pubkey, deposit_amount, options);
-
-            // Check the result
-            match result {
-                Ok(_) => {
-                    panic!("Expected an error due to invalid rent paying account, but received Ok")
-                }
-                Err(e) => {
-                    match e {
-                        DepositFeeError::InvalidRentPayingAccount => {} // This is the expected error
-                        _ => panic!("Unexpected error: {:?}", e),
-                    }
-                }
-            }
+            assert_eq!(
+                bank.deposit_fees(&pubkey, deposit_amount, options),
+                Err(DepositFeeError::InvalidRentPayingAccount),
+                "Expected an error due to invalid rent paying account"
+            );
         }
 
         // disable check_rent_paying
@@ -643,20 +592,11 @@ pub mod tests {
                 check_rent_paying: false,
             };
 
-            // Call the deposit_fees function
-            let result = bank.deposit_fees(&pubkey, deposit_amount, options);
-
-            // Check the result
-            match result {
-                Ok(new_balance) => {
-                    assert_eq!(
-                        new_balance,
-                        initial_balance + deposit_amount,
-                        "New balance should be the sum of the initial balance and deposit amount"
-                    );
-                }
-                Err(e) => panic!("Unexpected error: {:?}", e),
-            }
+            assert_eq!(
+                bank.deposit_fees(&pubkey, deposit_amount, options),
+                Ok(initial_balance + deposit_amount),
+                "New balance should be the sum of the initial balance and deposit amount"
+            );
         }
     }
 

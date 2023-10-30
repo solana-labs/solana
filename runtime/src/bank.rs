@@ -3800,11 +3800,19 @@ impl Bank {
         }
 
         // highest staked node is the first collector
-        self.collector_id = self
-            .stakes_cache
-            .stakes()
-            .highest_staked_node()
-            .unwrap_or_else(Pubkey::new_unique);
+        let highest_staked_node = self.stakes_cache.stakes().highest_staked_node();
+
+        #[cfg(test)]
+        {
+            // in tests, use a new unique pubkey as the collector id if no staked
+            // nodes are defined in the genesis config
+            self.collector_id = highest_staked_node.unwrap_or_else(Pubkey::new_unique);
+        }
+
+        #[cfg(not(test))]
+        {
+            self.collector_id = highest_staked_node.expect("no staked nodes available");
+        }
 
         self.blockhash_queue.write().unwrap().genesis_hash(
             &genesis_config.hash(),

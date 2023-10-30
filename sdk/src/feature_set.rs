@@ -904,7 +904,7 @@ lazy_static! {
         (update_hashes_per_tick4::id(), "Update desired hashes per tick to 7.6M"),
         (update_hashes_per_tick5::id(), "Update desired hashes per tick to 9.2M"),
         (update_hashes_per_tick6::id(), "Update desired hashes per tick to 10M"),
-        (validate_fee_collector_account::id(), "validate fee collector account #??"),
+        (validate_fee_collector_account::id(), "validate fee collector account #33888"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
