@@ -33,6 +33,21 @@ pub trait InstalledScheduler: Send + Sync + Debug + 'static {
         transaction_with_index: &'a (&'a SanitizedTransaction, usize),
     );
 
+    /// Wait for a scheduler to terminate after it is notified with the given reason.
+    ///
+    /// Firstly, this function blocks the current thread while waiting for the scheduler to
+    /// complete all of the executions for the scheduled transactions. This means the scheduler has
+    /// prepared the finalized `ResultWithTimings` at least internally at the time of existing from
+    /// this function. If no trsanction is scheduled, the result and timing will be `Ok(())` and
+    /// `ExecuteTimings::default()` respectively. This is done in the same way regardless of
+    /// `WaitReason`.
+    ///
+    /// After that, the scheduler may behave differently depending on the reason, regarding the
+    /// final bookkeeping. Specifically, this function guaranteed to return
+    /// `Some(finalized_result_with_timings)` unless the reason is `PausedForRecentBlockhash`. In
+    /// the case of `PausedForRecentBlockhash`, the scheduler is responsible to retain the
+    /// finalized `ResultWithTimings` until it's `wait_for_termination()`-ed with one of the other
+    /// two reasons later.
     #[must_use]
     fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings>;
 }
@@ -41,19 +56,28 @@ pub type DefaultInstalledSchedulerBox = Box<dyn InstalledScheduler>;
 
 pub type ResultWithTimings = (Result<()>, ExecuteTimings);
 
+/// A hint from the bank about the reason the caller is waiting on its scheduler termination.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum WaitReason {
-    // most normal termination waiting mode; couldn't be done implicitly inside Bank::freeze() -> () to return
-    // the result and timing in some way to higher-layer subsystems;
+    // The bank wants its scheduler to terminate after the completion of transaction execution, in
+    // order to freeze itself immediately thereafter. This is by far the most normal wait reason.
+    //
+    // Note that `wait_for_termination(TerminatedToFreeze)` must explicitly be done prior
+    // to Bank::freeze(). This can't be done inside Bank::freeze() implicitly to remain it
+    // infallible.
     TerminatedToFreeze,
-    // just behaves like TerminatedToFreeze but hint that this is called from Drop::drop().
+    // The bank wants its scheduler to terminate just like `TerminatedToFreeze` and indicate that
+    // Drop::drop() is the caller.
     DroppedFromBankForks,
-    // scheduler is paused without being returned to the pool to collect ResultWithTimings later.
+    // The bank wants its scheduler to pause the scheduler after the completion without being
+    // returned to the pool to collect scheduler's internally-held `ResultWithTimings` later.
     PausedForRecentBlockhash,
 }
 
 impl WaitReason {
     pub fn is_paused(&self) -> bool {
+        // Exhaustive `match` is preferred here than `matches!()` to trigger an explicit
+        // decision to be made, should we add new variants like `PausedForFooBar`...
         match self {
             WaitReason::PausedForRecentBlockhash => true,
             WaitReason::TerminatedToFreeze | WaitReason::DroppedFromBankForks => false,
