@@ -1781,6 +1781,10 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
                 Ok(())
             }
         }));
+    add_arg!(Arg::with_name("disable_accounts_disk_index")
+        .long("disable-accounts-disk-index")
+        .help("Disable the disk-based accounts index if it is enabled by default.")
+        .conflicts_with("accounts_index_memory_limit_mb"));
     add_arg!(
         Arg::with_name("disable_quic_servers")
             .long("disable-quic-servers")
@@ -1865,10 +1869,6 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
             .help("Skip ledger verification at validator bootup."),
         replaced_by: "skip-startup-ledger-verification",
     );
-    add_arg!(Arg::with_name("disable_accounts_disk_index")
-        .long("disable-accounts-disk-index")
-        .help("Disable the disk-based accounts index if it is enabled by default.")
-        .conflicts_with("accounts_index_memory_limit_mb"));
 
     res
 }
