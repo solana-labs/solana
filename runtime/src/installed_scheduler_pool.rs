@@ -116,6 +116,21 @@ pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + '
     // Calling this is illegal as soon as wait_for_termination is called.
     fn schedule_execution<'a>(&'a self, transaction_with_index: SEA::TransactionWithIndex<'a>);
 
+    /// Wait for a scheduler to terminate after it is notified with the given reason.
+    ///
+    /// Firstly, this function blocks the current thread while waiting for the scheduler to
+    /// complete all of the executions for the scheduled transactions. This means the scheduler has
+    /// prepared the finalized `ResultWithTimings` at least internally at the time of existing from
+    /// this function. If no trsanction is scheduled, the result and timing will be `Ok(())` and
+    /// `ExecuteTimings::default()` respectively. This is done in the same way regardless of
+    /// `WaitReason`.
+    ///
+    /// After that, the scheduler may behave differently depending on the reason, regarding the
+    /// final bookkeeping. Specifically, this function guaranteed to return
+    /// `Some(finalized_result_with_timings)` unless the reason is `PausedForRecentBlockhash`. In
+    /// the case of `PausedForRecentBlockhash`, the scheduler is responsible to retain the
+    /// finalized `ResultWithTimings` until it's `wait_for_termination()`-ed with one of the other
+    /// two reasons later.
     #[must_use]
     fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings>;
 
@@ -128,8 +143,6 @@ pub type DefaultInstalledSchedulerBox = Box<dyn InstalledScheduler<DefaultSchedu
 pub type InstalledSchedulerPoolArc<SEA> = Arc<dyn InstalledSchedulerPool<SEA>>;
 
 pub type SchedulerId = u64;
-
-pub type ResultWithTimings = (Result<()>, ExecuteTimings);
 
 pub trait WithTransactionAndIndex: Send + Sync + Debug {
     fn with_transaction_and_index(&self, callback: impl FnOnce(&SanitizedTransaction, usize));
@@ -157,26 +170,6 @@ pub struct DefaultScheduleExecutionArg;
 
 impl ScheduleExecutionArg for DefaultScheduleExecutionArg {
     type TransactionWithIndex<'tx> = &'tx (&'tx SanitizedTransaction, usize);
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum WaitReason {
-    // most normal termination waiting mode; couldn't be done implicitly inside Bank::freeze() -> () to return
-    // the result and timing in some way to higher-layer subsystems;
-    TerminatedToFreeze,
-    // just behaves like TerminatedToFreeze but hint that this is called from Drop::drop().
-    DroppedFromBankForks,
-    // scheduler is paused without being returned to the pool to collect ResultWithTimings later.
-    PausedForRecentBlockhash,
-}
-
-impl WaitReason {
-    pub fn is_paused(&self) -> bool {
-        match self {
-            WaitReason::PausedForRecentBlockhash => true,
-            WaitReason::TerminatedToFreeze | WaitReason::DroppedFromBankForks => false,
-        }
-    }
 }
 
 /// A small context to propagate a bank and its scheduling mode to the scheduler subsystem.
@@ -223,6 +216,37 @@ impl SchedulingContext {
                 .unwrap_or_else(|| "(?)".into()),
             width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
         )
+    }
+}
+
+pub type ResultWithTimings = (Result<()>, ExecuteTimings);
+
+/// A hint from the bank about the reason the caller is waiting on its scheduler termination.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum WaitReason {
+    // The bank wants its scheduler to terminate after the completion of transaction execution, in
+    // order to freeze itself immediately thereafter. This is by far the most normal wait reason.
+    //
+    // Note that `wait_for_termination(TerminatedToFreeze)` must explicitly be done prior
+    // to Bank::freeze(). This can't be done inside Bank::freeze() implicitly to remain it
+    // infallible.
+    TerminatedToFreeze,
+    // The bank wants its scheduler to terminate just like `TerminatedToFreeze` and indicate that
+    // Drop::drop() is the caller.
+    DroppedFromBankForks,
+    // The bank wants its scheduler to pause the scheduler after the completion without being
+    // returned to the pool to collect scheduler's internally-held `ResultWithTimings` later.
+    PausedForRecentBlockhash,
+}
+
+impl WaitReason {
+    pub fn is_paused(&self) -> bool {
+        // Exhaustive `match` is preferred here than `matches!()` to trigger an explicit
+        // decision to be made, should we add new variants like `PausedForFooBar`...
+        match self {
+            WaitReason::PausedForRecentBlockhash => true,
+            WaitReason::TerminatedToFreeze | WaitReason::DroppedFromBankForks => false,
+        }
     }
 }
 
@@ -322,7 +346,7 @@ impl BankWithScheduler {
     }
 
     pub(crate) fn wait_for_paused_scheduler(bank: &Bank, scheduler: &InstalledSchedulerRwLock) {
-        let maybe_result_with_timings = BankWithSchedulerInner::wait_for_scheduler(
+        let maybe_result_with_timings = BankWithSchedulerInner::wait_for_scheduler_termination(
             bank,
             scheduler,
             WaitReason::PausedForRecentBlockhash,
@@ -335,7 +359,7 @@ impl BankWithScheduler {
 
     #[must_use]
     pub fn wait_for_completed_scheduler(&self) -> Option<ResultWithTimings> {
-        BankWithSchedulerInner::wait_for_scheduler(
+        BankWithSchedulerInner::wait_for_scheduler_termination(
             &self.inner.bank,
             &self.inner.scheduler,
             WaitReason::TerminatedToFreeze,
@@ -350,7 +374,7 @@ impl BankWithScheduler {
 impl BankWithSchedulerInner {
     #[must_use]
     fn wait_for_completed_scheduler_from_drop(&self) -> Option<ResultWithTimings> {
-        Self::wait_for_scheduler(
+        Self::wait_for_scheduler_termination(
             &self.bank,
             &self.scheduler,
             WaitReason::DroppedFromBankForks,
@@ -358,13 +382,13 @@ impl BankWithSchedulerInner {
     }
 
     #[must_use]
-    fn wait_for_scheduler(
+    fn wait_for_scheduler_termination(
         bank: &Bank,
         scheduler: &InstalledSchedulerRwLock,
         reason: WaitReason,
     ) -> Option<ResultWithTimings> {
         debug!(
-            "wait_for_scheduler(slot: {}, reason: {:?}): started...",
+            "wait_for_scheduler_termination(slot: {}, reason: {:?}): started...",
             bank.slot(),
             reason,
         );
@@ -383,7 +407,7 @@ impl BankWithSchedulerInner {
             None
         };
         debug!(
-            "wait_for_scheduler(slot: {}, reason: {:?}): finished with: {:?}...",
+            "wait_for_scheduler_termination(slot: {}, reason: {:?}): finished with: {:?}...",
             bank.slot(),
             reason,
             result_with_timings.as_ref().map(|(result, _)| result),
