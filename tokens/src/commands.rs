@@ -54,9 +54,9 @@ use {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Allocation {
-    pub recipient: String,
+    pub recipient: Pubkey,
     pub amount: u64,
-    pub lockup_date: String,
+    pub lockup_date: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -133,7 +133,7 @@ fn merge_allocations(allocations: &[Allocation]) -> Vec<Allocation> {
             .or_insert(Allocation {
                 recipient: allocation.recipient.clone(),
                 amount: 0,
-                lockup_date: "".to_string(),
+                lockup_date: None,
             })
             .amount += allocation.amount;
     }
@@ -142,8 +142,8 @@ fn merge_allocations(allocations: &[Allocation]) -> Vec<Allocation> {
 
 /// Return true if the recipient and lockups are the same
 fn has_same_recipient(allocation: &Allocation, transaction_info: &TransactionInfo) -> bool {
-    allocation.recipient == transaction_info.recipient.to_string()
-        && allocation.lockup_date.parse().ok() == transaction_info.lockup_date
+    allocation.recipient == transaction_info.recipient
+        && allocation.lockup_date == transaction_info.lockup_date
 }
 
 fn apply_previous_transactions(
@@ -200,7 +200,7 @@ fn distribution_instructions(
         // No stake args; a simple token transfer.
         None => {
             let from = args.sender_keypair.pubkey();
-            let to = allocation.recipient.parse().unwrap();
+            let to = allocation.recipient;
             let lamports = allocation.amount;
             let instruction = system_instruction::transfer(&from, &to, lamports);
             vec![instruction]
@@ -210,7 +210,7 @@ fn distribution_instructions(
         Some(stake_args) => {
             let unlocked_sol = stake_args.unlocked_sol;
             let sender_pubkey = args.sender_keypair.pubkey();
-            let recipient = allocation.recipient.parse().unwrap();
+            let recipient = allocation.recipient;
 
             let mut instructions = match &stake_args.sender_stake_args {
                 // No source stake account, so create a recipient stake account directly.
@@ -325,7 +325,7 @@ fn build_messages(
             let associated_token_addresses = allocation_chunk
                 .iter()
                 .map(|x| {
-                    let wallet_address = x.recipient.parse().unwrap();
+                    let wallet_address = x.recipient;
                     get_associated_token_address(&wallet_address, &spl_token_args.mint)
                 })
                 .collect::<Vec<_>>();
@@ -340,11 +340,7 @@ fn build_messages(
             return Err(Error::ExitSignal);
         }
         let new_stake_account_keypair = Keypair::new();
-        let lockup_date = if allocation.lockup_date.is_empty() {
-            None
-        } else {
-            Some(allocation.lockup_date.parse::<DateTime<Utc>>().unwrap())
-        };
+        let lockup_date = allocation.lockup_date;
 
         let do_create_associated_token_account = if let Some(spl_token_args) = &args.spl_token_args
         {
@@ -411,7 +407,7 @@ fn send_messages(
                 signers.push(&*sender_stake_args.stake_authority);
                 signers.push(&*sender_stake_args.withdraw_authority);
                 signers.push(&new_stake_account_keypair);
-                if !allocation.lockup_date.is_empty() {
+                if !allocation.lockup_date.is_none() {
                     if let Some(lockup_authority) = &sender_stake_args.lockup_authority {
                         signers.push(&**lockup_authority);
                     } else {
@@ -442,7 +438,7 @@ fn send_messages(
                     args.stake_args.as_ref().map(|_| &new_stake_account_address);
                 db::set_transaction_info(
                     db,
-                    &allocation.recipient.parse().unwrap(),
+                    &allocation.recipient,
                     allocation.amount,
                     &transaction,
                     new_stake_account_address_option,
@@ -497,7 +493,7 @@ fn distribute_allocations(
 fn read_allocations(
     input_csv: &str,
     transfer_amount: Option<u64>,
-    require_lockup_heading: bool,
+    with_lockup: bool,
     raw_amount: bool,
 ) -> Result<Vec<Allocation>, Error> {
     let mut rdr = ReaderBuilder::new().trim(Trim::All).from_path(input_csv)?;
@@ -505,32 +501,35 @@ fn read_allocations(
         rdr.deserialize()
             .map(|recipient| {
                 let recipient: String = recipient?;
-                match Pubkey::from_str(recipient.as_str()) {
-                    Ok(..) => (),
+                let recipient = match Pubkey::from_str(recipient.as_str()) {
+                    Ok(pubkey) => pubkey,
                     Err(err) => return Err(Error::BadInputPubkeyError(err)),
-                }
+                };
                 Ok(Allocation {
                     recipient,
                     amount,
-                    lockup_date: "".to_string(),
+                    lockup_date: None,
                 })
             })
             .collect::<Result<Vec<Allocation>, Error>>()?
-    } else if require_lockup_heading {
+    } else if with_lockup {
         // We only support SOL token in "require lockup" mode.
         rdr.deserialize()
             .map(|recipient| {
                 let (recipient, amount, lockup_date): (String, f64, String) = recipient?;
-                match Pubkey::from_str(recipient.as_str()) {
-                    Ok(..) => (),
+                let recipient = match Pubkey::from_str(recipient.as_str()) {
+                    Ok(pubkey) => pubkey,
                     Err(err) => return Err(Error::BadInputPubkeyError(err)),
-                }
-                if !lockup_date.is_empty() {
+                };
+                let lockup_date = if !lockup_date.is_empty() {
                     match lockup_date.parse::<DateTime<Utc>>() {
-                        Ok(..) => (),
+                        Ok(lockup_date) => Some(lockup_date),
                         Err(err) => return Err(Error::BadInputLockupDate(err)),
                     }
-                } // empty lockup date means no lockup, it's okay to have only some lockups specified
+                } else {
+                    // empty lockup date means no lockup, it's okay to have only some lockups specified
+                    None
+                };
                 Ok(Allocation {
                     recipient,
                     amount: sol_to_lamports(amount),
@@ -542,14 +541,14 @@ fn read_allocations(
         rdr.deserialize()
             .map(|recipient| {
                 let (recipient, amount): (String, u64) = recipient?;
-                match Pubkey::from_str(recipient.as_str()) {
-                    Ok(..) => (),
+                let recipient = match Pubkey::from_str(recipient.as_str()) {
+                    Ok(pubkey) => pubkey,
                     Err(err) => return Err(Error::BadInputPubkeyError(err)),
-                }
+                };
                 Ok(Allocation {
                     recipient,
                     amount,
-                    lockup_date: "".to_string(),
+                    lockup_date: None,
                 })
             })
             .collect::<Result<Vec<Allocation>, Error>>()?
@@ -557,14 +556,14 @@ fn read_allocations(
         rdr.deserialize()
             .map(|recipient| {
                 let (recipient, amount): (String, f64) = recipient?;
-                match Pubkey::from_str(recipient.as_str()) {
-                    Ok(..) => (),
+                let recipient = match Pubkey::from_str(recipient.as_str()) {
+                    Ok(pubkey) => pubkey,
                     Err(err) => return Err(Error::BadInputPubkeyError(err)),
-                }
+                };
                 Ok(Allocation {
                     recipient,
                     amount: sol_to_lamports(amount),
-                    lockup_date: "".to_string(),
+                    lockup_date: None,
                 })
             })
             .collect::<Result<Vec<Allocation>, Error>>()?
@@ -591,11 +590,11 @@ pub fn process_allocations(
     args: &DistributeTokensArgs,
     exit: Arc<AtomicBool>,
 ) -> Result<Option<usize>, Error> {
-    let require_lockup_heading = args.stake_args.is_some();
+    let with_lockup = args.stake_args.is_some();
     let mut allocations: Vec<Allocation> = read_allocations(
         &args.input_csv,
         args.transfer_amount,
-        require_lockup_heading,
+        with_lockup,
         args.spl_token_args.is_some(),
     )?;
 
@@ -910,7 +909,7 @@ pub fn process_balances(
         if let Some(spl_token_args) = &args.spl_token_args {
             print_token_balances(client, allocation, spl_token_args)?;
         } else {
-            let address: Pubkey = allocation.recipient.parse().unwrap();
+            let address: Pubkey = allocation.recipient;
             let expected = lamports_to_sol(allocation.amount);
             let actual = lamports_to_sol(client.get_balance(&address).unwrap());
             println!(
@@ -1294,6 +1293,7 @@ mod tests {
         solana_streamer::socket::SocketAddrSpace,
         solana_test_validator::TestValidator,
         solana_transaction_status::TransactionConfirmationStatus,
+        std::alloc::alloc,
     };
 
     fn one_signer_message(client: &RpcClient) -> Message {
@@ -1357,16 +1357,27 @@ mod tests {
 
     #[test]
     fn test_read_allocations() {
-        let alice_pubkey = solana_sdk::pubkey::new_rand();
+        let alice_pubkey = pubkey::new_rand();
         let allocation = Allocation {
-            recipient: alice_pubkey.to_string(),
+            recipient: alice_pubkey,
             amount: 42,
-            lockup_date: "".to_string(),
+            lockup_date: None,
         };
         let file = NamedTempFile::new().unwrap();
         let input_csv = file.path().to_str().unwrap().to_string();
         let mut wtr = csv::WriterBuilder::new().from_writer(file);
-        wtr.serialize(&allocation).unwrap();
+        wtr.serialize((
+            "recipient".to_string(),
+            "amount".to_string(),
+            "require_lockup".to_string(),
+        ))
+        .unwrap();
+        wtr.serialize((
+            allocation.recipient.to_string(),
+            allocation.amount,
+            allocation.lockup_date,
+        ))
+        .unwrap();
         wtr.flush().unwrap();
 
         assert_eq!(
@@ -1375,9 +1386,9 @@ mod tests {
         );
 
         let allocation_sol = Allocation {
-            recipient: alice_pubkey.to_string(),
+            recipient: alice_pubkey,
             amount: sol_to_lamports(42.0),
-            lockup_date: "".to_string(),
+            lockup_date: None,
         };
 
         assert_eq!(
@@ -1409,14 +1420,14 @@ mod tests {
 
         let expected_allocations = vec![
             Allocation {
-                recipient: pubkey0.to_string(),
+                recipient: pubkey0,
                 amount: sol_to_lamports(42.0),
-                lockup_date: "".to_string(),
+                lockup_date: None,
             },
             Allocation {
-                recipient: pubkey1.to_string(),
+                recipient: pubkey1,
                 amount: sol_to_lamports(43.0),
-                lockup_date: "".to_string(),
+                lockup_date: None,
             },
         ];
         assert_eq!(
@@ -1674,19 +1685,19 @@ mod tests {
 
         let expected_allocations = vec![
             Allocation {
-                recipient: pubkey0.to_string(),
+                recipient: pubkey0,
                 amount,
-                lockup_date: "".to_string(),
+                lockup_date: None,
             },
             Allocation {
-                recipient: pubkey1.to_string(),
+                recipient: pubkey1,
                 amount,
-                lockup_date: "".to_string(),
+                lockup_date: None,
             },
             Allocation {
-                recipient: pubkey2.to_string(),
+                recipient: pubkey2,
                 amount,
-                lockup_date: "".to_string(),
+                lockup_date: None,
             },
         ];
         assert_eq!(
@@ -1701,14 +1712,14 @@ mod tests {
         let bob = pubkey::new_rand();
         let mut allocations = vec![
             Allocation {
-                recipient: alice.to_string(),
+                recipient: alice,
                 amount: sol_to_lamports(1.0),
-                lockup_date: "".to_string(),
+                lockup_date: None,
             },
             Allocation {
-                recipient: bob.to_string(),
+                recipient: bob,
                 amount: sol_to_lamports(1.0),
-                lockup_date: "".to_string(),
+                lockup_date: None,
             },
         ];
         let transaction_infos = vec![TransactionInfo {
@@ -1721,7 +1732,7 @@ mod tests {
 
         // Ensure that we applied the transaction to the allocation with
         // a matching recipient address (to bob, not alice).
-        assert_eq!(allocations[0].recipient, alice.to_string());
+        assert_eq!(allocations[0].recipient, alice);
     }
 
     #[test]
@@ -1731,14 +1742,14 @@ mod tests {
         let lockup0 = "2021-01-07T00:00:00Z".to_string();
         let lockup1 = "9999-12-31T23:59:59Z".to_string();
         let alice_alloc = Allocation {
-            recipient: alice_pubkey.to_string(),
+            recipient: alice_pubkey,
             amount: sol_to_lamports(1.0),
-            lockup_date: "".to_string(),
+            lockup_date: None,
         };
         let alice_alloc_lockup0 = Allocation {
-            recipient: alice_pubkey.to_string(),
+            recipient: alice_pubkey,
             amount: sol_to_lamports(1.0),
-            lockup_date: lockup0.clone(),
+            lockup_date: lockup0.parse().ok(),
         };
         let alice_info = TransactionInfo {
             recipient: alice_pubkey,
@@ -1779,9 +1790,9 @@ mod tests {
     fn test_set_split_stake_lockup() {
         let lockup_date_str = "2021-01-07T00:00:00Z";
         let allocation = Allocation {
-            recipient: Pubkey::default().to_string(),
+            recipient: Pubkey::default(),
             amount: sol_to_lamports(1.002_282_880),
-            lockup_date: lockup_date_str.to_string(),
+            lockup_date: lockup_date_str.parse().ok(),
         };
         let stake_account_address = pubkey::new_rand();
         let new_stake_account_address = pubkey::new_rand();
@@ -1844,9 +1855,9 @@ mod tests {
     ) -> (Vec<Allocation>, DistributeTokensArgs) {
         let recipient = pubkey::new_rand();
         let allocations = vec![Allocation {
-            recipient: recipient.to_string(),
+            recipient,
             amount: allocation_amount,
-            lockup_date: "".to_string(),
+            lockup_date: None,
         }];
         let args = DistributeTokensArgs {
             sender_keypair: read_keypair_file(sender_keypair_file).unwrap().into(),
@@ -2119,9 +2130,9 @@ mod tests {
         // Underfunded stake-account
         let expensive_allocation_amount = 5000.0;
         let expensive_allocations = vec![Allocation {
-            recipient: pubkey::new_rand().to_string(),
+            recipient: pubkey::new_rand(),
             amount: sol_to_lamports(expensive_allocation_amount),
-            lockup_date: "".to_string(),
+            lockup_date: None,
         }];
         let err_result = check_payer_balances(
             &[one_signer_message(&client)],
@@ -2337,9 +2348,9 @@ mod tests {
             transfer_amount: None,
         };
         let allocation = Allocation {
-            recipient: recipient.to_string(),
+            recipient,
             amount: sol_to_lamports(1.0),
-            lockup_date: "".to_string(),
+            lockup_date: None,
         };
 
         let mut messages: Vec<Message> = vec![];
@@ -2459,9 +2470,9 @@ mod tests {
             transfer_amount: None,
         };
         let allocation = Allocation {
-            recipient: recipient.to_string(),
+            recipient,
             amount: sol_to_lamports(1.0),
-            lockup_date: "".to_string(),
+            lockup_date: None,
         };
         let message = transaction.message.clone();
 
@@ -2558,9 +2569,9 @@ mod tests {
         let mut db = db::open_db(&db_file, false).unwrap();
         let recipient = Pubkey::new_unique();
         let allocation = Allocation {
-            recipient: recipient.to_string(),
+            recipient,
             amount: sol_to_lamports(1.0),
-            lockup_date: "".to_string(),
+            lockup_date: None,
         };
         // This is just dummy data; Args will not affect messages
         let args = DistributeTokensArgs {
