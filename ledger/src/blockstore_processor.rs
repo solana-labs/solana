@@ -216,10 +216,25 @@ fn execute_batch(
 }
 
 #[derive(Default)]
-struct ExecuteBatchesInternalMetrics {
+pub struct ExecuteBatchesInternalMetrics {
     execution_timings_per_thread: HashMap<usize, ThreadExecuteTimings>,
     total_batches_len: u64,
     execute_batches_us: u64,
+}
+
+impl ExecuteBatchesInternalMetrics {
+    pub fn new_with_timings_from_all_threads(execute_timings: ExecuteTimings) -> Self {
+        const DUMMY_THREAD_INDEX: usize = 999;
+        let mut new = Self::default();
+        new.execution_timings_per_thread.insert(
+            DUMMY_THREAD_INDEX,
+            ThreadExecuteTimings {
+                execute_timings,
+                ..ThreadExecuteTimings::default()
+            },
+        );
+        new
+    }
 }
 
 fn execute_batches_internal(
@@ -1068,7 +1083,7 @@ pub struct BatchExecutionTiming {
 }
 
 impl BatchExecutionTiming {
-    fn accumulate(&mut self, new_batch: ExecuteBatchesInternalMetrics) {
+    pub fn accumulate(&mut self, new_batch: ExecuteBatchesInternalMetrics) {
         let Self {
             totals,
             wall_clock_us,
@@ -1382,6 +1397,9 @@ fn process_bank_0(
         &mut ExecuteTimings::default(),
     )
     .expect("Failed to process bank 0 from ledger. Did you forget to provide a snapshot?");
+    if let Some((result, _timings)) = bank0.wait_for_completed_scheduler() {
+        result.unwrap();
+    }
     bank0.freeze();
     if blockstore.is_primary_access() {
         blockstore.insert_bank_hash(bank0.slot(), bank0.hash(), false);
@@ -1784,6 +1802,9 @@ fn process_single_slot(
         err
     })?;
 
+    if let Some((result, _timings)) = bank.wait_for_completed_scheduler() {
+        result?
+    }
     bank.freeze(); // all banks handled by this routine are created from complete slots
     if blockstore.is_primary_access() {
         blockstore.insert_bank_hash(bank.slot(), bank.hash(), false);
@@ -1924,7 +1945,7 @@ pub mod tests {
             genesis_utils::{
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
             },
-            installed_scheduler_pool::MockInstalledScheduler,
+            installed_scheduler_pool::{MockInstalledScheduler, WaitReason},
         },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
@@ -4510,10 +4531,17 @@ pub mod tests {
         let txs = create_test_transactions(&mint_keypair, &genesis_config.hash());
 
         let mut mocked_scheduler = MockInstalledScheduler::new();
+        let mut seq = mockall::Sequence::new();
         mocked_scheduler
             .expect_schedule_execution()
             .times(txs.len())
             .returning(|_| ());
+        mocked_scheduler
+            .expect_wait_for_termination()
+            .with(mockall::predicate::eq(WaitReason::DroppedFromBankForks))
+            .times(1)
+            .in_sequence(&mut seq)
+            .returning(|_| None);
         let bank = BankWithScheduler::new(bank, Some(Box::new(mocked_scheduler)));
 
         let batch = bank.prepare_sanitized_batch(&txs);
