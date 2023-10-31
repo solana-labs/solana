@@ -1,7 +1,9 @@
 use {
     clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg},
     log::*,
-    solana_accounts_db::{account_storage::meta::StoredAccountMeta, append_vec::AppendVec},
+    solana_accounts_db::{
+        account_storage::meta::StoredAccountMeta, accounts_hash::AccountHash, append_vec::AppendVec,
+    },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         hash::Hash,
@@ -65,7 +67,7 @@ fn main() {
 }
 
 fn is_account_zeroed(account: &StoredAccountMeta) -> bool {
-    account.hash() == &Hash::default()
+    account.hash() == &AccountHash(Hash::default())
         && account.data_len() == 0
         && account.write_version() == 0
         && account.pubkey() == &Pubkey::default()

@@ -1,7 +1,7 @@
 //! Code for stake and vote rewards
 
 use {
-    crate::{accounts_db::IncludeSlotInHash, storable_accounts::StorableAccounts},
+    crate::storable_accounts::StorableAccounts,
     solana_sdk::{
         account::AccountSharedData, clock::Slot, pubkey::Pubkey, reward_type::RewardType,
     },
@@ -32,7 +32,7 @@ impl StakeReward {
 }
 
 /// allow [StakeReward] to be passed to `StoreAccounts` directly without copies or vec construction
-impl<'a> StorableAccounts<'a, AccountSharedData> for (Slot, &'a [StakeReward], IncludeSlotInHash) {
+impl<'a> StorableAccounts<'a, AccountSharedData> for (Slot, &'a [StakeReward]) {
     fn pubkey(&self, index: usize) -> &Pubkey {
         &self.1[index].stake_pubkey
     }
@@ -48,9 +48,6 @@ impl<'a> StorableAccounts<'a, AccountSharedData> for (Slot, &'a [StakeReward], I
     }
     fn len(&self) -> usize {
         self.1.len()
-    }
-    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
-        self.2
     }
 }
 

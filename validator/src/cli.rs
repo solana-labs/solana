@@ -258,11 +258,9 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("SLOT_DISTANCE")
                 .takes_value(true)
                 .default_value(&default_args.health_check_slot_distance)
-                .help("If --known-validators are specified, report this validator healthy \
-                       if its latest account hash is no further behind than this number of \
-                       slots from the latest known validator account hash. \
-                       If no --known-validators are specified, the validator will always \
-                       report itself to be healthy")
+                .help("Report this validator healthy if its latest optimistically confirmed slot \
+                       that has been replayed is no further behind than this number of slots from \
+                       the cluster latest optimistically confirmed slot")
         )
         .arg(
             Arg::with_name("rpc_faucet_addr")
@@ -1197,6 +1195,19 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .hidden(hidden_unless_forced())
         )
         .arg(
+            Arg::with_name("accounts_db_test_skip_rewrites")
+                .long("accounts-db-test-skip-rewrites")
+                .help("Debug option to skip rewrites for rent-exempt accounts but still add them in bank delta hash calculation")
+                .hidden(hidden_unless_forced())
+        )
+        .arg(
+            Arg::with_name("no_skip_initial_accounts_db_clean")
+                .long("no-skip-initial-accounts-db-clean")
+                .help("Do not skip the initial cleaning of accounts when verifying snapshot bank")
+                .hidden(hidden_unless_forced())
+                .conflicts_with("accounts_db_skip_shrink")
+        )
+        .arg(
             Arg::with_name("accounts_db_create_ancient_storage_packed")
                 .long("accounts-db-create-ancient-storage-packed")
                 .help("Create ancient storages in one shot instead of appending.")
@@ -1385,10 +1396,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         .arg(
             Arg::with_name("wen_restart")
                 .long("wen-restart")
+                .hidden(hidden_unless_forced())
                 .value_name("DIR")
                 .takes_value(true)
                 .required(false)
-                .default_value(&default_args.wen_restart_path)
                 .conflicts_with("wait_for_supermajority")
                 .help(
                     "When specified, the validator will enter Wen Restart mode which
@@ -1452,6 +1463,11 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                     Arg::with_name("skip_new_snapshot_check")
                         .long("skip-new-snapshot-check")
                         .help("Skip check for a new snapshot")
+                )
+                .arg(
+                    Arg::with_name("skip_health_check")
+                        .long("skip-health-check")
+                        .help("Skip health check")
                 )
         )
         .subcommand(
@@ -1667,6 +1683,11 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                     Arg::with_name("skip_new_snapshot_check")
                         .long("skip-new-snapshot-check")
                         .help("Skip check for a new snapshot")
+                )
+                .arg(
+                    Arg::with_name("skip_health_check")
+                        .long("skip-health-check")
+                        .help("Skip health check")
                 )
                 .after_help("Note: If this command exits with a non-zero status \
                          then this not a good time for a restart")

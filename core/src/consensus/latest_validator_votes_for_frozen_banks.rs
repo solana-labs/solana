@@ -292,7 +292,7 @@ mod tests {
         }
 
         // Case 6: Adding a vote for a new higher slot that *is* frozen
-        // should upate the state
+        // should update the state
         let frozen_hash = Hash::new_unique();
         assert_eq!(
             latest_validator_votes_for_frozen_banks.check_add_vote(

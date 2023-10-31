@@ -2,7 +2,7 @@ use {
     futures_util::StreamExt,
     rand::Rng,
     serde_json::{json, Value},
-    solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path},
+    solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path_auto_delete},
     solana_pubsub_client::{nonblocking, pubsub_client::PubsubClient},
     solana_rpc::{
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
@@ -132,7 +132,7 @@ fn test_account_subscription() {
     } = create_genesis_config(10_000);
     let bank = Bank::new_for_tests(&genesis_config);
     let blockhash = bank.last_blockhash();
-    let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+    let bank_forks = BankForks::new_rw_arc(bank);
     let bank0 = bank_forks.read().unwrap().get(0).unwrap();
     let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
     bank_forks.write().unwrap().insert(bank1);
@@ -168,7 +168,7 @@ fn test_account_subscription() {
     // Transfer 100 lamports from alice to bob
     let tx = system_transaction::transfer(&alice, &bob.pubkey(), 100, blockhash);
     bank_forks
-        .write()
+        .read()
         .unwrap()
         .get(1)
         .unwrap()
@@ -230,11 +230,11 @@ fn test_block_subscription() {
     } = create_genesis_config(10_000);
     let bank = Bank::new_for_tests(&genesis_config);
     let rent_exempt_amount = bank.get_minimum_balance_for_rent_exemption(0);
-    let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+    let bank_forks = BankForks::new_rw_arc(bank);
 
     // setup Blockstore
-    let ledger_path = get_tmp_ledger_path!();
-    let blockstore = Blockstore::open(&ledger_path).unwrap();
+    let ledger_path = get_tmp_ledger_path_auto_delete!();
+    let blockstore = Blockstore::open(ledger_path.path()).unwrap();
     let blockstore = Arc::new(blockstore);
 
     // populate ledger with test txs
@@ -338,7 +338,7 @@ fn test_program_subscription() {
     } = create_genesis_config(10_000);
     let bank = Bank::new_for_tests(&genesis_config);
     let blockhash = bank.last_blockhash();
-    let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+    let bank_forks = BankForks::new_rw_arc(bank);
     let bank0 = bank_forks.read().unwrap().get(0).unwrap();
     let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
     bank_forks.write().unwrap().insert(bank1);
@@ -373,7 +373,7 @@ fn test_program_subscription() {
     // Create new program account at bob's address
     let tx = system_transaction::create_account(&alice, &bob, blockhash, 100, 0, &program_id);
     bank_forks
-        .write()
+        .read()
         .unwrap()
         .get(1)
         .unwrap()
@@ -425,7 +425,7 @@ fn test_root_subscription() {
 
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
     let bank = Bank::new_for_tests(&genesis_config);
-    let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+    let bank_forks = BankForks::new_rw_arc(bank);
     let bank0 = bank_forks.read().unwrap().get(0).unwrap();
     let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
     bank_forks.write().unwrap().insert(bank1);
@@ -477,7 +477,7 @@ fn test_slot_subscription() {
     let exit = Arc::new(AtomicBool::new(false));
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
     let bank = Bank::new_for_tests(&genesis_config);
-    let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+    let bank_forks = BankForks::new_rw_arc(bank);
     let optimistically_confirmed_bank =
         OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
     let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
@@ -553,7 +553,7 @@ async fn test_slot_subscription_async() {
         let exit = Arc::new(AtomicBool::new(false));
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());

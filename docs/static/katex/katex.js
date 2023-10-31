@@ -3674,7 +3674,7 @@ function assertSpan(group) {
 //     '\expandafter\show\the\scriptscriptfont2' \
 //     '\stop'
 //
-// The metrics themselves were retreived using the following commands:
+// The metrics themselves were retrieved using the following commands:
 //
 //     tftopl cmsy10
 //     tftopl cmsy7

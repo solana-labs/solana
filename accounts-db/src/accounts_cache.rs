@@ -1,14 +1,13 @@
 use {
-    crate::accounts_db::IncludeSlotInHash,
+    crate::{accounts_db::AccountsDb, accounts_hash::AccountHash},
     dashmap::DashMap,
+    seqlock::SeqLock,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
-        hash::Hash,
         pubkey::Pubkey,
     },
     std::{
-        borrow::Borrow,
         collections::BTreeSet,
         ops::Deref,
         sync::{
@@ -66,21 +65,12 @@ impl SlotCacheInner {
         self.cache.iter().map(|item| *item.key()).collect()
     }
 
-    pub fn insert(
-        &self,
-        pubkey: &Pubkey,
-        account: AccountSharedData,
-        hash: Option<impl Borrow<Hash>>,
-        slot: Slot,
-        include_slot_in_hash: IncludeSlotInHash,
-    ) -> CachedAccount {
+    pub fn insert(&self, pubkey: &Pubkey, account: AccountSharedData) -> CachedAccount {
         let data_len = account.data().len() as u64;
         let item = Arc::new(CachedAccountInner {
             account,
-            hash: RwLock::new(hash.map(|h| *h.borrow())),
-            slot,
+            hash: SeqLock::new(None),
             pubkey: *pubkey,
-            include_slot_in_hash,
         });
         if let Some(old) = self.cache.insert(*pubkey, item.clone()) {
             self.same_account_writes.fetch_add(1, Ordering::Relaxed);
@@ -143,28 +133,18 @@ pub type CachedAccount = Arc<CachedAccountInner>;
 #[derive(Debug)]
 pub struct CachedAccountInner {
     pub account: AccountSharedData,
-    hash: RwLock<Option<Hash>>,
-    slot: Slot,
+    hash: SeqLock<Option<AccountHash>>,
     pubkey: Pubkey,
-    /// temporarily here during feature activation
-    /// since we calculate the hash later, or in the background, we need knowledge of whether this slot uses the slot in the hash or not
-    pub include_slot_in_hash: IncludeSlotInHash,
 }
 
 impl CachedAccountInner {
-    pub fn hash(&self) -> Hash {
-        let hash = self.hash.read().unwrap();
-        match *hash {
+    pub fn hash(&self) -> AccountHash {
+        let hash = self.hash.read();
+        match hash {
             Some(hash) => hash,
             None => {
-                drop(hash);
-                let hash = crate::accounts_db::AccountsDb::hash_account(
-                    self.slot,
-                    &self.account,
-                    &self.pubkey,
-                    self.include_slot_in_hash,
-                );
-                *self.hash.write().unwrap() = Some(hash);
+                let hash = AccountsDb::hash_account(&self.account, &self.pubkey);
+                *self.hash.lock_write() = Some(hash);
                 hash
             }
         }
@@ -228,14 +208,7 @@ impl AccountsCache {
         );
     }
 
-    pub fn store(
-        &self,
-        slot: Slot,
-        pubkey: &Pubkey,
-        account: AccountSharedData,
-        hash: Option<impl Borrow<Hash>>,
-        include_slot_in_hash: IncludeSlotInHash,
-    ) -> CachedAccount {
+    pub fn store(&self, slot: Slot, pubkey: &Pubkey, account: AccountSharedData) -> CachedAccount {
         let slot_cache = self.slot_cache(slot).unwrap_or_else(||
             // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
             // which is dropped after this block ends, minimizing time held by the lock.
@@ -247,7 +220,7 @@ impl AccountsCache {
                 .or_insert(self.new_inner())
                 .clone());
 
-        slot_cache.insert(pubkey, account, hash, slot, include_slot_in_hash)
+        slot_cache.insert(pubkey, account)
     }
 
     pub fn load(&self, slot: Slot, pubkey: &Pubkey) -> Option<CachedAccount> {
@@ -339,7 +312,7 @@ impl AccountsCache {
 
 #[cfg(test)]
 pub mod tests {
-    use {super::*, crate::accounts_db::INCLUDE_SLOT_IN_HASH_TESTS};
+    use super::*;
 
     #[test]
     fn test_remove_slots_le() {
@@ -351,8 +324,6 @@ pub mod tests {
             inserted_slot,
             &Pubkey::new_unique(),
             AccountSharedData::new(1, 0, &Pubkey::default()),
-            Some(&Hash::default()),
-            INCLUDE_SLOT_IN_HASH_TESTS,
         );
         // If the cache is told the size limit is 0, it should return the one slot
         let removed = cache.remove_slots_le(0);
@@ -370,8 +341,6 @@ pub mod tests {
             inserted_slot,
             &Pubkey::new_unique(),
             AccountSharedData::new(1, 0, &Pubkey::default()),
-            Some(&Hash::default()),
-            INCLUDE_SLOT_IN_HASH_TESTS,
         );
 
         // If the cache is told the size limit is 0, it should return nothing, because there's no
