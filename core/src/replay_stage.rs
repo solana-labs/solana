@@ -260,8 +260,6 @@ pub struct ReplayTiming {
     start_leader_elapsed: u64,
     reset_bank_elapsed: u64,
     voting_elapsed: u64,
-    vote_push_us: u64,
-    vote_send_us: u64,
     generate_vote_us: u64,
     update_commitment_cache_us: u64,
     select_forks_elapsed: u64,
@@ -337,8 +335,6 @@ impl ReplayTiming {
         if elapsed_ms > 1000 {
             datapoint_info!(
                 "replay-loop-voting-stats",
-                ("vote_push_us", self.vote_push_us, i64),
-                ("vote_send_us", self.vote_send_us, i64),
                 ("generate_vote_us", self.generate_vote_us, i64),
                 (
                     "update_commitment_cache_us",
