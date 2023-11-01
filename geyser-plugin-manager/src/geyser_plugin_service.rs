@@ -102,7 +102,7 @@ impl GeyserPluginService {
 
         let entry_notifier: Option<EntryNotifierArc> = if entry_notifications_enabled {
             let entry_notifier = EntryNotifierImpl::new(plugin_manager.clone());
-            Some(Arc::new(RwLock::new(entry_notifier)))
+            Some(Arc::new(entry_notifier))
         } else {
             None
         };
