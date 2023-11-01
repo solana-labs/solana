@@ -134,7 +134,7 @@ impl Bank {
     // The reason is that rent fee doesn't need to be incentivized for throughput unlike transaction
     // fees
     //
-    // Ref: collect_transaction_fees
+    // Ref: distribute_transaction_fees
     #[allow(clippy::needless_collect)]
     fn distribute_rent_to_validators(
         &self,
