@@ -52,7 +52,7 @@ use {
     },
 };
 
-/// Allocation is here for backward-compatibility, prefer using AllocationV2 instead when possible.
+/// Allocation is a helper (mostly for tests), prefer using TypedAllocation instead when possible.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Allocation {
     pub recipient: String,
@@ -60,21 +60,9 @@ pub struct Allocation {
     pub lockup_date: String,
 }
 
-impl From<&AllocationV2> for Allocation {
-    fn from(item: &AllocationV2) -> Self {
-        Allocation {
-            recipient: item.recipient.to_string(),
-            amount: 0,
-            lockup_date: item
-                .lockup_date
-                .map_or("".to_string(), |date| date.to_string()),
-        }
-    }
-}
-
-/// AllocationV2 is same as Allocation but contains typed fields.
+/// TypedAllocation is same as Allocation but contains typed fields.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct AllocationV2 {
+pub struct TypedAllocation {
     pub recipient: Pubkey,
     pub amount: u64,
     pub lockup_date: Option<DateTime<Utc>>,
@@ -152,12 +140,12 @@ pub enum Error {
     ExitSignal,
 }
 
-fn merge_allocations(allocations: &[AllocationV2]) -> Vec<AllocationV2> {
+fn merge_allocations(allocations: &[TypedAllocation]) -> Vec<TypedAllocation> {
     let mut allocation_map = IndexMap::new();
     for allocation in allocations {
         allocation_map
             .entry(&allocation.recipient)
-            .or_insert(AllocationV2 {
+            .or_insert(TypedAllocation {
                 recipient: allocation.recipient,
                 amount: 0,
                 lockup_date: None,
@@ -168,13 +156,13 @@ fn merge_allocations(allocations: &[AllocationV2]) -> Vec<AllocationV2> {
 }
 
 /// Return true if the recipient and lockups are the same
-fn has_same_recipient(allocation: &AllocationV2, transaction_info: &TransactionInfo) -> bool {
+fn has_same_recipient(allocation: &TypedAllocation, transaction_info: &TransactionInfo) -> bool {
     allocation.recipient == transaction_info.recipient
         && allocation.lockup_date == transaction_info.lockup_date
 }
 
 fn apply_previous_transactions(
-    allocations: &mut Vec<AllocationV2>,
+    allocations: &mut Vec<TypedAllocation>,
     transaction_infos: &[TransactionInfo],
 ) {
     for transaction_info in transaction_infos {
@@ -213,18 +201,14 @@ fn transfer<S: Signer>(
 }
 
 fn distribution_instructions(
-    allocation: &AllocationV2,
+    allocation: &TypedAllocation,
     new_stake_account_address: &Pubkey,
     args: &DistributeTokensArgs,
     lockup_date: Option<DateTime<Utc>>,
     do_create_associated_token_account: bool,
 ) -> Vec<Instruction> {
     if args.spl_token_args.is_some() {
-        return build_spl_token_instructions(
-            &allocation.into(),
-            args,
-            do_create_associated_token_account,
-        );
+        return build_spl_token_instructions(allocation, args, do_create_associated_token_account);
     }
 
     match &args.stake_args {
@@ -342,7 +326,7 @@ fn distribution_instructions(
 fn build_messages(
     client: &RpcClient,
     db: &mut PickleDb,
-    allocations: &[AllocationV2],
+    allocations: &[TypedAllocation],
     args: &DistributeTokensArgs,
     exit: Arc<AtomicBool>,
     messages: &mut Vec<Message>,
@@ -416,7 +400,7 @@ fn build_messages(
 fn send_messages(
     client: &RpcClient,
     db: &mut PickleDb,
-    allocations: &[AllocationV2],
+    allocations: &[TypedAllocation],
     args: &DistributeTokensArgs,
     exit: Arc<AtomicBool>,
     messages: Vec<Message>,
@@ -489,7 +473,7 @@ fn send_messages(
 fn distribute_allocations(
     client: &RpcClient,
     db: &mut PickleDb,
-    allocations: &[AllocationV2],
+    allocations: &[TypedAllocation],
     args: &DistributeTokensArgs,
     exit: Arc<AtomicBool>,
 ) -> Result<(), Error> {
@@ -509,17 +493,7 @@ fn distribute_allocations(
     )?;
 
     if args.spl_token_args.is_some() {
-        check_spl_token_balances(
-            &messages,
-            allocations
-                .iter()
-                .map(|item| item.into())
-                .collect::<Vec<Allocation>>()
-                .as_slice(),
-            client,
-            args,
-            created_accounts,
-        )?;
+        check_spl_token_balances(&messages, allocations, client, args, created_accounts)?;
     } else {
         check_payer_balances(&messages, allocations, client, args)?;
     }
@@ -536,7 +510,7 @@ fn read_allocations(
     transfer_amount: Option<u64>,
     with_lockup: bool,
     raw_amount: bool,
-) -> Result<Vec<AllocationV2>, Error> {
+) -> Result<Vec<TypedAllocation>, Error> {
     let mut rdr = ReaderBuilder::new().trim(Trim::All).from_path(input_csv)?;
     let allocations = if let Some(amount) = transfer_amount {
         rdr.deserialize()
@@ -547,13 +521,13 @@ fn read_allocations(
                         input: recipient,
                         err,
                     })?;
-                Ok(AllocationV2 {
+                Ok(TypedAllocation {
                     recipient,
                     amount,
                     lockup_date: None,
                 })
             })
-            .collect::<Result<Vec<AllocationV2>, Error>>()?
+            .collect::<Result<Vec<TypedAllocation>, Error>>()?
     } else if with_lockup {
         // We only support SOL token in "require lockup" mode.
         rdr.deserialize()
@@ -576,13 +550,13 @@ fn read_allocations(
                     // empty lockup date means no lockup, it's okay to have only some lockups specified
                     None
                 };
-                Ok(AllocationV2 {
+                Ok(TypedAllocation {
                     recipient,
                     amount: sol_to_lamports(amount),
                     lockup_date,
                 })
             })
-            .collect::<Result<Vec<AllocationV2>, Error>>()?
+            .collect::<Result<Vec<TypedAllocation>, Error>>()?
     } else if raw_amount {
         rdr.deserialize()
             .map(|recipient| {
@@ -592,13 +566,13 @@ fn read_allocations(
                         input: recipient,
                         err,
                     })?;
-                Ok(AllocationV2 {
+                Ok(TypedAllocation {
                     recipient,
                     amount,
                     lockup_date: None,
                 })
             })
-            .collect::<Result<Vec<AllocationV2>, Error>>()?
+            .collect::<Result<Vec<TypedAllocation>, Error>>()?
     } else {
         rdr.deserialize()
             .map(|recipient| {
@@ -608,13 +582,13 @@ fn read_allocations(
                         input: recipient,
                         err,
                     })?;
-                Ok(AllocationV2 {
+                Ok(TypedAllocation {
                     recipient,
                     amount: sol_to_lamports(amount),
                     lockup_date: None,
                 })
             })
-            .collect::<Result<Vec<AllocationV2>, Error>>()?
+            .collect::<Result<Vec<TypedAllocation>, Error>>()?
     };
     if allocations.is_empty() {
         return Err(Error::CsvIsEmptyError);
@@ -639,7 +613,7 @@ pub fn process_allocations(
     exit: Arc<AtomicBool>,
 ) -> Result<Option<usize>, Error> {
     let with_lockup = args.stake_args.is_some();
-    let mut allocations: Vec<AllocationV2> = read_allocations(
+    let mut allocations: Vec<TypedAllocation> = read_allocations(
         &args.input_csv,
         args.transfer_amount,
         with_lockup,
@@ -845,7 +819,7 @@ pub fn get_fee_estimate_for_messages(
 
 fn check_payer_balances(
     messages: &[Message],
-    allocations: &[AllocationV2],
+    allocations: &[TypedAllocation],
     client: &RpcClient,
     args: &DistributeTokensArgs,
 ) -> Result<(), Error> {
@@ -929,7 +903,7 @@ pub fn process_balances(
     args: &BalancesArgs,
     exit: Arc<AtomicBool>,
 ) -> Result<(), Error> {
-    let allocations: Vec<AllocationV2> =
+    let allocations: Vec<TypedAllocation> =
         read_allocations(&args.input_csv, None, false, args.spl_token_args.is_some())?;
     let allocations = merge_allocations(&allocations);
 
@@ -955,7 +929,7 @@ pub fn process_balances(
         }
 
         if let Some(spl_token_args) = &args.spl_token_args {
-            print_token_balances(client, &allocation.into(), spl_token_args)?;
+            print_token_balances(client, allocation, spl_token_args)?;
         } else {
             let address: Pubkey = allocation.recipient;
             let expected = lamports_to_sol(allocation.amount);
@@ -1405,7 +1379,7 @@ mod tests {
     #[test]
     fn test_read_allocations() {
         let alice_pubkey = pubkey::new_rand();
-        let allocation = AllocationV2 {
+        let allocation = TypedAllocation {
             recipient: alice_pubkey,
             amount: 42,
             lockup_date: None,
@@ -1432,7 +1406,7 @@ mod tests {
             vec![allocation]
         );
 
-        let allocation_sol = AllocationV2 {
+        let allocation_sol = TypedAllocation {
             recipient: alice_pubkey,
             amount: sol_to_lamports(42.0),
             lockup_date: None,
@@ -1466,12 +1440,12 @@ mod tests {
         wtr.flush().unwrap();
 
         let expected_allocations = vec![
-            AllocationV2 {
+            TypedAllocation {
                 recipient: pubkey0,
                 amount: sol_to_lamports(42.0),
                 lockup_date: None,
             },
-            AllocationV2 {
+            TypedAllocation {
                 recipient: pubkey1,
                 amount: sol_to_lamports(43.0),
                 lockup_date: None,
@@ -1494,10 +1468,7 @@ mod tests {
         wtr.flush().unwrap();
         let input_csv = file.path().to_str().unwrap().to_string();
         let got = read_allocations(&input_csv, None, false, false);
-        match got {
-            Err(Error::CsvIsEmptyError) => (),
-            _ => unreachable!("expected CsvIsEmptyError, got: {:?}", got),
-        };
+        assert!(matches!(got, Err(Error::CsvIsEmptyError)));
 
         // Missing 2nd column.
         let file = NamedTempFile::new().unwrap();
@@ -1508,10 +1479,7 @@ mod tests {
         wtr.flush().unwrap();
         let input_csv = file.path().to_str().unwrap().to_string();
         let got = read_allocations(&input_csv, None, false, false);
-        match got {
-            Err(Error::CsvError(..)) => (),
-            _ => unreachable!("expected CsvError, got: {:?}", got),
-        };
+        assert!(matches!(got, Err(Error::CsvError(..))));
 
         // Missing 3rd column.
         let file = NamedTempFile::new().unwrap();
@@ -1525,10 +1493,7 @@ mod tests {
         wtr.flush().unwrap();
         let input_csv = file.path().to_str().unwrap().to_string();
         let got = read_allocations(&input_csv, None, true, false);
-        match got {
-            Err(Error::CsvError(..)) => (),
-            _ => unreachable!("expected CsvError, got: {:?}", got),
-        };
+        assert!(matches!(got, Err(Error::CsvError(..))));
 
         let generate_csv_file = |header: (String, String, String),
                                  data: Vec<(String, String, String)>,
@@ -1655,10 +1620,7 @@ mod tests {
         );
         let input_csv = file.path().to_str().unwrap().to_string();
         let got = read_allocations(&input_csv, None, false, false);
-        match got {
-            Err(Error::CsvError(..)) => (),
-            _ => unreachable!("expected CsvError, got: {:?}", got),
-        };
+        assert!(matches!(got, Err(Error::CsvError(..))));
         // Bad value in 2nd column (with require lockup).
         let file = NamedTempFile::new().unwrap();
         generate_csv_file(
@@ -1675,10 +1637,7 @@ mod tests {
         );
         let input_csv = file.path().to_str().unwrap().to_string();
         let got = read_allocations(&input_csv, None, true, false);
-        match got {
-            Err(Error::CsvError(..)) => (),
-            _ => unreachable!("expected CsvError, got: {:?}", got),
-        };
+        assert!(matches!(got, Err(Error::CsvError(..))));
         // Bad value in 2nd column (with raw amount).
         let file = NamedTempFile::new().unwrap();
         generate_csv_file(
@@ -1691,10 +1650,7 @@ mod tests {
         );
         let input_csv = file.path().to_str().unwrap().to_string();
         let got = read_allocations(&input_csv, None, false, true);
-        match got {
-            Err(Error::CsvError(..)) => (),
-            _ => unreachable!("expected CsvError, got: {:?}", got),
-        };
+        assert!(matches!(got, Err(Error::CsvError(..))));
 
         // Bad value in 3rd column.
         let file = NamedTempFile::new().unwrap();
@@ -1741,17 +1697,17 @@ mod tests {
         let amount = sol_to_lamports(1.5);
 
         let expected_allocations = vec![
-            AllocationV2 {
+            TypedAllocation {
                 recipient: pubkey0,
                 amount,
                 lockup_date: None,
             },
-            AllocationV2 {
+            TypedAllocation {
                 recipient: pubkey1,
                 amount,
                 lockup_date: None,
             },
-            AllocationV2 {
+            TypedAllocation {
                 recipient: pubkey2,
                 amount,
                 lockup_date: None,
@@ -1768,12 +1724,12 @@ mod tests {
         let alice = pubkey::new_rand();
         let bob = pubkey::new_rand();
         let mut allocations = vec![
-            AllocationV2 {
+            TypedAllocation {
                 recipient: alice,
                 amount: sol_to_lamports(1.0),
                 lockup_date: None,
             },
-            AllocationV2 {
+            TypedAllocation {
                 recipient: bob,
                 amount: sol_to_lamports(1.0),
                 lockup_date: None,
@@ -1798,12 +1754,12 @@ mod tests {
         let bob_pubkey = pubkey::new_rand();
         let lockup0 = "2021-01-07T00:00:00Z".to_string();
         let lockup1 = "9999-12-31T23:59:59Z".to_string();
-        let alice_alloc = AllocationV2 {
+        let alice_alloc = TypedAllocation {
             recipient: alice_pubkey,
             amount: sol_to_lamports(1.0),
             lockup_date: None,
         };
-        let alice_alloc_lockup0 = AllocationV2 {
+        let alice_alloc_lockup0 = TypedAllocation {
             recipient: alice_pubkey,
             amount: sol_to_lamports(1.0),
             lockup_date: lockup0.parse().ok(),
@@ -1846,7 +1802,7 @@ mod tests {
     #[test]
     fn test_set_split_stake_lockup() {
         let lockup_date_str = "2021-01-07T00:00:00Z";
-        let allocation = AllocationV2 {
+        let allocation = TypedAllocation {
             recipient: Pubkey::default(),
             amount: sol_to_lamports(1.002_282_880),
             lockup_date: lockup_date_str.parse().ok(),
@@ -1909,9 +1865,9 @@ mod tests {
         sender_keypair_file: &str,
         fee_payer: &str,
         stake_args: Option<StakeArgs>,
-    ) -> (Vec<AllocationV2>, DistributeTokensArgs) {
+    ) -> (Vec<TypedAllocation>, DistributeTokensArgs) {
         let recipient = pubkey::new_rand();
-        let allocations = vec![AllocationV2 {
+        let allocations = vec![TypedAllocation {
             recipient,
             amount: allocation_amount,
             lockup_date: None,
@@ -2186,7 +2142,7 @@ mod tests {
 
         // Underfunded stake-account
         let expensive_allocation_amount = 5000.0;
-        let expensive_allocations = vec![AllocationV2 {
+        let expensive_allocations = vec![TypedAllocation {
             recipient: pubkey::new_rand(),
             amount: sol_to_lamports(expensive_allocation_amount),
             lockup_date: None,
@@ -2404,7 +2360,7 @@ mod tests {
             spl_token_args: None,
             transfer_amount: None,
         };
-        let allocation = AllocationV2 {
+        let allocation = TypedAllocation {
             recipient,
             amount: sol_to_lamports(1.0),
             lockup_date: None,
@@ -2526,7 +2482,7 @@ mod tests {
             spl_token_args: None,
             transfer_amount: None,
         };
-        let allocation = AllocationV2 {
+        let allocation = TypedAllocation {
             recipient,
             amount: sol_to_lamports(1.0),
             lockup_date: None,
@@ -2625,7 +2581,7 @@ mod tests {
             .to_string();
         let mut db = db::open_db(&db_file, false).unwrap();
         let recipient = Pubkey::new_unique();
-        let allocation = AllocationV2 {
+        let allocation = TypedAllocation {
             recipient,
             amount: sol_to_lamports(1.0),
             lockup_date: None,
