@@ -186,7 +186,7 @@ impl GeyserPluginManager {
             return Err(jsonrpc_core::Error {
                 code: ErrorCode::InvalidRequest,
                 message: format!(
-                    "There already exists a plugin named {} loaded. Did not load requested plugin",
+                    "There already exists a plugin named {} loaded, while reloading {name}. Did not load requested plugin",
                     new_plugin.name()
                 ),
                 data: None,
