@@ -164,19 +164,6 @@ impl SchedulingContext {
     pub fn slot(&self) -> Slot {
         self.bank().slot()
     }
-
-    pub fn log_prefix(context: Option<&Self>, scheduler_id: SchedulerId) -> String {
-        const BITS_PER_HEX_DIGIT: usize = 4;
-
-        format!(
-            "sch_{:0width$x}{}: ",
-            scheduler_id,
-            context
-                .map(|c| format!("(slot:{})", c.slot()))
-                .unwrap_or_else(|| "(?)".into()),
-            width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
-        )
-    }
 }
 
 pub type ResultWithTimings = (Result<()>, ExecuteTimings);
@@ -479,23 +466,6 @@ mod tests {
             wait_reasons,
             None::<fn(&mut MockInstalledScheduler) -> ()>,
         )
-    }
-
-    #[test]
-    fn test_scheduling_context() {
-        solana_logger::setup();
-
-        let bank = Arc::new(Bank::default_for_tests());
-        let context = &SchedulingContext::new(bank);
-        assert_eq!(context.slot(), 0);
-        assert_eq!(
-            SchedulingContext::log_prefix(Some(context), 3),
-            "sch_0000000000000003(slot:0): "
-        );
-        assert_eq!(
-            SchedulingContext::log_prefix(None, 3),
-            "sch_0000000000000003(?): "
-        );
     }
 
     #[test]
