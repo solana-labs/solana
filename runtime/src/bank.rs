@@ -43,6 +43,7 @@ use {
         builtins::{BuiltinPrototype, BUILTINS},
         epoch_rewards_hasher::hash_rewards_into_partitions,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
+        installed_scheduler_pool::{BankWithScheduler, InstalledSchedulerRwLock},
         runtime_config::RuntimeConfig,
         serde_snapshot::BankIncrementalSnapshotPersistence,
         snapshot_hash::SnapshotHash,
@@ -220,7 +221,7 @@ mod metrics;
 mod serde_snapshot;
 mod sysvar_cache;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 mod transaction_account_state_info;
 
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
@@ -4185,7 +4186,11 @@ impl Bank {
     /// Register a new recent blockhash in the bank's recent blockhash queue. Called when a bank
     /// reaches its max tick height. Can be called by tests to get new blockhashes for transaction
     /// processing without advancing to a new bank slot.
-    pub fn register_recent_blockhash(&self, blockhash: &Hash) {
+    fn register_recent_blockhash(&self, blockhash: &Hash, scheduler: &InstalledSchedulerRwLock) {
+        // This is needed because recent_blockhash updates necessitate synchronizations for
+        // consistent tx check_age handling.
+        BankWithScheduler::wait_for_paused_scheduler(self, scheduler);
+
         // Only acquire the write lock for the blockhash queue on block boundaries because
         // readers can starve this write lock acquisition and ticks would be slowed down too
         // much if the write lock is acquired for each tick.
@@ -4197,7 +4202,10 @@ impl Bank {
     // gating this under #[cfg(feature = "dev-context-only-utils")] isn't easy due to
     // solana-program-test's usage...
     pub fn register_unique_recent_blockhash_for_test(&self) {
-        self.register_recent_blockhash(&Hash::new_unique())
+        self.register_recent_blockhash(
+            &Hash::new_unique(),
+            &BankWithScheduler::no_scheduler_available(),
+        )
     }
 
     /// Tell the bank which Entry IDs exist on the ledger. This function assumes subsequent calls
@@ -4206,14 +4214,14 @@ impl Bank {
     ///
     /// This is NOT thread safe because if tick height is updated by two different threads, the
     /// block boundary condition could be missed.
-    pub fn register_tick(&self, hash: &Hash) {
+    pub fn register_tick(&self, hash: &Hash, scheduler: &InstalledSchedulerRwLock) {
         assert!(
             !self.freeze_started(),
             "register_tick() working on a bank that is already frozen or is undergoing freezing!"
         );
 
         if self.is_block_boundary(self.tick_height.load(Relaxed) + 1) {
-            self.register_recent_blockhash(hash);
+            self.register_recent_blockhash(hash, scheduler);
         }
 
         // ReplayStage will start computing the accounts delta hash when it
@@ -4226,18 +4234,17 @@ impl Bank {
 
     #[cfg(feature = "dev-context-only-utils")]
     pub fn register_tick_for_test(&self, hash: &Hash) {
-        // currently meaningless wrapper; upcoming pr will make it an actual helper...
-        self.register_tick(hash)
+        self.register_tick(hash, &BankWithScheduler::no_scheduler_available())
     }
 
     #[cfg(feature = "dev-context-only-utils")]
     pub fn register_default_tick_for_test(&self) {
-        self.register_tick(&Hash::default())
+        self.register_tick_for_test(&Hash::default())
     }
 
     #[cfg(feature = "dev-context-only-utils")]
     pub fn register_unique_tick(&self) {
-        self.register_tick(&Hash::new_unique())
+        self.register_tick_for_test(&Hash::new_unique())
     }
 
     pub fn is_complete(&self) -> bool {
@@ -8008,10 +8015,14 @@ impl Bank {
     }
 
     pub fn fill_bank_with_ticks_for_tests(&self) {
+        self.do_fill_bank_with_ticks_for_tests(&BankWithScheduler::no_scheduler_available())
+    }
+
+    pub(crate) fn do_fill_bank_with_ticks_for_tests(&self, scheduler: &InstalledSchedulerRwLock) {
         if self.tick_height.load(Relaxed) < self.max_tick_height {
             let last_blockhash = self.last_blockhash();
             while self.last_blockhash() == last_blockhash {
-                self.register_tick(&Hash::new_unique())
+                self.register_tick(&Hash::new_unique(), scheduler)
             }
         } else {
             warn!("Bank already reached max tick height, cannot fill it with more ticks");
