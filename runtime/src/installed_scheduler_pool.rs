@@ -40,8 +40,8 @@ use {mockall::automock, qualifier_attr::qualifiers};
 
 #[cfg_attr(feature = "dev-context-only-utils", automock)]
 pub trait InstalledSchedulerPool: Send + Sync + Debug {
-    fn take_from_pool(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler>;
-    fn return_to_pool(&self, scheduler: Box<dyn InstalledScheduler>);
+    fn take_from_pool(&self, context: SchedulingContext) -> DefaultInstalledSchedulerBox;
+    fn return_to_pool(&self, scheduler: DefaultInstalledSchedulerBox);
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
