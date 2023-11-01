@@ -101,12 +101,18 @@ pub enum Error {
     IoError(#[from] io::Error),
     #[error("CSV file seems to be empty")]
     CsvIsEmptyError,
-    #[error("Bad input data for pubkey")]
+    #[error("CSV error")]
     CsvError(#[from] csv::Error),
-    #[error("Bad input data for pubkey")]
-    BadInputPubkeyError(#[from] pubkey::ParsePubkeyError),
-    #[error("Bad input data for lockup date")]
-    BadInputLockupDate(#[from] chrono::ParseError),
+    #[error("Bad input data for pubkey: {input}, error: {err}")]
+    BadInputPubkeyError {
+        input: String,
+        err: pubkey::ParsePubkeyError,
+    },
+    #[error("Bad input data for lockup date: {input}, error: {err}")]
+    BadInputLockupDate {
+        input: String,
+        err: chrono::ParseError,
+    },
     #[error("PickleDb error")]
     PickleDbError(#[from] pickledb::error::Error),
     #[error("Transport error")]
@@ -131,7 +137,7 @@ fn merge_allocations(allocations: &[Allocation]) -> Vec<Allocation> {
         allocation_map
             .entry(&allocation.recipient)
             .or_insert(Allocation {
-                recipient: allocation.recipient.clone(),
+                recipient: allocation.recipient,
                 amount: 0,
                 lockup_date: None,
             })
@@ -407,7 +413,7 @@ fn send_messages(
                 signers.push(&*sender_stake_args.stake_authority);
                 signers.push(&*sender_stake_args.withdraw_authority);
                 signers.push(&new_stake_account_keypair);
-                if !allocation.lockup_date.is_none() {
+                if allocation.lockup_date.is_some() {
                     if let Some(lockup_authority) = &sender_stake_args.lockup_authority {
                         signers.push(&**lockup_authority);
                     } else {
@@ -501,10 +507,11 @@ fn read_allocations(
         rdr.deserialize()
             .map(|recipient| {
                 let recipient: String = recipient?;
-                let recipient = match Pubkey::from_str(recipient.as_str()) {
-                    Ok(pubkey) => pubkey,
-                    Err(err) => return Err(Error::BadInputPubkeyError(err)),
-                };
+                let recipient =
+                    Pubkey::from_str(&recipient).map_err(|err| Error::BadInputPubkeyError {
+                        input: recipient,
+                        err,
+                    })?;
                 Ok(Allocation {
                     recipient,
                     amount,
@@ -517,15 +524,19 @@ fn read_allocations(
         rdr.deserialize()
             .map(|recipient| {
                 let (recipient, amount, lockup_date): (String, f64, String) = recipient?;
-                let recipient = match Pubkey::from_str(recipient.as_str()) {
-                    Ok(pubkey) => pubkey,
-                    Err(err) => return Err(Error::BadInputPubkeyError(err)),
-                };
+                let recipient =
+                    Pubkey::from_str(&recipient).map_err(|err| Error::BadInputPubkeyError {
+                        input: recipient,
+                        err,
+                    })?;
                 let lockup_date = if !lockup_date.is_empty() {
-                    match lockup_date.parse::<DateTime<Utc>>() {
-                        Ok(lockup_date) => Some(lockup_date),
-                        Err(err) => return Err(Error::BadInputLockupDate(err)),
-                    }
+                    let lockup_date = lockup_date.parse::<DateTime<Utc>>().map_err(|err| {
+                        Error::BadInputLockupDate {
+                            input: lockup_date,
+                            err,
+                        }
+                    })?;
+                    Some(lockup_date)
                 } else {
                     // empty lockup date means no lockup, it's okay to have only some lockups specified
                     None
@@ -541,10 +552,11 @@ fn read_allocations(
         rdr.deserialize()
             .map(|recipient| {
                 let (recipient, amount): (String, u64) = recipient?;
-                let recipient = match Pubkey::from_str(recipient.as_str()) {
-                    Ok(pubkey) => pubkey,
-                    Err(err) => return Err(Error::BadInputPubkeyError(err)),
-                };
+                let recipient =
+                    Pubkey::from_str(&recipient).map_err(|err| Error::BadInputPubkeyError {
+                        input: recipient,
+                        err,
+                    })?;
                 Ok(Allocation {
                     recipient,
                     amount,
@@ -556,10 +568,11 @@ fn read_allocations(
         rdr.deserialize()
             .map(|recipient| {
                 let (recipient, amount): (String, f64) = recipient?;
-                let recipient = match Pubkey::from_str(recipient.as_str()) {
-                    Ok(pubkey) => pubkey,
-                    Err(err) => return Err(Error::BadInputPubkeyError(err)),
-                };
+                let recipient =
+                    Pubkey::from_str(&recipient).map_err(|err| Error::BadInputPubkeyError {
+                        input: recipient,
+                        err,
+                    })?;
                 Ok(Allocation {
                     recipient,
                     amount: sol_to_lamports(amount),
@@ -568,7 +581,7 @@ fn read_allocations(
             })
             .collect::<Result<Vec<Allocation>, Error>>()?
     };
-    if allocations.len() == 0 {
+    if allocations.is_empty() {
         return Err(Error::CsvIsEmptyError);
     }
     Ok(allocations)
@@ -1293,7 +1306,6 @@ mod tests {
         solana_streamer::socket::SocketAddrSpace,
         solana_test_validator::TestValidator,
         solana_transaction_status::TransactionConfirmationStatus,
-        std::alloc::alloc,
     };
 
     fn one_signer_message(client: &RpcClient) -> Message {
@@ -1449,7 +1461,7 @@ mod tests {
         let got = read_allocations(&input_csv, None, false, false);
         match got {
             Err(Error::CsvIsEmptyError) => (),
-            _ => assert!(false, "expected CsvError, got: {:?}", got),
+            _ => unreachable!("expected CsvIsEmptyError, got: {:?}", got),
         };
 
         // Missing 2nd column.
@@ -1463,7 +1475,7 @@ mod tests {
         let got = read_allocations(&input_csv, None, false, false);
         match got {
             Err(Error::CsvError(..)) => (),
-            _ => assert!(false, "expected CsvError, got: {:?}", got),
+            _ => unreachable!("expected CsvError, got: {:?}", got),
         };
 
         // Missing 3rd column.
@@ -1480,7 +1492,7 @@ mod tests {
         let got = read_allocations(&input_csv, None, true, false);
         match got {
             Err(Error::CsvError(..)) => (),
-            _ => assert!(false, "expected CsvError, got: {:?}", got),
+            _ => unreachable!("expected CsvError, got: {:?}", got),
         };
 
         let generate_csv_file = |header: (String, String, String),
@@ -1516,8 +1528,10 @@ mod tests {
         let input_csv = file.path().to_str().unwrap().to_string();
         let got = read_allocations(&input_csv, None, false, false);
         match got {
-            Err(Error::BadInputPubkeyError(..)) => (),
-            _ => assert!(false, "expected BadInputPubkeyError, got: {:?}", got),
+            Err(Error::BadInputPubkeyError { input, .. }) => {
+                assert_eq!("bad pub key".to_string(), input)
+            }
+            _ => unreachable!("expected BadInputPubkeyError, got: {:?}", got),
         };
         // Bad pub key (with transfer amount).
         let file = NamedTempFile::new().unwrap();
@@ -1536,8 +1550,10 @@ mod tests {
         let input_csv = file.path().to_str().unwrap().to_string();
         let got = read_allocations(&input_csv, Some(123), false, false);
         match got {
-            Err(Error::BadInputPubkeyError(..)) => (),
-            _ => assert!(false, "expected BadInputPubkeyError, got: {:?}", got),
+            Err(Error::BadInputPubkeyError { input, .. }) => {
+                assert_eq!("bad pub key".to_string(), input)
+            }
+            _ => unreachable!("expected BadInputPubkeyError, got: {:?}", got),
         };
         // Bad pub key (with require lockup).
         let file = NamedTempFile::new().unwrap();
@@ -1560,8 +1576,10 @@ mod tests {
         let input_csv = file.path().to_str().unwrap().to_string();
         let got = read_allocations(&input_csv, None, true, false);
         match got {
-            Err(Error::BadInputPubkeyError(..)) => (),
-            _ => assert!(false, "expected BadInputPubkeyError, got: {:?}", got),
+            Err(Error::BadInputPubkeyError { input, .. }) => {
+                assert_eq!("bad pub key".to_string(), input)
+            }
+            _ => unreachable!("expected BadInputPubkeyError, got: {:?}", got),
         };
         // Bad pub key (with raw amount).
         let file = NamedTempFile::new().unwrap();
@@ -1576,8 +1594,10 @@ mod tests {
         let input_csv = file.path().to_str().unwrap().to_string();
         let got = read_allocations(&input_csv, None, false, true);
         match got {
-            Err(Error::BadInputPubkeyError(..)) => (),
-            _ => assert!(false, "expected BadInputPubkeyError, got: {:?}", got),
+            Err(Error::BadInputPubkeyError { input, .. }) => {
+                assert_eq!("bad pub key".to_string(), input)
+            }
+            _ => unreachable!("expected BadInputPubkeyError, got: {:?}", got),
         };
 
         // Bad value in 2nd column (default).
@@ -1602,7 +1622,7 @@ mod tests {
         let got = read_allocations(&input_csv, None, false, false);
         match got {
             Err(Error::CsvError(..)) => (),
-            _ => assert!(false, "expected CsvError, got: {:?}", got),
+            _ => unreachable!("expected CsvError, got: {:?}", got),
         };
         // Bad value in 2nd column (with require lockup).
         let file = NamedTempFile::new().unwrap();
@@ -1622,7 +1642,7 @@ mod tests {
         let got = read_allocations(&input_csv, None, true, false);
         match got {
             Err(Error::CsvError(..)) => (),
-            _ => assert!(false, "expected CsvError, got: {:?}", got),
+            _ => unreachable!("expected CsvError, got: {:?}", got),
         };
         // Bad value in 2nd column (with raw amount).
         let file = NamedTempFile::new().unwrap();
@@ -1638,7 +1658,7 @@ mod tests {
         let got = read_allocations(&input_csv, None, false, true);
         match got {
             Err(Error::CsvError(..)) => (),
-            _ => assert!(false, "expected CsvError, got: {:?}", got),
+            _ => unreachable!("expected CsvError, got: {:?}", got),
         };
 
         // Bad value in 3rd column.
@@ -1662,8 +1682,10 @@ mod tests {
         let input_csv = file.path().to_str().unwrap().to_string();
         let got = read_allocations(&input_csv, None, true, false);
         match got {
-            Err(Error::BadInputLockupDate(..)) => (),
-            _ => assert!(false, "expected CsvError, got: {:?}", got),
+            Err(Error::BadInputLockupDate { input, .. }) => {
+                assert_eq!("bad lockup date".to_string(), input)
+            }
+            _ => unreachable!("expected BadInputLockupDate, got: {:?}", got),
         };
     }
 
