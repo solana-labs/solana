@@ -36,11 +36,7 @@ pub fn update_decimals(client: &RpcClient, args: &mut Option<SplTokenArgs>) -> R
     Ok(())
 }
 
-pub fn spl_token_amount(amount: f64, decimals: u8) -> u64 {
-    (amount * 10_usize.pow(decimals as u32) as f64) as u64
-}
-
-pub fn build_spl_token_instructions(
+pub(crate) fn build_spl_token_instructions(
     allocation: &Allocation,
     args: &DistributeTokensArgs,
     do_create_associated_token_account: bool,
@@ -77,7 +73,7 @@ pub fn build_spl_token_instructions(
     instructions
 }
 
-pub fn check_spl_token_balances(
+pub(crate) fn check_spl_token_balances(
     messages: &[Message],
     allocations: &[Allocation],
     client: &RpcClient,
@@ -114,7 +110,7 @@ pub fn check_spl_token_balances(
     Ok(())
 }
 
-pub fn print_token_balances(
+pub(crate) fn print_token_balances(
     client: &RpcClient,
     allocation: &Allocation,
     spl_token_args: &SplTokenArgs,
