@@ -38,10 +38,8 @@ use {
 #[cfg(feature = "dev-context-only-utils")]
 use {mockall::automock, qualifier_attr::qualifiers};
 
-#[cfg_attr(feature = "dev-context-only-utils", automock)]
 pub trait InstalledSchedulerPool: Send + Sync + Debug {
-    fn take_from_pool(&self, context: SchedulingContext) -> DefaultInstalledSchedulerBox;
-    fn return_to_pool(&self, scheduler: DefaultInstalledSchedulerBox);
+    fn take_scheduler(&self, context: SchedulingContext) -> DefaultInstalledSchedulerBox;
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -101,7 +99,7 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 )]
 pub trait InstalledScheduler: Send + Sync + Debug + 'static {
     fn id(&self) -> SchedulerId;
-    fn pool(&self) -> InstalledSchedulerPoolArc;
+    fn return_to_pool(self: Box<Self>);
 
     // Calling this is illegal as soon as wait_for_termination is called.
     fn schedule_execution<'a>(
@@ -347,7 +345,7 @@ impl BankWithSchedulerInner {
                 .and_then(|scheduler| scheduler.wait_for_termination(&reason));
             if !reason.is_paused() {
                 let scheduler = scheduler.take().expect("scheduler after waiting");
-                scheduler.pool().return_to_pool(scheduler);
+                scheduler.return_to_pool();
             }
             result_with_timings
         } else {
@@ -413,15 +411,6 @@ mod tests {
         solana_sdk::system_transaction,
     };
 
-    fn setup_mocked_scheduler_pool(seq: &mut Sequence) -> InstalledSchedulerPoolArc {
-        let mut mock = MockInstalledSchedulerPool::new();
-        mock.expect_return_to_pool()
-            .times(1)
-            .in_sequence(seq)
-            .returning(|_| ());
-        Arc::new(mock)
-    }
-
     fn setup_mocked_scheduler_with_extra(
         wait_reasons: impl Iterator<Item = WaitReason>,
         f: Option<impl Fn(&mut MockInstalledScheduler)>,
@@ -448,10 +437,10 @@ mod tests {
                 });
         }
 
-        mock.expect_pool()
+        mock.expect_return_to_pool()
             .times(1)
             .in_sequence(&mut seq)
-            .returning(move || setup_mocked_scheduler_pool(&mut seq));
+            .returning(|| ());
         if let Some(f) = f {
             f(&mut mock);
         }
