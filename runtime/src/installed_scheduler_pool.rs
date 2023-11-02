@@ -110,7 +110,7 @@ pub trait InstalledSchedulerPool<SEA: ScheduleExecutionArg>: Send + Sync + Debug
 )]
 pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + 'static {
     fn id(&self) -> SchedulerId;
-    fn return_to_pool(self: Box<Self>);
+    fn context(&self) -> &SchedulingContext;
 
     // Calling this is illegal as soon as wait_for_termination is called.
     fn schedule_execution<'a>(&'a self, transaction_with_index: SEA::TransactionWithIndex<'a>);
@@ -133,7 +133,7 @@ pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + '
     #[must_use]
     fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings>;
 
-    fn context(&self) -> &SchedulingContext;
+    fn return_to_pool(self: Box<Self>);
 }
 
 pub type DefaultInstalledSchedulerBox = Box<dyn InstalledScheduler<DefaultScheduleExecutionArg>>;

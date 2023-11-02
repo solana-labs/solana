@@ -331,8 +331,8 @@ mod nonblocking {
             self.id
         }
 
-        fn return_to_pool(self: Box<Self>) {
-            self.pool.clone().return_scheduler(self)
+        fn context(&self) -> &SchedulingContext {
+            &self.context
         }
 
         fn schedule_execution(&self, transaction_with_index: TransactionWithIndexForBench) {
@@ -374,8 +374,8 @@ mod nonblocking {
             Some((overall_result, overall_timings))
         }
 
-        fn context(&self) -> &SchedulingContext {
-            &self.context
+        fn return_to_pool(self: Box<Self>) {
+            self.pool.clone().return_scheduler(self)
         }
     }
 
@@ -682,10 +682,6 @@ mod thread_utilization {
             self.inner_scheduler.id()
         }
 
-        fn return_to_pool(self: Box<Self>) {
-            Box::new(self.inner_scheduler).return_to_pool()
-        }
-
         fn context(&self) -> &SchedulingContext {
             self.inner_scheduler.context()
         }
@@ -711,6 +707,10 @@ mod thread_utilization {
             .unwrap();
 
             self.inner_scheduler.wait_for_termination(reason)
+        }
+
+        fn return_to_pool(self: Box<Self>) {
+            Box::new(self.inner_scheduler).return_to_pool()
         }
     }
 
