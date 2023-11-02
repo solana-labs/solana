@@ -125,8 +125,7 @@ pub trait InstalledScheduler: Send + Sync + Debug + 'static {
     #[must_use]
     fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings>;
 
-    fn context<'a>(&'a self) -> Option<&'a SchedulingContext>;
-    fn replace_context(&mut self, context: SchedulingContext);
+    fn context(&self) -> &SchedulingContext;
 }
 
 pub type DefaultInstalledSchedulerBox = Box<dyn InstalledScheduler>;
@@ -227,9 +226,11 @@ pub type InstalledSchedulerRwLock = RwLock<Option<DefaultInstalledSchedulerBox>>
 impl BankWithScheduler {
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     pub(crate) fn new(bank: Arc<Bank>, scheduler: Option<DefaultInstalledSchedulerBox>) -> Self {
-        if let Some(bank_in_context) = scheduler.as_ref().and_then(|scheduler| scheduler.context())
+        if let Some(bank_in_context) = scheduler
+            .as_ref()
+            .map(|scheduler| scheduler.context().bank())
         {
-            assert_eq!(bank.slot(), bank_in_context.slot());
+            assert!(Arc::ptr_eq(&bank, bank_in_context));
         }
 
         Self {
@@ -412,6 +413,7 @@ mod tests {
     };
 
     fn setup_mocked_scheduler_with_extra(
+        bank: &Arc<Bank>,
         wait_reasons: impl Iterator<Item = WaitReason>,
         f: Option<impl Fn(&mut MockInstalledScheduler)>,
     ) -> DefaultInstalledSchedulerBox {
@@ -421,7 +423,7 @@ mod tests {
         mock.expect_context()
             .times(1)
             .in_sequence(&mut seq)
-            .returning(|| None);
+            .return_const(SchedulingContext::new(bank.clone()));
 
         for wait_reason in wait_reasons {
             mock.expect_wait_for_termination()
@@ -449,9 +451,11 @@ mod tests {
     }
 
     fn setup_mocked_scheduler(
+        bank: &Arc<Bank>,
         wait_reasons: impl Iterator<Item = WaitReason>,
     ) -> DefaultInstalledSchedulerBox {
         setup_mocked_scheduler_with_extra(
+            bank,
             wait_reasons,
             None::<fn(&mut MockInstalledScheduler) -> ()>,
         )
@@ -461,10 +465,11 @@ mod tests {
     fn test_scheduler_normal_termination() {
         solana_logger::setup();
 
-        let bank = Arc::new(Bank::default_for_tests());
+        let bank = &Arc::new(Bank::default_for_tests());
         let bank = BankWithScheduler::new(
-            bank,
+            bank.clone(),
             Some(setup_mocked_scheduler(
+                bank,
                 [WaitReason::TerminatedToFreeze].into_iter(),
             )),
         );
@@ -493,10 +498,11 @@ mod tests {
     fn test_scheduler_termination_from_drop() {
         solana_logger::setup();
 
-        let bank = Arc::new(Bank::default_for_tests());
+        let bank = &Arc::new(Bank::default_for_tests());
         let bank = BankWithScheduler::new(
-            bank,
+            bank.clone(),
             Some(setup_mocked_scheduler(
+                bank,
                 [WaitReason::DroppedFromBankForks].into_iter(),
             )),
         );
@@ -507,10 +513,11 @@ mod tests {
     fn test_scheduler_pause() {
         solana_logger::setup();
 
-        let bank = Arc::new(crate::bank::tests::create_simple_test_bank(42));
+        let bank = &Arc::new(crate::bank::tests::create_simple_test_bank(42));
         let bank = BankWithScheduler::new(
-            bank,
+            bank.clone(),
             Some(setup_mocked_scheduler(
+                bank,
                 [
                     WaitReason::PausedForRecentBlockhash,
                     WaitReason::TerminatedToFreeze,
@@ -539,6 +546,7 @@ mod tests {
         ));
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let mocked_scheduler = setup_mocked_scheduler_with_extra(
+            &bank,
             [WaitReason::DroppedFromBankForks].into_iter(),
             Some(|mocked: &mut MockInstalledScheduler| {
                 mocked

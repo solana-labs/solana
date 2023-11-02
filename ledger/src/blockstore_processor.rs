@@ -1945,7 +1945,7 @@ pub mod tests {
             genesis_utils::{
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
             },
-            installed_scheduler_pool::{MockInstalledScheduler, WaitReason},
+            installed_scheduler_pool::{MockInstalledScheduler, SchedulingContext, WaitReason},
         },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
@@ -4527,6 +4527,7 @@ pub mod tests {
             ..
         } = create_genesis_config_with_leader(500, &dummy_leader_pubkey, 100);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let context = SchedulingContext::new(bank.clone());
 
         let txs = create_test_transactions(&mint_keypair, &genesis_config.hash());
 
@@ -4536,7 +4537,7 @@ pub mod tests {
             .expect_context()
             .times(1)
             .in_sequence(&mut seq)
-            .returning(|| None);
+            .return_const(context);
         mocked_scheduler
             .expect_schedule_execution()
             .times(txs.len())
