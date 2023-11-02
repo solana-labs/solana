@@ -99,7 +99,7 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 )]
 pub trait InstalledScheduler: Send + Sync + Debug + 'static {
     fn id(&self) -> SchedulerId;
-    fn return_to_pool(self: Box<Self>);
+    fn context(&self) -> &SchedulingContext;
 
     // Calling this is illegal as soon as wait_for_termination is called.
     fn schedule_execution<'a>(
@@ -125,7 +125,7 @@ pub trait InstalledScheduler: Send + Sync + Debug + 'static {
     #[must_use]
     fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings>;
 
-    fn context(&self) -> &SchedulingContext;
+    fn return_to_pool(self: Box<Self>);
 }
 
 pub type DefaultInstalledSchedulerBox = Box<dyn InstalledScheduler>;
