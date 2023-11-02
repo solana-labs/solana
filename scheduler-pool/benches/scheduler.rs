@@ -663,26 +663,26 @@ mod thread_utilization {
     // a wrapper InstalledScheduler to integrate with dep graph scheduling logic
     #[derive(Debug)]
     struct NonblockingSchedulerWithDepGraph {
-        inner_scheduelr: NonblockingScheduler<SleepyHandlerWithCompletionSignal>,
+        inner_scheduler: NonblockingScheduler<SleepyHandlerWithCompletionSignal>,
         pending_transactions: Mutex<Vec<SanitizedTransaction>>,
         completion_receiver: crossbeam_channel::Receiver<Signature>,
     }
 
     impl InstalledScheduler<ScheduleExecutionArgForBench> for NonblockingSchedulerWithDepGraph {
         fn id(&self) -> SchedulerId {
-            self.inner_scheduelr.id()
+            self.inner_scheduler.id()
         }
 
         fn pool(&self) -> InstalledSchedulerPoolArc<ScheduleExecutionArgForBench> {
-            self.inner_scheduelr.pool()
+            self.inner_scheduler.pool()
         }
 
         fn context(&self) -> Option<&SchedulingContext> {
-            self.inner_scheduelr.context()
+            self.inner_scheduler.context()
         }
 
         fn replace_context(&mut self, context: SchedulingContext) {
-            self.inner_scheduelr.replace_context(context)
+            self.inner_scheduler.replace_context(context)
         }
 
         fn schedule_execution(&self, transaction_with_index: TransactionWithIndexForBench) {
@@ -705,7 +705,7 @@ mod thread_utilization {
             )
             .unwrap();
 
-            self.inner_scheduelr.wait_for_termination(reason)
+            self.inner_scheduler.wait_for_termination(reason)
         }
     }
 
@@ -819,7 +819,7 @@ mod thread_utilization {
                                 .iter()
                                 .all(|idx| matches!(processing_states[*idx], State::Done))
                             {
-                                self.inner_scheduelr.schedule_execution(Arc::new((
+                                self.inner_scheduler.schedule_execution(Arc::new((
                                     pending_transactions[idx].clone(),
                                     idx,
                                 )));
@@ -890,7 +890,7 @@ mod thread_utilization {
         let tx_lock_ignoring_scheduler =
             NonblockingScheduler::spawn(pool, context.clone(), WORKER_THREAD_COUNT, handler);
         let tx_lock_adhering_scheduler = NonblockingSchedulerWithDepGraph {
-            inner_scheduelr: tx_lock_ignoring_scheduler,
+            inner_scheduler: tx_lock_ignoring_scheduler,
             pending_transactions: Mutex::new(Vec::default()),
             completion_receiver,
         };
