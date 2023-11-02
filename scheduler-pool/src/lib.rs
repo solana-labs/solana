@@ -47,7 +47,7 @@ pub struct SchedulerPool<
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<ReplayVoteSender>,
     prioritization_fee_cache: Arc<PrioritizationFeeCache>,
-    // weak_self could be elided by changing InstalledScheduler::take_from_pool()'s receiver to
+    // weak_self could be elided by changing InstalledScheduler::take_scheduler()'s receiver to
     // Arc<Self> from &Self, because SchedulerPool is used as in the form of Arc<SchedulerPool>
     // almost always. But, this would cause wasted and noisy Arc::clone()'s at every call sites.
     //
@@ -110,6 +110,15 @@ impl<
             .upgrade()
             .expect("self-referencing Arc-ed pool")
     }
+
+    pub fn return_scheduler(&self, scheduler: Box<dyn InstalledScheduler<SEA>>) {
+        assert!(scheduler.context().is_none());
+
+        self.schedulers
+            .lock()
+            .expect("not poisoned")
+            .push(scheduler);
+    }
 }
 
 impl<
@@ -118,7 +127,7 @@ impl<
         SEA: ScheduleExecutionArg,
     > InstalledSchedulerPool<SEA> for SchedulerPool<T, TH, SEA>
 {
-    fn take_from_pool(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler<SEA>> {
+    fn take_scheduler(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler<SEA>> {
         // pop is intentional for filo, expecting relatively warmed-up scheduler due to having been
         // returned recently
         if let Some(mut scheduler) = self.schedulers.lock().expect("not poisoned").pop() {
@@ -127,15 +136,6 @@ impl<
         } else {
             T::spawn_boxed(self.self_arc(), context, TH::create(self))
         }
-    }
-
-    fn return_to_pool(&self, scheduler: Box<dyn InstalledScheduler<SEA>>) {
-        assert!(scheduler.context().is_none());
-
-        self.schedulers
-            .lock()
-            .expect("not poisoned")
-            .push(scheduler);
     }
 }
 
@@ -253,8 +253,8 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
         self.id
     }
 
-    fn pool(&self) -> InstalledSchedulerPoolArc<SEA> {
-        self.pool.clone()
+    fn return_to_pool(self: Box<Self>) {
+        self.pool.clone().return_scheduler(self)
     }
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
@@ -361,7 +361,7 @@ mod tests {
             DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
         let bank = Arc::new(Bank::default_for_tests());
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank);
-        let scheduler = pool.take_from_pool(context);
+        let scheduler = pool.take_scheduler(context);
 
         let debug = format!("{scheduler:#?}");
         assert!(!debug.is_empty());
@@ -372,14 +372,13 @@ mod tests {
         solana_logger::setup();
 
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
-        let pool =
-            DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
+        let pool = DefaultSchedulerPool::new(None, None, None, ignored_prioritization_fee_cache);
         let bank = Arc::new(Bank::default_for_tests());
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank);
 
-        let mut scheduler1 = pool.take_from_pool(context.clone());
+        let mut scheduler1 = pool.take_scheduler(context.clone());
         let scheduler_id1 = scheduler1.id();
-        let mut scheduler2 = pool.take_from_pool(context.clone());
+        let mut scheduler2 = pool.take_scheduler(context.clone());
         let scheduler_id2 = scheduler2.id();
         assert_ne!(scheduler_id1, scheduler_id2);
 
@@ -387,16 +386,16 @@ mod tests {
             scheduler1.wait_for_termination(&WaitReason::TerminatedToFreeze),
             None
         );
-        pool.return_to_pool(scheduler1);
+        pool.return_scheduler(scheduler1);
         assert_matches!(
             scheduler2.wait_for_termination(&WaitReason::TerminatedToFreeze),
             None
         );
-        pool.return_to_pool(scheduler2);
+        pool.return_scheduler(scheduler2);
 
-        let scheduler3 = pool.take_from_pool(context.clone());
+        let scheduler3 = pool.take_scheduler(context.clone());
         assert_eq!(scheduler_id2, scheduler3.id());
-        let scheduler4 = pool.take_from_pool(context.clone());
+        let scheduler4 = pool.take_scheduler(context.clone());
         assert_eq!(scheduler_id1, scheduler4.id());
     }
 
@@ -410,7 +409,7 @@ mod tests {
         let bank = Arc::new(Bank::default_for_tests());
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank);
 
-        let mut scheduler = pool.take_from_pool(context.clone());
+        let mut scheduler = pool.take_scheduler(context.clone());
 
         assert!(scheduler.context().is_some());
         assert_matches!(
@@ -430,8 +429,7 @@ mod tests {
         solana_logger::setup();
 
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
-        let pool =
-            DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
+        let pool = DefaultSchedulerPool::new(None, None, None, ignored_prioritization_fee_cache);
         let old_bank = &Arc::new(Bank::default_for_tests());
         let new_bank = &Arc::new(Bank::default_for_tests());
         assert!(!Arc::ptr_eq(old_bank, new_bank));
@@ -441,15 +439,15 @@ mod tests {
         let new_context =
             &SchedulingContext::new(SchedulingMode::BlockVerification, new_bank.clone());
 
-        let mut scheduler = pool.take_from_pool(old_context.clone());
+        let mut scheduler = pool.take_scheduler(old_context.clone());
         let scheduler_id = scheduler.id();
         assert_matches!(
             scheduler.wait_for_termination(&WaitReason::TerminatedToFreeze),
             None
         );
-        pool.return_to_pool(scheduler);
+        pool.return_scheduler(scheduler);
 
-        let scheduler = pool.take_from_pool(new_context.clone());
+        let scheduler = pool.take_scheduler(new_context.clone());
         assert_eq!(scheduler_id, scheduler.id());
         assert!(Arc::ptr_eq(scheduler.context().unwrap().bank(), new_bank));
     }
@@ -522,7 +520,7 @@ mod tests {
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
 
         assert_eq!(bank.transaction_count(), 0);
-        let scheduler = pool.take_from_pool(context);
+        let scheduler = pool.take_scheduler(context);
         scheduler.schedule_execution(&(tx0, 0));
         let bank = BankWithScheduler::new(bank, Some(scheduler));
         assert_matches!(bank.wait_for_completed_scheduler(), Some((Ok(()), _)));
@@ -552,7 +550,7 @@ mod tests {
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
 
         assert_eq!(bank.transaction_count(), 0);
-        let scheduler = pool.take_from_pool(context);
+        let scheduler = pool.take_scheduler(context);
         scheduler.schedule_execution(&(tx0, 0));
         assert_eq!(bank.transaction_count(), 0);
 
@@ -593,8 +591,8 @@ mod tests {
             self.0.id()
         }
 
-        fn pool(&self) -> InstalledSchedulerPoolArc<DefaultScheduleExecutionArg> {
-            self.0.pool()
+        fn return_to_pool(self: Box<Self>) {
+            self.0.pool.clone().return_scheduler(self)
         }
 
         fn context(&self) -> Option<&SchedulingContext> {
@@ -722,7 +720,7 @@ mod tests {
             DefaultTransactionHandler,
             DefaultScheduleExecutionArg,
         >::new_dyn(None, None, None, ignored_prioritization_fee_cache);
-        let scheduler = pool.take_from_pool(context);
+        let scheduler = pool.take_scheduler(context);
 
         let bank = BankWithScheduler::new(bank, Some(scheduler));
         assert_eq!(bank.transaction_count(), 0);

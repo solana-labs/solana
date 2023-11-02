@@ -15,8 +15,8 @@ use {
         bank::Bank,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         installed_scheduler_pool::{
-            InstalledScheduler, InstalledSchedulerPoolArc, ResultWithTimings, ScheduleExecutionArg,
-            SchedulerId, SchedulingContext, WaitReason, WithTransactionAndIndex,
+            InstalledScheduler, ResultWithTimings, ScheduleExecutionArg, SchedulerId,
+            SchedulingContext, WaitReason, WithTransactionAndIndex,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
@@ -209,7 +209,7 @@ mod nonblocking {
         H: ScheduledTransactionHandler<ScheduleExecutionArgForBench> + Clone,
     > {
         id: SchedulerId,
-        pool: Arc<SchedulerPool<Self, H, ScheduleExecutionArgForBench>>,
+        pub(crate) pool: Arc<SchedulerPool<Self, H, ScheduleExecutionArgForBench>>,
         transaction_sender: crossbeam_channel::Sender<ChainedChannel>,
         result_receiver: crossbeam_channel::Receiver<(Result<()>, ExecuteTimings, usize)>,
         lane_count: usize,
@@ -330,8 +330,8 @@ mod nonblocking {
             self.id
         }
 
-        fn pool(&self) -> InstalledSchedulerPoolArc<ScheduleExecutionArgForBench> {
-            self.pool.clone()
+        fn return_to_pool(self: Box<Self>) {
+            self.pool.clone().return_scheduler(self)
         }
 
         fn schedule_execution(&self, transaction_with_index: TransactionWithIndexForBench) {
@@ -673,8 +673,8 @@ mod thread_utilization {
             self.inner_scheduler.id()
         }
 
-        fn pool(&self) -> InstalledSchedulerPoolArc<ScheduleExecutionArgForBench> {
-            self.inner_scheduler.pool()
+        fn return_to_pool(self: Box<Self>) {
+            self.inner_scheduler.pool.clone().return_scheduler(self)
         }
 
         fn context(&self) -> Option<&SchedulingContext> {
