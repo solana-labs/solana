@@ -7167,8 +7167,10 @@ impl AccountsDb {
         }
     }
 
-    /// if ancient append vecs are enabled, return a slot 'max_slot_inclusive' - (slots_per_epoch - `self.ancient_append_vec_offset`)
-    /// otherwise, return 0
+    /// `oldest_non_ancient_slot`` is only applicable when `Append` is used for ancient appendvec packing.
+    /// If `Pack` are used for ancient apendvec packing, return None.
+    /// Otherwise, return a slot 'max_slot_inclusive' - (slots_per_epoch - `self.ancient_append_vec_offset`)
+    /// If ancient appendvec is not enabled, return 0.
     fn get_oldest_non_ancient_slot_for_hash_calc_scan(
         &self,
         max_slot_inclusive: Slot,
