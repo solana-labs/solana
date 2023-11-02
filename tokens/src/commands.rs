@@ -1511,51 +1511,37 @@ mod tests {
             "require_lockup".to_string(),
         );
 
-        // Bad pub key (default).
+        // Bad pubkey (default).
         let file = NamedTempFile::new().unwrap();
         generate_csv_file(
             default_header.clone(),
             vec![
                 (pubkey0.to_string(), "42.0".to_string(), "".to_string()),
-                (
-                    "bad pub key".to_string(),
-                    "43.0".to_string(),
-                    "".to_string(),
-                ),
+                ("bad pubkey".to_string(), "43.0".to_string(), "".to_string()),
             ],
             &file,
         );
         let input_csv = file.path().to_str().unwrap().to_string();
-        let got = read_allocations(&input_csv, None, false, false);
-        match got {
-            Err(Error::BadInputPubkeyError { input, .. }) => {
-                assert_eq!("bad pub key".to_string(), input)
-            }
-            _ => unreachable!("expected BadInputPubkeyError, got: {:?}", got),
-        };
-        // Bad pub key (with transfer amount).
+        let got_err = read_allocations(&input_csv, None, false, false).unwrap_err();
+        assert!(
+            matches!(got_err, Error::BadInputPubkeyError { input, .. } if input == *"bad pubkey")
+        );
+        // Bad pubkey (with transfer amount).
         let file = NamedTempFile::new().unwrap();
         generate_csv_file(
             default_header.clone(),
             vec![
                 (pubkey0.to_string(), "42.0".to_string(), "".to_string()),
-                (
-                    "bad pub key".to_string(),
-                    "43.0".to_string(),
-                    "".to_string(),
-                ),
+                ("bad pubkey".to_string(), "43.0".to_string(), "".to_string()),
             ],
             &file,
         );
         let input_csv = file.path().to_str().unwrap().to_string();
-        let got = read_allocations(&input_csv, Some(123), false, false);
-        match got {
-            Err(Error::BadInputPubkeyError { input, .. }) => {
-                assert_eq!("bad pub key".to_string(), input)
-            }
-            _ => unreachable!("expected BadInputPubkeyError, got: {:?}", got),
-        };
-        // Bad pub key (with require lockup).
+        let got_err = read_allocations(&input_csv, Some(123), false, false).unwrap_err();
+        assert!(
+            matches!(got_err, Error::BadInputPubkeyError { input, .. } if input == *"bad pubkey")
+        );
+        // Bad pubkey (with require lockup).
         let file = NamedTempFile::new().unwrap();
         generate_csv_file(
             default_header.clone(),
@@ -1566,7 +1552,7 @@ mod tests {
                     "2021-02-07T00:00:00Z".to_string(),
                 ),
                 (
-                    "bad pub key".to_string(),
+                    "bad pubkey".to_string(),
                     "43.0".to_string(),
                     "2021-02-07T00:00:00Z".to_string(),
                 ),
@@ -1574,31 +1560,25 @@ mod tests {
             &file,
         );
         let input_csv = file.path().to_str().unwrap().to_string();
-        let got = read_allocations(&input_csv, None, true, false);
-        match got {
-            Err(Error::BadInputPubkeyError { input, .. }) => {
-                assert_eq!("bad pub key".to_string(), input)
-            }
-            _ => unreachable!("expected BadInputPubkeyError, got: {:?}", got),
-        };
-        // Bad pub key (with raw amount).
+        let got_err = read_allocations(&input_csv, None, true, false).unwrap_err();
+        assert!(
+            matches!(got_err, Error::BadInputPubkeyError { input, .. } if input == *"bad pubkey")
+        );
+        // Bad pubkey (with raw amount).
         let file = NamedTempFile::new().unwrap();
         generate_csv_file(
             default_header.clone(),
             vec![
                 (pubkey0.to_string(), "42".to_string(), "".to_string()),
-                ("bad pub key".to_string(), "43".to_string(), "".to_string()),
+                ("bad pubkey".to_string(), "43".to_string(), "".to_string()),
             ],
             &file,
         );
         let input_csv = file.path().to_str().unwrap().to_string();
-        let got = read_allocations(&input_csv, None, false, true);
-        match got {
-            Err(Error::BadInputPubkeyError { input, .. }) => {
-                assert_eq!("bad pub key".to_string(), input)
-            }
-            _ => unreachable!("expected BadInputPubkeyError, got: {:?}", got),
-        };
+        let got_err = read_allocations(&input_csv, None, false, true).unwrap_err();
+        assert!(
+            matches!(got_err, Error::BadInputPubkeyError { input, .. } if input == *"bad pubkey")
+        );
 
         // Bad value in 2nd column (default).
         let file = NamedTempFile::new().unwrap();
@@ -1671,13 +1651,10 @@ mod tests {
             &file,
         );
         let input_csv = file.path().to_str().unwrap().to_string();
-        let got = read_allocations(&input_csv, None, true, false);
-        match got {
-            Err(Error::BadInputLockupDate { input, .. }) => {
-                assert_eq!("bad lockup date".to_string(), input)
-            }
-            _ => unreachable!("expected BadInputLockupDate, got: {:?}", got),
-        };
+        let got_err = read_allocations(&input_csv, None, true, false).unwrap_err();
+        assert!(
+            matches!(got_err, Error::BadInputLockupDate { input, .. } if input == *"bad lockup date")
+        );
     }
 
     #[test]
