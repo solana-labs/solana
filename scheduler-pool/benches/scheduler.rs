@@ -22,7 +22,8 @@ use {
     },
     solana_scheduler::SchedulingMode,
     solana_scheduler_pool::{
-        PooledScheduler, ScheduledTransactionHandler, SchedulerPool, SpawnableScheduler,
+        InstallableScheduler, PooledScheduler, ScheduledTransactionHandler, SchedulerPool,
+        SpawnableScheduler,
     },
     solana_sdk::{
         system_transaction,
@@ -148,7 +149,7 @@ mod blocking_ref {
         let pool = SchedulerPool::new(None, None, None, ignored_prioritization_fee_cache);
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
 
-        let mut scheduler = PooledScheduler::<_, DefaultScheduleExecutionArg>::spawn(
+        let mut scheduler = PooledScheduler::<_, DefaultScheduleExecutionArg>::do_spawn(
             pool,
             context.clone(),
             BenchFriendlyHandler::<_, false>::default(),
@@ -181,7 +182,7 @@ mod blocking {
     #[bench]
     fn bench_with_arc_mutation(bencher: &mut Bencher) {
         run_bench(bencher, |pool, context| {
-            BlockingScheduler::spawn(
+            BlockingScheduler::do_spawn(
                 pool,
                 context,
                 BenchFriendlyHandlerWithArcMutation::default(),
@@ -192,7 +193,7 @@ mod blocking {
     #[bench]
     fn bench_without_arc_mutation(bencher: &mut Bencher) {
         run_bench(bencher, |pool, context| {
-            BlockingScheduler::spawn(
+            BlockingScheduler::do_spawn(
                 pool,
                 context,
                 BenchFriendlyHandlerWithoutArcMutation::default(),
@@ -243,11 +244,11 @@ mod nonblocking {
     impl<H: ScheduledTransactionHandler<ScheduleExecutionArgForBench> + Clone>
         SpawnableScheduler<H, ScheduleExecutionArgForBench> for NonblockingScheduler<H>
     {
-        fn spawn_boxed(
+        fn spawn(
             _pool: Arc<SchedulerPool<Self, H, ScheduleExecutionArgForBench>>,
             _initial_context: SchedulingContext,
             _handler: H,
-        ) -> Box<dyn InstalledScheduler<ScheduleExecutionArgForBench>> {
+        ) -> Self {
             unimplemented!();
         }
     }
@@ -373,8 +374,16 @@ mod nonblocking {
             Some((overall_result, overall_timings))
         }
 
-        fn context(&self) -> Option<&SchedulingContext> {
-            Some(&self.context)
+        fn context(&self) -> &SchedulingContext {
+            &self.context
+        }
+    }
+
+    impl<H: ScheduledTransactionHandler<ScheduleExecutionArgForBench> + Clone>
+        InstallableScheduler<ScheduleExecutionArgForBench> for NonblockingScheduler<H>
+    {
+        fn has_context(&self) -> bool {
+            true
         }
 
         fn replace_context(&mut self, context: SchedulingContext) {
@@ -487,7 +496,7 @@ mod nonblocking {
 // demonstrate meaningfully differing performance profile regarding multi worker thread utilization
 // with saturated transaction execution for each bench scenarios, with/without the existence of
 // artificial and needless synchronizations.
-// conversely, the whole InstalledScheduler machinery can be justified as it can eliminate these
+// conversely, the whole InstallableScheduler machinery can be justified as it can eliminate these
 // synchronizations altogether to bare minimum (i.e. bank freeze).
 mod thread_utilization {
     use {
@@ -536,7 +545,7 @@ mod thread_utilization {
 
     const WORKER_THREAD_COUNT: usize = 10;
 
-    fn simulate_synchronization_point<T: InstalledScheduler<ScheduleExecutionArgForBench>>(
+    fn simulate_synchronization_point<T: InstallableScheduler<ScheduleExecutionArgForBench>>(
         scheduler: &mut T,
         context: SchedulingContext,
     ) {
@@ -547,7 +556,7 @@ mod thread_utilization {
         scheduler.replace_context(context);
     }
 
-    fn run_scenario_and_finalize<T: InstalledScheduler<ScheduleExecutionArgForBench>>(
+    fn run_scenario_and_finalize<T: InstallableScheduler<ScheduleExecutionArgForBench>>(
         bencher: &mut Bencher,
         really_synchronize: bool,
         scheduler: &mut T,
@@ -660,7 +669,7 @@ mod thread_utilization {
         }
     }
 
-    // a wrapper InstalledScheduler to integrate with dep graph scheduling logic
+    // a wrapper InstallableScheduler to integrate with dep graph scheduling logic
     #[derive(Debug)]
     struct NonblockingSchedulerWithDepGraph {
         inner_scheduler: NonblockingScheduler<SleepyHandlerWithCompletionSignal>,
@@ -674,15 +683,11 @@ mod thread_utilization {
         }
 
         fn return_to_pool(self: Box<Self>) {
-            self.inner_scheduler.pool.clone().return_scheduler(self)
+            Box::new(self.inner_scheduler).return_to_pool()
         }
 
-        fn context(&self) -> Option<&SchedulingContext> {
+        fn context(&self) -> &SchedulingContext {
             self.inner_scheduler.context()
-        }
-
-        fn replace_context(&mut self, context: SchedulingContext) {
-            self.inner_scheduler.replace_context(context)
         }
 
         fn schedule_execution(&self, transaction_with_index: TransactionWithIndexForBench) {
@@ -699,13 +704,23 @@ mod thread_utilization {
         fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings> {
             // execute all the pending transactions now!
             self.execute_batches(
-                self.context().unwrap().bank(),
+                self.context().bank(),
                 &std::mem::take(&mut *self.pending_transactions.lock().unwrap()),
                 &self.completion_receiver,
             )
             .unwrap();
 
             self.inner_scheduler.wait_for_termination(reason)
+        }
+    }
+
+    impl InstallableScheduler<ScheduleExecutionArgForBench> for NonblockingSchedulerWithDepGraph {
+        fn has_context(&self) -> bool {
+            self.inner_scheduler.has_context()
+        }
+
+        fn replace_context(&mut self, context: SchedulingContext) {
+            self.inner_scheduler.replace_context(context)
         }
     }
 

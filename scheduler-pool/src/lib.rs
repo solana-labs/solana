@@ -42,7 +42,7 @@ pub struct SchedulerPool<
     TH: ScheduledTransactionHandler<SEA>,
     SEA: ScheduleExecutionArg,
 > {
-    schedulers: Mutex<Vec<Box<dyn InstalledScheduler<SEA>>>>,
+    schedulers: Mutex<Vec<Box<T>>>,
     log_messages_bytes_limit: Option<usize>,
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<ReplayVoteSender>,
@@ -58,7 +58,7 @@ pub struct SchedulerPool<
     // After these considerations, this weak_self approach is chosen at the cost of some additional
     // memory increase.
     weak_self: Weak<Self>,
-    _phantom: PhantomData<(T, TH)>,
+    _phantom: PhantomData<(T, TH, SEA)>,
 }
 
 pub type DefaultSchedulerPool = SchedulerPool<
@@ -80,7 +80,7 @@ impl<
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Arc<Self> {
         Arc::new_cyclic(|weak_self| Self {
-            schedulers: Mutex::<Vec<Box<dyn InstalledScheduler<SEA>>>>::default(),
+            schedulers: Mutex::default(),
             log_messages_bytes_limit,
             transaction_status_sender,
             replay_vote_sender,
@@ -111,13 +111,24 @@ impl<
             .expect("self-referencing Arc-ed pool")
     }
 
-    pub fn return_scheduler(&self, scheduler: Box<dyn InstalledScheduler<SEA>>) {
-        assert!(scheduler.context().is_none());
+    pub fn return_scheduler(&self, scheduler: Box<T>) {
+        assert!(!scheduler.has_context());
 
         self.schedulers
             .lock()
             .expect("not poisoned")
             .push(scheduler);
+    }
+
+    pub fn do_take_scheduler(&self, context: SchedulingContext) -> Box<T> {
+        // pop is intentional for filo, expecting relatively warmed-up scheduler due to having been
+        // returned recently
+        if let Some(mut scheduler) = self.schedulers.lock().expect("not poisoned").pop() {
+            scheduler.replace_context(context);
+            scheduler
+        } else {
+            Box::new(T::spawn(self.self_arc(), context, TH::create(self)))
+        }
     }
 }
 
@@ -128,14 +139,7 @@ impl<
     > InstalledSchedulerPool<SEA> for SchedulerPool<T, TH, SEA>
 {
     fn take_scheduler(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler<SEA>> {
-        // pop is intentional for filo, expecting relatively warmed-up scheduler due to having been
-        // returned recently
-        if let Some(mut scheduler) = self.schedulers.lock().expect("not poisoned").pop() {
-            scheduler.replace_context(context);
-            scheduler
-        } else {
-            T::spawn_boxed(self.self_arc(), context, TH::create(self))
-        }
+        self.do_take_scheduler(context)
     }
 }
 
@@ -206,7 +210,7 @@ pub struct PooledScheduler<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleEx
 }
 
 impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
-    pub fn spawn(
+    pub fn do_spawn(
         pool: Arc<SchedulerPool<Self, TH, SEA>>,
         initial_context: SchedulingContext,
         handler: TH,
@@ -222,14 +226,19 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> PooledSche
     }
 }
 
+pub trait InstallableScheduler<SEA: ScheduleExecutionArg>: InstalledScheduler<SEA> {
+    fn has_context(&self) -> bool;
+    fn replace_context(&mut self, context: SchedulingContext);
+}
+
 pub trait SpawnableScheduler<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg>:
-    InstalledScheduler<SEA>
+    InstallableScheduler<SEA>
 {
-    fn spawn_boxed(
+    fn spawn(
         pool: Arc<SchedulerPool<Self, TH, SEA>>,
         initial_context: SchedulingContext,
         handler: TH,
-    ) -> Box<dyn InstalledScheduler<SEA>>
+    ) -> Self
     where
         Self: Sized;
 }
@@ -237,12 +246,12 @@ pub trait SpawnableScheduler<TH: ScheduledTransactionHandler<SEA>, SEA: Schedule
 impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
     for PooledScheduler<TH, SEA>
 {
-    fn spawn_boxed(
+    fn spawn(
         pool: Arc<SchedulerPool<Self, TH, SEA>>,
         initial_context: SchedulingContext,
         handler: TH,
-    ) -> Box<dyn InstalledScheduler<SEA>> {
-        Box::new(Self::spawn(pool, initial_context, handler))
+    ) -> Self {
+        Self::do_spawn(pool, initial_context, handler)
     }
 }
 
@@ -258,9 +267,7 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
     }
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
-        let context = self.context.as_ref().expect("active context should exist");
-
-        let fail_fast = match context.mode() {
+        let fail_fast = match self.context().mode() {
             // this should be false, for (upcoming) BlockProduction variant.
             SchedulingMode::BlockVerification => true,
         };
@@ -277,7 +284,7 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
                     &self.handler,
                     result,
                     timings,
-                    context.bank(),
+                    self.context().bank(),
                     transaction,
                     index,
                     &self.pool,
@@ -292,7 +299,11 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
         if keep_result_with_timings {
             None
         } else {
-            drop(self.context.take());
+            drop(
+                self.context
+                    .take()
+                    .expect("active context should be dropped"),
+            );
             // current simplest form of this trait impl doesn't block the current thread materially
             // just with the following single mutex lock. Suppose more elaborated synchronization
             // across worker threads here in the future...
@@ -303,8 +314,16 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
         }
     }
 
-    fn context(&self) -> Option<&SchedulingContext> {
-        self.context.as_ref()
+    fn context(&self) -> &SchedulingContext {
+        self.context.as_ref().expect("active context should exist")
+    }
+}
+
+impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstallableScheduler<SEA>
+    for PooledScheduler<TH, SEA>
+{
+    fn has_context(&self) -> bool {
+        self.context.is_some()
     }
 
     fn replace_context(&mut self, context: SchedulingContext) {
@@ -322,9 +341,7 @@ mod tests {
             bank::Bank,
             bank_forks::BankForks,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
-            installed_scheduler_pool::{
-                BankWithScheduler, DefaultInstalledSchedulerBox, SchedulingContext,
-            },
+            installed_scheduler_pool::{BankWithScheduler, SchedulingContext},
             prioritization_fee_cache::PrioritizationFeeCache,
         },
         solana_sdk::{
@@ -376,9 +393,9 @@ mod tests {
         let bank = Arc::new(Bank::default_for_tests());
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank);
 
-        let mut scheduler1 = pool.take_scheduler(context.clone());
+        let mut scheduler1 = pool.do_take_scheduler(context.clone());
         let scheduler_id1 = scheduler1.id();
-        let mut scheduler2 = pool.take_scheduler(context.clone());
+        let mut scheduler2 = pool.do_take_scheduler(context.clone());
         let scheduler_id2 = scheduler2.id();
         assert_ne!(scheduler_id1, scheduler_id2);
 
@@ -393,9 +410,9 @@ mod tests {
         );
         pool.return_scheduler(scheduler2);
 
-        let scheduler3 = pool.take_scheduler(context.clone());
+        let scheduler3 = pool.do_take_scheduler(context.clone());
         assert_eq!(scheduler_id2, scheduler3.id());
-        let scheduler4 = pool.take_scheduler(context.clone());
+        let scheduler4 = pool.do_take_scheduler(context.clone());
         assert_eq!(scheduler_id1, scheduler4.id());
     }
 
@@ -404,24 +421,23 @@ mod tests {
         solana_logger::setup();
 
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
-        let pool =
-            DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
+        let pool = DefaultSchedulerPool::new(None, None, None, ignored_prioritization_fee_cache);
         let bank = Arc::new(Bank::default_for_tests());
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank);
 
-        let mut scheduler = pool.take_scheduler(context.clone());
+        let mut scheduler = pool.do_take_scheduler(context.clone());
 
-        assert!(scheduler.context().is_some());
+        assert!(scheduler.has_context());
         assert_matches!(
             scheduler.wait_for_termination(&WaitReason::PausedForRecentBlockhash),
             None
         );
-        assert!(scheduler.context().is_some());
+        assert!(scheduler.has_context());
         assert_matches!(
             scheduler.wait_for_termination(&WaitReason::TerminatedToFreeze),
             None
         );
-        assert!(scheduler.context().is_none());
+        assert!(!scheduler.has_context());
     }
 
     #[test]
@@ -439,7 +455,7 @@ mod tests {
         let new_context =
             &SchedulingContext::new(SchedulingMode::BlockVerification, new_bank.clone());
 
-        let mut scheduler = pool.take_scheduler(old_context.clone());
+        let mut scheduler = pool.do_take_scheduler(old_context.clone());
         let scheduler_id = scheduler.id();
         assert_matches!(
             scheduler.wait_for_termination(&WaitReason::TerminatedToFreeze),
@@ -449,7 +465,7 @@ mod tests {
 
         let scheduler = pool.take_scheduler(new_context.clone());
         assert_eq!(scheduler_id, scheduler.id());
-        assert!(Arc::ptr_eq(scheduler.context().unwrap().bank(), new_bank));
+        assert!(Arc::ptr_eq(scheduler.context().bank(), new_bank));
     }
 
     #[test]
@@ -592,15 +608,11 @@ mod tests {
         }
 
         fn return_to_pool(self: Box<Self>) {
-            self.0.pool.clone().return_scheduler(self)
+            Box::new(self.0).return_to_pool()
         }
 
-        fn context(&self) -> Option<&SchedulingContext> {
+        fn context(&self) -> &SchedulingContext {
             self.0.context()
-        }
-
-        fn replace_context(&mut self, context: SchedulingContext) {
-            self.0.replace_context(context)
         }
 
         fn schedule_execution<'a>(
@@ -608,7 +620,7 @@ mod tests {
             &(transaction, index): <DefaultScheduleExecutionArg as ScheduleExecutionArg>::TransactionWithIndex<'a>,
         ) {
             let transaction_and_index = (transaction.clone(), index);
-            let context = self.context().unwrap().clone();
+            let context = self.context().clone();
             let pool = self.0.pool.clone();
 
             self.1.lock().unwrap().push(std::thread::spawn(move || {
@@ -661,12 +673,12 @@ mod tests {
         SpawnableScheduler<DefaultTransactionHandler, DefaultScheduleExecutionArg>
         for AsyncScheduler<TRIGGER_RACE_CONDITION>
     {
-        fn spawn_boxed(
+        fn spawn(
             pool: Arc<SchedulerPool<Self, DefaultTransactionHandler, DefaultScheduleExecutionArg>>,
             initial_context: SchedulingContext,
             handler: DefaultTransactionHandler,
-        ) -> DefaultInstalledSchedulerBox {
-            Box::new(AsyncScheduler::<TRIGGER_RACE_CONDITION>(
+        ) -> Self {
+            AsyncScheduler::<TRIGGER_RACE_CONDITION>(
                 PooledScheduler::<DefaultTransactionHandler, DefaultScheduleExecutionArg> {
                     id: thread_rng().gen::<SchedulerId>(),
                     pool: SchedulerPool::new(
@@ -681,7 +693,19 @@ mod tests {
                     _phantom: PhantomData,
                 },
                 Mutex::new(vec![]),
-            ))
+            )
+        }
+    }
+
+    impl<const TRIGGER_RACE_CONDITION: bool> InstallableScheduler<DefaultScheduleExecutionArg>
+        for AsyncScheduler<TRIGGER_RACE_CONDITION>
+    {
+        fn has_context(&self) -> bool {
+            self.0.has_context()
+        }
+
+        fn replace_context(&mut self, context: SchedulingContext) {
+            self.0.replace_context(context)
         }
     }
 
