@@ -459,7 +459,7 @@ mod tests {
             .in_sequence(&mut seq)
             .return_const(SchedulingContext::new(
                 SchedulingMode::BlockVerification,
-                bank.clone(),
+                bank,
             ));
 
         for wait_reason in wait_reasons {
