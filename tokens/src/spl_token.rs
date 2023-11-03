@@ -1,7 +1,7 @@
 use {
     crate::{
         args::{DistributeTokensArgs, SplTokenArgs},
-        commands::{get_fee_estimate_for_messages, Allocation, Error, FundingSource},
+        commands::{get_fee_estimate_for_messages, Error, FundingSource, TypedAllocation},
     },
     console::style,
     solana_account_decoder::parse_token::{real_number_string, real_number_string_trimmed},
@@ -37,7 +37,7 @@ pub fn update_decimals(client: &RpcClient, args: &mut Option<SplTokenArgs>) -> R
 }
 
 pub(crate) fn build_spl_token_instructions(
-    allocation: &Allocation,
+    allocation: &TypedAllocation,
     args: &DistributeTokensArgs,
     do_create_associated_token_account: bool,
 ) -> Vec<Instruction> {
@@ -45,7 +45,7 @@ pub(crate) fn build_spl_token_instructions(
         .spl_token_args
         .as_ref()
         .expect("spl_token_args must be some");
-    let wallet_address = allocation.recipient.parse().unwrap();
+    let wallet_address = allocation.recipient;
     let associated_token_address =
         get_associated_token_address(&wallet_address, &spl_token_args.mint);
     let mut instructions = vec![];
@@ -75,7 +75,7 @@ pub(crate) fn build_spl_token_instructions(
 
 pub(crate) fn check_spl_token_balances(
     messages: &[Message],
-    allocations: &[Allocation],
+    allocations: &[TypedAllocation],
     client: &RpcClient,
     args: &DistributeTokensArgs,
     created_accounts: u64,
@@ -112,10 +112,10 @@ pub(crate) fn check_spl_token_balances(
 
 pub(crate) fn print_token_balances(
     client: &RpcClient,
-    allocation: &Allocation,
+    allocation: &TypedAllocation,
     spl_token_args: &SplTokenArgs,
 ) -> Result<(), Error> {
-    let address = allocation.recipient.parse().unwrap();
+    let address = allocation.recipient;
     let expected = allocation.amount;
     let associated_token_address = get_associated_token_address(&address, &spl_token_args.mint);
     let recipient_account = client
