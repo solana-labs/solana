@@ -1599,7 +1599,11 @@ fn test_rent_eager_collect_rent_in_partition() {
     let large_lamports = 123_456_789;
     // genesis_config.epoch_schedule.slots_per_epoch == 432_000 and is unsuitable for this test
     let some_slot = MINIMUM_SLOTS_PER_EPOCH; // chosen to cause epoch to be +1
-    let rent_collected = 1; // this is a function of 'some_slot'
+    let rent_collected = if bank.disable_rent_fees_collection() {
+        0
+    } else {
+        1 /* this is a function of 'some_slot' */
+    };
 
     bank.store_account(
         &zero_lamport_pubkey,
@@ -1649,9 +1653,9 @@ fn test_rent_eager_collect_rent_in_partition() {
         bank.get_account(&rent_due_pubkey).unwrap().lamports(),
         little_lamports - rent_collected
     );
-    assert_eq!(
-        bank.get_account(&rent_due_pubkey).unwrap().rent_epoch(),
-        current_epoch + 1
+    assert!(
+        bank.get_account(&rent_due_pubkey).unwrap().rent_epoch() == current_epoch + 1
+            || bank.disable_rent_fees_collection()
     );
     assert_eq!(
         bank.get_account(&rent_exempt_pubkey).unwrap().lamports(),
