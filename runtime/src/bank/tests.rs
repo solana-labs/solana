@@ -11500,17 +11500,18 @@ fn test_accounts_data_size_and_rent_collection() {
         }
 
         // Collect rent for real
+        let rent_fees_collection_disabled = bank.disable_rent_fees_collection();
         let accounts_data_size_delta_before_collecting_rent = bank.load_accounts_data_size_delta();
         bank.collect_rent_eagerly();
         let accounts_data_size_delta_after_collecting_rent = bank.load_accounts_data_size_delta();
 
         let accounts_data_size_delta_delta = accounts_data_size_delta_after_collecting_rent
             - accounts_data_size_delta_before_collecting_rent;
-        assert!(accounts_data_size_delta_delta < 0);
+        assert!(rent_fees_collection_disabled || accounts_data_size_delta_delta < 0);
         let reclaimed_data_size = accounts_data_size_delta_delta.saturating_neg() as usize;
 
         // Ensure the account is reclaimed by rent collection
-        assert_eq!(reclaimed_data_size, data_size,);
+        assert!(rent_fees_collection_disabled || reclaimed_data_size == data_size);
     }
 }
 
