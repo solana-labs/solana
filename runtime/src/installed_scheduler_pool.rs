@@ -413,7 +413,7 @@ mod tests {
     };
 
     fn setup_mocked_scheduler_with_extra(
-        bank: &Arc<Bank>,
+        bank: Arc<Bank>,
         wait_reasons: impl Iterator<Item = WaitReason>,
         f: Option<impl Fn(&mut MockInstalledScheduler)>,
     ) -> DefaultInstalledSchedulerBox {
@@ -423,7 +423,7 @@ mod tests {
         mock.expect_context()
             .times(1)
             .in_sequence(&mut seq)
-            .return_const(SchedulingContext::new(bank.clone()));
+            .return_const(SchedulingContext::new(bank));
 
         for wait_reason in wait_reasons {
             mock.expect_wait_for_termination()
@@ -451,7 +451,7 @@ mod tests {
     }
 
     fn setup_mocked_scheduler(
-        bank: &Arc<Bank>,
+        bank: Arc<Bank>,
         wait_reasons: impl Iterator<Item = WaitReason>,
     ) -> DefaultInstalledSchedulerBox {
         setup_mocked_scheduler_with_extra(
@@ -465,7 +465,7 @@ mod tests {
     fn test_scheduler_normal_termination() {
         solana_logger::setup();
 
-        let bank = &Arc::new(Bank::default_for_tests());
+        let bank = Arc::new(Bank::default_for_tests());
         let bank = BankWithScheduler::new(
             bank.clone(),
             Some(setup_mocked_scheduler(
@@ -498,7 +498,7 @@ mod tests {
     fn test_scheduler_termination_from_drop() {
         solana_logger::setup();
 
-        let bank = &Arc::new(Bank::default_for_tests());
+        let bank = Arc::new(Bank::default_for_tests());
         let bank = BankWithScheduler::new(
             bank.clone(),
             Some(setup_mocked_scheduler(
@@ -513,7 +513,7 @@ mod tests {
     fn test_scheduler_pause() {
         solana_logger::setup();
 
-        let bank = &Arc::new(crate::bank::tests::create_simple_test_bank(42));
+        let bank = Arc::new(crate::bank::tests::create_simple_test_bank(42));
         let bank = BankWithScheduler::new(
             bank.clone(),
             Some(setup_mocked_scheduler(
@@ -546,7 +546,7 @@ mod tests {
         ));
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let mocked_scheduler = setup_mocked_scheduler_with_extra(
-            &bank,
+            bank.clone(),
             [WaitReason::DroppedFromBankForks].into_iter(),
             Some(|mocked: &mut MockInstalledScheduler| {
                 mocked
