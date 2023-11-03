@@ -1,6 +1,6 @@
 use {
     super::Bank,
-    log::{debug, warn},
+    log::{debug, info, warn},
     solana_accounts_db::{account_rent_state::RentState, stake_rewards::RewardInfo},
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
@@ -272,6 +272,15 @@ impl Bank {
 
     pub(super) fn distribute_rent_fees(&self) {
         let total_rent_collected = self.collected_rent.load(Relaxed);
+
+        if self.disable_rent_fees_collection() {
+            info!(
+                "skip rent fees distribution: total_rent = {}",
+                total_rent_collected
+            );
+            assert_eq!(total_rent_collected, 0);
+            return;
+        }
 
         let (burned_portion, rent_to_be_distributed) = self
             .rent_collector

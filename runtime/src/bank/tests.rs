@@ -450,6 +450,7 @@ fn test_credit_debit_rent_no_side_effect_on_hash() {
                 &mut account_copy,
                 None,
                 set_exempt_rent_epoch_max,
+                false,
             );
             assert_eq!(expected_rent.rent_amount, too_few_lamports);
             assert_eq!(account_copy.lamports(), 0);
@@ -10877,6 +10878,7 @@ fn test_rent_state_list_len() {
         RewardInterval::OutsideInterval,
         &HashMap::new(),
         &LoadedProgramsForTxBatch::default(),
+        false,
     );
 
     let compute_budget = bank.runtime_config.compute_budget.unwrap_or_else(|| {
@@ -11492,6 +11494,7 @@ fn test_accounts_data_size_and_rent_collection() {
                 &mut account,
                 None,
                 set_exempt_rent_epoch_max,
+                false,
             );
             assert_eq!(info.account_data_len_reclaimed, data_size as u64);
         }
