@@ -1,6 +1,6 @@
 use {
     super::Bank,
-    log::{debug, error, warn},
+    log::{debug, warn},
     solana_accounts_db::{account_rent_state::RentState, stake_rewards::RewardInfo},
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
@@ -70,10 +70,15 @@ impl Bank {
                         ));
                     }
                     Err(err) => {
-                        // notify validator that their fees were burned
-                        error!(
-                            "Burned {deposit} lamport transaction fee instead of sending to {} due to {err}",
-                            self.collector_id
+                        debug!(
+                            "Burned {} lamport tx fee instead of sending to {} due to {}",
+                            deposit, self.collector_id, err
+                        );
+                        datapoint_info!(
+                            "bank-burned_fee",
+                            ("slot", self.slot(), i64),
+                            ("num_lamports", deposit, i64),
+                            ("error", err.to_string(), String),
                         );
                         burn += deposit;
                     }
@@ -197,6 +202,7 @@ impl Bank {
         // holder
         let mut leftover_lamports = rent_to_be_distributed - rent_distributed_in_initial_round;
 
+        let mut rent_to_burn: u64 = 0;
         let mut rewards = vec![];
         validator_rent_shares
             .into_iter()
@@ -230,19 +236,28 @@ impl Bank {
                             ));
                         }
                         Err(err) => {
+                            debug!(
+                                "Burned {} lamport rent fee instead of sending to {} due to {}",
+                                rent_to_be_paid, pubkey, err
+                            );
+
                             // overflow adding lamports or resulting account is invalid
-                            self.capitalization.fetch_sub(rent_to_be_paid, Relaxed);
-                            // notify validator that their fees were burned
-                            if self.collector_id == pubkey {
-                                error!(
-                                    "Burned {rent_to_be_paid} lamport rent fee instead of sending to {pubkey} due to {err}",
-                                );
-                            }
+                            // so burn lamports and track lamports burned per slot
+                            rent_to_burn = rent_to_burn.saturating_add(rent_to_be_paid);
                         }
                     }
                 }
             });
         self.rewards.write().unwrap().append(&mut rewards);
+
+        if rent_to_burn > 0 {
+            self.capitalization.fetch_sub(rent_to_burn, Relaxed);
+            datapoint_info!(
+                "bank-burned_rent",
+                ("slot", self.slot(), i64),
+                ("num_lamports", rent_to_burn, i64)
+            );
+        }
 
         if enforce_fix {
             assert_eq!(leftover_lamports, 0);
