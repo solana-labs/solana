@@ -28,7 +28,7 @@ usage() {
     echo "Error: $*"
   fi
   cat <<EOF
-usage: $0 [+<cargo version>] [--debug] [--validator-only] [--canary] <install directory>
+usage: $0 [+<cargo version>] [--debug] [--validator-only] [--release-with-debug] <install directory>
 EOF
   exit $exitcode
 }
@@ -48,7 +48,7 @@ while [[ -n $1 ]]; do
       buildProfileArg=      # the default cargo profile is 'debug'
       buildProfile='debug'
       shift
-    elif [[ $1 = --canary ]]; then
+    elif [[ $1 = --release-with-debug ]]; then
       buildProfileArg='--profile release-with-debug'
       buildProfile='release-with-debug'
       shift
