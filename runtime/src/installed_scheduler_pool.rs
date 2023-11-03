@@ -164,12 +164,13 @@ impl ScheduleExecutionArg for DefaultScheduleExecutionArg {
 
 /// A small context to propagate a bank and its scheduling mode to the scheduler subsystem.
 ///
-/// Note that this isn't called SchedulerContext because the context isn't necessarily tied to a
-/// particular scheduler. A scheduler will use many SchedulingContexts during its lifetime.
-/// "Scheduling" part of the context name refers to a slice of time to schedule and execute all
-/// transactions for a given bank for block verification or block production. A context is expected
-/// to be used by a particular scheduler only for that duration of time and to be disposed by the
-/// scheduler. Then, it will be able to work on subsequent SchedulingContexts.
+/// Note that this isn't called `SchedulerContext` because the contexts aren't associated with
+/// schedulers one by one. A scheduler will use many SchedulingContexts during its lifetime.
+/// "Scheduling" part of the context name refers to an abstract slice of time to schedule and
+/// execute all transactions for a given bank for block verification or production. A context is
+/// expected to be used by a particular scheduler only for that duration of the time and to be
+/// disposed by the scheduler. Then, the scheduler may work on different banks with new
+/// `SchedulingContext`s.
 #[derive(Clone, Debug)]
 pub struct SchedulingContext {
     mode: SchedulingMode,
