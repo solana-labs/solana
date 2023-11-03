@@ -24,6 +24,6 @@ bincode = { workspace = true }
 crossbeam-channel = { workspace = true }
 jemallocator = { workspace = true }
 log = { workspace = true }
-solana-nohash-hasher = { workspace = true }
 solana-logger = { workspace = true }
+solana-nohash-hasher = { workspace = true }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
