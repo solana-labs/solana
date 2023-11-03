@@ -502,7 +502,7 @@ mod thread_utilization {
     use {
         super::*,
         crate::nonblocking::NonblockingScheduler,
-        nohash_hasher::IntSet,
+        solana_nohash_hasher::IntSet,
         solana_sdk::{
             signature::Signature, signer::keypair::Keypair,
             system_instruction::SystemInstruction::Transfer, transaction::TransactionAccountLocks,
