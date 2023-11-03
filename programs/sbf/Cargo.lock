@@ -3090,11 +3090,11 @@ dependencies = [
 
 [[package]]
 name = "num_enum"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70bf6736f74634d299d00086f02986875b3c2d924781a6a2cb6c201e73da0ceb"
+checksum = "683751d591e6d81200c39fb0d1032608b77724f34114db54f571ff1317b337c0"
 dependencies = [
- "num_enum_derive 0.7.0",
+ "num_enum_derive 0.7.1",
 ]
 
 [[package]]
@@ -3111,9 +3111,9 @@ dependencies = [
 
 [[package]]
 name = "num_enum_derive"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56ea360eafe1022f7cc56cd7b869ed57330fb2453d0c7831d99b74c65d2f5597"
+checksum = "6c11e44798ad209ccdd91fc192f0526a369a01234f7373e1b141c96d7cee4f0e"
 dependencies = [
  "proc-macro-crate 1.1.3",
  "proc-macro2",
@@ -4658,7 +4658,7 @@ dependencies = [
  "num-derive 0.4.1",
  "num-traits",
  "num_cpus",
- "num_enum 0.7.0",
+ "num_enum 0.7.1",
  "ouroboros",
  "percentage",
  "qualifier_attr",
@@ -4805,7 +4805,7 @@ dependencies = [
  "log",
  "memmap2",
  "modular-bitfield",
- "num_enum 0.7.0",
+ "num_enum 0.7.1",
  "rand 0.8.5",
  "solana-measure",
  "solana-sdk",
@@ -4957,7 +4957,7 @@ dependencies = [
  "log",
  "lru",
  "min-max-heap",
- "num_enum 0.7.0",
+ "num_enum 0.7.1",
  "prio-graph",
  "quinn",
  "rand 0.8.5",
@@ -5235,7 +5235,7 @@ dependencies = [
  "lru",
  "mockall",
  "num_cpus",
- "num_enum 0.7.0",
+ "num_enum 0.7.1",
  "prost",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
@@ -5718,7 +5718,7 @@ dependencies = [
  "num-derive 0.4.1",
  "num-traits",
  "num_cpus",
- "num_enum 0.7.0",
+ "num_enum 0.7.1",
  "ouroboros",
  "percentage",
  "qualifier_attr",
@@ -6212,7 +6212,7 @@ dependencies = [
  "memmap2",
  "num-derive 0.4.1",
  "num-traits",
- "num_enum 0.7.0",
+ "num_enum 0.7.1",
  "pbkdf2 0.11.0",
  "qstring",
  "qualifier_attr",
@@ -6849,7 +6849,7 @@ dependencies = [
  "bytemuck",
  "num-derive 0.4.1",
  "num-traits",
- "num_enum 0.7.0",
+ "num_enum 0.7.1",
  "solana-program",
  "solana-zk-token-sdk",
  "spl-memo",
