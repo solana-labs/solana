@@ -5,11 +5,11 @@
 //! the services begins removing data in FIFO order.
 
 use {
-    crossbeam_channel::{Receiver, RecvTimeoutError},
     crate::{
         blockstore::{Blockstore, PurgeType},
         blockstore_db::{Result as BlockstoreResult, DATA_SHRED_CF},
     },
+    crossbeam_channel::{Receiver, RecvTimeoutError},
     solana_measure::measure::Measure,
     solana_sdk::clock::Slot,
     std::{
@@ -334,22 +334,31 @@ mod tests {
         // Ensure no cleaning of slots > last_root
         let last_root = 0;
         let max_ledger_shreds = 0;
-        let (should_clean, lowest_purged, _) =
-            BlockstoreCleanupService::find_slots_to_clean(&blockstore, last_root, max_ledger_shreds);
+        let (should_clean, lowest_purged, _) = BlockstoreCleanupService::find_slots_to_clean(
+            &blockstore,
+            last_root,
+            max_ledger_shreds,
+        );
         // Slot 0 will exist in blockstore with zero shreds since it is slot
         // 1's parent. Thus, slot 0 will be identified for clean.
         assert!(should_clean && lowest_purged == 0);
         // Now, set max_ledger_shreds to 1, slot 0 still eligible for clean
         let max_ledger_shreds = 1;
-        let (should_clean, lowest_purged, _) =
-            BlockstoreCleanupService::find_slots_to_clean(&blockstore, last_root, max_ledger_shreds);
+        let (should_clean, lowest_purged, _) = BlockstoreCleanupService::find_slots_to_clean(
+            &blockstore,
+            last_root,
+            max_ledger_shreds,
+        );
         assert!(should_clean && lowest_purged == 0);
 
         // Ensure no cleaning if blockstore contains fewer than max_ledger_shreds
         let last_root = num_slots;
         let max_ledger_shreds = (shreds_per_slot * num_slots) + 1;
-        let (should_clean, lowest_purged, _) =
-            BlockstoreCleanupService::find_slots_to_clean(&blockstore, last_root, max_ledger_shreds);
+        let (should_clean, lowest_purged, _) = BlockstoreCleanupService::find_slots_to_clean(
+            &blockstore,
+            last_root,
+            max_ledger_shreds,
+        );
         assert!(!should_clean && lowest_purged == 0);
 
         for slot in 1..=num_slots {
@@ -393,8 +402,14 @@ mod tests {
         //send a signal to kill all but 5 shreds, which will be in the newest slots
         let mut last_purge_slot = 0;
         sender.send(50).unwrap();
-        BlockstoreCleanupService::cleanup_ledger(&receiver, &blockstore, 5, &mut last_purge_slot, 10)
-            .unwrap();
+        BlockstoreCleanupService::cleanup_ledger(
+            &receiver,
+            &blockstore,
+            5,
+            &mut last_purge_slot,
+            10,
+        )
+        .unwrap();
         assert_eq!(last_purge_slot, 50);
 
         //check that 0-40 don't exist
