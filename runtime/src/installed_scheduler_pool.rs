@@ -1,25 +1,22 @@
 //! Transaction processing glue code, mainly consisting of Object-safe traits
 //!
-//! `trait InstalledSchedulerPool` is the most crucial piece of code for this whole integration.
+//! [InstalledSchedulerPool] lends one of pooled [InstalledScheduler]s as wrapped in
+//! [BankWithScheduler], which can be used by `ReplayStage` and `BankingStage` for transaction
+//! execution. After use, the scheduler will be returned to the pool.
 //!
-//! It lends one of pooled `trait InstalledScheduler`s out to a `Bank`, so that the ubiquitous
-//! `Arc<Bank>` can conveniently work as a facade for transaction scheduling, to higher-layer
-//! subsystems (i.e. both `ReplayStage` and `BankingStage`). `BankForks`/`BankWithScheduler` and
-//! some `Bank` methods are responsible for this book-keeping, including returning the scheduler
-//! from the bank to the pool after use.
+//! [InstalledScheduler] can be fed with [SanitizedTransaction]s. Then, it schedules those
+//! executions and commits those results into the associated _bank_.
 //!
-//! `trait InstalledScheduler` can be fed with `SanitizedTransaction`s. Then, it schedules and
-//! commits those transaction execution results into the associated _bank_. That means,
-//! `InstalledScheduler` and `Bank` are mutually linked to each other, resulting in somewhat
-//! special handling as part of their life-cycle.
+//! It's generally assumed that each [InstalledScheduler] is backed by multiple threads for
+//! parallel transaction processing and there are multiple independent schedulers inside a single
+//! instance of [InstalledSchedulerPool].
 //!
-//! Albeit being at this abstract interface level, it's generally assumed that each
-//! `InstalledScheduler` is backed by multiple threads for performant transaction execution and
-//! there're multiple independent schedulers inside a single instance of `InstalledSchedulerPool`.
-//!
-//! Dynamic dispatch was inevitable, due to the need of delegating those implementations to the
-//! dependent crate (`solana-scheduler-pool`, which in turn depends on `solana-ledger`; another
-//! dependent crate of `solana-runtime`...), while cutting cyclic dependency.
+//! Dynamic dispatch was inevitable due to the desire to piggyback on
+//! [BankForks](crate::bank_forks::BankForks)'s pruning for scheduler lifecycle management as the
+//! common place both for `ReplayStage` and `BankingStage` and the resultant need of invoking
+//! actual implementations provided by the dependent crate (`solana-unified-scheduler-pool`, which
+//! in turn depends on `solana-ledger`, which in turn depends on `solana-runtime`), avoiding a
+//! cyclic dependency.
 //!
 //! See [InstalledScheduler] for visualized interaction.
 
@@ -51,55 +48,50 @@ pub trait InstalledSchedulerPool<SEA: ScheduleExecutionArg>: Send + Sync + Debug
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Schedules, executes, and commits transactions under encapsulated implementation
 ///
-/// The following chart illustrates the ownership/reference interaction between inter-dependent objects across crates:
+/// The following chart illustrates the ownership/reference interaction between inter-dependent
+/// objects across crates:
 ///
-///  ```mermaid
-///  graph TD
-///      Bank["Arc#lt;Bank#gt;"]
+/// ```mermaid
+/// graph TD
+///     Bank["Arc#lt;Bank#gt;"]
 ///
-///      subgraph solana-runtime
-///          BankForks;
-///          subgraph cyclic-ref
-///              Bank;
-///              SchedulingContext;
-///              InstalledScheduler{{InstalledScheduler}};
-///          end
-///          InstalledSchedulerPool{{InstalledSchedulerPool}};
-///      end
+///     subgraph solana-runtime
+///         BankForks;
+///         BankWithScheduler;
+///         Bank;
+///         LoadExecuteAndCommitTransactions(["load_execute_and_commit_transactions()"]);
+///         SchedulingContext;
+///         InstalledSchedulerPool{{InstalledSchedulerPool}};
+///         InstalledScheduler{{InstalledScheduler}};
+///     end
 ///
-///      subgraph solana-ledger
-///          ExecuteBatch(["execute_batch()"]);
-///      end
+///     subgraph solana-unified-scheduler-pool
+///         SchedulerPool;
+///         PooledScheduler;
+///         ScheduleExecution(["schedule_execution()"]);
+///     end
 ///
-///      subgraph solana-scheduler-pool
-///          SchedulerPool;
-///          PooledScheduler;
-///      end
+///     subgraph solana-ledger
+///         ExecuteBatch(["execute_batch()"]);
+///     end
 ///
-///      subgraph solana-scheduler
-///          WithSchedulingMode{{WithSchedulingMode}};
-///      end
+///     ScheduleExecution -. calls .-> ExecuteBatch;
+///     BankWithScheduler -. dyn-calls .-> ScheduleExecution;
+///     ExecuteBatch -. calls .-> LoadExecuteAndCommitTransactions;
+///     linkStyle 0,1,2 stroke:gray,color:gray;
 ///
-///      SchedulingContext -- refs --> Bank;
-///      BankForks -- owns --> Bank;
-///      BankForks -- owns --> InstalledSchedulerPool;
-///      Bank -- refs --> InstalledScheduler;
+///     BankForks -- owns --> BankWithScheduler;
+///     BankForks -- owns --> InstalledSchedulerPool;
+///     BankWithScheduler -- refs --> Bank;
+///     BankWithScheduler -- owns --> InstalledScheduler;
+///     SchedulingContext -- refs --> Bank;
+///     InstalledScheduler -- owns --> SchedulingContext;
 ///
-///      SchedulerPool -. impls .-> InstalledSchedulerPool;
-///      PooledScheduler -. impls .-> InstalledScheduler;
-///      InstalledScheduler -- refs --> SchedulingContext;
-///      SchedulingContext -. impls .-> WithSchedulingMode;
-///
-///      PooledScheduler -- refs --> SchedulerPool;
-///      SchedulerPool -- owns --> PooledScheduler;
-///      PooledScheduler -. calls .-> ExecuteBatch;
-///
-///      solana-scheduler-pool -- deps --> solana-scheduler;
-///      solana-scheduler-pool -- deps --> solana-ledger;
-///      solana-scheduler-pool -- deps --> solana-runtime;
-///      solana-ledger -- deps --> solana-runtime;
-///      solana-runtime -- deps --> solana-scheduler;
-///  ```
+///     SchedulerPool -- owns --> PooledScheduler;
+///     SchedulerPool -. impls .-> InstalledSchedulerPool;
+///     PooledScheduler -. impls .-> InstalledScheduler;
+///     PooledScheduler -- refs --> SchedulerPool;
+/// ```
 #[cfg_attr(feature = "dev-context-only-utils", automock)]
 // suppress false clippy complaints arising from mockall-derive:
 //   warning: `#[must_use]` has no effect when applied to a struct field
@@ -454,7 +446,7 @@ mod tests {
     };
 
     fn setup_mocked_scheduler_with_extra(
-        bank: &Arc<Bank>,
+        bank: Arc<Bank>,
         wait_reasons: impl Iterator<Item = WaitReason>,
         f: Option<impl Fn(&mut MockInstalledScheduler<DefaultScheduleExecutionArg>)>,
     ) -> DefaultInstalledSchedulerBox {
@@ -495,7 +487,7 @@ mod tests {
     }
 
     fn setup_mocked_scheduler(
-        bank: &Arc<Bank>,
+        bank: Arc<Bank>,
         wait_reasons: impl Iterator<Item = WaitReason>,
     ) -> DefaultInstalledSchedulerBox {
         setup_mocked_scheduler_with_extra(
@@ -509,7 +501,7 @@ mod tests {
     fn test_scheduler_normal_termination() {
         solana_logger::setup();
 
-        let bank = &Arc::new(Bank::default_for_tests());
+        let bank = Arc::new(Bank::default_for_tests());
         let bank = BankWithScheduler::new(
             bank.clone(),
             Some(setup_mocked_scheduler(
@@ -542,7 +534,7 @@ mod tests {
     fn test_scheduler_termination_from_drop() {
         solana_logger::setup();
 
-        let bank = &Arc::new(Bank::default_for_tests());
+        let bank = Arc::new(Bank::default_for_tests());
         let bank = BankWithScheduler::new(
             bank.clone(),
             Some(setup_mocked_scheduler(
@@ -557,7 +549,7 @@ mod tests {
     fn test_scheduler_pause() {
         solana_logger::setup();
 
-        let bank = &Arc::new(crate::bank::tests::create_simple_test_bank(42));
+        let bank = Arc::new(crate::bank::tests::create_simple_test_bank(42));
         let bank = BankWithScheduler::new(
             bank.clone(),
             Some(setup_mocked_scheduler(
@@ -590,7 +582,7 @@ mod tests {
         ));
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let mocked_scheduler = setup_mocked_scheduler_with_extra(
-            &bank,
+            bank.clone(),
             [WaitReason::DroppedFromBankForks].into_iter(),
             Some(
                 |mocked: &mut MockInstalledScheduler<DefaultScheduleExecutionArg>| {
