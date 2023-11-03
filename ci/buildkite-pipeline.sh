@@ -240,6 +240,8 @@ EOF
              ^ci/rust-version.sh \
              ^ci/test-coverage.sh \
              ^ci/test-bench.sh \
+             ^ci/bench \
+             .buildkite/scripts/build-bench.sh \
       ; then
     .buildkite/scripts/build-bench.sh >> "$output_file"
   else
