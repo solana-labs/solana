@@ -3800,7 +3800,7 @@ impl Bank {
         }
 
         // Highest staked node is the first collector but if a genesis config
-        // doesn't define and staked nodes, we assume this genesis config is for
+        // doesn't define any staked nodes, we assume this genesis config is for
         // testing and set the collector id to a unique pubkey.
         self.collector_id = self
             .stakes_cache
