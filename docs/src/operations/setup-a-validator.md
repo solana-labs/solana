@@ -134,7 +134,7 @@ Make sure you have the latest and greatest package versions on your server
 
 ```
 sudo apt update
-sudo apt install
+sudo apt upgrade
 ```
 
 ## Sol User
