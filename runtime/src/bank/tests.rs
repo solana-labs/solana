@@ -6431,15 +6431,9 @@ fn test_clean_nonrooted() {
 
     // Store some lamports in bank 1
     let some_lamports = 123;
-<<<<<<< HEAD
     let mut bank1 = Arc::new(Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1));
-    bank1.deposit(&pubkey0, some_lamports).unwrap();
-    goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank1).unwrap());
-=======
-    let bank1 = Arc::new(Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1));
     test_utils::deposit(&bank1, &pubkey0, some_lamports).unwrap();
-    goto_end_of_slot(bank1.clone());
->>>>>>> ebe8afb0c3 (Burn fees collected into invalid accounts (#33887))
+    goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank1).unwrap());
     bank1.freeze();
     bank1.flush_accounts_cache_slot_for_tests();
 
@@ -6447,13 +6441,8 @@ fn test_clean_nonrooted() {
 
     // Store some lamports for pubkey1 in bank 2, root bank 2
     // bank2's parent is bank0
-<<<<<<< HEAD
     let mut bank2 = Arc::new(Bank::new_from_parent(bank0, &Pubkey::default(), 2));
-    bank2.deposit(&pubkey1, some_lamports).unwrap();
-=======
-    let bank2 = Arc::new(Bank::new_from_parent(bank0, &Pubkey::default(), 2));
     test_utils::deposit(&bank2, &pubkey1, some_lamports).unwrap();
->>>>>>> ebe8afb0c3 (Burn fees collected into invalid accounts (#33887))
     bank2.store_account(&pubkey0, &account_zero);
     goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank2).unwrap());
     bank2.freeze();
@@ -6467,15 +6456,9 @@ fn test_clean_nonrooted() {
     // candidate set
     bank2.clean_accounts_for_tests();
 
-<<<<<<< HEAD
     let mut bank3 = Arc::new(Bank::new_from_parent(bank2, &Pubkey::default(), 3));
-    bank3.deposit(&pubkey1, some_lamports + 1).unwrap();
-    goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank3).unwrap());
-=======
-    let bank3 = Arc::new(Bank::new_from_parent(bank2, &Pubkey::default(), 3));
     test_utils::deposit(&bank3, &pubkey1, some_lamports + 1).unwrap();
-    goto_end_of_slot(bank3.clone());
->>>>>>> ebe8afb0c3 (Burn fees collected into invalid accounts (#33887))
+    goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank3).unwrap());
     bank3.freeze();
     bank3.squash();
     bank3.force_flush_accounts_cache();
@@ -6527,17 +6510,10 @@ fn test_shrink_candidate_slots_cached() {
 
     // Store some lamports in bank 1
     let some_lamports = 123;
-<<<<<<< HEAD
     let mut bank1 = Arc::new(new_from_parent(bank0));
-    bank1.deposit(&pubkey1, some_lamports).unwrap();
-    bank1.deposit(&pubkey2, some_lamports).unwrap();
-    goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank1).unwrap());
-=======
-    let bank1 = Arc::new(new_from_parent(bank0));
     test_utils::deposit(&bank1, &pubkey1, some_lamports).unwrap();
     test_utils::deposit(&bank1, &pubkey2, some_lamports).unwrap();
-    goto_end_of_slot(bank1.clone());
->>>>>>> ebe8afb0c3 (Burn fees collected into invalid accounts (#33887))
+    goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank1).unwrap());
     bank1.freeze();
     bank1.squash();
     // Flush now so that accounts cache cleaning doesn't clean up bank 0 when later
@@ -6545,13 +6521,8 @@ fn test_shrink_candidate_slots_cached() {
     bank1.force_flush_accounts_cache();
 
     // Store some lamports for pubkey1 in bank 2, root bank 2
-<<<<<<< HEAD
     let mut bank2 = Arc::new(new_from_parent(bank1));
-    bank2.deposit(&pubkey1, some_lamports).unwrap();
-=======
-    let bank2 = Arc::new(new_from_parent(bank1));
     test_utils::deposit(&bank2, &pubkey1, some_lamports).unwrap();
->>>>>>> ebe8afb0c3 (Burn fees collected into invalid accounts (#33887))
     bank2.store_account(&pubkey0, &account0);
     goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank2).unwrap());
     bank2.freeze();

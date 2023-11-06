@@ -8291,17 +8291,12 @@ impl Drop for Bank {
 pub mod test_utils {
     use {
         super::Bank,
-<<<<<<< HEAD
-        solana_sdk::{hash::hashv, pubkey::Pubkey},
-=======
-        crate::installed_scheduler_pool::BankWithScheduler,
         solana_sdk::{
             account::{ReadableAccount, WritableAccount},
             hash::hashv,
             lamports::LamportsError,
             pubkey::Pubkey,
         },
->>>>>>> ebe8afb0c3 (Burn fees collected into invalid accounts (#33887))
         solana_vote_program::vote_state::{self, BlockTimestamp, VoteStateVersions},
     };
     pub fn goto_end_of_slot(bank: &Bank) {
