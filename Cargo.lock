@@ -5326,6 +5326,7 @@ dependencies = [
  "strum_macros",
  "tar",
  "tempfile",
+ "test-case",
  "thiserror",
 ]
 
