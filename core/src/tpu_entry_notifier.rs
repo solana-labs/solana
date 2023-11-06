@@ -78,6 +78,7 @@ impl TpuEntryNotifier {
             slot,
             index,
             entry: entry_summary,
+            starting_transaction_index: 0,
         }) {
             warn!(
                 "Failed to send slot {slot:?} entry {index:?} from Tpu to EntryNotifierService, error {err:?}",

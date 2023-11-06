@@ -18,7 +18,13 @@ pub(crate) struct EntryNotifierImpl {
 }
 
 impl EntryNotifier for EntryNotifierImpl {
-    fn notify_entry<'a>(&'a self, slot: Slot, index: usize, entry: &'a EntrySummary) {
+    fn notify_entry<'a>(
+        &'a self,
+        slot: Slot,
+        index: usize,
+        entry: &'a EntrySummary,
+        _starting_transaction_index: usize,
+    ) {
         let mut measure = Measure::start("geyser-plugin-notify_plugins_of_entry_info");
 
         let plugin_manager = self.plugin_manager.read().unwrap();
