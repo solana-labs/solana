@@ -1221,7 +1221,7 @@ fn confirm_slot_entries(
                     slot,
                     index: entry_index,
                     entry: entry.into(),
-                    starting_transaction_index: 0,
+                    starting_transaction_index: entry_tx_starting_index,
                 }) {
                     warn!(
                         "Slot {}, entry {} entry_notification_sender send failed: {:?}",
