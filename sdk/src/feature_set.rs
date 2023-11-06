@@ -725,7 +725,7 @@ pub mod validate_fee_collector_account {
 }
 
 pub mod disable_rent_fees_collection {
-    solana_sdk::declare_id!("A21nu9C2rnWZv3spuh91K5b2oiiuafvErJo5vfscF8Qk");
+    solana_sdk::declare_id!("CJzY83ggJHqPGDq8VisV3U91jDJLuEaALZooBrXtnnLU");
 }
 
 lazy_static! {
