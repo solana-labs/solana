@@ -20,14 +20,10 @@ pub struct AccountIndexWriterEntry<'a> {
 /// The offset to an account stored inside its accounts block.
 /// This struct is used to access the meta and data of an account by looking through
 /// its accounts block.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AccountOffset {
     /// The offset to the accounts block that contains the account meta/data.
     pub block: usize,
-    /// The byte-offset within the accounts block to the account meta/data
-    /// (after decompression if the accounts block is compressed).
-    /// - note: for formats that have one account per block, this 'offset' will
-    /// always be zero, and can be ommited entirely.
-    pub offset: usize,
 }
 
 /// The index format of a tiered accounts file.
@@ -104,7 +100,6 @@ impl AccountIndexFormat {
                 let (account_block_offset, _) = get_type(map, offset)?;
                 Ok(AccountOffset {
                     block: *account_block_offset,
-                    offset: 0,
                 })
             }
         }
@@ -163,7 +158,6 @@ mod tests {
         for (i, index_entry) in index_entries.iter().enumerate() {
             let account_offset = indexer.get_account_offset(&map, &footer, i).unwrap();
             assert_eq!(index_entry.block_offset, account_offset.block as u64);
-            assert_eq!(index_entry.intra_block_offset, account_offset.offset as u64);
             let address = indexer.get_account_address(&map, &footer, i).unwrap();
             assert_eq!(index_entry.address, address);
         }
