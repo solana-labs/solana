@@ -1,3 +1,4 @@
+#![cfg(feature = "full")]
 //! Definitions related to Solana over QUIC.
 use {crate::signer::keypair::Keypair, std::time::Duration};
 
