@@ -968,12 +968,6 @@ pub fn update(config_file: &str, check_only: bool) -> Result<bool, String> {
 pub fn init_or_update(config_file: &str, is_init: bool, check_only: bool) -> Result<bool, String> {
     let mut config = Config::load(config_file)?;
 
-    let semver_update_type = if is_init {
-        SemverUpdateType::Fixed
-    } else {
-        SemverUpdateType::Patch
-    };
-
     let (updated_version, download_url_and_sha256, release_dir) = if let Some(explicit_release) =
         &config.explicit_release
     {
@@ -986,6 +980,11 @@ pub fn init_or_update(config_file: &str, is_init: bool, check_only: bool) -> Res
                     let progress_bar = new_spinner_progress_bar();
                     progress_bar.set_message(format!("{LOOKING_GLASS}Checking for updates..."));
 
+                    let semver_update_type = if is_init {
+                        SemverUpdateType::Fixed
+                    } else {
+                        SemverUpdateType::Patch
+                    };
                     let github_release = check_for_newer_github_release(
                         current_release_semver,
                         semver_update_type,
