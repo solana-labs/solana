@@ -246,7 +246,7 @@ where
                             "Sending async connection creation {} for {addr}",
                             pool.num_connections() - 1
                         );
-                        info!("Connection cache using keypair {:?}", conn_man.get_key());
+                        debug!("Using keypair {:?}", conn_man.get_key());
                         sender.send((idx, *addr)).unwrap();
                     };
                 } else {
