@@ -6,7 +6,7 @@ pub trait EntryNotifier {
         slot: Slot,
         index: usize,
         entry: &EntrySummary,
-        _starting_transaction_index: usize,
+        starting_transaction_index: usize,
     );
 }
 
