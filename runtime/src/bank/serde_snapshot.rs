@@ -3,8 +3,8 @@ mod tests {
     use {
         crate::{
             bank::{
-                epoch_accounts_hash_utils, Bank, BankTestConfig, EpochRewardStatus,
-                StartBlockHeightAndRewards,
+                epoch_accounts_hash_utils, test_utils as bank_test_utils, Bank, BankTestConfig,
+                EpochRewardStatus, StartBlockHeightAndRewards,
             },
             genesis_utils::{activate_all_features, activate_feature},
             runtime_config::RuntimeConfig,
@@ -109,7 +109,7 @@ mod tests {
 
         // Create an account on a non-root fork
         let key1 = Keypair::new();
-        bank1.deposit(&key1.pubkey(), 5).unwrap();
+        bank_test_utils::deposit(&bank1, &key1.pubkey(), 5).unwrap();
 
         // If setting an initial EAH, then the bank being snapshotted must be in the EAH calculation
         // window.  Otherwise `bank_to_stream()` below will *not* include the EAH in the bank snapshot,
@@ -123,11 +123,11 @@ mod tests {
 
         // Test new account
         let key2 = Keypair::new();
-        bank2.deposit(&key2.pubkey(), 10).unwrap();
+        bank_test_utils::deposit(&bank2, &key2.pubkey(), 10).unwrap();
         assert_eq!(bank2.get_balance(&key2.pubkey()), 10);
 
         let key3 = Keypair::new();
-        bank2.deposit(&key3.pubkey(), 0).unwrap();
+        bank_test_utils::deposit(&bank2, &key3.pubkey(), 0).unwrap();
 
         bank2.freeze();
         bank2.squash();
