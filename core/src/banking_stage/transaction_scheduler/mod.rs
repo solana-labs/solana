@@ -12,6 +12,8 @@ mod batch_id_generator;
 mod in_flight_tracker;
 #[allow(dead_code)]
 mod prio_graph_scheduler;
+#[allow(dead_code)]
+mod scheduler_controller;
 mod scheduler_error;
 #[allow(dead_code)]
 mod transaction_id_generator;

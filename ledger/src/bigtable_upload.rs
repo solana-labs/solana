@@ -138,7 +138,7 @@ pub async fn upload_confirmed_blocks(
             "No blocks between {} and {} need to be uploaded to bigtable",
             starting_slot, ending_slot
         );
-        return Ok(last_blockstore_slot);
+        return Ok(ending_slot);
     }
     let last_slot = *blocks_to_upload.last().unwrap();
     info!(

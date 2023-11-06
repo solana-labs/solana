@@ -332,14 +332,14 @@ const _: () = assert!(
     "CalculateHashIntermediate cannot have any padding"
 );
 
-#[derive(Default, Debug, PartialEq, Eq)]
-pub struct CumulativeOffset {
+#[derive(Debug, PartialEq, Eq)]
+struct CumulativeOffset {
     /// Since the source data is at most 2D, two indexes are enough.
-    pub index: [usize; 2],
-    pub start_offset: usize,
+    index: [usize; 2],
+    start_offset: usize,
 }
 
-pub trait ExtractSliceFromRawData<'b, T: 'b> {
+trait ExtractSliceFromRawData<'b, T: 'b> {
     fn extract<'a>(&'b self, offset: &'a CumulativeOffset, start: usize) -> &'b [T];
 }
 
@@ -1243,7 +1243,7 @@ pub enum ZeroLamportAccounts {
 
 /// Hash of an account
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Pod, Zeroable)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Pod, Zeroable, AbiExample)]
 pub struct AccountHash(pub Hash);
 
 // Ensure the newtype wrapper never changes size from the underlying Hash
@@ -1517,18 +1517,18 @@ mod tests {
             let len = combined.len();
             assert_eq!(cumulative.total_count(), len);
             (0..combined.len()).for_each(|start| {
-                let mut retreived = Vec::default();
+                let mut retrieved = Vec::default();
                 let mut cumulative_start = start;
                 // read all data
-                while retreived.len() < (len - start) {
+                while retrieved.len() < (len - start) {
                     let this_one = cumulative.get_slice(cumulative_start);
-                    retreived.extend(this_one.iter());
+                    retrieved.extend(this_one.iter());
                     cumulative_start += this_one.len();
                     assert_ne!(0, this_one.len());
                 }
                 assert_eq!(
                     &combined[start..],
-                    &retreived[..],
+                    &retrieved[..],
                     "permutation: {permutation}"
                 );
             });

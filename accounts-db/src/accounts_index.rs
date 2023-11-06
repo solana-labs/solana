@@ -3,7 +3,7 @@ use {
         accounts_index_storage::{AccountsIndexStorage, Startup},
         accounts_partition::RentPayingAccountsByPartition,
         ancestors::Ancestors,
-        bucket_map_holder::{Age, BucketMapHolder},
+        bucket_map_holder::{Age, AtomicAge, BucketMapHolder},
         contains::Contains,
         in_mem_accounts_index::{InMemAccountsIndex, InsertNewEntryResults, StartupStats},
         inline_spl_token::{self, GenericTokenAccount},
@@ -36,7 +36,7 @@ use {
         },
         path::PathBuf,
         sync::{
-            atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering},
+            atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
             Arc, Mutex, OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
     },
@@ -238,7 +238,7 @@ pub struct AccountMapEntryMeta {
     /// true if entry in in-mem idx has changes and needs to be written to disk
     pub dirty: AtomicBool,
     /// 'age' at which this entry should be purged from the cache (implements lru)
-    pub age: AtomicU8,
+    pub age: AtomicAge,
 }
 
 impl AccountMapEntryMeta {
@@ -248,7 +248,7 @@ impl AccountMapEntryMeta {
     ) -> Self {
         AccountMapEntryMeta {
             dirty: AtomicBool::new(true),
-            age: AtomicU8::new(storage.future_age_to_flush(is_cached)),
+            age: AtomicAge::new(storage.future_age_to_flush(is_cached)),
         }
     }
     pub fn new_clean<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>>(
@@ -256,7 +256,7 @@ impl AccountMapEntryMeta {
     ) -> Self {
         AccountMapEntryMeta {
             dirty: AtomicBool::new(false),
-            age: AtomicU8::new(storage.future_age_to_flush(false)),
+            age: AtomicAge::new(storage.future_age_to_flush(false)),
         }
     }
 }
@@ -2113,7 +2113,7 @@ pub mod tests {
                     let (slot, account_info) = entry.slot_list.read().unwrap()[0];
                     let meta = AccountMapEntryMeta {
                         dirty: AtomicBool::new(entry.dirty()),
-                        age: AtomicU8::new(entry.age()),
+                        age: AtomicAge::new(entry.age()),
                     };
                     PreAllocatedAccountMapEntry::Entry(Arc::new(AccountMapEntryInner::new(
                         vec![(slot, account_info)],

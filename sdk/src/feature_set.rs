@@ -283,7 +283,7 @@ pub mod stake_deactivate_delinquent_instruction {
 }
 
 pub mod stake_redelegate_instruction {
-    solana_sdk::declare_id!("GUrp5BKMyDazsAp9mBoVD6orE5ihXNRPC3jkBRfx6Lq7");
+    solana_sdk::declare_id!("2KKG3C6RBnxQo9jVVrbzsoSh41TDXLK7gBc9gduyxSzW");
 }
 
 pub mod vote_withdraw_authority_may_change_authorized_voter {
@@ -700,10 +700,6 @@ pub mod better_error_codes_for_tx_lamport_check {
     solana_sdk::declare_id!("Ffswd3egL3tccB6Rv3XY6oqfdzn913vUcjCSnpvCKpfx");
 }
 
-pub mod programify_feature_gate_program {
-    solana_sdk::declare_id!("8GdovDzVwWU5edz2G697bbB7GZjrUc6aQZLWyNNAtHdg");
-}
-
 pub mod update_hashes_per_tick2 {
     solana_sdk::declare_id!("EWme9uFqfy1ikK1jhJs8fM5hxWnK336QJpbscNtizkTU");
 }
@@ -722,6 +718,10 @@ pub mod update_hashes_per_tick5 {
 
 pub mod update_hashes_per_tick6 {
     solana_sdk::declare_id!("FKu1qYwLQSiehz644H6Si65U5ZQ2cp9GxsyFUfYcuADv");
+}
+
+pub mod validate_fee_collector_account {
+    solana_sdk::declare_id!("prpFrMtgNmzaNzkPJg9o753fVvbHKqNrNTm76foJ2wm");
 }
 
 lazy_static! {
@@ -894,12 +894,12 @@ lazy_static! {
         (require_rent_exempt_split_destination::id(), "Require stake split destination account to be rent exempt"),
         (better_error_codes_for_tx_lamport_check::id(), "better error codes for tx lamport check #33353"),
         (enable_alt_bn128_compression_syscall::id(), "add alt_bn128 compression syscalls"),
-        (programify_feature_gate_program::id(), "move feature gate activation logic to an on-chain program #32783"),
         (update_hashes_per_tick2::id(), "Update desired hashes per tick to 2.8M"),
         (update_hashes_per_tick3::id(), "Update desired hashes per tick to 4.4M"),
         (update_hashes_per_tick4::id(), "Update desired hashes per tick to 7.6M"),
         (update_hashes_per_tick5::id(), "Update desired hashes per tick to 9.2M"),
         (update_hashes_per_tick6::id(), "Update desired hashes per tick to 10M"),
+        (validate_fee_collector_account::id(), "validate fee collector account #33888"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

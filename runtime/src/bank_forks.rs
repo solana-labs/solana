@@ -4,13 +4,20 @@ use {
     crate::{
         accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestKind},
         bank::{epoch_accounts_hash_utils, Bank, SquashTiming},
-        installed_scheduler_pool::BankWithScheduler,
+        installed_scheduler_pool::{
+            BankWithScheduler, InstalledSchedulerPoolArc, SchedulingContext,
+        },
         snapshot_config::SnapshotConfig,
     },
     log::*,
     solana_measure::measure::Measure,
-    solana_program_runtime::loaded_programs::{BlockRelation, ForkGraph, WorkingSlot},
-    solana_sdk::{clock::Slot, feature_set, hash::Hash, timing},
+    solana_program_runtime::loaded_programs::{BlockRelation, ForkGraph},
+    solana_sdk::{
+        clock::{Epoch, Slot},
+        feature_set,
+        hash::Hash,
+        timing,
+    },
     std::{
         collections::{hash_map::Entry, HashMap, HashSet},
         ops::Index,
@@ -67,6 +74,7 @@ pub struct BankForks {
     last_accounts_hash_slot: Slot,
     in_vote_only_mode: Arc<AtomicBool>,
     highest_slot_at_startup: Slot,
+    scheduler_pool: Option<InstalledSchedulerPoolArc>,
 }
 
 impl Index<u64> for BankForks {
@@ -198,6 +206,7 @@ impl BankForks {
             last_accounts_hash_slot: root,
             in_vote_only_mode: Arc::new(AtomicBool::new(false)),
             highest_slot_at_startup: 0,
+            scheduler_pool: None,
         }));
 
         for bank in bank_forks.read().unwrap().banks.values() {
@@ -210,11 +219,26 @@ impl BankForks {
         bank_forks
     }
 
+    pub fn install_scheduler_pool(&mut self, pool: InstalledSchedulerPoolArc) {
+        info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
+        assert!(
+            self.scheduler_pool.replace(pool).is_none(),
+            "Reinstalling scheduler pool isn't supported"
+        );
+    }
+
     pub fn insert(&mut self, mut bank: Bank) -> BankWithScheduler {
         bank.check_program_modification_slot =
             self.root.load(Ordering::Relaxed) < self.highest_slot_at_startup;
 
-        let bank = BankWithScheduler::new_without_scheduler(Arc::new(bank));
+        let bank = Arc::new(bank);
+        let bank = if let Some(scheduler_pool) = &self.scheduler_pool {
+            let context = SchedulingContext::new(bank.clone());
+            let scheduler = scheduler_pool.take_scheduler(context);
+            BankWithScheduler::new(bank, Some(scheduler))
+        } else {
+            BankWithScheduler::new_without_scheduler(bank)
+        };
         let prev = self.banks.insert(bank.slot(), bank.clone_with_scheduler());
         assert!(prev.is_none());
         let slot = bank.slot();
@@ -680,9 +704,11 @@ impl ForkGraph for BankForks {
                 (a == b)
                     .then_some(BlockRelation::Equal)
                     .or_else(|| {
-                        self.banks
-                            .get(&b)
-                            .and_then(|bank| bank.is_ancestor(a).then_some(BlockRelation::Ancestor))
+                        self.banks.get(&b).and_then(|bank| {
+                            bank.ancestors
+                                .contains_key(&a)
+                                .then_some(BlockRelation::Ancestor)
+                        })
                     })
                     .or_else(|| {
                         self.descendants.get(&b).and_then(|slots| {
@@ -692,6 +718,10 @@ impl ForkGraph for BankForks {
                     .unwrap_or(BlockRelation::Unrelated)
             })
             .unwrap_or(BlockRelation::Unknown)
+    }
+
+    fn slot_epoch(&self, slot: Slot) -> Option<Epoch> {
+        self.banks.get(&slot).map(|bank| bank.epoch())
     }
 }
 

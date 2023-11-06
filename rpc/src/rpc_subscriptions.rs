@@ -1838,7 +1838,7 @@ pub(crate) mod tests {
             &stake::program::id(),
         );
         bank_forks
-            .write()
+            .read()
             .unwrap()
             .get(0)
             .unwrap()
@@ -2436,8 +2436,7 @@ pub(crate) mod tests {
         } = create_genesis_config(100);
         let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks_arc = BankForks::new_rw_arc(bank);
-        let mut bank_forks = bank_forks_arc.write().unwrap();
+        let bank_forks = BankForks::new_rw_arc(bank);
         let alice = Keypair::new();
 
         let past_bank_tx =
@@ -2448,24 +2447,28 @@ pub(crate) mod tests {
             system_transaction::transfer(&mint_keypair, &alice.pubkey(), 3, blockhash);
 
         bank_forks
+            .read()
+            .unwrap()
             .get(0)
             .unwrap()
             .process_transaction(&past_bank_tx)
             .unwrap();
 
         let next_bank = Bank::new_from_parent(
-            bank_forks.get(0).unwrap(),
+            bank_forks.read().unwrap().get(0).unwrap(),
             &solana_sdk::pubkey::new_rand(),
             1,
         );
-        bank_forks.insert(next_bank);
+        bank_forks.write().unwrap().insert(next_bank);
 
         bank_forks
+            .read()
+            .unwrap()
             .get(1)
             .unwrap()
             .process_transaction(&processed_tx)
             .unwrap();
-        let bank1 = bank_forks[1].clone();
+        let bank1 = bank_forks.read().unwrap().get(1).unwrap().clone();
 
         let mut cache0 = BlockCommitment::default();
         cache0.increase_confirmation_stake(1, 10);
@@ -2483,19 +2486,16 @@ pub(crate) mod tests {
             },
         );
 
-        // Drop the write locked bank_forks
-        drop(bank_forks);
-
         let exit = Arc::new(AtomicBool::new(false));
         let optimistically_confirmed_bank =
-            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks_arc);
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
-            bank_forks_arc,
+            bank_forks,
             Arc::new(RwLock::new(block_commitment_cache)),
             optimistically_confirmed_bank,
         ));
@@ -2818,7 +2818,7 @@ pub(crate) mod tests {
 
         // Add the same transaction to the unfrozen 2nd bank
         bank_forks
-            .write()
+            .read()
             .unwrap()
             .get(2)
             .unwrap()
