@@ -7177,7 +7177,7 @@ impl AccountsDb {
         config: &CalcAccountsHashConfig<'_>,
     ) -> Option<Slot> {
         if self.create_ancient_storage == CreateAncientStorage::Pack {
-            // oldest_non_ancient_slot is only applicable, when ancient storages are created with `Append`. When ancient storage are created with `Pack`, ancient storage
+            // oldest_non_ancient_slot is only applicable when ancient storages are created with `Append`. When ancient storages are created with `Pack`, ancient storages
             // can be created in between non-ancient storages. Return None, because oldest_non_ancient_slot is not applicable here.
             None
         } else if self.ancient_append_vec_offset.is_some() {
