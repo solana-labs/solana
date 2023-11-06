@@ -30,7 +30,7 @@ pub struct AccountIndexWriterEntry<'a> {
     num_enum::IntoPrimitive,
     num_enum::TryFromPrimitive,
 )]
-pub enum AccountIndexFormat {
+pub enum IndexBlockFormat {
     /// This format optimizes the storage size by storing only account addresses
     /// and offsets.  It skips storing the size of account data by storing account
     /// block entries and index block entries in the same order.
@@ -38,7 +38,7 @@ pub enum AccountIndexFormat {
     AddressAndOffset = 0,
 }
 
-impl AccountIndexFormat {
+impl IndexBlockFormat {
     /// Persists the specified index_entries to the specified file and returns
     /// the total number of bytes written.
     pub fn write_index_block(
@@ -69,7 +69,7 @@ impl AccountIndexFormat {
     ) -> TieredStorageResult<&'a Pubkey> {
         let offset = match self {
             Self::AddressAndOffset => {
-                footer.account_index_offset as usize + std::mem::size_of::<Pubkey>() * index
+                footer.index_block_offset as usize + std::mem::size_of::<Pubkey>() * index
             }
         };
         let (address, _) = get_type::<Pubkey>(map, offset)?;
@@ -86,7 +86,7 @@ impl AccountIndexFormat {
     ) -> TieredStorageResult<u64> {
         match self {
             Self::AddressAndOffset => {
-                let offset = footer.account_index_offset as usize
+                let offset = footer.index_block_offset as usize
                     + std::mem::size_of::<Pubkey>() * footer.account_entry_count as usize
                     + index * std::mem::size_of::<u64>();
                 let (account_block_offset, _) = get_type(map, offset)?;
@@ -134,11 +134,11 @@ mod tests {
 
         {
             let file = TieredStorageFile::new_writable(&path).unwrap();
-            let indexer = AccountIndexFormat::AddressAndOffset;
+            let indexer = IndexBlockFormat::AddressAndOffset;
             indexer.write_index_block(&file, &index_entries).unwrap();
         }
 
-        let indexer = AccountIndexFormat::AddressAndOffset;
+        let indexer = IndexBlockFormat::AddressAndOffset;
         let file = OpenOptions::new()
             .read(true)
             .create(false)
