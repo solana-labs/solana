@@ -87,7 +87,7 @@ impl GeyserPluginService {
             if account_data_notifications_enabled {
                 let accounts_update_notifier =
                     AccountsUpdateNotifierImpl::new(plugin_manager.clone());
-                Some(Arc::new(RwLock::new(accounts_update_notifier)))
+                Some(Arc::new(accounts_update_notifier))
             } else {
                 None
             };
