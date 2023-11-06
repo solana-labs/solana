@@ -12,7 +12,7 @@ use {
     crossbeam_channel::Receiver,
     log::*,
     solana_accounts_db::accounts_update_notifier_interface::AccountsUpdateNotifier,
-    solana_ledger::entry_notifier_interface::EntryNotifierLock,
+    solana_ledger::entry_notifier_interface::EntryNotifierArc,
     solana_rpc::{
         optimistically_confirmed_bank_tracker::SlotNotification,
         transaction_notifier_interface::TransactionNotifierLock,
@@ -35,7 +35,7 @@ pub struct GeyserPluginService {
     plugin_manager: Arc<RwLock<GeyserPluginManager>>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierLock>,
-    entry_notifier: Option<EntryNotifierLock>,
+    entry_notifier: Option<EntryNotifierArc>,
     block_metadata_notifier: Option<BlockMetadataNotifierLock>,
 }
 
@@ -100,9 +100,9 @@ impl GeyserPluginService {
                 None
             };
 
-        let entry_notifier: Option<EntryNotifierLock> = if entry_notifications_enabled {
+        let entry_notifier: Option<EntryNotifierArc> = if entry_notifications_enabled {
             let entry_notifier = EntryNotifierImpl::new(plugin_manager.clone());
-            Some(Arc::new(RwLock::new(entry_notifier)))
+            Some(Arc::new(entry_notifier))
         } else {
             None
         };
@@ -164,7 +164,7 @@ impl GeyserPluginService {
         self.transaction_notifier.clone()
     }
 
-    pub fn get_entry_notifier(&self) -> Option<EntryNotifierLock> {
+    pub fn get_entry_notifier(&self) -> Option<EntryNotifierArc> {
         self.entry_notifier.clone()
     }
 
