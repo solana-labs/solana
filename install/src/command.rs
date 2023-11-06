@@ -980,7 +980,7 @@ pub fn init_or_update(config_file: &str, is_init: bool, check_only: bool) -> Res
         match explicit_release {
             ExplicitRelease::Semver(current_release_semver) => {
                 let release_dir = config.release_dir(current_release_semver);
-                if release_dir.exists() {
+                if is_init && release_dir.exists() {
                     (current_release_semver.to_owned(), None, release_dir)
                 } else {
                     let progress_bar = new_spinner_progress_bar();
