@@ -41,11 +41,6 @@ pub trait ConnectionManager: Send + Sync + 'static {
     fn update_key(&mut self, _key: &Keypair) {}
 }
 
-struct ConnectionMap<R, S> {
-    pub map: IndexMap<SocketAddr, /*ConnectionPool:*/ R>,
-    pub connection_manager: Arc<S>,
-}
-
 pub struct ConnectionCache<
     R, // ConnectionPool
     S, // ConnectionManager
