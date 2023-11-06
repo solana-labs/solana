@@ -94,15 +94,7 @@ pub fn spawn_server(
     max_unstaked_connections: usize,
     wait_for_chunk_timeout: Duration,
     coalesce: Duration,
-) -> Result<
-    (
-        Endpoint,
-        Arc<StreamStats>,
-        JoinHandle<()>,
-        Arc<RwLock<Keypair>>,
-    ),
-    QuicServerError,
-> {
+) -> Result<(Endpoint, Arc<StreamStats>, JoinHandle<()>), QuicServerError> {
     info!("Start {name} quic server on {sock:?}");
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
@@ -114,7 +106,6 @@ pub fn spawn_server(
     )
     .map_err(QuicServerError::EndpointFailed)?;
     let stats = Arc::<StreamStats>::default();
-    let key = Arc::new(RwLock::new(keypair.insecure_clone()));
     let handle = tokio::spawn(run_server(
         name,
         endpoint.clone(),
@@ -127,9 +118,8 @@ pub fn spawn_server(
         stats.clone(),
         wait_for_chunk_timeout,
         coalesce,
-        key.clone(),
     ));
-    Ok((endpoint, stats, handle, key))
+    Ok((endpoint, stats, handle))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -145,7 +135,6 @@ async fn run_server(
     stats: Arc<StreamStats>,
     wait_for_chunk_timeout: Duration,
     coalesce: Duration,
-    key: Arc<RwLock<Keypair>>,
 ) {
     const WAIT_FOR_CONNECTION_TIMEOUT: Duration = Duration::from_secs(1);
     debug!("spawn quic server");
@@ -172,12 +161,7 @@ async fn run_server(
         }
 
         if let Ok(Some(connection)) = timeout_connection {
-            let key_guard = key.read().unwrap();
-            info!(
-                "Got a connection {:?} using keypair {:?}",
-                connection.remote_address(),
-                key_guard
-            );
+            info!("Got a connection {:?}", connection.remote_address());
             tokio::spawn(setup_connection(
                 connection,
                 unstaked_connection_table.clone(),
