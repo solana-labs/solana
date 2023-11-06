@@ -16397,7 +16397,7 @@ pub mod tests {
                 // 1..=slots_per_epoch are all non-ancient, so 1 is oldest non ancient
                 assert_eq!(
                     db.get_oldest_non_ancient_slot_for_hash_calc_scan(slots_per_epoch, &config),
-                    test_get_oldest_non_ancient_slot_for_hash_calc_scan!(@expected 0, $create_ancient_storage)
+                    test_get_oldest_non_ancient_slot_for_hash_calc_scan!(@expected 1, $create_ancient_storage)
 
                 );
                 assert_eq!(
