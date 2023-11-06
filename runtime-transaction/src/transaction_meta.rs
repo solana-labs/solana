@@ -3,7 +3,7 @@
 //! specified by compute-budget instructions, simple-vote flag, transaction
 //! costs, durable nonce account etc;
 //!
-//! The premiss is if anything qualifies as metadata, then it must be valid
+//! The premise is if anything qualifies as metadata, then it must be valid
 //! and available as long as the transaction itself is valid and available.
 //! Hence they are not Option<T> type. Their visibility at different states
 //! are defined in traits.
