@@ -451,6 +451,13 @@ crossbeam-epoch = { git = "https://github.com/solana-labs/crossbeam", rev = "fd2
 # and we end up with two versions of `solana-program` and `solana-zk-token-sdk` and all of their
 # dependencies in our build tree.
 #
+# If you are developing downstream using non-crates-io solana-program (local or
+# forked repo, or from github rev, eg), duplicate the following patch statements
+# in your Cargo.toml. If you still hit duplicate-type errors with the patch
+# statements in place, run `cargo update -p solana-program` and/or `cargo update
+# -p solana-zk-token-sdk` to remove extraneous versions from your Cargo.lock
+# file.
+#
 # There is a similar override in `programs/sbf/Cargo.toml`.  Please keep both comments and the
 # overrides in sync.
 solana-program = { path = "sdk/program" }
