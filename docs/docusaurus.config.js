@@ -183,10 +183,6 @@ module.exports = {
               to: "proposals",
             },
             {
-              label: "Integrations",
-              to: "integrations/exchange",
-            },
-            {
               href: "https://spl.solana.com",
               label: "Solana Program Library »",
             },
