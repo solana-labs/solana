@@ -70,18 +70,14 @@ module.exports = {
           label: "Validators",
           position: "left",
         },
+        { label: "Proposals", to: "proposals" },
         {
           label: "More",
           position: "left",
           items: [
             {
-              label: "Terminology",
-              href: "https://solana.com/docs/terminology",
-            },
-            { label: "Proposals", to: "proposals" },
-            {
               href: "https://spl.solana.com",
-              label: "Solana Program Library »",
+              label: "Solana Program Library",
             },
           ],
         },
@@ -119,7 +115,7 @@ module.exports = {
           title: "Documentation",
           items: [
             {
-              label: "Developers",
+              label: "Developers »",
               href: "https://solana.com/developers",
             },
             {
@@ -153,7 +149,7 @@ module.exports = {
             },
             {
               label: "Twitter »",
-              href: "https://twitter.com/solana",
+              href: "https://solana.com/twitter",
             },
             {
               label: "Forum »",
@@ -164,6 +160,10 @@ module.exports = {
         {
           title: "Resources",
           items: [
+            {
+              label: "Terminology »",
+              href: "https://solana.com/docs/terminology",
+            },
             {
               label: "Proposals",
               to: "proposals",
