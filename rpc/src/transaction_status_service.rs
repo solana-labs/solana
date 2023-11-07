@@ -460,7 +460,7 @@ pub(crate) mod tests {
         };
         assert!(test_notifier.notifications.contains_key(&key));
 
-        let result = &*test_notifier.notifications.get(&key).unwrap();
+        let result = test_notifier.notifications.get(&key).unwrap();
         assert_eq!(
             expected_transaction.signature(),
             result.transaction.signature()
