@@ -48,7 +48,7 @@ A voting validator can earn SOL through 2 methods:
 1. Inflationary rewards paid at the end of an epoch. See
    [staking rewards](./../../implemented-proposals/staking-rewards.md)
 2. Earning 50% of transaction fees for the blocks produced by the validator. See
-   [transaction fee basic economic design](../../transaction_fees.md#basic-economic-design)
+   [transaction fee basic economic design](https://solana.com/docs/intro/transaction_fees#basic-economic-design)
 
 The following links are community provided resources that discuss the economics
 of running a validator:

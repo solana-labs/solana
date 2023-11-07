@@ -1,24 +1,26 @@
 ---
 title: Staking
 ---
+
 For an overview of staking, read first the
 [Staking and Inflation FAQ](https://solana.com/staking).
 
-------
+---
 
-After you have [received SOL](transfer-tokens.md), you might consider putting
-it to use by delegating _stake_ to a validator. Stake is what we call tokens
-in a _stake account_. Solana weights validator votes by the amount of stake
-delegated to them, which gives those validators more influence in determining
-then next valid block of transactions in the blockchain. Solana then generates
-new SOL periodically to reward stakers and validators. You earn more rewards
-the more stake you delegate.
+After you have [received SOL](transfer-tokens.md), you might consider putting it
+to use by delegating _stake_ to a validator. Stake is what we call tokens in a
+_stake account_. Solana weights validator votes by the amount of stake delegated
+to them, which gives those validators more influence in determining then next
+valid block of transactions in the blockchain. Solana then generates new SOL
+periodically to reward stakers and validators. You earn more rewards the more
+stake you delegate.
 
 ## Create a Stake Account
 
 To delegate stake, you will need to transfer some tokens into a stake account.
 To create an account, you will need a keypair. Its public key will be used as
-the [stake account address](../staking/stake-accounts.md#account-address).
+the
+[stake account address](https://solana.com/docs/economics/staking/stake-accounts#account-address).
 No need for a password or encryption here; this keypair will be discarded right
 after creating the stake account.
 
@@ -67,11 +69,10 @@ Withdraw Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
 
 ### Set Stake and Withdraw Authorities
 
-[Stake and withdraw authorities](../staking/stake-accounts.md#understanding-account-authorities)
-can be set when creating an account via the
-`--stake-authority` and `--withdraw-authority` options, or afterward with the
-`solana stake-authorize` command. For example, to set a new stake authority,
-run:
+[Stake and withdraw authorities](https://solana.com/docs/economics/staking/stake-accounts#understanding-account-authorities)
+can be set when creating an account via the `--stake-authority` and
+`--withdraw-authority` options, or afterward with the `solana stake-authorize`
+command. For example, to set a new stake authority, run:
 
 ```bash
 solana stake-authorize <STAKE_ACCOUNT_ADDRESS> \
@@ -95,11 +96,12 @@ solana create-stake-account --from <KEYPAIR> <STAKE_ACCOUNT_KEYPAIR> --seed <STR
     --stake-authority <PUBKEY> --withdraw-authority <PUBKEY> --fee-payer <KEYPAIR>
 ```
 
-`<STRING>` is an arbitrary string up to 32 bytes, but will typically be a
-number corresponding to which derived account this is. The first account might
-be "0", then "1", and so on. The public key of `<STAKE_ACCOUNT_KEYPAIR>` acts
-as the base address. The command derives a new address from the base address
-and seed string. To see what stake address the command will derive, use `solana create-address-with-seed`:
+`<STRING>` is an arbitrary string up to 32 bytes, but will typically be a number
+corresponding to which derived account this is. The first account might be "0",
+then "1", and so on. The public key of `<STAKE_ACCOUNT_KEYPAIR>` acts as the
+base address. The command derives a new address from the base address and seed
+string. To see what stake address the command will derive, use
+`solana create-address-with-seed`:
 
 ```bash
 solana create-address-with-seed --from <PUBKEY> <SEED_STRING> STAKE
@@ -121,9 +123,9 @@ accounts with the `solana validators` command:
 solana validators
 ```
 
-The first column of each row contains the validator's identity and the second
-is the vote account address. Choose a validator and use its vote account
-address in `solana delegate-stake`:
+The first column of each row contains the validator's identity and the second is
+the vote account address. Choose a validator and use its vote account address in
+`solana delegate-stake`:
 
 ```bash
 solana delegate-stake --stake-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <VOTE_ACCOUNT_ADDRESS> \
@@ -134,8 +136,8 @@ The stake authority `<KEYPAIR>` authorizes the operation on the account with
 address `<STAKE_ACCOUNT_ADDRESS>`. The stake is delegated to the vote account
 with address `<VOTE_ACCOUNT_ADDRESS>`.
 
-After delegating stake, use `solana stake-account` to observe the changes
-to the stake account:
+After delegating stake, use `solana stake-account` to observe the changes to the
+stake account:
 
 ```bash
 solana stake-account <STAKE_ACCOUNT_ADDRESS>
@@ -164,8 +166,8 @@ solana deactivate-stake --stake-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> \
     --fee-payer <KEYPAIR>
 ```
 
-The stake authority `<KEYPAIR>` authorizes the operation on the account
-with address `<STAKE_ACCOUNT_ADDRESS>`.
+The stake authority `<KEYPAIR>` authorizes the operation on the account with
+address `<STAKE_ACCOUNT_ADDRESS>`.
 
 Note that stake takes several epochs to "cool down". Attempts to delegate stake
 in the cool down period will fail.
@@ -180,8 +182,8 @@ solana withdraw-stake --withdraw-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <RE
 ```
 
 `<STAKE_ACCOUNT_ADDRESS>` is the existing stake account, the stake authority
-`<KEYPAIR>` is the withdraw authority, and `<AMOUNT>` is the number of tokens
-to transfer to `<RECIPIENT_ADDRESS>`.
+`<KEYPAIR>` is the withdraw authority, and `<AMOUNT>` is the number of tokens to
+transfer to `<RECIPIENT_ADDRESS>`.
 
 ## Split Stake
 
@@ -196,11 +198,11 @@ solana split-stake --stake-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <NEW_STAK
 ```
 
 `<STAKE_ACCOUNT_ADDRESS>` is the existing stake account, the stake authority
-`<KEYPAIR>` is the stake authority, `<NEW_STAKE_ACCOUNT_KEYPAIR>` is the
-keypair for the new account, and `<AMOUNT>` is the number of tokens to transfer
-to the new account.
+`<KEYPAIR>` is the stake authority, `<NEW_STAKE_ACCOUNT_KEYPAIR>` is the keypair
+for the new account, and `<AMOUNT>` is the number of tokens to transfer to the
+new account.
 
 To split a stake account into a derived account address, use the `--seed`
 option. See
-[Derive Stake Account Addresses](#advanced-derive-stake-account-addresses)
-for details.
+[Derive Stake Account Addresses](#advanced-derive-stake-account-addresses) for
+details.

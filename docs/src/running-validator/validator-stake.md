@@ -81,7 +81,8 @@ Learn more about
 ## Validator Stake Warm-up
 
 To combat various attacks on consensus, new stake delegations are subject to a
-[warm-up](/staking/stake-accounts#delegation-warmup-and-cooldown) period.
+[warm-up](https://solana.com/docs/economics/staking/stake-accounts#delegation-warmup-and-cooldown)
+period.
 
 Monitor a validator's stake during warmup by:
 
