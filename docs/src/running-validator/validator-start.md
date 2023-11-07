@@ -218,9 +218,6 @@ Or to see in finer detail:
 solana balance --lamports
 ```
 
-Read more about the
-[difference between SOL and lamports here](../introduction.md#what-are-sols).
-
 ## Create Authorized Withdrawer Account
 
 If you haven't already done so, create an authorized-withdrawer keypair to be

@@ -56,11 +56,6 @@ module.exports = {
       },
       items: [
         {
-          to: "introduction",
-          label: "Learn",
-          position: "left",
-        },
-        {
           to: "cluster/overview",
           label: "Architecture",
           position: "left",
@@ -68,11 +63,6 @@ module.exports = {
         {
           to: "cli",
           label: "CLI",
-          position: "left",
-        },
-        {
-          to: "/developers",
-          label: "Developers",
           position: "left",
         },
         {
@@ -88,9 +78,6 @@ module.exports = {
               label: "Terminology",
               href: "https://solana.com/docs/terminology",
             },
-            { label: "Staking", to: "staking" },
-            { label: "Integrations", to: "integrations/exchange" },
-            { label: "Economics", to: "economics_overview" },
             { label: "Proposals", to: "proposals" },
             {
               href: "https://spl.solana.com",
@@ -132,12 +119,8 @@ module.exports = {
           title: "Documentation",
           items: [
             {
-              label: "Learn",
-              to: "introduction",
-            },
-            {
               label: "Developers",
-              to: "/developers",
+              href: "https://solana.com/developers",
             },
             {
               label: "Validators",
