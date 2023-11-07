@@ -2,8 +2,9 @@
 title: Deploy a Program
 ---
 
-Developers can deploy on-chain [programs](terminology.md#program) (often called
-smart contracts elsewhere) with the Solana tools.
+Developers can deploy on-chain
+[programs](https://solana.com/docs/terminology#program) (often called smart
+contracts elsewhere) with the Solana tools.
 
 To learn about developing and executing programs on Solana, start with the
 [intro to Solana programs](developing/intro/programs.md) and then dig into the
@@ -100,10 +101,10 @@ solana program deploy <PROGRAM_FILEPATH>
 
 By default, programs are deployed to accounts that are twice the size of the
 original deployment. Doing so leaves room for program growth in future
-redeployments. But, if the initially deployed program is very small  and then
-later grows substantially, the redeployment may fail. To avoid this, specify
-a `max_len` that is at least the size (in bytes) that the program is expected
-to become (plus some wiggle room).
+redeployments. But, if the initially deployed program is very small and then
+later grows substantially, the redeployment may fail. To avoid this, specify a
+`max_len` that is at least the size (in bytes) that the program is expected to
+become (plus some wiggle room).
 
 ```bash
 solana program deploy --max-len 200000 <PROGRAM_FILEPATH>
@@ -117,9 +118,9 @@ is locked up permanently.
 ### Resuming a failed deploy
 
 If program deployment fails, there will be a hanging intermediate buffer account
-that contains a non-zero balance. In order to recoup that balance you may
-resume a failed deployment by providing the same intermediate buffer to a new
-call to `deploy`.
+that contains a non-zero balance. In order to recoup that balance you may resume
+a failed deployment by providing the same intermediate buffer to a new call to
+`deploy`.
 
 Deployment failures will print an error message specifying the seed phrase
 needed to recover the generated intermediate buffer's keypair:
@@ -158,8 +159,8 @@ Both program and buffer accounts can be closed and their lamport balances
 transferred to a recipient's account.
 
 If deployment fails there will be a left over buffer account that holds
-lamports. The buffer account can either be used to [resume a
-deploy](#resuming-a-failed-deploy) or closed.
+lamports. The buffer account can either be used to
+[resume a deploy](#resuming-a-failed-deploy) or closed.
 
 The program or buffer account's authority must be present to close an account,
 to list all the open program or buffer accounts that match the default
@@ -273,9 +274,10 @@ $ sha256sum extended.so dump.so
 ### Using an intermediary Buffer account
 
 Instead of deploying directly to the program account, the program can be written
-to an intermediary buffer account. Intermediary accounts can be useful for things
-like multi-entity governed programs where the governing members fist verify the
-intermediary buffer contents and then vote to allow an upgrade using it.
+to an intermediary buffer account. Intermediary accounts can be useful for
+things like multi-entity governed programs where the governing members fist
+verify the intermediary buffer contents and then vote to allow an upgrade using
+it.
 
 ```bash
 solana program write-buffer <PROGRAM_FILEPATH>

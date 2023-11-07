@@ -84,7 +84,10 @@ module.exports = {
           label: "More",
           position: "left",
           items: [
-            { label: "Terminology", to: "terminology" },
+            {
+              label: "Terminology",
+              href: "https://solana.com/docs/terminology",
+            },
             { label: "Staking", to: "staking" },
             { label: "Integrations", to: "integrations/exchange" },
             { label: "Economics", to: "economics_overview" },

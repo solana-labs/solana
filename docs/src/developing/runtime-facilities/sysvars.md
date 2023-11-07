@@ -3,10 +3,9 @@ title: Sysvar Cluster Data
 ---
 
 Solana exposes a variety of cluster state data to programs via
-[`sysvar`](terminology.md#sysvar) accounts. These accounts are populated at
-known addresses published along with the account layouts in the
-[`solana-program`
-crate](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/index.html),
+[`sysvar`](https://solana.com/docs/terminology#sysvar) accounts. These accounts
+are populated at known addresses published along with the account layouts in the
+[`solana-program` crate](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/index.html),
 and outlined below.
 
 There are two ways for a program to access a sysvar.
@@ -18,21 +17,25 @@ let clock = Clock::get()
 ```
 
 The following sysvars support `get`:
+
 - Clock
 - EpochSchedule
 - Fees
 - Rent
 - EpochRewards
 
-The second is to pass the sysvar to the program as an account by including its address as one of the accounts in the `Instruction` and then deserializing the data during execution.  Access to sysvars accounts is
-always _readonly_.
+The second is to pass the sysvar to the program as an account by including its
+address as one of the accounts in the `Instruction` and then deserializing the
+data during execution. Access to sysvars accounts is always _readonly_.
 
 ```
 let clock_sysvar_info = next_account_info(account_info_iter)?;
 let clock = Clock::from_account_info(&clock_sysvar_info)?;
 ```
 
-The first method is more efficient and does not require that the sysvar account be passed to the program, or specified in the `Instruction` the program is processing.
+The first method is more efficient and does not require that the sysvar account
+be passed to the program, or specified in the `Instruction` the program is
+processing.
 
 ## Clock
 
@@ -40,13 +43,17 @@ The Clock sysvar contains data on cluster time, including the current slot,
 epoch, and estimated wall-clock Unix timestamp. It is updated every slot.
 
 - Address: `SysvarC1ock11111111111111111111111111111111`
-- Layout: [Clock](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/clock/struct.Clock.html)
+- Layout:
+  [Clock](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/clock/struct.Clock.html)
 - Fields:
 
   - `slot`: the current slot
-  - `epoch_start_timestamp`: the Unix timestamp of the first slot in this epoch. In the first slot of an epoch, this timestamp is identical to the `unix_timestamp` (below).
+  - `epoch_start_timestamp`: the Unix timestamp of the first slot in this epoch.
+    In the first slot of an epoch, this timestamp is identical to the
+    `unix_timestamp` (below).
   - `epoch`: the current epoch
-  - `leader_schedule_epoch`: the most recent epoch for which the leader schedule has already been generated
+  - `leader_schedule_epoch`: the most recent epoch for which the leader schedule
+    has already been generated
   - `unix_timestamp`: the Unix timestamp of this slot.
 
   Each slot has an estimated duration based on Proof of History. But in reality,
@@ -69,7 +76,8 @@ epoch, and estimated wall-clock Unix timestamp. It is updated every slot.
 
 The EpochSchedule sysvar contains epoch scheduling constants that are set in
 genesis, and enables calculating the number of slots in a given epoch, the epoch
-for a given slot, etc. (Note: the epoch schedule is distinct from the [`leader schedule`](terminology.md#leader-schedule))
+for a given slot, etc. (Note: the epoch schedule is distinct from the
+[`leader schedule`](https://solana.com/docs/terminology#leader-schedule))
 
 - Address: `SysvarEpochSchedu1e111111111111111111111111`
 - Layout:
@@ -159,7 +167,8 @@ determining whether epoch rewards distribution has finished.
 
 ## LastRestartSlot
 
-The LastRestartSlot sysvar contains the slot number of the last restart or _0_ (zero) if none ever happened.
+The LastRestartSlot sysvar contains the slot number of the last restart or _0_
+(zero) if none ever happened.
 
 - Address: `SysvarLastRestartS1ot1111111111111111111111`
 - Layout:
