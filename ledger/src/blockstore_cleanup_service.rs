@@ -296,8 +296,8 @@ impl BlockstoreCleanupService {
 mod tests {
     use {
         super::*,
+        crate::{blockstore::make_many_slot_entries, get_tmp_ledger_path_auto_delete},
         crossbeam_channel::unbounded,
-        solana_ledger::{blockstore::make_many_slot_entries, get_tmp_ledger_path_auto_delete},
     };
 
     fn flush_blockstore_contents_to_disk(blockstore: Blockstore) -> Blockstore {
