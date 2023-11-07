@@ -15,7 +15,7 @@ use {
     solana_ledger::entry_notifier_interface::EntryNotifierArc,
     solana_rpc::{
         optimistically_confirmed_bank_tracker::SlotNotification,
-        transaction_notifier_interface::TransactionNotifierLock,
+        transaction_notifier_interface::TransactionNotifierArc,
     },
     std::{
         path::{Path, PathBuf},
@@ -34,7 +34,7 @@ pub struct GeyserPluginService {
     slot_status_observer: Option<SlotStatusObserver>,
     plugin_manager: Arc<RwLock<GeyserPluginManager>>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    transaction_notifier: Option<TransactionNotifierLock>,
+    transaction_notifier: Option<TransactionNotifierArc>,
     entry_notifier: Option<EntryNotifierArc>,
     block_metadata_notifier: Option<BlockMetadataNotifierLock>,
 }
@@ -92,10 +92,10 @@ impl GeyserPluginService {
                 None
             };
 
-        let transaction_notifier: Option<TransactionNotifierLock> =
+        let transaction_notifier: Option<TransactionNotifierArc> =
             if transaction_notifications_enabled {
                 let transaction_notifier = TransactionNotifierImpl::new(plugin_manager.clone());
-                Some(Arc::new(RwLock::new(transaction_notifier)))
+                Some(Arc::new(transaction_notifier))
             } else {
                 None
             };
@@ -160,7 +160,7 @@ impl GeyserPluginService {
         self.accounts_update_notifier.clone()
     }
 
-    pub fn get_transaction_notifier(&self) -> Option<TransactionNotifierLock> {
+    pub fn get_transaction_notifier(&self) -> Option<TransactionNotifierArc> {
         self.transaction_notifier.clone()
     }
 
