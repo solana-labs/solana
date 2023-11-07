@@ -3844,6 +3844,7 @@ pub mod rpc_full {
                     "unsupported encoding: {tx_encoding}. Supported encodings: base58, base64"
                 ))
             })?;
+            // TODO: limit total number of transactions with default + config
             let mut unsanitized_txs = data
                 .into_iter()
                 .map(|data| {
