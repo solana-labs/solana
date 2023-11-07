@@ -273,7 +273,7 @@ impl Bank {
     pub(super) fn distribute_rent_fees(&self) {
         let total_rent_collected = self.collected_rent.load(Relaxed);
 
-        if self.disable_rent_fees_collection() {
+        if !self.should_collect_rent() {
             info!(
                 "skip rent fees distribution: total_rent = {}",
                 total_rent_collected

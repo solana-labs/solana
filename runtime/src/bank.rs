@@ -5248,7 +5248,7 @@ impl Bank {
             self.get_reward_interval(),
             &program_accounts_map,
             &programs_loaded_for_tx_batch.borrow(),
-            self.disable_rent_fees_collection(),
+            self.should_collect_rent(),
         );
         load_time.stop();
 
@@ -5884,9 +5884,10 @@ impl Bank {
             .is_active(&feature_set::skip_rent_rewrites::id())
     }
 
-    /// true if rent fees collection is disabled
-    fn disable_rent_fees_collection(&self) -> bool {
-        self.feature_set
+    /// true if rent fees should be collected (i.e. disable_rent_fees_collection is NOT enabled)
+    fn should_collect_rent(&self) -> bool {
+        !self
+            .feature_set
             .is_active(&feature_set::disable_rent_fees_collection::id())
     }
 
@@ -5929,7 +5930,7 @@ impl Bank {
                     account,
                     self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
                     set_exempt_rent_epoch_max,
-                    self.disable_rent_fees_collection(),
+                    self.should_collect_rent(),
                 ));
             time_collecting_rent_us += measure.as_us();
 
@@ -8374,7 +8375,11 @@ impl TotalAccountsStats {
         }
 
         if !rent_collector.should_collect_rent(address, account)
-            || rent_collector.get_rent_due(account, false).is_exempt()
+            || rent_collector
+                .get_rent_due(
+                    account, true, /* For rent stat, we want to always calculate rent. */
+                )
+                .is_exempt()
         {
             self.num_rent_exempt_accounts += 1;
         } else {

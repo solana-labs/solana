@@ -314,7 +314,7 @@ impl Accounts {
         reward_interval: RewardInterval,
         program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
         loaded_programs: &LoadedProgramsForTxBatch,
-        disable_rent_collection: bool,
+        should_collect_rent: bool,
     ) -> Result<LoadedTransaction> {
         let in_reward_interval = reward_interval == RewardInterval::InsideInterval;
 
@@ -389,7 +389,7 @@ impl Accounts {
                                             &mut account,
                                             self.accounts_db.filler_account_suffix.as_ref(),
                                             set_exempt_rent_epoch_max,
-                                            disable_rent_collection,
+                                            should_collect_rent,
                                         )
                                         .rent_amount;
                                     (account.data().len(), account, rent_due)
@@ -643,7 +643,7 @@ impl Accounts {
         in_reward_interval: RewardInterval,
         program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
         loaded_programs: &LoadedProgramsForTxBatch,
-        disable_rent_collection: bool,
+        should_collect_rent: bool,
     ) -> Vec<TransactionLoadResult> {
         txs.iter()
             .zip(lock_results)
@@ -678,7 +678,7 @@ impl Accounts {
                         in_reward_interval,
                         program_accounts,
                         loaded_programs,
-                        disable_rent_collection,
+                        should_collect_rent,
                     ) {
                         Ok(loaded_transaction) => loaded_transaction,
                         Err(e) => return (Err(e), None),
@@ -1502,7 +1502,7 @@ mod tests {
             RewardInterval::OutsideInterval,
             &HashMap::new(),
             &LoadedProgramsForTxBatch::default(),
-            false,
+            true,
         )
     }
 
@@ -3102,7 +3102,7 @@ mod tests {
             RewardInterval::OutsideInterval,
             &HashMap::new(),
             &LoadedProgramsForTxBatch::default(),
-            false,
+            true,
         )
     }
 

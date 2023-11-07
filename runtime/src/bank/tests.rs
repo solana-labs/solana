@@ -450,7 +450,7 @@ fn test_credit_debit_rent_no_side_effect_on_hash() {
                 &mut account_copy,
                 None,
                 set_exempt_rent_epoch_max,
-                false,
+                true,
             );
             assert_eq!(expected_rent.rent_amount, too_few_lamports);
             assert_eq!(account_copy.lamports(), 0);
@@ -1599,10 +1599,10 @@ fn test_rent_eager_collect_rent_in_partition() {
     let large_lamports = 123_456_789;
     // genesis_config.epoch_schedule.slots_per_epoch == 432_000 and is unsuitable for this test
     let some_slot = MINIMUM_SLOTS_PER_EPOCH; // chosen to cause epoch to be +1
-    let rent_collected = if bank.disable_rent_fees_collection() {
-        0
-    } else {
+    let rent_collected = if bank.should_collect_rent() {
         1 /* this is a function of 'some_slot' */
+    } else {
+        0
     };
 
     bank.store_account(
@@ -1655,7 +1655,7 @@ fn test_rent_eager_collect_rent_in_partition() {
     );
     assert!(
         bank.get_account(&rent_due_pubkey).unwrap().rent_epoch() == current_epoch + 1
-            || bank.disable_rent_fees_collection()
+            || !bank.should_collect_rent()
     );
     assert_eq!(
         bank.get_account(&rent_exempt_pubkey).unwrap().lamports(),
@@ -10882,7 +10882,7 @@ fn test_rent_state_list_len() {
         RewardInterval::OutsideInterval,
         &HashMap::new(),
         &LoadedProgramsForTxBatch::default(),
-        false,
+        true,
     );
 
     let compute_budget = bank.runtime_config.compute_budget.unwrap_or_else(|| {
@@ -11498,24 +11498,24 @@ fn test_accounts_data_size_and_rent_collection() {
                 &mut account,
                 None,
                 set_exempt_rent_epoch_max,
-                false,
+                true,
             );
             assert_eq!(info.account_data_len_reclaimed, data_size as u64);
         }
 
         // Collect rent for real
-        let rent_fees_collection_disabled = bank.disable_rent_fees_collection();
+        let should_collect_rent = bank.should_collect_rent();
         let accounts_data_size_delta_before_collecting_rent = bank.load_accounts_data_size_delta();
         bank.collect_rent_eagerly();
         let accounts_data_size_delta_after_collecting_rent = bank.load_accounts_data_size_delta();
 
         let accounts_data_size_delta_delta = accounts_data_size_delta_after_collecting_rent
             - accounts_data_size_delta_before_collecting_rent;
-        assert!(rent_fees_collection_disabled || accounts_data_size_delta_delta < 0);
+        assert!(!should_collect_rent || accounts_data_size_delta_delta < 0);
         let reclaimed_data_size = accounts_data_size_delta_delta.saturating_neg() as usize;
 
         // Ensure the account is reclaimed by rent collection
-        assert!(rent_fees_collection_disabled || reclaimed_data_size == data_size);
+        assert!(!should_collect_rent || reclaimed_data_size == data_size);
     }
 }
 
