@@ -514,11 +514,12 @@ impl RunLengthEncoding {
     fn add_number_and_test_full(
         encoded: &mut Vec<U16>,
         total_serde_bytes: &mut usize,
-        current_bit_count: u16,
+        count: usize,
     ) -> bool {
-        if current_bit_count == 0 {
-            false
+        if count == 0 || count >= 1 << 16 {
+            true
         } else {
+            let current_bit_count: u16 = count as u16;
             let serde_bits = 16 - current_bit_count.leading_zeros();
             let serde_bytes = ((serde_bits + 6) / 7).max(1) as usize;
             if *total_serde_bytes + serde_bytes > RestartLastVotedForkSlots::MAX_SPACE {
@@ -533,27 +534,12 @@ impl RunLengthEncoding {
 
     pub fn new(bits: &BitVec<u8>) -> Self {
         let mut encoded: Vec<U16> = Vec::new();
-        let mut current_bit = 1;
-        let mut current_bit_count: u16 = 0;
         let mut total_serde_bytes = 0;
-        for i in 0..bits.len() {
-            let bit: u8 = bits.get(i) as u8;
-            if bit == current_bit {
-                current_bit_count += 1;
-            } else {
-                if Self::add_number_and_test_full(
-                    &mut encoded,
-                    &mut total_serde_bytes,
-                    current_bit_count,
-                ) {
-                    current_bit_count = 0;
-                    break;
-                }
-                current_bit = bit;
-                current_bit_count = 1;
+        for (count, _) in (0..bits.len()).map(|i| bits.get(i)).dedup_with_count() {
+            if Self::add_number_and_test_full(&mut encoded, &mut total_serde_bytes, count) {
+                break;
             }
         }
-        Self::add_number_and_test_full(&mut encoded, &mut total_serde_bytes, current_bit_count);
         Self { encoded }
     }
 
@@ -564,10 +550,9 @@ impl RunLengthEncoding {
     pub fn to_slots(&self, last_slot: Slot, min_slot: Slot) -> Vec<Slot> {
         let mut result: Vec<Slot> = Vec::new();
         let mut offset = 0;
-        let mut current_bit = 1;
-        for bit_count in &self.encoded {
-            let count: u16 = bit_count.0;
-            if current_bit > 0 {
+        for (bit_count, bit) in self.encoded.iter().zip([1, 0].iter().cycle()) {
+            let count = bit_count.0;
+            if *bit > 0 {
                 for i in 0..count {
                     let slot = last_slot.saturating_sub(offset).saturating_sub(i as Slot);
                     if slot < min_slot {
@@ -580,7 +565,6 @@ impl RunLengthEncoding {
                 }
             }
             offset += count as Slot;
-            current_bit = 1 - current_bit;
         }
         result.reverse();
         result

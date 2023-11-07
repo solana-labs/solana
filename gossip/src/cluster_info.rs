@@ -975,7 +975,7 @@ impl ClusterInfo {
                 CrdsData::RestartLastVotedForkSlots(last_voted_fork_slots),
                 &self.keypair(),
             )),
-            Err(e) => error!("failed to create RestartLastVotedForkSlots {:?}", e),
+            Err(e) => error!("failed to create RestartLastVotedForkSlots {e:?}"),
         }
     }
 
