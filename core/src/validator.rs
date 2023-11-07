@@ -2479,7 +2479,7 @@ mod tests {
             ..ValidatorConfig::default_for_test()
         };
         let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
-        let (validator, _) = Validator::new(
+        let validator = Validator::new(
             validator_node,
             Arc::new(validator_keypair),
             &validator_ledger_path,
