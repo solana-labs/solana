@@ -1,5 +1,24 @@
-//! Currently, there are only two things: minimal InstalledScheduler trait and an auxiliary type
-//! called BankWithScheduler.. This file will be populated by later PRs to align with the filename.
+//! Transaction processing glue code, mainly consisting of Object-safe traits
+//!
+//! [InstalledSchedulerPool] lends one of pooled [InstalledScheduler]s as wrapped in
+//! [BankWithScheduler], which can be used by `ReplayStage` and `BankingStage` for transaction
+//! execution. After use, the scheduler will be returned to the pool.
+//!
+//! [InstalledScheduler] can be fed with [SanitizedTransaction]s. Then, it schedules those
+//! executions and commits those results into the associated _bank_.
+//!
+//! It's generally assumed that each [InstalledScheduler] is backed by multiple threads for
+//! parallel transaction processing and there are multiple independent schedulers inside a single
+//! instance of [InstalledSchedulerPool].
+//!
+//! Dynamic dispatch was inevitable due to the desire to piggyback on
+//! [BankForks](crate::bank_forks::BankForks)'s pruning for scheduler lifecycle management as the
+//! common place both for `ReplayStage` and `BankingStage` and the resultant need of invoking
+//! actual implementations provided by the dependent crate (`solana-unified-scheduler-pool`, which
+//! in turn depends on `solana-ledger`, which in turn depends on `solana-runtime`), avoiding a
+//! cyclic dependency.
+//!
+//! See [InstalledScheduler] for visualized interaction.
 
 use {
     crate::bank::Bank,
@@ -7,6 +26,7 @@ use {
     solana_program_runtime::timings::ExecuteTimings,
     solana_sdk::{
         hash::Hash,
+        slot_history::Slot,
         transaction::{Result, SanitizedTransaction},
     },
     std::{
@@ -18,6 +38,57 @@ use {
 #[cfg(feature = "dev-context-only-utils")]
 use {mockall::automock, qualifier_attr::qualifiers};
 
+pub trait InstalledSchedulerPool: Send + Sync + Debug {
+    fn take_scheduler(&self, context: SchedulingContext) -> DefaultInstalledSchedulerBox;
+}
+
+#[cfg_attr(doc, aquamarine::aquamarine)]
+/// Schedules, executes, and commits transactions under encapsulated implementation
+///
+/// The following chart illustrates the ownership/reference interaction between inter-dependent
+/// objects across crates:
+///
+/// ```mermaid
+/// graph TD
+///     Bank["Arc#lt;Bank#gt;"]
+///
+///     subgraph solana-runtime
+///         BankForks;
+///         BankWithScheduler;
+///         Bank;
+///         LoadExecuteAndCommitTransactions(["load_execute_and_commit_transactions()"]);
+///         SchedulingContext;
+///         InstalledSchedulerPool{{InstalledSchedulerPool}};
+///         InstalledScheduler{{InstalledScheduler}};
+///     end
+///
+///     subgraph solana-unified-scheduler-pool
+///         SchedulerPool;
+///         PooledScheduler;
+///         ScheduleExecution(["schedule_execution()"]);
+///     end
+///
+///     subgraph solana-ledger
+///         ExecuteBatch(["execute_batch()"]);
+///     end
+///
+///     ScheduleExecution -. calls .-> ExecuteBatch;
+///     BankWithScheduler -. dyn-calls .-> ScheduleExecution;
+///     ExecuteBatch -. calls .-> LoadExecuteAndCommitTransactions;
+///     linkStyle 0,1,2 stroke:gray,color:gray;
+///
+///     BankForks -- owns --> BankWithScheduler;
+///     BankForks -- owns --> InstalledSchedulerPool;
+///     BankWithScheduler -- refs --> Bank;
+///     BankWithScheduler -- owns --> InstalledScheduler;
+///     SchedulingContext -- refs --> Bank;
+///     InstalledScheduler -- owns --> SchedulingContext;
+///
+///     SchedulerPool -- owns --> PooledScheduler;
+///     SchedulerPool -. impls .-> InstalledSchedulerPool;
+///     PooledScheduler -. impls .-> InstalledScheduler;
+///     PooledScheduler -- refs --> SchedulerPool;
+/// ```
 #[cfg_attr(feature = "dev-context-only-utils", automock)]
 // suppress false clippy complaints arising from mockall-derive:
 //   warning: `#[must_use]` has no effect when applied to a struct field
@@ -27,6 +98,9 @@ use {mockall::automock, qualifier_attr::qualifiers};
     allow(unused_attributes, clippy::needless_lifetimes)
 )]
 pub trait InstalledScheduler: Send + Sync + Debug + 'static {
+    fn id(&self) -> SchedulerId;
+    fn context(&self) -> &SchedulingContext;
+
     // Calling this is illegal as soon as wait_for_termination is called.
     fn schedule_execution<'a>(
         &'a self,
@@ -50,9 +124,44 @@ pub trait InstalledScheduler: Send + Sync + Debug + 'static {
     /// two reasons later.
     #[must_use]
     fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings>;
+
+    fn return_to_pool(self: Box<Self>);
 }
 
 pub type DefaultInstalledSchedulerBox = Box<dyn InstalledScheduler>;
+
+pub type InstalledSchedulerPoolArc = Arc<dyn InstalledSchedulerPool>;
+
+pub type SchedulerId = u64;
+
+/// A small context to propagate a bank and its scheduling mode to the scheduler subsystem.
+///
+/// Note that this isn't called `SchedulerContext` because the contexts aren't associated with
+/// schedulers one by one. A scheduler will use many SchedulingContexts during its lifetime.
+/// "Scheduling" part of the context name refers to an abstract slice of time to schedule and
+/// execute all transactions for a given bank for block verification or production. A context is
+/// expected to be used by a particular scheduler only for that duration of the time and to be
+/// disposed by the scheduler. Then, the scheduler may work on different banks with new
+/// `SchedulingContext`s.
+#[derive(Clone, Debug)]
+pub struct SchedulingContext {
+    // mode: SchedulingMode, // this will be added later.
+    bank: Arc<Bank>,
+}
+
+impl SchedulingContext {
+    pub fn new(bank: Arc<Bank>) -> Self {
+        Self { bank }
+    }
+
+    pub fn bank(&self) -> &Arc<Bank> {
+        &self.bank
+    }
+
+    pub fn slot(&self) -> Slot {
+        self.bank().slot()
+    }
+}
 
 pub type ResultWithTimings = (Result<()>, ExecuteTimings);
 
@@ -117,6 +226,13 @@ pub type InstalledSchedulerRwLock = RwLock<Option<DefaultInstalledSchedulerBox>>
 impl BankWithScheduler {
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     pub(crate) fn new(bank: Arc<Bank>, scheduler: Option<DefaultInstalledSchedulerBox>) -> Self {
+        if let Some(bank_in_context) = scheduler
+            .as_ref()
+            .map(|scheduler| scheduler.context().bank())
+        {
+            assert!(Arc::ptr_eq(&bank, bank_in_context));
+        }
+
         Self {
             inner: Arc::new(BankWithSchedulerInner {
                 bank,
@@ -229,7 +345,8 @@ impl BankWithSchedulerInner {
                 .as_mut()
                 .and_then(|scheduler| scheduler.wait_for_termination(&reason));
             if !reason.is_paused() {
-                drop(scheduler.take().expect("scheduler after waiting"));
+                let scheduler = scheduler.take().expect("scheduler after waiting");
+                scheduler.return_to_pool();
             }
             result_with_timings
         } else {
@@ -296,11 +413,17 @@ mod tests {
     };
 
     fn setup_mocked_scheduler_with_extra(
+        bank: Arc<Bank>,
         wait_reasons: impl Iterator<Item = WaitReason>,
         f: Option<impl Fn(&mut MockInstalledScheduler)>,
     ) -> DefaultInstalledSchedulerBox {
         let mut mock = MockInstalledScheduler::new();
         let mut seq = Sequence::new();
+
+        mock.expect_context()
+            .times(1)
+            .in_sequence(&mut seq)
+            .return_const(SchedulingContext::new(bank));
 
         for wait_reason in wait_reasons {
             mock.expect_wait_for_termination()
@@ -316,6 +439,10 @@ mod tests {
                 });
         }
 
+        mock.expect_return_to_pool()
+            .times(1)
+            .in_sequence(&mut seq)
+            .returning(|| ());
         if let Some(f) = f {
             f(&mut mock);
         }
@@ -324,9 +451,11 @@ mod tests {
     }
 
     fn setup_mocked_scheduler(
+        bank: Arc<Bank>,
         wait_reasons: impl Iterator<Item = WaitReason>,
     ) -> DefaultInstalledSchedulerBox {
         setup_mocked_scheduler_with_extra(
+            bank,
             wait_reasons,
             None::<fn(&mut MockInstalledScheduler) -> ()>,
         )
@@ -338,8 +467,9 @@ mod tests {
 
         let bank = Arc::new(Bank::default_for_tests());
         let bank = BankWithScheduler::new(
-            bank,
+            bank.clone(),
             Some(setup_mocked_scheduler(
+                bank,
                 [WaitReason::TerminatedToFreeze].into_iter(),
             )),
         );
@@ -370,8 +500,9 @@ mod tests {
 
         let bank = Arc::new(Bank::default_for_tests());
         let bank = BankWithScheduler::new(
-            bank,
+            bank.clone(),
             Some(setup_mocked_scheduler(
+                bank,
                 [WaitReason::DroppedFromBankForks].into_iter(),
             )),
         );
@@ -384,8 +515,9 @@ mod tests {
 
         let bank = Arc::new(crate::bank::tests::create_simple_test_bank(42));
         let bank = BankWithScheduler::new(
-            bank,
+            bank.clone(),
             Some(setup_mocked_scheduler(
+                bank,
                 [
                     WaitReason::PausedForRecentBlockhash,
                     WaitReason::TerminatedToFreeze,
@@ -414,6 +546,7 @@ mod tests {
         ));
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let mocked_scheduler = setup_mocked_scheduler_with_extra(
+            bank.clone(),
             [WaitReason::DroppedFromBankForks].into_iter(),
             Some(|mocked: &mut MockInstalledScheduler| {
                 mocked

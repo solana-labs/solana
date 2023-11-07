@@ -1439,7 +1439,6 @@ pub struct AccountsDb {
 
     pub storage: AccountStorage,
 
-    #[allow(dead_code)]
     /// from AccountsDbConfig
     create_ancient_storage: CreateAncientStorage,
 
@@ -1729,24 +1728,33 @@ impl SplitAncientStorages {
     /// So a slot remains in the same chunk whenever it is included in the accounts hash.
     /// When the slot gets deleted or gets consumed in an ancient append vec, it will no longer be in its chunk.
     /// The results of scanning a chunk of appendvecs can be cached to avoid scanning large amounts of data over and over.
-    fn new(oldest_non_ancient_slot: Slot, snapshot_storages: &SortedStorages) -> Self {
+    fn new(oldest_non_ancient_slot: Option<Slot>, snapshot_storages: &SortedStorages) -> Self {
         let range = snapshot_storages.range();
 
-        // any ancient append vecs should definitely be cached
-        // We need to break the ranges into:
-        // 1. individual ancient append vecs (may be empty)
-        // 2. first unevenly divided chunk starting at 1 epoch old slot (may be empty)
-        // 3. evenly divided full chunks in the middle
-        // 4. unevenly divided chunk of most recent slots (may be empty)
-        let ancient_slots =
-            Self::get_ancient_slots(oldest_non_ancient_slot, snapshot_storages, |storage| {
-                storage.capacity() > get_ancient_append_vec_capacity() * 50 / 100
-            });
+        let (ancient_slots, first_non_ancient_slot) = if let Some(oldest_non_ancient_slot) =
+            oldest_non_ancient_slot
+        {
+            // any ancient append vecs should definitely be cached
+            // We need to break the ranges into:
+            // 1. individual ancient append vecs (may be empty)
+            // 2. first unevenly divided chunk starting at 1 epoch old slot (may be empty)
+            // 3. evenly divided full chunks in the middle
+            // 4. unevenly divided chunk of most recent slots (may be empty)
+            let ancient_slots =
+                Self::get_ancient_slots(oldest_non_ancient_slot, snapshot_storages, |storage| {
+                    storage.capacity() > get_ancient_append_vec_capacity() * 50 / 100
+                });
 
-        let first_non_ancient_slot = ancient_slots
-            .last()
-            .map(|last_ancient_slot| last_ancient_slot.saturating_add(1))
-            .unwrap_or(range.start);
+            let first_non_ancient_slot = ancient_slots
+                .last()
+                .map(|last_ancient_slot| last_ancient_slot.saturating_add(1))
+                .unwrap_or(range.start);
+
+            (ancient_slots, first_non_ancient_slot)
+        } else {
+            (vec![], range.start)
+        };
+
         Self::new_with_ancient_info(range, ancient_slots, first_non_ancient_slot)
     }
 
@@ -7159,21 +7167,32 @@ impl AccountsDb {
         }
     }
 
-    /// if ancient append vecs are enabled, return a slot 'max_slot_inclusive' - (slots_per_epoch - `self.ancient_append_vec_offset`)
-    /// otherwise, return 0
+    /// `oldest_non_ancient_slot` is only applicable when `Append` is used for ancient append vec packing.
+    /// If `Pack` is used for ancient append vec packing, return None.
+    /// Otherwise, return a slot 'max_slot_inclusive' - (slots_per_epoch - `self.ancient_append_vec_offset`)
+    /// If ancient append vecs are not enabled, return 0.
     fn get_oldest_non_ancient_slot_for_hash_calc_scan(
         &self,
         max_slot_inclusive: Slot,
         config: &CalcAccountsHashConfig<'_>,
-    ) -> Slot {
-        if self.ancient_append_vec_offset.is_some() {
+    ) -> Option<Slot> {
+        if self.create_ancient_storage == CreateAncientStorage::Pack {
+            // oldest_non_ancient_slot is only applicable when ancient storages are created with `Append`. When ancient storages are created with `Pack`, ancient storages
+            // can be created in between non-ancient storages. Return None, because oldest_non_ancient_slot is not applicable here.
+            None
+        } else if self.ancient_append_vec_offset.is_some() {
             // For performance, this is required when ancient appendvecs are enabled
-            self.get_oldest_non_ancient_slot_from_slot(config.epoch_schedule, max_slot_inclusive)
+            Some(
+                self.get_oldest_non_ancient_slot_from_slot(
+                    config.epoch_schedule,
+                    max_slot_inclusive,
+                ),
+            )
         } else {
             // This causes the entire range to be chunked together, treating older append vecs just like new ones.
             // This performs well if there are many old append vecs that haven't been cleaned yet.
             // 0 will have the effect of causing ALL older append vecs to be chunked together, just like every other append vec.
-            0
+            Some(0)
         }
     }
 
@@ -7313,7 +7332,11 @@ impl AccountsDb {
                         let mut init_accum = true;
                         // load from cache failed, so create the cache file for this chunk
                         for (slot, storage) in snapshot_storages.iter_range(&range_this_chunk) {
-                            let ancient = slot < oldest_non_ancient_slot;
+                            let ancient =
+                                oldest_non_ancient_slot.is_some_and(|oldest_non_ancient_slot| {
+                                    slot < oldest_non_ancient_slot
+                                });
+
                             let (_, scan_us) = measure_us!(if let Some(storage) = storage {
                                 if init_accum {
                                     let range = bin_range.end - bin_range.start;
@@ -9997,6 +10020,7 @@ pub mod tests {
             sync::atomic::AtomicBool,
             thread::{self, Builder, JoinHandle},
         },
+        test_case::test_case,
     };
 
     fn linear_ancestors(end_slot: u64) -> Ancestors {
@@ -16326,9 +16350,22 @@ pub mod tests {
         assert_eq!(db.accounts_index.ref_count_from_storage(&pk1), 0);
     }
 
-    #[test]
-    fn test_get_oldest_non_ancient_slot_for_hash_calc_scan() {
+    #[test_case(CreateAncientStorage::Append; "append")]
+    #[test_case(CreateAncientStorage::Pack; "pack")]
+    fn test_get_oldest_non_ancient_slot_for_hash_calc_scan(
+        create_ancient_storage: CreateAncientStorage,
+    ) {
+        let expected = |v| {
+            if create_ancient_storage == CreateAncientStorage::Append {
+                Some(v)
+            } else {
+                None
+            }
+        };
+
         let mut db = AccountsDb::new_single_for_tests();
+        db.create_ancient_storage = create_ancient_storage;
+
         let config = CalcAccountsHashConfig::default();
         let slot = config.epoch_schedule.slots_per_epoch;
         let slots_per_epoch = config.epoch_schedule.slots_per_epoch;
@@ -16337,23 +16374,23 @@ pub mod tests {
         // no ancient append vecs, so always 0
         assert_eq!(
             db.get_oldest_non_ancient_slot_for_hash_calc_scan(slots_per_epoch + offset, &config),
-            0
+            expected(0)
         );
         // ancient append vecs enabled (but at 0 offset), so can be non-zero
         db.ancient_append_vec_offset = Some(0);
         // 0..=(slots_per_epoch - 1) are all non-ancient
         assert_eq!(
             db.get_oldest_non_ancient_slot_for_hash_calc_scan(slots_per_epoch - 1, &config),
-            0
+            expected(0)
         );
         // 1..=slots_per_epoch are all non-ancient, so 1 is oldest non ancient
         assert_eq!(
             db.get_oldest_non_ancient_slot_for_hash_calc_scan(slots_per_epoch, &config),
-            1
+            expected(1)
         );
         assert_eq!(
             db.get_oldest_non_ancient_slot_for_hash_calc_scan(slots_per_epoch + offset, &config),
-            offset + 1
+            expected(offset + 1)
         );
     }
 
@@ -16426,7 +16463,7 @@ pub mod tests {
     fn test_split_storages_ancient_chunks() {
         let storages = SortedStorages::empty();
         assert_eq!(storages.max_slot_inclusive(), 0);
-        let result = SplitAncientStorages::new(0, &storages);
+        let result = SplitAncientStorages::new(Some(0), &storages);
         assert_eq!(result, SplitAncientStorages::default());
     }
 
@@ -16776,7 +16813,7 @@ pub mod tests {
             // 1 = all storages are non-ancient
             // 2 = ancient slots: 1
             // 3 = ancient slots: 1, 2
-            // 4 = ancient slots: 1, 2, 3 (except 2 is large, 3 is not, so treat 3 as non-ancient)
+            // 4 = ancient slots: 1, 2 (except 2 is large, 3 is not, so treat 3 as non-ancient)
             // 5 = ...
             for oldest_non_ancient_slot in 0..6 {
                 let ancient_slots = SplitAncientStorages::get_ancient_slots(
