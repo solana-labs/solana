@@ -7821,7 +7821,7 @@ pub mod tests {
         assert_eq!(counter, 1);
     }
 
-    fn do_test_lowest_cleanup_slot_and_special_cfs(simulate_ledger_cleanup_service: bool) {
+    fn do_test_lowest_cleanup_slot_and_special_cfs(simulate_blockstore_cleanup_service: bool) {
         solana_logger::setup();
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -7929,13 +7929,13 @@ pub mod tests {
         assert_eq!(are_missing, (false, false));
         assert_existing_always();
 
-        if simulate_ledger_cleanup_service {
+        if simulate_blockstore_cleanup_service {
             *blockstore.lowest_cleanup_slot.write().unwrap() = lowest_cleanup_slot;
             blockstore.purge_slots(0, lowest_cleanup_slot, PurgeType::CompactionFilter);
         }
 
         let are_missing = check_for_missing();
-        if simulate_ledger_cleanup_service {
+        if simulate_blockstore_cleanup_service {
             // ... when either simulation (or both) is effective, we should observe to be missing
             // consistently
             assert_eq!(are_missing, (true, true));
@@ -7947,12 +7947,12 @@ pub mod tests {
     }
 
     #[test]
-    fn test_lowest_cleanup_slot_and_special_cfs_with_ledger_cleanup_service_simulation() {
+    fn test_lowest_cleanup_slot_and_special_cfs_with_blockstore_cleanup_service_simulation() {
         do_test_lowest_cleanup_slot_and_special_cfs(true);
     }
 
     #[test]
-    fn test_lowest_cleanup_slot_and_special_cfs_without_ledger_cleanup_service_simulation() {
+    fn test_lowest_cleanup_slot_and_special_cfs_without_blockstore_cleanup_service_simulation() {
         do_test_lowest_cleanup_slot_and_special_cfs(false);
     }
 
