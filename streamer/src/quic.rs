@@ -114,7 +114,7 @@ pub enum QuicServerError {
 }
 
 pub struct EndpointKeyUpdater {
-    endpoint: Endpoint,
+    endpoint: Arc<Endpoint>,
     gossip_host: IpAddr,
 }
 
@@ -416,7 +416,14 @@ pub fn spawn_server(
     max_unstaked_connections: usize,
     wait_for_chunk_timeout: Duration,
     coalesce: Duration,
-) -> Result<(Endpoint, thread::JoinHandle<()>, Arc<EndpointKeyUpdater>), QuicServerError> {
+) -> Result<
+    (
+        Arc<Endpoint>,
+        thread::JoinHandle<()>,
+        Arc<EndpointKeyUpdater>,
+    ),
+    QuicServerError,
+> {
     let runtime = rt();
     let (endpoint, _stats, task) = {
         let _guard = runtime.enter();
@@ -443,6 +450,7 @@ pub fn spawn_server(
             }
         })
         .unwrap();
+    let endpoint = Arc::new(endpoint);
     let updater = EndpointKeyUpdater {
         endpoint: endpoint.clone(),
         gossip_host
@@ -473,7 +481,7 @@ mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let (_, t, _) = spawn_server(
+        let (_, t) = spawn_server(
             "quic_streamer_test",
             s,
             &keypair,
@@ -529,7 +537,7 @@ mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let (_, t, _) = spawn_server(
+        let (_, t) = spawn_server(
             "quic_streamer_test",
             s,
             &keypair,
@@ -572,7 +580,7 @@ mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let (_, t, _) = spawn_server(
+        let (_, t) = spawn_server(
             "quic_streamer_test",
             s,
             &keypair,
