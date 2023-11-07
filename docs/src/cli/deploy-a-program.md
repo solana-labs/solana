@@ -7,8 +7,9 @@ Developers can deploy on-chain
 contracts elsewhere) with the Solana tools.
 
 To learn about developing and executing programs on Solana, start with the
-[intro to Solana programs](developing/intro/programs.md) and then dig into the
-details of [on-chain programs](developing/on-chain-programs/overview.md).
+[intro to Solana programs](https://solana.com/docs/core/programs) and then dig
+into the details of
+[developing on-chain programs](https://solana.com/docs/programs).
 
 To deploy a program, use the Solana tools to interact with the on-chain loader
 to:
@@ -111,7 +112,7 @@ solana program deploy --max-len 200000 <PROGRAM_FILEPATH>
 ```
 
 Note that program accounts are required to be
-[rent-exempt](developing/programming-model/accounts.md#rent-exemption), and the
+[rent-exempt](https://solana.com/docs/core/accounts#rent-exemption), and the
 `max-len` is fixed after initial deployment, so any SOL in the program accounts
 is locked up permanently.
 

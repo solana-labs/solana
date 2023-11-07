@@ -24,8 +24,8 @@ are assigned to validators that vote on
 to all validators that successfully vote on blocks that are added to the
 blockchain. Additionally, when the validator is the leader, it can earn
 transaction fees and storage
-[rent fees](../../developing/programming-model/accounts.md#rent) for each block
-that it produces that is added to the blockchain.
+[rent fees](https://solana.com/docs/core/accounts#rent) for each block that it
+produces that is added to the blockchain.
 
 Since all votes in Solana happen on the blockchain, a validator incurs a
 transaction cost for each vote that it makes. These transaction fees amount to

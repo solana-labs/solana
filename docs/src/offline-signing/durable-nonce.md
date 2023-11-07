@@ -2,8 +2,9 @@
 title: Durable Transaction Nonces
 ---
 
-Durable transaction nonces are a mechanism for getting around the typical
-short lifetime of a transaction's [`recent_blockhash`](developing/programming-model/transactions.md#recent-blockhash).
+Durable transaction nonces are a mechanism for getting around the typical short
+lifetime of a transaction's
+[`recent_blockhash`](https://solana.com/docs/core/transactions#recent-blockhash).
 They are implemented as a Solana Program, the mechanics of which can be read
 about in the [proposal](../implemented-proposals/durable-tx-nonces.md).
 
@@ -18,9 +19,9 @@ Authority over a nonce account can optionally be assigned to another account. In
 doing so the new authority inherits full control over the nonce account from the
 previous authority, including the account creator. This feature enables the
 creation of more complex account ownership arrangements and derived account
-addresses not associated with a keypair. The `--nonce-authority <AUTHORITY_KEYPAIR>`
-argument is used to specify this account and is supported by the following
-commands
+addresses not associated with a keypair. The
+`--nonce-authority <AUTHORITY_KEYPAIR>` argument is used to specify this account
+and is supported by the following commands
 
 - `create-nonce-account`
 - `new-nonce`
@@ -30,10 +31,12 @@ commands
 ### Nonce Account Creation
 
 The durable transaction nonce feature uses an account to store the next nonce
-value. Durable nonce accounts must be [rent-exempt](../implemented-proposals/rent.md#two-tiered-rent-regime),
-so need to carry the minimum balance to achieve this.
+value. Durable nonce accounts must be
+[rent-exempt](../implemented-proposals/rent.md#two-tiered-rent-regime), so need
+to carry the minimum balance to achieve this.
 
-A nonce account is created by first generating a new keypair, then create the account on chain
+A nonce account is created by first generating a new keypair, then create the
+account on chain
 
 - Command
 
@@ -48,7 +51,9 @@ solana create-nonce-account nonce-keypair.json 1
 2SymGjGV4ksPdpbaqWFiDoBz8okvtiik4KE9cnMQgRHrRLySSdZ6jrEcpPifW4xUpp4z66XM9d9wM48sA7peG2XL
 ```
 
-> To keep the keypair entirely offline, use the [Paper Wallet](wallet-guide/paper-wallet.md) keypair generation [instructions](wallet-guide/paper-wallet.md#seed-phrase-generation) instead
+> To keep the keypair entirely offline, use the
+> [Paper Wallet](wallet-guide/paper-wallet.md) keypair generation
+> [instructions](wallet-guide/paper-wallet.md#seed-phrase-generation) instead
 
 > [Full usage documentation](../cli/usage.md#solana-create-nonce-account)
 
@@ -192,7 +197,8 @@ $ solana airdrop -k alice.json 1
 
 Now Alice needs a nonce account. Create one
 
-> Here, no separate [nonce authority](#nonce-authority) is employed, so `alice.json` has full authority over the nonce account
+> Here, no separate [nonce authority](#nonce-authority) is employed, so
+> `alice.json` has full authority over the nonce account
 
 ```bash
 $ solana create-nonce-account -k alice.json nonce.json 0.1
@@ -215,7 +221,8 @@ Error: Io(Custom { kind: Other, error: "Transaction \"33gQQaoPc9jWePMvDAeyJpcnSP
 Alice retries the transaction, this time specifying her nonce account and the
 blockhash stored there
 
-> Remember, `alice.json` is the [nonce authority](#nonce-authority) in this example
+> Remember, `alice.json` is the [nonce authority](#nonce-authority) in this
+> example
 
 ```bash
 $ solana nonce-account nonce.json
