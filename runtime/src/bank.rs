@@ -4370,7 +4370,7 @@ impl Bank {
     ) -> TransactionSimulationResult {
         let account_keys = transaction.message().account_keys();
         let number_of_accounts = account_keys.len();
-        let account_overrides = self.get_account_overrides_for_simulation(&account_keys);
+        let account_overrides = self.get_account_overrides_for_simulation([&account_keys]);
         let batch = self.prepare_unlocked_batch_from_single_tx(&transaction);
         let mut timings = ExecuteTimings::default();
 
@@ -4436,10 +4436,117 @@ impl Bank {
         }
     }
 
-    fn get_account_overrides_for_simulation(&self, account_keys: &AccountKeys) -> AccountOverrides {
+    /// Run multiple sequential transactions against a frozen bank without committing the results
+    pub fn simulate_multiple_transactions(
+        &self,
+        transactions: Vec<SanitizedTransaction>,
+    ) -> Vec<TransactionSimulationResult> {
+        assert!(self.is_frozen(), "simulation bank must be frozen");
+        self.simulate_multiple_transactions_unchecked(transactions)
+    }
+
+    /// Run multiple sequential transactions against a bank without committing the results; does not check if the bank
+    /// is frozen
+    pub fn simulate_multiple_transactions_unchecked(
+        &self,
+        transactions: Vec<SanitizedTransaction>,
+    ) -> Vec<TransactionSimulationResult> {
+        let account_keys: Vec<_> = transactions
+            .iter()
+            .map(|tx| tx.message().account_keys())
+            .collect();
+        let account_nums = account_keys
+            .iter()
+            .map(|keys| keys.len())
+            .collect::<Vec<_>>();
+        let mut account_overrides = self.get_account_overrides_for_simulation(&account_keys);
+
+        let mut results = vec![];
+        for (transaction, number_of_accounts) in transactions.iter().zip(account_nums) {
+            let batch = self.prepare_unlocked_batch_from_single_tx(&transaction);
+            let mut timings = ExecuteTimings::default();
+            let LoadAndExecuteTransactionsOutput {
+                loaded_transactions,
+                mut execution_results,
+                ..
+            } = self.load_and_execute_transactions(
+                &batch,
+                // After simulation, transactions will need to be forwarded to the leader
+                // for processing. During forwarding, the transaction could expire if the
+                // delay is not accounted for.
+                MAX_PROCESSING_AGE - MAX_TRANSACTION_FORWARDING_DELAY,
+                false,
+                true,
+                true,
+                &mut timings,
+                Some(&account_overrides),
+                None,
+            );
+
+            let post_simulation_accounts = loaded_transactions
+                .into_iter()
+                .next()
+                .unwrap()
+                .0
+                .ok()
+                .map(|loaded_transaction| {
+                    loaded_transaction
+                        .accounts
+                        .into_iter()
+                        .take(number_of_accounts)
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+
+            let units_consumed = timings.details.per_program_timings.iter().fold(
+                0,
+                |acc: u64, (_, program_timing)| {
+                    acc.saturating_add(program_timing.accumulated_units)
+                },
+            );
+
+            debug!("simulate_multiple_transaction: {:?}", timings);
+
+            let execution_result = execution_results.pop().unwrap();
+            let flattened_result = execution_result.flattened_result();
+            let (logs, return_data) = match execution_result {
+                TransactionExecutionResult::Executed { details, .. } => {
+                    (details.log_messages, details.return_data)
+                }
+                TransactionExecutionResult::NotExecuted(_) => (None, None),
+            };
+            let logs = logs.unwrap_or_default();
+            post_simulation_accounts
+                .iter()
+                .enumerate()
+                .for_each(|(index, (key, account))| {
+                    if transaction.message().is_writable(index) {
+                        account_overrides.set_account(key, Some(account.clone()));
+                    }
+                });
+
+            results.push(TransactionSimulationResult {
+                result: flattened_result,
+                logs,
+                post_simulation_accounts,
+                units_consumed,
+                return_data,
+            });
+        }
+        results
+    }
+
+    fn get_account_overrides_for_simulation<'a, 'b: 'a>(
+        &self,
+        account_keys: impl IntoIterator<Item = &'a AccountKeys<'b>>,
+    ) -> AccountOverrides {
         let mut account_overrides = AccountOverrides::default();
         let slot_history_id = sysvar::slot_history::id();
-        if account_keys.iter().any(|pubkey| *pubkey == slot_history_id) {
+        if account_keys
+            .into_iter()
+            .flat_map(|pubkey| pubkey.iter())
+            .any(|a| a == &slot_history_id)
+        {
             let current_account = self.get_account_with_fixed_root(&slot_history_id);
             let slot_history = current_account
                 .as_ref()

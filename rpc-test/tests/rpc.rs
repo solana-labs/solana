@@ -1,3 +1,7 @@
+use solana_rpc_client_api::config::{
+    RpcSimulateTransactionAccountsConfig, RpcSimulateTransactionConfig,
+};
+use solana_rpc_client_api::response::RpcSimulateTransactionResult;
 use {
     bincode::serialize,
     crossbeam_channel::unbounded,
@@ -21,11 +25,13 @@ use {
     solana_sdk::{
         commitment_config::CommitmentConfig,
         hash::Hash,
+        instruction::InstructionError,
+        native_token::LAMPORTS_PER_SOL,
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signature, Signer},
         system_transaction,
-        transaction::Transaction,
+        transaction::{Transaction, TransactionError},
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
@@ -512,6 +518,84 @@ fn test_tpu_send_transaction_with_quic() {
     run_tpu_send_transaction(/*tpu_use_quic*/ true)
 }
 
+#[test]
+fn test_simulate_multiple_transactions() {
+    solana_logger::setup();
+
+    let mint_keypair = Keypair::new();
+    let mint_pubkey = mint_keypair.pubkey();
+    let test_validator =
+        TestValidator::with_no_fees(mint_pubkey, None, SocketAddrSpace::Unspecified);
+    let rpc_client = Arc::new(RpcClient::new_with_commitment(
+        test_validator.rpc_url(),
+        CommitmentConfig::confirmed(),
+    ));
+
+    let bob = Keypair::new();
+
+    let recent_blockhash = rpc_client.get_latest_blockhash().unwrap();
+    let alice_to_bob = system_transaction::transfer(
+        &mint_keypair,
+        &bob.pubkey(),
+        LAMPORTS_PER_SOL,
+        recent_blockhash,
+    );
+    let mut bob_to_alice1 = system_transaction::transfer(
+        &bob,
+        &mint_keypair.pubkey(),
+        (LAMPORTS_PER_SOL / 10) * 6,
+        recent_blockhash,
+    );
+
+    let random_key = Keypair::new().pubkey();
+    bob_to_alice1.message.account_keys.push(random_key);
+    let bob_to_alice2 = system_transaction::transfer(
+        &bob,
+        &mint_keypair.pubkey(),
+        (LAMPORTS_PER_SOL / 10) * 5,
+        recent_blockhash,
+    );
+
+    let transactions = vec![alice_to_bob, bob_to_alice1, bob_to_alice2];
+    let simulation_result = rpc_client
+        .simulate_multiple_transactions_with_config(
+            &transactions,
+            RpcSimulateTransactionConfig {
+                accounts: Some(RpcSimulateTransactionAccountsConfig {
+                    encoding: None,
+                    addresses: vec![
+                        bob.pubkey().to_string(),
+                        mint_keypair.pubkey().to_string(),
+                        random_key.to_string(),
+                    ],
+                }),
+                commitment: Some(CommitmentConfig::processed()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    println!("Simulation Result: {:#?}", simulation_result);
+    let alice_txn = &simulation_result.value[0];
+    let bob_txn1 = &simulation_result.value[1];
+    let bob_txn2 = &simulation_result.value[2];
+    assert!(alice_txn.err.is_none());
+    assert!(bob_txn1.err.is_none());
+    let get_bob_balance = |tx: &RpcSimulateTransactionResult| {
+        tx.accounts.as_ref().unwrap()[0].as_ref().unwrap().lamports
+    };
+    let bob_balance1: u64 = get_bob_balance(alice_txn);
+    assert_eq!(bob_balance1, LAMPORTS_PER_SOL);
+    let bob_balance2: u64 = get_bob_balance(bob_txn1);
+    assert_eq!(bob_balance2, (LAMPORTS_PER_SOL / 10) * 4);
+
+    // not enough sol
+    assert!(bob_txn2.err.as_ref().is_some_and(|err| {
+        matches!(
+            err,
+            TransactionError::InstructionError(0, InstructionError::Custom(1))
+        )
+    }));
+}
 #[test]
 fn deserialize_rpc_error() -> ClientResult<()> {
     solana_logger::setup();

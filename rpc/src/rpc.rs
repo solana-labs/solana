@@ -3327,6 +3327,14 @@ pub mod rpc_full {
             config: Option<RpcSimulateTransactionConfig>,
         ) -> Result<RpcResponse<RpcSimulateTransactionResult>>;
 
+        #[rpc(meta, name = "simulateMultipleTransactions")]
+        fn simulate_multiple_transactions(
+            &self,
+            meta: Self::Metadata,
+            data: Vec<String>,
+            config: Option<RpcSimulateTransactionConfig>,
+        ) -> Result<RpcResponse<Vec<RpcSimulateTransactionResult>>>;
+
         #[rpc(meta, name = "minimumLedgerSlot")]
         fn minimum_ledger_slot(&self, meta: Self::Metadata) -> Result<Slot>;
 
@@ -3813,6 +3821,119 @@ pub mod rpc_full {
                     return_data: return_data.map(|return_data| return_data.into()),
                 },
             ))
+        }
+
+        fn simulate_multiple_transactions(
+            &self,
+            meta: Self::Metadata,
+            data: Vec<String>,
+            config: Option<RpcSimulateTransactionConfig>,
+        ) -> Result<RpcResponse<Vec<RpcSimulateTransactionResult>>> {
+            debug!("simulate_multiple_transactions rpc request received");
+            let RpcSimulateTransactionConfig {
+                sig_verify,
+                replace_recent_blockhash,
+                commitment,
+                encoding,
+                accounts: config_accounts,
+                min_context_slot,
+            } = config.unwrap_or_default();
+            let tx_encoding = encoding.unwrap_or(UiTransactionEncoding::Base58);
+            let binary_encoding = tx_encoding.into_binary_encoding().ok_or_else(|| {
+                Error::invalid_params(format!(
+                    "unsupported encoding: {tx_encoding}. Supported encodings: base58, base64"
+                ))
+            })?;
+            let mut unsanitized_txs = data
+                .into_iter()
+                .map(|data| {
+                    decode_and_deserialize::<VersionedTransaction>(data, binary_encoding)
+                        .map(|x| x.1)
+                })
+                .collect::<Result<Vec<_>>>()?;
+
+            let bank = &*meta.get_bank_with_config(RpcContextConfig {
+                commitment,
+                min_context_slot,
+            })?;
+            if replace_recent_blockhash {
+                if sig_verify {
+                    return Err(Error::invalid_params(
+                        "sigVerify may not be used with replaceRecentBlockhash",
+                    ));
+                }
+                unsanitized_txs
+                    .iter_mut()
+                    .for_each(|tx| tx.message.set_recent_blockhash(bank.last_blockhash()));
+            }
+
+            let transactions = unsanitized_txs
+                .iter()
+                .map(|tx| sanitize_transaction(tx.clone(), bank))
+                .collect::<Result<Vec<_>>>()?;
+
+            if sig_verify {
+                transactions
+                    .iter()
+                    .try_for_each(|tx| verify_transaction(tx, &bank.feature_set))?;
+            }
+
+            let simulation_results = bank.simulate_multiple_transactions(transactions);
+            let mut results = vec![];
+            for simulation_result in simulation_results {
+                let TransactionSimulationResult {
+                    result,
+                    logs,
+                    post_simulation_accounts,
+                    units_consumed,
+                    return_data,
+                } = simulation_result;
+
+                let accounts = if let Some(ref config_accounts) = config_accounts {
+                    // TODO: probably limit total number of config_accounts
+                    let accounts_encoding = config_accounts
+                        .encoding
+                        .unwrap_or(UiAccountEncoding::Base64);
+
+                    if accounts_encoding == UiAccountEncoding::Binary
+                        || accounts_encoding == UiAccountEncoding::Base58
+                    {
+                        return Err(Error::invalid_params("base58 encoding not supported"));
+                    }
+
+                    if result.is_err() {
+                        Some(vec![None; config_accounts.addresses.len()])
+                    } else {
+                        Some(
+                            config_accounts
+                                .addresses
+                                .iter()
+                                .map(|address_str| {
+                                    let address = verify_pubkey(address_str)?;
+                                    post_simulation_accounts
+                                        .iter()
+                                        .find(|(key, _account)| key == &address)
+                                        .map(|(pubkey, account)| {
+                                            encode_account(account, pubkey, accounts_encoding, None)
+                                        })
+                                        .transpose()
+                                })
+                                .collect::<Result<Vec<_>>>()?,
+                        )
+                    }
+                } else {
+                    None
+                };
+                results.push(RpcSimulateTransactionResult {
+                    err: result.err(),
+                    logs: Some(logs),
+                    accounts,
+                    units_consumed: Some(units_consumed),
+                    return_data: return_data.map(|return_data| return_data.into()),
+                })
+            }
+
+            Ok(new_response(bank, results))
         }
 
         fn minimum_ledger_slot(&self, meta: Self::Metadata) -> Result<Slot> {

@@ -1071,6 +1071,13 @@ impl RpcClient {
         self.invoke((self.rpc_client.as_ref()).simulate_transaction(transaction))
     }
 
+    pub fn simulate_multiple_transactions(
+        &self,
+        transactions: &[impl SerializableTransaction],
+    ) -> RpcResult<Vec<RpcSimulateTransactionResult>> {
+        self.invoke((self.rpc_client.as_ref()).simulate_multiple_transactions(transactions))
+    }
+
     /// Simulates sending a transaction.
     ///
     /// If the transaction fails, then the [`err`] field of the returned
@@ -1148,6 +1155,17 @@ impl RpcClient {
     ) -> RpcResult<RpcSimulateTransactionResult> {
         self.invoke(
             (self.rpc_client.as_ref()).simulate_transaction_with_config(transaction, config),
+        )
+    }
+
+    pub fn simulate_multiple_transactions_with_config(
+        &self,
+        transactions: &[impl SerializableTransaction],
+        config: RpcSimulateTransactionConfig,
+    ) -> RpcResult<Vec<RpcSimulateTransactionResult>> {
+        self.invoke(
+            (self.rpc_client.as_ref())
+                .simulate_multiple_transactions_with_config(transactions, config),
         )
     }
 

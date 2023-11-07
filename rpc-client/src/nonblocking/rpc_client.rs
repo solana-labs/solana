@@ -1314,6 +1314,20 @@ impl RpcClient {
         .await
     }
 
+    pub async fn simulate_multiple_transactions(
+        &self,
+        transactions: &[impl SerializableTransaction],
+    ) -> RpcResult<Vec<RpcSimulateTransactionResult>> {
+        self.simulate_multiple_transactions_with_config(
+            transactions,
+            RpcSimulateTransactionConfig {
+                commitment: Some(self.commitment()),
+                ..RpcSimulateTransactionConfig::default()
+            },
+        )
+        .await
+    }
+
     /// Simulates sending a transaction.
     ///
     /// If the transaction fails, then the [`err`] field of the returned
@@ -1407,6 +1421,34 @@ impl RpcClient {
         let serialized_encoded = serialize_and_encode(transaction, encoding)?;
         self.send(
             RpcRequest::SimulateTransaction,
+            json!([serialized_encoded, config]),
+        )
+        .await
+    }
+
+    pub async fn simulate_multiple_transactions_with_config(
+        &self,
+        transactions: &[impl SerializableTransaction],
+        config: RpcSimulateTransactionConfig,
+    ) -> RpcResult<Vec<RpcSimulateTransactionResult>> {
+        let encoding = if let Some(encoding) = config.encoding {
+            encoding
+        } else {
+            self.default_cluster_transaction_encoding().await?
+        };
+        let commitment = config.commitment.unwrap_or_default();
+        let commitment = self.maybe_map_commitment(commitment).await?;
+        let config = RpcSimulateTransactionConfig {
+            encoding: Some(encoding),
+            commitment: Some(commitment),
+            ..config
+        };
+        let serialized_encoded = transactions
+            .iter()
+            .map(|transaction| serialize_and_encode(transaction, encoding))
+            .collect::<Result<Vec<_>, _>>()?;
+        self.send(
+            RpcRequest::SimulateMultipleTransactions,
             json!([serialized_encoded, config]),
         )
         .await

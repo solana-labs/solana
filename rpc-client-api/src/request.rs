@@ -113,6 +113,7 @@ pub enum RpcRequest {
     RequestAirdrop,
     SendTransaction,
     SimulateTransaction,
+    SimulateMultipleTransactions,
     SignVote,
 }
 
@@ -189,6 +190,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::RequestAirdrop => "requestAirdrop",
             RpcRequest::SendTransaction => "sendTransaction",
             RpcRequest::SimulateTransaction => "simulateTransaction",
+            RpcRequest::SimulateMultipleTransactions => "simulateMultipleTransactions",
             RpcRequest::SignVote => "signVote",
         };
 
