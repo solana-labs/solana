@@ -11,7 +11,7 @@ starts a full-featured, single-node cluster on the developer's workstation.
 
 - No RPC rate-limits
 - No airdrop limits
-- Direct [on-chain program](on-chain-programs/overview) deployment
+- Direct [on-chain program](https://solana.com/docs/programs) deployment
   (`--bpf-program ...`)
 - Clone accounts from a public cluster, including programs (`--clone ...`)
 - Load accounts from files
@@ -154,7 +154,7 @@ JSON RPC URL: http://127.0.0.1:8899
 
 ## Appendix II: Runtime Features
 
-By default, the test validator runs with all [runtime features](programming-model/runtime#features) activated.
+By default, the test validator runs with all [runtime features](https://solana.com/docs/core/runtime#features) activated.
 
 You can verify this using the [Solana command-line tools](cli/install-solana-cli-tools.md):
 
