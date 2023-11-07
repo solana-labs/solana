@@ -68,7 +68,7 @@ mod tests {
         let (sender, receiver) = unbounded();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let (s, exit, keypair, ip) = server_args();
-        let (_, t) = solana_streamer::quic::spawn_server(
+        let (_, t, _) = solana_streamer::quic::spawn_server(
             "quic_streamer_test",
             s.try_clone().unwrap(),
             &keypair,
@@ -204,7 +204,7 @@ mod tests {
         let (sender, receiver) = unbounded();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let (request_recv_socket, request_recv_exit, keypair, request_recv_ip) = server_args();
-        let (request_recv_endpoint, request_recv_thread) = solana_streamer::quic::spawn_server(
+        let (request_recv_endpoint, request_recv_thread, _) = solana_streamer::quic::spawn_server(
             "quic_streamer_test",
             request_recv_socket.try_clone().unwrap(),
             &keypair,
@@ -228,21 +228,22 @@ mod tests {
         let addr = response_recv_socket.local_addr().unwrap().ip();
         let port = response_recv_socket.local_addr().unwrap().port();
         let server_addr = SocketAddr::new(addr, port);
-        let (response_recv_endpoint, response_recv_thread) = solana_streamer::quic::spawn_server(
-            "quic_streamer_test",
-            response_recv_socket,
-            &keypair2,
-            response_recv_ip,
-            sender2,
-            response_recv_exit.clone(),
-            1,
-            staked_nodes,
-            10,
-            10,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
-            DEFAULT_TPU_COALESCE,
-        )
-        .unwrap();
+        let (response_recv_endpoint, response_recv_thread, _) =
+            solana_streamer::quic::spawn_server(
+                "quic_streamer_test",
+                response_recv_socket,
+                &keypair2,
+                response_recv_ip,
+                sender2,
+                response_recv_exit.clone(),
+                1,
+                staked_nodes,
+                10,
+                10,
+                DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+                DEFAULT_TPU_COALESCE,
+            )
+            .unwrap();
 
         // Request Sender, it uses the same endpoint as the response receiver:
         let addr = request_recv_socket.local_addr().unwrap().ip();

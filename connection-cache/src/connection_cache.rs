@@ -718,7 +718,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
         {
-            let map = connection_cache.map.read().unwrap().map;
+            let map = connection_cache.map.read().unwrap();
             assert!(map.len() == MAX_CONNECTIONS);
             addrs.iter().for_each(|addr| {
                 let conn = &map.get(addr).expect("Address not found").get(0).unwrap();
@@ -739,7 +739,7 @@ mod tests {
 
         let port = addr.port();
         let addr_with_quic_port = SocketAddr::new(addr.ip(), port);
-        let map = connection_cache.map.read().unwrap().map;
+        let map = connection_cache.map.read().unwrap();
         assert!(map.len() == MAX_CONNECTIONS);
         let _conn = map.get(&addr_with_quic_port).expect("Address not found");
     }
