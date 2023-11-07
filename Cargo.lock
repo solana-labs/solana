@@ -727,6 +727,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "borsh"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e3f7359eeed8d454c38bbb25eb89d98b888b1060bbfeed2cda71cb013ff2dc2"
+dependencies = [
+ "cfg_aliases",
+]
+
+[[package]]
 name = "borsh-derive"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1028,6 +1037,12 @@ name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
+
+[[package]]
+name = "cfg_aliases"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
 
 [[package]]
 name = "chrono"
@@ -5397,7 +5412,7 @@ dependencies = [
 name = "solana-banks-client"
 version = "1.18.0"
 dependencies = [
- "borsh 0.10.3",
+ "borsh 1.1.1",
  "futures 0.3.29",
  "solana-banks-interface",
  "solana-banks-server",
@@ -6651,8 +6666,8 @@ dependencies = [
  "bincode",
  "bitflags 2.4.1",
  "blake3",
- "borsh 0.10.3",
  "borsh 0.9.3",
+ "borsh 1.1.1",
  "bs58",
  "bv",
  "bytemuck",
@@ -7076,7 +7091,7 @@ dependencies = [
  "base64 0.21.5",
  "bincode",
  "bitflags 2.4.1",
- "borsh 0.10.3",
+ "borsh 1.1.1",
  "bs58",
  "bytemuck",
  "byteorder",
@@ -7423,7 +7438,7 @@ dependencies = [
  "Inflector",
  "base64 0.21.5",
  "bincode",
- "borsh 0.10.3",
+ "borsh 1.1.1",
  "bs58",
  "lazy_static",
  "log",
