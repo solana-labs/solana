@@ -232,6 +232,7 @@ impl LockAttemptsInCell {
 pub struct Task {
     unique_weight: UniqueWeight,
     pub tx: (SanitizedTransaction, LockAttemptsInCell), // actually should be Bundle
+    pub contention_count: std::sync::atomic::AtomicUsize,
     pub uncontended: std::sync::atomic::AtomicUsize,
 }
 
@@ -914,7 +915,6 @@ fn attempt_lock_for_execution<'a>(
     address_book: &mut AddressBook,
     unique_weight: &UniqueWeight,
     lock_attempts: &mut [LockAttempt],
-    mode: Mode,
 ) -> (usize, usize, CU) {
     // no short-cuircuit; we at least all need to add to the contended queue
     let mut unlockable_count = 0;
@@ -1085,7 +1085,6 @@ impl ScheduleStage {
                         address_book,
                         &unique_weight,
                         &mut next_task.lock_attempts_mut(),
-                        true,
                     );
 
                 if unlockable_count > 0 {
