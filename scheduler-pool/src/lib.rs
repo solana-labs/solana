@@ -968,7 +968,6 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn select_next_task<'a>(
-        //runnable_queue: &'a mut TaskQueue,
         runnable_queue: &'a mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
         contended_count: &usize,
@@ -1067,9 +1066,6 @@ impl ScheduleStage {
                     *queue_clock = queue_clock.checked_add(1).unwrap();
                 }
                 let unique_weight = next_task.unique_weight;
-
-                // plumb message_hash into StatusCache or implmenent our own for duplicate tx
-                // detection?
 
                 let (unlockable_count, provisional_count) =
                     attempt_lock_for_execution(
