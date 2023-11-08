@@ -609,7 +609,7 @@ impl Preloader {
             PageRc(by_address::ByAddress(PageRcInner::new((
                 core::cell::RefCell::new(Page::new(&address, Usage::unused())),
                 //Default::default(),
-                Default::default(),
+                AtomicUsize::default(),
             ))))
         }))
     }
