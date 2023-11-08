@@ -228,6 +228,11 @@ pub struct Task {
 }
 
 impl Task {
+    #[inline(never)]
+    pub fn clone_in_queue(this: &TaskInQueue) -> TaskInQueue {
+        TaskInQueue::clone(this)
+    }
+
     pub fn currently_contended(&self) -> bool {
         self.uncontended.load(std::sync::atomic::Ordering::SeqCst) == 1
     }
