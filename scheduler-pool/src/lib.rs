@@ -850,6 +850,40 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> SpawnableS
     }
 }
 
+fn schedule_next_execution<AST: AtScheduleThread>(
+    ast: AST,
+    task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
+    //runnable_queue: &mut TaskQueue,
+    runnable_queue: &mut ModeSpecificTaskQueue,
+    address_book: &mut AddressBook,
+    contended_count: &mut usize,
+    prefer_immediate: bool,
+    sequence_time: &usize,
+    queue_clock: &mut usize,
+    execute_clock: &mut usize,
+    provisioning_tracker_count: &mut usize,
+    task_selection: &mut TaskSelection,
+    failed_lock_count: &mut usize,
+) -> Option<Box<ExecutionEnvironment>> {
+    let maybe_ee = Self::pop_from_queue_then_lock(
+        ast,
+        task_sender,
+        runnable_queue,
+        address_book,
+        contended_count,
+        prefer_immediate,
+        sequence_time,
+        queue_clock,
+        provisioning_tracker_count,
+        task_selection,
+        failed_lock_count,
+    )
+    .map(|(uw, t, ll)| {
+        Self::prepare_scheduled_execution(address_book, uw, t, ll, queue_clock, execute_clock)
+    });
+    maybe_ee
+}
+
 impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledScheduler<SEA>
     for PooledScheduler<TH, SEA>
 {
@@ -886,6 +920,20 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
             let (transaction_sender, transaction_receiver) = crossbeam_channel::unbounded();
             let mut runnable_queue = ModeSpecificTaskQueue::BlockVerification(ChannelBackedTaskQueue::new(&transaction_receiver));
             runnable_queue.add_to_schedule(task.unique_weight, task)
+            let maybe_ee = Self::schedule_next_execution(
+                ast,
+                &task_sender,
+                &mut runnable_queue,
+                address_book,
+                &mut contended_count,
+                prefer_immediate,
+                &sequence_time,
+                &mut queue_clock,
+                &mut execute_clock,
+                &mut provisioning_tracker_count,
+                &mut selection,
+                &mut failed_lock_count,
+            );
         })
     }
 
