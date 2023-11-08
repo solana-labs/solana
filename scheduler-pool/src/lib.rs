@@ -327,9 +327,9 @@ impl LockAttempt {
         this: &TaskInQueue,
         task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
     ) {
-        for lock_attempt in &*this.lock_attempts_mut(ast) {
+        for lock_attempt in &*this.lock_attempts_mut() {
             lock_attempt
-                .target_page_mut(ast)
+                .target_page_mut()
                 .task_ids
                 .insert_task(this.unique_weight, Task::clone_in_queue(this));
 
@@ -337,7 +337,7 @@ impl LockAttempt {
                 //lock_attempt
                 //    .target_contended_write_task_count()
                 //    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                lock_attempt.target_page_mut(ast).write_task_ids.insert(this.unique_weight);
+                lock_attempt.target_page_mut().write_task_ids.insert(this.unique_weight);
             }
         }
         //let a = Task::clone_in_queue(this);
