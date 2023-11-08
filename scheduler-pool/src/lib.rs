@@ -684,6 +684,14 @@ impl TaskQueueReader for TaskQueue {
     }
 }
 
+#[derive(Default, Debug, Clone)]
+pub struct TaskQueue {
+    tasks: std::collections::BTreeMap<UniqueWeight, TaskInQueue>,
+    //tasks: im::OrdMap<UniqueWeight, TaskInQueue>,
+    //tasks: im::HashMap<UniqueWeight, TaskInQueue>,
+    //tasks: std::sync::Arc<dashmap::DashMap<UniqueWeight, TaskInQueue>>,
+}
+
 struct ChannelBackedTaskQueue {
     channel: crossbeam_channel::Receiver<SchedulablePayload>,
     buffered_task: Option<TaskInQueue>,
