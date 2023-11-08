@@ -472,7 +472,6 @@ impl AddressBook {
     #[inline(never)]
     fn attempt_lock_address(
         from_runnable: bool,
-        prefer_immediate: bool,
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) -> CU {
@@ -535,19 +534,11 @@ impl AddressBook {
                     }
                 }
                 RequestedUsage::Writable => {
-                    if from_runnable || prefer_immediate {
-                        *status = LockStatus::Failed;
-                    } else {
-                        panic!();
-                    }
+                    *status = LockStatus::Failed;
                 }
             },
             Usage::Writable => {
-                if from_runnable || prefer_immediate {
-                    *status = LockStatus::Failed;
-                } else {
-                    panic!();
-                }
+                *status = LockStatus::Failed;
             }
         }
         page.cu
@@ -943,7 +934,6 @@ impl TaskSelection {
 #[inline(never)]
 fn attempt_lock_for_execution<'a>(
     from_runnable: bool,
-    prefer_immediate: bool,
     address_book: &mut AddressBook,
     unique_weight: &UniqueWeight,
     lock_attempts: &mut [LockAttempt],
@@ -956,7 +946,6 @@ fn attempt_lock_for_execution<'a>(
     for attempt in lock_attempts.iter_mut() {
         let cu = AddressBook::attempt_lock_address(
             from_runnable,
-            prefer_immediate,
             unique_weight,
             attempt,
         );
@@ -1071,7 +1060,6 @@ impl ScheduleStage {
         runnable_queue: &mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
-        prefer_immediate: bool,
         queue_clock: &mut usize,
         provisioning_tracker_count: &mut usize,
         task_selection: &mut TaskSelection,
@@ -1096,7 +1084,6 @@ impl ScheduleStage {
                 let (unlockable_count, provisional_count, busiest_page_cu) =
                     attempt_lock_for_execution(
                         from_runnable,
-                        prefer_immediate,
                         address_book,
                         &unique_weight,
                         &mut next_task.lock_attempts_mut(),
@@ -1397,11 +1384,9 @@ impl ScheduleStage {
     #[inline(never)]
     fn schedule_next_execution(
         task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
-        //runnable_queue: &mut TaskQueue,
         runnable_queue: &mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
-        prefer_immediate: bool,
         queue_clock: &mut usize,
         execute_clock: &mut usize,
         provisioning_tracker_count: &mut usize,
@@ -1413,7 +1398,6 @@ impl ScheduleStage {
             runnable_queue,
             address_book,
             contended_count,
-            prefer_immediate,
             queue_clock,
             provisioning_tracker_count,
             task_selection,
