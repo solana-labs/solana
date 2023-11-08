@@ -15,6 +15,7 @@ crossbeam-channel = { workspace = true }
 dashmap = { workspace = true }
 enum_dispatch = { workspace = true }
 rand = { workspace = true }
+log = { workspace = true }
 solana-ledger = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-runtime = { workspace = true }
