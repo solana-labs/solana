@@ -1057,17 +1057,6 @@ impl ScheduleStage {
         task_selection: &mut TaskSelection,
         failed_lock_count: &mut usize,
     ) -> Option<(UniqueWeight, TaskInQueue, Vec<LockAttempt>)> {
-        if let Some(a) = address_book.fulfilled_provisional_task_ids.pop_last() {
-            trace!(
-                "expediate pop from provisional queue [rest: {}]",
-                address_book.fulfilled_provisional_task_ids.len()
-            );
-
-            let lock_attempts = std::mem::take(&mut *a.1.lock_attempts_mut());
-
-            return Some((a.0, a.1, lock_attempts));
-        }
-
         loop {
             if let Some((task_source, next_task)) = Self::select_next_task(
                 runnable_queue,
