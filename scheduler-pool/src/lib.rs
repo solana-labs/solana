@@ -235,9 +235,6 @@ impl Task {
         tx: (SanitizedTransaction, Vec<LockAttempt>),
     ) -> TaskInQueue {
         TaskInQueue::new(Self {
-            for_indexer: LockAttemptsInCell::new(std::cell::RefCell::new(
-                tx.1.iter().map(|a| a.clone_for_test()).collect(),
-            )),
             unique_weight,
             tx: (tx.0, LockAttemptsInCell::new(std::cell::RefCell::new(tx.1))),
             uncontended: Default::default(),
