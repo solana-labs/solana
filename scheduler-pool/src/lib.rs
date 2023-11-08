@@ -264,7 +264,7 @@ impl LockAttempt {
     */
 
     fn target_page_mut(&self) -> std::cell::RefMut<'_, Page> {
-        self.target.page_mut(ast)
+        self.target.page_mut()
     }
 }
 
