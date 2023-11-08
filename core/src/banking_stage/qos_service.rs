@@ -978,4 +978,52 @@ mod tests {
             batched_transaction_details.costs.batched_bpf_execute_cost
         );
     }
+
+    #[test]
+    fn test_adjust_compute_units_for_potential_underpricing() {
+        solana_logger::setup();
+        use solana_cost_model::block_cost_limits::COMPUTE_UNIT_TO_US_RATIO;
+
+        let executed_cu = 70;
+
+        // no adjust for over-pricing
+        assert_eq!(
+            executed_cu,
+            QosService::adjust_compute_units_for_potential_underpricing(
+                executed_cu,
+                executed_cu / (COMPUTE_UNIT_TO_US_RATIO + 10)
+            )
+        );
+
+        // adjust for under pricing
+        let slow_execution_time = executed_cu / (COMPUTE_UNIT_TO_US_RATIO - 10);
+        let adjustment = ((COMPUTE_UNIT_TO_US_RATIO - executed_cu / slow_execution_time)
+            * slow_execution_time)
+            / 2;
+        assert_eq!(
+            executed_cu + adjustment,
+            QosService::adjust_compute_units_for_potential_underpricing(
+                executed_cu,
+                slow_execution_time
+            )
+        );
+
+        // handle zeros and MAX
+        assert_eq!(
+            0,
+            QosService::adjust_compute_units_for_potential_underpricing(0, 0)
+        );
+        assert_eq!(
+            u64::MAX / 2, // tapered in half
+            QosService::adjust_compute_units_for_potential_underpricing(0, u64::MAX)
+        );
+        assert_eq!(
+            u64::MAX,
+            QosService::adjust_compute_units_for_potential_underpricing(u64::MAX, u64::MAX)
+        );
+        assert_eq!(
+            u64::MAX,
+            QosService::adjust_compute_units_for_potential_underpricing(u64::MAX, 0)
+        );
+    }
 }
