@@ -1006,13 +1006,7 @@ impl ScheduleStage {
                         &unique_weight,
                         &message_hash,
                         &mut next_task.lock_attempts_mut(ast),
-                        (
-                            if runnable_queue.is_backed_by_channel() {
-                                Mode::BlockVerification
-                            } else {
-                                panic!()
-                            }
-                        )
+                        true,
                     );
 
                 if unlockable_count > 0 {
