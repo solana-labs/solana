@@ -934,7 +934,6 @@ fn attempt_lock_for_execution<'a>(
             prefer_immediate,
             unique_weight,
             attempt,
-            mode,
         );
         busiest_page_cu = busiest_page_cu.max(cu);
 
@@ -947,9 +946,6 @@ fn attempt_lock_for_execution<'a>(
                     attempt.requested_usage
                 );
                 unlockable_count += 1;
-            }
-            LockStatus::Provisional => {
-                provisional_count += 1;
             }
         }
     }
@@ -1066,7 +1062,6 @@ impl ScheduleStage {
             ) {
                 let from_runnable = matches!(task_source, TaskSource::Runnable);
                 if from_runnable {
-                    next_task.record_queue_time(*sequence_clock, *queue_clock);
                     *queue_clock = queue_clock.checked_add(1).unwrap();
                 }
                 let unique_weight = next_task.unique_weight;
