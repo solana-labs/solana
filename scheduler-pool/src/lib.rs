@@ -34,6 +34,7 @@ use {
 };
 use solana_sdk::pubkey::Pubkey;
 pub type UniqueWeight = u128;
+type CU = u64;
 
 // SchedulerPool must be accessed via dyn by solana-runtime code, because of its internal fields'
 // types (currently TransactionStatusSender; also, PohRecorder in the future) aren't available
