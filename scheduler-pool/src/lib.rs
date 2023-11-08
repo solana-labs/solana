@@ -705,6 +705,21 @@ impl ChannelBackedTaskQueue {
     }
 }
 
+#[derive(Debug)]
+pub struct ExecutionEnvironment {
+    //accounts: Vec<i8>,
+    pub cu: CU,
+    pub unique_weight: UniqueWeight,
+    pub task: TaskInQueue,
+    pub finalized_lock_attempts: Vec<LockAttempt>,
+    pub is_reindexed: bool,
+    pub execution_result: Option<Result<(), solana_sdk::transaction::TransactionError>>,
+    pub finish_time: Option<std::time::SystemTime>,
+    pub thx: usize,
+    pub execution_us: u64,
+    pub execution_cpu_us: u128,
+}
+
 pub struct SchedulablePayload(pub Flushable<TaskInQueue>);
 pub struct ExecutablePayload(pub Flushable<Box<ExecutionEnvironment>>);
 pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment>, pub T);
