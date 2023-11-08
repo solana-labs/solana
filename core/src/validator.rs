@@ -1300,6 +1300,7 @@ impl Validator {
                 cluster_info.clone(),
                 bank_forks.clone(),
                 slots_to_repair_for_wen_restart.clone(),
+                WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT,
             ) {
                 Ok(()) => {
                     return Err("wen_restart phase one completedy".to_string());

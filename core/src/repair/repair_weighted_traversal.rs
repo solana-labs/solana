@@ -103,6 +103,7 @@ pub fn get_best_repair_shreds(
                         slot,
                         slot_meta,
                         max_repairs - repairs.len(),
+                        true,
                     );
                     repairs.extend(new_repairs);
                     visited_set.insert(slot);

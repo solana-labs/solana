@@ -191,6 +191,7 @@ pub fn get_closest_completion(
                 path_slot,
                 slot_meta,
                 limit - repairs.len(),
+                true,
             );
             repairs.extend(new_repairs);
             total_processed_slots += 1;

@@ -22,7 +22,7 @@ pub struct LastVotedForkSlotsAggregate {
 
 pub struct LastVotedForkSlotsAggregateResult {
     pub slots_to_repair: Vec<Slot>,
-    pub active_percentage: f64,
+    pub active_percent: f64, /* 0 ~ 100.0 */
 }
 
 impl LastVotedForkSlotsAggregate {
@@ -112,10 +112,10 @@ impl LastVotedForkSlotsAggregate {
         let total_active_stake = self.active_peers.iter().fold(0, |sum: u64, pubkey| {
             sum.saturating_add(Self::validator_stake(&self.epoch_stakes, pubkey))
         });
-        let active_percentage = total_active_stake as f64 / total_stake as f64;
+        let active_percent = total_active_stake as f64 / total_stake as f64 * 100.0;
         LastVotedForkSlotsAggregateResult {
             slots_to_repair: self.slots_to_repair.iter().cloned().collect(),
-            active_percentage,
+            active_percent,
         }
     }
 }
@@ -191,7 +191,7 @@ mod tests {
             received: HashMap::new(),
         };
         let result = slots_aggregate.aggregate(slots_vec, &mut aggregate_record);
-        assert_eq!(result.active_percentage, 0.4);
+        assert_eq!(result.active_percent, 40.0);
         assert!(result.slots_to_repair.is_empty());
         assert_eq!(aggregate_record.received, expected_aggregate_record);
 
@@ -213,7 +213,7 @@ mod tests {
             },
         );
         let result = slots_aggregate.aggregate(vec![message5], &mut aggregate_record);
-        assert_eq!(result.active_percentage, 0.5);
+        assert_eq!(result.active_percent, 50.0);
         let mut actual_slots = Vec::from_iter(result.slots_to_repair);
         actual_slots.sort();
         assert_eq!(actual_slots, last_voted_fork);
@@ -238,7 +238,7 @@ mod tests {
             },
         );
         let result = slots_aggregate.aggregate(vec![new_message2], &mut aggregate_record);
-        assert_eq!(result.active_percentage, 0.5);
+        assert_eq!(result.active_percent, 50.0);
         assert_eq!(aggregate_record.received, expected_aggregate_record);
         let mut actual_slots = Vec::from_iter(result.slots_to_repair);
         actual_slots.sort();

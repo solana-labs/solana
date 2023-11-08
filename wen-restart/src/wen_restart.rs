@@ -33,8 +33,6 @@ use {
 
 // If >42% of the validators have this block, repair this block locally.
 const REPAIR_THRESHOLD: f64 = 0.42;
-// Wait until 80% responded before proceeding to next stage.
-const RESTART_SUPERMAJORITY_THRESHOLD: f64 = 0.80;
 
 fn send_restart_last_voted_fork_slots(
     last_vote: VoteTransaction,
@@ -76,6 +74,7 @@ fn send_restart_last_voted_fork_slots(
 
 fn aggregate_restart_last_voted_fork_slots(
     wen_restart_path: &PathBuf,
+    wait_for_supermajority_threshold_percent: u64,
     cluster_info: Arc<ClusterInfo>,
     bank_forks: Arc<RwLock<BankForks>>,
     slots_to_repair_for_wen_restart: Arc<RwLock<Vec<Slot>>>,
@@ -132,9 +131,11 @@ fn aggregate_restart_last_voted_fork_slots(
         filtered_slots.sort();
         info!(
             "Active peers: {} Slots to repair: {:?}",
-            result.active_percentage, &filtered_slots
+            result.active_percent, &filtered_slots
         );
-        if filtered_slots.is_empty() && result.active_percentage > RESTART_SUPERMAJORITY_THRESHOLD {
+        if filtered_slots.is_empty()
+            && result.active_percent > wait_for_supermajority_threshold_percent as f64
+        {
             *slots_to_repair_for_wen_restart.write().unwrap() = vec![];
             break;
         }
@@ -159,6 +160,7 @@ pub fn wait_for_wen_restart(
     cluster_info: Arc<ClusterInfo>,
     bank_forks: Arc<RwLock<BankForks>>,
     slots_to_repair_for_wen_restart: Option<Arc<RwLock<Vec<Slot>>>>,
+    wait_for_supermajority_threshold_percent: u64,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut progress = read_wen_restart_records(wen_restart_path)?;
     while progress.state() != RestartState::Done {
@@ -171,6 +173,7 @@ pub fn wait_for_wen_restart(
             )?,
             RestartState::LastVotedForkSlots => aggregate_restart_last_voted_fork_slots(
                 wen_restart_path,
+                wait_for_supermajority_threshold_percent,
                 cluster_info.clone(),
                 bank_forks.clone(),
                 slots_to_repair_for_wen_restart.clone().unwrap(),
@@ -319,6 +322,7 @@ mod tests {
                     cluster_info_clone,
                     bank_forks_clone,
                     slots_to_repair_for_wen_restart.clone(),
+                    80,
                 )
                 .is_ok());
             })

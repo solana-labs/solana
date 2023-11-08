@@ -392,7 +392,7 @@ impl RepairService {
                     Some(slots_to_repair) => Self::generate_repairs_for_wen_restart(
                         blockstore,
                         MAX_REPAIR_LENGTH,
-                        &slots_to_repair.read().unwrap().clone(),
+                        &slots_to_repair.read().unwrap(),
                     ),
                     None => repair_weight.get_best_weighted_repairs(
                         blockstore,
@@ -621,26 +621,29 @@ impl RepairService {
         slot: Slot,
         slot_meta: &SlotMeta,
         max_repairs: usize,
+        add_delay_after_first_shred: bool,
     ) -> Vec<ShredRepairType> {
         if max_repairs == 0 || slot_meta.is_full() {
             vec![]
         } else if slot_meta.consumed == slot_meta.received {
             // check delay time of last shred
-            if let Some(reference_tick) = slot_meta
-                .received
-                .checked_sub(1)
-                .and_then(|index| blockstore.get_data_shred(slot, index).ok()?)
-                .and_then(|shred| shred::layout::get_reference_tick(&shred).ok())
-                .map(u64::from)
-            {
-                // System time is not monotonic
-                let ticks_since_first_insert = DEFAULT_TICKS_PER_SECOND
-                    * timestamp().saturating_sub(slot_meta.first_shred_timestamp)
-                    / 1_000;
-                if ticks_since_first_insert
-                    < reference_tick.saturating_add(DEFER_REPAIR_THRESHOLD_TICKS)
+            if add_delay_after_first_shred {
+                if let Some(reference_tick) = slot_meta
+                    .received
+                    .checked_sub(1)
+                    .and_then(|index| blockstore.get_data_shred(slot, index).ok()?)
+                    .and_then(|shred| shred::layout::get_reference_tick(&shred).ok())
+                    .map(u64::from)
                 {
-                    return vec![];
+                    // System time is not monotonic
+                    let ticks_since_first_insert = DEFAULT_TICKS_PER_SECOND
+                        * timestamp().saturating_sub(slot_meta.first_shred_timestamp)
+                        / 1_000;
+                    if ticks_since_first_insert
+                        < reference_tick.saturating_add(DEFER_REPAIR_THRESHOLD_TICKS)
+                    {
+                        return vec![];
+                    }
                 }
             }
             vec![ShredRepairType::HighestShred(slot, slot_meta.received)]
@@ -676,6 +679,7 @@ impl RepairService {
                     slot,
                     &slot_meta,
                     max_repairs - repairs.len(),
+                    true,
                 );
                 repairs.extend(new_repairs);
                 let next_slots = slot_meta.next_slots;
@@ -699,6 +703,7 @@ impl RepairService {
                     *slot,
                     &slot_meta,
                     max_repairs - result.len(),
+                    false,
                 );
                 result.extend(new_repairs);
             } else {
@@ -738,6 +743,7 @@ impl RepairService {
                 slot,
                 &meta,
                 max_repairs - repairs.len(),
+                true,
             );
             repairs.extend(new_repairs);
         }
@@ -760,6 +766,7 @@ impl RepairService {
                     slot,
                     &slot_meta,
                     MAX_REPAIR_PER_DUPLICATE,
+                    true,
                 ))
             }
         } else {
