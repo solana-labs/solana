@@ -353,7 +353,6 @@ impl AddressBook {
         prefer_immediate: bool,
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
-        mode: Mode,
     ) -> CU {
         let tcuw = attempt
             //.target_contended_unique_weights()
