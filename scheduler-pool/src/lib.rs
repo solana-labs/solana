@@ -439,15 +439,15 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
         transaction_with_index.with_transaction_and_index(|transaction, index| {
             let locks = transaction.get_account_locks_unchecked();
             let writable_lock_iter = locks.writable.iter().map(|address| {
-                solana_scheduler::LockAttempt::new(
+                LockAttempt::new(
                     self.preloader.load(**address),
-                    solana_scheduler::RequestedUsage::Writable,
+                    RequestedUsage::Writable,
                 )
             });
             let readonly_lock_iter = locks.readonly.iter().map(|address| {
-                solana_scheduler::LockAttempt::new(
+                LockAttempt::new(
                     self.preloader.load(**address),
-                    solana_scheduler::RequestedUsage::Readonly,
+                    RequestedUsage::Readonly,
                 )
             });
             let locks = writable_lock_iter
