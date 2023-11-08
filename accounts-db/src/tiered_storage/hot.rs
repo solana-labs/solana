@@ -9,7 +9,7 @@ use {
             footer::{
                 AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat, TieredStorageFooter,
             },
-            index::AccountIndexFormat,
+            index::IndexBlockFormat,
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
             mmap_utils::get_type,
             TieredStorageFormat, TieredStorageResult,
@@ -25,7 +25,7 @@ pub const HOT_FORMAT: TieredStorageFormat = TieredStorageFormat {
     meta_entry_size: std::mem::size_of::<HotAccountMeta>(),
     account_meta_format: AccountMetaFormat::Hot,
     owners_block_format: OwnersBlockFormat::LocalIndex,
-    account_index_format: AccountIndexFormat::AddressAndOffset,
+    index_block_format: IndexBlockFormat::AddressAndOffset,
     account_block_format: AccountBlockFormat::AlignedRaw,
 };
 
@@ -241,7 +241,7 @@ pub mod tests {
                 FOOTER_SIZE,
             },
             hot::{HotAccountMeta, HotStorageReader},
-            index::AccountIndexFormat,
+            index::IndexBlockFormat,
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
         },
         memoffset::offset_of,
@@ -383,14 +383,14 @@ pub mod tests {
         let expected_footer = TieredStorageFooter {
             account_meta_format: AccountMetaFormat::Hot,
             owners_block_format: OwnersBlockFormat::LocalIndex,
-            account_index_format: AccountIndexFormat::AddressAndOffset,
+            index_block_format: IndexBlockFormat::AddressAndOffset,
             account_block_format: AccountBlockFormat::AlignedRaw,
             account_entry_count: 300,
             account_meta_entry_size: 16,
             account_block_size: 4096,
             owner_count: 250,
             owner_entry_size: 32,
-            account_index_offset: 1069600,
+            index_block_offset: 1069600,
             owners_offset: 1081200,
             hash: Hash::new_unique(),
             min_account_address: Pubkey::default(),

@@ -765,12 +765,16 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         accounts_hash_interval,
         num_account_paths,
     );
-    let validator_snapshot_test_config = SnapshotValidatorConfig::new(
+    let mut validator_snapshot_test_config = SnapshotValidatorConfig::new(
         full_snapshot_interval,
         incremental_snapshot_interval,
         accounts_hash_interval,
         num_account_paths,
     );
+    // The test has asserts that require the validator always boots from snapshot archives
+    validator_snapshot_test_config
+        .validator_config
+        .use_snapshot_archives_at_startup = UseSnapshotArchivesAtStartup::Always;
     let stake = DEFAULT_NODE_STAKE;
     let mut config = ClusterConfig {
         node_stakes: vec![stake],

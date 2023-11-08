@@ -457,16 +457,17 @@ impl RepairService {
 
             let mut batch_send_repairs_elapsed = Measure::start("batch_send_repairs_elapsed");
             if !batch.is_empty() {
-                if let Err(SendPktsError::IoError(err, num_failed)) =
-                    batch_send(repair_socket, &batch)
-                {
-                    error!(
-                        "{} batch_send failed to send {}/{} packets first error {:?}",
-                        id,
-                        num_failed,
-                        batch.len(),
-                        err
-                    );
+                match batch_send(repair_socket, &batch) {
+                    Ok(()) => (),
+                    Err(SendPktsError::IoError(err, num_failed)) => {
+                        error!(
+                            "{} batch_send failed to send {}/{} packets first error {:?}",
+                            id,
+                            num_failed,
+                            batch.len(),
+                            err
+                        );
+                    }
                 }
             }
             batch_send_repairs_elapsed.stop();

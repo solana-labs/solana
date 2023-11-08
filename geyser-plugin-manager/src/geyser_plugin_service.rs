@@ -12,10 +12,10 @@ use {
     crossbeam_channel::Receiver,
     log::*,
     solana_accounts_db::accounts_update_notifier_interface::AccountsUpdateNotifier,
-    solana_ledger::entry_notifier_interface::EntryNotifierLock,
+    solana_ledger::entry_notifier_interface::EntryNotifierArc,
     solana_rpc::{
         optimistically_confirmed_bank_tracker::SlotNotification,
-        transaction_notifier_interface::TransactionNotifierLock,
+        transaction_notifier_interface::TransactionNotifierArc,
     },
     std::{
         path::{Path, PathBuf},
@@ -34,8 +34,8 @@ pub struct GeyserPluginService {
     slot_status_observer: Option<SlotStatusObserver>,
     plugin_manager: Arc<RwLock<GeyserPluginManager>>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    transaction_notifier: Option<TransactionNotifierLock>,
-    entry_notifier: Option<EntryNotifierLock>,
+    transaction_notifier: Option<TransactionNotifierArc>,
+    entry_notifier: Option<EntryNotifierArc>,
     block_metadata_notifier: Option<BlockMetadataNotifierLock>,
 }
 
@@ -87,22 +87,22 @@ impl GeyserPluginService {
             if account_data_notifications_enabled {
                 let accounts_update_notifier =
                     AccountsUpdateNotifierImpl::new(plugin_manager.clone());
-                Some(Arc::new(RwLock::new(accounts_update_notifier)))
+                Some(Arc::new(accounts_update_notifier))
             } else {
                 None
             };
 
-        let transaction_notifier: Option<TransactionNotifierLock> =
+        let transaction_notifier: Option<TransactionNotifierArc> =
             if transaction_notifications_enabled {
                 let transaction_notifier = TransactionNotifierImpl::new(plugin_manager.clone());
-                Some(Arc::new(RwLock::new(transaction_notifier)))
+                Some(Arc::new(transaction_notifier))
             } else {
                 None
             };
 
-        let entry_notifier: Option<EntryNotifierLock> = if entry_notifications_enabled {
+        let entry_notifier: Option<EntryNotifierArc> = if entry_notifications_enabled {
             let entry_notifier = EntryNotifierImpl::new(plugin_manager.clone());
-            Some(Arc::new(RwLock::new(entry_notifier)))
+            Some(Arc::new(entry_notifier))
         } else {
             None
         };
@@ -160,11 +160,11 @@ impl GeyserPluginService {
         self.accounts_update_notifier.clone()
     }
 
-    pub fn get_transaction_notifier(&self) -> Option<TransactionNotifierLock> {
+    pub fn get_transaction_notifier(&self) -> Option<TransactionNotifierArc> {
         self.transaction_notifier.clone()
     }
 
-    pub fn get_entry_notifier(&self) -> Option<EntryNotifierLock> {
+    pub fn get_entry_notifier(&self) -> Option<EntryNotifierArc> {
         self.entry_notifier.clone()
     }
 

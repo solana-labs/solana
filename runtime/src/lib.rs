@@ -14,7 +14,6 @@ pub mod commitment;
 mod epoch_rewards_hasher;
 pub mod epoch_stakes;
 pub mod genesis_utils;
-pub mod inline_feature_gate_program;
 pub mod inline_spl_associated_token_account;
 pub mod installed_scheduler_pool;
 pub mod loader_utils;
