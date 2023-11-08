@@ -36,6 +36,12 @@ use solana_sdk::pubkey::Pubkey;
 pub type UniqueWeight = u128;
 type CU = u64;
 
+type TaskIds = BTreeMapTaskIds;
+#[derive(Debug, Default)]
+pub struct BTreeMapTaskIds {
+    task_ids: std::collections::BTreeMap<UniqueWeight, TaskInQueue>,
+}
+
 // SchedulerPool must be accessed via dyn by solana-runtime code, because of its internal fields'
 // types (currently TransactionStatusSender; also, PohRecorder in the future) aren't available
 // there...
