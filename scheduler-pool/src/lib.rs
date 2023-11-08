@@ -495,8 +495,7 @@ impl AddressBook {
 
         if !strictly_lockable {
             attempt.status = LockStatus::Failed;
-            let page = attempt.target_page_mut();
-            return page.cu;
+            return;
         }
 
         let LockAttempt {
