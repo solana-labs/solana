@@ -363,7 +363,7 @@ impl BTreeMapTaskIds {
     }
 
     #[inline(never)]
-    pub fn remove_task(&mut self, u: &TaskId) {
+    pub fn remove_task(&mut self, u: &UniqueWeight) {
         let removed_entry = self.task_ids.remove(u);
         assert!(removed_entry.is_some());
     }
@@ -373,7 +373,7 @@ impl BTreeMapTaskIds {
         self.task_ids.values().rev()
     }
 
-    pub fn heaviest_task_id(&mut self) -> Option<TaskId> {
+    pub fn heaviest_task_id(&mut self) -> Option<UniqueWeight> {
         self.task_ids.last_entry().map(|j| *j.key())
     }
 
