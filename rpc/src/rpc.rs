@@ -1002,11 +1002,7 @@ impl JsonRpcRequestProcessor {
         })
     }
 
-    // Check if the given `slot` is within the blockstore bounds. This function assumes that
-    // `result` is from a blockstore fetch, and that the fetch:
-    // 1) Checked if `slot` is above the lowest cleanup slot (and errored if not)
-    // 2) Checked if `slot` is a root
-    fn check_blockstore_bounds<T>(
+    fn map_get_rooted_blockstore_result<T>(
         &self,
         result: &std::result::Result<T, BlockstoreError>,
         slot: Slot,
@@ -1101,7 +1097,7 @@ impl JsonRpcRequestProcessor {
             {
                 self.check_blockstore_writes_complete(slot)?;
                 let result = self.blockstore.get_rooted_block(slot, true);
-                self.check_blockstore_bounds(&result, slot)?;
+                self.map_get_rooted_blockstore_result(&result, slot)?;
                 let encode_block = |confirmed_block: ConfirmedBlock| -> Result<UiConfirmedBlock> {
                     let mut encoded_block = confirmed_block
                         .encode_with_options(encoding, encoding_options)
@@ -1325,7 +1321,7 @@ impl JsonRpcRequestProcessor {
                 .highest_super_majority_root()
         {
             let result = self.blockstore.get_rooted_block_time(slot);
-            self.check_blockstore_bounds(&result, slot)?;
+            self.map_get_rooted_blockstore_result(&result, slot)?;
             if result.is_err() {
                 if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                     let bigtable_result = bigtable_ledger_storage.get_confirmed_block(slot).await;
