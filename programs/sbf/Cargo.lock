@@ -2280,9 +2280,9 @@ dependencies = [
 
 [[package]]
 name = "index_list"
-version = "0.2.7"
+version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a9d968042a4902e08810946fc7cd5851eb75e80301342305af755ca06cb82ce"
+checksum = "70891286cb8e844fdfcf1178b47569699f9e20b5ecc4b45a6240a64771444638"
 
 [[package]]
 name = "indexmap"
