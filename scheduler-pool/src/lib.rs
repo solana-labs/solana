@@ -954,8 +954,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn pop_from_queue_then_lock<AST: AtScheduleThread>(
-        ast: AST,
+    fn pop_from_queue_then_lock(
         task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
         //runnable_queue: &mut TaskQueue,
         runnable_queue: &mut ModeSpecificTaskQueue,
@@ -974,7 +973,7 @@ impl ScheduleStage {
                 address_book.fulfilled_provisional_task_ids.len()
             );
 
-            let lock_attempts = std::mem::take(&mut *a.1.lock_attempts_mut(ast));
+            let lock_attempts = std::mem::take(&mut *a.1.lock_attempts_mut());
 
             return Some((a.0, a.1, lock_attempts));
         }
@@ -999,13 +998,12 @@ impl ScheduleStage {
 
                 let (unlockable_count, provisional_count, busiest_page_cu) =
                     attempt_lock_for_execution(
-                        ast,
                         from_runnable,
                         prefer_immediate,
                         address_book,
                         &unique_weight,
                         &message_hash,
-                        &mut next_task.lock_attempts_mut(ast),
+                        &mut next_task.lock_attempts_mut(),
                         true,
                     );
 
@@ -1017,12 +1015,11 @@ impl ScheduleStage {
 
                     //trace!("reset_lock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.0.signature());
                     Self::reset_lock_for_failed_execution(
-                        ast,
                         address_book,
                         &unique_weight,
-                        &mut next_task.lock_attempts_mut(ast),
+                        &mut next_task.lock_attempts_mut(),
                     );
-                    let lock_count = next_task.lock_attempts_mut(ast).len();
+                    let lock_count = next_task.lock_attempts_mut().len();
                     next_task
                         .contention_count
                         .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -1037,7 +1034,7 @@ impl ScheduleStage {
                         next_task.mark_as_contended();
                         *contended_count = contended_count.checked_add(1).unwrap();
 
-                        Task::index_with_address_book(ast, &next_task, task_sender);
+                        Task::index_with_address_book(&next_task, task_sender);
 
                         // maybe run lightweight prune logic on contended_queue here.
                     } else {
@@ -1102,7 +1099,7 @@ impl ScheduleStage {
                 } else if provisional_count > 0 {
                     assert!(!from_runnable);
                     assert_eq!(unlockable_count, 0);
-                    let lock_count = next_task.lock_attempts_mut(ast).len();
+                    let lock_count = next_task.lock_attempts_mut().len();
                     trace!("provisional exec: [{}/{}]", provisional_count, lock_count);
                     *contended_count = contended_count.checked_sub(1).unwrap();
                     next_task.mark_as_uncontended();
@@ -1116,7 +1113,6 @@ impl ScheduleStage {
                     *provisioning_tracker_count =
                         provisioning_tracker_count.checked_add(1).unwrap();
                     Self::finalize_lock_for_provisional_execution(
-                        ast,
                         address_book,
                         &next_task,
                         tracker,
@@ -1139,8 +1135,8 @@ impl ScheduleStage {
                     *contended_count = contended_count.checked_sub(1).unwrap();
                     next_task.mark_as_uncontended();
                     if let TaskSource::Contended(uncontendeds) = task_source {
-                        for lock_attempt in next_task.lock_attempts_mut(ast).iter().filter(|l| l.requested_usage == RequestedUsage::Readonly /*&& uncontendeds.contains(&l.target)*/) {
-                            if let Some(task) = lock_attempt.target_page_mut(ast).task_ids.reindex(false, &unique_weight) {
+                        for lock_attempt in next_task.lock_attempts_mut().iter().filter(|l| l.requested_usage == RequestedUsage::Readonly /*&& uncontendeds.contains(&l.target)*/) {
+                            if let Some(task) = lock_attempt.target_page_mut().task_ids.reindex(false, &unique_weight) {
                                 if task.currently_contended() {
                                     let uti = address_book
                                         .uncontended_task_ids
@@ -1153,7 +1149,7 @@ impl ScheduleStage {
                 } else {
                     next_task.update_busiest_page_cu(busiest_page_cu);
                 }
-                let lock_attempts = std::mem::take(&mut *next_task.lock_attempts_mut(ast));
+                let lock_attempts = std::mem::take(&mut *next_task.lock_attempts_mut());
 
                 return Some((unique_weight, next_task, lock_attempts));
             } else {
@@ -1165,13 +1161,12 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn finalize_lock_for_provisional_execution<AST: AtScheduleThread>(
-        ast: AST,
+    fn finalize_lock_for_provisional_execution(
         address_book: &mut AddressBook,
         next_task: &Task,
         tracker: triomphe::Arc<ProvisioningTracker>,
     ) {
-        for l in next_task.lock_attempts_mut(ast).iter_mut() {
+        for l in next_task.lock_attempts_mut().iter_mut() {
             match l.status {
                 LockStatus::Succeded => {
                     // do nothing
@@ -1185,29 +1180,27 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn reset_lock_for_failed_execution<AST: AtScheduleThread>(
-        ast: AST,
+    fn reset_lock_for_failed_execution(
         address_book: &mut AddressBook,
         unique_weight: &UniqueWeight,
         lock_attempts: &mut [LockAttempt],
     ) {
         for l in lock_attempts {
-            address_book.reset_lock(ast, l, false);
+            address_book.reset_lock(l, false);
         }
     }
 
     #[inline(never)]
-    fn unlock_after_execution<AST: AtScheduleThread>(
-        ast: AST,
+    fn unlock_after_execution(
         address_book: &mut AddressBook,
         lock_attempts: &mut [LockAttempt],
         provisioning_tracker_count: &mut usize,
         cu: CU,
     ) {
         for mut l in lock_attempts {
-            let newly_uncontended = address_book.reset_lock(ast, &mut l, true);
+            let newly_uncontended = address_book.reset_lock(&mut l, true);
 
-            let mut page = l.target.page_mut(ast);
+            let mut page = l.target.page_mut();
             page.cu += cu;
             if newly_uncontended && page.next_usage == Usage::Unused {
                 //let mut inserted = false;
@@ -1308,8 +1301,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn commit_processed_execution<AST: AtScheduleThread>(
-        ast: AST,
+    fn commit_processed_execution(
         ee: &mut ExecutionEnvironment,
         address_book: &mut AddressBook,
         commit_clock: &mut usize,
@@ -1317,7 +1309,7 @@ impl ScheduleStage {
     ) {
         // do par()-ly?
 
-        ee.reindex_with_address_book(ast);
+        ee.reindex_with_address_book();
         assert!(ee.is_reindexed());
 
         ee.task.record_commit_time(*commit_clock);
@@ -1327,7 +1319,6 @@ impl ScheduleStage {
 
         // which order for data race free?: unlocking / marking
         Self::unlock_after_execution(
-            ast,
             address_book,
             &mut ee.finalized_lock_attempts,
             provisioning_tracker_count,
@@ -1347,8 +1338,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn schedule_next_execution<AST: AtScheduleThread>(
-        ast: AST,
+    fn schedule_next_execution(
         task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
         //runnable_queue: &mut TaskQueue,
         runnable_queue: &mut ModeSpecificTaskQueue,
@@ -1363,7 +1353,6 @@ impl ScheduleStage {
         failed_lock_count: &mut usize,
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee = Self::pop_from_queue_then_lock(
-            ast,
             task_sender,
             runnable_queue,
             address_book,
