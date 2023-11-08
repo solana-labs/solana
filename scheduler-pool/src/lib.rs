@@ -486,12 +486,6 @@ impl AddressBook {
         } else if tcuw.unwrap() == *unique_weight {
             true
         } else if attempt.requested_usage == RequestedUsage::Readonly
-            /*
-            && attempt
-                .target_contended_write_task_count()
-                .load(std::sync::atomic::Ordering::SeqCst)
-                == 0
-            */
             && attempt.target_page_mut().write_task_ids.last().map(|j| unique_weight > j).unwrap_or(true)
         {
             true
