@@ -11,6 +11,7 @@ edition = { workspace = true }
 
 [dependencies]
 by_address = { workspace = true }
+dash-map = { workspace = true }
 rand = { workspace = true }
 solana-ledger = { workspace = true }
 solana-program-runtime = { workspace = true }
