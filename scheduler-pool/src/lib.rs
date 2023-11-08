@@ -196,6 +196,37 @@ impl<SEA: ScheduleExecutionArg> ScheduledTransactionHandler<SEA> for DefaultTran
     }
 }
 
+type PageRcInner = triomphe::Arc<(
+    std::cell::RefCell<Page>,
+    //SkipListTaskIds,
+    std::sync::atomic::AtomicUsize,
+)>;
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct PageRc(by_address::ByAddress<PageRcInner>);
+unsafe impl Send for PageRc {}
+unsafe impl Sync for PageRc {}
+
+type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
+
+#[derive(Debug)]
+pub struct Preloader {
+    book: AddressMap,
+}
+
+impl Preloader {
+    #[inline(never)]
+    pub fn load(&self, address: Pubkey) -> PageRc {
+        PageRc::clone(&self.book.entry(address).or_insert_with(|| {
+            PageRc(by_address::ByAddress(PageRcInner::new((
+                core::cell::RefCell::new(Page::new(&address, Usage::unused())),
+                //Default::default(),
+                Default::default(),
+            ))))
+        }))
+    }
+}
+
 // Currently, simplest possible implementation (i.e. single-threaded)
 // this will be replaced with more proper implementation...
 // not usable at all, especially for mainnet-beta
@@ -206,6 +237,7 @@ pub struct PooledScheduler<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleEx
     context: Option<SchedulingContext>,
     result_with_timings: Mutex<Option<ResultWithTimings>>,
     handler: TH,
+    preloader: Arc<Preloader>,
     _phantom: PhantomData<SEA>,
 }
 
@@ -267,30 +299,25 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
     }
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
-        let fail_fast = match self.context().mode() {
-            // this should be false, for (upcoming) BlockProduction variant.
-            SchedulingMode::BlockVerification => true,
-        };
+        transaction_with_index.with_transaction_and_index(|transaction, index| {
+            let locks = transaction.get_account_locks_unchecked();
+            let writable_lock_iter = locks.writable.iter().map(|address| {
+                solana_scheduler::LockAttempt::new(
+                    self.preloader.load(**address),
+                    solana_scheduler::RequestedUsage::Writable,
+                )
+            });
+            let readonly_lock_iter = locks.readonly.iter().map(|address| {
+                solana_scheduler::LockAttempt::new(
+                    self.preloader.load(**address),
+                    solana_scheduler::RequestedUsage::Readonly,
+                )
+            });
+            let locks = writable_lock_iter
+                .chain(readonly_lock_iter)
+                .collect::<Vec<_>>();
 
-        let result_with_timings = &mut *self.result_with_timings.lock().expect("not poisoned");
-        let (result, timings) =
-            result_with_timings.get_or_insert_with(|| (Ok(()), ExecuteTimings::default()));
-
-        // so, we're NOT scheduling at all; rather, just execute tx straight off.  we doesn't need
-        // to solve inter-tx locking deps only in the case of single-thread fifo like this....
-        if result.is_ok() || !fail_fast {
-            transaction_with_index.with_transaction_and_index(|transaction, index| {
-                TH::handle(
-                    &self.handler,
-                    result,
-                    timings,
-                    self.context().bank(),
-                    transaction,
-                    index,
-                    &self.pool,
-                );
-            })
-        }
+        })
     }
 
     fn wait_for_termination(&mut self, wait_reason: &WaitReason) -> Option<ResultWithTimings> {
@@ -318,6 +345,23 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
         self.pool.clone().return_scheduler(self)
     }
 }
+
+/*
+struct SchedulingStateMachine {};
+
+enum Event {
+    Registered(Transaction),
+    Executed(Transaction),
+}
+
+enum Action {
+    
+}
+
+impl SchedulingStateMachine {
+    fn tick(Event) -> Action {}
+}
+*/
 
 impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstallableScheduler<SEA>
     for PooledScheduler<TH, SEA>
