@@ -710,7 +710,10 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
             let locks = writable_lock_iter
                 .chain(readonly_lock_iter)
                 .collect::<Vec<_>>();
-
+            let uw = 
+                UniqueWeight::max_value() - index as UniqueWeight;
+            let t =
+                Task::new_for_queue(nast, uw, (sanitized_tx.clone(), locks));
         })
     }
 
