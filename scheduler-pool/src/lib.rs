@@ -713,7 +713,7 @@ pub struct ExecutionEnvironment {
     pub task: TaskInQueue,
     pub finalized_lock_attempts: Vec<LockAttempt>,
     pub is_reindexed: bool,
-    pub execution_result: Option<Result<(), solana_sdk::transaction::TransactionError>>,
+    pub execution_result: Option<std::result::Result<(), solana_sdk::transaction::TransactionError>>,
     pub finish_time: Option<std::time::SystemTime>,
     pub thx: usize,
     pub execution_us: u64,
