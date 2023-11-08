@@ -208,6 +208,66 @@ impl<SEA: ScheduleExecutionArg> ScheduledTransactionHandler<SEA> for DefaultTran
 type UsageCount = usize;
 const SOLE_USE_COUNT: UsageCount = 1;
 
+#[derive(Clone, Debug)]
+enum LockStatus {
+    Succeded,
+    Provisional,
+    Failed,
+}
+
+#[derive(Debug)]
+pub struct LockAttempt {
+    target: PageRc,
+    status: LockStatus,
+    requested_usage: RequestedUsage,
+    //pub heaviest_uncontended: arc_swap::ArcSwapOption<Task>,
+    pub heaviest_uncontended: Option<TaskInQueue>,
+    //remembered: bool,
+}
+
+impl LockAttempt {
+    pub fn new(target: PageRc, requested_usage: RequestedUsage) -> Self {
+        Self {
+            target,
+            status: LockStatus::Succeded,
+            requested_usage,
+            heaviest_uncontended: Default::default(),
+            //remembered: false,
+        }
+    }
+
+    pub fn clone_for_test(&self) -> Self {
+        Self {
+            target: self.target.clone(),
+            status: LockStatus::Succeded,
+            requested_usage: self.requested_usage,
+            heaviest_uncontended: Default::default(),
+            //remembered: false,
+        }
+    }
+
+    /*
+    pub fn target_contended_unique_weights(&self) -> &TaskIds {
+        panic!()//&self.target.0 .1
+    }
+
+    pub fn target_contended_write_task_count(&self) -> &std::sync::atomic::AtomicUsize {
+        &self.target.0 .1
+    }
+
+    */
+
+    /*
+    pub fn remember_write_task_id<AST: AtScheduleThread>(&self, kst: AST, unique_weight: UniqueWeight) {
+        self.target_page_mut(ast).write_task_ids.insert(unique_weight);
+    }
+    */
+
+    fn target_page_mut<AST: AtScheduleThread>(&self, ast: AST) -> std::cell::RefMut<'_, Page> {
+        self.target.page_mut(ast)
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum Usage {
     Unused,
