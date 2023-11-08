@@ -196,6 +196,34 @@ impl<SEA: ScheduleExecutionArg> ScheduledTransactionHandler<SEA> for DefaultTran
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum Usage {
+    Unused,
+    // weight to abort running tx?
+    // also sum all readonly weights to subvert to write lock with greater weight?
+    Readonly(UsageCount),
+    Writable,
+}
+
+impl Usage {
+    fn renew(requested_usage: RequestedUsage) -> Self {
+        match requested_usage {
+            RequestedUsage::Readonly => Usage::Readonly(SOLE_USE_COUNT),
+            RequestedUsage::Writable => Usage::Writable,
+        }
+    }
+
+    fn unused() -> Self {
+        Usage::Unused
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RequestedUsage {
+    Readonly,
+    Writable,
+}
+
 #[derive(Debug)]
 pub struct Page {
     address_str: String,
