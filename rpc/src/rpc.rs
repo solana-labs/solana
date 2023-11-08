@@ -1002,37 +1002,26 @@ impl JsonRpcRequestProcessor {
         })
     }
 
-    // Check if the given `slot` is within the blockstore bounds. This function assumes that
-    // `result` is from a blockstore fetch, and that the fetch:
-    // 1) Checked if `slot` is above the lowest cleanup slot (and errored if not)
-    // 2) Checked if `slot` is a root
-    fn check_blockstore_bounds<T>(
+    fn check_blockstore_root<T>(
         &self,
         result: &std::result::Result<T, BlockstoreError>,
         slot: Slot,
     ) -> Result<()> {
-        match result {
-            // The slot was found, all good
-            Ok(_) => Ok(()),
-            // The slot was cleaned up, return Ok() for now to allow fallback to bigtable
-            Err(BlockstoreError::SlotCleanedUp) => Ok(()),
-            // The slot was not cleaned up but also not found
-            Err(BlockstoreError::SlotNotRooted) => {
-                let max_root = self.blockstore.max_root();
-                debug!("check_blockstore_bounds, slot: {slot}, max root: {max_root}");
-                // Our node hasn't seen this slot yet, error out
-                if slot >= max_root {
-                    return Err(RpcCustomError::BlockNotAvailable { slot }.into());
-                }
-                // The slot is within the bounds of the blockstore as the lookup that yielded
-                // `result` checked that `slot` was greater than the blockstore's lowest
-                // cleanup slot and we just checked that `slot` was less than the blockstore's
-                // largest root. Thus, the slot must have been skipped and we can error out.
-                Err(RpcCustomError::SlotSkipped { slot }.into())
+        if let Err(err) = result {
+            debug!(
+                "check_blockstore_root, slot: {:?}, max root: {:?}, err: {:?}",
+                slot,
+                self.blockstore.max_root(),
+                err
+            );
+            if slot >= self.blockstore.max_root() {
+                return Err(RpcCustomError::BlockNotAvailable { slot }.into());
             }
-            // Some other Blockstore error, ignore for now
-            _ => Ok(()),
+            if self.blockstore.is_skipped(slot) {
+                return Err(RpcCustomError::SlotSkipped { slot }.into());
+            }
         }
+        Ok(())
     }
 
     fn check_slot_cleaned_up<T>(
@@ -1109,7 +1098,7 @@ impl JsonRpcRequestProcessor {
             {
                 self.check_blockstore_writes_complete(slot)?;
                 let result = self.blockstore.get_rooted_block(slot, true);
-                self.check_blockstore_bounds(&result, slot)?;
+                self.check_blockstore_root(&result, slot)?;
                 let encode_block = |confirmed_block: ConfirmedBlock| -> Result<UiConfirmedBlock> {
                     let mut encoded_block = confirmed_block
                         .encode_with_options(encoding, encoding_options)
@@ -1333,7 +1322,7 @@ impl JsonRpcRequestProcessor {
                 .highest_super_majority_root()
         {
             let result = self.blockstore.get_rooted_block_time(slot);
-            self.check_blockstore_bounds(&result, slot)?;
+            self.check_blockstore_root(&result, slot)?;
             if result.is_err() {
                 if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                     let bigtable_result = bigtable_ledger_storage.get_confirmed_block(slot).await;
