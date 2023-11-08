@@ -74,7 +74,7 @@ use {
             TransactionLoadResult,
         },
         accounts_db::{
-            AccountShrinkThreshold, AccountStorageEntry, AccountsDbConfig,
+            AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig,
             CalcAccountsHashDataSource, VerifyAccountsHashAndLamportsConfig,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
@@ -5542,6 +5542,7 @@ impl Bank {
             &self.rent_collector,
             &durable_nonce,
             lamports_per_signature,
+            &self.ancestors,
         );
         if let Some(dummy_lamports) = dummy_lamports {
             self.capitalization.fetch_add(dummy_lamports, Relaxed);
