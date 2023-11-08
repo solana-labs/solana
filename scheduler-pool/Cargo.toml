@@ -11,6 +11,7 @@ edition = { workspace = true }
 
 [dependencies]
 by_address = { workspace = true }
+crossbeam-channel = { workspace = true }
 dashmap = { workspace = true }
 rand = { workspace = true }
 solana-ledger = { workspace = true }
@@ -23,7 +24,6 @@ solana-vote = { workspace = true }
 [dev-dependencies]
 assert_matches = { workspace = true }
 bincode = { workspace = true }
-crossbeam-channel = { workspace = true }
 jemallocator = { workspace = true }
 log = { workspace = true }
 solana-logger = { workspace = true }
