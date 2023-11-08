@@ -728,7 +728,7 @@ impl ExecutionEnvironment {
             > 0;
         for lock_attempt in self.finalized_lock_attempts.iter_mut() {
             let ll = lock_attempt
-                .target_page_mut(ast)
+                .target_page_mut()
                 .task_ids
                 .reindex(should_remove, &uq);
             if let Some(heaviest_uncontended) = ll {
@@ -739,7 +739,7 @@ impl ExecutionEnvironment {
                 //lock_attempt
                 //    .target_contended_write_task_count()
                 //    .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
-                lock_attempt.target_page_mut(ast).write_task_ids.remove(&uq);
+                lock_attempt.target_page_mut().write_task_ids.remove(&uq);
             }
         }
     }
