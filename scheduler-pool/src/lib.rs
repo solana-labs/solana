@@ -881,8 +881,9 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
                 .collect::<Vec<_>>();
             let uw = 
                 UniqueWeight::max_value() - index as UniqueWeight;
-            let t =
+            let task =
                 Task::new_for_queue(uw, (transaction.clone(), locks));
+           runnable_queue.add_to_schedule(task.unique_weight, task)
         })
     }
 
