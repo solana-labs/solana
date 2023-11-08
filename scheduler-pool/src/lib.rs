@@ -215,12 +215,6 @@ enum LockStatus {
     Failed,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RequestedUsage {
-    Readonly,
-    Writable,
-}
-
 #[derive(Debug)]
 pub struct LockAttempt {
     target: PageRc,
