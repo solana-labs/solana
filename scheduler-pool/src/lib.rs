@@ -231,6 +231,16 @@ impl PageRc {
     }
 }
 
+#[derive(Debug)]
+pub struct LockAttempt {
+    target: PageRc,
+    status: LockStatus,
+    requested_usage: RequestedUsage,
+    //pub heaviest_uncontended: arc_swap::ArcSwapOption<Task>,
+    pub heaviest_uncontended: Option<TaskInQueue>,
+    //remembered: bool,
+}
+
 impl LockAttempt {
     pub fn new(target: PageRc, requested_usage: RequestedUsage) -> Self {
         Self {
