@@ -702,6 +702,62 @@ pub struct ExecutionEnvironment {
     pub execution_cpu_us: u128,
 }
 
+impl ExecutionEnvironment {
+    //fn new(cu: usize) -> Self {
+    //    Self {
+    //        cu,
+    //        ..Self::default()
+    //    }
+    //}
+
+    //fn abort() {
+    //  pass AtomicBool into InvokeContext??
+    //}
+    //
+    #[inline(never)]
+    fn reindex_with_address_book<AST: AtScheduleThread>(&mut self, ast: AST) {
+        assert!(!self.is_reindexed());
+        self.is_reindexed = true;
+
+        let uq = self.unique_weight;
+        //self.task.trace_timestamps("in_exec(self)");
+        let should_remove = self
+            .task
+            .contention_count
+            .load(std::sync::atomic::Ordering::SeqCst)
+            > 0;
+        for lock_attempt in self.finalized_lock_attempts.iter_mut() {
+            let ll = lock_attempt
+                .target_page_mut(ast)
+                .task_ids
+                .reindex(should_remove, &uq);
+            if let Some(heaviest_uncontended) = ll {
+                lock_attempt.heaviest_uncontended = Some(heaviest_uncontended);
+            };
+
+            if should_remove && lock_attempt.requested_usage == RequestedUsage::Writable {
+                //lock_attempt
+                //    .target_contended_write_task_count()
+                //    .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                lock_attempt.target_page_mut(ast).write_task_ids.remove(&uq);
+            }
+        }
+    }
+
+    fn is_reindexed(&self) -> bool {
+        self.is_reindexed
+    }
+
+    pub fn is_aborted(&self) -> bool {
+        if let Some(r) = &self.execution_result {
+            r.is_err()
+        } else {
+            false
+        }
+    }
+}
+
+
 pub struct SchedulablePayload(pub Flushable<TaskInQueue>);
 pub struct ExecutablePayload(pub Flushable<Box<ExecutionEnvironment>>);
 pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment>, pub T);
