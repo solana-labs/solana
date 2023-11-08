@@ -715,7 +715,7 @@ impl ExecutionEnvironment {
     //}
     //
     #[inline(never)]
-    fn reindex_with_address_book<AST: AtScheduleThread>(&mut self, ast: AST) {
+    fn reindex_with_address_book(&mut self, ast: AST) {
         assert!(!self.is_reindexed());
         self.is_reindexed = true;
 
@@ -905,6 +905,52 @@ impl TaskSelection {
             TaskSelection::OnlyFromContended(_) => false,
         }
     }
+}
+
+#[inline(never)]
+fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
+    ast: AST,
+    from_runnable: bool,
+    prefer_immediate: bool,
+    address_book: &mut AddressBook,
+    unique_weight: &UniqueWeight,
+    message_hash: &'a Hash,
+    lock_attempts: &mut [LockAttempt],
+    mode: Mode,
+) -> (usize, usize, CU) {
+    // no short-cuircuit; we at least all need to add to the contended queue
+    let mut unlockable_count = 0;
+    let mut provisional_count = 0;
+    let mut busiest_page_cu = 1;
+
+    for attempt in lock_attempts.iter_mut() {
+        let cu = AddressBook::attempt_lock_address(
+            ast,
+            from_runnable,
+            prefer_immediate,
+            unique_weight,
+            attempt,
+            mode,
+        );
+        busiest_page_cu = busiest_page_cu.max(cu);
+
+        match attempt.status {
+            LockStatus::Succeded => {}
+            LockStatus::Failed => {
+                trace!(
+                    "lock failed: {}/{:?}",
+                    attempt.target_page_mut(ast).address_str,
+                    attempt.requested_usage
+                );
+                unlockable_count += 1;
+            }
+            LockStatus::Provisional => {
+                provisional_count += 1;
+            }
+        }
+    }
+
+    (unlockable_count, provisional_count, busiest_page_cu)
 }
 
 pub struct ScheduleStage {}
