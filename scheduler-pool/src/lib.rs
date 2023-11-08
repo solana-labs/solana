@@ -33,7 +33,9 @@ use {
     },
 };
 use solana_sdk::pubkey::Pubkey;
-pub type UniqueWeight = u128;
+use std::sync::atomic::AtomicUsize;
+
+type UniqueWeight = u128;
 type CU = u64;
 
 type TaskIds = BTreeMapTaskIds;
