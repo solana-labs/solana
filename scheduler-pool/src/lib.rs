@@ -327,6 +327,43 @@ impl Page {
     }
 }
 
+impl BTreeMapTaskIds {
+    #[inline(never)]
+    pub fn insert_task(&mut self, u: TaskId, task: TaskInQueue) {
+        let pre_existed = self.task_ids.insert(u, task);
+        assert!(pre_existed.is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
+    }
+
+    #[inline(never)]
+    pub fn remove_task(&mut self, u: &TaskId) {
+        let removed_entry = self.task_ids.remove(u);
+        assert!(removed_entry.is_some());
+    }
+
+    #[inline(never)]
+    fn heaviest_task_cursor(&self) -> impl Iterator<Item = &TaskInQueue> {
+        self.task_ids.values().rev()
+    }
+
+    pub fn heaviest_task_id(&mut self) -> Option<TaskId> {
+        self.task_ids.last_entry().map(|j| *j.key())
+    }
+
+    #[inline(never)]
+    fn reindex(&mut self, should_remove: bool, uq: &UniqueWeight) -> Option<TaskInQueue> {
+        if should_remove {
+            self.remove_task(uq);
+        }
+
+        self.heaviest_task_cursor()
+            .find(|task| {
+                assert!(!task.already_finished());
+                task.currently_contended()
+            })
+            .map(|task| Task::clone_in_queue(task))
+    }
+}
+
 type PageRcInner = Arc<(
     std::cell::RefCell<Page>,
     //SkipListTaskIds,
