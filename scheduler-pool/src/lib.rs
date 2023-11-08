@@ -823,6 +823,12 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> SpawnableS
     }
 }
 
+enum TaskSource {
+    Runnable,
+    Contended(std::collections::HashSet<PageRc>),
+    Stuck,
+}
+
 enum TaskSelection {
     OnlyFromRunnable,
     OnlyFromContended(usize),
