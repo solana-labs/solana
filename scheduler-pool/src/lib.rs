@@ -908,8 +908,7 @@ impl TaskSelection {
 }
 
 #[inline(never)]
-fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
-    ast: AST,
+fn attempt_lock_for_execution<'a>(
     from_runnable: bool,
     prefer_immediate: bool,
     address_book: &mut AddressBook,
@@ -924,7 +923,6 @@ fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
 
     for attempt in lock_attempts.iter_mut() {
         let cu = AddressBook::attempt_lock_address(
-            ast,
             from_runnable,
             prefer_immediate,
             unique_weight,
@@ -938,7 +936,7 @@ fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
             LockStatus::Failed => {
                 trace!(
                     "lock failed: {}/{:?}",
-                    attempt.target_page_mut(ast).address_str,
+                    attempt.target_page_mut().address_str,
                     attempt.requested_usage
                 );
                 unlockable_count += 1;
