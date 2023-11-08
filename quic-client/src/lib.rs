@@ -14,6 +14,7 @@ use {
         },
         quic_client::QuicClientConnection as BlockingQuicClientConnection,
     },
+    log::warn,
     quinn::Endpoint,
     rcgen::RcgenError,
     solana_connection_cache::{
@@ -222,7 +223,10 @@ impl ConnectionManager for QuicConnectionManager {
     }
 
     fn update_key(&mut self, key: &Keypair) {
-        let _ = self.connection_config.update_client_certificate(key, None);
+        let res = self.connection_config.update_client_certificate(key, None);
+        if let Err(err) = res {
+            warn!("Error updating Quic client key: {:?}", err);
+        }
     }
 }
 
