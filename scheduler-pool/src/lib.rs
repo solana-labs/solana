@@ -705,6 +705,11 @@ impl ChannelBackedTaskQueue {
     }
 }
 
+pub enum Flushable<T> {
+    Payload(T),
+    Flush,
+}
+
 impl TaskQueueReader for ChannelBackedTaskQueue {
     #[inline(never)]
     fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: TaskInQueue) {
