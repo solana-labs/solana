@@ -874,6 +874,8 @@ mod tests {
             initial_context: SchedulingContext,
             handler: DefaultTransactionHandler,
         ) -> Self {
+            todo!();
+            /*
             AsyncScheduler::<TRIGGER_RACE_CONDITION>(
                 PooledScheduler::<DefaultTransactionHandler, DefaultScheduleExecutionArg> {
                     id: thread_rng().gen::<SchedulerId>(),
@@ -890,6 +892,7 @@ mod tests {
                 },
                 Mutex::new(vec![]),
             )
+            */
         }
     }
 
