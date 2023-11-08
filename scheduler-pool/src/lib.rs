@@ -726,7 +726,7 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
             let uw = 
                 UniqueWeight::max_value() - index as UniqueWeight;
             let t =
-                Task::new_for_queue(uw, (sanitized_tx.clone(), locks));
+                Task::new_for_queue(uw, (transaction.clone(), locks));
         })
     }
 
