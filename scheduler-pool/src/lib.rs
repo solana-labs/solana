@@ -698,7 +698,6 @@ impl ChannelBackedTaskQueue {
 #[derive(Debug)]
 pub struct ExecutionEnvironment {
     //accounts: Vec<i8>,
-    pub cu: CU,
     pub unique_weight: UniqueWeight,
     pub task: TaskInQueue,
     pub finalized_lock_attempts: Vec<LockAttempt>,
