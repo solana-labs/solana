@@ -245,6 +245,7 @@ impl Task {
             unique_weight,
             tx: (tx.0, LockAttemptsInCell::new(std::cell::RefCell::new(tx.1))),
             uncontended: Default::default(),
+            contention_count: Default::default(),
         })
     }
     #[inline(never)]
