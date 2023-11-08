@@ -1319,28 +1319,6 @@ impl ScheduleStage {
             }
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
                 page.switch_to_next_usage();
-                for tracker in std::mem::take(&mut page.provisional_task_ids).into_iter() {
-                    tracker.progress();
-                    if tracker.is_fulfilled() {
-                        trace!(
-                            "provisioning tracker progress: {} => {} (!)",
-                            tracker.prev_count(),
-                            tracker.count()
-                        );
-                        address_book.fulfilled_provisional_task_ids.insert(
-                            tracker.task.unique_weight,
-                            Task::clone_in_queue(&tracker.task),
-                        );
-                        *provisioning_tracker_count =
-                            provisioning_tracker_count.checked_sub(1).unwrap();
-                    } else {
-                        trace!(
-                            "provisioning tracker progress: {} => {}",
-                            tracker.prev_count(),
-                            tracker.count()
-                        );
-                    }
-                }
             }
 
             // todo: mem::forget and panic in LockAttempt::drop()
