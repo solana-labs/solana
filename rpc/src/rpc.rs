@@ -1016,20 +1016,12 @@ impl JsonRpcRequestProcessor {
             Ok(_) => Ok(()),
             // The slot was cleaned up, return Ok() for now to allow fallback to bigtable
             Err(BlockstoreError::SlotCleanedUp) => Ok(()),
-            // The slot was not cleaned up but also not found
-            Err(BlockstoreError::SlotNotRooted) => {
-                let max_root = self.blockstore.max_root();
-                debug!("check_blockstore_bounds, slot: {slot}, max root: {max_root}");
-                // Our node hasn't seen this slot yet, error out
-                if slot >= max_root {
-                    return Err(RpcCustomError::BlockNotAvailable { slot }.into());
-                }
-                // The slot is within the bounds of the blockstore as the lookup that yielded
-                // `result` checked that `slot` was greater than the blockstore's lowest
-                // cleanup slot and we just checked that `slot` was less than the blockstore's
-                // largest root. Thus, the slot must have been skipped and we can error out.
-                Err(RpcCustomError::SlotSkipped { slot }.into())
+            // The slot is greater than what is in Blockstore, won't be in bigtable either
+            Err(BlockstoreError::SlotGreaterThanMaxRoot) => {
+                Err(RpcCustomError::BlockNotAvailable { slot }.into())
             }
+            // The slot was within Blockstore bounds but not found so it must have been skipped
+            Err(BlockstoreError::SlotNotRooted) => Err(RpcCustomError::SlotSkipped { slot }.into()),
             // Some other Blockstore error, ignore for now
             _ => Ok(()),
         }

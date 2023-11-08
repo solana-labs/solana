@@ -1975,12 +1975,14 @@ impl Blockstore {
         let _lock = self.check_lowest_cleanup_slot(slot)?;
 
         if self.is_root(slot) {
-            return self
-                .blocktime_cf
+            self.blocktime_cf
                 .get(slot)?
-                .ok_or(BlockstoreError::SlotUnavailable);
+                .ok_or(BlockstoreError::SlotUnavailable)
+        } else if slot > self.max_root() {
+            Err(BlockstoreError::SlotGreaterThanMaxRoot)
+        } else {
+            Err(BlockstoreError::SlotNotRooted)
         }
-        Err(BlockstoreError::SlotNotRooted)
     }
 
     pub fn cache_block_time(&self, slot: Slot, timestamp: UnixTimestamp) -> Result<()> {
@@ -2021,9 +2023,12 @@ impl Blockstore {
         let _lock = self.check_lowest_cleanup_slot(slot)?;
 
         if self.is_root(slot) {
-            return self.get_complete_block(slot, require_previous_blockhash);
+            self.get_complete_block(slot, require_previous_blockhash)
+        } else if slot > self.max_root() {
+            Err(BlockstoreError::SlotGreaterThanMaxRoot)
+        } else {
+            Err(BlockstoreError::SlotNotRooted)
         }
-        Err(BlockstoreError::SlotNotRooted)
     }
 
     pub fn get_complete_block(

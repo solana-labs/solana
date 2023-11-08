@@ -148,6 +148,8 @@ pub enum BlockstoreError {
     MissingTransactionMetadata,
     #[error("transaction-index overflow")]
     TransactionIndexOverflow,
+    #[error("slot greater than max root")]
+    SlotGreaterThanMaxRoot,
 }
 pub type Result<T> = std::result::Result<T, BlockstoreError>;
 
