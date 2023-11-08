@@ -215,6 +215,14 @@ enum LockStatus {
     Failed,
 }
 
+pub type TaskInQueue = Arc<Task>;
+
+#[derive(Debug)]
+pub struct Task {
+    unique_weight: UniqueWeight,
+    pub tx: (SanitizedTransaction, LockAttemptsInCell), // actually should be Bundle
+}
+
 #[derive(Debug)]
 pub struct LockAttempt {
     target: PageRc,
