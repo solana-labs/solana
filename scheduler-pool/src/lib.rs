@@ -213,7 +213,6 @@ const SOLE_USE_COUNT: UsageCount = 1;
 #[derive(Clone, Debug)]
 enum LockStatus {
     Succeded,
-    Provisional,
     Failed,
 }
 
@@ -504,16 +503,7 @@ impl AddressBook {
                     if from_runnable || prefer_immediate {
                         *status = LockStatus::Failed;
                     } else {
-                        match page.next_usage {
-                            Usage::Unused => {
-                                *status = LockStatus::Provisional;
-                                page.next_usage = Usage::renew(*requested_usage);
-                            }
-                            // support multiple readonly locks!
-                            Usage::Readonly(_) | Usage::Writable => {
-                                *status = LockStatus::Failed;
-                            }
-                        }
+                        panic!();
                     }
                 }
             },
@@ -521,16 +511,7 @@ impl AddressBook {
                 if from_runnable || prefer_immediate {
                     *status = LockStatus::Failed;
                 } else {
-                    match page.next_usage {
-                        Usage::Unused => {
-                            *status = LockStatus::Provisional;
-                            page.next_usage = Usage::renew(*requested_usage);
-                        }
-                        // support multiple readonly locks!
-                        Usage::Readonly(_) | Usage::Writable => {
-                            *status = LockStatus::Failed;
-                        }
-                    }
+                    panic!();
                 }
             }
         }
@@ -544,14 +525,6 @@ impl AddressBook {
     ) -> bool {
         match attempt.status {
             LockStatus::Succeded => self.unlock(attempt),
-            LockStatus::Provisional => {
-                if after_execution {
-                    self.unlock(attempt)
-                } else {
-                    self.cancel(attempt);
-                    false
-                }
-            }
             LockStatus::Failed => {
                 false // do nothing
             }
@@ -1200,11 +1173,6 @@ impl ScheduleStage {
     ) {
         for l in next_task.lock_attempts_mut(ast).iter_mut() {
             match l.status {
-                LockStatus::Provisional => {
-                    l.target_page_mut(ast)
-                        .provisional_task_ids
-                        .push(triomphe::Arc::clone(&tracker));
-                }
                 LockStatus::Succeded => {
                     // do nothing
                 }
