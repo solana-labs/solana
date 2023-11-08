@@ -1255,13 +1255,11 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         lock_attempts: &mut [LockAttempt],
         provisioning_tracker_count: &mut usize,
-        cu: CU,
     ) {
         for mut l in lock_attempts {
             let newly_uncontended = address_book.reset_lock(&mut l, true);
 
             let mut page = l.target.page_mut();
-            page.cu += cu;
             if newly_uncontended && page.next_usage == Usage::Unused {
                 //let mut inserted = false;
 
@@ -1357,7 +1355,6 @@ impl ScheduleStage {
             address_book,
             &mut ee.finalized_lock_attempts,
             provisioning_tracker_count,
-            ee.cu,
         );
         ee.task.mark_as_finished();
 
