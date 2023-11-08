@@ -883,7 +883,8 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
                 UniqueWeight::max_value() - index as UniqueWeight;
             let task =
                 Task::new_for_queue(uw, (transaction.clone(), locks));
-           runnable_queue.add_to_schedule(task.unique_weight, task)
+            let mut runnable_queue = ModeSpecificTaskQueue::BlockVerification(ChannelBackedTaskQueue::new(from_prev));
+            runnable_queue.add_to_schedule(task.unique_weight, task)
         })
     }
 
