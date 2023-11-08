@@ -932,24 +932,7 @@ impl ScheduleStage {
             }
             (None, None) => {
                 trace!("select: none");
-
-                if false && runnable_queue.has_no_task_hint() && /* *contended_count > 0 &&*/ address_book.stuck_tasks.len() > 0
-                {
-                    trace!("handling stuck...");
-                    let (stuck_task_id, task) = address_book.stuck_tasks.pop_first().unwrap();
-                    // ensure proper rekeying
-                    assert_eq!(task.stuck_task_id(), stuck_task_id);
-
-                    if task.currently_contended() {
-                        Some((TaskSource::Stuck, task))
-                    } else {
-                        // is it expected for uncontended tasks is in the stuck queue, to begin
-                        // with??
-                        None
-                    }
-                } else {
-                    None
-                }
+                None
             }
         }
     }
