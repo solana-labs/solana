@@ -927,7 +927,7 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
             let mut processed_count = 0_usize;
             let mut interval_count = 0;
             let mut failed_lock_count = 0;
-            let maybe_ee = Self::schedule_next_execution(
+            let maybe_ee = schedule_next_execution(
                 ast,
                 &task_sender,
                 &mut runnable_queue,
