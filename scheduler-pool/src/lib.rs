@@ -252,6 +252,13 @@ impl Task {
         TaskInQueue::clone(this)
     }
 
+    fn lock_attempts_mut(
+        &self,
+    ) -> std::cell::RefMut<'_, Vec<LockAttempt>> {
+        self.tx.1 .0.borrow_mut()
+    }
+
+
     pub fn currently_contended(&self) -> bool {
         self.uncontended.load(std::sync::atomic::Ordering::SeqCst) == 1
     }
