@@ -1125,7 +1125,6 @@ impl ScheduleStage {
                         // for the case of being struck, we have already removed it from
                         // stuck_tasks, so pretend to add anew one.
                         // todo: optimize this needless operation
-                        next_task.update_busiest_page_cu(busiest_page_cu);
                         /*
                         let a = address_book
                             .stuck_tasks
@@ -1174,7 +1173,6 @@ impl ScheduleStage {
                     *contended_count = contended_count.checked_sub(1).unwrap();
                     next_task.mark_as_uncontended();
                     //address_book.stuck_tasks.remove(&next_task.stuck_task_id());
-                    next_task.update_busiest_page_cu(busiest_page_cu);
 
                     *provisioning_tracker_count =
                         provisioning_tracker_count.checked_add(1).unwrap();
@@ -1211,8 +1209,6 @@ impl ScheduleStage {
                             }
                         }
                     }
-                } else {
-                    next_task.update_busiest_page_cu(busiest_page_cu);
                 }
                 let lock_attempts = std::mem::take(&mut *next_task.lock_attempts_mut());
 
@@ -1325,7 +1321,6 @@ impl ScheduleStage {
     ) -> Box<ExecutionEnvironment> {
         let mut rng = rand::thread_rng();
         // load account now from AccountsDb
-        task.record_execute_time(*queue_clock, *execute_clock);
         *execute_clock = execute_clock.checked_add(1).unwrap();
 
         Box::new(ExecutionEnvironment {
@@ -1353,7 +1348,6 @@ impl ScheduleStage {
         ee.reindex_with_address_book();
         assert!(ee.is_reindexed());
 
-        ee.task.record_commit_time(*commit_clock);
         //ee.task.trace_timestamps("commit");
         //assert_eq!(ee.task.execute_time(), *commit_clock);
         *commit_clock = commit_clock.checked_add(1).unwrap();
