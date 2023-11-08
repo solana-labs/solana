@@ -196,6 +196,39 @@ impl<SEA: ScheduleExecutionArg> ScheduledTransactionHandler<SEA> for DefaultTran
     }
 }
 
+#[derive(Debug)]
+pub struct Page {
+    address_str: String,
+    current_usage: Usage,
+    next_usage: Usage,
+    provisional_task_ids: Vec<triomphe::Arc<ProvisioningTracker>>,
+    cu: CU,
+    task_ids: TaskIds,
+    write_task_ids: std::collections::BTreeSet<UniqueWeight>,
+    //loaded account from Accounts db
+    //comulative_cu for qos; i.e. track serialized cumulative keyed by addresses and bail out block
+    //producing as soon as any one of cu from the executing thread reaches to the limit
+}
+
+impl Page {
+    fn new(address: &Pubkey, current_usage: Usage) -> Self {
+        Self {
+            address_str: format!("{}", address),
+            current_usage,
+            next_usage: Usage::Unused,
+            provisional_task_ids: Default::default(),
+            cu: Default::default(),
+            task_ids: Default::default(),
+            write_task_ids: Default::default(),
+        }
+    }
+
+    fn switch_to_next_usage(&mut self) {
+        self.current_usage = self.next_usage;
+        self.next_usage = Usage::Unused;
+    }
+}
+
 type PageRcInner = Arc<(
     std::cell::RefCell<Page>,
     //SkipListTaskIds,
