@@ -263,7 +263,7 @@ impl LockAttempt {
     }
     */
 
-    fn target_page_mut<AST: AtScheduleThread>(&self, ast: AST) -> std::cell::RefMut<'_, Page> {
+    fn target_page_mut(&self) -> std::cell::RefMut<'_, Page> {
         self.target.page_mut(ast)
     }
 }
