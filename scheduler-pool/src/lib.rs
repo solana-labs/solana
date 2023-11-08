@@ -222,6 +222,12 @@ pub type TaskInQueue = Arc<Task>;
 #[derive(Debug)]
 pub struct LockAttemptsInCell(std::cell::RefCell<Vec<LockAttempt>>);
 
+impl LockAttemptsInCell {
+    fn new(ll: std::cell::RefCell<Vec<LockAttempt>>) -> Self {
+        Self(ll)
+    }
+}
+
 #[derive(Debug)]
 pub struct Task {
     unique_weight: UniqueWeight,
