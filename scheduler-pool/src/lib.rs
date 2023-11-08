@@ -225,6 +225,12 @@ pub struct LockAttempt {
     //remembered: bool,
 }
 
+impl PageRc {
+    fn page_mut(&self) -> std::cell::RefMut<'_, Page> {
+        self.0.0 .0.borrow_mut()
+    }
+}
+
 impl LockAttempt {
     pub fn new(target: PageRc, requested_usage: RequestedUsage) -> Self {
         Self {
