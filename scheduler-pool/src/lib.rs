@@ -205,6 +205,9 @@ impl<SEA: ScheduleExecutionArg> ScheduledTransactionHandler<SEA> for DefaultTran
     }
 }
 
+type UsageCount = usize;
+const SOLE_USE_COUNT: UsageCount = 1;
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum Usage {
     Unused,
