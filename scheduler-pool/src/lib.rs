@@ -850,6 +850,27 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> SpawnableS
     }
 }
 
+enum TaskSelection {
+    OnlyFromRunnable,
+    OnlyFromContended(usize),
+}
+
+impl TaskSelection {
+    fn should_proceed(&self) -> bool {
+        match self {
+            TaskSelection::OnlyFromRunnable => true,
+            TaskSelection::OnlyFromContended(retry_count) => *retry_count > 0,
+        }
+    }
+
+    fn runnable_exclusive(&self) -> bool {
+        match self {
+            TaskSelection::OnlyFromRunnable => true,
+            TaskSelection::OnlyFromContended(_) => false,
+        }
+    }
+}
+
 pub struct ScheduleStage {}
 impl ScheduleStage {
     #[inline(never)]
