@@ -224,6 +224,34 @@ pub struct LockAttemptsInCell(std::cell::RefCell<Vec<LockAttempt>>);
 pub struct Task {
     unique_weight: UniqueWeight,
     pub tx: (SanitizedTransaction, LockAttemptsInCell), // actually should be Bundle
+    pub uncontended: std::sync::atomic::AtomicUsize,
+}
+
+impl Task {
+    pub fn currently_contended(&self) -> bool {
+        self.uncontended.load(std::sync::atomic::Ordering::SeqCst) == 1
+    }
+
+    pub fn already_finished(&self) -> bool {
+        self.uncontended.load(std::sync::atomic::Ordering::SeqCst) == 3
+    }
+
+    fn mark_as_contended(&self) {
+        self.uncontended
+            .store(1, std::sync::atomic::Ordering::SeqCst)
+    }
+
+    fn mark_as_uncontended(&self) {
+        assert!(self.currently_contended());
+        self.uncontended
+            .store(2, std::sync::atomic::Ordering::SeqCst)
+    }
+
+    fn mark_as_finished(&self) {
+        assert!(!self.already_finished() && !self.currently_contended());
+        self.uncontended
+            .store(3, std::sync::atomic::Ordering::SeqCst)
+    }
 }
 
 #[derive(Debug)]
