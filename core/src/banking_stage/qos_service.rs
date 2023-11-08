@@ -213,7 +213,7 @@ impl QosService {
     // additional executing time it needs.
     // adjustment is u64 for now, meaning only add more CUs when transactions are under priced,
     // but not to reduce CU if transactions are over priced.
-    fn adjust_compute_units_for_potential_underpricing(
+    pub(crate) fn adjust_compute_units_for_potential_underpricing(
         executed_units: u64,
         executed_us: u64,
     ) -> u64 {

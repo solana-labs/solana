@@ -1277,8 +1277,11 @@ mod tests {
                 let actual_bpf_execution_cost = match commit_transactions_result.first().unwrap() {
                     CommitTransactionDetails::Committed {
                         executed_units,
-                        executed_us: _,
-                    } => *executed_units,
+                        executed_us,
+                    } => QosService::adjust_compute_units_for_potential_underpricing(
+                        *executed_units,
+                        *executed_us,
+                    ),
                     CommitTransactionDetails::NotCommitted => {
                         unreachable!()
                     }
