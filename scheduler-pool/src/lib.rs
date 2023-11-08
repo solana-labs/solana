@@ -34,6 +34,7 @@ use {
 };
 use solana_sdk::pubkey::Pubkey;
 use std::sync::atomic::AtomicUsize;
+use log::*;
 
 type UniqueWeight = u128;
 type CU = u64;
