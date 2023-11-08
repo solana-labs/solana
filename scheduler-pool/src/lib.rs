@@ -474,7 +474,7 @@ impl AddressBook {
         from_runnable: bool,
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
-    ) -> CU {
+    ) {
         let tcuw = attempt
             //.target_contended_unique_weights()
             .target_page_mut()
@@ -535,7 +535,6 @@ impl AddressBook {
                 *status = LockStatus::Failed;
             }
         }
-        page.cu
     }
 
     fn reset_lock(
@@ -931,19 +930,17 @@ fn attempt_lock_for_execution<'a>(
     address_book: &mut AddressBook,
     unique_weight: &UniqueWeight,
     lock_attempts: &mut [LockAttempt],
-) -> (usize, usize, CU) {
+) -> (usize, usize) {
     // no short-cuircuit; we at least all need to add to the contended queue
     let mut unlockable_count = 0;
     let mut provisional_count = 0;
-    let mut busiest_page_cu = 1;
 
     for attempt in lock_attempts.iter_mut() {
-        let cu = AddressBook::attempt_lock_address(
+        AddressBook::attempt_lock_address(
             from_runnable,
             unique_weight,
             attempt,
         );
-        busiest_page_cu = busiest_page_cu.max(cu);
 
         match attempt.status {
             LockStatus::Succeded => {}
@@ -958,7 +955,7 @@ fn attempt_lock_for_execution<'a>(
         }
     }
 
-    (unlockable_count, provisional_count, busiest_page_cu)
+    (unlockable_count, provisional_count)
 }
 
 pub struct ScheduleStage {}
@@ -1075,7 +1072,7 @@ impl ScheduleStage {
                 // plumb message_hash into StatusCache or implmenent our own for duplicate tx
                 // detection?
 
-                let (unlockable_count, provisional_count, busiest_page_cu) =
+                let (unlockable_count, provisional_count) =
                     attempt_lock_for_execution(
                         from_runnable,
                         address_book,
@@ -1152,21 +1149,6 @@ impl ScheduleStage {
                             unreachable!();
                         }
                     } else if matches!(task_source, TaskSource::Contended(_)) {
-                        // todo: remove this task from stuck_tasks before update_busiest_page_cu
-                        /*
-                        let removed = address_book
-                            .stuck_tasks
-                            .remove(&next_task.stuck_task_id())
-                            .unwrap();
-                        next_task.update_busiest_page_cu(busiest_page_cu);
-                        let a = address_book
-                            .stuck_tasks
-                            .insert(next_task.stuck_task_id(), removed);
-                        assert!(a.is_none());
-                        */
-
-                        //address_book.uncontended_task_ids.insert(next_task.unique_weight, next_task);
-
                         break;
                     } else {
                         unreachable!();
