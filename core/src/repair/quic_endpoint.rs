@@ -6,8 +6,8 @@ use {
     log::error,
     quinn::{
         ClientConfig, ConnectError, Connecting, Connection, ConnectionError, Endpoint,
-        EndpointConfig, ReadError, ReadToEndError, RecvStream, SendStream, ServerConfig,
-        TokioRuntime, TransportConfig, VarInt, WriteError,
+        EndpointConfig, IdleTimeout, ReadError, ReadToEndError, RecvStream, SendStream,
+        ServerConfig, TokioRuntime, TransportConfig, VarInt, WriteError,
     },
     rcgen::RcgenError,
     rustls::{Certificate, PrivateKey},
@@ -46,7 +46,13 @@ const CONNECT_SERVER_NAME: &str = "solana-repair";
 const CLIENT_CHANNEL_BUFFER: usize = 1 << 14;
 const ROUTER_CHANNEL_BUFFER: usize = 64;
 const CONNECTION_CACHE_CAPACITY: usize = 3072;
+
+// Transport config.
+// Repair randomly samples peers, uses bi-directional streams and generally has
+// low to moderate load and so is configured separately from other protocols.
+const KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(4);
 const MAX_CONCURRENT_BIDI_STREAMS: VarInt = VarInt::from_u32(512);
+const MAX_IDLE_TIMEOUT: Duration = Duration::from_secs(10);
 
 const CONNECTION_CLOSE_ERROR_CODE_SHUTDOWN: VarInt = VarInt::from_u32(1);
 const CONNECTION_CLOSE_ERROR_CODE_DROPPED: VarInt = VarInt::from_u32(2);
@@ -195,11 +201,15 @@ fn new_client_config(cert: Certificate, key: PrivateKey) -> Result<ClientConfig,
 }
 
 fn new_transport_config() -> TransportConfig {
+    let max_idle_timeout = IdleTimeout::try_from(MAX_IDLE_TIMEOUT).unwrap();
     let mut config = TransportConfig::default();
+    // Disable datagrams and uni streams.
     config
+        .datagram_receive_buffer_size(None)
+        .keep_alive_interval(Some(KEEP_ALIVE_INTERVAL))
         .max_concurrent_bidi_streams(MAX_CONCURRENT_BIDI_STREAMS)
         .max_concurrent_uni_streams(VarInt::from(0u8))
-        .datagram_receive_buffer_size(None);
+        .max_idle_timeout(Some(max_idle_timeout));
     config
 }
 
