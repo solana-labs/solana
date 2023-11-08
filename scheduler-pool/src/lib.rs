@@ -218,6 +218,9 @@ enum LockStatus {
 pub type TaskInQueue = Arc<Task>;
 
 #[derive(Debug)]
+pub struct LockAttemptsInCell(std::cell::RefCell<Vec<LockAttempt>>);
+
+#[derive(Debug)]
 pub struct Task {
     unique_weight: UniqueWeight,
     pub tx: (SanitizedTransaction, LockAttemptsInCell), // actually should be Bundle
