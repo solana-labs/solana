@@ -705,6 +705,11 @@ impl ChannelBackedTaskQueue {
     }
 }
 
+pub struct SchedulablePayload(pub Flushable<TaskInQueue>);
+pub struct ExecutablePayload(pub Flushable<Box<ExecutionEnvironment>>);
+pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment>, pub T);
+pub struct ExaminablePayload<T>(pub Flushable<(Box<ExecutionEnvironment>, T)>);
+
 pub enum Flushable<T> {
     Payload(T),
     Flush,
