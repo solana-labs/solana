@@ -715,7 +715,7 @@ impl ExecutionEnvironment {
     //}
     //
     #[inline(never)]
-    fn reindex_with_address_book(&mut self, ast: AST) {
+    fn reindex_with_address_book(&mut self) {
         assert!(!self.is_reindexed());
         self.is_reindexed = true;
 
