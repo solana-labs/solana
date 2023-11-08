@@ -263,23 +263,6 @@ impl LockAttempt {
         }
     }
 
-    /*
-    pub fn target_contended_unique_weights(&self) -> &TaskIds {
-        panic!()//&self.target.0 .1
-    }
-
-    pub fn target_contended_write_task_count(&self) -> &std::sync::atomic::AtomicUsize {
-        &self.target.0 .1
-    }
-
-    */
-
-    /*
-    pub fn remember_write_task_id<AST: AtScheduleThread>(&self, kst: AST, unique_weight: UniqueWeight) {
-        self.target_page_mut(ast).write_task_ids.insert(unique_weight);
-    }
-    */
-
     fn target_page_mut(&self) -> std::cell::RefMut<'_, Page> {
         self.target.page_mut()
     }
@@ -374,7 +357,7 @@ impl AddressBook {
     ) -> CU {
         let tcuw = attempt
             //.target_contended_unique_weights()
-            .target_page_mut(ast)
+            .target_page_mut()
             .task_ids
             .heaviest_task_id();
 
@@ -389,7 +372,7 @@ impl AddressBook {
                 .load(std::sync::atomic::Ordering::SeqCst)
                 == 0
             */
-            && attempt.target_page_mut(ast).write_task_ids.last().map(|j| unique_weight > j).unwrap_or(true)
+            && attempt.target_page_mut().write_task_ids.last().map(|j| unique_weight > j).unwrap_or(true)
         {
             true
         } else {
@@ -398,7 +381,7 @@ impl AddressBook {
 
         if !strictly_lockable {
             attempt.status = LockStatus::Failed;
-            let page = attempt.target_page_mut(ast);
+            let page = attempt.target_page_mut();
             return page.cu;
         }
 
@@ -408,7 +391,7 @@ impl AddressBook {
             status, /*, remembered*/
             ..
         } = attempt;
-        let mut page = target.page_mut(ast);
+        let mut page = target.page_mut();
 
         let next_usage = page.next_usage;
         match page.current_usage {
@@ -473,12 +456,12 @@ impl AddressBook {
         after_execution: bool,
     ) -> bool {
         match attempt.status {
-            LockStatus::Succeded => self.unlock(ast, attempt),
+            LockStatus::Succeded => self.unlock(attempt),
             LockStatus::Provisional => {
                 if after_execution {
-                    self.unlock(ast, attempt)
+                    self.unlock(attempt)
                 } else {
-                    self.cancel(ast, attempt);
+                    self.cancel(attempt);
                     false
                 }
             }
@@ -494,7 +477,7 @@ impl AddressBook {
 
         let mut newly_uncontended = false;
 
-        let mut page = attempt.target_page_mut(ast);
+        let mut page = attempt.target_page_mut();
 
         match &mut page.current_usage {
             Usage::Readonly(ref mut count) => match &attempt.requested_usage {
@@ -525,7 +508,7 @@ impl AddressBook {
 
     #[inline(never)]
     fn cancel(&mut self, attempt: &mut LockAttempt) {
-        let mut page = attempt.target_page_mut(ast);
+        let mut page = attempt.target_page_mut();
 
         match page.next_usage {
             Usage::Unused => {
