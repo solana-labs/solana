@@ -196,7 +196,7 @@ impl<SEA: ScheduleExecutionArg> ScheduledTransactionHandler<SEA> for DefaultTran
     }
 }
 
-type PageRcInner = triomphe::Arc<(
+type PageRcInner = Arc<(
     std::cell::RefCell<Page>,
     //SkipListTaskIds,
     std::sync::atomic::AtomicUsize,
