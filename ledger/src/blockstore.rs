@@ -3104,21 +3104,6 @@ impl Blockstore {
         matches!(self.db.get::<cf::Root>(slot), Ok(Some(true)))
     }
 
-    /// Returns true if a slot is between the rooted slot bounds of the ledger, but has not itself
-    /// been rooted. This is either because the slot was skipped, or due to a gap in ledger data,
-    /// as when booting from a newer snapshot.
-    pub fn is_skipped(&self, slot: Slot) -> bool {
-        let lowest_root = self
-            .rooted_slot_iterator(0)
-            .ok()
-            .and_then(|mut iter| iter.next())
-            .unwrap_or_default();
-        match self.db.get::<cf::Root>(slot).ok().flatten() {
-            Some(_) => false,
-            None => slot < self.max_root() && slot > lowest_root,
-        }
-    }
-
     pub fn insert_bank_hash(&self, slot: Slot, frozen_hash: Hash, is_duplicate_confirmed: bool) {
         if let Some(prev_value) = self.bank_hash_cf.get(slot).unwrap() {
             if prev_value.frozen_hash() == frozen_hash && prev_value.is_duplicate_confirmed() {
@@ -6865,22 +6850,6 @@ pub mod tests {
 
         for i in chained_slots {
             assert!(blockstore.is_root(i));
-        }
-    }
-
-    #[test]
-    fn test_is_skipped() {
-        let ledger_path = get_tmp_ledger_path_auto_delete!();
-        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-        let roots = [2, 4, 7, 12, 15];
-        blockstore.set_roots(roots.iter()).unwrap();
-
-        for i in 0..20 {
-            if i < 2 || roots.contains(&i) || i > 15 {
-                assert!(!blockstore.is_skipped(i));
-            } else {
-                assert!(blockstore.is_skipped(i));
-            }
         }
     }
 
