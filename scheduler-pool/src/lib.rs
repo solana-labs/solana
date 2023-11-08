@@ -322,6 +322,31 @@ impl LockAttempt {
         }
     }
 
+    #[inline(never)]
+    fn index_with_address_book<AST: AtScheduleThread>(
+        ast: AST,
+        this: &TaskInQueue,
+        task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
+    ) {
+        for lock_attempt in &*this.lock_attempts_mut(ast) {
+            lock_attempt
+                .target_page_mut(ast)
+                .task_ids
+                .insert_task(this.unique_weight, Task::clone_in_queue(this));
+
+            if lock_attempt.requested_usage == RequestedUsage::Writable {
+                //lock_attempt
+                //    .target_contended_write_task_count()
+                //    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                lock_attempt.target_page_mut(ast).write_task_ids.insert(this.unique_weight);
+            }
+        }
+        //let a = Task::clone_in_queue(this);
+        //task_sender
+        //    .send((a, std::mem::take(&mut *this.for_indexer.0.borrow_mut())))
+        //    .unwrap();
+    }
+
     fn target_page_mut(&self) -> std::cell::RefMut<'_, Page> {
         self.target.page_mut()
     }
