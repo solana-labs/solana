@@ -215,6 +215,12 @@ enum LockStatus {
     Failed,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RequestedUsage {
+    Readonly,
+    Writable,
+}
+
 #[derive(Debug)]
 pub struct LockAttempt {
     target: PageRc,
@@ -229,16 +235,6 @@ impl PageRc {
     fn page_mut(&self) -> std::cell::RefMut<'_, Page> {
         self.0.0 .0.borrow_mut()
     }
-}
-
-#[derive(Debug)]
-pub struct LockAttempt {
-    target: PageRc,
-    status: LockStatus,
-    requested_usage: RequestedUsage,
-    //pub heaviest_uncontended: arc_swap::ArcSwapOption<Task>,
-    pub heaviest_uncontended: Option<TaskInQueue>,
-    //remembered: bool,
 }
 
 impl LockAttempt {
