@@ -238,7 +238,6 @@ pub struct Page {
     address_str: String,
     current_usage: Usage,
     next_usage: Usage,
-    provisional_task_ids: Vec<Arc<ProvisioningTracker>>,
     cu: CU,
     task_ids: TaskIds,
     write_task_ids: std::collections::BTreeSet<UniqueWeight>,
