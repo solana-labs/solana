@@ -265,25 +265,15 @@ impl Task {
                 .insert_task(this.unique_weight, Task::clone_in_queue(this));
 
             if lock_attempt.requested_usage == RequestedUsage::Writable {
-                //lock_attempt
-                //    .target_contended_write_task_count()
-                //    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 lock_attempt.target_page_mut().write_task_ids.insert(this.unique_weight);
             }
         }
-        //let a = Task::clone_in_queue(this);
-        //task_sender
-        //    .send((a, std::mem::take(&mut *this.for_indexer.0.borrow_mut())))
-        //    .unwrap();
     }
 
 
-    fn lock_attempts_mut(
-        &self,
-    ) -> std::cell::RefMut<'_, Vec<LockAttempt>> {
+    fn lock_attempts_mut(&self) -> std::cell::RefMut<'_, Vec<LockAttempt>> {
         self.tx.1 .0.borrow_mut()
     }
-
 
     pub fn currently_contended(&self) -> bool {
         self.uncontended.load(std::sync::atomic::Ordering::SeqCst) == 1
@@ -316,9 +306,7 @@ pub struct LockAttempt {
     target: PageRc,
     status: LockStatus,
     requested_usage: RequestedUsage,
-    //pub heaviest_uncontended: arc_swap::ArcSwapOption<Task>,
     pub heaviest_uncontended: Option<TaskInQueue>,
-    //remembered: bool,
 }
 
 impl PageRc {
@@ -334,7 +322,6 @@ impl LockAttempt {
             status: LockStatus::Succeded,
             requested_usage,
             heaviest_uncontended: Default::default(),
-            //remembered: false,
         }
     }
 
@@ -344,7 +331,6 @@ impl LockAttempt {
             status: LockStatus::Succeded,
             requested_usage: self.requested_usage,
             heaviest_uncontended: Default::default(),
-            //remembered: false,
         }
     }
 
@@ -356,8 +342,6 @@ impl LockAttempt {
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum Usage {
     Unused,
-    // weight to abort running tx?
-    // also sum all readonly weights to subvert to write lock with greater weight?
     Readonly(UsageCount),
     Writable,
 }
@@ -386,12 +370,8 @@ pub struct Page {
     address_str: String,
     current_usage: Usage,
     next_usage: Usage,
-    cu: CU,
     task_ids: TaskIds,
     write_task_ids: std::collections::BTreeSet<UniqueWeight>,
-    //loaded account from Accounts db
-    //comulative_cu for qos; i.e. track serialized cumulative keyed by addresses and bail out block
-    //producing as soon as any one of cu from the executing thread reaches to the limit
 }
 
 impl Page {
@@ -400,7 +380,6 @@ impl Page {
             address_str: format!("{}", address),
             current_usage,
             next_usage: Usage::Unused,
-            cu: Default::default(),
             task_ids: Default::default(),
             write_task_ids: Default::default(),
         }
@@ -719,24 +698,12 @@ pub struct ExecutionEnvironment {
 }
 
 impl ExecutionEnvironment {
-    //fn new(cu: usize) -> Self {
-    //    Self {
-    //        cu,
-    //        ..Self::default()
-    //    }
-    //}
-
-    //fn abort() {
-    //  pass AtomicBool into InvokeContext??
-    //}
-    //
     #[inline(never)]
     fn reindex_with_address_book(&mut self) {
         assert!(!self.is_reindexed());
         self.is_reindexed = true;
 
         let uq = self.unique_weight;
-        //self.task.trace_timestamps("in_exec(self)");
         let should_remove = self
             .task
             .contention_count
@@ -752,9 +719,6 @@ impl ExecutionEnvironment {
             };
 
             if should_remove && lock_attempt.requested_usage == RequestedUsage::Writable {
-                //lock_attempt
-                //    .target_contended_write_task_count()
-                //    .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
                 lock_attempt.target_page_mut().write_task_ids.remove(&uq);
             }
         }
