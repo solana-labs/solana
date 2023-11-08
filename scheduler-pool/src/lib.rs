@@ -361,7 +361,6 @@ type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
 pub struct AddressBook {
     book: AddressMap,
     uncontended_task_ids: WeightedTaskIds2,
-    fulfilled_provisional_task_ids: WeightedTaskIds,
 }
 
 #[derive(Debug)]
