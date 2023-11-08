@@ -32,6 +32,7 @@ use {
         sync::{Arc, Mutex, Weak},
     },
 };
+use solana_sdk::pubkey::Pubkey;
 
 // SchedulerPool must be accessed via dyn by solana-runtime code, because of its internal fields'
 // types (currently TransactionStatusSender; also, PohRecorder in the future) aren't available

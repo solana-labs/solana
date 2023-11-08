@@ -7100,6 +7100,7 @@ dependencies = [
  "bincode",
  "by_address",
  "crossbeam-channel",
+ "dashmap",
  "log",
  "rand 0.8.5",
  "solana-ledger",
