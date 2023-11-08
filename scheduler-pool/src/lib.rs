@@ -1146,16 +1146,11 @@ impl ScheduleStage {
                     //address_book.stuck_tasks.remove(&next_task.stuck_task_id());
                     next_task.update_busiest_page_cu(busiest_page_cu);
 
-                    let tracker = triomphe::Arc::new(ProvisioningTracker::new(
-                        provisional_count,
-                        Task::clone_in_queue(&next_task),
-                    ));
                     *provisioning_tracker_count =
                         provisioning_tracker_count.checked_add(1).unwrap();
                     Self::finalize_lock_for_provisional_execution(
                         address_book,
                         &next_task,
-                        tracker,
                     );
 
                     break;
@@ -1204,7 +1199,6 @@ impl ScheduleStage {
     fn finalize_lock_for_provisional_execution(
         address_book: &mut AddressBook,
         next_task: &Task,
-        tracker: triomphe::Arc<ProvisioningTracker>,
     ) {
         for l in next_task.lock_attempts_mut().iter_mut() {
             match l.status {
