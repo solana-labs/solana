@@ -914,7 +914,6 @@ fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
     prefer_immediate: bool,
     address_book: &mut AddressBook,
     unique_weight: &UniqueWeight,
-    message_hash: &'a Hash,
     lock_attempts: &mut [LockAttempt],
     mode: Mode,
 ) -> (usize, usize, CU) {
@@ -1077,7 +1076,6 @@ impl ScheduleStage {
                     *queue_clock = queue_clock.checked_add(1).unwrap();
                 }
                 let unique_weight = next_task.unique_weight;
-                let message_hash = next_task.tx.0.message_hash();
 
                 // plumb message_hash into StatusCache or implmenent our own for duplicate tx
                 // detection?
@@ -1088,7 +1086,6 @@ impl ScheduleStage {
                         prefer_immediate,
                         address_book,
                         &unique_weight,
-                        &message_hash,
                         &mut next_task.lock_attempts_mut(),
                         true,
                     );
