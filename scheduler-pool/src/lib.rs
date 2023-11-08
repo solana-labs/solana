@@ -363,6 +363,188 @@ pub struct AddressBook {
     uncontended_task_ids: WeightedTaskIds2,
 }
 
+impl AddressBook {
+    #[inline(never)]
+    fn attempt_lock_address(
+        from_runnable: bool,
+        prefer_immediate: bool,
+        unique_weight: &UniqueWeight,
+        attempt: &mut LockAttempt,
+        mode: Mode,
+    ) -> CU {
+        let tcuw = attempt
+            //.target_contended_unique_weights()
+            .target_page_mut(ast)
+            .task_ids
+            .heaviest_task_id();
+
+        let strictly_lockable = if tcuw.is_none() {
+            true
+        } else if tcuw.unwrap() == *unique_weight {
+            true
+        } else if attempt.requested_usage == RequestedUsage::Readonly
+            /*
+            && attempt
+                .target_contended_write_task_count()
+                .load(std::sync::atomic::Ordering::SeqCst)
+                == 0
+            */
+            && attempt.target_page_mut(ast).write_task_ids.last().map(|j| unique_weight > j).unwrap_or(true)
+        {
+            true
+        } else {
+            false
+        };
+
+        if !strictly_lockable {
+            attempt.status = LockStatus::Failed;
+            let page = attempt.target_page_mut(ast);
+            return page.cu;
+        }
+
+        let LockAttempt {
+            target,
+            requested_usage,
+            status, /*, remembered*/
+            ..
+        } = attempt;
+        let mut page = target.page_mut(ast);
+
+        let next_usage = page.next_usage;
+        match page.current_usage {
+            Usage::Unused => {
+                assert_eq!(page.next_usage, Usage::Unused);
+                page.current_usage = Usage::renew(*requested_usage);
+                *status = LockStatus::Succeded;
+            }
+            Usage::Readonly(ref mut count) => match requested_usage {
+                RequestedUsage::Readonly => {
+                    // prevent newer read-locks (even from runnable too)
+                    match next_usage {
+                        Usage::Unused => {
+                            *count += 1;
+                            *status = LockStatus::Succeded;
+                        }
+                        Usage::Readonly(_) | Usage::Writable => {
+                            *status = LockStatus::Failed;
+                        }
+                    }
+                }
+                RequestedUsage::Writable => {
+                    if from_runnable || prefer_immediate {
+                        *status = LockStatus::Failed;
+                    } else {
+                        match page.next_usage {
+                            Usage::Unused => {
+                                *status = LockStatus::Provisional;
+                                page.next_usage = Usage::renew(*requested_usage);
+                            }
+                            // support multiple readonly locks!
+                            Usage::Readonly(_) | Usage::Writable => {
+                                *status = LockStatus::Failed;
+                            }
+                        }
+                    }
+                }
+            },
+            Usage::Writable => {
+                if from_runnable || prefer_immediate {
+                    *status = LockStatus::Failed;
+                } else {
+                    match page.next_usage {
+                        Usage::Unused => {
+                            *status = LockStatus::Provisional;
+                            page.next_usage = Usage::renew(*requested_usage);
+                        }
+                        // support multiple readonly locks!
+                        Usage::Readonly(_) | Usage::Writable => {
+                            *status = LockStatus::Failed;
+                        }
+                    }
+                }
+            }
+        }
+        page.cu
+    }
+
+    fn reset_lock(
+        &mut self,
+        attempt: &mut LockAttempt,
+        after_execution: bool,
+    ) -> bool {
+        match attempt.status {
+            LockStatus::Succeded => self.unlock(ast, attempt),
+            LockStatus::Provisional => {
+                if after_execution {
+                    self.unlock(ast, attempt)
+                } else {
+                    self.cancel(ast, attempt);
+                    false
+                }
+            }
+            LockStatus::Failed => {
+                false // do nothing
+            }
+        }
+    }
+
+    #[inline(never)]
+    fn unlock(&mut self, attempt: &mut LockAttempt) -> bool {
+        //debug_assert!(attempt.is_success());
+
+        let mut newly_uncontended = false;
+
+        let mut page = attempt.target_page_mut(ast);
+
+        match &mut page.current_usage {
+            Usage::Readonly(ref mut count) => match &attempt.requested_usage {
+                RequestedUsage::Readonly => {
+                    if *count == SOLE_USE_COUNT {
+                        newly_uncontended = true;
+                    } else {
+                        *count -= 1;
+                    }
+                }
+                RequestedUsage::Writable => unreachable!(),
+            },
+            Usage::Writable => match &attempt.requested_usage {
+                RequestedUsage::Writable => {
+                    newly_uncontended = true;
+                }
+                RequestedUsage::Readonly => unreachable!(),
+            },
+            Usage::Unused => unreachable!(),
+        }
+
+        if newly_uncontended {
+            page.current_usage = Usage::Unused;
+        }
+
+        newly_uncontended
+    }
+
+    #[inline(never)]
+    fn cancel(&mut self, attempt: &mut LockAttempt) {
+        let mut page = attempt.target_page_mut(ast);
+
+        match page.next_usage {
+            Usage::Unused => {
+                unreachable!();
+            }
+            // support multiple readonly locks!
+            Usage::Readonly(_) | Usage::Writable => {
+                page.next_usage = Usage::Unused;
+            }
+        }
+    }
+
+    pub fn preloader(&self) -> Preloader {
+        Preloader {
+            book: std::sync::Arc::clone(&self.book),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Preloader {
     book: AddressMap,
