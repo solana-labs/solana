@@ -26,8 +26,12 @@ use {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CommitTransactionDetails {
     Committed {
+        // actual compute units consumed for executing the committed transaction
         executed_units: u64,
+        // actual micro-second elapsed for executing the committed transaction
         executed_us: u64,
+        // compute units to add to executed_units to compensate under priced CUs
+        adjust_units: u64,
     },
     NotCommitted,
 }
@@ -112,6 +116,10 @@ impl Committer {
                 Some(details) => CommitTransactionDetails::Committed {
                     executed_units: details.executed_units,
                     executed_us: details.executed_us,
+                    adjust_units: Self::adjust_executed_units_for_potential_underpricing(
+                        details.executed_units,
+                        details.executed_us,
+                    ),
                 },
                 None => CommitTransactionDetails::NotCommitted,
             })
@@ -180,5 +188,81 @@ impl Committer {
                 batch_transaction_indexes,
             );
         }
+    }
+
+    // If transaction's actual CU/us ratio is below cluster average COMPUTE_UNIT_TO_US_RATIO,
+    // it is likely has been under priced. To prevent extending replay time significantly,
+    // we can pad additional CUs to transaction's actual CUs during packing to compensate
+    // additional executing time it needs.
+    // adjustment is u64 for now, meaning only add more CUs when transactions are under priced,
+    // but not to reduce CU if transactions are over priced.
+    fn adjust_executed_units_for_potential_underpricing(
+        executed_units: u64,
+        executed_us: u64,
+    ) -> u64 {
+        // "actual executed units" is consistent cross cluster, but "adjustment" are only based
+        // on current leader node. Add a 50% taper to reduce local variance.
+        const TAPER: u64 = 2;
+        solana_cost_model::block_cost_limits::COMPUTE_UNIT_TO_US_RATIO
+            .saturating_mul(executed_us)
+            .saturating_sub(executed_units)
+            .saturating_div(TAPER)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_adjust_executed_units_for_potential_underpricing() {
+        solana_logger::setup();
+        use solana_cost_model::block_cost_limits::COMPUTE_UNIT_TO_US_RATIO;
+
+        let executed_cu = 70;
+
+        // no adjust for over-pricing
+        assert_eq!(
+            0,
+            Committer::adjust_executed_units_for_potential_underpricing(
+                executed_cu,
+                executed_cu / (COMPUTE_UNIT_TO_US_RATIO + 10)
+            )
+        );
+
+        // adjust for under pricing
+        let slow_execution_time = executed_cu / (COMPUTE_UNIT_TO_US_RATIO - 10);
+        let expected_adjustment = ((COMPUTE_UNIT_TO_US_RATIO - executed_cu / slow_execution_time)
+            * slow_execution_time)
+            / 2;
+        assert_eq!(
+            expected_adjustment,
+            Committer::adjust_executed_units_for_potential_underpricing(
+                executed_cu,
+                slow_execution_time
+            )
+        );
+
+        // handle zeros
+        assert_eq!(
+            0,
+            Committer::adjust_executed_units_for_potential_underpricing(0, 0)
+        );
+
+        // the case of extreme underpricing
+        assert_eq!(
+            u64::MAX / 2, // tapered in half
+            Committer::adjust_executed_units_for_potential_underpricing(0, u64::MAX)
+        );
+
+        // No adjustment if executed_units is already MAX
+        assert_eq!(
+            0,
+            Committer::adjust_executed_units_for_potential_underpricing(u64::MAX, u64::MAX)
+        );
+        assert_eq!(
+            0,
+            Committer::adjust_executed_units_for_potential_underpricing(u64::MAX, 0)
+        );
     }
 }

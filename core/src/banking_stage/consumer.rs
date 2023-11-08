@@ -507,6 +507,14 @@ impl Consumer {
         self.qos_service.accumulate_actual_execute_cu(cu);
         self.qos_service.accumulate_actual_execute_time(us);
 
+        let (committed_cu, adjust_cu, committed_us) =
+            Self::accumulate_commit_transactions_result(commit_transactions_result.as_ref().ok());
+        self.qos_service
+            .accumulate_committed_execute_cu(committed_cu);
+        self.qos_service
+            .accumulate_committed_execute_time(committed_us);
+        self.qos_service.accumulate_committed_adjust_cu(adjust_cu);
+
         // reports qos service stats for this batch
         self.qos_service.report_metrics(bank.slot());
 
@@ -681,6 +689,34 @@ impl Consumer {
                 )
             },
         )
+    }
+
+    fn accumulate_commit_transactions_result(
+        transaction_committed_status: Option<&Vec<CommitTransactionDetails>>,
+    ) -> (u64, u64, u64) {
+        if let Some(transaction_committed_status) = transaction_committed_status {
+            transaction_committed_status.iter().fold(
+                (0, 0, 0),
+                |(units, time, adjustment), transaction_committed_details| {
+                    if let CommitTransactionDetails::Committed {
+                        executed_units,
+                        executed_us,
+                        adjust_units,
+                    } = transaction_committed_details
+                    {
+                        (
+                            units.saturating_add(*executed_units),
+                            time.saturating_add(*executed_us),
+                            adjustment.saturating_add(*adjust_units),
+                        )
+                    } else {
+                        (units, time, adjustment)
+                    }
+                },
+            )
+        } else {
+            (0, 0, 0)
+        }
     }
 
     /// This function filters pending packets that are still valid
@@ -1277,11 +1313,9 @@ mod tests {
                 let actual_bpf_execution_cost = match commit_transactions_result.first().unwrap() {
                     CommitTransactionDetails::Committed {
                         executed_units,
-                        executed_us,
-                    } => QosService::adjust_compute_units_for_potential_underpricing(
-                        *executed_units,
-                        *executed_us,
-                    ),
+                        executed_us: _,
+                        adjust_units,
+                    } => executed_units.saturating_add(*adjust_units),
                     CommitTransactionDetails::NotCommitted => {
                         unreachable!()
                     }

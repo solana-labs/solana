@@ -194,38 +194,15 @@ impl QosService {
                 if let Ok(tx_cost) = tx_cost {
                     if let CommitTransactionDetails::Committed {
                         executed_units,
-                        executed_us,
+                        executed_us: _,
+                        adjust_units,
                     } = transaction_committed_details
                     {
-                        let compute_units = Self::adjust_compute_units_for_potential_underpricing(
-                            *executed_units,
-                            *executed_us,
-                        );
+                        let compute_units = executed_units.saturating_add(*adjust_units);
                         cost_tracker.update_execution_cost(tx_cost, compute_units)
                     }
                 }
             });
-    }
-
-    // If transaction's actual CU/us ratio is below cluster average COMPUTE_UNIT_TO_US_RATIO,
-    // it is likely has been under priced. To prevent extending replay time significantly,
-    // we can pad additional CUs to transaction's actual CUs during packing to compensate
-    // additional executing time it needs.
-    // adjustment is u64 for now, meaning only add more CUs when transactions are under priced,
-    // but not to reduce CU if transactions are over priced.
-    pub(crate) fn adjust_compute_units_for_potential_underpricing(
-        executed_units: u64,
-        executed_us: u64,
-    ) -> u64 {
-        // "actual executed units" is consistent cross cluster, but "adjustment" are only based
-        // on current leader node. Add a 50% taper to reduce local variance.
-        const TAPER: u64 = 2;
-        let adjustment = solana_cost_model::block_cost_limits::COMPUTE_UNIT_TO_US_RATIO
-            .saturating_mul(executed_us)
-            .saturating_sub(executed_units)
-            .saturating_div(TAPER);
-
-        executed_units + adjustment
     }
 
     fn remove_transaction_costs<'a>(
@@ -333,6 +310,27 @@ impl QosService {
             .stats
             .actual_execute_time_us
             .fetch_add(micro_sec, Ordering::Relaxed);
+    }
+
+    pub fn accumulate_committed_execute_cu(&self, units: u64) {
+        self.metrics
+            .stats
+            .committed_execute_cu
+            .fetch_add(units, Ordering::Relaxed);
+    }
+
+    pub fn accumulate_committed_execute_time(&self, micro_sec: u64) {
+        self.metrics
+            .stats
+            .committed_execute_time_us
+            .fetch_add(micro_sec, Ordering::Relaxed);
+    }
+
+    pub fn accumulate_committed_adjust_cu(&self, units: u64) {
+        self.metrics
+            .stats
+            .committed_adjust_cu
+            .fetch_add(units, Ordering::Relaxed);
     }
 
     // rollup transaction cost details, eg signature_cost, write_lock_cost, data_bytes_cost and
@@ -465,6 +463,15 @@ struct QosServiceMetricsStats {
 
     /// accumulated actual program execute micro-sec that have been packed into block
     actual_execute_time_us: AtomicU64,
+
+    /// accumulated executtion units for all committed transactions
+    committed_execute_cu: AtomicU64,
+
+    /// accumulated execution time for all committed transactions
+    committed_execute_time_us: AtomicU64,
+
+    /// accumulated adjustment units for committed transactions that might have been under-priced
+    committed_adjust_cu: AtomicU64,
 }
 
 #[derive(Debug, Default)]
@@ -563,6 +570,23 @@ impl QosServiceMetrics {
                 (
                     "actual_execute_time_us",
                     self.stats.actual_execute_time_us.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "committed_execute_cu",
+                    self.stats.committed_execute_cu.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "committed_execute_time_us",
+                    self.stats
+                        .committed_execute_time_us
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "committed_adjust_cu",
+                    self.stats.committed_adjust_cu.swap(0, Ordering::Relaxed),
                     i64
                 ),
             );
@@ -765,6 +789,7 @@ mod tests {
                     executed_units: tx_cost.as_ref().unwrap().bpf_execution_cost()
                         + execute_units_adjustment,
                     executed_us: 0,
+                    adjust_units: 0,
                 })
                 .collect();
             let final_txs_cost = total_txs_cost + execute_units_adjustment * transaction_count;
@@ -893,6 +918,7 @@ mod tests {
                             executed_units: tx_cost.as_ref().unwrap().bpf_execution_cost()
                                 + execute_units_adjustment,
                             executed_us: 0,
+                            adjust_units: 0,
                         }
                     }
                 })
@@ -976,54 +1002,6 @@ mod tests {
         assert_eq!(
             expected_bpf_execution_costs,
             batched_transaction_details.costs.batched_bpf_execute_cost
-        );
-    }
-
-    #[test]
-    fn test_adjust_compute_units_for_potential_underpricing() {
-        solana_logger::setup();
-        use solana_cost_model::block_cost_limits::COMPUTE_UNIT_TO_US_RATIO;
-
-        let executed_cu = 70;
-
-        // no adjust for over-pricing
-        assert_eq!(
-            executed_cu,
-            QosService::adjust_compute_units_for_potential_underpricing(
-                executed_cu,
-                executed_cu / (COMPUTE_UNIT_TO_US_RATIO + 10)
-            )
-        );
-
-        // adjust for under pricing
-        let slow_execution_time = executed_cu / (COMPUTE_UNIT_TO_US_RATIO - 10);
-        let adjustment = ((COMPUTE_UNIT_TO_US_RATIO - executed_cu / slow_execution_time)
-            * slow_execution_time)
-            / 2;
-        assert_eq!(
-            executed_cu + adjustment,
-            QosService::adjust_compute_units_for_potential_underpricing(
-                executed_cu,
-                slow_execution_time
-            )
-        );
-
-        // handle zeros and MAX
-        assert_eq!(
-            0,
-            QosService::adjust_compute_units_for_potential_underpricing(0, 0)
-        );
-        assert_eq!(
-            u64::MAX / 2, // tapered in half
-            QosService::adjust_compute_units_for_potential_underpricing(0, u64::MAX)
-        );
-        assert_eq!(
-            u64::MAX,
-            QosService::adjust_compute_units_for_potential_underpricing(u64::MAX, u64::MAX)
-        );
-        assert_eq!(
-            u64::MAX,
-            QosService::adjust_compute_units_for_potential_underpricing(u64::MAX, 0)
         );
     }
 }
