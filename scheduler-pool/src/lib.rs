@@ -437,6 +437,8 @@ type PageRcInner = Arc<(
 pub struct PageRc(by_address::ByAddress<PageRcInner>);
 unsafe impl Send for PageRc {}
 unsafe impl Sync for PageRc {}
+unsafe impl Send for LockAttemptsInCell {}
+unsafe impl Sync for LockAttemptsInCell {}
 type WeightedTaskIds2 = std::collections::BTreeMap<UniqueWeight, (TaskInQueue, std::collections::HashSet<PageRc>)>;
 
 type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
