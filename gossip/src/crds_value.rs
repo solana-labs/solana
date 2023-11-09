@@ -9,7 +9,10 @@ use {
     },
     bincode::{serialize, serialized_size},
     bv::BitVec,
-    itertools::{Itertools, MinMaxResult::MinMax},
+    itertools::{
+        Itertools,
+        MinMaxResult::{MinMax, NoElements, OneElement},
+    },
     rand::{CryptoRng, Rng},
     serde::de::{Deserialize, Deserializer},
     solana_sdk::{
@@ -626,11 +629,10 @@ impl RestartLastVotedForkSlots {
         last_voted_hash: Hash,
         shred_version: u16,
     ) -> Result<Self, String> {
-        if last_voted_fork.is_empty() {
-            return Err("Last voted slot must be specified".to_string());
-        }
-        let MinMax(first_voted_slot, last_voted_slot) = last_voted_fork.iter().minmax() else {
-            return Err("Last voted fork should have at least two elements".to_string());
+        let (first_voted_slot, last_voted_slot) = match last_voted_fork.iter().minmax() {
+            NoElements => return Err("Last voted slot must be specified".to_string()),
+            OneElement(slot) => (slot, slot),
+            MinMax(min, max) => (min, max),
         };
         let max_size = last_voted_slot.saturating_sub(*first_voted_slot) + 1;
         let mut uncompressed_bitvec = BitVec::new_fill(false, max_size);
@@ -1398,6 +1400,7 @@ mod test {
                 .map(|x| x as Slot)
                 .collect_vec(),
         );
+        check_run_length_encoding([1000 as Slot].into());
         check_run_length_encoding([1000 as Slot, (MAX_SLOTS_PER_ENTRY * 2 + 1000) as Slot].into());
         check_run_length_encoding((1000..1800).step_by(2).map(|x| x as Slot).collect_vec());
 
