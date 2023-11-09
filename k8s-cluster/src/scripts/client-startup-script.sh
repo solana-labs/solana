@@ -2,7 +2,7 @@
 # set -e
 
 SECRET_FILE=(
-  "/home/solana/${validator_type}-accounts/faucet.base64"
+  "/home/solana/client-accounts/faucet.base64"
 )
 DECODED_FILE=(
   "/home/solana/faucet.json"
@@ -24,15 +24,36 @@ fi
 
 mkdir -p /home/solana/logs
 
-
 clientToRun="$1"
 benchTpsExtraArgs="$2"
 clientType="${3:-thin-client}"
 
-echo "client to run: $1"
-echo "benchtpsextraargs: $2"
-echo "client type: $3"
+shift 3
 
+runtime_args=()
+while [[ -n $1 ]]; do
+  if [[ ${1:0:1} = - ]]; then
+    if [[ $1 = --target-node ]]; then 
+      echo "--target-node not supported yet...not including" >> logs/client.log 2>&1
+      # runtime_args+=("$1" "$2")
+      shift 2
+    elif [[ $1 = --duration ]]; then 
+      runtime_args+=("$1" "$2")
+      shift 2
+    elif [[ $1 = --num-nodes ]]; then 
+      runtime_args+=("$1" "$2")
+      shift 2
+    else
+      echo "Unknown argument: $1"
+      $program --help
+      exit 1
+    fi
+  else 
+    echo "Unknown argument: $1"
+    $program --help
+    exit 1
+  fi
+done
 
 missing() {
   echo "Error: $1 not specified"
@@ -84,12 +105,12 @@ bench-tps)
 
   clientCommand="\
     solana-bench-tps \
-      --duration 7500 \
       --sustained \
       --threads $threadCount \
       $benchTpsExtraArgs \
       --read-client-keys ./client-accounts.yml \
       ${args[*]} \
+      ${runtime_args[*]} \
   "
   ;;
 idle)
@@ -103,4 +124,6 @@ idle)
   exit 1
 esac
 
-$clientCommand >> client.log 2>&1
+echo "client command to run: $clientCommand" >> logs/client.log 2>&1
+
+$clientCommand >> logs/client.log 2>&1

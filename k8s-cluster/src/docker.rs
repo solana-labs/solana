@@ -157,9 +157,6 @@ WORKDIR /home/solana
         let dockerfile = format!("{}\n{}", dockerfile, self.insert_client_accounts_if_present());
 
         info!("dockerfile: {}", dockerfile);
-        // USER root
-        // RUN chown -R solana:solana /home/solana/ledger
-        // USER solana
         std::fs::write(
             docker_path.as_path().join("Dockerfile"),
             content.unwrap_or(dockerfile.as_str()),

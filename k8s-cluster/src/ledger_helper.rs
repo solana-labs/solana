@@ -29,7 +29,7 @@ impl LedgerHelper {
         Ok(shred_version)
     }
 
-    pub fn create_snapshot(warp_slot: u64) -> Result<(), Box<dyn Error>> {
+    pub fn create_snapshot(_warp_slot: u64) -> Result<(), Box<dyn Error>> {
         ledger_directory_exists()?;
         let config_dir = LEDGER_DIR.join("accounts_hash_cache");
         if config_dir.exists() {

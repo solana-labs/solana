@@ -1,11 +1,11 @@
 use {
-    crate::{boxed_error, SOLANA_ROOT},
+    crate::SOLANA_ROOT,
     base64::{engine::general_purpose, Engine as _},
     k8s_openapi::{
         api::{
             apps::v1::{ReplicaSet, ReplicaSetSpec},
             core::v1::{
-                ConfigMap, ConfigMapVolumeSource, Container, EnvVar, EnvVarSource, Namespace,
+                Container, EnvVar, EnvVarSource, Namespace,
                 ObjectFieldSelector, PodSecurityContext, PodSpec, PodTemplateSpec, Secret,
                 SecretVolumeSource, Service, ServicePort, ServiceSpec, Volume, VolumeMount,
             },
@@ -18,9 +18,11 @@ use {
         Client,
     },
     log::*,
-    serde_json,
-    solana_sdk::hash::Hash,
-    std::{collections::BTreeMap, error::Error, fs::File, io::Read},
+    solana_sdk::{
+        hash::Hash,
+        pubkey::Pubkey,
+    },
+    std::{collections::BTreeMap, error::Error},
 };
 
 pub struct ValidatorConfig<'a> {
@@ -84,6 +86,9 @@ pub struct ClientConfig {
     pub client_type: String,
     pub client_to_run: String,
     pub bench_tps_args: Vec<String>,
+    pub target_node: Option<Pubkey>,
+    pub duration: u64,
+    pub num_nodes: Option<u64>,
 }
 
 pub struct Kubernetes<'a> {
@@ -184,6 +189,21 @@ impl<'a> Kubernetes<'a> {
         let bench_tps_args = self.client_config.bench_tps_args.join(" ");
         flags.push(bench_tps_args);
         flags.push(self.client_config.client_type.clone());
+
+        if let Some(target_node) = self.client_config.target_node {
+            flags.push("--target-node".to_string());
+            flags.push(target_node.to_string());
+        }
+
+        flags.push("--duration".to_string());
+        flags.push(self.client_config.duration.to_string());
+        info!("greg duration: {}", self.client_config.duration);
+
+        if let Some(num_nodes) = self.client_config.num_nodes {
+            flags.push("--num-nodes".to_string());
+            flags.push(num_nodes.to_string());
+            info!("greg num nodes: {}", num_nodes);
+        }
 
         flags
 
@@ -680,6 +700,26 @@ impl<'a> Kubernetes<'a> {
             },
         ];
 
+        let accounts_volume = Some(vec![
+            Volume {
+                name: format!("client-accounts-volume-{}", client_index),
+                secret: Some(SecretVolumeSource {
+                    secret_name,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }
+        ]);
+
+        let accounts_volume_mount = Some(vec![
+            VolumeMount {
+                name: format!("client-accounts-volume-{}", client_index),
+                mount_path: "/home/solana/client-accounts".to_string(),
+                ..Default::default()
+            }
+        ]);
+
+
         let mut command =
             vec!["/home/solana/k8s-cluster-scripts/client-startup-script.sh".to_string()];
         command.extend(self.generate_client_command_flags());
@@ -696,8 +736,8 @@ impl<'a> Kubernetes<'a> {
             num_clients,
             env_vars,
             &command,
-            None,
-            None,
+            accounts_volume,
+            accounts_volume_mount,
         )
         .await
     }

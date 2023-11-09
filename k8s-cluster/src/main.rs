@@ -17,6 +17,7 @@ use {
         get_solana_root,
         ValidatorType,
     },
+    solana_sdk::pubkey::Pubkey,
     std::{thread, time::Duration},
 };
 
@@ -315,7 +316,7 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("client-type")
                 .takes_value(true)
                 .default_value("thin-client")
-                .help("Client Config. options: thin-client, tpu-client, rpc-client. default: [bench-tps]"),
+                .help("Client Config. options: thin-client, tpu-client, rpc-client. default: [thin-client]"),
         )
         .arg(
             Arg::with_name("client_to_run")
@@ -342,6 +343,27 @@ fn parse_matches() -> ArgMatches<'static> {
                 If you want multiple args, pass in twice: 
                     --bench-tps-args tx_count=25000 --bench-tps-args --other-flag=<val>
                 "),
+        )
+        .arg(
+            Arg::with_name("target_node")
+                .long("target-node")
+                .takes_value(true)
+                .help("Client Config. Optional: Specify an exact node to send transactions to. use: --target-node <Pubkey>. 
+                Not supported yet. TODO..."),
+        )
+        .arg(
+            Arg::with_name("duration")
+                .long("duration")
+                .takes_value(true)
+                .default_value("7500")
+                .help("Client Config. Seconds to run benchmark, then exit; default is forever use: --duration <SECS>"),
+        )
+        .arg(
+            Arg::with_name("num_nodes")
+                .long("num-nodes")
+                .short("-N")
+                .takes_value(true)
+                .help("Client Config. Optional: Wait for NUM nodes to converge: --num-nodes <NUM> "),
         )
         .get_matches()
 }
@@ -396,6 +418,21 @@ async fn main() {
                     .collect::<Vec<String>>()
             })
             .collect(),
+        target_node: match matches.value_of("target_node") {
+            Some(s) => match s.parse::<Pubkey>() {
+                Ok(pubkey) => Some(pubkey),
+                Err(e) => return error!("failed to parse pubkey in target_node: {}", e),
+            },
+            None => None,
+        },
+        duration: value_t_or_exit!(matches, "duration", u64),
+        num_nodes: matches
+            .value_of("num_nodes")
+            .map(|value_str| {
+                value_str
+                    .parse()
+                    .expect("Invalid value for num_nodes")
+            }),
     };
 
     let build_config = BuildConfig {
