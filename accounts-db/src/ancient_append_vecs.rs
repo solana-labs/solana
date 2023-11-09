@@ -436,8 +436,6 @@ impl AccountsDb {
         slots: Vec<Slot>,
         tuning: &PackedAncientStorageTuning,
     ) -> AncientSlotInfos {
-        assert!(!tuning.can_randomly_shrink);
-
         let mut ancient_slot_infos = self.calc_ancient_slot_info(slots, tuning.can_randomly_shrink);
 
         ancient_slot_infos.filter_ancient_slots(tuning);
