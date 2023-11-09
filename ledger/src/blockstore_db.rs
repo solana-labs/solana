@@ -351,7 +351,7 @@ pub mod columns {
     ///
     /// Its index type is (Slot, fec_set_index).
     ///
-    /// * index type: `crate::shred::ErasureSetId` `(Slot, fec_set_index: u64)`
+    /// * index type: `crate::shred::ErasureSetId` `(Slot, fec_set_index: u32)`
     /// * value type: [`blockstore_meta::MerkleRootMeta`]`
     pub struct MerkleRootMeta;
 
@@ -1246,24 +1246,24 @@ impl TypedColumn for columns::OptimisticSlots {
 }
 
 impl Column for columns::MerkleRootMeta {
-    type Index = (Slot, u64);
+    type Index = (Slot, /*fec_set_index:*/ u32);
 
-    fn index(key: &[u8]) -> (Slot, u64) {
+    fn index(key: &[u8]) -> Self::Index {
         let slot = BigEndian::read_u64(&key[..8]);
-        let fec_set_index = BigEndian::read_u64(&key[8..]);
+        let fec_set_index = BigEndian::read_u32(&key[8..]);
 
         (slot, fec_set_index)
     }
 
-    fn key((slot, fec_set_index): (Slot, u64)) -> Vec<u8> {
+    fn key((slot, fec_set_index): Self::Index) -> Vec<u8> {
         let mut key = vec![0; 16];
         BigEndian::write_u64(&mut key[..8], slot);
-        BigEndian::write_u64(&mut key[8..], fec_set_index);
+        BigEndian::write_u32(&mut key[8..], fec_set_index);
         key
     }
 
-    fn slot(index: Self::Index) -> Slot {
-        index.0
+    fn slot((slot, _fec_set_index): Self::Index) -> Slot {
+        slot
     }
 
     fn as_index(slot: Slot) -> Self::Index {
