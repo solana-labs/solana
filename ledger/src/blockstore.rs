@@ -3236,13 +3236,8 @@ impl Blockstore {
         }
 
         self.db.write(write_batch)?;
-
-        let mut max_root = self.max_root.load(Ordering::Relaxed);
-        if max_root == std::u64::MAX {
-            max_root = 0;
-        }
         self.max_root
-            .store(cmp::max(max_new_rooted_slot, max_root), Ordering::Relaxed);
+            .fetch_max(max_new_rooted_slot, Ordering::Relaxed);
         Ok(())
     }
 
