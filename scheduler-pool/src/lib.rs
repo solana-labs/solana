@@ -256,7 +256,6 @@ impl Task {
     #[inline(never)]
     fn index_with_address_book(
         this: &TaskInQueue,
-        task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
     ) {
         for lock_attempt in &*this.lock_attempts_mut() {
             lock_attempt
@@ -976,7 +975,6 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn pop_from_queue_then_lock(
-        task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
         runnable_queue: &mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
@@ -1027,7 +1025,7 @@ impl ScheduleStage {
                         next_task.mark_as_contended();
                         *contended_count = contended_count.checked_add(1).unwrap();
 
-                        Task::index_with_address_book(&next_task, task_sender);
+                        Task::index_with_address_book(&next_task);
 
                         // maybe run lightweight prune logic on contended_queue here.
                     } else {
@@ -1231,7 +1229,6 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn schedule_next_execution(
-        task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
         runnable_queue: &mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
@@ -1239,7 +1236,6 @@ impl ScheduleStage {
         failed_lock_count: &mut usize,
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee = Self::pop_from_queue_then_lock(
-            task_sender,
             runnable_queue,
             address_book,
             contended_count,
@@ -1300,7 +1296,6 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
             let mut runnable_queue = ModeSpecificTaskQueue::BlockVerification(ChannelBackedTaskQueue::new(&transaction_receiver));
             runnable_queue.add_to_schedule(task.unique_weight, task)
             let maybe_ee = ScheduleStage::schedule_next_execution(
-                &task_sender,
                 &mut runnable_queue,
                 address_book,
                 &mut contended_count,
