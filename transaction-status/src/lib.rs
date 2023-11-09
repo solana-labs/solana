@@ -12,6 +12,7 @@ use {
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
         commitment_config::CommitmentConfig,
+        hash::Hash,
         instruction::CompiledInstruction,
         message::{
             v0::{self, LoadedAddresses, LoadedMessage, MessageAddressTableLookup},
@@ -805,7 +806,7 @@ pub struct VersionedConfirmedBlockWithEntries {
 // a block. Used for uploading to BigTable.
 pub struct EntrySummary {
     pub num_hashes: u64,
-    pub hash: String,
+    pub hash: Hash,
     pub num_transactions: u64,
     pub starting_transaction_index: usize,
 }

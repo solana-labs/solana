@@ -2070,14 +2070,18 @@ impl Blockstore {
                     .map(|entry| entry.hash)
                     .unwrap_or_else(|| panic!("Rooted slot {slot:?} must have blockhash"));
                 let mut starting_transaction_index = 0;
-                let mut entries = vec![];
+                let mut entries = if populate_entries {
+                    Vec::with_capacity(slot_entries.len())
+                } else {
+                    Vec::new()
+                };
                 let slot_transaction_iterator = slot_entries
                     .into_iter()
                     .flat_map(|entry| {
                         if populate_entries {
                             entries.push(solana_transaction_status::EntrySummary {
                                 num_hashes: entry.num_hashes,
-                                hash: entry.hash.to_string(),
+                                hash: entry.hash,
                                 num_transactions: entry.transactions.len() as u64,
                                 starting_transaction_index,
                             });
