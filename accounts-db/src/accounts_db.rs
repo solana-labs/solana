@@ -9408,7 +9408,7 @@ impl AccountsDb {
             // subtract data.len() from accounts_data_len for all old accounts that are in the index twice
             let mut accounts_data_len_dedup_timer =
                 Measure::start("handle accounts data len duplicates");
-            let uncleaned_roots = Mutex::new(HashSet::<Slot>::default());
+            let uncleaned_roots = Mutex::new(IntSet::default());
             if pass == 0 {
                 let accounts_data_len_from_duplicates = unique_pubkeys_by_bin
                     .par_iter()
