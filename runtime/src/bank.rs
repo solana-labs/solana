@@ -4867,9 +4867,19 @@ impl Bank {
         error_counters: &mut TransactionErrorMetrics,
         log_messages_bytes_limit: Option<usize>,
         programs_loaded_for_tx_batch: &LoadedProgramsForTxBatch,
+        unique_loaded_accounts: &mut HashMap<Pubkey, AccountSharedData>,
     ) -> TransactionExecutionResult {
         let prev_accounts_data_len = self.load_accounts_data_size();
-        let transaction_accounts = std::mem::take(&mut loaded_transaction.accounts);
+        let mut transaction_accounts = std::mem::take(&mut loaded_transaction.accounts);
+
+        // get latest value of acct struct from unique_loaded_accounts
+        for acct in transaction_accounts.iter_mut() {
+            if let Some(unique_acct_data) = unique_loaded_accounts.get(&acct.0) {
+                if unique_acct_data != &acct.1 {
+                    acct.1 = unique_acct_data.clone();
+                }
+            }
+        }
 
         fn transaction_accounts_lamports_sum(
             accounts: &[(Pubkey, AccountSharedData)],
@@ -4936,6 +4946,26 @@ impl Bank {
             &mut executed_units,
         );
         process_message_time.stop();
+
+        // update latest value of acct struct in unique_loaded_accounts
+        if process_result.is_ok() {
+            let account_keys = transaction_context.account_keys();
+            let accounts: Vec<AccountSharedData> = transaction_context.accounts().accounts
+            .iter()
+            .map(|account| account.clone().into_inner())
+            .collect();
+
+            for acct_index in 0..account_keys.len() {
+                let key = account_keys[acct_index];
+                let acct_data_from_lookup = unique_loaded_accounts
+                    .entry(key)
+                    .or_insert_with(|| accounts[acct_index].clone());
+
+                if acct_data_from_lookup != &accounts[acct_index] {
+                    *acct_data_from_lookup = accounts[acct_index].clone();
+                }
+            }
+        }
 
         saturating_add_assign!(
             timings.execute_accessories.process_message_us,
@@ -5261,6 +5291,15 @@ impl Bank {
         let mut execution_time = Measure::start("execution_time");
         let mut signature_count: u64 = 0;
 
+        // collect unique loaded accounts
+        let mut unique_loaded_accounts: HashMap<Pubkey, AccountSharedData> = HashMap::default();
+        for (tx, _) in loaded_transactions.iter().filter(|(tx, _)| tx.is_ok()) {
+            let accts = &tx.as_ref().unwrap().accounts;
+            for acct in accts.iter() {
+                unique_loaded_accounts.insert(acct.0, acct.1.clone());
+            }
+        }
+
         let execution_results: Vec<TransactionExecutionResult> = loaded_transactions
             .iter_mut()
             .zip(sanitized_txs.iter())
@@ -5302,6 +5341,7 @@ impl Bank {
                         &mut error_counters,
                         log_messages_bytes_limit,
                         &programs_loaded_for_tx_batch.borrow(),
+                        &mut unique_loaded_accounts,
                     );
 
                     if let TransactionExecutionResult::Executed {

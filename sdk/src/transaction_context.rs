@@ -58,7 +58,7 @@ pub type TransactionAccount = (Pubkey, AccountSharedData);
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TransactionAccounts {
-    accounts: Vec<RefCell<AccountSharedData>>,
+    pub accounts: Vec<RefCell<AccountSharedData>>,
     touched_flags: RefCell<Box<[bool]>>,
 }
 
@@ -192,6 +192,11 @@ impl TransactionContext {
     #[cfg(not(target_os = "solana"))]
     pub fn accounts(&self) -> &Rc<TransactionAccounts> {
         &self.accounts
+    }
+
+    #[cfg(not(target_os = "solana"))]
+    pub fn account_keys(&self) -> &Pin<Box<[Pubkey]>> {
+        &self.account_keys
     }
 
     /// Stores the signature of the current transaction
