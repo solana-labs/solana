@@ -59,7 +59,7 @@ use {
     solana_transaction_status::{
         ConfirmedTransactionStatusWithSignature, ConfirmedTransactionWithStatusMeta, Rewards,
         TransactionStatusMeta, TransactionWithStatusMeta, VersionedConfirmedBlock,
-        VersionedTransactionWithStatusMeta,
+        VersionedConfirmedBlockWithEntries, VersionedTransactionWithStatusMeta,
     },
     std::{
         borrow::Cow,
@@ -2031,6 +2031,33 @@ impl Blockstore {
         slot: Slot,
         require_previous_blockhash: bool,
     ) -> Result<VersionedConfirmedBlock> {
+        self.get_complete_block_with_entries(slot, require_previous_blockhash, false)
+            .map(|result| result.block)
+    }
+
+    pub fn get_rooted_block_with_entries(
+        &self,
+        slot: Slot,
+        require_previous_blockhash: bool,
+    ) -> Result<VersionedConfirmedBlockWithEntries> {
+        datapoint_info!(
+            "blockstore-rpc-api",
+            ("method", "get_rooted_block_with_entries", String)
+        );
+        let _lock = self.check_lowest_cleanup_slot(slot)?;
+
+        if self.is_root(slot) {
+            return self.get_complete_block_with_entries(slot, require_previous_blockhash, true);
+        }
+        Err(BlockstoreError::SlotNotRooted)
+    }
+
+    fn get_complete_block_with_entries(
+        &self,
+        slot: Slot,
+        require_previous_blockhash: bool,
+        populate_entries: bool,
+    ) -> Result<VersionedConfirmedBlockWithEntries> {
         let Some(slot_meta) = self.meta_cf.get(slot)? else {
             info!("SlotMeta not found for slot {}", slot);
             return Err(BlockstoreError::SlotUnavailable);
@@ -2042,9 +2069,26 @@ impl Blockstore {
                     .last()
                     .map(|entry| entry.hash)
                     .unwrap_or_else(|| panic!("Rooted slot {slot:?} must have blockhash"));
+                let mut starting_transaction_index = 0;
+                let mut entries = if populate_entries {
+                    Vec::with_capacity(slot_entries.len())
+                } else {
+                    Vec::new()
+                };
                 let slot_transaction_iterator = slot_entries
                     .into_iter()
-                    .flat_map(|entry| entry.transactions)
+                    .flat_map(|entry| {
+                        if populate_entries {
+                            entries.push(solana_transaction_status::EntrySummary {
+                                num_hashes: entry.num_hashes,
+                                hash: entry.hash,
+                                num_transactions: entry.transactions.len() as u64,
+                                starting_transaction_index,
+                            });
+                            starting_transaction_index += entry.transactions.len();
+                        }
+                        entry.transactions
+                    })
                     .map(|transaction| {
                         if let Err(err) = transaction.sanitize() {
                             warn!(
@@ -2096,7 +2140,7 @@ impl Blockstore {
                     block_time,
                     block_height,
                 };
-                return Ok(block);
+                return Ok(VersionedConfirmedBlockWithEntries { block, entries });
             }
         }
         Err(BlockstoreError::SlotUnavailable)
