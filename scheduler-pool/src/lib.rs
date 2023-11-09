@@ -937,7 +937,6 @@ impl ScheduleStage {
     fn select_next_task<'a>(
         runnable_queue: &'a mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
-        contended_count: &usize,
         task_selection: &mut TaskSelection,
     ) -> Option<(TaskSource, TaskInQueue)> {
         let selected_heaviest_tasks = match task_selection {
@@ -981,7 +980,6 @@ impl ScheduleStage {
     fn pop_from_queue_then_lock(
         runnable_queue: &mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
-        contended_count: &mut usize,
         task_selection: &mut TaskSelection,
         failed_lock_count: &mut usize,
     ) -> Option<(UniqueWeight, TaskInQueue, Vec<LockAttempt>)> {
@@ -989,7 +987,6 @@ impl ScheduleStage {
             if let Some((task_source, next_task)) = Self::select_next_task(
                 runnable_queue,
                 address_book,
-                contended_count,
                 task_selection,
             ) {
                 let from_runnable = matches!(task_source, TaskSource::Runnable);
@@ -1027,7 +1024,6 @@ impl ScheduleStage {
                             lock_count
                         );
                         next_task.mark_as_contended();
-                        *contended_count = contended_count.checked_add(1).unwrap();
 
                         Task::index_with_address_book(&next_task);
 
@@ -1058,7 +1054,6 @@ impl ScheduleStage {
                     assert_eq!(unlockable_count, 0);
                     let lock_count = next_task.lock_attempts_mut().len();
                     trace!("provisional exec: [{}/{}]", provisional_count, lock_count);
-                    *contended_count = contended_count.checked_sub(1).unwrap();
                     next_task.mark_as_uncontended();
                     break;
                 }
@@ -1073,7 +1068,6 @@ impl ScheduleStage {
 
                 assert!(!next_task.already_finished());
                 if !from_runnable {
-                    *contended_count = contended_count.checked_sub(1).unwrap();
                     next_task.mark_as_uncontended();
                     if let TaskSource::Contended(uncontendeds) = task_source {
                         for lock_attempt in next_task.lock_attempts_mut().iter().filter(|l| l.requested_usage == RequestedUsage::Readonly /*&& uncontendeds.contains(&l.target)*/) {
@@ -1179,14 +1173,12 @@ impl ScheduleStage {
     fn schedule_next_execution(
         runnable_queue: &mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
-        contended_count: &mut usize,
         task_selection: &mut TaskSelection,
         failed_lock_count: &mut usize,
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee = Self::pop_from_queue_then_lock(
             runnable_queue,
             address_book,
-            contended_count,
             task_selection,
             failed_lock_count,
         )
@@ -1210,7 +1202,6 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
         let mut executing_queue_count = 0_usize;
-        let mut contended_count = 0;
         let mut provisioning_tracker_count = 0;
         let mut sequence_time = 0;
         let mut queue_clock = 0;
@@ -1248,7 +1239,6 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
             let maybe_ee = ScheduleStage::schedule_next_execution(
                 &mut runnable_queue,
                 &mut address_book,
-                &mut contended_count,
                 &mut selection,
                 &mut failed_lock_count,
             );
