@@ -1265,6 +1265,16 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
     }
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
+        let mut executing_queue_count = 0_usize;
+        let mut contended_count = 0;
+        let mut provisioning_tracker_count = 0;
+        let mut sequence_time = 0;
+        let mut queue_clock = 0;
+        let mut execute_clock = 0;
+        let mut commit_clock = 0;
+        let mut processed_count = 0_usize;
+        let mut interval_count = 0;
+        let mut failed_lock_count = 0;
         transaction_with_index.with_transaction_and_index(|transaction, index| {
             let locks = transaction.get_account_locks_unchecked();
             let writable_lock_iter = locks.writable.iter().map(|address| {
