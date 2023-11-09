@@ -807,7 +807,7 @@ pub struct PooledScheduler<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleEx
     context: Option<SchedulingContext>,
     result_with_timings: Mutex<Option<ResultWithTimings>>,
     handler: TH,
-    address_book: AddressBook,
+    address_book: Mutex<AddressBook>,
     preloader: Arc<Preloader>,
     _phantom: PhantomData<SEA>,
 }
@@ -818,7 +818,7 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> PooledSche
         initial_context: SchedulingContext,
         handler: TH,
     ) -> Self {
-        let address_book = AddressBook::default();
+        let address_book = AddressBook::default().into();
         let preloader = Arc::new(address_book.preloader());
 
         Self {
