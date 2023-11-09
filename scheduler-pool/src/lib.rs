@@ -966,38 +966,6 @@ impl ScheduleStage {
             }
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
                 unreachable!("heaviest_entry_to_execute isn't idempotent....");
-
-                /*
-                let weight_from_runnable = heaviest_runnable_entry.key();
-                let uw = weight_from_contended.key();
-
-                if weight_from_runnable > uw {
-                    panic!(
-                        "replay shouldn't see this branch: {} > {}",
-                        weight_from_runnable, uw
-                    );
-
-                    /*
-                    trace!("select: runnable > contended");
-                    let t = heaviest_runnable_entry.remove();
-                    Some((TaskSource::Runnable, t))
-                    */
-                } else if uw > weight_from_runnable {
-                    if task_selection.runnable_exclusive() {
-                        trace!("select: contended > runnnable, runnable_exclusive");
-                        let t = heaviest_runnable_entry.remove();
-                        Some((TaskSource::Runnable, t))
-                    } else {
-                        trace!("select: contended > runnnable, !runnable_exclusive)");
-                        let t = weight_from_contended.remove();
-                        Some((TaskSource::Contended(t.1), t.0))
-                    }
-                } else {
-                    unreachable!(
-                        "identical unique weights shouldn't exist in both runnable and contended"
-                    )
-                }
-                */
             }
             (None, None) => {
                 trace!("select: none");
@@ -1009,12 +977,10 @@ impl ScheduleStage {
     #[inline(never)]
     fn pop_from_queue_then_lock(
         task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
-        //runnable_queue: &mut TaskQueue,
         runnable_queue: &mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
         queue_clock: &mut usize,
-        provisioning_tracker_count: &mut usize,
         task_selection: &mut TaskSelection,
         failed_lock_count: &mut usize,
     ) -> Option<(UniqueWeight, TaskInQueue, Vec<LockAttempt>)> {
@@ -1045,7 +1011,6 @@ impl ScheduleStage {
                         *retry_count = retry_count.checked_sub(1).unwrap();
                     }
 
-                    //trace!("reset_lock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.0.signature());
                     Self::reset_lock_for_failed_execution(
                         address_book,
                         &unique_weight,
@@ -1084,29 +1049,7 @@ impl ScheduleStage {
                     }
 
                     if from_runnable || matches!(task_source, TaskSource::Stuck) {
-                        // for the case of being struck, we have already removed it from
-                        // stuck_tasks, so pretend to add anew one.
-                        // todo: optimize this needless operation
-                        /*
-                        let a = address_book
-                            .stuck_tasks
-                            .insert(next_task.stuck_task_id(), Task::clone_in_queue(&next_task));
-                        assert!(a.is_none());
-                        */
-
-                        if from_runnable {
-                            // continue; // continue to prefer depleting the possibly-non-empty runnable queue
-                            break;
-                        } else if matches!(task_source, TaskSource::Stuck) {
-                            // need to bail out immediately to avoid going to infinite loop of re-processing
-                            // the struck task again.
-                            // todo?: buffer restuck tasks until readd to the stuck tasks until
-                            // some scheduling state tick happens and try 2nd idling stuck task in
-                            // the collection?
-                            break;
-                        } else {
-                            unreachable!();
-                        }
+                        break;
                     } else if matches!(task_source, TaskSource::Contended(_)) {
                         break;
                     } else {
@@ -1121,8 +1064,6 @@ impl ScheduleStage {
                     next_task.mark_as_uncontended();
                     //address_book.stuck_tasks.remove(&next_task.stuck_task_id());
 
-                    *provisioning_tracker_count =
-                        provisioning_tracker_count.checked_add(1).unwrap();
                     Self::finalize_lock_for_provisional_execution(
                         address_book,
                         &next_task,
@@ -1201,7 +1142,6 @@ impl ScheduleStage {
     fn unlock_after_execution(
         address_book: &mut AddressBook,
         lock_attempts: &mut [LockAttempt],
-        provisioning_tracker_count: &mut usize,
     ) {
         for mut l in lock_attempts {
             let newly_uncontended = address_book.reset_lock(&mut l, true);
@@ -1286,7 +1226,6 @@ impl ScheduleStage {
         ee: &mut ExecutionEnvironment,
         address_book: &mut AddressBook,
         commit_clock: &mut usize,
-        provisioning_tracker_count: &mut usize,
     ) {
         // do par()-ly?
 
@@ -1301,19 +1240,8 @@ impl ScheduleStage {
         Self::unlock_after_execution(
             address_book,
             &mut ee.finalized_lock_attempts,
-            provisioning_tracker_count,
         );
         ee.task.mark_as_finished();
-
-        //address_book.stuck_tasks.remove(&ee.task.stuck_task_id());
-
-        // block-wide qos validation will be done here
-        // if error risen..:
-        //   don't commit the tx for banking and potentially finish scheduling at block max cu
-        //   limit
-        //   mark the block as dead for replaying
-
-        // par()-ly clone updated Accounts into address book
     }
 
     #[inline(never)]
@@ -1324,7 +1252,6 @@ impl ScheduleStage {
         contended_count: &mut usize,
         queue_clock: &mut usize,
         execute_clock: &mut usize,
-        provisioning_tracker_count: &mut usize,
         task_selection: &mut TaskSelection,
         failed_lock_count: &mut usize,
     ) -> Option<Box<ExecutionEnvironment>> {
@@ -1334,7 +1261,6 @@ impl ScheduleStage {
             address_book,
             contended_count,
             queue_clock,
-            provisioning_tracker_count,
             task_selection,
             failed_lock_count,
         )
