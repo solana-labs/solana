@@ -551,10 +551,6 @@ impl Shred {
             Self::ShredData(_) => Err(Error::InvalidShredType),
         }
     }
-
-    pub fn merkle_root(&self) -> Option<Hash> {
-        layout::get_merkle_root(self.payload())
-    }
 }
 
 // Helper methods to extract pieces of the shred from the payload

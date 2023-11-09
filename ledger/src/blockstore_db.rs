@@ -105,7 +105,7 @@ const PROGRAM_COSTS_CF: &str = "program_costs";
 /// Column family for optimistic slots
 const OPTIMISTIC_SLOTS_CF: &str = "optimistic_slots";
 /// Column family for merkle roots
-const MERKLE_ROOT_CF: &str = "merkle_root_meta";
+const MERKLE_ROOT_META_CF: &str = "merkle_root_meta";
 
 #[derive(Error, Debug)]
 pub enum BlockstoreError {
@@ -349,7 +349,7 @@ pub mod columns {
     /// its FEC set. This column stores that merkle root and associated
     /// meta information about the first shred received.
     ///
-    /// Its index type is (Slot, FEC) set index.
+    /// Its index type is (Slot, fec_set_index).
     ///
     /// * index type: `crate::shred::ErasureSetId` `(Slot, fec_set_index: u64)`
     /// * value type: [`blockstore_meta::MerkleRootMeta`]`
@@ -1250,15 +1250,15 @@ impl Column for columns::MerkleRootMeta {
 
     fn index(key: &[u8]) -> (Slot, u64) {
         let slot = BigEndian::read_u64(&key[..8]);
-        let set_index = BigEndian::read_u64(&key[8..]);
+        let fec_set_index = BigEndian::read_u64(&key[8..]);
 
-        (slot, set_index)
+        (slot, fec_set_index)
     }
 
-    fn key((slot, set_index): (Slot, u64)) -> Vec<u8> {
+    fn key((slot, fec_set_index): (Slot, u64)) -> Vec<u8> {
         let mut key = vec![0; 16];
         BigEndian::write_u64(&mut key[..8], slot);
-        BigEndian::write_u64(&mut key[8..], set_index);
+        BigEndian::write_u64(&mut key[8..], fec_set_index);
         key
     }
 
@@ -1272,7 +1272,7 @@ impl Column for columns::MerkleRootMeta {
 }
 
 impl ColumnName for columns::MerkleRootMeta {
-    const NAME: &'static str = MERKLE_ROOT_CF;
+    const NAME: &'static str = MERKLE_ROOT_META_CF;
 }
 impl TypedColumn for columns::MerkleRootMeta {
     type Type = MerkleRootMeta;

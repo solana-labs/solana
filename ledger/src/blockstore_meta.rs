@@ -406,31 +406,6 @@ impl ErasureMeta {
     }
 }
 
-impl MerkleRootMeta {
-    pub(crate) fn from_shred(shred: &Shred) -> Self {
-        Self {
-            merkle_root: shred.merkle_root().unwrap_or_default(),
-            first_received_shred_index: u64::from(shred.index()),
-            first_received_shred_type: shred.shred_type(),
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn merkle_root(&self) -> Hash {
-        self.merkle_root
-    }
-
-    #[cfg(test)]
-    pub(crate) fn first_received_shred_index(&self) -> u64 {
-        self.first_received_shred_index
-    }
-
-    #[cfg(test)]
-    pub(crate) fn first_received_shred_type(&self) -> ShredType {
-        self.first_received_shred_type
-    }
-}
-
 impl DuplicateSlotProof {
     pub(crate) fn new(shred1: Vec<u8>, shred2: Vec<u8>) -> Self {
         DuplicateSlotProof { shred1, shred2 }
