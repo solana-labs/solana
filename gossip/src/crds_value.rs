@@ -512,17 +512,20 @@ pub struct RunLengthEncoding {
 impl RunLengthEncoding {
     // Return whether the encoded vec is already full.
     fn valid_and_has_space(total_serde_bytes: &mut usize, count: usize) -> bool {
-        if count == 0 || count >= 1 << 16 {
-            false
-        } else {
-            let current_bit_count: u16 = count as u16;
-            let serde_bits = 16 - current_bit_count.leading_zeros();
-            let serde_bytes = ((serde_bits + 6) / 7).max(1) as usize;
-            if *total_serde_bytes + serde_bytes > RestartLastVotedForkSlots::MAX_SPACE {
+        match u16::try_from(count) {
+            Ok(current_bit_count) => {
+                let serde_bits = u16::BITS - current_bit_count.leading_zeros();
+                let serde_bytes = ((serde_bits + 6) / 7).max(1) as usize;
+                if *total_serde_bytes + serde_bytes > RestartLastVotedForkSlots::MAX_SPACE {
+                    false
+                } else {
+                    *total_serde_bytes += serde_bytes;
+                    true
+                }
+            }
+            Err(e) => {
+                info!("Failed to convert count to u16: {e:?}");
                 false
-            } else {
-                *total_serde_bytes += serde_bytes;
-                true
             }
         }
     }
@@ -544,24 +547,22 @@ impl RunLengthEncoding {
     }
 
     pub fn to_slots(&self, last_slot: Slot, min_slot: Slot) -> Vec<Slot> {
-        let mut result: Vec<Slot> = Vec::new();
-        let mut offset = 0;
-        for (bit_count, bit) in self.encoded.iter().zip([1, 0].iter().cycle()) {
-            let count = bit_count.0;
-            if *bit > 0 {
-                for i in 0..count {
-                    let slot = last_slot.saturating_sub(offset).saturating_sub(i as Slot);
-                    if slot < min_slot {
-                        return result;
-                    }
-                    result.push(slot);
-                    if result.len() > MAX_SLOTS_PER_ENTRY {
-                        break;
-                    }
+        let mut result: Vec<Slot> = self
+            .encoded
+            .iter()
+            .zip([1, 0].iter().cycle())
+            .flat_map(|(bit_count, bit)| std::iter::repeat(bit).take(bit_count.0.into()))
+            .enumerate()
+            .filter_map(|(offset, bit): (usize, &i32)| {
+                if *bit > 0 {
+                    Some(last_slot.saturating_sub(offset as Slot))
+                } else {
+                    None
                 }
-            }
-            offset += count as Slot;
-        }
+            })
+            .take(MAX_SLOTS_PER_ENTRY)
+            .take_while(|slot| *slot >= min_slot)
+            .collect();
         result.reverse();
         result
     }
@@ -1377,5 +1378,32 @@ mod test {
         assert!(serialized_size(&large_slots).unwrap() < MAX_CRDS_OBJECT_SIZE as u64);
         let retrieved_slots = large_slots.to_slots(0);
         assert_eq!(retrieved_slots, large_slots_vec);
+    }
+
+    fn check_run_length_encoding(slots: Vec<Slot>) {
+        let last_voted_slot = slots[slots.len() - 1];
+        let mut bitvec = BitVec::new_fill(false, last_voted_slot - slots[0] + 1);
+        for slot in &slots {
+            bitvec.set(last_voted_slot - slot, true);
+        }
+        let rle = RunLengthEncoding::new(&bitvec);
+        let retrieved_slots = rle.to_slots(last_voted_slot, 0);
+        assert_eq!(retrieved_slots, slots);
+    }
+
+    #[test]
+    fn test_run_length_encoding() {
+        check_run_length_encoding(
+            (1000..MAX_SLOTS_PER_ENTRY + 1000)
+                .map(|x| x as Slot)
+                .collect_vec(),
+        );
+        check_run_length_encoding([1000 as Slot, (MAX_SLOTS_PER_ENTRY * 2 + 1000) as Slot].into());
+        check_run_length_encoding((1000..1800).step_by(2).map(|x| x as Slot).collect_vec());
+
+        let mut rng = rand::thread_rng();
+        let large_length = 500;
+        let range: Vec<Slot> = make_rand_slots(&mut rng).take(large_length).collect();
+        check_run_length_encoding(range);
     }
 }
