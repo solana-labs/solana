@@ -184,7 +184,6 @@ EOF
           break
         fi
       done
-      # if numbenchtpsclients > 0, we create an account and store
 
       for i in $(seq 0 $((numBenchTpsClients-1))); do
         # shellcheck disable=SC2086 # Do not want to quote $benchTpsExtraArgs
@@ -193,7 +192,6 @@ EOF
         # Skip first line, as it contains header
         tail -n +2 -q config/bench-tps"$i".yml >> config/client-accounts.yml
         echo "" >> config/client-accounts.yml
-        echo "creating client-account: $i"
       done
       if [[ -f $externalPrimordialAccountsFile ]]; then
         cat "$externalPrimordialAccountsFile" >> config/validator-balances.yml

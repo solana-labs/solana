@@ -465,19 +465,4 @@ impl Genesis {
             panic!("Error: validator pubkeys have duplicates!");
         }
     }
-
-    // solana-genesis creates a genesis.tar.bz2 but if we need to create snapshots, these
-    // are not included in the genesis.tar.bz2. So we package everything including genesis.tar.bz2,
-    // snapshots, etc into genesis-package.tar.bz2 and we use this as our genesis in the
-    // bootstrap validator
-    pub fn package_up(&mut self) -> Result<(), Box<dyn Error>> {
-        info!("Packaging genesis");
-        let folder_to_tar = LEDGER_DIR.join("");
-        let tar_bz2_file = File::create(SOLANA_ROOT.join("config-k8s/genesis-package.tar.bz2"))?;
-        let encoder = BzEncoder::new(tar_bz2_file, Compression::best());
-        let mut tar_builder = Builder::new(encoder);
-        tar_builder.append_dir_all("ledger", folder_to_tar)?;
-
-        Ok(())
-    }
 }

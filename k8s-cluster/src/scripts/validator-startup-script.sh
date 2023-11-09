@@ -13,7 +13,7 @@ args=(
 )
 airdrops_enabled=1
 node_sol=500 # 500 SOL: number of SOL to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
-stake_sol=400
+stake_sol=10
 identity=identity.json
 vote_account=vote.json
 no_restart=0
