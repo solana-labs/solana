@@ -471,16 +471,6 @@ impl Blockstore {
         self.orphans_cf.get(slot)
     }
 
-    /// Returns the max root or 0 if it does not exist.
-    pub fn max_root(&self) -> Slot {
-        self.db
-            .iter::<cf::Root>(IteratorMode::End)
-            .expect("Couldn't get rooted iterator for max_root()")
-            .next()
-            .map(|(slot, _)| slot)
-            .unwrap_or(0)
-    }
-
     pub fn slot_meta_iterator(
         &self,
         slot: Slot,
@@ -3355,6 +3345,7 @@ impl Blockstore {
         Ok(duplicate_slots_iterator.map(|(slot, _)| slot))
     }
 
+    /// Returns the max root or 0 if it does not exist
     pub fn max_root(&self) -> Slot {
         *self.max_root.read().unwrap()
     }
