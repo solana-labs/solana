@@ -84,13 +84,12 @@ impl<'a> DockerConfig<'a> {
         }
     }
 
-    fn insert_client_accounts_if_present(
-        &self,
-    ) -> String {
+    fn insert_client_accounts_if_present(&self) -> String {
         if SOLANA_ROOT.join("config-k8s/client-accounts.yml").exists() {
             return r#"
 COPY --chown=solana:solana ./config-k8s/client-accounts.yml /home/solana
-            "#.to_string();
+            "#
+            .to_string();
         }
         "".to_string()
     }
@@ -154,7 +153,11 @@ WORKDIR /home/solana
             self.image_config.base_image
         );
 
-        let dockerfile = format!("{}\n{}", dockerfile, self.insert_client_accounts_if_present());
+        let dockerfile = format!(
+            "{}\n{}",
+            dockerfile,
+            self.insert_client_accounts_if_present()
+        );
 
         info!("dockerfile: {}", dockerfile);
         std::fs::write(

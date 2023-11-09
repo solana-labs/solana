@@ -7,14 +7,13 @@ use {
     solana_k8s_cluster::{
         docker::{DockerConfig, DockerImageConfig},
         genesis::{
-            Genesis, GenesisFlags, DEFAULT_INTERNAL_NODE_SOL, DEFAULT_INTERNAL_NODE_STAKE_SOL,
-            DEFAULT_CLIENT_LAMPORTS_PER_SIGNATURE,
+            Genesis, GenesisFlags, DEFAULT_CLIENT_LAMPORTS_PER_SIGNATURE,
+            DEFAULT_INTERNAL_NODE_SOL, DEFAULT_INTERNAL_NODE_STAKE_SOL,
         },
-        initialize_globals,
-        kubernetes::{Kubernetes, ValidatorConfig, ClientConfig},
+        get_solana_root, initialize_globals,
+        kubernetes::{ClientConfig, Kubernetes, ValidatorConfig},
         ledger_helper::LedgerHelper,
         release::{BuildConfig, Deploy},
-        get_solana_root,
         ValidatorType,
     },
     solana_sdk::pubkey::Pubkey,
@@ -389,7 +388,11 @@ async fn main() {
         skip_genesis_build: matches.is_present("skip_genesis_build"),
     };
 
-    if setup_config.skip_genesis_build && !get_solana_root().join("config-k8s/bootstrap-validator").exists() {
+    if setup_config.skip_genesis_build
+        && !get_solana_root()
+            .join("config-k8s/bootstrap-validator")
+            .exists()
+    {
         error!("Skipping genesis build but there is not previous genesis to use. exiting...");
     }
 
@@ -400,8 +403,14 @@ async fn main() {
             .unwrap()
             .parse()
             .expect("Failed to parse client_delay_start into u64"),
-        client_type: matches.value_of("client_type").unwrap_or_default().to_string(),
-        client_to_run: matches.value_of("client_to_run").unwrap_or_default().to_string(),
+        client_type: matches
+            .value_of("client_type")
+            .unwrap_or_default()
+            .to_string(),
+        client_to_run: matches
+            .value_of("client_to_run")
+            .unwrap_or_default()
+            .to_string(),
         bench_tps_args: matches
             .values_of("bench_tps_args")
             .unwrap_or_default()
@@ -410,9 +419,9 @@ async fn main() {
                     .enumerate()
                     .map(|(idx, s)| {
                         if idx == 0 {
-                            format!("--{}", s)  // prepend '--' to the key
+                            format!("--{}", s) // prepend '--' to the flag
                         } else {
-                            s.to_string()  // leave the value as-is
+                            s.to_string()
                         }
                     })
                     .collect::<Vec<String>>()
@@ -428,11 +437,7 @@ async fn main() {
         duration: value_t_or_exit!(matches, "duration", u64),
         num_nodes: matches
             .value_of("num_nodes")
-            .map(|value_str| {
-                value_str
-                    .parse()
-                    .expect("Invalid value for num_nodes")
-            }),
+            .map(|value_str| value_str.parse().expect("Invalid value for num_nodes")),
     };
 
     let build_config = BuildConfig {
@@ -561,7 +566,12 @@ async fn main() {
     info!("Runtime Config: {}", validator_config);
 
     // Check if namespace exists
-    let mut kub_controller = Kubernetes::new(setup_config.namespace, &mut validator_config, client_config.clone()).await;
+    let mut kub_controller = Kubernetes::new(
+        setup_config.namespace,
+        &mut validator_config,
+        client_config.clone(),
+    )
+    .await;
     match kub_controller.namespace_exists().await {
         Ok(res) => {
             if !res {
@@ -595,7 +605,7 @@ async fn main() {
                 return;
             }
         }
-    
+
         match genesis.generate_accounts(ValidatorType::Standard, setup_config.num_validators) {
             Ok(_) => (),
             Err(err) => {
@@ -603,11 +613,11 @@ async fn main() {
                 return;
             }
         }
-    
+
         if client_config.num_clients > 0 && client_config.client_to_run == "bench-tps".to_string() {
             match genesis.create_client_accounts(
-                client_config.num_clients, 
-                DEFAULT_CLIENT_LAMPORTS_PER_SIGNATURE, 
+                client_config.num_clients,
+                DEFAULT_CLIENT_LAMPORTS_PER_SIGNATURE,
                 client_config.bench_tps_args,
             ) {
                 Ok(_) => (),
@@ -617,7 +627,7 @@ async fn main() {
                 }
             }
         }
-    
+
         // creates genesis and writes to binary file
         match genesis.generate() {
             Ok(_) => (),
@@ -627,7 +637,6 @@ async fn main() {
             }
         }
     }
-
 
     match LedgerHelper::get_shred_version() {
         Ok(shred_version) => kub_controller.set_shred_version(shred_version),
@@ -736,7 +745,6 @@ async fn main() {
     let client_image_name = matches
         .value_of("validator_image_name")
         .expect("Validator image name is required");
-
 
     let bootstrap_secret = match kub_controller.create_bootstrap_secret("bootstrap-accounts-secret")
     {
@@ -893,11 +901,14 @@ async fn main() {
     if client_config.num_clients <= 0 {
         return;
     }
-    
+
     //TODO, we need to wait for all validators to actually be deployed before starting the client.
     // Aka need to somehow check that either all validators are connected via gossip and through tpu
     // or we just check that their replica sets are 1/1
-    info!("Waiting for client_delay_start: {} seconds", client_config.client_delay_start);
+    info!(
+        "Waiting for client_delay_start: {} seconds",
+        client_config.client_delay_start
+    );
     thread::sleep(Duration::from_secs(client_config.client_delay_start));
 
     for client_index in 0..client_config.num_clients {
@@ -921,7 +932,6 @@ async fn main() {
             "app.kubernetes.io/name",
             format!("client-{}", client_index).as_str(),
         );
-
 
         let client_replica_set = match kub_controller
             .create_client_replica_set(
@@ -961,21 +971,14 @@ async fn main() {
             }
         };
 
-        let client_service = kub_controller.create_validator_service(
-            format!("client-{}", client_index).as_str(),
-            &label_selector,
-        );
+        let client_service = kub_controller
+            .create_validator_service(format!("client-{}", client_index).as_str(), &label_selector);
         match kub_controller.deploy_service(&client_service).await {
-            Ok(_) => info!(
-                "client service ({}) deployed successfully",
-                client_index
-            ),
+            Ok(_) => info!("client service ({}) deployed successfully", client_index),
             Err(err) => error!(
                 "Error! Failed to deploy client service: {}. err: {:?}",
                 client_index, err
             ),
         }
     }
-
-
 }

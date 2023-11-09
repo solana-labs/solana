@@ -5,9 +5,9 @@ use {
         api::{
             apps::v1::{ReplicaSet, ReplicaSetSpec},
             core::v1::{
-                Container, EnvVar, EnvVarSource, Namespace,
-                ObjectFieldSelector, PodSecurityContext, PodSpec, PodTemplateSpec, Secret,
-                SecretVolumeSource, Service, ServicePort, ServiceSpec, Volume, VolumeMount,
+                Container, EnvVar, EnvVarSource, Namespace, ObjectFieldSelector,
+                PodSecurityContext, PodSpec, PodTemplateSpec, Secret, SecretVolumeSource, Service,
+                ServicePort, ServiceSpec, Volume, VolumeMount,
             },
         },
         apimachinery::pkg::apis::meta::v1::LabelSelector,
@@ -18,10 +18,7 @@ use {
         Client,
     },
     log::*,
-    solana_sdk::{
-        hash::Hash,
-        pubkey::Pubkey,
-    },
+    solana_sdk::{hash::Hash, pubkey::Pubkey},
     std::{collections::BTreeMap, error::Error},
 };
 
@@ -95,7 +92,7 @@ pub struct Kubernetes<'a> {
     client: Client,
     namespace: &'a str,
     validator_config: &'a mut ValidatorConfig<'a>,
-    client_config: ClientConfig
+    client_config: ClientConfig,
 }
 
 impl<'a> Kubernetes<'a> {
@@ -206,7 +203,6 @@ impl<'a> Kubernetes<'a> {
         }
 
         flags
-
     }
 
     pub async fn namespace_exists(&self) -> Result<bool, kube::Error> {
@@ -249,24 +245,20 @@ impl<'a> Kubernetes<'a> {
             ..Default::default()
         }];
 
-        let accounts_volume = Some(vec![
-            Volume {
-                name: "bootstrap-accounts-volume".into(),
-                secret: Some(SecretVolumeSource {
-                    secret_name,
-                    ..Default::default()
-                }),
+        let accounts_volume = Some(vec![Volume {
+            name: "bootstrap-accounts-volume".into(),
+            secret: Some(SecretVolumeSource {
+                secret_name,
                 ..Default::default()
-            }
-        ]);
+            }),
+            ..Default::default()
+        }]);
 
-        let accounts_volume_mount = Some(vec![
-            VolumeMount {
-                name: "bootstrap-accounts-volume".to_string(),
-                mount_path: "/home/solana/bootstrap-accounts".to_string(),
-                ..Default::default()
-            }
-        ]);
+        let accounts_volume_mount = Some(vec![VolumeMount {
+            name: "bootstrap-accounts-volume".to_string(),
+            mount_path: "/home/solana/bootstrap-accounts".to_string(),
+            ..Default::default()
+        }]);
 
         let mut command =
             vec!["/home/solana/k8s-cluster-scripts/bootstrap-startup-script.sh".to_string()];
@@ -305,7 +297,6 @@ impl<'a> Kubernetes<'a> {
         volumes: Option<Vec<Volume>>,
         volume_mounts: Option<Vec<VolumeMount>>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
-
         // Define the pod spec
         let pod_spec = PodTemplateSpec {
             metadata: Some(ObjectMeta {
@@ -322,7 +313,7 @@ impl<'a> Kubernetes<'a> {
                     volume_mounts: volume_mounts,
                     ..Default::default()
                 }],
-                volumes: volumes,
+                volumes,
                 security_context: Some(PodSecurityContext {
                     run_as_user: Some(1000),
                     run_as_group: Some(1000),
@@ -571,16 +562,8 @@ impl<'a> Kubernetes<'a> {
         Ok(available_validators >= desired_validators)
     }
 
-    pub async fn create_validator_replica_set(
-        &mut self,
-        container_name: &str,
-        validator_index: i32,
-        image_name: &str,
-        num_validators: i32,
-        secret_name: Option<String>,
-        label_selector: &BTreeMap<String, String>,
-    ) -> Result<ReplicaSet, Box<dyn Error>> {
-        let env_vars = vec![
+    fn set_non_bootstrap_environment_variables(&self) -> Vec<EnvVar> {
+        vec![
             EnvVar {
                 name: "NAMESPACE".to_string(),
                 value_from: Some(EnvVarSource {
@@ -613,26 +596,34 @@ impl<'a> Kubernetes<'a> {
                 ),
                 ..Default::default()
             },
-        ];
+        ]
+    }
 
-        let accounts_volume = Some(vec![
-            Volume {
-                name: format!("validator-accounts-volume-{}", validator_index),
-                secret: Some(SecretVolumeSource {
-                    secret_name,
-                    ..Default::default()
-                }),
-                ..Default::default()
-            }
-        ]);
+    pub async fn create_validator_replica_set(
+        &mut self,
+        container_name: &str,
+        validator_index: i32,
+        image_name: &str,
+        num_validators: i32,
+        secret_name: Option<String>,
+        label_selector: &BTreeMap<String, String>,
+    ) -> Result<ReplicaSet, Box<dyn Error>> {
+        let env_vars = self.set_non_bootstrap_environment_variables();
 
-        let accounts_volume_mount = Some(vec![
-            VolumeMount {
-                name: format!("validator-accounts-volume-{}", validator_index),
-                mount_path: "/home/solana/validator-accounts".to_string(),
+        let accounts_volume = Some(vec![Volume {
+            name: format!("validator-accounts-volume-{}", validator_index),
+            secret: Some(SecretVolumeSource {
+                secret_name,
                 ..Default::default()
-            }
-        ]);
+            }),
+            ..Default::default()
+        }]);
+
+        let accounts_volume_mount = Some(vec![VolumeMount {
+            name: format!("validator-accounts-volume-{}", validator_index),
+            mount_path: "/home/solana/validator-accounts".to_string(),
+            ..Default::default()
+        }]);
 
         let mut command =
             vec!["/home/solana/k8s-cluster-scripts/validator-startup-script.sh".to_string()];
@@ -665,60 +656,22 @@ impl<'a> Kubernetes<'a> {
         secret_name: Option<String>,
         label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
-        let env_vars = vec![
-            EnvVar {
-                name: "NAMESPACE".to_string(),
-                value_from: Some(EnvVarSource {
-                    field_ref: Some(ObjectFieldSelector {
-                        field_path: "metadata.namespace".to_string(),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            },
-            EnvVar {
-                name: "BOOTSTRAP_RPC_ADDRESS".to_string(),
-                value: Some(
-                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8899".to_string(),
-                ),
-                ..Default::default()
-            },
-            EnvVar {
-                name: "BOOTSTRAP_GOSSIP_ADDRESS".to_string(),
-                value: Some(
-                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8001".to_string(),
-                ),
-                ..Default::default()
-            },
-            EnvVar {
-                name: "BOOTSTRAP_FAUCET_ADDRESS".to_string(),
-                value: Some(
-                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:9900".to_string(),
-                ),
-                ..Default::default()
-            },
-        ];
+        let env_vars = self.set_non_bootstrap_environment_variables();
 
-        let accounts_volume = Some(vec![
-            Volume {
-                name: format!("client-accounts-volume-{}", client_index),
-                secret: Some(SecretVolumeSource {
-                    secret_name,
-                    ..Default::default()
-                }),
+        let accounts_volume = Some(vec![Volume {
+            name: format!("client-accounts-volume-{}", client_index),
+            secret: Some(SecretVolumeSource {
+                secret_name,
                 ..Default::default()
-            }
-        ]);
+            }),
+            ..Default::default()
+        }]);
 
-        let accounts_volume_mount = Some(vec![
-            VolumeMount {
-                name: format!("client-accounts-volume-{}", client_index),
-                mount_path: "/home/solana/client-accounts".to_string(),
-                ..Default::default()
-            }
-        ]);
-
+        let accounts_volume_mount = Some(vec![VolumeMount {
+            name: format!("client-accounts-volume-{}", client_index),
+            mount_path: "/home/solana/client-accounts".to_string(),
+            ..Default::default()
+        }]);
 
         let mut command =
             vec!["/home/solana/k8s-cluster-scripts/client-startup-script.sh".to_string()];
@@ -801,5 +754,4 @@ impl<'a> Kubernetes<'a> {
 
         Ok(())
     }
-   
 }

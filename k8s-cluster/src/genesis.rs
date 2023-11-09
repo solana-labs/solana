@@ -15,11 +15,11 @@ use {
         signature::{keypair_from_seed, write_keypair, write_keypair_file, Keypair, Signer},
     },
     std::{
-        error::Error, 
-        fs::{File, OpenOptions}, 
-        io::{self, Read, BufRead, Write, BufWriter}, 
-        path::PathBuf, 
-        process::Command
+        error::Error,
+        fs::{File, OpenOptions},
+        io::{self, BufRead, BufWriter, Read, Write},
+        path::PathBuf,
+        process::Command,
     },
     tar::Builder,
 };
@@ -99,7 +99,7 @@ fn parse_spl_genesis_file(spl_file: &PathBuf) -> Result<Vec<String>, Box<dyn Err
 }
 
 fn append_client_accounts_to_file(
-    in_file: &PathBuf, //bench-tps-x.yml
+    in_file: &PathBuf,  //bench-tps-x.yml
     out_file: &PathBuf, //client-accounts.yml
 ) -> io::Result<()> {
     // Open the bench-tps-x file for reading.
@@ -116,7 +116,7 @@ fn append_client_accounts_to_file(
     // Enumerate the lines of the input file, starting from 1.
     for (index, line) in reader.lines().enumerate().map(|(i, l)| (i + 1, l)) {
         let line = line?;
-        
+
         // Skip first line since it is a header aka "---" in a yaml
         if (index as u64) > 1 {
             writeln!(writer, "{}", line)?;
@@ -241,11 +241,11 @@ impl Genesis {
         number_of_clients: i32,
         target_lamports_per_signature: u64,
         bench_tps_args: Vec<String>, //todo: need to set this up from argmatches in main.rs
-    ) -> Result<(), Box<dyn Error>> { 
+    ) -> Result<(), Box<dyn Error>> {
         let client_accounts_file = SOLANA_ROOT.join("config-k8s/client-accounts.yml");
         for i in 0..number_of_clients {
             let mut args = Vec::new();
-            let account_path  = SOLANA_ROOT.join(format!("config-k8s/bench-tps-{}.yml", i));
+            let account_path = SOLANA_ROOT.join(format!("config-k8s/bench-tps-{}.yml", i));
             args.push("--write-client-keys".to_string());
             args.push(account_path.to_string_lossy().to_string());
             args.push("--target-lamports-per-signature".to_string());
@@ -264,20 +264,20 @@ impl Genesis {
                 .args(&args)
                 .output()
                 .expect("Failed to execute solana-bench-tps");
-    
+
             if !output.status.success() {
                 return Err(boxed_error!(format!(
                     "Failed to create client accounts. err: {}",
                     String::from_utf8_lossy(&output.stderr)
                 )));
             }
-            
+
             append_client_accounts_to_file(&account_path, &client_accounts_file)?;
         }
 
         // add client accounts file as a primordial account
         self.primordial_accounts_files.push(client_accounts_file);
-       
+
         Ok(())
     }
 
@@ -390,7 +390,12 @@ impl Genesis {
 
         if SOLANA_ROOT.join("config-k8s/client-accounts.yml").exists() {
             args.push("--primordial-accounts-file".to_string());
-            args.push(SOLANA_ROOT.join("config-k8s/client-accounts.yml").to_string_lossy().to_string());
+            args.push(
+                SOLANA_ROOT
+                    .join("config-k8s/client-accounts.yml")
+                    .to_string_lossy()
+                    .to_string(),
+            );
         }
         args
     }
