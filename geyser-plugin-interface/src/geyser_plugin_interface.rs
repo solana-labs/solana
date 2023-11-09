@@ -321,6 +321,12 @@ pub type Result<T> = std::result::Result<T, GeyserPluginError>;
 /// Geyser plugins must describe desired behavior for load and unload,
 /// as well as how they will handle streamed data.
 pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
+    /// Will be called the first and only once
+    #[allow(unused_variables)]
+    fn setup_logger(&self, logger: &'static dyn log::Log, level: log::LevelFilter) -> Result<()> {
+        Ok(())
+    }
+
     fn name(&self) -> &'static str;
 
     /// The callback called when a plugin is loaded by the system,

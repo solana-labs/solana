@@ -107,6 +107,18 @@ impl GeyserPluginManager {
             });
         }
 
+        // Initialize logging for the plugin
+        new_plugin
+            .setup_logger(log::logger(), log::max_level())
+            .map_err(|on_load_err| jsonrpc_core::Error {
+                code: ErrorCode::InvalidRequest,
+                message: format!(
+                    "setup_logger method of plugin {} failed: {on_load_err}",
+                    new_plugin.name()
+                ),
+                data: None,
+            })?;
+
         // Call on_load and push plugin
         new_plugin
             .on_load(new_config_file, false)
@@ -193,6 +205,18 @@ impl GeyserPluginManager {
             });
         }
 
+        // Initialize logging for the plugin
+        new_plugin
+            .setup_logger(log::logger(), log::max_level())
+            .map_err(|on_load_err| jsonrpc_core::Error {
+                code: ErrorCode::InvalidRequest,
+                message: format!(
+                    "setup_logger method of plugin {} failed: {on_load_err}",
+                    new_plugin.name()
+                ),
+                data: None,
+            })?;
+
         // Attempt to on_load with new plugin
         match new_plugin.on_load(new_parsed_config_file, true) {
             // On success, push plugin and library
@@ -221,6 +245,7 @@ impl GeyserPluginManager {
         let mut current_plugin = self.plugins.remove(idx);
         let name = current_plugin.name().to_string();
         current_plugin.on_unload();
+        // The plugin must be first dropped before dropping the library to avoid crash.
         drop(current_plugin);
         drop(current_lib);
         info!("Unloaded plugin {name} at idx {idx}");
