@@ -3256,11 +3256,6 @@ impl Blockstore {
         Ok(())
     }
 
-    /// For tests
-    pub fn set_last_root(&mut self, root: Slot) {
-        *self.last_root.write().unwrap() = root;
-    }
-
     pub fn mark_slots_as_if_rooted_normally_at_startup(
         &self,
         slots: Vec<(Slot, Option<Hash>)>,
