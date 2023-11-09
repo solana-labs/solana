@@ -1360,7 +1360,6 @@ impl Blockstore {
         );
 
         let slot_meta = &mut slot_meta_entry.new_slot_meta.borrow_mut();
-        let erasure_set = shred.erasure_set();
 
         if !is_trusted {
             if Self::is_data_shred_present(&shred, slot_meta, index_meta.data()) {
@@ -1395,6 +1394,7 @@ impl Blockstore {
             }
         }
 
+        let erasure_set = shred.erasure_set();
         let newly_completed_data_sets = self.insert_data_shred(
             slot_meta,
             index_meta.data_mut(),
