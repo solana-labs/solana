@@ -73,7 +73,7 @@ use {
         path::{Path, PathBuf},
         rc::Rc,
         sync::{
-            atomic::{AtomicBool, Ordering},
+            atomic::{AtomicBool, AtomicU64, Ordering},
             Arc, Mutex, RwLock,
         },
     },
@@ -214,7 +214,7 @@ pub struct Blockstore {
     program_costs_cf: LedgerColumn<cf::ProgramCosts>,
     bank_hash_cf: LedgerColumn<cf::BankHash>,
     optimistic_slots_cf: LedgerColumn<cf::OptimisticSlots>,
-    max_root: RwLock<Slot>,
+    max_root: AtomicU64,
     insert_shreds_lock: Mutex<()>,
     new_shreds_signals: Mutex<Vec<Sender<bool>>>,
     completed_slots_senders: Mutex<Vec<CompletedSlotsSender>>,
@@ -324,7 +324,7 @@ impl Blockstore {
             .next()
             .map(|(slot, _)| slot)
             .unwrap_or(0);
-        let max_root = RwLock::new(max_root);
+        let max_root = AtomicU64::new(max_root);
 
         measure.stop();
         info!("{:?} {}", blockstore_path, measure);
@@ -1182,7 +1182,7 @@ impl Blockstore {
                 return false;
             }
 
-            if !Blockstore::should_insert_coding_shred(&shred, &self.max_root) {
+            if !Blockstore::should_insert_coding_shred(&shred, self.max_root()) {
                 metrics.num_coding_shreds_invalid += 1;
                 return false;
             }
@@ -1381,7 +1381,7 @@ impl Blockstore {
                 &shred,
                 slot_meta,
                 just_inserted_shreds,
-                &self.max_root,
+                self.max_root(),
                 leader_schedule,
                 shred_source,
                 duplicate_shreds,
@@ -1409,9 +1409,9 @@ impl Blockstore {
         Ok(newly_completed_data_sets)
     }
 
-    fn should_insert_coding_shred(shred: &Shred, max_root: &RwLock<u64>) -> bool {
+    fn should_insert_coding_shred(shred: &Shred, max_root: Slot) -> bool {
         debug_assert_matches!(shred.sanitize(), Ok(()));
-        shred.is_code() && shred.slot() > *max_root.read().unwrap()
+        shred.is_code() && shred.slot() > max_root
     }
 
     fn insert_coding_shred(
@@ -1463,7 +1463,7 @@ impl Blockstore {
         shred: &Shred,
         slot_meta: &SlotMeta,
         just_inserted_shreds: &HashMap<ShredId, Shred>,
-        max_root: &RwLock<u64>,
+        max_root: Slot,
         leader_schedule: Option<&LeaderScheduleCache>,
         shred_source: ShredSource,
         duplicate_shreds: &mut Vec<PossibleDuplicateShred>,
@@ -1558,7 +1558,6 @@ impl Blockstore {
             return false;
         }
 
-        let max_root = *max_root.read().unwrap();
         // TODO Shouldn't this use shred.parent() instead and update
         // slot_meta.parent_slot accordingly?
         slot_meta
@@ -3238,11 +3237,12 @@ impl Blockstore {
 
         self.db.write(write_batch)?;
 
-        let mut max_root = self.max_root.write().unwrap();
-        if *max_root == std::u64::MAX {
-            *max_root = 0;
+        let mut max_root = self.max_root.load(Ordering::Relaxed);
+        if max_root == std::u64::MAX {
+            max_root = 0;
         }
-        *max_root = cmp::max(max_new_rooted_slot, *max_root);
+        self.max_root
+            .store(cmp::max(max_new_rooted_slot, max_root), Ordering::Relaxed);
         Ok(())
     }
 
@@ -3347,7 +3347,7 @@ impl Blockstore {
 
     /// Returns the max root or 0 if it does not exist
     pub fn max_root(&self) -> Slot {
-        *self.max_root.read().unwrap()
+        self.max_root.load(Ordering::Relaxed)
     }
 
     // find the first available slot in blockstore that has some data in it
@@ -6581,7 +6581,7 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-        let max_root = RwLock::new(0);
+        let max_root = 0;
 
         // Insert the first 5 shreds, we don't have a "is_last" shred yet
         blockstore
@@ -6611,7 +6611,7 @@ pub mod tests {
             &empty_shred,
             &slot_meta,
             &HashMap::new(),
-            &max_root,
+            max_root,
             None,
             ShredSource::Repaired,
             &mut Vec::new(),
@@ -6636,7 +6636,7 @@ pub mod tests {
             &shred7,
             &slot_meta,
             &HashMap::new(),
-            &max_root,
+            max_root,
             None,
             ShredSource::Repaired,
             &mut duplicate_shreds,
@@ -6667,7 +6667,7 @@ pub mod tests {
             &shred8,
             &slot_meta,
             &HashMap::new(),
-            &max_root,
+            max_root,
             None,
             ShredSource::Repaired,
             &mut duplicate_shreds,
@@ -6775,7 +6775,7 @@ pub mod tests {
     fn test_should_insert_coding_shred() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-        let max_root = RwLock::new(0);
+        let max_root = 0;
 
         let slot = 1;
         let mut coding_shred = Shred::new_from_parity_shard(
@@ -6792,7 +6792,7 @@ pub mod tests {
         // Insert a good coding shred
         assert!(Blockstore::should_insert_coding_shred(
             &coding_shred,
-            &max_root
+            max_root
         ));
 
         // Insertion should succeed
@@ -6805,7 +6805,7 @@ pub mod tests {
         {
             assert!(Blockstore::should_insert_coding_shred(
                 &coding_shred,
-                &max_root
+                max_root
             ));
         }
 
@@ -6813,16 +6813,16 @@ pub mod tests {
         coding_shred.set_index(coding_shred.index() + 1);
         assert!(Blockstore::should_insert_coding_shred(
             &coding_shred,
-            &max_root
+            max_root
         ));
 
         // Trying to insert value into slot <= than last root should fail
         {
             let mut coding_shred = coding_shred.clone();
-            coding_shred.set_slot(*max_root.read().unwrap());
+            coding_shred.set_slot(max_root);
             assert!(!Blockstore::should_insert_coding_shred(
                 &coding_shred,
-                &max_root
+                max_root
             ));
         }
     }
