@@ -841,6 +841,11 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> PooledSche
     }
 }
 
+impl PooledScheduler {
+    fn start_threads(&self) {
+    }
+}
+
 pub trait InstallableScheduler<SEA: ScheduleExecutionArg>: InstalledScheduler<SEA> {
     fn has_context(&self) -> bool;
     fn replace_context(&mut self, context: SchedulingContext);
