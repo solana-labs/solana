@@ -442,7 +442,7 @@ unsafe impl Sync for LockAttemptsInCell {}
 type WeightedTaskIds2 = std::collections::BTreeMap<UniqueWeight, (TaskInQueue, std::collections::HashSet<PageRc>)>;
 
 type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct AddressBook {
     book: AddressMap,
     uncontended_task_ids: WeightedTaskIds2,
