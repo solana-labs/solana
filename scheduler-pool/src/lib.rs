@@ -1300,7 +1300,7 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
             let mut runnable_queue = ModeSpecificTaskQueue::BlockVerification(ChannelBackedTaskQueue::new(&transaction_receiver));
             runnable_queue.add_to_schedule(task.unique_weight, task);
             let mut selection = TaskSelection::OnlyFromContended(usize::max_value());
-            let mut aaddress_book = self.address_book.lock().unwrap();
+            let mut address_book = self.address_book.lock().unwrap();
             let maybe_ee = ScheduleStage::schedule_next_execution(
                 &mut runnable_queue,
                 &mut address_book,
