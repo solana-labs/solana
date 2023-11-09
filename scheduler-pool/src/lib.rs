@@ -1197,11 +1197,8 @@ impl ScheduleStage {
         unique_weight: UniqueWeight,
         task: TaskInQueue,
         finalized_lock_attempts: Vec<LockAttempt>,
-        execute_clock: &mut usize,
     ) -> Box<ExecutionEnvironment> {
         let mut rng = rand::thread_rng();
-        // load account now from AccountsDb
-        *execute_clock = execute_clock.checked_add(1).unwrap();
 
         Box::new(ExecutionEnvironment {
             task,
@@ -1238,7 +1235,6 @@ impl ScheduleStage {
         runnable_queue: &mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
-        execute_clock: &mut usize,
         task_selection: &mut TaskSelection,
         failed_lock_count: &mut usize,
     ) -> Option<Box<ExecutionEnvironment>> {
@@ -1251,7 +1247,7 @@ impl ScheduleStage {
             failed_lock_count,
         )
         .map(|(uw, t, ll)| {
-            Self::prepare_scheduled_execution(address_book, uw, t, ll, execute_clock)
+            Self::prepare_scheduled_execution(address_book, uw, t, ll)
         });
         maybe_ee
     }
