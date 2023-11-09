@@ -276,7 +276,6 @@ impl AccountsDb {
             ideal_storage_size: NonZeroU64::new(get_ancient_append_vec_capacity()).unwrap(),
             can_randomly_shrink,
         };
-        assert!(!tuning.can_randomly_shrink);
 
         let _guard = self.active_stats.activate(ActiveStatItem::SquashAncient);
 
