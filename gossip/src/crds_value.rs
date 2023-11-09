@@ -511,35 +511,31 @@ pub struct RunLengthEncoding {
 
 impl RunLengthEncoding {
     // Return whether the encoded vec is already full.
-    fn add_number_and_test_full(
-        encoded: &mut Vec<U16>,
-        total_serde_bytes: &mut usize,
-        count: usize,
-    ) -> bool {
+    fn valid_and_has_space(total_serde_bytes: &mut usize, count: usize) -> bool {
         if count == 0 || count >= 1 << 16 {
-            true
+            false
         } else {
             let current_bit_count: u16 = count as u16;
             let serde_bits = 16 - current_bit_count.leading_zeros();
             let serde_bytes = ((serde_bits + 6) / 7).max(1) as usize;
             if *total_serde_bytes + serde_bytes > RestartLastVotedForkSlots::MAX_SPACE {
-                true
-            } else {
-                encoded.push(U16(current_bit_count));
-                *total_serde_bytes += serde_bytes;
                 false
+            } else {
+                *total_serde_bytes += serde_bytes;
+                true
             }
         }
     }
 
     pub fn new(bits: &BitVec<u8>) -> Self {
-        let mut encoded: Vec<U16> = Vec::new();
         let mut total_serde_bytes = 0;
-        for (count, _) in (0..bits.len()).map(|i| bits.get(i)).dedup_with_count() {
-            if Self::add_number_and_test_full(&mut encoded, &mut total_serde_bytes, count) {
-                break;
-            }
-        }
+        let encoded = (0..bits.len())
+            .map(|i| bits.get(i))
+            .dedup_with_count()
+            .map(|(count, _)| count)
+            .take_while(|count| Self::valid_and_has_space(&mut total_serde_bytes, *count))
+            .map(|count| U16(count.try_into().unwrap()))
+            .collect();
         Self { encoded }
     }
 
