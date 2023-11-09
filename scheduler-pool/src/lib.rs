@@ -1301,7 +1301,7 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
             runnable_queue.add_to_schedule(task.unique_weight, task);
             let maybe_ee = ScheduleStage::schedule_next_execution(
                 &mut runnable_queue,
-                self.address_book,
+                &mut self.address_book,
                 &mut contended_count,
                 &mut selection,
                 &mut failed_lock_count,
