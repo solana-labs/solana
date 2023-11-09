@@ -835,7 +835,7 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> PooledSche
             scheduler_thread: None,
             handler_threads: vec![],
             _phantom: PhantomData,
-        }
+        };
         new.start_threads();
         new
     }
