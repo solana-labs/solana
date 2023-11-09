@@ -62,9 +62,11 @@ impl ShredFetchStage {
         };
         let mut stats = ShredFetchStats::default();
 
-        let my_slots_to_repair_for_wen_restart =
-            slots_to_repair_for_wen_restart.map(|slots| slots.read().unwrap().clone());
         for mut packet_batch in recvr {
+            let my_slots_to_repair_for_wen_restart = slots_to_repair_for_wen_restart
+                .as_ref()
+                .map(|slots| slots.read().unwrap().clone());
+
             if last_updated.elapsed().as_millis() as u64 > DEFAULT_MS_PER_SLOT {
                 last_updated = Instant::now();
                 let root_bank = {
