@@ -11,7 +11,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-bv = { workspace = true, features = ["serde"] }
+bit-vec = { workspace = true }
 bytemuck = { workspace = true, features = ["derive"] }
 log = { workspace = true }
 memmap2 = { workspace = true }

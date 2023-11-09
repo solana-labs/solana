@@ -5541,7 +5541,7 @@ dependencies = [
 name = "solana-bucket-map"
 version = "1.18.0"
 dependencies = [
- "bv",
+ "bit-vec",
  "bytemuck",
  "fs_extra",
  "log",

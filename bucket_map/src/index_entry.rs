@@ -5,7 +5,7 @@ use {
         bucket_storage::{BucketCapacity, BucketOccupied, BucketStorage, Capacity, IncludeHeader},
         RefCount,
     },
-    bv::BitVec,
+    bit_vec::BitVec,
     modular_bitfield::prelude::*,
     num_enum::FromPrimitive,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
@@ -83,7 +83,7 @@ impl BucketOccupied for BucketWithHeader {
 #[derive(Debug)]
 pub struct IndexBucketUsingBitVecBits<T: PartialEq + 'static> {
     /// 2 bits per entry that represent a 4 state enum tag
-    pub enum_tag: BitVec,
+    enum_tag: BitVec,
     /// number of elements allocated
     capacity: u64,
     _phantom: PhantomData<&'static T>,
@@ -91,21 +91,24 @@ pub struct IndexBucketUsingBitVecBits<T: PartialEq + 'static> {
 
 impl<T: Copy + PartialEq + 'static> IndexBucketUsingBitVecBits<T> {
     /// set the 2 bits (first and second) in `enum_tag`
-    fn set_bits(&mut self, ix: u64, first: bool, second: bool) {
+    fn set_bits(&mut self, ix: usize, first: bool, second: bool) {
         self.enum_tag.set(ix * 2, first);
         self.enum_tag.set(ix * 2 + 1, second);
     }
     /// get the 2 bits (first and second) in `enum_tag`
-    fn get_bits(&self, ix: u64) -> (bool, bool) {
-        (self.enum_tag.get(ix * 2), self.enum_tag.get(ix * 2 + 1))
+    fn get_bits(&self, ix: usize) -> (bool, bool) {
+        (
+            self.enum_tag.get(ix * 2).unwrap(),
+            self.enum_tag.get(ix * 2 + 1).unwrap(),
+        )
     }
     /// turn the tag into bits and store them
-    fn set_enum_tag(&mut self, ix: u64, value: OccupiedEnumTag) {
+    fn set_enum_tag(&mut self, ix: usize, value: OccupiedEnumTag) {
         let value = value as u8;
         self.set_bits(ix, (value & 2) == 2, (value & 1) == 1);
     }
     /// read the bits and convert them to an enum tag
-    fn get_enum_tag(&self, ix: u64) -> OccupiedEnumTag {
+    fn get_enum_tag(&self, ix: usize) -> OccupiedEnumTag {
         let (first, second) = self.get_bits(ix);
         let tag = (first as u8 * 2) + second as u8;
         num_enum::FromPrimitive::from_primitive(tag)
@@ -115,14 +118,14 @@ impl<T: Copy + PartialEq + 'static> IndexBucketUsingBitVecBits<T> {
 impl<T: Copy + PartialEq + 'static> BucketOccupied for IndexBucketUsingBitVecBits<T> {
     fn occupy(&mut self, element: &mut [u8], ix: usize) {
         assert!(self.is_free(element, ix));
-        self.set_enum_tag(ix as u64, OccupiedEnumTag::ZeroSlots);
+        self.set_enum_tag(ix, OccupiedEnumTag::ZeroSlots);
     }
     fn free(&mut self, element: &mut [u8], ix: usize) {
         assert!(!self.is_free(element, ix));
-        self.set_enum_tag(ix as u64, OccupiedEnumTag::Free);
+        self.set_enum_tag(ix, OccupiedEnumTag::Free);
     }
     fn is_free(&self, _element: &[u8], ix: usize) -> bool {
-        self.get_enum_tag(ix as u64) == OccupiedEnumTag::Free
+        self.get_enum_tag(ix) == OccupiedEnumTag::Free
     }
     fn offset_to_first_data() -> usize {
         // no header, nothing stored in data stream
@@ -131,7 +134,7 @@ impl<T: Copy + PartialEq + 'static> BucketOccupied for IndexBucketUsingBitVecBit
     fn new(capacity: Capacity) -> Self {
         Self {
             // note: twice as many bits allocated as `num_elements` because we store 2 bits per element
-            enum_tag: BitVec::new_fill(false, capacity.capacity() * 2),
+            enum_tag: BitVec::from_elem((capacity.capacity() * 2) as usize, false),
             capacity: capacity.capacity(),
             _phantom: PhantomData,
         }
@@ -146,7 +149,7 @@ impl<T: Copy + PartialEq + 'static> BucketOccupied for IndexBucketUsingBitVecBit
         _element_old: &[u8],
         ix_old: usize,
     ) {
-        self.set_enum_tag(ix_new as u64, other.get_enum_tag(ix_old as u64));
+        self.set_enum_tag(ix_new, other.get_enum_tag(ix_old));
     }
 }
 
@@ -327,7 +330,7 @@ impl<T: Copy + PartialEq + 'static> IndexEntryPlaceInBucket<T> {
         &self,
         index_bucket: &'a BucketStorage<IndexBucket<T>>,
     ) -> OccupiedEnum<'a, T> {
-        let enum_tag = index_bucket.contents.get_enum_tag(self.ix);
+        let enum_tag = index_bucket.contents.get_enum_tag(self.ix as usize);
         let index_entry = index_bucket.get::<IndexEntry<T>>(self.ix);
         match enum_tag {
             OccupiedEnumTag::Free => OccupiedEnum::Free,
@@ -346,7 +349,7 @@ impl<T: Copy + PartialEq + 'static> IndexEntryPlaceInBucket<T> {
         &self,
         index_bucket: &'a mut BucketStorage<IndexBucket<T>>,
     ) -> Option<&'a mut MultipleSlots> {
-        let enum_tag = index_bucket.contents.get_enum_tag(self.ix);
+        let enum_tag = index_bucket.contents.get_enum_tag(self.ix as usize);
         unsafe {
             match enum_tag {
                 OccupiedEnumTag::MultipleSlots => {
@@ -378,7 +381,7 @@ impl<T: Copy + PartialEq + 'static> IndexEntryPlaceInBucket<T> {
                 OccupiedEnumTag::MultipleSlots
             }
         };
-        index_bucket.contents.set_enum_tag(self.ix, tag);
+        index_bucket.contents.set_enum_tag(self.ix as usize, tag);
     }
 
     pub fn init(&self, index_bucket: &mut BucketStorage<IndexBucket<T>>, pubkey: &Pubkey) {
@@ -396,7 +399,7 @@ impl<T: Copy + PartialEq + 'static> IndexEntryPlaceInBucket<T> {
     ) -> OccupyIfMatches {
         let index_entry = index_bucket.get::<IndexEntry<T>>(self.ix);
         if &index_entry.key == k {
-            let enum_tag = index_bucket.contents.get_enum_tag(self.ix);
+            let enum_tag = index_bucket.contents.get_enum_tag(self.ix as usize);
             if unsafe { &index_entry.contents.single_element } == data {
                 assert_eq!(
                     enum_tag,
@@ -405,7 +408,7 @@ impl<T: Copy + PartialEq + 'static> IndexEntryPlaceInBucket<T> {
                 );
                 index_bucket
                     .contents
-                    .set_enum_tag(self.ix, OccupiedEnumTag::OneSlotInIndex);
+                    .set_enum_tag(self.ix as usize, OccupiedEnumTag::OneSlotInIndex);
                 OccupyIfMatches::SuccessfulInit
             } else if enum_tag == OccupiedEnumTag::Free {
                 // pubkey is same, but value is different, so update value
