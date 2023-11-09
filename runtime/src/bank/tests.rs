@@ -7,9 +7,7 @@ use {
         *,
     },
     crate::{
-        accounts_background_service::{
-            AbsRequestSender, PrunedBanksRequestHandler, SendDroppedBankCallback,
-        },
+        accounts_background_service::{PrunedBanksRequestHandler, SendDroppedBankCallback},
         bank_client::BankClient,
         bank_forks::BankForks,
         epoch_rewards_hasher::hash_rewards_into_partitions,
@@ -6990,7 +6988,7 @@ fn test_bank_load_program() {
     programdata_account.set_rent_epoch(1);
     bank.store_account_and_update_capitalization(&key1, &program_account);
     bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
-    let program = bank.load_program(&key1, false);
+    let program = bank.load_program(&key1, false, None);
     assert_matches!(program.program, LoadedProgramType::LegacyV1(_));
     assert_eq!(
         program.account_size,
@@ -7145,7 +7143,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         assert_eq!(*elf.get(i).unwrap(), *byte);
     }
 
-    let loaded_program = bank.load_program(&program_keypair.pubkey(), false);
+    let loaded_program = bank.load_program(&program_keypair.pubkey(), false, None);
 
     // Invoke deployed program
     mock_process_instruction(
@@ -11903,7 +11901,7 @@ fn test_is_in_slot_hashes_history() {
 }
 
 #[test]
-fn test_runtime_feature_enable_with_program_cache() {
+fn test_feature_activation_loaded_programs_recompilation_phase() {
     solana_logger::setup();
 
     // Bank Setup
@@ -11969,20 +11967,8 @@ fn test_runtime_feature_enable_with_program_cache() {
         &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
     );
 
-    // Reroot to call LoadedPrograms::prune() and end the current recompilation phase
     goto_end_of_slot(bank.clone());
-    bank_forks
-        .write()
-        .unwrap()
-        .insert(Arc::into_inner(bank).unwrap());
-    let bank = bank_forks.read().unwrap().working_bank();
-    bank_forks.read().unwrap().prune_program_cache(bank.slot);
-    bank_forks
-        .write()
-        .unwrap()
-        .set_root(bank.slot, &AbsRequestSender::default(), None);
-
-    // Advance to next epoch, which starts the next recompilation phase
+    // Advance to next epoch, which starts the recompilation phase
     let bank = new_from_parent_next_epoch(bank, 1);
 
     // Execute after feature is enabled to check it was filtered out and reverified.

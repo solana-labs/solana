@@ -103,6 +103,7 @@ use {
     },
     solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1,
     solana_cost_model::cost_tracker::CostTracker,
+    solana_loader_v4_program::create_program_runtime_environment_v2,
     solana_measure::{measure, measure::Measure, measure_us},
     solana_perf::perf_libs,
     solana_program_runtime::{
@@ -1442,11 +1443,10 @@ impl Bank {
         });
 
         // Following code may touch AccountsDb, requiring proper ancestors
-        let parent_epoch = parent.epoch();
         let (_, update_epoch_time_us) = measure_us!({
-            if parent_epoch < new.epoch() {
+            if parent.epoch() < new.epoch() {
                 new.process_new_epoch(
-                    parent_epoch,
+                    parent.epoch(),
                     parent.slot(),
                     parent.block_height(),
                     reward_calc_tracer,
@@ -1461,11 +1461,71 @@ impl Bank {
             }
         });
 
+        let (_, recompilation_time_us) = measure_us!({
+            // Recompile loaded programs one at a time before the next epoch hits
+            let (_epoch, slot_index) = new.get_epoch_and_slot_index(new.slot());
+            let slots_in_epoch = new.get_slots_in_epoch(new.epoch());
+            let slots_in_recompilation_phase =
+                (solana_program_runtime::loaded_programs::MAX_LOADED_ENTRY_COUNT as u64)
+                    .min(slots_in_epoch)
+                    .checked_div(2)
+                    .unwrap();
+            let mut loaded_programs_cache = new.loaded_programs_cache.write().unwrap();
+            if loaded_programs_cache.upcoming_environments.is_some() {
+                if let Some((key, program_to_recompile)) =
+                    loaded_programs_cache.programs_to_recompile.pop()
+                {
+                    drop(loaded_programs_cache);
+                    let recompiled = new.load_program(&key, false, Some(program_to_recompile));
+                    let mut loaded_programs_cache = new.loaded_programs_cache.write().unwrap();
+                    loaded_programs_cache.replenish(key, recompiled);
+                }
+            } else if new.epoch() != loaded_programs_cache.latest_root_epoch
+                || slot_index.saturating_add(slots_in_recompilation_phase) >= slots_in_epoch
+            {
+                // Anticipate the upcoming program runtime environment for the next epoch,
+                // so we can try to recompile loaded programs before the feature transition hits.
+                drop(loaded_programs_cache);
+                let (feature_set, _new_feature_activations) = new.compute_active_feature_set(true);
+                let mut loaded_programs_cache = new.loaded_programs_cache.write().unwrap();
+                let program_runtime_environment_v1 = create_program_runtime_environment_v1(
+                    &feature_set,
+                    &new.runtime_config.compute_budget.unwrap_or_default(),
+                    false, /* deployment */
+                    false, /* debugging_features */
+                )
+                .unwrap();
+                let program_runtime_environment_v2 = create_program_runtime_environment_v2(
+                    &new.runtime_config.compute_budget.unwrap_or_default(),
+                    false, /* debugging_features */
+                );
+                let mut upcoming_environments = loaded_programs_cache.environments.clone();
+                let changed_program_runtime_v1 =
+                    *upcoming_environments.program_runtime_v1 != program_runtime_environment_v1;
+                let changed_program_runtime_v2 =
+                    *upcoming_environments.program_runtime_v2 != program_runtime_environment_v2;
+                if changed_program_runtime_v1 {
+                    upcoming_environments.program_runtime_v1 =
+                        Arc::new(program_runtime_environment_v1);
+                }
+                if changed_program_runtime_v2 {
+                    upcoming_environments.program_runtime_v2 =
+                        Arc::new(program_runtime_environment_v2);
+                }
+                loaded_programs_cache.upcoming_environments = Some(upcoming_environments);
+                loaded_programs_cache.programs_to_recompile = loaded_programs_cache
+                    .get_entries_sorted_by_tx_usage(
+                        changed_program_runtime_v1,
+                        changed_program_runtime_v2,
+                    );
+            }
+        });
+
         // Update sysvars before processing transactions
         let (_, update_sysvars_time_us) = measure_us!({
             new.update_slot_hashes();
-            new.update_stake_history(Some(parent_epoch));
-            new.update_clock(Some(parent_epoch));
+            new.update_stake_history(Some(parent.epoch()));
+            new.update_clock(Some(parent.epoch()));
             new.update_fees();
             new.update_last_restart_slot()
         });
@@ -1493,6 +1553,7 @@ impl Bank {
                 feature_set_time_us,
                 ancestors_time_us,
                 update_epoch_time_us,
+                recompilation_time_us,
                 update_sysvars_time_us,
                 fill_sysvar_cache_time_us,
             },
@@ -4642,16 +4703,25 @@ impl Bank {
         ProgramAccountLoadResult::InvalidAccountData
     }
 
-    pub fn load_program(&self, pubkey: &Pubkey, reload: bool) -> Arc<LoadedProgram> {
+    pub fn load_program(
+        &self,
+        pubkey: &Pubkey,
+        reload: bool,
+        recompile: Option<Arc<LoadedProgram>>,
+    ) -> Arc<LoadedProgram> {
         let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
-        let environments = loaded_programs_cache.get_environments_for_epoch(self.epoch);
-
+        let effective_epoch = if recompile.is_some() {
+            loaded_programs_cache.latest_root_epoch.saturating_add(1)
+        } else {
+            self.epoch
+        };
+        let environments = loaded_programs_cache.get_environments_for_epoch(effective_epoch);
         let mut load_program_metrics = LoadProgramMetrics {
             program_id: pubkey.to_string(),
             ..LoadProgramMetrics::default()
         };
 
-        let loaded_program = match self.load_program_accounts(pubkey) {
+        let mut loaded_program = match self.load_program_accounts(pubkey) {
             ProgramAccountLoadResult::AccountNotFound => Ok(LoadedProgram::new_tombstone(
                 self.slot,
                 LoadedProgramType::Closed,
@@ -4758,6 +4828,16 @@ impl Bank {
 
         let mut timings = ExecuteDetailsTimings::default();
         load_program_metrics.submit_datapoint(&mut timings);
+        if let Some(recompile) = recompile {
+            loaded_program.effective_slot = loaded_program.effective_slot.max(
+                self.epoch_schedule()
+                    .get_first_slot_in_epoch(effective_epoch),
+            );
+            loaded_program.tx_usage_counter =
+                AtomicU64::new(recompile.tx_usage_counter.load(Ordering::Relaxed));
+            loaded_program.ix_usage_counter =
+                AtomicU64::new(recompile.ix_usage_counter.load(Ordering::Relaxed));
+        }
         Arc::new(loaded_program)
     }
 
@@ -5004,7 +5084,7 @@ impl Bank {
         let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing
             .iter()
             .map(|(key, count)| {
-                let program = self.load_program(key, false);
+                let program = self.load_program(key, false, None);
                 program.tx_usage_counter.store(*count, Ordering::Relaxed);
                 (*key, program)
             })
@@ -5014,7 +5094,7 @@ impl Bank {
         let unloaded_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = unloaded
             .iter()
             .map(|(key, count)| {
-                let program = self.load_program(key, true);
+                let program = self.load_program(key, true, None);
                 program.tx_usage_counter.store(*count, Ordering::Relaxed);
                 (*key, program)
             })
@@ -6559,6 +6639,24 @@ impl Bank {
             }
         }
 
+        let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
+        loaded_programs_cache.latest_root_slot = self.slot();
+        loaded_programs_cache.latest_root_epoch = self.epoch();
+        loaded_programs_cache.environments.program_runtime_v1 = Arc::new(
+            create_program_runtime_environment_v1(
+                &self.feature_set,
+                &self.runtime_config.compute_budget.unwrap_or_default(),
+                false, /* deployment */
+                false, /* debugging_features */
+            )
+            .unwrap(),
+        );
+        loaded_programs_cache.environments.program_runtime_v2 =
+            Arc::new(create_program_runtime_environment_v2(
+                &self.runtime_config.compute_budget.unwrap_or_default(),
+                false, /* debugging_features */
+            ));
+
         if self
             .feature_set
             .is_active(&feature_set::cap_accounts_data_len::id())
@@ -7924,46 +8022,6 @@ impl Bank {
         only_apply_transitions_for_new_features: bool,
         new_feature_activations: &HashSet<Pubkey>,
     ) {
-        const FEATURES_AFFECTING_RBPF: &[Pubkey] = &[
-            feature_set::error_on_syscall_bpf_function_hash_collisions::id(),
-            feature_set::reject_callx_r10::id(),
-            feature_set::switch_to_new_elf_parser::id(),
-            feature_set::bpf_account_data_direct_mapping::id(),
-            feature_set::enable_alt_bn128_syscall::id(),
-            feature_set::enable_alt_bn128_compression_syscall::id(),
-            feature_set::enable_big_mod_exp_syscall::id(),
-            feature_set::blake3_syscall_enabled::id(),
-            feature_set::curve25519_syscall_enabled::id(),
-            feature_set::disable_fees_sysvar::id(),
-            feature_set::enable_partitioned_epoch_reward::id(),
-            feature_set::disable_deploy_of_alloc_free_syscall::id(),
-            feature_set::last_restart_slot_sysvar::id(),
-            feature_set::remaining_compute_units_syscall_enabled::id(),
-        ];
-        if !only_apply_transitions_for_new_features
-            || FEATURES_AFFECTING_RBPF
-                .iter()
-                .any(|key| new_feature_activations.contains(key))
-        {
-            let program_runtime_environment_v1 = create_program_runtime_environment_v1(
-                &self.feature_set,
-                &self.runtime_config.compute_budget.unwrap_or_default(),
-                false, /* deployment */
-                false, /* debugging_features */
-            )
-            .unwrap();
-            let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
-            loaded_programs_cache.environments.program_runtime_v1 =
-                Arc::new(program_runtime_environment_v1);
-            let program_runtime_environment_v2 =
-                solana_loader_v4_program::create_program_runtime_environment_v2(
-                    &self.runtime_config.compute_budget.unwrap_or_default(),
-                    false, /* debugging_features */
-                );
-            loaded_programs_cache.environments.program_runtime_v2 =
-                Arc::new(program_runtime_environment_v2);
-            loaded_programs_cache.prune_feature_set_transition();
-        }
         for builtin in BUILTINS.iter() {
             if let Some(feature_id) = builtin.feature_id {
                 let should_apply_action_for_feature_transition =
