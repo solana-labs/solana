@@ -824,7 +824,7 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> PooledSche
         let address_book = AddressBook::default();
         let preloader = Arc::new(address_book.preloader());
 
-        Self {
+        let mut new = Self {
             id: thread_rng().gen::<SchedulerId>(),
             pool,
             context: Some(initial_context),
@@ -836,6 +836,8 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> PooledSche
             handler_threads: vec![],
             _phantom: PhantomData,
         }
+        new.start_threads();
+        new
     }
 }
 
