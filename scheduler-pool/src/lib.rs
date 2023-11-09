@@ -831,6 +831,8 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> PooledSche
             handler,
             address_book: Mutex::new(address_book),
             preloader,
+            scheduler_thread: None,
+            handler_threads: vec![],
             _phantom: PhantomData,
         }
     }
