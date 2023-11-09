@@ -220,8 +220,8 @@ impl GeyserPluginManager {
         let mut current_plugin = self.plugins.remove(idx);
         let current_lib = self.libs.remove(idx);
         current_plugin.on_unload();
-        current_lib.close();
-        drop(current_lib);
+        let result = current_lib.close();
+        info!("Unloading plugin at {} returned result {:?}", idx, result);
     }
 }
 
