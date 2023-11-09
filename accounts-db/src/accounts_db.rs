@@ -9397,51 +9397,82 @@ impl AccountsDb {
                 ..GenerateIndexTimings::default()
             };
 
-            // subtract data.len() from accounts_data_len for all old accounts that are in the index twice
-            let mut accounts_data_len_dedup_timer =
-                Measure::start("handle accounts data len duplicates");
-            let uncleaned_roots = Mutex::new(IntSet::default());
             if pass == 0 {
-                let accounts_data_len_from_duplicates = unique_pubkeys_by_bin
+                // subtract data.len() from accounts_data_len for all old accounts that are in the index twice
+                let mut accounts_data_len_dedup_timer =
+                    Measure::start("handle accounts data len duplicates");
+                let (accounts_data_len_from_duplicates, uncleaned_roots) = unique_pubkeys_by_bin
                     .par_iter()
-                    .map(|unique_keys| {
-                        unique_keys
-                            .par_chunks(4096)
-                            .map(|pubkeys| {
-                                let (count, uncleaned_roots_this_group) = self
-                                    .visit_duplicate_pubkeys_during_startup(
-                                        pubkeys,
-                                        &rent_collector,
-                                        &timings,
+                    .fold(
+                        // identity: accounts data len from duplicates, uncleaned roots
+                        || (0, IntSet::default()),
+                        // fold operation
+                        |mut accum, pubkeys_by_bin| {
+                            let (accounts_data_len_from_duplicates, uncleaned_roots) =
+                                pubkeys_by_bin
+                                    .par_chunks(4096)
+                                    .fold(
+                                        // identity: accounts data len from duplicates, uncleaned roots
+                                        || (0, IntSet::default()),
+                                        // fold operation
+                                        |mut accum, pubkeys| {
+                                            let (
+                                                accounts_data_len_from_duplicates,
+                                                uncleaned_roots,
+                                            ) = self.visit_duplicate_pubkeys_during_startup(
+                                                pubkeys,
+                                                &rent_collector,
+                                                &timings,
+                                            );
+                                            accum.0 += accounts_data_len_from_duplicates;
+                                            accum.1.extend(uncleaned_roots);
+                                            accum
+                                        },
+                                    )
+                                    .reduce(
+                                        // identity: accounts data len from duplicates, uncleaned roots
+                                        || (0, IntSet::default()),
+                                        // reduce operation
+                                        |mut a, b| {
+                                            a.0 += b.0;
+                                            a.1.extend(b.1);
+                                            a
+                                        },
                                     );
-                                let mut uncleaned_roots = uncleaned_roots.lock().unwrap();
-                                uncleaned_roots_this_group.into_iter().for_each(|slot| {
-                                    uncleaned_roots.insert(slot);
-                                });
-                                count
-                            })
-                            .sum::<u64>()
-                    })
-                    .sum();
+
+                            accum.0 += accounts_data_len_from_duplicates;
+                            accum.1.extend(uncleaned_roots);
+                            accum
+                        },
+                    )
+                    .reduce(
+                        // identity: accounts data len from duplicates, uncleaned roots
+                        || (0, IntSet::default()),
+                        // reduce operation
+                        |mut a, b| {
+                            a.0 += b.0;
+                            a.1.extend(b.1);
+                            a
+                        },
+                    );
+                accounts_data_len_dedup_timer.stop();
+                timings.accounts_data_len_dedup_time_us = accounts_data_len_dedup_timer.as_us();
+                timings.slots_to_clean = uncleaned_roots.len() as u64;
+
+                self.accounts_index
+                    .add_uncleaned_roots(uncleaned_roots.into_iter());
                 accounts_data_len.fetch_sub(accounts_data_len_from_duplicates, Ordering::Relaxed);
                 info!(
                     "accounts data len: {}",
                     accounts_data_len.load(Ordering::Relaxed)
                 );
             }
-            accounts_data_len_dedup_timer.stop();
-            timings.accounts_data_len_dedup_time_us = accounts_data_len_dedup_timer.as_us();
-
-            let uncleaned_roots = uncleaned_roots.into_inner().unwrap();
-            timings.slots_to_clean = uncleaned_roots.len() as u64;
 
             if pass == 0 {
                 // Need to add these last, otherwise older updates will be cleaned
                 for root in &slots {
                     self.accounts_index.add_root(*root);
                 }
-                self.accounts_index
-                    .add_uncleaned_roots(uncleaned_roots.into_iter());
 
                 self.set_storage_count_and_alive_bytes(storage_info, &mut timings);
             }
