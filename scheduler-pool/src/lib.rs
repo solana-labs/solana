@@ -804,11 +804,11 @@ impl TaskQueueReader for ChannelBackedTaskQueue {
 pub struct PooledScheduler<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> {
     id: SchedulerId,
     pool: Arc<SchedulerPool<Self, TH, SEA>>,
-    context: Option<SchedulingContext>,
-    result_with_timings: Mutex<Option<ResultWithTimings>>,
     handler: TH,
     address_book: Mutex<AddressBook>,
     preloader: Arc<Preloader>,
+    scheduler_thread: Option<JoinHandle<()>>,
+    handler_threads: Vec<JoinHandle<()>>,
     _phantom: PhantomData<SEA>,
 }
 
@@ -1278,17 +1278,27 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
 struct SchedulingStateMachine {};
 
 enum Event {
-    Registered(Transaction),
+    New(Transaction),
     Executed(Transaction),
 }
 
 enum Action {
-    
+    Execute,
+    Abort,
+}
+
+enum ActionResult {
+    NoTransaction,
+    Runnable(Transaction),
+    Aborted,
 }
 
 impl SchedulingStateMachine {
-    fn tick(Event) -> Action {}
+    fn tick_by_event(Event) {}
+    fn tick_by_action(Action) -> ActionResult {}
 }
+
+impl Thread
 */
 
 impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstallableScheduler<SEA>
