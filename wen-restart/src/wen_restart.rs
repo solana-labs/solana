@@ -63,7 +63,6 @@ fn send_restart_last_voted_fork_slots(
         last_vote_hash, last_vote_fork_slots
     );
     cluster_info.push_restart_last_voted_fork_slots(&last_vote_fork_slots, last_vote_hash);
-    progress.set_state(RestartState::LastVotedForkSlots);
     progress.my_last_voted_fork_slots = Some(LastVotedForkSlotsRecord {
         last_vote_fork_slots,
         last_vote_bankhash: last_vote.hash().to_string(),
@@ -149,7 +148,6 @@ fn aggregate_restart_last_voted_fork_slots(
             sleep(Duration::from_millis(time_left));
         }
     }
-    progress.set_state(RestartState::HeaviestFork);
     Ok(())
 }
 
@@ -163,28 +161,49 @@ pub fn wait_for_wen_restart(
     wait_for_supermajority_threshold_percent: u64,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut progress = read_wen_restart_records(wen_restart_path)?;
-    while progress.state() != RestartState::Done {
-        match progress.state() {
-            RestartState::Init => send_restart_last_voted_fork_slots(
-                last_vote.clone(),
-                blockstore.clone(),
-                cluster_info.clone(),
-                &mut progress,
-            )?,
-            RestartState::LastVotedForkSlots => aggregate_restart_last_voted_fork_slots(
-                wen_restart_path,
-                wait_for_supermajority_threshold_percent,
-                cluster_info.clone(),
-                bank_forks.clone(),
-                slots_to_repair_for_wen_restart.clone().unwrap(),
-                &mut progress,
-            )?,
-            // Place holder to make the code compile and run for now.
-            _ => progress.set_state(RestartState::Done),
-        }
-        write_wen_restart_records(wen_restart_path, &progress)?;
+    if progress.state() == RestartState::Init {
+        send_restart_last_voted_fork_slots(
+            last_vote.clone(),
+            blockstore.clone(),
+            cluster_info.clone(),
+            &mut progress,
+        )?;
+        increment_and_write_wen_restart_records(wen_restart_path, &mut progress)?
     }
-    Ok(())
+    if progress.state() == RestartState::LastVotedForkSlots {
+        aggregate_restart_last_voted_fork_slots(
+            wen_restart_path,
+            wait_for_supermajority_threshold_percent,
+            cluster_info.clone(),
+            bank_forks.clone(),
+            slots_to_repair_for_wen_restart.clone().unwrap(),
+            &mut progress,
+        )?;
+        increment_and_write_wen_restart_records(wen_restart_path, &mut progress)?
+    }
+    // Place holder to make the code compile and run for now.
+    if progress.state() == RestartState::HeaviestFork {
+        increment_and_write_wen_restart_records(wen_restart_path, &mut progress)?
+    }
+    if progress.state() == RestartState::Done {
+        Ok(())
+    } else {
+        panic!("Moving to unexpected state {:?}", progress.state())
+    }
+}
+
+fn increment_and_write_wen_restart_records(
+    records_path: &PathBuf,
+    new_progress: &mut WenRestartProgress,
+) -> Result<(), Error> {
+    let new_state = match new_progress.state() {
+        RestartState::Init => RestartState::LastVotedForkSlots,
+        RestartState::LastVotedForkSlots => RestartState::HeaviestFork,
+        RestartState::HeaviestFork => RestartState::Done,
+        _ => panic!("Unexpected state {:?}", new_progress.state()),
+    };
+    new_progress.set_state(new_state);
+    write_wen_restart_records(records_path, new_progress)
 }
 
 fn read_wen_restart_records(records_path: &PathBuf) -> Result<WenRestartProgress, Error> {

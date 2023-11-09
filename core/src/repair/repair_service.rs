@@ -623,27 +623,31 @@ impl RepairService {
         max_repairs: usize,
         add_delay_after_first_shred: bool,
     ) -> Vec<ShredRepairType> {
+        // When in wen_restart, turbine not running, no need to wait after first shred.
+        let defer_repair_threshold_ticks = if add_delay_after_first_shred {
+            DEFER_REPAIR_THRESHOLD_TICKS
+        } else {
+            0
+        };
         if max_repairs == 0 || slot_meta.is_full() {
             vec![]
         } else if slot_meta.consumed == slot_meta.received {
             // check delay time of last shred
-            if add_delay_after_first_shred {
-                if let Some(reference_tick) = slot_meta
-                    .received
-                    .checked_sub(1)
-                    .and_then(|index| blockstore.get_data_shred(slot, index).ok()?)
-                    .and_then(|shred| shred::layout::get_reference_tick(&shred).ok())
-                    .map(u64::from)
+            if let Some(reference_tick) = slot_meta
+                .received
+                .checked_sub(1)
+                .and_then(|index| blockstore.get_data_shred(slot, index).ok()?)
+                .and_then(|shred| shred::layout::get_reference_tick(&shred).ok())
+                .map(u64::from)
+            {
+                // System time is not monotonic
+                let ticks_since_first_insert = DEFAULT_TICKS_PER_SECOND
+                    * timestamp().saturating_sub(slot_meta.first_shred_timestamp)
+                    / 1_000;
+                if ticks_since_first_insert
+                    < reference_tick.saturating_add(defer_repair_threshold_ticks)
                 {
-                    // System time is not monotonic
-                    let ticks_since_first_insert = DEFAULT_TICKS_PER_SECOND
-                        * timestamp().saturating_sub(slot_meta.first_shred_timestamp)
-                        / 1_000;
-                    if ticks_since_first_insert
-                        < reference_tick.saturating_add(DEFER_REPAIR_THRESHOLD_TICKS)
-                    {
-                        return vec![];
-                    }
+                    return vec![];
                 }
             }
             vec![ShredRepairType::HighestShred(slot, slot_meta.received)]
@@ -652,7 +656,7 @@ impl RepairService {
                 .find_missing_data_indexes(
                     slot,
                     slot_meta.first_shred_timestamp,
-                    DEFER_REPAIR_THRESHOLD_TICKS,
+                    defer_repair_threshold_ticks,
                     slot_meta.consumed,
                     slot_meta.received,
                     max_repairs,
