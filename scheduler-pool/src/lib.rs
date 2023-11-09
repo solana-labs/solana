@@ -818,7 +818,7 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> PooledSche
         initial_context: SchedulingContext,
         handler: TH,
     ) -> Self {
-        let address_book = Mutex::new(AddressBook::default());
+        let address_book = AddressBook::default();
         let preloader = Arc::new(address_book.preloader());
 
         Self {
@@ -827,7 +827,7 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> PooledSche
             context: Some(initial_context),
             result_with_timings: Mutex::default(),
             handler,
-            address_book,
+            address_book: Mutex::new(address_book),
             preloader,
             _phantom: PhantomData,
         }
