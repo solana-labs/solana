@@ -486,7 +486,6 @@ impl AccountsDb {
             all_infos: Vec::with_capacity(len),
             ..AncientSlotInfos::default()
         };
-        assert!(!can_randomly_shrink);
         let mut randoms = 0;
 
         log::error!(
