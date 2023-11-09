@@ -839,9 +839,7 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> PooledSche
         new.start_threads();
         new
     }
-}
 
-impl PooledScheduler {
     fn start_threads(&self) {
     }
 }
