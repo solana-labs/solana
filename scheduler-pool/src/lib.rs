@@ -1307,7 +1307,7 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
                 &mut failed_lock_count,
             );
             if let Some(ee) = maybe_ee {
-                ScheduleStage::commit_processed_execution(&mut ee, &mut address_book);
+                ScheduleStage::commit_processed_execution(&mut ee, &mut self.address_book);
             }
         })
     }
