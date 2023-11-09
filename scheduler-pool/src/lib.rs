@@ -1294,7 +1294,7 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
                 Task::new_for_queue(uw, (transaction.clone(), locks));
             let (transaction_sender, transaction_receiver) = crossbeam_channel::unbounded();
             let mut runnable_queue = ModeSpecificTaskQueue::BlockVerification(ChannelBackedTaskQueue::new(&transaction_receiver));
-            runnable_queue.add_to_schedule(task.unique_weight, task)
+            runnable_queue.add_to_schedule(task.unique_weight, task);
             let maybe_ee = ScheduleStage::schedule_next_execution(
                 &mut runnable_queue,
                 address_book,
