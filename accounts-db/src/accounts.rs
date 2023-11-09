@@ -70,6 +70,9 @@ use {
     },
 };
 
+// max_tx_per entry * avg_accts_per_tx = 64*16 =  
+const ENTRY_ACCTS_LOOKUP_TABLE_SIZE: usize = 1024; 
+
 pub type PubkeyAccountSlot = (Pubkey, AccountSharedData, Slot);
 
 #[derive(Debug, Default, AbiExample)]
@@ -314,6 +317,7 @@ impl Accounts {
         reward_interval: RewardInterval,
         program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
         loaded_programs: &LoadedProgramsForTxBatch,
+        entry_accts_lookup: &mut HashMap<Pubkey, AccountSharedData>,
     ) -> Result<LoadedTransaction> {
         let in_reward_interval = reward_interval == RewardInterval::InsideInterval;
 
@@ -382,6 +386,10 @@ impl Accounts {
                             .load_with_fixed_root(ancestors, key)
                             .map(|(mut account, _)| {
                                 if message.is_writable(i) {
+                                    // get the updated state from the entry level lookup
+                                    if let Some(lookup_acct) = entry_accts_lookup.get(key) {
+                                        account = lookup_acct.clone();
+                                    }
                                     let rent_due = rent_collector
                                         .collect_from_existing_account(
                                             key,
@@ -642,6 +650,8 @@ impl Accounts {
         program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
         loaded_programs: &LoadedProgramsForTxBatch,
     ) -> Vec<TransactionLoadResult> {
+        let mut entry_accts_lookup: HashMap<Pubkey, AccountSharedData> =
+            HashMap::with_capacity(ENTRY_ACCTS_LOOKUP_TABLE_SIZE);
         txs.iter()
             .zip(lock_results)
             .map(|etx| match etx {
@@ -675,6 +685,7 @@ impl Accounts {
                         in_reward_interval,
                         program_accounts,
                         loaded_programs,
+                        &mut entry_accts_lookup,
                     ) {
                         Ok(loaded_transaction) => loaded_transaction,
                         Err(e) => return (Err(e), None),
@@ -694,6 +705,19 @@ impl Accounts {
                     } else {
                         None
                     };
+
+                    // update lookup table after every transaction
+                    for (pubkey,acct) in loaded_transaction.accounts.iter(){
+                        if let Some(lookup_account) = entry_accts_lookup.get(&pubkey) {
+                            if lookup_account != acct {
+                                entry_accts_lookup.insert(*pubkey, acct.clone());
+                            }
+                        }
+                        else {
+                            entry_accts_lookup.insert(*pubkey, acct.clone());
+                        }
+
+                    }
 
                     (Ok(loaded_transaction), nonce)
                 }
