@@ -9398,62 +9398,64 @@ impl AccountsDb {
             };
 
             if pass == 0 {
+                #[derive(Debug, Default)]
+                struct DuplicatePubkeysVisitedInfo {
+                    accounts_data_len_from_duplicates: u64,
+                    uncleaned_roots: IntSet<Slot>,
+                }
+                impl DuplicatePubkeysVisitedInfo {
+                    fn reduce(mut a: Self, mut b: Self) -> Self {
+                        if a.uncleaned_roots.len() >= b.uncleaned_roots.len() {
+                            a.merge(b);
+                            a
+                        } else {
+                            b.merge(a);
+                            b
+                        }
+                    }
+                    fn merge(&mut self, other: Self) {
+                        self.accounts_data_len_from_duplicates +=
+                            other.accounts_data_len_from_duplicates;
+                        self.uncleaned_roots.extend(other.uncleaned_roots);
+                    }
+                }
+
                 // subtract data.len() from accounts_data_len for all old accounts that are in the index twice
                 let mut accounts_data_len_dedup_timer =
                     Measure::start("handle accounts data len duplicates");
-                let (accounts_data_len_from_duplicates, uncleaned_roots) = unique_pubkeys_by_bin
+                let DuplicatePubkeysVisitedInfo {
+                    accounts_data_len_from_duplicates,
+                    uncleaned_roots,
+                } = unique_pubkeys_by_bin
                     .par_iter()
                     .fold(
-                        // identity: accounts data len from duplicates, uncleaned roots
-                        || (0, IntSet::default()),
-                        // fold operation
-                        |mut accum, pubkeys_by_bin| {
-                            let (accounts_data_len_from_duplicates, uncleaned_roots) =
-                                pubkeys_by_bin
-                                    .par_chunks(4096)
-                                    .fold(
-                                        // identity: accounts data len from duplicates, uncleaned roots
-                                        || (0, IntSet::default()),
-                                        // fold operation
-                                        |mut accum, pubkeys| {
-                                            let (
-                                                accounts_data_len_from_duplicates,
-                                                uncleaned_roots,
-                                            ) = self.visit_duplicate_pubkeys_during_startup(
-                                                pubkeys,
-                                                &rent_collector,
-                                                &timings,
-                                            );
-                                            accum.0 += accounts_data_len_from_duplicates;
-                                            accum.1.extend(uncleaned_roots);
-                                            accum
-                                        },
-                                    )
-                                    .reduce(
-                                        // identity: accounts data len from duplicates, uncleaned roots
-                                        || (0, IntSet::default()),
-                                        // reduce operation
-                                        |mut a, b| {
-                                            a.0 += b.0;
-                                            a.1.extend(b.1);
-                                            a
-                                        },
-                                    );
-
-                            accum.0 += accounts_data_len_from_duplicates;
-                            accum.1.extend(uncleaned_roots);
-                            accum
+                        DuplicatePubkeysVisitedInfo::default,
+                        |accum, pubkeys_by_bin| {
+                            let intermediate = pubkeys_by_bin
+                                .par_chunks(4096)
+                                .fold(DuplicatePubkeysVisitedInfo::default, |accum, pubkeys| {
+                                    let (accounts_data_len_from_duplicates, uncleaned_roots) = self
+                                        .visit_duplicate_pubkeys_during_startup(
+                                            pubkeys,
+                                            &rent_collector,
+                                            &timings,
+                                        );
+                                    let intermediate = DuplicatePubkeysVisitedInfo {
+                                        accounts_data_len_from_duplicates,
+                                        uncleaned_roots,
+                                    };
+                                    DuplicatePubkeysVisitedInfo::reduce(accum, intermediate)
+                                })
+                                .reduce(
+                                    DuplicatePubkeysVisitedInfo::default,
+                                    DuplicatePubkeysVisitedInfo::reduce,
+                                );
+                            DuplicatePubkeysVisitedInfo::reduce(accum, intermediate)
                         },
                     )
                     .reduce(
-                        // identity: accounts data len from duplicates, uncleaned roots
-                        || (0, IntSet::default()),
-                        // reduce operation
-                        |mut a, b| {
-                            a.0 += b.0;
-                            a.1.extend(b.1);
-                            a
-                        },
+                        DuplicatePubkeysVisitedInfo::default,
+                        DuplicatePubkeysVisitedInfo::reduce,
                     );
                 accounts_data_len_dedup_timer.stop();
                 timings.accounts_data_len_dedup_time_us = accounts_data_len_dedup_timer.as_us();
