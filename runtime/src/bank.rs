@@ -184,7 +184,7 @@ use {
     std::{
         borrow::Cow,
         cell::RefCell,
-        collections::{HashMap, HashSet},
+        collections::{hash_map::Entry, HashMap, HashSet},
         convert::TryFrom,
         fmt, mem,
         ops::{AddAssign, RangeInclusive},
@@ -5116,6 +5116,60 @@ impl Bank {
         loaded_programs_for_txs
     }
 
+    /// Returns a hash map of executable program accounts (program accounts that are not writable
+    /// in the given transactions), and their owners, for the transactions with a valid
+    /// blockhash or nonce.
+    fn filter_executable_program_accounts<'a>(
+        &self,
+        ancestors: &Ancestors,
+        txs: &[SanitizedTransaction],
+        lock_results: &mut [TransactionCheckResult],
+        program_owners: &'a [Pubkey],
+        hash_queue: &BlockhashQueue,
+    ) -> HashMap<Pubkey, (&'a Pubkey, u64)> {
+        let mut result: HashMap<Pubkey, (&'a Pubkey, u64)> = HashMap::new();
+        lock_results.iter_mut().zip(txs).for_each(|etx| {
+            if let ((Ok(()), nonce), tx) = etx {
+                if nonce
+                    .as_ref()
+                    .map(|nonce| nonce.lamports_per_signature())
+                    .unwrap_or_else(|| {
+                        hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
+                    })
+                    .is_some()
+                {
+                    tx.message()
+                        .account_keys()
+                        .iter()
+                        .for_each(|key| match result.entry(*key) {
+                            Entry::Occupied(mut entry) => {
+                                let (_, count) = entry.get_mut();
+                                saturating_add_assign!(*count, 1);
+                            }
+                            Entry::Vacant(entry) => {
+                                if let Ok(index) = self
+                                    .rc
+                                    .accounts
+                                    .accounts_db
+                                    .account_matches_owners(ancestors, key, program_owners)
+                                {
+                                    program_owners
+                                        .get(index)
+                                        .map(|owner| entry.insert((owner, 1)));
+                                }
+                            }
+                        });
+                } else {
+                    // If the transaction's nonce account was not valid, and blockhash is not found,
+                    // the transaction will fail to process. Let's not load any programs from the
+                    // transaction, and update the status of the transaction.
+                    *etx.0 = (Err(TransactionError::BlockhashNotFound), None);
+                }
+            }
+        });
+        result
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -5183,7 +5237,7 @@ impl Bank {
             bpf_loader_deprecated::id(),
             loader_v4::id(),
         ];
-        let mut program_accounts_map = self.rc.accounts.filter_executable_program_accounts(
+        let mut program_accounts_map = self.filter_executable_program_accounts(
             &self.ancestors,
             sanitized_txs,
             &mut check_results,
