@@ -1060,15 +1060,7 @@ impl ScheduleStage {
                     trace!("provisional exec: [{}/{}]", provisional_count, lock_count);
                     *contended_count = contended_count.checked_sub(1).unwrap();
                     next_task.mark_as_uncontended();
-                    //address_book.stuck_tasks.remove(&next_task.stuck_task_id());
-
-                    Self::finalize_lock_for_provisional_execution(
-                        address_book,
-                        &next_task,
-                    );
-
                     break;
-                    //continue;
                 }
 
                 trace!(
@@ -1108,24 +1100,6 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn finalize_lock_for_provisional_execution(
-        address_book: &mut AddressBook,
-        next_task: &Task,
-    ) {
-        for l in next_task.lock_attempts_mut().iter_mut() {
-            match l.status {
-                LockStatus::Succeded => {
-                    // do nothing
-                }
-                LockStatus::Failed => {
-                    unreachable!();
-                }
-            }
-        }
-        //trace!("provisioning_trackers: {}", address_book.provisioning_trackers.len());
-    }
-
-    #[inline(never)]
     fn reset_lock_for_failed_execution(
         address_book: &mut AddressBook,
         unique_weight: &UniqueWeight,
@@ -1146,43 +1120,13 @@ impl ScheduleStage {
 
             let mut page = l.target.page_mut();
             if newly_uncontended && page.next_usage == Usage::Unused {
-                //let mut inserted = false;
-
                 if let Some(task) = l.heaviest_uncontended.take() {
-                    //assert!(!task.already_finished());
-                    if
-                    /*true ||*/
-                    task.currently_contended() {
-                        //assert!(task.currently_contended());
-                        //inserted = true;
+                    if task.currently_contended() {
                         let uti = address_book
                             .uncontended_task_ids
                             .entry(task.unique_weight).or_insert((task, Default::default()));
                         uti.1.insert(l.target.clone());
-                    } /*else {
-                          let contended_unique_weights = &page.contended_unique_weights;
-                          contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
-                              let mut found = true;
-                              //assert_ne!(task_cursor.key(), &task.uq);
-                              let mut task = task_cursor.value();
-                              while !task.currently_contended() {
-                                  if let Some(new_cursor) = task_cursor.prev() {
-                                      assert!(new_cursor.key() < task_cursor.key());
-                                      //assert_ne!(new_cursor.key(), &uq);
-                                      task_cursor = new_cursor;
-                                      task = task_cursor.value();
-                                  } else {
-                                      found = false;
-                                      break;
-                                  }
-                              }
-                              found.then(|| Task::clone_in_queue(task))
-                          }).flatten().map(|task| {
-                              let uti = address_book.uncontended_task_ids.entry(task.unique_weight).or_insert(task);
-                              uti.1.insert(????);
-                              ()
-                          });
-                      }*/
+                    }
                 }
             }
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
