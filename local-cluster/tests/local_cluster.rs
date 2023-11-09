@@ -4716,7 +4716,8 @@ fn test_duplicate_with_pruned_ancestor() {
         }
 
         // Copy minority fork to our blockstore
-        // Set trusted=true in blockstore copy to override parent >= latest root check
+        // Set trusted=true in blockstore copy to skip the parent slot >= latest root check;
+        // this check would otherwise prevent the pruned fork from being inserted
         let minority_blockstore = open_blockstore(&minority_validator_info.info.ledger_path);
         let our_blockstore = open_blockstore(&our_node_info.info.ledger_path);
         copy_blocks(
