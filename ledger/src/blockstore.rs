@@ -3345,6 +3345,14 @@ impl Blockstore {
         self.max_root.load(Ordering::Relaxed)
     }
 
+    #[deprecated(
+        since = "1.18.0",
+        note = "Please use `solana_ledger::blockstore::Blockstore::max_root()` instead"
+    )]
+    pub fn last_root(&self) -> Slot {
+        self.max_root()
+    }
+
     /// For tests
     pub fn set_max_root(&mut self, root: Slot) {
         self.max_root.store(root, Ordering::Relaxed);
