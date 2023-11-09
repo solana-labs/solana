@@ -260,13 +260,13 @@ pub enum GeyserPluginManagerError {
     #[error("Invalid plugin path")]
     InvalidPluginPath,
 
-    #[error("Cannot load plugin shared library")]
+    #[error("Cannot load plugin shared library (error: {0})")]
     PluginLoadError(String),
 
     #[error("The geyser plugin {0} is already loaded shared library")]
     PluginAlreadyLoaded(String),
 
-    #[error("The GeyserPlugin on_load method failed")]
+    #[error("The GeyserPlugin on_load method failed (error: {0})")]
     PluginStartError(String),
 }
 

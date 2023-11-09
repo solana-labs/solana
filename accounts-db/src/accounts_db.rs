@@ -81,7 +81,7 @@ use {
     serde::{Deserialize, Serialize},
     smallvec::SmallVec,
     solana_measure::{measure::Measure, measure_us},
-    solana_nohash_hasher::IntSet,
+    solana_nohash_hasher::{IntMap, IntSet},
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -4328,7 +4328,7 @@ impl AccountsDb {
         shrink_slots: &ShrinkCandidates,
         shrink_ratio: f64,
         oldest_non_ancient_slot: Option<Slot>,
-    ) -> (HashMap<Slot, Arc<AccountStorageEntry>>, ShrinkCandidates) {
+    ) -> (IntMap<Slot, Arc<AccountStorageEntry>>, ShrinkCandidates) {
         struct StoreUsageInfo {
             slot: Slot,
             alive_ratio: f64,
@@ -4371,7 +4371,7 @@ impl AccountsDb {
 
         // Working from the beginning of store_usage which are the most sparse and see when we can stop
         // shrinking while still achieving the overall goals.
-        let mut shrink_slots = HashMap::new();
+        let mut shrink_slots = IntMap::default();
         let mut shrink_slots_next_batch = ShrinkCandidates::default();
         for usage in &store_usage {
             let store = &usage.store;
@@ -9408,7 +9408,7 @@ impl AccountsDb {
             // subtract data.len() from accounts_data_len for all old accounts that are in the index twice
             let mut accounts_data_len_dedup_timer =
                 Measure::start("handle accounts data len duplicates");
-            let uncleaned_roots = Mutex::new(HashSet::<Slot>::default());
+            let uncleaned_roots = Mutex::new(IntSet::default());
             if pass == 0 {
                 let accounts_data_len_from_duplicates = unique_pubkeys_by_bin
                     .par_iter()

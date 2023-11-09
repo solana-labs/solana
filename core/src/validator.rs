@@ -14,7 +14,6 @@ use {
             tower_storage::{NullTowerStorage, TowerStorage},
             ExternalRootSource, Tower,
         },
-        ledger_metric_report_service::LedgerMetricReportService,
         poh_timing_report_service::PohTimingReportService,
         repair::{self, serve_repair::ServeRepair, serve_repair_service::ServeRepairService},
         rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
@@ -56,6 +55,7 @@ use {
         blockstore::{
             Blockstore, BlockstoreError, BlockstoreSignals, CompletedSlotsReceiver, PurgeType,
         },
+        blockstore_metric_report_service::BlockstoreMetricReportService,
         blockstore_options::{BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions},
         blockstore_processor::{self, TransactionStatusSender},
         entry_notifier_interface::EntryNotifierArc,
@@ -83,7 +83,7 @@ use {
         rpc_pubsub_service::{PubSubConfig, PubSubService},
         rpc_service::JsonRpcService,
         rpc_subscriptions::RpcSubscriptions,
-        transaction_notifier_interface::TransactionNotifierLock,
+        transaction_notifier_interface::TransactionNotifierArc,
         transaction_status_service::TransactionStatusService,
     },
     solana_runtime::{
@@ -465,7 +465,7 @@ pub struct Validator {
     pub bank_forks: Arc<RwLock<BankForks>>,
     pub blockstore: Arc<Blockstore>,
     geyser_plugin_service: Option<GeyserPluginService>,
-    ledger_metric_report_service: LedgerMetricReportService,
+    blockstore_metric_report_service: BlockstoreMetricReportService,
     accounts_background_service: AccountsBackgroundService,
     accounts_hash_verifier: AccountsHashVerifier,
     turbine_quic_endpoint: Endpoint,
@@ -1102,8 +1102,8 @@ impl Validator {
         )
         .map_err(|err| format!("wait_for_supermajority failed: {err:?}"))?;
 
-        let ledger_metric_report_service =
-            LedgerMetricReportService::new(blockstore.clone(), exit.clone());
+        let blockstore_metric_report_service =
+            BlockstoreMetricReportService::new(blockstore.clone(), exit.clone());
 
         let wait_for_vote_to_start_leader =
             !waited_for_supermajority && !config.no_wait_for_vote_to_start_leader;
@@ -1378,7 +1378,7 @@ impl Validator {
             bank_forks,
             blockstore,
             geyser_plugin_service,
-            ledger_metric_report_service,
+            blockstore_metric_report_service,
             accounts_background_service,
             accounts_hash_verifier,
             turbine_quic_endpoint,
@@ -1507,7 +1507,7 @@ impl Validator {
         self.stats_reporter_service
             .join()
             .expect("stats_reporter_service");
-        self.ledger_metric_report_service
+        self.blockstore_metric_report_service
             .join()
             .expect("ledger_metric_report_service");
         self.accounts_background_service
@@ -1689,7 +1689,7 @@ fn load_blockstore(
     exit: Arc<AtomicBool>,
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    transaction_notifier: Option<TransactionNotifierLock>,
+    transaction_notifier: Option<TransactionNotifierArc>,
     entry_notifier: Option<EntryNotifierArc>,
     poh_timing_point_sender: Option<PohTimingSender>,
 ) -> Result<
@@ -2167,7 +2167,7 @@ fn initialize_rpc_transaction_history_services(
     exit: Arc<AtomicBool>,
     enable_rpc_transaction_history: bool,
     enable_extended_tx_metadata_storage: bool,
-    transaction_notifier: Option<TransactionNotifierLock>,
+    transaction_notifier: Option<TransactionNotifierArc>,
 ) -> TransactionHistoryServices {
     let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
     let (transaction_status_sender, transaction_status_receiver) = unbounded();

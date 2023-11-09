@@ -4274,49 +4274,6 @@ fn test_leader_failure_4() {
     );
 }
 
-#[test]
-#[serial]
-fn test_ledger_cleanup_service() {
-    solana_logger::setup_with_default(RUST_LOG_FILTER);
-    error!("test_ledger_cleanup_service");
-    let num_nodes = 3;
-    let validator_config = ValidatorConfig {
-        max_ledger_shreds: Some(100),
-        ..ValidatorConfig::default_for_test()
-    };
-    let mut config = ClusterConfig {
-        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
-        poh_config: PohConfig::new_sleep(Duration::from_millis(50)),
-        node_stakes: vec![DEFAULT_NODE_STAKE; num_nodes],
-        validator_configs: make_identical_validator_configs(&validator_config, num_nodes),
-        ..ClusterConfig::default()
-    };
-    let mut cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
-    // 200ms/per * 100 = 20 seconds, so sleep a little longer than that.
-    sleep(Duration::from_secs(60));
-
-    cluster_tests::spend_and_verify_all_nodes(
-        &cluster.entry_point_info,
-        &cluster.funding_keypair,
-        num_nodes,
-        HashSet::new(),
-        SocketAddrSpace::Unspecified,
-        &cluster.connection_cache,
-    );
-    cluster.close_preserve_ledgers();
-    //check everyone's ledgers and make sure only ~100 slots are stored
-    for info in cluster.validators.values() {
-        let mut slots = 0;
-        let blockstore = Blockstore::open(&info.info.ledger_path).unwrap();
-        blockstore
-            .slot_meta_iterator(0)
-            .unwrap()
-            .for_each(|_| slots += 1);
-        // with 3 nodes up to 3 slots can be in progress and not complete so max slots in blockstore should be up to 103
-        assert!(slots <= 103, "got {slots}");
-    }
-}
-
 // This test verifies that even if votes from a validator end up taking too long to land, and thus
 // some of the referenced slots are slots are no longer present in the slot hashes sysvar,
 // consensus can still be attained.
