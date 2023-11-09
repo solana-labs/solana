@@ -980,7 +980,6 @@ impl ScheduleStage {
         runnable_queue: &mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
-        queue_clock: &mut usize,
         task_selection: &mut TaskSelection,
         failed_lock_count: &mut usize,
     ) -> Option<(UniqueWeight, TaskInQueue, Vec<LockAttempt>)> {
@@ -992,9 +991,6 @@ impl ScheduleStage {
                 task_selection,
             ) {
                 let from_runnable = matches!(task_source, TaskSource::Runnable);
-                if from_runnable {
-                    *queue_clock = queue_clock.checked_add(1).unwrap();
-                }
                 let unique_weight = next_task.unique_weight;
 
                 let (unlockable_count, provisional_count) =
@@ -1201,7 +1197,6 @@ impl ScheduleStage {
         unique_weight: UniqueWeight,
         task: TaskInQueue,
         finalized_lock_attempts: Vec<LockAttempt>,
-        queue_clock: &usize,
         execute_clock: &mut usize,
     ) -> Box<ExecutionEnvironment> {
         let mut rng = rand::thread_rng();
@@ -1225,16 +1220,9 @@ impl ScheduleStage {
     fn commit_processed_execution(
         ee: &mut ExecutionEnvironment,
         address_book: &mut AddressBook,
-        commit_clock: &mut usize,
     ) {
-        // do par()-ly?
-
         ee.reindex_with_address_book();
         assert!(ee.is_reindexed());
-
-        //ee.task.trace_timestamps("commit");
-        //assert_eq!(ee.task.execute_time(), *commit_clock);
-        *commit_clock = commit_clock.checked_add(1).unwrap();
 
         // which order for data race free?: unlocking / marking
         Self::unlock_after_execution(
@@ -1250,7 +1238,6 @@ impl ScheduleStage {
         runnable_queue: &mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
-        queue_clock: &mut usize,
         execute_clock: &mut usize,
         task_selection: &mut TaskSelection,
         failed_lock_count: &mut usize,
@@ -1260,12 +1247,11 @@ impl ScheduleStage {
             runnable_queue,
             address_book,
             contended_count,
-            queue_clock,
             task_selection,
             failed_lock_count,
         )
         .map(|(uw, t, ll)| {
-            Self::prepare_scheduled_execution(address_book, uw, t, ll, queue_clock, execute_clock)
+            Self::prepare_scheduled_execution(address_book, uw, t, ll, execute_clock)
         });
         maybe_ee
     }
