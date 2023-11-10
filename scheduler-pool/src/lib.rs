@@ -871,7 +871,7 @@ impl ThreadManager {
     }
 
     fn start_threads(&mut self) {
-        let t = std::thread::Builder::new().name("aaaa").spawn(move || {
+        let t = std::thread::Builder::new().name("aaaa".to_owned()).spawn(move || {
         }).unwrap();
         self.scheduler_thread = Some(t);
     }
