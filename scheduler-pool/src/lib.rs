@@ -977,7 +977,7 @@ impl ThreadManager {
                                                             (payload, true)
                                                         }
                                                         SessionedChannel::NextSession(mut next_receiver_box) => {
-                                                            (blocked_transaction_receiver, _next_result_sender) =
+                                                            (blocked_transaction_receiver, _) =
                                                                 next_receiver_box.unwrap_channel_pair();
                                                             continue;
                                                         }
