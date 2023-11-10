@@ -895,12 +895,14 @@ impl ThreadManager {
             .spawn(move || {})
             .unwrap();
         self.scheduler_thread = Some(t);
+        let (idle_transaction_sender, idle_transaction_receiver) = unbounded();
         self.handler_threads = (0..10)
             .map(|thx| {
                 std::thread::Builder::new()
                     .name("aaaa".to_owned())
                     .spawn(move || {
-                        select_biased!{}
+                        select_biased!{
+                        }
                     })
                     .unwrap()
             })
