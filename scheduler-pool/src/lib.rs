@@ -1259,7 +1259,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> InstalledScheduler<SEA>
             if let Some(mut ee) = maybe_ee {
                 ScheduleStage::commit_processed_execution(&mut ee, &mut address_book);
             }
-        })
+        });
         drop(r);
     }
 
