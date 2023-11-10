@@ -800,7 +800,7 @@ impl TaskQueueReader for ChannelBackedTaskQueue {
 #[derive(Debug)]
 pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     id: SchedulerId,
-    pool: Arc<SchedulerPool<Self, TH, SEA>>,
+    pool: Arc<SchedulerPool<Self, TH, SEA>>, // to be moved to ThreadManager
     context: Option<SchedulingContext>, // to be moved to ThreadManager
     result_with_timings: Mutex<Option<ResultWithTimings>>, // to be removed
     handler: TH,
@@ -812,7 +812,7 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
 
 #[derive(Default, Debug)]
 struct ThreadManager {
-    context: Option<SchedulingContext>, // to be removed
+    context: Option<SchedulingContext>,
     scheduler_thread: Option<JoinHandle<()>>,
     handler_threads: Vec<JoinHandle<()>>,
 }
