@@ -907,6 +907,7 @@ impl ThreadManager {
                 .name("aaaa".to_owned())
                 .spawn(move || {
                     let never = &never();
+                    let state_machine = SchedulingStateMachine;
 
                     loop {
                         select_biased! {
@@ -1382,8 +1383,8 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> InstalledScheduler<SEA>
     }
 }
 
-/*
 struct SchedulingStateMachine {};
+/*
 
 enum Event {
     New(Transaction),
