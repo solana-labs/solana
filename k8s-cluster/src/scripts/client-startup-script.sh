@@ -1,12 +1,8 @@
 #!/bin/bash
 # set -e
 
-SECRET_FILE=(
-  "/home/solana/client-accounts/faucet.base64"
-)
-DECODED_FILE=(
-  "/home/solana/faucet.json"
-)
+SECRET_FILE="/home/solana/client-accounts/faucet.base64"
+DECODED_FILE="/home/solana/faucet.json"
 
 # Check if the secret file exists
 if [ -f "$SECRET_FILE" ]; then
@@ -45,12 +41,12 @@ while [[ -n $1 ]]; do
       shift 2
     else
       echo "Unknown argument: $1"
-      $program --help
+      solana-bench-tps --help
       exit 1
     fi
   else 
     echo "Unknown argument: $1"
-    $program --help
+    solana-bench-tps --help
     exit 1
   fi
 done
