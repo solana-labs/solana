@@ -889,6 +889,8 @@ impl ThreadManager {
     }
 
     fn receive_new_transaction(state_machine: &mut SchedulingStateMachine, msg: Box<Task>) {}
+    fn receive_handled_transaction(state_machine: &mut SchedulingStateMachine, msg: &mut Box<ExecutionEnvironment>) {}
+    fn update_result_with_timings(result_with_timings: &mut result_with_timings, msg: &mut Box<ExecutionEnvironment>) {}
 
     fn receive_scheduled_transaction(msg: &mut Box<ExecutionEnvironment>) {}
 
@@ -922,7 +924,10 @@ impl ThreadManager {
                         let mut result_with_timings = (Ok(()), Default::default());
                         while !scheduler_is_empty || !will_end_session {
                             select_biased! {
-                                recv(handled_blocked_transaction_receiver) -> m => {m;},
+                                recv(handled_blocked_transaction_receiver) -> m => {
+                                    let m = m.unwrap();
+                                    Self::receive_handled_transaction(&mut state_machine, m);
+                                },
                                 recv(if !will_end_session { &transaction_receiver } else { never }) -> m => {
                                     match m {
                                         Ok(mm) => {
@@ -944,7 +949,10 @@ impl ThreadManager {
                                         Err(_) => will_end_thread = true,
                                     }
                                 },
-                                recv(handled_idle_transaction_receiver) -> m => {m; },
+                                recv(handled_idle_transaction_receiver) -> m => {
+                                    let m = m.unwrap();
+                                    Self::receive_handled_transaction(&mut state_machine, m);
+                                },
                             };
                         }
                         result_sender.send(result_with_timings).unwrap();
