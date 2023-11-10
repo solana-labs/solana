@@ -854,6 +854,11 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
     }
 }
 
+type ChannelPair<T> = (
+    crossbeam_channel::Receiver<SessionedChannel>,
+    crossbeam_channel::Sender<T>,
+);
+
 trait WithChannelPair: Send + Sync {
     fn unwrap_channel_pair(&mut self) -> usize;
 }
