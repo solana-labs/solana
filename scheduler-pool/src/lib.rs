@@ -908,6 +908,7 @@ impl ThreadManager {
                 .spawn(move || {
                     let never = &never();
                     let mut state_machine = SchedulingStateMachine;
+                    let mut bank = self.context.unwrap();
 
                     loop {
                         select_biased! {
