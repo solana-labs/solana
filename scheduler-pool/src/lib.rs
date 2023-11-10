@@ -863,10 +863,10 @@ trait WithChannelPair<T>: Send + Sync {
     fn unwrap_channel_pair(&mut self) -> ChannelPair<T>;
 }
 
-enum SessionedChannel {
+enum SessionedChannel<T> {
     Payload((SanitizedTransaction, usize)),
     NextContext(SchedulingContext),
-    NextSession(Box<dyn WithChannelPair>),
+    NextSession(Box<dyn WithChannelPair<T>>),
     Stop,
 }
 
