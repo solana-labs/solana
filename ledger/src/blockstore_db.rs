@@ -1256,7 +1256,7 @@ impl Column for columns::MerkleRootMeta {
     }
 
     fn key((slot, fec_set_index): Self::Index) -> Vec<u8> {
-        let mut key = vec![0; 16];
+        let mut key = vec![0; 12];
         BigEndian::write_u64(&mut key[..8], slot);
         BigEndian::write_u32(&mut key[8..], fec_set_index);
         key
