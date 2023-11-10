@@ -36,6 +36,12 @@ impl SkipClientVerification {
     }
 }
 
+pub struct SpawnServerResult {
+    pub endpoint: Endpoint,
+    pub thread: thread::JoinHandle<()>,
+    pub key_updater: Arc<EndpointKeyUpdater>,
+}
+
 impl rustls::server::ClientCertVerifier for SkipClientVerification {
     fn client_auth_root_subjects(&self) -> &[DistinguishedName] {
         &[]
@@ -403,7 +409,7 @@ impl StreamStats {
     }
 }
 
-#[allow(clippy::too_many_arguments, clippy::type_complexity)]
+#[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
     name: &'static str,
     sock: UdpSocket,
@@ -417,7 +423,7 @@ pub fn spawn_server(
     max_unstaked_connections: usize,
     wait_for_chunk_timeout: Duration,
     coalesce: Duration,
-) -> Result<(Endpoint, thread::JoinHandle<()>, Arc<EndpointKeyUpdater>), QuicServerError> {
+) -> Result<SpawnServerResult, QuicServerError> {
     let runtime = rt();
     let (endpoint, _stats, task) = {
         let _guard = runtime.enter();
@@ -448,7 +454,11 @@ pub fn spawn_server(
         endpoint: endpoint.clone(),
         gossip_host,
     };
-    Ok((endpoint, handle, Arc::new(updater)))
+    Ok(SpawnServerResult {
+        endpoint,
+        thread: handle,
+        key_updater: Arc::new(updater),
+    })
 }
 
 #[cfg(test)]
@@ -474,7 +484,11 @@ mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let (_, t, _) = spawn_server(
+        let SpawnServerResult {
+            endpoint: _,
+            thread: t,
+            key_updater: _,
+        } = spawn_server(
             "quic_streamer_test",
             s,
             &keypair,
@@ -530,7 +544,11 @@ mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let (_, t, _) = spawn_server(
+        let SpawnServerResult {
+            endpoint: _,
+            thread: t,
+            key_updater: _,
+        } = spawn_server(
             "quic_streamer_test",
             s,
             &keypair,
@@ -573,7 +591,11 @@ mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let (_, t, _) = spawn_server(
+        let SpawnServerResult {
+            endpoint: _,
+            thread: t,
+            key_updater: _,
+        } = spawn_server(
             "quic_streamer_test",
             s,
             &keypair,
