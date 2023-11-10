@@ -894,10 +894,10 @@ impl ThreadManager {
         let (idle_transaction_sender, idle_transaction_receiver) = unbounded::<i32>();
         let (handled_transaction_sender, handled_transaction_receiver) = unbounded::<i32>();
 
-        self.scheduler_thread = std::thread::Builder::new()
+        self.scheduler_thread = Some(std::thread::Builder::new()
             .name("aaaa".to_owned())
             .spawn(move || {})
-            .unwrap();
+            .unwrap());
 
         self.handler_threads = (0..10)
             .map({
