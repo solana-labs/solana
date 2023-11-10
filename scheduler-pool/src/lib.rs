@@ -902,7 +902,7 @@ impl ThreadManager {
         let (handled_blocked_transaction_sender, handled_blocked_transaction_receiver) =
             unbounded::<Box<ExecutionEnvironment>>();
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
-            unbounded::<i32>();
+            unbounded::<Box<ExecutionEnvironment>>();
         let (mut result_sender, result_receiver) = unbounded();
 
         self.scheduler_thread = Some(
