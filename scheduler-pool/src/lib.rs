@@ -1260,6 +1260,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> InstalledScheduler<SEA>
                 ScheduleStage::commit_processed_execution(&mut ee, &mut address_book);
             }
         })
+        drop(r);
     }
 
     fn wait_for_termination(&mut self, wait_reason: &WaitReason) -> Option<ResultWithTimings> {
