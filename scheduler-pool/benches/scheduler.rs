@@ -22,7 +22,7 @@ use {
     },
     solana_scheduler::SchedulingMode,
     solana_scheduler_pool::{
-        InstallableScheduler, PooledScheduler, ScheduledTransactionHandler, SchedulerPool,
+        InstallableScheduler, PooledScheduler, TransactionHandler, SchedulerPool,
         SpawnableScheduler,
     },
     solana_sdk::{
@@ -56,7 +56,7 @@ struct BenchFriendlyHandler<SEA: ScheduleExecutionArg + Clone, const MUTATE_ARC:
     PhantomData<SEA>,
 );
 
-impl<SEA: ScheduleExecutionArg + Clone, const MUTATE_ARC: bool> ScheduledTransactionHandler<SEA>
+impl<SEA: ScheduleExecutionArg + Clone, const MUTATE_ARC: bool> TransactionHandler<SEA>
     for BenchFriendlyHandler<SEA, MUTATE_ARC>
 {
     fn create<T: SpawnableScheduler<Self, SEA>>(_pool: &SchedulerPool<T, Self, SEA>) -> Self {
@@ -95,7 +95,7 @@ type BenchFriendlyHandlerWithoutArcMutation =
 fn run_bench<
     F: FnOnce(Arc<SchedulerPool<I, TH, ScheduleExecutionArgForBench>>, SchedulingContext) -> I,
     I: SpawnableScheduler<TH, ScheduleExecutionArgForBench>,
-    TH: ScheduledTransactionHandler<ScheduleExecutionArgForBench>,
+    TH: TransactionHandler<ScheduleExecutionArgForBench>,
 >(
     bencher: &mut Bencher,
     create_scheduler: F,
@@ -207,7 +207,7 @@ mod nonblocking {
 
     #[derive(Debug)]
     pub(super) struct NonblockingScheduler<
-        H: ScheduledTransactionHandler<ScheduleExecutionArgForBench> + Clone,
+        H: TransactionHandler<ScheduleExecutionArgForBench> + Clone,
     > {
         id: SchedulerId,
         pub(crate) pool: Arc<SchedulerPool<Self, H, ScheduleExecutionArgForBench>>,
@@ -241,7 +241,7 @@ mod nonblocking {
         }
     }
 
-    impl<H: ScheduledTransactionHandler<ScheduleExecutionArgForBench> + Clone>
+    impl<H: TransactionHandler<ScheduleExecutionArgForBench> + Clone>
         SpawnableScheduler<H, ScheduleExecutionArgForBench> for NonblockingScheduler<H>
     {
         fn spawn(
@@ -253,7 +253,7 @@ mod nonblocking {
         }
     }
 
-    impl<H: ScheduledTransactionHandler<ScheduleExecutionArgForBench> + Clone> NonblockingScheduler<H> {
+    impl<H: TransactionHandler<ScheduleExecutionArgForBench> + Clone> NonblockingScheduler<H> {
         pub(super) fn spawn(
             pool: Arc<SchedulerPool<Self, H, ScheduleExecutionArgForBench>>,
             initial_context: SchedulingContext,
@@ -324,7 +324,7 @@ mod nonblocking {
             }
         }
     }
-    impl<H: ScheduledTransactionHandler<ScheduleExecutionArgForBench> + Clone>
+    impl<H: TransactionHandler<ScheduleExecutionArgForBench> + Clone>
         InstalledScheduler<ScheduleExecutionArgForBench> for NonblockingScheduler<H>
     {
         fn id(&self) -> SchedulerId {
@@ -379,7 +379,7 @@ mod nonblocking {
         }
     }
 
-    impl<H: ScheduledTransactionHandler<ScheduleExecutionArgForBench> + Clone>
+    impl<H: TransactionHandler<ScheduleExecutionArgForBench> + Clone>
         InstallableScheduler<ScheduleExecutionArgForBench> for NonblockingScheduler<H>
     {
         fn has_context(&self) -> bool {
@@ -513,7 +513,7 @@ mod thread_utilization {
     #[derive(Debug, Clone)]
     struct SleepyHandler;
 
-    impl<SEA: ScheduleExecutionArg> ScheduledTransactionHandler<SEA> for SleepyHandler {
+    impl<SEA: ScheduleExecutionArg> TransactionHandler<SEA> for SleepyHandler {
         fn create<T: SpawnableScheduler<Self, SEA>>(_pool: &SchedulerPool<T, Self, SEA>) -> Self {
             Self
         }
@@ -640,7 +640,7 @@ mod thread_utilization {
     #[derive(Debug, Clone)]
     struct SleepyHandlerWithCompletionSignal(crossbeam_channel::Sender<Signature>);
 
-    impl<SEA: ScheduleExecutionArg> ScheduledTransactionHandler<SEA>
+    impl<SEA: ScheduleExecutionArg> TransactionHandler<SEA>
         for SleepyHandlerWithCompletionSignal
     {
         fn create<T: SpawnableScheduler<Self, SEA>>(_pool: &SchedulerPool<T, Self, SEA>) -> Self {
