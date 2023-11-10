@@ -859,7 +859,7 @@ trait WithChannelPair: Send + Sync {
 }
 
 enum SessionedChannel {
-    Payload(TransactionWithIndexForBench),
+    Payload(TransactionWithIndex),
     NextContext(SchedulingContext),
     NextSession(Box<dyn WithChannelPair>),
     Stop,
