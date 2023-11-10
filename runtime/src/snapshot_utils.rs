@@ -19,9 +19,7 @@ use {
     regex::Regex,
     solana_accounts_db::{
         account_storage::AccountStorageMap,
-        accounts_db::{
-            self, create_accounts_run_and_snapshot_dirs, AccountStorageEntry, AtomicAppendVecId,
-        },
+        accounts_db::{self, AccountStorageEntry, AtomicAppendVecId},
         accounts_file::AccountsFileError,
         append_vec::AppendVec,
         hardened_unpack::{self, ParallelSelector, UnpackError},
@@ -1999,7 +1997,9 @@ pub fn verify_snapshot_archive(
 ) {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let unpack_dir = temp_dir.path();
-    let unpack_account_dir = create_accounts_run_and_snapshot_dirs(unpack_dir).unwrap().0;
+    let unpack_account_dir = accounts_db::create_accounts_run_and_snapshot_dirs(unpack_dir)
+        .unwrap()
+        .0;
     untar_snapshot_in(
         snapshot_archive,
         unpack_dir,
@@ -2170,9 +2170,16 @@ pub fn should_take_incremental_snapshot(
         && last_full_snapshot_slot.is_some()
 }
 
+/// Creates an "accounts path" directory for tests
+///
+/// This temporary directory will contain the "run" and "snapshot"
+/// sub-directories required by a validator.
+#[cfg(feature = "dev-context-only-utils")]
 pub fn create_tmp_accounts_dir_for_tests() -> (TempDir, PathBuf) {
     let tmp_dir = tempfile::TempDir::new().unwrap();
-    let account_dir = create_accounts_run_and_snapshot_dirs(&tmp_dir).unwrap().0;
+    let account_dir = accounts_db::create_accounts_run_and_snapshot_dirs(&tmp_dir)
+        .unwrap()
+        .0;
     (tmp_dir, account_dir)
 }
 
