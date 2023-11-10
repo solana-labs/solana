@@ -905,10 +905,11 @@ impl ThreadManager {
         self.scheduler_thread = Some(
             std::thread::Builder::new()
                 .name("aaaa".to_owned())
-                .spawn(move || {
+                .spawn({ 
+                    let mut bank = self.context.unwrap();
+                    move || {
                     let never = &never();
                     let mut state_machine = SchedulingStateMachine;
-                    let mut bank = self.context.unwrap();
 
                     loop {
                         select_biased! {
@@ -922,7 +923,7 @@ impl ThreadManager {
                             recv(handled_idle_transaction_receiver) -> m => {m; },
                         };
                     }
-                })
+                }})
                 .unwrap(),
         );
 
