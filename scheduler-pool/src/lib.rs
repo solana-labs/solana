@@ -53,7 +53,7 @@ pub struct BTreeMapTaskIds {
 #[derive(Debug)]
 pub struct SchedulerPool<
     T: SpawnableScheduler<TH, SEA>,
-    TH: TransactionHandler<SEA>,
+    TH: Handler<SEA>,
     SEA: ScheduleExecutionArg,
 > {
     schedulers: Mutex<Vec<Box<T>>>,
@@ -81,7 +81,7 @@ pub type DefaultSchedulerPool = SchedulerPool<
     DefaultScheduleExecutionArg,
 >;
 
-impl<T: SpawnableScheduler<TH, SEA>, TH: TransactionHandler<SEA>, SEA: ScheduleExecutionArg>
+impl<T: SpawnableScheduler<TH, SEA>, TH: Handler<SEA>, SEA: ScheduleExecutionArg>
     SchedulerPool<T, TH, SEA>
 {
     pub fn new(
@@ -143,7 +143,7 @@ impl<T: SpawnableScheduler<TH, SEA>, TH: TransactionHandler<SEA>, SEA: ScheduleE
     }
 }
 
-impl<T: SpawnableScheduler<TH, SEA>, TH: TransactionHandler<SEA>, SEA: ScheduleExecutionArg>
+impl<T: SpawnableScheduler<TH, SEA>, TH: Handler<SEA>, SEA: ScheduleExecutionArg>
     InstalledSchedulerPool<SEA> for SchedulerPool<T, TH, SEA>
 {
     fn take_scheduler(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler<SEA>> {
@@ -151,9 +151,7 @@ impl<T: SpawnableScheduler<TH, SEA>, TH: TransactionHandler<SEA>, SEA: ScheduleE
     }
 }
 
-pub trait TransactionHandler<SEA: ScheduleExecutionArg>:
-    Send + Sync + Debug + Sized + 'static
-{
+pub trait Handler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + Sized + 'static {
     fn create<T: SpawnableScheduler<Self, SEA>>(pool: &SchedulerPool<T, Self, SEA>) -> Self;
 
     fn handle<T: SpawnableScheduler<Self, SEA>>(
@@ -170,7 +168,7 @@ pub trait TransactionHandler<SEA: ScheduleExecutionArg>:
 #[derive(Debug)]
 pub struct DefaultTransactionHandler;
 
-impl<SEA: ScheduleExecutionArg> TransactionHandler<SEA> for DefaultTransactionHandler {
+impl<SEA: ScheduleExecutionArg> Handler<SEA> for DefaultTransactionHandler {
     fn create<T: SpawnableScheduler<Self, SEA>>(_pool: &SchedulerPool<T, Self, SEA>) -> Self {
         Self
     }
@@ -797,7 +795,7 @@ impl TaskQueueReader for ChannelBackedTaskQueue {
 // this will be replaced with more proper implementation...
 // not usable at all, especially for mainnet-beta
 #[derive(Debug)]
-pub struct PooledScheduler<TH: TransactionHandler<SEA>, SEA: ScheduleExecutionArg> {
+pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     id: SchedulerId,
     pool: Arc<SchedulerPool<Self, TH, SEA>>,
     context: Option<SchedulingContext>, // to be removed
@@ -810,7 +808,7 @@ pub struct PooledScheduler<TH: TransactionHandler<SEA>, SEA: ScheduleExecutionAr
     _phantom: PhantomData<SEA>,
 }
 
-impl<TH: TransactionHandler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
+impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
     pub fn do_spawn(
         pool: Arc<SchedulerPool<Self, TH, SEA>>,
         initial_context: SchedulingContext,
@@ -845,7 +843,7 @@ pub trait InstallableScheduler<SEA: ScheduleExecutionArg>: InstalledScheduler<SE
     fn replace_context(&mut self, context: SchedulingContext);
 }
 
-pub trait SpawnableScheduler<TH: TransactionHandler<SEA>, SEA: ScheduleExecutionArg>:
+pub trait SpawnableScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg>:
     InstallableScheduler<SEA>
 {
     fn spawn(
@@ -857,7 +855,7 @@ pub trait SpawnableScheduler<TH: TransactionHandler<SEA>, SEA: ScheduleExecution
         Self: Sized;
 }
 
-impl<TH: TransactionHandler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
+impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
     for PooledScheduler<TH, SEA>
 {
     fn spawn(
@@ -1184,7 +1182,7 @@ impl ScheduleStage {
     }
 }
 
-impl<TH: TransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledScheduler<SEA>
+impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> InstalledScheduler<SEA>
     for PooledScheduler<TH, SEA>
 {
     fn id(&self) -> SchedulerId {
@@ -1290,7 +1288,7 @@ impl SchedulingStateMachine {
 impl Thread
 */
 
-impl<TH: TransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstallableScheduler<SEA>
+impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> InstallableScheduler<SEA>
     for PooledScheduler<TH, SEA>
 {
     fn has_context(&self) -> bool {
@@ -1598,9 +1596,7 @@ mod tests {
                 let mut result = Ok(());
                 let mut timings = ExecuteTimings::default();
 
-                <DefaultTransactionHandler as TransactionHandler<
-                    DefaultScheduleExecutionArg,
-                >>::handle(
+                <DefaultTransactionHandler as Handler<DefaultScheduleExecutionArg>>::handle(
                     &DefaultTransactionHandler,
                     &mut result,
                     &mut timings,
