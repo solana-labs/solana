@@ -964,30 +964,32 @@ impl ThreadManager {
                             let handled_idle_transaction_sender = handled_idle_transaction_sender.clone();
 
                             move || {
-                                let (m, was_blocked) = select_biased! {
-                                    recv(blocked_transaction_receiver) -> m => {
-                                        match m.unwrap() {
-                                            SessionedChannel::Payload(payload) => {
-                                                (payload, true)
+                                loop {
+                                    let (m, was_blocked) = select_biased! {
+                                        recv(blocked_transaction_receiver) -> m => {
+                                            match m.unwrap() {
+                                                SessionedChannel::Payload(payload) => {
+                                                    (payload, true)
+                                                }
+                                                SessionedChannel::NextSession(mut next_receiver_box) => {
+                                                    todo!();
+                                                }
+                                                SessionedChannel::NewContext(next_context) => {
+                                                    bank = next_context.bank().clone();
+                                                    continue;
+                                                }
                                             }
-                                            SessionedChannel::NextSession(mut next_receiver_box) => {
-                                                todo!();
-                                            }
-                                            SessionedChannel::NewContext(next_context) => {
-                                                bank = next_context.bank().clone();
-                                                continue;
-                                            }
-                                        }
-                                    },
-                                    recv(idle_transaction_receiver) -> m => {
-                                        (m.unwrap(), false)
-                                    },
-                                };
+                                        },
+                                        recv(idle_transaction_receiver) -> m => {
+                                            (m.unwrap(), false)
+                                        },
+                                    };
 
-                                if was_blocked {
-                                    handled_blocked_transaction_sender.send(3).unwrap();
-                                } else {
-                                    handled_idle_transaction_sender.send(3).unwrap();
+                                    if was_blocked {
+                                        handled_blocked_transaction_sender.send(3).unwrap();
+                                    } else {
+                                        handled_idle_transaction_sender.send(3).unwrap();
+                                    }
                                 }
                             }
                         })
