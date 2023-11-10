@@ -970,18 +970,18 @@ impl ThreadManager {
                                         recv(blocked_transaction_receiver) -> m => {
                                             match m {
                                                 Ok(mm) => {
-                                            match mm {
-                                                SessionedChannel::Payload(payload) => {
-                                                    (payload, true)
-                                                }
-                                                SessionedChannel::NextSession(mut next_receiver_box) => {
-                                                    todo!();
-                                                }
-                                                SessionedChannel::NewContext(next_context) => {
-                                                    bank = next_context.bank().clone();
-                                                    continue;
-                                                }
-                                            }
+                                                    match mm {
+                                                        SessionedChannel::Payload(payload) => {
+                                                            (payload, true)
+                                                        }
+                                                        SessionedChannel::NextSession(mut next_receiver_box) => {
+                                                            todo!();
+                                                        }
+                                                        SessionedChannel::NewContext(next_context) => {
+                                                            bank = next_context.bank().clone();
+                                                            continue;
+                                                        }
+                                                    }
                                                 },
                                                 Err(_) => break,
                                             }
