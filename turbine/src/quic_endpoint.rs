@@ -5,7 +5,8 @@ use {
     log::error,
     quinn::{
         ClientConfig, ConnectError, Connecting, Connection, ConnectionError, Endpoint,
-        EndpointConfig, SendDatagramError, ServerConfig, TokioRuntime, TransportConfig, VarInt,
+        EndpointConfig, IdleTimeout, SendDatagramError, ServerConfig, TokioRuntime,
+        TransportConfig, VarInt,
     },
     rcgen::RcgenError,
     rustls::{Certificate, PrivateKey},
@@ -39,9 +40,16 @@ use {
 const CLIENT_CHANNEL_BUFFER: usize = 1 << 14;
 const ROUTER_CHANNEL_BUFFER: usize = 64;
 const CONNECTION_CACHE_CAPACITY: usize = 3072;
-const INITIAL_MAXIMUM_TRANSMISSION_UNIT: u16 = 1280;
 const ALPN_TURBINE_PROTOCOL_ID: &[u8] = b"solana-turbine";
 const CONNECT_SERVER_NAME: &str = "solana-turbine";
+
+// Transport config.
+const DATAGRAM_RECEIVE_BUFFER_SIZE: usize = 256 * 1024 * 1024;
+const DATAGRAM_SEND_BUFFER_SIZE: usize = 128 * 1024 * 1024;
+const INITIAL_MAXIMUM_TRANSMISSION_UNIT: u16 = MINIMUM_MAXIMUM_TRANSMISSION_UNIT;
+const KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(4);
+const MAX_IDLE_TIMEOUT: Duration = Duration::from_secs(10);
+const MINIMUM_MAXIMUM_TRANSMISSION_UNIT: u16 = 1280;
 
 const CONNECTION_CLOSE_ERROR_CODE_SHUTDOWN: VarInt = VarInt::from_u32(1);
 const CONNECTION_CLOSE_ERROR_CODE_DROPPED: VarInt = VarInt::from_u32(2);
@@ -173,11 +181,18 @@ fn new_client_config(cert: Certificate, key: PrivateKey) -> Result<ClientConfig,
 }
 
 fn new_transport_config() -> TransportConfig {
+    let max_idle_timeout = IdleTimeout::try_from(MAX_IDLE_TIMEOUT).unwrap();
     let mut config = TransportConfig::default();
     config
+        .datagram_receive_buffer_size(Some(DATAGRAM_RECEIVE_BUFFER_SIZE))
+        .datagram_send_buffer_size(DATAGRAM_SEND_BUFFER_SIZE)
+        .initial_mtu(INITIAL_MAXIMUM_TRANSMISSION_UNIT)
+        .keep_alive_interval(Some(KEEP_ALIVE_INTERVAL))
         .max_concurrent_bidi_streams(VarInt::from(0u8))
         .max_concurrent_uni_streams(VarInt::from(0u8))
-        .initial_mtu(INITIAL_MAXIMUM_TRANSMISSION_UNIT);
+        .max_idle_timeout(Some(max_idle_timeout))
+        .min_mtu(MINIMUM_MAXIMUM_TRANSMISSION_UNIT)
+        .mtu_discovery_config(None);
     config
 }
 

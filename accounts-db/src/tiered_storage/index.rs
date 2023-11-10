@@ -26,6 +26,12 @@ pub struct AccountOffset {
     pub block: usize,
 }
 
+/// The offset to an account/address entry in the accounts index block.
+/// This can be used to obtain the AccountOffset and address by looking through
+/// the accounts index block.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct IndexOffset(usize);
+
 /// The index format of a tiered accounts file.
 #[repr(u16)]
 #[derive(
@@ -74,11 +80,11 @@ impl IndexBlockFormat {
         &self,
         map: &'a Mmap,
         footer: &TieredStorageFooter,
-        index: usize,
+        offset: IndexOffset,
     ) -> TieredStorageResult<&'a Pubkey> {
         let offset = match self {
             Self::AddressAndOffset => {
-                footer.index_block_offset as usize + std::mem::size_of::<Pubkey>() * index
+                footer.index_block_offset as usize + std::mem::size_of::<Pubkey>() * offset.0
             }
         };
         let (address, _) = get_type::<Pubkey>(map, offset)?;
@@ -90,13 +96,13 @@ impl IndexBlockFormat {
         &self,
         map: &Mmap,
         footer: &TieredStorageFooter,
-        index: usize,
+        offset: IndexOffset,
     ) -> TieredStorageResult<AccountOffset> {
         match self {
             Self::AddressAndOffset => {
                 let offset = footer.index_block_offset as usize
                     + std::mem::size_of::<Pubkey>() * footer.account_entry_count as usize
-                    + index * std::mem::size_of::<u64>();
+                    + offset.0 * std::mem::size_of::<u64>();
                 let (account_block_offset, _) = get_type(map, offset)?;
                 Ok(AccountOffset {
                     block: *account_block_offset,
@@ -156,9 +162,13 @@ mod tests {
             .unwrap();
         let map = unsafe { MmapOptions::new().map(&file).unwrap() };
         for (i, index_entry) in index_entries.iter().enumerate() {
-            let account_offset = indexer.get_account_offset(&map, &footer, i).unwrap();
+            let account_offset = indexer
+                .get_account_offset(&map, &footer, IndexOffset(i))
+                .unwrap();
             assert_eq!(index_entry.block_offset, account_offset.block as u64);
-            let address = indexer.get_account_address(&map, &footer, i).unwrap();
+            let address = indexer
+                .get_account_address(&map, &footer, IndexOffset(i))
+                .unwrap();
             assert_eq!(index_entry.address, address);
         }
     }
