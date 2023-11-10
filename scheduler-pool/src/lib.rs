@@ -979,6 +979,7 @@ impl ThreadManager {
                                                         SessionedChannel::NextSession(mut next_receiver_box) => {
                                                             (blocked_transaction_receiver, _next_result_sender) =
                                                                 next_receiver_box.unwrap_channel_pair();
+                                                            continue;
                                                         }
                                                         SessionedChannel::NewContext(next_context) => {
                                                             bank = next_context.bank().clone();
