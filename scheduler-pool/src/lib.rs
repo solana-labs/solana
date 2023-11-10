@@ -813,6 +813,7 @@ struct ThreadManager {
     inner: Mutex<ThreadManagerInner>,
 }
 
+#[derive(Default)]
 struct ThreadManagerInner {
     scheduler_thread: Option<JoinHandle<()>>,
     handler_threads: Vec<JoinHandle<()>>,
