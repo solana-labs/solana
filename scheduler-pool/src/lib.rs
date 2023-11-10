@@ -899,7 +899,7 @@ impl ThreadManager {
                 std::thread::Builder::new()
                     .name("aaaa".to_owned())
                     .spawn(move || {
-                        select_biased!{}
+                        select!{}
                     })
                     .unwrap()
             })
