@@ -862,13 +862,13 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
     }
 }
 
-type ChannelPair<T> = (
+type ChannelPair<T, U> = (
     crossbeam_channel::Receiver<SessionedChannel<T>>,
-    crossbeam_channel::Sender<T>,
+    crossbeam_channel::Sender<U>,
 );
 
-trait WithChannelPair<T>: Send + Sync {
-    fn unwrap_channel_pair(&mut self) -> ChannelPair<T>;
+trait WithChannelPair<T, U>: Send + Sync {
+    fn unwrap_channel_pair(&mut self) -> ChannelPair<T, U>;
 }
 
 enum SessionedChannel<T> {
