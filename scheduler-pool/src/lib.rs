@@ -902,7 +902,7 @@ impl ThreadManager {
                     .name("aaaa".to_owned())
                     .spawn(move || {
                         select_biased!{
-                            recv(idle_transaction_receiver) -> _ => {},
+                            recv(idle_transaction_receiver.clone()) -> _ => {},
                         }
                     })
                     .unwrap()
