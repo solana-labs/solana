@@ -843,7 +843,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
         loop {
             let r = self.thread_manager.read().unwrap();
             if r.is_active() {
-                return r
+                return r;
             } else {
                 drop(r);
                 let mut w = self.thread_manager.write().unwrap();
@@ -852,6 +852,17 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             }
         }
     }
+}
+
+trait WithChannelPair: Send + Sync {
+    fn unwrap_channel_pair(&mut self) -> usize;
+}
+
+enum SessionedChannel {
+    Payload(TransactionWithIndexForBench),
+    NextContext(SchedulingContext),
+    NextSession(Box<dyn WithChannelPair>),
+    Stop,
 }
 
 impl ThreadManager {
