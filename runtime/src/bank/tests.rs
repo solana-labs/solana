@@ -1579,13 +1579,17 @@ impl Bank {
     }
 }
 
-#[test]
-fn test_rent_eager_collect_rent_in_partition() {
+#[test_case(true; "disable rent fees collection")]
+#[test_case(false; "enable rent fees collection")]
+fn test_rent_eager_collect_rent_in_partition(disable_rent_fees_collection: bool) {
     solana_logger::setup();
 
     let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000);
     for feature_id in FeatureSet::default().inactive {
-        if feature_id != solana_sdk::feature_set::set_exempt_rent_epoch_max::id() {
+        if feature_id != solana_sdk::feature_set::set_exempt_rent_epoch_max::id()
+            && (!disable_rent_fees_collection
+                || feature_id != solana_sdk::feature_set::disable_rent_fees_collection::id())
+        {
             activate_feature(&mut genesis_config, feature_id);
         }
     }
@@ -11468,14 +11472,22 @@ fn test_get_rent_paying_pubkeys() {
 }
 
 /// Ensure that accounts data size is updated correctly by rent collection
-#[test]
-fn test_accounts_data_size_and_rent_collection() {
+#[test_case(true; "disable rent fees collection")]
+#[test_case(false; "enable rent fees collection")]
+fn test_accounts_data_size_and_rent_collection(disable_rent_fees_collection: bool) {
     for set_exempt_rent_epoch_max in [false, true] {
         let GenesisConfigInfo {
             mut genesis_config, ..
         } = genesis_utils::create_genesis_config(100 * LAMPORTS_PER_SOL);
         genesis_config.rent = Rent::default();
-        activate_all_features(&mut genesis_config);
+        for feature_id in FeatureSet::default().inactive {
+            if !disable_rent_fees_collection
+                || feature_id != solana_sdk::feature_set::disable_rent_fees_collection::id()
+            {
+                activate_feature(&mut genesis_config, feature_id);
+            }
+        }
+
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let slot = bank.slot() + bank.slot_count_per_normal_epoch();
         let bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));

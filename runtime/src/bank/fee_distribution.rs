@@ -1,6 +1,6 @@
 use {
     super::Bank,
-    log::{debug, info, warn},
+    log::{debug, warn},
     solana_accounts_db::{account_rent_state::RentState, stake_rewards::RewardInfo},
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
