@@ -848,7 +848,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
 
 impl ThreadManager {
     fn is_active(&self) -> bool {
-        true
+        self.is_active
     }
 
     fn ensure_threads(&self) {}
