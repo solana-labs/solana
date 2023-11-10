@@ -847,7 +847,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
                 return Some(r)
             } else {
                 drop(r);
-                let w = self.thread_manager.write().unwrap();
+                let mut w = self.thread_manager.write().unwrap();
                 w.start_threads();
                 drop(w);
             }
