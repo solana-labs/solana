@@ -909,10 +909,10 @@ impl ThreadManager {
                             let handled_transaction_sender = handled_transaction_sender.clone();
 
                             move || {
-                                select_biased! {
-                                    recv(blocked_transaction_receiver.clone()) -> _ => {},
-                                    recv(idle_transaction_receiver.clone()) -> _ => {},
-                                }
+                                let msg = select_biased! {
+                                    recv(blocked_transaction_receiver.clone()) -> m => m,
+                                    recv(idle_transaction_receiver.clone()) -> m => m,
+                                };
                                 handled_transaction_sender.send(3).unwrap();
                             }
                         })
