@@ -899,7 +899,8 @@ impl ThreadManager {
             .spawn(move || {
                 select_biased! {
                     recv(handled_transaction_receiver) -> m => m,
-                }
+                };
+                ()
             })
             .unwrap());
 
