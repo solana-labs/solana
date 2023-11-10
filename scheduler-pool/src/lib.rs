@@ -984,6 +984,7 @@ impl ThreadManager {
                                             }
                                                 },
                                                 Err(_) => break,
+                                            }
                                         },
                                         recv(idle_transaction_receiver) -> m => {
                                             (m.unwrap(), false)
