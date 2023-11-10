@@ -2,10 +2,9 @@
 #![allow(clippy::arithmetic_side_effects)]
 
 use {
-    crate::{boxed_error, initialize_globals, ValidatorType, LEDGER_DIR, SOLANA_ROOT},
+    crate::{boxed_error, initialize_globals, ValidatorType, SOLANA_ROOT},
     base64::{engine::general_purpose, Engine as _},
     bip39::{Language, Mnemonic, MnemonicType, Seed},
-    bzip2::{write::BzEncoder, Compression},
     log::*,
     solana_clap_v3_utils::{input_parsers::STDOUT_OUTFILE_TOKEN, keygen},
     solana_sdk::{
@@ -21,7 +20,6 @@ use {
         path::PathBuf,
         process::Command,
     },
-    tar::Builder,
 };
 
 pub const DEFAULT_WORD_COUNT: usize = 12;
