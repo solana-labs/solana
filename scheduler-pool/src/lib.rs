@@ -890,6 +890,8 @@ impl ThreadManager {
 
     fn receive_new_transaction(state_machine: &mut SchedulingStateMachine, msg: Box<Task>) {}
 
+    fn receive_scheduled_transaction(msg: Box<Task>) {}
+
     fn start_threads(&mut self) {
         let (_transaction_sender, mut transaction_receiver) =
             unbounded::<SessionedChannel<Box<Task>>>();
@@ -991,6 +993,7 @@ impl ThreadManager {
                                         },
                                     };
 
+                                    Self::receive_scheduled_transaction(m);
                                     if was_blocked {
                                         handled_blocked_transaction_sender.send(3).unwrap();
                                     } else {
