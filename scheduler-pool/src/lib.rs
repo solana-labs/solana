@@ -73,6 +73,8 @@ pub struct SchedulerPool<
     // After these considerations, this weak_self approach is chosen at the cost of some additional
     // memory increase.
     weak_self: Weak<Self>,
+    // watchdog_thread // prune schedulers, stop idling scheduler's threads, sanity check on the
+    // address book after scheduler is returned.
     _phantom: PhantomData<(T, TH, SEA)>,
 }
 
