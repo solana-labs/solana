@@ -872,7 +872,7 @@ trait WithChannelPair<T>: Send + Sync {
 
 struct ChannelPairOption<T>(Option<ChannelPair<T>>);
 
-impl<T> WithChannelPair for ChannelPairOption<T> {
+impl<T> WithChannelPair<T> for ChannelPairOption<T> {
     fn unwrap_channel_pair(&mut self) -> ChannelPair<T> {
         self.0.take().unwrap()
     }
