@@ -870,6 +870,14 @@ trait WithChannelPair<T>: Send + Sync {
     fn unwrap_channel_pair(&mut self) -> ChannelPair<T>;
 }
 
+struct ChannelPairOption<T>(Option<ChannelPair<T>>);
+
+impl<T> WithChannelPair for ChannelPairOption<T> {
+    fn unwrap_channel_pair(&mut self) -> ChannelPair<T> {
+        self.0.take().unwrap()
+    }
+}
+
 enum SessionedChannel<T> {
     Payload(T),
     NextSession(Box<dyn WithChannelPair<T>>),
