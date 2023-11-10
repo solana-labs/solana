@@ -33,7 +33,7 @@ use {
     std::{
         fmt::Debug,
         marker::PhantomData,
-        sync::{atomic::AtomicUsize, Arc, Mutex, Weak},
+        sync::{atomic::AtomicUsize, Arc, Mutex, RwLock, Weak},
         thread::JoinHandle,
     },
 };
