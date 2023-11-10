@@ -923,7 +923,7 @@ impl ThreadManager {
 
                     while !will_end_thread {
                         let mut result_with_timings = (Ok(()), Default::default());
-                        while !scheduler_is_empty || !will_end_session {
+                        while !(scheduler_is_empty && will_end_session) {
                             select_biased! {
                                 recv(handled_blocked_transaction_receiver) -> execution_environment => {
                                     let execution_environment = execution_environment.unwrap();
@@ -957,6 +957,10 @@ impl ThreadManager {
                                     Self::receive_handled_transaction(&mut state_machine, execution_environment);
                                 },
                             };
+                        }
+                        for _ in (0..10) {
+                            blocked_transaction_sender.send(SessionedChannel::NextSession()).unwrap();
+
                         }
                         result_sender.send(result_with_timings).unwrap();
                         result_sender = next_result_sender.clone();
