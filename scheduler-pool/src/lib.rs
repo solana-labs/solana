@@ -854,6 +854,10 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             }
         }
     }
+
+    fn stop_threads(&self) {
+        self.thread_manager.write().unwrap().stop_threads();
+    }
 }
 
 type ChannelPair<T> = (
