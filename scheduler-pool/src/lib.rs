@@ -978,7 +978,7 @@ impl ThreadManager {
                                         }
                                     },
                                     recv(idle_transaction_receiver) -> m => {
-                                        (m, false);
+                                        (m, false)
                                     },
                                 };
 
