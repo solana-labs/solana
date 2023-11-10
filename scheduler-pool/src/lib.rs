@@ -841,8 +841,17 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
 
     #[must_use]
     fn ensure_threads(&self) -> Option<RwLockReadGuard<'_, ThreadManager>> {
-        let r = self.thread_manager.read().unwrap();
-        r.is_active().then_some(r)
+        loop {
+            let r = self.thread_manager.read().unwrap();
+            if r.is_active() {
+                return Some(r)
+            } else {
+                drop(r);
+                let w = self.thread_manager.write().unwrap();
+                w.start_threads();
+                drop(w);
+            }
+        }
     }
 }
 
@@ -851,7 +860,7 @@ impl ThreadManager {
         self.is_active
     }
 
-    fn ensure_threads(&self) {}
+    fn start_threads(&mut self) {}
 
     fn stop_threads(&self) {}
 }
