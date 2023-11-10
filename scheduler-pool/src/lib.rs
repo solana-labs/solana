@@ -835,7 +835,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             thread_manager: RwLock::default(),
             _phantom: PhantomData,
         };
-        new.ensure_threads();
+        let _read_lock_guard = new.ensure_threads();
         new
     }
 
