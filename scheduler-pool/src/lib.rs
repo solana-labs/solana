@@ -890,6 +890,7 @@ impl ThreadManager {
     }
 
     fn start_threads(&mut self) {
+        let (_transaction_sender, transaction_receiver) = unbounded::<i32>();
         let (blocked_transaction_sender, blocked_transaction_receiver) = unbounded::<i32>();
         let (idle_transaction_sender, idle_transaction_receiver) = unbounded::<i32>();
         let (handled_transaction_sender, handled_transaction_receiver) = unbounded::<i32>();
@@ -899,6 +900,7 @@ impl ThreadManager {
             .spawn(move || {
                 select_biased! {
                     recv(handled_transaction_receiver) -> m => m,
+                    recv(transaction_receiver) -> m => m,
                 };
                 ()
             })
