@@ -912,6 +912,7 @@ impl ThreadManager {
                     let mut state_machine = SchedulingStateMachine;
                     let mut session_ended = false;
                     let mut scheduler_is_empty = false;
+                    let mut next_result_sender = result_sender.clone();
 
                     loop {
                         while !scheduler_is_empty && !session_ended {
