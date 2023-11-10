@@ -274,11 +274,7 @@ impl Bank {
         let total_rent_collected = self.collected_rent.load(Relaxed);
 
         if !self.should_collect_rent() {
-            info!(
-                "skip rent fees distribution: total_rent = {}",
-                total_rent_collected
-            );
-            assert_eq!(total_rent_collected, 0);
+            assert_eq!(total_rent_collected, 0, "Rent fees distribution was skipped, yet total rent collect was non zero! Total rent collected: {total_rent_collected}");
             return;
         }
 
