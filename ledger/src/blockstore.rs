@@ -73,7 +73,7 @@ use {
         path::{Path, PathBuf},
         rc::Rc,
         sync::{
-            atomic::{AtomicBool, Ordering},
+            atomic::{AtomicBool, AtomicU64, Ordering},
             Arc, Mutex, RwLock,
         },
     },
@@ -214,7 +214,7 @@ pub struct Blockstore {
     program_costs_cf: LedgerColumn<cf::ProgramCosts>,
     bank_hash_cf: LedgerColumn<cf::BankHash>,
     optimistic_slots_cf: LedgerColumn<cf::OptimisticSlots>,
-    last_root: RwLock<Slot>,
+    max_root: AtomicU64,
     insert_shreds_lock: Mutex<()>,
     new_shreds_signals: Mutex<Vec<Sender<bool>>>,
     completed_slots_senders: Mutex<Vec<CompletedSlotsSender>>,
@@ -324,7 +324,7 @@ impl Blockstore {
             .next()
             .map(|(slot, _)| slot)
             .unwrap_or(0);
-        let last_root = RwLock::new(max_root);
+        let max_root = AtomicU64::new(max_root);
 
         measure.stop();
         info!("{:?} {}", blockstore_path, measure);
@@ -356,7 +356,7 @@ impl Blockstore {
             completed_slots_senders: Mutex::default(),
             shred_timing_point_sender: None,
             insert_shreds_lock: Mutex::<()>::default(),
-            last_root,
+            max_root,
             lowest_cleanup_slot: RwLock::<Slot>::default(),
             slots_stats: SlotsStats::default(),
         };
@@ -469,16 +469,6 @@ impl Blockstore {
     /// blockstore or the slot isn't an orphan slot.
     pub fn orphan(&self, slot: Slot) -> Result<Option<bool>> {
         self.orphans_cf.get(slot)
-    }
-
-    /// Returns the max root or 0 if it does not exist.
-    pub fn max_root(&self) -> Slot {
-        self.db
-            .iter::<cf::Root>(IteratorMode::End)
-            .expect("Couldn't get rooted iterator for max_root()")
-            .next()
-            .map(|(slot, _)| slot)
-            .unwrap_or(0)
     }
 
     pub fn slot_meta_iterator(
@@ -1192,7 +1182,7 @@ impl Blockstore {
                 return false;
             }
 
-            if !Blockstore::should_insert_coding_shred(&shred, &self.last_root) {
+            if !Blockstore::should_insert_coding_shred(&shred, self.max_root()) {
                 metrics.num_coding_shreds_invalid += 1;
                 return false;
             }
@@ -1391,7 +1381,7 @@ impl Blockstore {
                 &shred,
                 slot_meta,
                 just_inserted_shreds,
-                &self.last_root,
+                self.max_root(),
                 leader_schedule,
                 shred_source,
                 duplicate_shreds,
@@ -1419,9 +1409,9 @@ impl Blockstore {
         Ok(newly_completed_data_sets)
     }
 
-    fn should_insert_coding_shred(shred: &Shred, last_root: &RwLock<u64>) -> bool {
+    fn should_insert_coding_shred(shred: &Shred, max_root: Slot) -> bool {
         debug_assert_matches!(shred.sanitize(), Ok(()));
-        shred.is_code() && shred.slot() > *last_root.read().unwrap()
+        shred.is_code() && shred.slot() > max_root
     }
 
     fn insert_coding_shred(
@@ -1473,7 +1463,7 @@ impl Blockstore {
         shred: &Shred,
         slot_meta: &SlotMeta,
         just_inserted_shreds: &HashMap<ShredId, Shred>,
-        last_root: &RwLock<u64>,
+        max_root: Slot,
         leader_schedule: Option<&LeaderScheduleCache>,
         shred_source: ShredSource,
         duplicate_shreds: &mut Vec<PossibleDuplicateShred>,
@@ -1568,12 +1558,11 @@ impl Blockstore {
             return false;
         }
 
-        let last_root = *last_root.read().unwrap();
         // TODO Shouldn't this use shred.parent() instead and update
         // slot_meta.parent_slot accordingly?
         slot_meta
             .parent_slot
-            .map(|parent_slot| verify_shred_slots(slot, parent_slot, last_root))
+            .map(|parent_slot| verify_shred_slots(slot, parent_slot, max_root))
             .unwrap_or_default()
     }
 
@@ -1584,7 +1573,7 @@ impl Blockstore {
                 sender,
                 SlotPohTimingInfo::new_slot_full_poh_time_point(
                     slot,
-                    Some(self.last_root()),
+                    Some(self.max_root()),
                     solana_sdk::timing::timestamp(),
                 ),
             );
@@ -2491,10 +2480,10 @@ impl Blockstore {
             "blockstore-rpc-api",
             ("method", "get_complete_transaction", String)
         );
-        let last_root = self.last_root();
+        let max_root = self.max_root();
         let confirmed_unrooted_slots: HashSet<_> =
             AncestorIterator::new_inclusive(highest_confirmed_slot, self)
-                .take_while(|&slot| slot > last_root)
+                .take_while(|&slot| slot > max_root)
                 .collect();
         self.get_transaction_with_status(signature, &confirmed_unrooted_slots)
     }
@@ -2642,10 +2631,10 @@ impl Blockstore {
             "blockstore-rpc-api",
             ("method", "get_confirmed_signatures_for_address2", String)
         );
-        let last_root = self.last_root();
+        let max_root = self.max_root();
         let confirmed_unrooted_slots: HashSet<_> =
             AncestorIterator::new_inclusive(highest_slot, self)
-                .take_while(|&slot| slot > last_root)
+                .take_while(|&slot| slot > max_root)
                 .collect();
 
         // Figure the `slot` to start listing signatures at, based on the ledger location of the
@@ -3247,12 +3236,8 @@ impl Blockstore {
         }
 
         self.db.write(write_batch)?;
-
-        let mut last_root = self.last_root.write().unwrap();
-        if *last_root == std::u64::MAX {
-            *last_root = 0;
-        }
-        *last_root = cmp::max(max_new_rooted_slot, *last_root);
+        self.max_root
+            .fetch_max(max_new_rooted_slot, Ordering::Relaxed);
         Ok(())
     }
 
@@ -3355,8 +3340,17 @@ impl Blockstore {
         Ok(duplicate_slots_iterator.map(|(slot, _)| slot))
     }
 
+    /// Returns the max root or 0 if it does not exist
+    pub fn max_root(&self) -> Slot {
+        self.max_root.load(Ordering::Relaxed)
+    }
+
+    #[deprecated(
+        since = "1.18.0",
+        note = "Please use `solana_ledger::blockstore::Blockstore::max_root()` instead"
+    )]
     pub fn last_root(&self) -> Slot {
-        *self.last_root.read().unwrap()
+        self.max_root()
     }
 
     // find the first available slot in blockstore that has some data in it
@@ -3370,7 +3364,7 @@ impl Blockstore {
             }
         }
         // This means blockstore is empty, should never get here aside from right at boot.
-        self.last_root()
+        self.max_root()
     }
 
     fn lowest_slot_with_genesis(&self) -> Slot {
@@ -3383,7 +3377,7 @@ impl Blockstore {
             }
         }
         // This means blockstore is empty, should never get here aside from right at boot.
-        self.last_root()
+        self.max_root()
     }
 
     /// Returns the highest available slot in the blockstore
@@ -3458,7 +3452,7 @@ impl Blockstore {
             }
             slot
         } else {
-            self.last_root()
+            self.max_root()
         };
         let end_slot = end_slot.unwrap_or(*lowest_cleanup_slot);
         let ancestor_iterator =
@@ -6590,7 +6584,7 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-        let last_root = RwLock::new(0);
+        let max_root = 0;
 
         // Insert the first 5 shreds, we don't have a "is_last" shred yet
         blockstore
@@ -6620,7 +6614,7 @@ pub mod tests {
             &empty_shred,
             &slot_meta,
             &HashMap::new(),
-            &last_root,
+            max_root,
             None,
             ShredSource::Repaired,
             &mut Vec::new(),
@@ -6645,7 +6639,7 @@ pub mod tests {
             &shred7,
             &slot_meta,
             &HashMap::new(),
-            &last_root,
+            max_root,
             None,
             ShredSource::Repaired,
             &mut duplicate_shreds,
@@ -6676,7 +6670,7 @@ pub mod tests {
             &shred8,
             &slot_meta,
             &HashMap::new(),
-            &last_root,
+            max_root,
             None,
             ShredSource::Repaired,
             &mut duplicate_shreds,
@@ -6784,7 +6778,7 @@ pub mod tests {
     fn test_should_insert_coding_shred() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-        let last_root = RwLock::new(0);
+        let max_root = 0;
 
         let slot = 1;
         let mut coding_shred = Shred::new_from_parity_shard(
@@ -6801,7 +6795,7 @@ pub mod tests {
         // Insert a good coding shred
         assert!(Blockstore::should_insert_coding_shred(
             &coding_shred,
-            &last_root
+            max_root
         ));
 
         // Insertion should succeed
@@ -6814,7 +6808,7 @@ pub mod tests {
         {
             assert!(Blockstore::should_insert_coding_shred(
                 &coding_shred,
-                &last_root
+                max_root
             ));
         }
 
@@ -6822,16 +6816,16 @@ pub mod tests {
         coding_shred.set_index(coding_shred.index() + 1);
         assert!(Blockstore::should_insert_coding_shred(
             &coding_shred,
-            &last_root
+            max_root
         ));
 
         // Trying to insert value into slot <= than last root should fail
         {
             let mut coding_shred = coding_shred.clone();
-            coding_shred.set_slot(*last_root.read().unwrap());
+            coding_shred.set_slot(max_root);
             assert!(!Blockstore::should_insert_coding_shred(
                 &coding_shred,
-                &last_root
+                max_root
             ));
         }
     }
@@ -6896,11 +6890,11 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let chained_slots = vec![0, 2, 4, 7, 12, 15];
-        assert_eq!(blockstore.last_root(), 0);
+        assert_eq!(blockstore.max_root(), 0);
 
         blockstore.set_roots(chained_slots.iter()).unwrap();
 
-        assert_eq!(blockstore.last_root(), 15);
+        assert_eq!(blockstore.max_root(), 15);
 
         for i in chained_slots {
             assert!(blockstore.is_root(i));
@@ -7071,9 +7065,9 @@ pub mod tests {
 
         // Make shred for slot 1
         let (shreds1, _) = make_slot_entries(1, 0, 1, /*merkle_variant:*/ true);
-        let last_root = 100;
+        let max_root = 100;
 
-        blockstore.set_roots(std::iter::once(&last_root)).unwrap();
+        blockstore.set_roots(std::iter::once(&max_root)).unwrap();
 
         // Insert will fail, slot < root
         blockstore

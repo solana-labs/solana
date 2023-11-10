@@ -63,7 +63,7 @@ async fn upload(
         None => blockstore.get_first_available_block()?,
     };
 
-    let ending_slot = ending_slot.unwrap_or_else(|| blockstore.last_root());
+    let ending_slot = ending_slot.unwrap_or_else(|| blockstore.max_root());
 
     while starting_slot <= ending_slot {
         let current_ending_slot = min(
