@@ -897,6 +897,7 @@ impl ThreadManager {
         self.scheduler_thread = Some(t);
         let (blocked_transaction_sender, blocked_transaction_receiver) = unbounded::<i32>();
         let (idle_transaction_sender, idle_transaction_receiver) = unbounded::<i32>();
+        let (handled_transaction_sender, handled_transaction_receiver) = unbounded::<i32>();
         self.handler_threads = (0..10)
             .map({
                 |thx| {
@@ -910,6 +911,7 @@ impl ThreadManager {
                                     recv(blocked_transaction_receiver.clone()) -> _ => {},
                                     recv(idle_transaction_receiver.clone()) -> _ => {},
                                 }
+                                handled_transaction_sender.send(3).unwrap();
                             }
                         })
                         .unwrap()
