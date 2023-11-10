@@ -907,7 +907,7 @@ impl ThreadManager {
                 .name("aaaa".to_owned())
                 .spawn(move || {
                     let never = &never();
-                    let state_machine = SchedulingStateMachine;
+                    let mut state_machine = SchedulingStateMachine;
 
                     loop {
                         select_biased! {
