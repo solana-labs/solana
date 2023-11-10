@@ -873,7 +873,7 @@ trait WithChannelPair<T>: Send + Sync {
 
 enum SessionedChannel<T> {
     Payload(T),
-    NextContext(SchedulingContext),
+    NewContext(SchedulingContext),
     NextSession(Box<dyn WithChannelPair<T>>),
 }
 
@@ -909,21 +909,24 @@ impl ThreadManager {
                     move || {
                     let never = &never();
                     let mut state_machine = SchedulingStateMachine;
+                    let mut session_ended = false;
 
                     loop {
                         select_biased! {
                             recv(handled_blocked_transaction_receiver) -> m => {m;},
-                            recv(if true { &transaction_receiver } else { never }) -> m => { 
+                            recv(if !session_ended { &transaction_receiver } else { never }) -> m => { 
                                 match m {
                                     Ok(mm) => {
                                         match mm {
                                             SessionedChannel::Payload(payload) => {
                                                 Self::receive_new_transaction(&mut state_machine, payload);
                                             }
-                                            SessionedChannel::NextContext(next_context) => {
+                                            SessionedChannel::NewContext(next_context) => {
                                                 bank = next_context.bank().clone();
+                                                session_ended = false;
                                             }
                                             SessionedChannel::NextSession(mut next_receiver_box) => {
+                                                session_ended = true;
                                                 (transaction_receiver, _) =
                                                     next_receiver_box.unwrap_channel_pair();
                                             }
