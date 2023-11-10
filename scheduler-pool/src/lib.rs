@@ -910,16 +910,17 @@ impl ThreadManager {
                     move || {
                     let never = &never();
                     let mut state_machine = SchedulingStateMachine;
-                    let mut session_ended = false;
+                    let mut will_end_session = false;
+                    let mut will_end_thread = false;
                     let mut scheduler_is_empty = false;
                     let mut next_result_sender = result_sender.clone();
                     let mut result_with_timings = (Ok(()), Default::default());
 
-                    loop {
-                        while !scheduler_is_empty && !session_ended {
+                    while will_end_thread {
+                        while !scheduler_is_empty || !will_end_session {
                             select_biased! {
                                 recv(handled_blocked_transaction_receiver) -> m => {m;},
-                                recv(if !session_ended { &transaction_receiver } else { never }) -> m => { 
+                                recv(if !will_end_session { &transaction_receiver } else { never }) -> m => { 
                                     match m {
                                         Ok(mm) => {
                                             match mm {
@@ -928,16 +929,16 @@ impl ThreadManager {
                                                 }
                                                 SessionedChannel::NewContext(next_context) => {
                                                     bank = next_context.bank().clone();
-                                                    session_ended = false;
+                                                    will_end_session = false;
                                                 }
                                                 SessionedChannel::NextSession(mut next_receiver_box) => {
-                                                    session_ended = true;
+                                                    will_end_session = true;
                                                     (transaction_receiver, next_result_sender) =
                                                         next_receiver_box.unwrap_channel_pair();
                                                 }
                                             };
                                         },
-                                        Err(_) => break,
+                                        Err(_) => will_end_thread = true,
                                     }
                                 },
                                 recv(handled_idle_transaction_receiver) -> m => {m; },
