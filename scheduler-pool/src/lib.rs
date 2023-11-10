@@ -945,7 +945,7 @@ impl ThreadManager {
                             };
                         }
                         result_sender.send(result_with_timings).unwrap();
-                        result_sender = next_result_sender;
+                        result_sender = next_result_sender.clone();
                     }
                 }})
                 .unwrap(),
