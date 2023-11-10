@@ -897,7 +897,9 @@ impl ThreadManager {
         self.scheduler_thread = Some(t);
         let (idle_transaction_sender, idle_transaction_receiver) = unbounded::<i32>();
         self.handler_threads = (0..10)
-            .map(|thx| {
+            .map({
+                idle_transaction_receiver = idle_transaction_receiver.clone();
+                |thx| {
                 std::thread::Builder::new()
                     .name("aaaa".to_owned())
                     .spawn(move || {
@@ -906,7 +908,7 @@ impl ThreadManager {
                         }
                     })
                     .unwrap()
-            })
+            }})
             .collect();
     }
 
