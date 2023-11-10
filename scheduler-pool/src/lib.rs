@@ -910,33 +910,38 @@ impl ThreadManager {
                     let never = &never();
                     let mut state_machine = SchedulingStateMachine;
                     let mut session_ended = false;
+                    let mut scheduler_is_empty = false;
 
                     loop {
-                        select_biased! {
-                            recv(handled_blocked_transaction_receiver) -> m => {m;},
-                            recv(if !session_ended { &transaction_receiver } else { never }) -> m => { 
-                                match m {
-                                    Ok(mm) => {
-                                        match mm {
-                                            SessionedChannel::Payload(payload) => {
-                                                Self::receive_new_transaction(&mut state_machine, payload);
-                                            }
-                                            SessionedChannel::NewContext(next_context) => {
-                                                bank = next_context.bank().clone();
-                                                session_ended = false;
-                                            }
-                                            SessionedChannel::NextSession(mut next_receiver_box) => {
-                                                session_ended = true;
-                                                (transaction_receiver, _) =
-                                                    next_receiver_box.unwrap_channel_pair();
-                                            }
-                                        };
-                                    },
-                                    Err(_) => break,
-                                }
-                            },
-                            recv(handled_idle_transaction_receiver) -> m => {m; },
-                        };
+                        while !scheduler_is_empty && !session_ended {
+                            select_biased! {
+                                recv(handled_blocked_transaction_receiver) -> m => {m;},
+                                recv(if !session_ended { &transaction_receiver } else { never }) -> m => { 
+                                    match m {
+                                        Ok(mm) => {
+                                            match mm {
+                                                SessionedChannel::Payload(payload) => {
+                                                    Self::receive_new_transaction(&mut state_machine, payload);
+                                                }
+                                                SessionedChannel::NewContext(next_context) => {
+                                                    bank = next_context.bank().clone();
+                                                    session_ended = false;
+                                                }
+                                                SessionedChannel::NextSession(mut next_receiver_box) => {
+                                                    session_ended = true;
+                                                    (transaction_receiver, next_result_sender) =
+                                                        next_receiver_box.unwrap_channel_pair();
+                                                }
+                                            };
+                                        },
+                                        Err(_) => break,
+                                    }
+                                },
+                                recv(handled_idle_transaction_receiver) -> m => {m; },
+                            };
+                        }
+                        result_sender.send(3).unwrap();
+                        result_sender = next_result_sender;
                     }
                 }})
                 .unwrap(),
