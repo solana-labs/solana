@@ -15,7 +15,7 @@ use {
         prioritization_fee_cache::PrioritizationFeeCache,
         transaction_batch::TransactionBatch,
     },
-    solana_sdk::{hash::Hash, pubkey::Pubkey, saturating_add_assign},
+    solana_sdk::{hash::Hash, account::AccountSharedData, pubkey::Pubkey, saturating_add_assign},
     solana_transaction_status::{
         token_balances::TransactionTokenBalancesSet, TransactionTokenBalance,
     },
@@ -76,6 +76,7 @@ impl Committer {
         executed_transactions_count: usize,
         executed_non_vote_transactions_count: usize,
         executed_with_successful_result_count: usize,
+        preexecution_account_states: Option<HashMap<Pubkey, AccountSharedData>>,
     ) -> (u64, Vec<CommitTransactionDetails>) {
         let executed_transactions = execution_results
             .iter()
@@ -98,6 +99,7 @@ impl Committer {
                 signature_count,
             },
             &mut execute_and_commit_timings.execute_timings,
+            preexecution_account_states,
         ));
         execute_and_commit_timings.commit_us = commit_time_us;
 

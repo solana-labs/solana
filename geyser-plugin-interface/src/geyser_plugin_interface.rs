@@ -111,6 +111,60 @@ pub struct ReplicaAccountInfoV3<'a> {
     pub txn: Option<&'a SanitizedTransaction>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplicaPreviousAccountInfo<'a> {
+    /// The lamports for the account
+    pub lamports: u64,
+
+    /// The Pubkey of the owner program account
+    pub owner: &'a [u8],
+
+    /// This account's data contains a loaded program (and is now read-only)
+    pub executable: bool,
+
+    /// The epoch at which this account will next owe rent
+    pub rent_epoch: u64,
+
+    /// The data held in this account.
+    pub data: &'a [u8],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+/// Information about an account being updated
+/// (extended with reference to transaction doing this update)
+pub struct ReplicaAccountInfoV4<'a> {
+    /// The Pubkey for the account
+    pub pubkey: &'a [u8],
+
+    /// The lamports for the account
+    pub lamports: u64,
+
+    /// The Pubkey of the owner program account
+    pub owner: &'a [u8],
+
+    /// This account's data contains a loaded program (and is now read-only)
+    pub executable: bool,
+
+    /// The epoch at which this account will next owe rent
+    pub rent_epoch: u64,
+
+    /// The data held in this account.
+    pub data: &'a [u8],
+
+    /// A global monotonically increasing atomic number, which can be used
+    /// to tell the order of the account update. For example, when an
+    /// account is updated in the same slot multiple times, the update
+    /// with higher write_version should supersede the one with lower
+    /// write_version.
+    pub write_version: u64,
+
+    /// Reference to transaction causing this account modification
+    pub txn: Option<&'a SanitizedTransaction>,
+
+    /// old account data
+    pub previous_account_state: Option<ReplicaPreviousAccountInfo<'a>>,
+}
+
 /// A wrapper to future-proof ReplicaAccountInfo handling.
 /// If there were a change to the structure of ReplicaAccountInfo,
 /// there would be new enum entry for the newer version, forcing
@@ -120,6 +174,7 @@ pub enum ReplicaAccountInfoVersions<'a> {
     V0_0_1(&'a ReplicaAccountInfo<'a>),
     V0_0_2(&'a ReplicaAccountInfoV2<'a>),
     V0_0_3(&'a ReplicaAccountInfoV3<'a>),
+    V0_0_4(&'a ReplicaAccountInfoV4<'a>),
 }
 
 /// Information about a transaction
@@ -436,6 +491,17 @@ pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
     /// Default is false -- if the plugin is interested in
     /// entry data, return true.
     fn entry_notifications_enabled(&self) -> bool {
+        false
+    }
+
+    /// Check if the plugin is interested in accounts data before
+    /// exection of transaction
+    /// Default is false -- if plugin is interested in accounts data
+    /// before execution, return true
+    /// This feature will require more memory and could lead
+    /// in degraded performance as the pre transaction execution states
+    /// will be saved in memory, so activate only if required
+    fn enable_pre_trasaction_execution_accounts_data(&self) -> bool {
         false
     }
 }

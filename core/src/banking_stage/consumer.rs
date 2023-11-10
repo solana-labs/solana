@@ -589,6 +589,7 @@ impl Consumer {
             executed_with_successful_result_count,
             signature_count,
             error_counters,
+            preexecution_account_states,
             ..
         } = load_and_execute_transactions_output;
 
@@ -666,6 +667,7 @@ impl Consumer {
                 executed_transactions_count,
                 executed_non_vote_transactions_count,
                 executed_with_successful_result_count,
+                preexecution_account_states,
             )
         } else {
             (

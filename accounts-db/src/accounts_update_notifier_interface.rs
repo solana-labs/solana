@@ -15,6 +15,7 @@ pub trait AccountsUpdateNotifierInterface: std::fmt::Debug {
         txn: &Option<&SanitizedTransaction>,
         pubkey: &Pubkey,
         write_version: u64,
+        preexecution_account_data: Option<&AccountSharedData>,
     );
 
     /// Notified when the AccountsDb is initialized at start when restored
@@ -23,6 +24,8 @@ pub trait AccountsUpdateNotifierInterface: std::fmt::Debug {
 
     /// Notified when all accounts have been notified when restoring from a snapshot.
     fn notify_end_of_restore_from_snapshot(&self);
+
+    fn enable_preexecution_account_states_notification(&self) -> bool;
 }
 
 pub type AccountsUpdateNotifier = Arc<dyn AccountsUpdateNotifierInterface + Sync + Send>;
