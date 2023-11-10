@@ -963,16 +963,20 @@ impl ThreadManager {
                             let handled_idle_transaction_sender = handled_idle_transaction_sender.clone();
 
                             move || {
-                                select_biased! {
+                                let (m, was_blocked) = select_biased! {
                                     recv(blocked_transaction_receiver) -> m => {
-                                        m;
-                                        handled_blocked_transaction_sender.send(3).unwrap();
+                                        (m, true)
                                     },
                                     recv(idle_transaction_receiver) -> m => {
-                                        m;
-                                        handled_idle_transaction_sender.send(3).unwrap();
+                                        (m, false);
                                     },
                                 };
+
+                                if was_blocked {
+                                    handled_blocked_transaction_sender.send(3).unwrap();
+                                } else {
+                                    handled_idle_transaction_sender.send(3).unwrap();
+                                }
                             }
                         })
                         .unwrap()
