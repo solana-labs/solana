@@ -8,7 +8,7 @@ use {
         banking_trace::{BankingTracer, TracerThread},
         cluster_info_vote_listener::{
             ClusterInfoVoteListener, DuplicateConfirmedSlotsSender, GossipVerifiedVoteHashSender,
-            VerifiedVoteSender, VoteTracker,
+            RepairThresholdSlotsSender, VerifiedVoteSender, VoteTracker,
         },
         fetch_stage::FetchStage,
         sigverify::TransactionSigVerifier,
@@ -111,6 +111,7 @@ impl Tpu {
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
         block_production_method: BlockProductionMethod,
         _generator_config: Option<GeneratorConfig>, /* vestigial code for replay invalidator */
+        repair_threshold_slot_sender: RepairThresholdSlotsSender,
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
@@ -216,6 +217,7 @@ impl Tpu {
             blockstore.clone(),
             bank_notification_sender,
             duplicate_confirmed_slot_sender,
+            repair_threshold_slot_sender,
         );
 
         let banking_stage = BankingStage::new(

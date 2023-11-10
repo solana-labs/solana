@@ -1,4 +1,5 @@
 #![cfg(feature = "dev-context-only-utils")]
+
 use {
     crate::{
         cluster_info_vote_listener::VoteTracker,
@@ -12,6 +13,7 @@ use {
         },
         repair::cluster_slot_state_verifier::{
             DuplicateConfirmedSlots, DuplicateSlotsTracker, EpochSlotsFrozenSlots,
+            RepairThresholdSlots,
         },
         replay_stage::{HeaviestForkFailures, ReplayStage},
         unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
@@ -215,6 +217,7 @@ impl VoteSimulator {
             &mut self.heaviest_subtree_fork_choice,
             &mut DuplicateSlotsTracker::default(),
             &mut DuplicateConfirmedSlots::default(),
+            &mut RepairThresholdSlots::default(),
             &mut UnfrozenGossipVerifiedVoteHashes::default(),
             &mut true,
             &mut Vec::new(),

@@ -9,7 +9,7 @@ use {
     },
     solana_ledger::blockstore::Blockstore,
     solana_sdk::{clock::Slot, hash::Hash},
-    std::collections::{BTreeMap, BTreeSet, HashMap},
+    std::collections::{BTreeMap, BTreeSet, HashMap, HashSet},
 };
 
 pub(crate) type DuplicateSlotsTracker = BTreeSet<Slot>;
@@ -17,6 +17,7 @@ pub(crate) type DuplicateSlotsToRepair = HashMap<Slot, Hash>;
 pub(crate) type PurgeRepairSlotCounter = BTreeMap<Slot, usize>;
 pub(crate) type EpochSlotsFrozenSlots = BTreeMap<Slot, Hash>;
 pub(crate) type DuplicateConfirmedSlots = BTreeMap<Slot, Hash>;
+pub(crate) type RepairThresholdSlots = BTreeMap<Slot, HashSet<Hash>>;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum ClusterConfirmedHash {
@@ -187,6 +188,31 @@ impl DuplicateConfirmedState {
 }
 
 #[derive(PartialEq, Eq, Debug)]
+pub struct RepairThresholdState {
+    // Keep fields private, forces construction
+    // via constructor
+    repair_threshold_hash: Hash,
+    bank_status: BankStatus,
+}
+impl RepairThresholdState {
+    pub fn new_from_state(
+        repair_threshold_hash: Hash,
+        is_dead: impl Fn() -> bool,
+        get_hash: impl Fn() -> Option<Hash>,
+    ) -> Self {
+        let bank_status = BankStatus::new(is_dead, get_hash);
+        Self::new(repair_threshold_hash, bank_status)
+    }
+
+    fn new(repair_threshold_hash: Hash, bank_status: BankStatus) -> Self {
+        Self {
+            repair_threshold_hash,
+            bank_status,
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Debug)]
 pub struct DuplicateState {
     // Keep fields private, forces construction
     // via constructor
@@ -286,6 +312,11 @@ pub enum SlotStateUpdate {
     // The fork is pruned but has reached `DUPLICATE_THRESHOLD` from votes aggregated across
     // descendants and all versions of the slots on this fork.
     PopularPrunedFork,
+    // Notify the state machine that a version of this slot has reached the repair threshold
+    // and that it might be necessary to perform a targetted duplicate block repair.
+    // TODO: subject to change depending on SIMD and semantics of (slot, hash) repair, update
+    // comment when finalized
+    RepairThreshold(RepairThresholdState),
 }
 
 impl SlotStateUpdate {
@@ -308,6 +339,8 @@ impl SlotStateUpdate {
                 on_epoch_slots_frozen(slot, epoch_slots_frozen_state)
             }
             SlotStateUpdate::PopularPrunedFork => on_popular_pruned_fork(slot),
+            // TODO: update once we have (slot, hash) repair
+            SlotStateUpdate::RepairThreshold(_repair_threshold_state) => vec![],
         }
     }
 
@@ -331,6 +364,9 @@ impl SlotStateUpdate {
                     && !epoch_slots_frozen_state.is_popular_pruned()
             }
             SlotStateUpdate::PopularPrunedFork => false,
+            SlotStateUpdate::RepairThreshold(repair_threshold_state) => {
+                repair_threshold_state.bank_status.can_be_further_replayed()
+            }
         }
     }
 }

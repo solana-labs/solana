@@ -5,7 +5,8 @@ use {
         banking_trace::BankingTracer,
         cache_block_meta_service::CacheBlockMetaSender,
         cluster_info_vote_listener::{
-            DuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VoteTracker,
+            DuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver,
+            RepairThresholdSlotsReceiver, VoteTracker,
         },
         cluster_slots_service::{cluster_slots::ClusterSlots, ClusterSlotsUpdateSender},
         commitment_service::{AggregateCommitmentService, CommitmentAggregationData},
@@ -94,6 +95,16 @@ pub const SUPERMINORITY_THRESHOLD: f64 = 1f64 / 3f64;
 pub const MAX_UNCONFIRMED_SLOTS: usize = 5;
 pub const DUPLICATE_LIVENESS_THRESHOLD: f64 = 0.1;
 pub const DUPLICATE_THRESHOLD: f64 = 1.0 - SWITCH_FORK_THRESHOLD - DUPLICATE_LIVENESS_THRESHOLD;
+
+// We choose support up to 5 adversarial network partitions of the network.
+// If we assume that `MALICIOUS_TOLERANCE` stake straddles each partition, we require
+// a propagation threshold of at least 1% to upper bound the number of partitions that reach
+// `REPAIR_THRESHOLD` at 5.
+pub const MALICIOUS_TOLERANCE: f64 = SUPERMINORITY_THRESHOLD;
+pub const MAX_REPAIR_THRESHOLD_BLOCKS_PER_SLOT: usize = 5;
+pub const TURBINE_MIN_NETWORK_PARTITION_PROPAGATION: f64 = 0.01;
+pub const REPAIR_THRESHOLD: f64 = MALICIOUS_TOLERANCE + TURBINE_MIN_NETWORK_PARTITION_PROPAGATION;
+
 const MAX_VOTE_SIGNATURES: usize = 200;
 const MAX_VOTE_REFRESH_INTERVAL_MILLIS: usize = 5000;
 // Expect this number to be small enough to minimize thread pool overhead while large enough
@@ -274,6 +285,7 @@ pub struct ReplayTiming {
     process_duplicate_slots_elapsed: u64,
     process_unfrozen_gossip_verified_vote_hashes_elapsed: u64,
     process_popular_pruned_forks_elapsed: u64,
+    process_repair_threshold_slots_elapsed: u64,
     repair_correct_slots_elapsed: u64,
     retransmit_not_propagated_elapsed: u64,
     generate_new_bank_forks_read_lock_us: u64,
@@ -306,6 +318,7 @@ impl ReplayTiming {
         process_duplicate_slots_elapsed: u64,
         repair_correct_slots_elapsed: u64,
         retransmit_not_propagated_elapsed: u64,
+        process_repair_threshold_slots_elapsed: u64,
     ) {
         self.collect_frozen_banks_elapsed += collect_frozen_banks_elapsed;
         self.compute_bank_stats_elapsed += compute_bank_stats_elapsed;
@@ -329,6 +342,7 @@ impl ReplayTiming {
         self.process_duplicate_slots_elapsed += process_duplicate_slots_elapsed;
         self.repair_correct_slots_elapsed += repair_correct_slots_elapsed;
         self.retransmit_not_propagated_elapsed += retransmit_not_propagated_elapsed;
+        self.process_repair_threshold_slots_elapsed += process_repair_threshold_slots_elapsed;
         let now = timestamp();
         let elapsed_ms = now - self.last_print;
         if elapsed_ms > 1000 {
@@ -404,6 +418,11 @@ impl ReplayTiming {
                 (
                     "process_popular_pruned_forks_elapsed",
                     self.process_popular_pruned_forks_elapsed as i64,
+                    i64
+                ),
+                (
+                    "process_repair_threshold_slots_elapsed",
+                    self.process_repair_threshold_slots_elapsed as i64,
                     i64
                 ),
                 (
@@ -497,6 +516,7 @@ impl ReplayStage {
         dumped_slots_sender: DumpedSlotsSender,
         banking_tracer: Arc<BankingTracer>,
         popular_pruned_forks_receiver: PopularPrunedForksReceiver,
+        repair_threshold_slots_receiver: RepairThresholdSlotsReceiver,
     ) -> Result<Self, String> {
         let ReplayStageConfig {
             vote_account,
@@ -546,6 +566,7 @@ impl ReplayStage {
             let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
             let mut duplicate_confirmed_slots: DuplicateConfirmedSlots =
                 DuplicateConfirmedSlots::default();
+            let mut repair_threshold_slots = RepairThresholdSlots::default();
             let mut epoch_slots_frozen_slots: EpochSlotsFrozenSlots =
                 EpochSlotsFrozenSlots::default();
             let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
@@ -674,6 +695,24 @@ impl ReplayStage {
                     &mut purge_repair_slot_counter,
                 );
                 process_duplicate_confirmed_slots_time.stop();
+
+                // Check for any new slots that reached the repair threshold
+                let mut process_repair_threshold_slots_time =
+                    Measure::start("process_repair_threshold_slots");
+                Self::process_repair_threshold_slots(
+                    &repair_threshold_slots_receiver,
+                    &blockstore,
+                    &mut duplicate_slots_tracker,
+                    &mut repair_threshold_slots,
+                    &mut epoch_slots_frozen_slots,
+                    &bank_forks,
+                    &progress,
+                    &mut heaviest_subtree_fork_choice,
+                    &mut duplicate_slots_to_repair,
+                    &ancestor_hashes_replay_update_sender,
+                    &mut purge_repair_slot_counter,
+                );
+                process_repair_threshold_slots_time.stop();
 
                 // Ingest any new verified votes from gossip. Important for fork choice
                 // and switching proofs because these may be votes that haven't yet been
@@ -893,6 +932,7 @@ impl ReplayStage {
                         &bank_notification_sender,
                         &mut duplicate_slots_tracker,
                         &mut duplicate_confirmed_slots,
+                        &mut repair_threshold_slots,
                         &mut unfrozen_gossip_verified_vote_hashes,
                         &mut voted_signatures,
                         &mut has_new_vote_been_rooted,
@@ -1092,6 +1132,7 @@ impl ReplayStage {
                     process_duplicate_slots_time.as_us(),
                     dump_then_repair_correct_slots_time.as_us(),
                     retransmit_not_propagated_time.as_us(),
+                    process_repair_threshold_slots_time.as_us(),
                 );
             }
         };
@@ -1695,6 +1736,66 @@ impl ReplayStage {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn process_repair_threshold_slots(
+        repair_threshold_slots_receiver: &RepairThresholdSlotsReceiver,
+        blockstore: &Blockstore,
+        duplicate_slots_tracker: &mut DuplicateSlotsTracker,
+        repair_threshold_slots: &mut RepairThresholdSlots,
+        epoch_slots_frozen_slots: &mut EpochSlotsFrozenSlots,
+        bank_forks: &RwLock<BankForks>,
+        progress: &ProgressMap,
+        fork_choice: &mut HeaviestSubtreeForkChoice,
+        duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
+        ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
+        purge_repair_slot_counter: &mut PurgeRepairSlotCounter,
+    ) {
+        let root = bank_forks.read().unwrap().root();
+        for new_repair_threshold_slots in repair_threshold_slots_receiver.try_iter() {
+            for (slot, repair_threshold_hash) in new_repair_threshold_slots {
+                if slot <= root {
+                    continue;
+                }
+                let repairable_hashes = repair_threshold_slots.entry(slot).or_default();
+                if repairable_hashes.contains(&repair_threshold_hash) {
+                    // Already seen
+                    continue;
+                }
+                repairable_hashes.insert(repair_threshold_hash);
+                if repairable_hashes.len() > MAX_REPAIR_THRESHOLD_BLOCKS_PER_SLOT {
+                    error!("We have observed {} > {} blocks with bank hashes {:?} for slot {} that have reached a voted stake > {}.
+                        This is either a critical bug in duplicate block consensus or we are facing an adversary that is more
+                        powerful than our coded assumptions. At this point it is unclear if consensus will be able to converge
+                        and manual intervention might be needed.",
+                        repairable_hashes.len(),
+                        MAX_REPAIR_THRESHOLD_BLOCKS_PER_SLOT,
+                        repairable_hashes,
+                        slot,
+                        REPAIR_THRESHOLD
+                    );
+                }
+
+                let repair_threshold_state = RepairThresholdState::new_from_state(
+                    repair_threshold_hash,
+                    || progress.is_dead(slot).unwrap_or(false),
+                    || bank_forks.read().unwrap().bank_hash(slot),
+                );
+                check_slot_agrees_with_cluster(
+                    slot,
+                    root,
+                    blockstore,
+                    duplicate_slots_tracker,
+                    epoch_slots_frozen_slots,
+                    fork_choice,
+                    duplicate_slots_to_repair,
+                    ancestor_hashes_replay_update_sender,
+                    purge_repair_slot_counter,
+                    SlotStateUpdate::RepairThreshold(repair_threshold_state),
+                );
+            }
+        }
+    }
+
     fn process_gossip_verified_vote_hashes(
         gossip_verified_vote_hash_receiver: &GossipVerifiedVoteHashReceiver,
         unfrozen_gossip_verified_vote_hashes: &mut UnfrozenGossipVerifiedVoteHashes,
@@ -2141,6 +2242,7 @@ impl ReplayStage {
         bank_notification_sender: &Option<BankNotificationSenderConfig>,
         duplicate_slots_tracker: &mut DuplicateSlotsTracker,
         duplicate_confirmed_slots: &mut DuplicateConfirmedSlots,
+        repair_threshold_slots: &mut RepairThresholdSlots,
         unfrozen_gossip_verified_vote_hashes: &mut UnfrozenGossipVerifiedVoteHashes,
         vote_signatures: &mut Vec<Signature>,
         has_new_vote_been_rooted: &mut bool,
@@ -2200,6 +2302,7 @@ impl ReplayStage {
                 heaviest_subtree_fork_choice,
                 duplicate_slots_tracker,
                 duplicate_confirmed_slots,
+                repair_threshold_slots,
                 unfrozen_gossip_verified_vote_hashes,
                 has_new_vote_been_rooted,
                 vote_signatures,
@@ -3901,6 +4004,7 @@ impl ReplayStage {
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
         duplicate_slots_tracker: &mut DuplicateSlotsTracker,
         duplicate_confirmed_slots: &mut DuplicateConfirmedSlots,
+        repair_threshold_slots: &mut RepairThresholdSlots,
         unfrozen_gossip_verified_vote_hashes: &mut UnfrozenGossipVerifiedVoteHashes,
         has_new_vote_been_rooted: &mut bool,
         voted_signatures: &mut Vec<Signature>,
@@ -3940,6 +4044,9 @@ impl ReplayStage {
 
         *duplicate_confirmed_slots = duplicate_confirmed_slots.split_off(&new_root);
         // gossip_confirmed_slots now only contains entries >= `new_root`
+
+        *repair_threshold_slots = repair_threshold_slots.split_off(&new_root);
+        // repair_threshold_slots now only contains entries >= `new_root`
 
         unfrozen_gossip_verified_vote_hashes.set_root(new_root);
         *epoch_slots_frozen_slots = epoch_slots_frozen_slots.split_off(&new_root);
@@ -4423,6 +4530,11 @@ pub(crate) mod tests {
             .into_iter()
             .map(|s| (s, Hash::default()))
             .collect();
+        let mut repair_threshold_slots = vec![root - 1, root, root + 1]
+            .into_iter()
+            .map(|s| (s, HashSet::from([Hash::default()])))
+            .collect();
+
         let mut unfrozen_gossip_verified_vote_hashes: UnfrozenGossipVerifiedVoteHashes =
             UnfrozenGossipVerifiedVoteHashes {
                 votes_per_slot: vec![root - 1, root, root + 1]
@@ -4444,6 +4556,7 @@ pub(crate) mod tests {
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_tracker,
             &mut duplicate_confirmed_slots,
+            &mut repair_threshold_slots,
             &mut unfrozen_gossip_verified_vote_hashes,
             &mut true,
             &mut Vec::new(),
@@ -4460,6 +4573,13 @@ pub(crate) mod tests {
         );
         assert_eq!(
             duplicate_confirmed_slots
+                .keys()
+                .cloned()
+                .collect::<Vec<Slot>>(),
+            vec![root, root + 1]
+        );
+        assert_eq!(
+            repair_threshold_slots
                 .keys()
                 .cloned()
                 .collect::<Vec<Slot>>(),
@@ -4522,6 +4642,7 @@ pub(crate) mod tests {
             &mut heaviest_subtree_fork_choice,
             &mut DuplicateSlotsTracker::default(),
             &mut DuplicateConfirmedSlots::default(),
+            &mut RepairThresholdSlots::default(),
             &mut UnfrozenGossipVerifiedVoteHashes::default(),
             &mut true,
             &mut Vec::new(),
