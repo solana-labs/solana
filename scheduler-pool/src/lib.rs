@@ -912,7 +912,7 @@ impl ThreadManager {
                     loop {
                         select_biased! {
                             recv(handled_blocked_transaction_receiver) -> m => {m;},
-                            recv(if true { &transaction_receiver } else { never }) -> m => { 
+                            try_recv(if true { &transaction_receiver } else { never }) -> m => { 
                                 match m {
                                     Ok(mm) => Self::receive_new_transaction(&mut state_machine, mm),
                                     Err(_) => break,
