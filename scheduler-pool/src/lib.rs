@@ -834,7 +834,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             handler,
             address_book: Mutex::new(address_book),
             preloader,
-            thread_manager: RwLock::default(),
+            thread_manager: RwLock::new(ThreadManager::new(initial_context)),
             _phantom: PhantomData,
         };
         drop(new.ensure_threads());
@@ -874,6 +874,9 @@ enum SessionedChannel<T> {
 }
 
 impl ThreadManager {
+    fn new(initial_context: SchedulingContext) -> Self {
+        Self { context: Some(initial_context) }
+    }
     fn is_active(&self) -> bool {
         self.scheduler_thread.is_some()
     }
