@@ -890,7 +890,7 @@ impl ThreadManager {
 
     fn receive_new_transaction(state_machine: &mut SchedulingStateMachine, msg: Box<Task>) {}
     fn receive_handled_transaction(state_machine: &mut SchedulingStateMachine, msg: &mut Box<ExecutionEnvironment>) {}
-    fn update_result_with_timings(result_with_timings: &mut result_with_timings, msg: &mut Box<ExecutionEnvironment>) {}
+    fn update_result_with_timings(result_with_timings: &mut ResultWithTimings, msg: &mut Box<ExecutionEnvironment>) {}
 
     fn receive_scheduled_transaction(msg: &mut Box<ExecutionEnvironment>) {}
 
