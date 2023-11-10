@@ -918,7 +918,7 @@ impl ThreadManager {
                                 match m {
                                     Ok(mm) => {
                                         match mm {};
-                                        Self::receive_new_transaction(&mut state_machine, mm),
+                                        Self::receive_new_transaction(&mut state_machine, mm);
                                     },
                                     Err(_) => break,
                                 }
