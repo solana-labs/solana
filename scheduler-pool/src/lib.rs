@@ -911,7 +911,12 @@ impl ThreadManager {
                     loop {
                         select_biased! {
                             recv(handled_blocked_transaction_receiver) -> m => {m;},
-                            recv(if true { &transaction_receiver } else { never }) -> m => { Self::receive_new_transaction(m)},
+                            recv(if true { &transaction_receiver } else { never }) -> m => { 
+                                match m {
+                                    Ok(mm) => Self::receive_new_transaction(mm),
+                                    Err(_) => return;
+                                }
+                            },
                             recv(handled_idle_transaction_receiver) -> m => {m; },
                         };
                     }
