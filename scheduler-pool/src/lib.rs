@@ -1383,7 +1383,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> InstalledScheduler<SEA>
     }
 }
 
-struct SchedulingStateMachine {};
+struct SchedulingStateMachine;
 /*
 
 enum Event {
