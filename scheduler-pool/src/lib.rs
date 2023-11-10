@@ -970,7 +970,7 @@ impl ThreadManager {
                                         recv(blocked_transaction_receiver) -> m => {
                                             match m {
                                                 Ok(mm) => {
-                                            match m.unwrap() {
+                                            match mm.unwrap() {
                                                 SessionedChannel::Payload(payload) => {
                                                     (payload, true)
                                                 }
