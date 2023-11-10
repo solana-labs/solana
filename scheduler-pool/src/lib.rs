@@ -906,6 +906,8 @@ impl ThreadManager {
                         .spawn({
                             let blocked_transaction_receiver = blocked_transaction_receiver.clone();
                             let idle_transaction_receiver = idle_transaction_receiver.clone();
+                            let handled_transaction_sender = handled_transaction_sender.clone();
+
                             move || {
                                 select_biased! {
                                     recv(blocked_transaction_receiver.clone()) -> _ => {},
