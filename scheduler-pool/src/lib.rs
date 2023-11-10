@@ -921,6 +921,7 @@ impl ThreadManager {
                 .name("aaaa".to_owned())
                 .spawn({
                     let mut bank = self.context.as_ref().unwrap().bank().clone();
+                    let mut blocked_transaction_sender = blocked_transaction_sender.clone();
                     let mut blocked_transaction_receiver = blocked_transaction_receiver.clone();
                     move || {
                     let never = &never();
