@@ -614,7 +614,7 @@ async fn main() {
             }
         }
 
-        if client_config.num_clients > 0 && client_config.client_to_run == "bench-tps".to_string() {
+        if client_config.num_clients > 0 && client_config.client_to_run == "bench-tps" {
             match genesis.create_client_accounts(
                 client_config.num_clients,
                 DEFAULT_CLIENT_LAMPORTS_PER_SIGNATURE,
