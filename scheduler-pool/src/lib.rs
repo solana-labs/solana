@@ -898,7 +898,9 @@ impl ThreadManager {
             .map(|thx| {
                 std::thread::Builder::new()
                     .name("aaaa".to_owned())
-                    .spawn(move || {})
+                    .spawn(move || {
+                        select_biased!
+                    })
                     .unwrap()
             })
             .collect();
