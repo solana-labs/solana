@@ -894,8 +894,8 @@ impl ThreadManager {
 
     fn start_threads(&mut self) {
         let (_transaction_sender, mut transaction_receiver) = unbounded::<SessionedChannel<Box<Task>>>();
-        let (blocked_transaction_sender, blocked_transaction_receiver) = unbounded::<i32>();
-        let (idle_transaction_sender, idle_transaction_receiver) = unbounded::<i32>();
+        let (blocked_transaction_sender, blocked_transaction_receiver) = unbounded::<Box<Task>>();
+        let (idle_transaction_sender, idle_transaction_receiver) = unbounded::<Box<Task>>();
         let (handled_blocked_transaction_sender, handled_blocked_transaction_receiver) =
             unbounded::<i32>();
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
