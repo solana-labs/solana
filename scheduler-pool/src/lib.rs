@@ -37,6 +37,7 @@ use {
         thread::JoinHandle,
     },
 };
+use std::sync::atomic::AtomicBool;
 
 type UniqueWeight = u128;
 type CU = u64;
