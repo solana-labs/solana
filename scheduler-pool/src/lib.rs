@@ -900,9 +900,9 @@ impl ThreadManager {
             .name("aaaa".to_owned())
             .spawn(move || {
                 select_biased! {
-                    recv(handled_blocked_transaction_receiver) -> m => m,
-                    recv(transaction_receiver) -> m => m,
-                    recv(handled_idle_transaction_receiver) -> m => m,
+                    recv(handled_blocked_transaction_receiver) -> m => {m;},
+                    recv(transaction_receiver) -> m => {m;},
+                    recv(handled_idle_transaction_receiver) -> m => {m; },
                 };
                 ()
             })
