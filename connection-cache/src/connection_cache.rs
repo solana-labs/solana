@@ -38,7 +38,9 @@ pub trait ConnectionManager: Send + Sync + 'static {
 
     fn new_connection_pool(&self) -> Self::ConnectionPool;
     fn new_connection_config(&self) -> Self::NewConnectionConfig;
-    fn update_key(&mut self, _key: &Keypair) {}
+    fn update_key(&mut self, _key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
+        Ok(())
+    }
 }
 
 pub struct ConnectionCache<
@@ -138,11 +140,11 @@ where
             .unwrap()
     }
 
-    pub fn update_key(&self, key: &Keypair) {
+    pub fn update_key(&self, key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
         let mut map = self.map.write().unwrap();
         map.clear();
         let mut connection_manager = self.connection_manager.write().unwrap();
-        connection_manager.update_key(key);
+        connection_manager.update_key(key)
     }
     /// Create a lazy connection object under the exclusive lock of the cache map if there is not
     /// enough used connections in the connection pool for the specified address.

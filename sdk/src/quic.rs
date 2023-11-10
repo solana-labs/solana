@@ -38,5 +38,5 @@ pub const QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO: u64 = 128;
 pub const QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO: u64 = 512;
 
 pub trait NotifyKeyUpdate {
-    fn update_key(&self, key: &Keypair);
+    fn update_key(&self, key: &Keypair) -> Result<(), Box<dyn std::error::Error>>;
 }

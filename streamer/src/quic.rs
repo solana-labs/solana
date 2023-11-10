@@ -119,9 +119,10 @@ pub struct EndpointKeyUpdater {
 }
 
 impl NotifyKeyUpdate for EndpointKeyUpdater {
-    fn update_key(&self, key: &Keypair) {
-        let (config, _) = configure_server(key, self.gossip_host).unwrap();
-        self.endpoint.set_server_config(Some(config))
+    fn update_key(&self, key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
+        let (config, _) = configure_server(key, self.gossip_host)?;
+        self.endpoint.set_server_config(Some(config));
+        Ok(())
     }
 }
 
