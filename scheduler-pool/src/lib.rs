@@ -968,7 +968,7 @@ impl ThreadManager {
 
                             move || {
                                 loop {
-                                    let (m, was_blocked) = select_biased! {
+                                    let (mut m, was_blocked) = select_biased! {
                                         recv(blocked_transaction_receiver) -> m => {
                                             match m {
                                                 Ok(mm) => {
