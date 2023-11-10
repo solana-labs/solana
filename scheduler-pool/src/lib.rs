@@ -926,7 +926,7 @@ impl ThreadManager {
                             select_biased! {
                                 recv(handled_blocked_transaction_receiver) -> m => {
                                     let m = m.unwrap();
-                                    Self::receive_handled_transaction(&mut state_machine, m);
+                                    Self::receive_handled_transaction(&mut state_machine, &mut m);
                                 },
                                 recv(if !will_end_session { &transaction_receiver } else { never }) -> m => {
                                     match m {
@@ -951,7 +951,7 @@ impl ThreadManager {
                                 },
                                 recv(handled_idle_transaction_receiver) -> m => {
                                     let m = m.unwrap();
-                                    Self::receive_handled_transaction(&mut state_machine, m);
+                                    Self::receive_handled_transaction(&mut state_machine, &mut m);
                                 },
                             };
                         }
