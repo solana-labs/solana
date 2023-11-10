@@ -859,8 +859,8 @@ type ChannelPair<T> = (
     crossbeam_channel::Sender<T>,
 );
 
-trait WithChannelPair: Send + Sync {
-    fn unwrap_channel_pair(&mut self) -> usize;
+trait WithChannelPair<T>: Send + Sync {
+    fn unwrap_channel_pair(&mut self) -> ChannelPair<T>;
 }
 
 enum SessionedChannel {
