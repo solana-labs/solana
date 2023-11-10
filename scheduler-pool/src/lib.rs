@@ -893,14 +893,16 @@ impl ThreadManager {
         let (_transaction_sender, transaction_receiver) = unbounded::<i32>();
         let (blocked_transaction_sender, blocked_transaction_receiver) = unbounded::<i32>();
         let (idle_transaction_sender, idle_transaction_receiver) = unbounded::<i32>();
-        let (handled_transaction_sender, handled_transaction_receiver) = unbounded::<i32>();
+        let (handled_blocked_transaction_sender, handled_blocked_transaction_receiver) = unbounded::<i32>();
+        let (handled_idle_transaction_sender, handled_idle_transaction_receiver) = unbounded::<i32>();
 
         self.scheduler_thread = Some(std::thread::Builder::new()
             .name("aaaa".to_owned())
             .spawn(move || {
                 select_biased! {
-                    recv(handled_transaction_receiver) -> m => m,
+                    recv(handled_blocked_transaction_receiver) -> m => m,
                     recv(transaction_receiver) -> m => m,
+                    recv(handled_idle_transaction_receiver) -> m => m,
                 };
                 ()
             })
@@ -914,12 +916,13 @@ impl ThreadManager {
                         .spawn({
                             let blocked_transaction_receiver = blocked_transaction_receiver.clone();
                             let idle_transaction_receiver = idle_transaction_receiver.clone();
-                            let handled_transaction_sender = handled_transaction_sender.clone();
+                            let handled_blocked_transaction_sender = handled_blocked_transaction_sender.clone();
+                            let handled_idle_transaction_sender = handled_idle_transaction_sender.clone();
 
                             move || {
-                                let msg = select_biased! {
-                                    recv(blocked_transaction_receiver) -> m => m,
-                                    recv(idle_transaction_receiver) -> m => m,
+                                let (msg, handled_transaction_sender) = select_biased! {
+                                    recv(blocked_transaction_receiver) -> m => (m, &handled_blocked_transaction_sender),
+                                    recv(idle_transaction_receiver) -> m => (m, &handled_idle_transaction_sender),
                                 };
                                 handled_transaction_sender.send(3).unwrap();
                             }
