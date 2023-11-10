@@ -1006,7 +1006,7 @@ impl ThreadManager {
                                         },
                                     };
 
-                                    Self::receive_scheduled_transaction(&bank, &amut m);
+                                    Self::receive_scheduled_transaction(&bank, &mut m);
                                     if was_blocked {
                                         handled_blocked_transaction_sender.send(m).unwrap();
                                     } else {
