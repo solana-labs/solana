@@ -914,9 +914,9 @@ impl ThreadManager {
                     let mut will_end_thread = false;
                     let mut scheduler_is_empty = false;
                     let mut next_result_sender = result_sender.clone();
-                    let mut result_with_timings = (Ok(()), Default::default());
 
-                    while will_end_thread {
+                    while !will_end_thread {
+                        let mut result_with_timings = (Ok(()), Default::default());
                         while !scheduler_is_empty || !will_end_session {
                             select_biased! {
                                 recv(handled_blocked_transaction_receiver) -> m => {m;},
