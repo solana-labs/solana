@@ -38,6 +38,7 @@ use {
         thread::JoinHandle,
     },
 };
+use crossbeam_channel::never;
 
 type UniqueWeight = u128;
 type CU = u64;
