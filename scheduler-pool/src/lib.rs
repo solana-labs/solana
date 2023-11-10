@@ -923,7 +923,7 @@ impl ThreadManager {
                                             SessionedChannel::NextContext(next_context) => {
                                                 bank = next_context.bank().clone();
                                             }
-                                            SessionedChannel::NextChannel(mut next_receiver_box) => {
+                                            SessionedChannel::NextSession(mut next_receiver_box) => {
                                             }
                                         };
                                         Self::receive_new_transaction(&mut state_machine, mm);
