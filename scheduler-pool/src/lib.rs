@@ -835,12 +835,20 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             thread_manager: Mutex::default(),
             _phantom: PhantomData,
         };
-        new.thread_manager.ensure_threads();
+        new.ensure_threads();
         new
+    }
+
+    fn ensure_threads(&self) -> Option<usize> {
+        let r = self.thread_manager.read().unwrap();
+        r.is_active().then_some(Some(r))
     }
 }
 
 impl ThreadManager {
+    fn is_active(&self) -> bool {
+    }
+
     fn ensure_threads(&self) {}
 
     fn stop_threads(&self) {}
