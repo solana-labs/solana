@@ -964,10 +964,15 @@ impl ThreadManager {
 
                             move || {
                                 let (msg, handled_transaction_sender) = select_biased! {
-                                    recv(blocked_transaction_receiver) -> m => (m, &handled_blocked_transaction_sender),
-                                    recv(idle_transaction_receiver) -> m => (m, &handled_idle_transaction_sender),
+                                    recv(blocked_transaction_receiver) -> m => {
+                                        m;
+                                        handled_blocked_transaction_sender.send(3).unwrap();
+                                    },
+                                    recv(idle_transaction_receiver) -> m => {
+                                        m;
+                                        handled_idle_transaction_sender.send(3).unwrap();
+                                    },
                                 };
-                                handled_transaction_sender.send(3).unwrap();
                             }
                         })
                         .unwrap()
