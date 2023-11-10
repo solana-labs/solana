@@ -1220,6 +1220,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> InstalledScheduler<SEA>
     }
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
+        let r = self.ensure_threads();
         let mut executing_queue_count = 0_usize;
         let mut provisioning_tracker_count = 0;
         let mut sequence_time = 0;
