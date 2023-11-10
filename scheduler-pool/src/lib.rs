@@ -37,7 +37,7 @@ use {
         thread::JoinHandle,
     },
 };
-use std::sync::atomic::AtomicBool;
+use std::sync::RwLockReadGuard;
 
 type UniqueWeight = u128;
 type CU = u64;
