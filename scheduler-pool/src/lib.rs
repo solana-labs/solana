@@ -903,12 +903,13 @@ impl ThreadManager {
             std::thread::Builder::new()
                 .name("aaaa".to_owned())
                 .spawn(move || {
-                    select_biased! {
-                        recv(handled_blocked_transaction_receiver) -> m => {m;},
-                        recv(if true { transaction_receiver } else { never() }) -> m => {m;},
-                        recv(handled_idle_transaction_receiver) -> m => {m; },
-                    };
-                    ()
+                    loop {
+                        select_biased! {
+                            recv(handled_blocked_transaction_receiver) -> m => {m;},
+                            recv(if true { transaction_receiver } else { never() }) -> m => {m;},
+                            recv(handled_idle_transaction_receiver) -> m => {m; },
+                        };
+                    }
                 })
                 .unwrap(),
         );
