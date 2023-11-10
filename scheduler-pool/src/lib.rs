@@ -875,7 +875,6 @@ enum SessionedChannel<T> {
     Payload((SanitizedTransaction, usize)),
     NextContext(SchedulingContext),
     NextSession(Box<dyn WithChannelPair<T>>),
-    Stop,
 }
 
 impl ThreadManager {
