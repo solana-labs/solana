@@ -906,7 +906,7 @@ impl ThreadManager {
             std::thread::Builder::new()
                 .name("aaaa".to_owned())
                 .spawn({ 
-                    let mut bank = self.context.as_ref().unwrap().bank();
+                    let mut bank = self.context.as_ref().unwrap().bank().clone();
                     move || {
                     let never = &never();
                     let mut state_machine = SchedulingStateMachine;
