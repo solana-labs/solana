@@ -803,9 +803,15 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     handler: TH,
     address_book: Mutex<AddressBook>,
     preloader: Arc<Preloader>,
-    scheduler_thread: Option<JoinHandle<()>>, // group under Mutex<ThreadManager>?
-    handler_threads: Vec<JoinHandle<()>>,
+    thread_manager: Mutex<ThreadManager>,
     _phantom: PhantomData<SEA>,
+}
+
+#[derive(Default)]
+struct ThreadManager {
+    is_active: AtomicBool,
+    scheduler_thread: Option<JoinHandle<()>>,
+    handler_threads: Vec<JoinHandle<()>>,
 }
 
 impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
@@ -825,14 +831,15 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             handler,
             address_book: Mutex::new(address_book),
             preloader,
-            scheduler_thread: None,
-            handler_threads: vec![],
+            thread_manager: Mutex::default(),
             _phantom: PhantomData,
         };
-        new.ensure_threads();
+        new.thread_manager.ensure_threads();
         new
     }
+}
 
+impl ThreadManager {
     fn ensure_threads(&self) {}
 
     fn stop_threads(&self) {}
