@@ -900,6 +900,7 @@ impl ThreadManager {
             unbounded::<i32>();
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
             unbounded::<i32>();
+        let (result_sender, result_receiver) = unbounded::<i32>();
 
         self.scheduler_thread = Some(
             std::thread::Builder::new()
