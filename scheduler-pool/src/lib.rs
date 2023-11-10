@@ -9,7 +9,7 @@
 //! helper fun called `execute_batch()`.
 
 use {
-    crossbeam_channel::{select_biased, unbounded},
+    crossbeam_channel::{never, select_biased, unbounded},
     log::*,
     rand::{thread_rng, Rng},
     solana_ledger::blockstore_processor::{
@@ -38,7 +38,6 @@ use {
         thread::JoinHandle,
     },
 };
-use crossbeam_channel::never;
 
 type UniqueWeight = u128;
 type CU = u64;
@@ -889,13 +888,15 @@ impl ThreadManager {
         self.scheduler_thread.is_some()
     }
 
-    fn receive_new_transaction(state_machine: &mut SchedulingStateMachine, msg: Box<Task>) {
-    }
+    fn receive_new_transaction(state_machine: &mut SchedulingStateMachine, msg: Box<Task>) {}
 
     fn start_threads(&mut self) {
-        let (_transaction_sender, mut transaction_receiver) = unbounded::<SessionedChannel<Box<Task>>>();
-        let (blocked_transaction_sender, blocked_transaction_receiver) = unbounded::<SessionedChannel<Box<ExecutionEnvironment>>>();
-        let (idle_transaction_sender, idle_transaction_receiver) = unbounded::<Box<ExecutionEnvironment>>();
+        let (_transaction_sender, mut transaction_receiver) =
+            unbounded::<SessionedChannel<Box<Task>>>();
+        let (blocked_transaction_sender, blocked_transaction_receiver) =
+            unbounded::<SessionedChannel<Box<ExecutionEnvironment>>>();
+        let (idle_transaction_sender, idle_transaction_receiver) =
+            unbounded::<Box<ExecutionEnvironment>>();
         let (handled_blocked_transaction_sender, handled_blocked_transaction_receiver) =
             unbounded::<i32>();
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
@@ -905,7 +906,7 @@ impl ThreadManager {
         self.scheduler_thread = Some(
             std::thread::Builder::new()
                 .name("aaaa".to_owned())
-                .spawn({ 
+                .spawn({
                     let mut bank = self.context.as_ref().unwrap().bank().clone();
                     move || {
                     let never = &never();
@@ -920,7 +921,7 @@ impl ThreadManager {
                         while !scheduler_is_empty || !will_end_session {
                             select_biased! {
                                 recv(handled_blocked_transaction_receiver) -> m => {m;},
-                                recv(if !will_end_session { &transaction_receiver } else { never }) -> m => { 
+                                recv(if !will_end_session { &transaction_receiver } else { never }) -> m => {
                                     match m {
                                         Ok(mm) => {
                                             match mm {
