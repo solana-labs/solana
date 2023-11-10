@@ -810,7 +810,6 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
 
 #[derive(Default, Debug)]
 struct ThreadManager {
-    is_active: bool,
     scheduler_thread: Option<JoinHandle<()>>,
     handler_threads: Vec<JoinHandle<()>>,
 }
@@ -857,7 +856,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
 
 impl ThreadManager {
     fn is_active(&self) -> bool {
-        self.is_active
+        self.scheduler_thread.is_some()
     }
 
     fn start_threads(&mut self) {}
