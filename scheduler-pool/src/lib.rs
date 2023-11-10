@@ -898,15 +898,16 @@ impl ThreadManager {
         let (idle_transaction_sender, idle_transaction_receiver) = unbounded::<i32>();
         self.handler_threads = (0..10)
             .map({
-                let idle_transaction_receiver = idle_transaction_receiver.clone();
                 |thx| {
                 std::thread::Builder::new()
                     .name("aaaa".to_owned())
-                    .spawn(move || {
+                    .spawn({
+                        let idle_transaction_receiver = idle_transaction_receiver.clone();
+                        move || {
                         select_biased!{
                             recv(idle_transaction_receiver.clone()) -> _ => {},
                         }
-                    })
+                    }})
                     .unwrap()
             }})
             .collect();
