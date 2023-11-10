@@ -2150,6 +2150,72 @@ impl fmt::Display for CliProgram {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CliProgramV4 {
+    pub program_id: String,
+    pub owner: String,
+    pub authority: String,
+    pub last_deploy_slot: u64,
+    pub status: String,
+    pub data_len: usize,
+}
+impl QuietDisplay for CliProgramV4 {}
+impl VerboseDisplay for CliProgramV4 {}
+impl fmt::Display for CliProgramV4 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f)?;
+        writeln_name_value(f, "Program Id:", &self.program_id)?;
+        writeln_name_value(f, "Owner:", &self.owner)?;
+        writeln_name_value(f, "Authority:", &self.authority)?;
+        writeln_name_value(
+            f,
+            "Last Deployed In Slot:",
+            &self.last_deploy_slot.to_string(),
+        )?;
+        writeln_name_value(f, "Status:", &self.status)?;
+        writeln_name_value(
+            f,
+            "Data Length:",
+            &format!("{:?} ({:#x?}) bytes", self.data_len, self.data_len),
+        )?;
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliProgramsV4 {
+    pub programs: Vec<CliProgramV4>,
+}
+impl QuietDisplay for CliProgramsV4 {}
+impl VerboseDisplay for CliProgramsV4 {}
+impl fmt::Display for CliProgramsV4 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f)?;
+        writeln!(
+            f,
+            "{}",
+            style(format!(
+                "{:<44} | {:<9} | {:<44} | {:<10}",
+                "Program Id", "Slot", "Authority", "Status"
+            ))
+            .bold()
+        )?;
+        for program in self.programs.iter() {
+            writeln!(
+                f,
+                "{}",
+                &format!(
+                    "{:<44} | {:<9} | {:<44} | {:<10}",
+                    program.program_id, program.last_deploy_slot, program.authority, program.status,
+                )
+            )?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CliUpgradeableProgram {
     pub program_id: String,
     pub owner: String,

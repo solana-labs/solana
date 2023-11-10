@@ -10,6 +10,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+aquamarine = { workspace = true }
 arrayref = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }
@@ -32,6 +33,7 @@ log = { workspace = true }
 lru = { workspace = true }
 lz4 = { workspace = true }
 memmap2 = { workspace = true }
+mockall = { workspace = true }
 modular-bitfield = { workspace = true }
 num-derive = { workspace = true }
 num-traits = { workspace = true }

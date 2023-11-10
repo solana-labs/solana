@@ -854,8 +854,7 @@ fn process_status(
     let mut features = vec![];
     for feature_ids in feature_ids.chunks(MAX_MULTIPLE_ACCOUNTS) {
         let mut feature_chunk = rpc_client
-            .get_multiple_accounts(feature_ids)
-            .unwrap_or_default()
+            .get_multiple_accounts(feature_ids)?
             .into_iter()
             .zip(feature_ids)
             .map(|(account, feature_id)| {

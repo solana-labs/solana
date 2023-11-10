@@ -40,7 +40,7 @@ use {
         marker::PhantomData,
         path::Path,
         sync::{
-            atomic::{AtomicU64, Ordering},
+            atomic::{AtomicBool, AtomicU64, Ordering},
             Arc,
         },
     },
@@ -348,7 +348,10 @@ pub mod columns {
 }
 
 #[derive(Default, Clone, Debug)]
-struct OldestSlot(Arc<AtomicU64>);
+struct OldestSlot {
+    slot: Arc<AtomicU64>,
+    clean_slot_0: Arc<AtomicBool>,
+}
 
 impl OldestSlot {
     pub fn set(&self, oldest_slot: Slot) {
@@ -356,7 +359,7 @@ impl OldestSlot {
         // also, compaction_filters are created via its factories, creating short-lived copies of
         // this atomic value for the single job of compaction. So, Relaxed store can be justified
         // in total
-        self.0.store(oldest_slot, Ordering::Relaxed);
+        self.slot.store(oldest_slot, Ordering::Relaxed);
     }
 
     pub fn get(&self) -> Slot {
@@ -365,7 +368,15 @@ impl OldestSlot {
         // requirement at the moment
         // also eventual propagation (very Relaxed) load is Ok, because compaction by nature doesn't
         // require strictly synchronized semantics in this regard
-        self.0.load(Ordering::Relaxed)
+        self.slot.load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn set_clean_slot_0(&self, clean_slot_0: bool) {
+        self.clean_slot_0.store(clean_slot_0, Ordering::Relaxed);
+    }
+
+    pub(crate) fn get_clean_slot_0(&self) -> bool {
+        self.clean_slot_0.load(Ordering::Relaxed)
     }
 }
 
@@ -1427,6 +1438,10 @@ impl Database {
         self.backend.oldest_slot.set(oldest_slot);
     }
 
+    pub(crate) fn set_clean_slot_0(&self, clean_slot_0: bool) {
+        self.backend.oldest_slot.set_clean_slot_0(clean_slot_0);
+    }
+
     pub fn live_files_metadata(&self) -> Result<Vec<LiveFile>> {
         self.backend.live_files_metadata()
     }
@@ -1835,6 +1850,10 @@ impl<'a> WriteBatch<'a> {
 struct PurgedSlotFilter<C: Column + ColumnName> {
     /// The oldest slot to keep; any slot < oldest_slot will be removed
     oldest_slot: Slot,
+    /// Whether to preserve keys that return slot 0, even when oldest_slot > 0.
+    // This is used to delete old column data that wasn't keyed with a Slot, and so always returns
+    // `C::slot() == 0`
+    clean_slot_0: bool,
     name: CString,
     _phantom: PhantomData<C>,
 }
@@ -1844,7 +1863,7 @@ impl<C: Column + ColumnName> CompactionFilter for PurgedSlotFilter<C> {
         use rocksdb::CompactionDecision::*;
 
         let slot_in_key = C::slot(C::index(key));
-        if slot_in_key >= self.oldest_slot {
+        if slot_in_key >= self.oldest_slot || (slot_in_key == 0 && !self.clean_slot_0) {
             Keep
         } else {
             Remove
@@ -1867,8 +1886,10 @@ impl<C: Column + ColumnName> CompactionFilterFactory for PurgedSlotFilterFactory
 
     fn create(&mut self, _context: CompactionFilterContext) -> Self::Filter {
         let copied_oldest_slot = self.oldest_slot.get();
+        let copied_clean_slot_0 = self.oldest_slot.get_clean_slot_0();
         PurgedSlotFilter::<C> {
             oldest_slot: copied_oldest_slot,
+            clean_slot_0: copied_clean_slot_0,
             name: CString::new(format!(
                 "purged_slot_filter({}, {:?})",
                 C::NAME,
@@ -2113,6 +2134,7 @@ pub mod tests {
             is_manual_compaction: true,
         };
         let oldest_slot = OldestSlot::default();
+        oldest_slot.set_clean_slot_0(true);
 
         let mut factory = PurgedSlotFilterFactory::<ShredData> {
             oldest_slot: oldest_slot.clone(),

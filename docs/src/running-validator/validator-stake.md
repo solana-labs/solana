@@ -3,7 +3,7 @@ title: Staking
 ---
 
 **By default your validator will have no stake.** This means it will be
-ineligible to become leader.
+ineligible to become leader, and unable to land votes.
 
 ## Monitoring Catch Up
 
@@ -55,8 +55,25 @@ but only one re-delegation is permitted per epoch:
 solana delegate-stake ~/validator-stake-keypair.json ~/some-other-vote-account-keypair.json
 ```
 
-Assuming the node is voting, now you're up and running and generating validator
-rewards. Rewards are paid automatically on epoch boundaries.
+## Validator Stake Warm-up
+
+To combat various attacks on consensus, new stake delegations are subject to
+a [warm-up](/staking/stake-accounts#delegation-warmup-and-cooldown)
+period.
+
+Monitor a validator's stake during warmup by:
+
+- View your vote account:`solana vote-account ~/vote-account-keypair.json` This displays the current state of all the votes the validator has submitted to the network.
+- View your stake account, the delegation preference and details of your stake:`solana stake-account ~/validator-stake-keypair.json`
+- `solana validators` displays the current active stake of all validators, including yours
+- `solana stake-history` shows the history of stake warming up and cooling down over recent epochs
+- Look for log messages on your validator indicating your next leader slot: `[2019-09-27T20:16:00.319721164Z INFO solana_core::replay_stage] <VALIDATOR_IDENTITY_PUBKEY> voted and reset PoH at tick height ####. My next leader slot is ####`
+- Once your stake is warmed up, you will see a stake balance listed for your validator by running `solana validators`
+
+## Validator Rewards
+
+Once your stake is warmed up, and assuming the node is voting, you will now be
+generating validator rewards. Rewards are paid automatically on epoch boundaries.
 
 The rewards lamports earned are split between your stake account and the vote
 account according to the commission rate set in the vote account. Rewards can
@@ -75,21 +92,6 @@ fluctuate based on transaction load. You can determine the current fee via the
 before submitting a transaction.
 
 Learn more about [transaction fees here](../implemented-proposals/transaction-fees.md).
-
-## Validator Stake Warm-up
-
-To combat various attacks on consensus, new stake delegations are subject to
-a [warm-up](/staking/stake-accounts#delegation-warmup-and-cooldown)
-period.
-
-Monitor a validator's stake during warmup by:
-
-- View your vote account:`solana vote-account ~/vote-account-keypair.json` This displays the current state of all the votes the validator has submitted to the network.
-- View your stake account, the delegation preference and details of your stake:`solana stake-account ~/validator-stake-keypair.json`
-- `solana validators` displays the current active stake of all validators, including yours
-- `solana stake-history` shows the history of stake warming up and cooling down over recent epochs
-- Look for log messages on your validator indicating your next leader slot: `[2019-09-27T20:16:00.319721164Z INFO solana_core::replay_stage] <VALIDATOR_IDENTITY_PUBKEY> voted and reset PoH at tick height ####. My next leader slot is ####`
-- Once your stake is warmed up, you will see a stake balance listed for your validator by running `solana validators`
 
 ## Monitor Your Staked Validator
 

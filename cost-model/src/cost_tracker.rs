@@ -713,7 +713,7 @@ mod tests {
         }
 
         // case 3: add tx writes to [acct1, acct2], acct2 exceeds limit, should failed atomically,
-        // we shoudl still have:
+        // we should still have:
         // | acct1 | $cost |
         // | acct2 | $cost * 2 |
         // | acct3 | $cost |

@@ -59,7 +59,7 @@ use {
     solana_transaction_status::{
         ConfirmedTransactionStatusWithSignature, ConfirmedTransactionWithStatusMeta, Rewards,
         TransactionStatusMeta, TransactionWithStatusMeta, VersionedConfirmedBlock,
-        VersionedTransactionWithStatusMeta,
+        VersionedConfirmedBlockWithEntries, VersionedTransactionWithStatusMeta,
     },
     std::{
         borrow::Cow,
@@ -1962,10 +1962,25 @@ impl Blockstore {
         }
     }
 
-    pub fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
-        datapoint_info!("blockstore-rpc-api", ("method", "get_block_time", String));
+    fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
         let _lock = self.check_lowest_cleanup_slot(slot)?;
         self.blocktime_cf.get(slot)
+    }
+
+    pub fn get_rooted_block_time(&self, slot: Slot) -> Result<UnixTimestamp> {
+        datapoint_info!(
+            "blockstore-rpc-api",
+            ("method", "get_rooted_block_time", String)
+        );
+        let _lock = self.check_lowest_cleanup_slot(slot)?;
+
+        if self.is_root(slot) {
+            return self
+                .blocktime_cf
+                .get(slot)?
+                .ok_or(BlockstoreError::SlotUnavailable);
+        }
+        Err(BlockstoreError::SlotNotRooted)
     }
 
     pub fn cache_block_time(&self, slot: Slot, timestamp: UnixTimestamp) -> Result<()> {
@@ -2016,6 +2031,33 @@ impl Blockstore {
         slot: Slot,
         require_previous_blockhash: bool,
     ) -> Result<VersionedConfirmedBlock> {
+        self.get_complete_block_with_entries(slot, require_previous_blockhash, false)
+            .map(|result| result.block)
+    }
+
+    pub fn get_rooted_block_with_entries(
+        &self,
+        slot: Slot,
+        require_previous_blockhash: bool,
+    ) -> Result<VersionedConfirmedBlockWithEntries> {
+        datapoint_info!(
+            "blockstore-rpc-api",
+            ("method", "get_rooted_block_with_entries", String)
+        );
+        let _lock = self.check_lowest_cleanup_slot(slot)?;
+
+        if self.is_root(slot) {
+            return self.get_complete_block_with_entries(slot, require_previous_blockhash, true);
+        }
+        Err(BlockstoreError::SlotNotRooted)
+    }
+
+    fn get_complete_block_with_entries(
+        &self,
+        slot: Slot,
+        require_previous_blockhash: bool,
+        populate_entries: bool,
+    ) -> Result<VersionedConfirmedBlockWithEntries> {
         let Some(slot_meta) = self.meta_cf.get(slot)? else {
             info!("SlotMeta not found for slot {}", slot);
             return Err(BlockstoreError::SlotUnavailable);
@@ -2027,9 +2069,26 @@ impl Blockstore {
                     .last()
                     .map(|entry| entry.hash)
                     .unwrap_or_else(|| panic!("Rooted slot {slot:?} must have blockhash"));
+                let mut starting_transaction_index = 0;
+                let mut entries = if populate_entries {
+                    Vec::with_capacity(slot_entries.len())
+                } else {
+                    Vec::new()
+                };
                 let slot_transaction_iterator = slot_entries
                     .into_iter()
-                    .flat_map(|entry| entry.transactions)
+                    .flat_map(|entry| {
+                        if populate_entries {
+                            entries.push(solana_transaction_status::EntrySummary {
+                                num_hashes: entry.num_hashes,
+                                hash: entry.hash,
+                                num_transactions: entry.transactions.len() as u64,
+                                starting_transaction_index,
+                            });
+                            starting_transaction_index += entry.transactions.len();
+                        }
+                        entry.transactions
+                    })
                     .map(|transaction| {
                         if let Err(err) = transaction.sanitize() {
                             warn!(
@@ -2081,7 +2140,7 @@ impl Blockstore {
                     block_time,
                     block_height,
                 };
-                return Ok(block);
+                return Ok(VersionedConfirmedBlockWithEntries { block, entries });
             }
         }
         Err(BlockstoreError::SlotUnavailable)
@@ -2109,6 +2168,17 @@ impl Blockstore {
         if !self.is_primary_access() {
             return Ok(());
         }
+
+        // Initialize TransactionStatusIndexMeta if they are not present already
+        if self.transaction_status_index_cf.get(0)?.is_none() {
+            self.transaction_status_index_cf
+                .put(0, &TransactionStatusIndexMeta::default())?;
+        }
+        if self.transaction_status_index_cf.get(1)?.is_none() {
+            self.transaction_status_index_cf
+                .put(1, &TransactionStatusIndexMeta::default())?;
+        }
+
         // If present, delete dummy entries inserted by old software
         // https://github.com/solana-labs/solana/blob/bc2b372/ledger/src/blockstore.rs#L2130-L2137
         let transaction_status_dummy_key = cf::TransactionStatus::as_index(2);
@@ -2152,8 +2222,10 @@ impl Blockstore {
                 highest_primary_index_slot = Some(meta.max_slot);
             }
         }
-        if highest_primary_index_slot.is_some() {
+        if highest_primary_index_slot.is_some_and(|slot| slot != 0) {
             self.set_highest_primary_index_slot(highest_primary_index_slot);
+        } else {
+            self.db.set_clean_slot_0(true);
         }
         Ok(())
     }
@@ -2166,6 +2238,9 @@ impl Blockstore {
                 self.transaction_status_index_cf.delete(0)?;
                 self.transaction_status_index_cf.delete(1)?;
             }
+        }
+        if w_highest_primary_index_slot.is_none() {
+            self.db.set_clean_slot_0(true);
         }
         Ok(())
     }
@@ -3179,11 +3254,6 @@ impl Blockstore {
         }
         *last_root = cmp::max(max_new_rooted_slot, *last_root);
         Ok(())
-    }
-
-    /// For tests
-    pub fn set_last_root(&mut self, root: Slot) {
-        *self.last_root.write().unwrap() = root;
     }
 
     pub fn mark_slots_as_if_rooted_normally_at_startup(
@@ -7790,7 +7860,7 @@ pub mod tests {
         assert_eq!(counter, 1);
     }
 
-    fn do_test_lowest_cleanup_slot_and_special_cfs(simulate_ledger_cleanup_service: bool) {
+    fn do_test_lowest_cleanup_slot_and_special_cfs(simulate_blockstore_cleanup_service: bool) {
         solana_logger::setup();
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -7898,13 +7968,13 @@ pub mod tests {
         assert_eq!(are_missing, (false, false));
         assert_existing_always();
 
-        if simulate_ledger_cleanup_service {
+        if simulate_blockstore_cleanup_service {
             *blockstore.lowest_cleanup_slot.write().unwrap() = lowest_cleanup_slot;
             blockstore.purge_slots(0, lowest_cleanup_slot, PurgeType::CompactionFilter);
         }
 
         let are_missing = check_for_missing();
-        if simulate_ledger_cleanup_service {
+        if simulate_blockstore_cleanup_service {
             // ... when either simulation (or both) is effective, we should observe to be missing
             // consistently
             assert_eq!(are_missing, (true, true));
@@ -7916,12 +7986,12 @@ pub mod tests {
     }
 
     #[test]
-    fn test_lowest_cleanup_slot_and_special_cfs_with_ledger_cleanup_service_simulation() {
+    fn test_lowest_cleanup_slot_and_special_cfs_with_blockstore_cleanup_service_simulation() {
         do_test_lowest_cleanup_slot_and_special_cfs(true);
     }
 
     #[test]
-    fn test_lowest_cleanup_slot_and_special_cfs_without_ledger_cleanup_service_simulation() {
+    fn test_lowest_cleanup_slot_and_special_cfs_without_blockstore_cleanup_service_simulation() {
         do_test_lowest_cleanup_slot_and_special_cfs(false);
     }
 

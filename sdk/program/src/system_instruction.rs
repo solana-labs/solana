@@ -1461,7 +1461,7 @@ pub fn create_nonce_account(
 ///
 /// When constructing a transaction that includes an `AdvanceNonceInstruction`
 /// the [`recent_blockhash`] must be treated differently &mdash; instead of
-/// setting it to a recent blockhash, the value of the nonce must be retreived
+/// setting it to a recent blockhash, the value of the nonce must be retrieved
 /// and deserialized from the nonce account, and that value specified as the
 /// "recent blockhash". A nonce account can be deserialized with the
 /// [`solana_rpc_client_nonce_utils::data_from_account`][dfa] function.

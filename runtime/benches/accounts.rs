@@ -11,7 +11,7 @@ use {
         accounts::{AccountAddressFilter, Accounts},
         accounts_db::{
             test_utils::create_test_accounts, AccountShrinkThreshold,
-            VerifyAccountsHashAndLamportsConfig, INCLUDE_SLOT_IN_HASH_TESTS,
+            VerifyAccountsHashAndLamportsConfig,
         },
         accounts_index::{AccountSecondaryIndexes, ScanConfig},
         ancestors::Ancestors,
@@ -42,7 +42,7 @@ fn deposit_many(bank: &Bank, pubkeys: &mut Vec<Pubkey>, num: usize) -> Result<()
             AccountSharedData::new((t + 1) as u64, 0, AccountSharedData::default().owner());
         pubkeys.push(pubkey);
         assert!(bank.get_account(&pubkey).is_none());
-        bank.deposit(&pubkey, (t + 1) as u64)?;
+        test_utils::deposit(bank, &pubkey, (t + 1) as u64)?;
         assert_eq!(bank.get_account(&pubkey).unwrap(), account);
     }
     Ok(())
@@ -80,7 +80,7 @@ fn test_accounts_squash(bencher: &mut Bencher) {
             &Pubkey::default(),
             slot,
         ));
-        next_bank.deposit(&pubkeys[0], 1).unwrap();
+        test_utils::deposit(&next_bank, &pubkeys[0], 1).unwrap();
         next_bank.squash();
         slot += 1;
         prev_bank = next_bank;
@@ -118,7 +118,6 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
                 ignore_mismatch: false,
                 store_detailed_debug_info: false,
                 use_bg_thread_pool: false,
-                include_slot_in_hash: INCLUDE_SLOT_IN_HASH_TESTS,
             }
         ))
     });

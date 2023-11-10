@@ -1,5 +1,5 @@
 use {
-    crate::transaction_notifier_interface::TransactionNotifierLock,
+    crate::transaction_notifier_interface::TransactionNotifierArc,
     crossbeam_channel::{Receiver, RecvTimeoutError},
     itertools::izip,
     solana_accounts_db::transaction_results::{DurableNonceFee, TransactionExecutionDetails},
@@ -29,7 +29,7 @@ impl TransactionStatusService {
         write_transaction_status_receiver: Receiver<TransactionStatusMessage>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
         enable_rpc_transaction_history: bool,
-        transaction_notifier: Option<TransactionNotifierLock>,
+        transaction_notifier: Option<TransactionNotifierArc>,
         blockstore: Arc<Blockstore>,
         enable_extended_tx_metadata_storage: bool,
         exit: Arc<AtomicBool>,
@@ -60,7 +60,7 @@ impl TransactionStatusService {
         write_transaction_status_receiver: &Receiver<TransactionStatusMessage>,
         max_complete_transaction_status_slot: &Arc<AtomicU64>,
         enable_rpc_transaction_history: bool,
-        transaction_notifier: Option<TransactionNotifierLock>,
+        transaction_notifier: Option<TransactionNotifierArc>,
         blockstore: &Blockstore,
         enable_extended_tx_metadata_storage: bool,
     ) -> Result<(), RecvTimeoutError> {
@@ -169,7 +169,7 @@ impl TransactionStatusService {
                         };
 
                         if let Some(transaction_notifier) = transaction_notifier.as_ref() {
-                            transaction_notifier.write().unwrap().notify_transaction(
+                            transaction_notifier.notify_transaction(
                                 slot,
                                 transaction_index,
                                 transaction.signature(),
@@ -230,7 +230,7 @@ pub(crate) mod tests {
             nonce_info::{NonceFull, NoncePartial},
             rent_debits::RentDebits,
         },
-        solana_ledger::{genesis_utils::create_genesis_config, get_tmp_ledger_path},
+        solana_ledger::{genesis_utils::create_genesis_config, get_tmp_ledger_path_auto_delete},
         solana_runtime::bank::{Bank, TransactionBalancesSet},
         solana_sdk::{
             account_utils::StateMut,
@@ -255,7 +255,7 @@ pub(crate) mod tests {
         std::{
             sync::{
                 atomic::{AtomicBool, Ordering},
-                Arc, RwLock,
+                Arc,
             },
             thread::sleep,
             time::Duration,
@@ -339,9 +339,9 @@ pub(crate) mod tests {
         let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
 
         let (transaction_status_sender, transaction_status_receiver) = unbounded();
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore =
-            Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger");
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path())
+            .expect("Expected to be able to open database ledger");
         let blockstore = Arc::new(blockstore);
 
         let transaction = build_test_transaction_legacy();
@@ -432,7 +432,7 @@ pub(crate) mod tests {
             transaction_indexes: vec![transaction_index],
         };
 
-        let test_notifier = Arc::new(RwLock::new(TestTransactionNotifier::new()));
+        let test_notifier = Arc::new(TestTransactionNotifier::new());
 
         let exit = Arc::new(AtomicBool::new(false));
         let transaction_status_service = TransactionStatusService::new(
@@ -452,16 +452,15 @@ pub(crate) mod tests {
 
         exit.store(true, Ordering::Relaxed);
         transaction_status_service.join().unwrap();
-        let notifier = test_notifier.read().unwrap();
-        assert_eq!(notifier.notifications.len(), 1);
+        assert_eq!(test_notifier.notifications.len(), 1);
         let key = TestNotifierKey {
             slot,
             transaction_index,
             signature,
         };
-        assert!(notifier.notifications.contains_key(&key));
+        assert!(test_notifier.notifications.contains_key(&key));
 
-        let result = &*notifier.notifications.get(&key).unwrap();
+        let result = test_notifier.notifications.get(&key).unwrap();
         assert_eq!(
             expected_transaction.signature(),
             result.transaction.signature()

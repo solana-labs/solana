@@ -990,4 +990,109 @@ pub mod tests {
         }
         assert_eq!(count, max_slot - (oldest_slot - 1));
     }
+
+    #[test]
+    fn test_purge_transaction_memos_compaction_filter() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+        let oldest_slot = 5;
+
+        fn random_signature() -> Signature {
+            use rand::Rng;
+
+            let mut key = [0u8; 64];
+            rand::thread_rng().fill(&mut key[..]);
+            Signature::from(key)
+        }
+
+        // Insert some deprecated TransactionMemos
+        blockstore
+            .transaction_memos_cf
+            .put_deprecated(random_signature(), &"this is a memo".to_string())
+            .unwrap();
+        blockstore
+            .transaction_memos_cf
+            .put_deprecated(random_signature(), &"another memo".to_string())
+            .unwrap();
+        // Set clean_slot_0 to false, since we have deprecated memos
+        blockstore.db.set_clean_slot_0(false);
+
+        // Insert some current TransactionMemos
+        blockstore
+            .transaction_memos_cf
+            .put(
+                (random_signature(), oldest_slot - 1),
+                &"this is a new memo in slot 4".to_string(),
+            )
+            .unwrap();
+        blockstore
+            .transaction_memos_cf
+            .put(
+                (random_signature(), oldest_slot),
+                &"this is a memo in slot 5 ".to_string(),
+            )
+            .unwrap();
+
+        let first_index = {
+            let mut memos_iterator = blockstore
+                .transaction_memos_cf
+                .iterator_cf_raw_key(IteratorMode::Start);
+            memos_iterator.next().unwrap().unwrap().0
+        };
+        let last_index = {
+            let mut memos_iterator = blockstore
+                .transaction_memos_cf
+                .iterator_cf_raw_key(IteratorMode::End);
+            memos_iterator.next().unwrap().unwrap().0
+        };
+
+        // Purge at slot 0 should not affect any memos
+        blockstore.db.set_oldest_slot(0);
+        blockstore
+            .db
+            .compact_range_cf::<cf::TransactionMemos>(&first_index, &last_index);
+        let memos_iterator = blockstore
+            .transaction_memos_cf
+            .iterator_cf_raw_key(IteratorMode::Start);
+        let mut count = 0;
+        for item in memos_iterator {
+            let _item = item.unwrap();
+            count += 1;
+        }
+        assert_eq!(count, 4);
+
+        // Purge at oldest_slot without clean_slot_0 only purges the current memo at slot 4
+        blockstore.db.set_oldest_slot(oldest_slot);
+        blockstore
+            .db
+            .compact_range_cf::<cf::TransactionMemos>(&first_index, &last_index);
+        let memos_iterator = blockstore
+            .transaction_memos_cf
+            .iterator_cf_raw_key(IteratorMode::Start);
+        let mut count = 0;
+        for item in memos_iterator {
+            let (key, _value) = item.unwrap();
+            let slot = <cf::TransactionMemos as Column>::index(&key).1;
+            assert!(slot == 0 || slot >= oldest_slot);
+            count += 1;
+        }
+        assert_eq!(count, 3);
+
+        // Purge at oldest_slot with clean_slot_0 purges deprecated memos
+        blockstore.db.set_clean_slot_0(true);
+        blockstore
+            .db
+            .compact_range_cf::<cf::TransactionMemos>(&first_index, &last_index);
+        let memos_iterator = blockstore
+            .transaction_memos_cf
+            .iterator_cf_raw_key(IteratorMode::Start);
+        let mut count = 0;
+        for item in memos_iterator {
+            let (key, _value) = item.unwrap();
+            let slot = <cf::TransactionMemos as Column>::index(&key).1;
+            assert!(slot >= oldest_slot);
+            count += 1;
+        }
+        assert_eq!(count, 1);
+    }
 }

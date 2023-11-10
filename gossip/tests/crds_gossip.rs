@@ -351,9 +351,7 @@ fn network_run_push(
                 node.gossip.purge(&node_pubkey, thread_pool, now, &timeouts);
                 (
                     node_pubkey,
-                    node.gossip
-                        .new_push_messages(&node_pubkey, vec![], now, &stakes)
-                        .0,
+                    node.gossip.new_push_messages(&node_pubkey, now, &stakes).0,
                 )
             })
             .collect();
@@ -575,7 +573,6 @@ fn network_run_pull(
                         .gossip
                         .filter_pull_responses(&timeouts, rsp, now, &mut stats);
                     node.gossip.process_pull_responses(
-                        &from,
                         vers,
                         vers_expired_timeout,
                         failed_inserts,

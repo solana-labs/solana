@@ -255,6 +255,12 @@ Remember to move your authorized withdrawer keypair into a very secure location 
 
 Read more about [creating and managing a vote account](vote-accounts.md).
 
+## Stake your validator
+
+Until your validator is staked, it will be unable to vote, propose leader blocks, or collect rewards.
+
+Follow the instructions to [stake your validator](validator-stake.md)
+
 ## Known validators
 
 If you know and respect other validator operators, you can specify this on the command line with the `--known-validator <PUBKEY>`
@@ -430,18 +436,3 @@ which starts the solana validator process uses "exec" to do so (example: "exec
 solana-validator ..."); otherwise, when logrotate sends its signal to the
 validator, the enclosing script will die and take the validator process with
 it.
-
-### Account indexing
-
-As the number of populated accounts on the cluster grows, account-data RPC
-requests that scan the entire account set -- like
-[`getProgramAccounts`](../api/http#getprogramaccounts) and
-[SPL-token-specific requests](../api/http#gettokenaccountsbydelegate) --
-may perform poorly. If your validator needs to support any of these requests,
-you can use the `--account-index` parameter to activate one or more in-memory
-account indexes that significantly improve RPC performance by indexing accounts
-by the key field. Currently supports the following parameter values:
-
-- `program-id`: each account indexed by its owning program; used by [getProgramAccounts](../api/http#getprogramaccounts)
-- `spl-token-mint`: each SPL token account indexed by its token Mint; used by [getTokenAccountsByDelegate](../api/http#gettokenaccountsbydelegate), and [getTokenLargestAccounts](../api/http#gettokenlargestaccounts)
-- `spl-token-owner`: each SPL token account indexed by the token-owner address; used by [getTokenAccountsByOwner](../api/http#gettokenaccountsbyowner), and [getProgramAccounts](../api/http#getprogramaccounts) requests that include an spl-token-owner filter.

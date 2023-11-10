@@ -26,7 +26,7 @@ with the `--rpc-pubsub-enable-block-subscription` flag.
 
 ### Parameters:
 
-<Parameter name="filter" type={"string | object"} optional={true}>
+<Parameter name="filter" type={"string | object"} required={true}>
 
 filter criteria for the logs to receive results by account type; currently supported:
 
@@ -52,33 +52,69 @@ Configuration object containing the following fields:
   name="commitment"
   type="string"
   optional={true}
+  defaultValue={"finalized"}
   href="/api/http#configuring-state-commitment"
-></Field>
-
-<Field name="transactionDetails" default="full" type="string" optional={true}>
-  level of transaction detail to return, either "full", "signatures", or "none".
+>
+  <li>
+    the default is <code>finalized</code>
+  </li>
+  <li>
+    <code>processed</code> is not supported.
+  </li>
 </Field>
 
-<Field name="showRewards" type="bool" defaultValue="true" optional={true}>
-  whether to populate the `rewards` array.
-</Field>
+<Field name="encoding" type="string" optional={true} defaultValue={"json"} href="/api/http#parsed-responses">
 
-<Field name="encoding" type="string" defaultValue="base64" optional={true} href="/api/http#parsed-responses">
+encoding format for each returned Transaction
 
-Encoding format for Account data
-
-<Values values={["base58", "base64", "base64+zstd", "jsonParsed"]} />
+<Values values={["json", "jsonParsed", "base58", "base64"]} />
 
 <details>
 
-- `base58` is slow
-- `jsonParsed` encoding attempts to use program-specific state parsers to return
-  more human-readable and explicit account state data.
-- If `jsonParsed` is requested but a parser cannot be found, the field falls back
-  to `base64` encoding, detectable when the `data` field is type `string`.
+- `jsonParsed` attempts to use program-specific instruction parsers to return
+  more human-readable and explicit data in the `transaction.message.instructions` list.
+- If `jsonParsed` is requested but a parser cannot be found, the instruction
+  falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
 
 </details>
 
+</Field>
+
+<Field name="transactionDetails" type="string" optional={true} defaultValue={"full"}>
+
+level of transaction detail to return
+
+<Values values={["full", "accounts", "signatures", "none"]} />
+
+<details>
+
+- If `accounts` are requested, transaction details only include signatures and
+  an annotated list of accounts in each transaction.
+- Transaction metadata is limited to only: fee, err, pre_balances,
+  post_balances, pre_token_balances, and post_token_balances.
+
+</details>
+
+</Field>
+
+<Field name="maxSupportedTransactionVersion" type="number" optional={true}>
+
+the max transaction version to return in responses.
+
+<details>
+
+- If the requested block contains a transaction with a higher version, an
+  error will be returned.
+- If this parameter is omitted, only legacy transactions will be returned, and
+  a block containing any versioned transaction will prompt the error.
+
+</details>
+
+</Field>
+
+<Field name="showRewards" type="bool" optional={true}>
+  whether to populate the `rewards` array. If parameter not provided, the
+  default includes rewards.
 </Field>
 
 </Parameter>
