@@ -839,6 +839,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
         new
     }
 
+    #[must_use]
     fn ensure_threads(&self) -> Option<RwLockReadGuard<'_, ThreadManager>> {
         let r = self.thread_manager.read().unwrap();
         r.is_active().then_some(r)
