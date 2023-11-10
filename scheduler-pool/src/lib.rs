@@ -872,7 +872,7 @@ impl ThreadManager {
 
     fn start_threads(&mut self) {
         let t = std::thread::Builder::new().name("aaaa").spawn(move || {
-        });
+        }).unwrap();
         self.scheduler_thread = Some(t);
     }
 
