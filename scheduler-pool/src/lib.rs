@@ -810,7 +810,7 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     _phantom: PhantomData<SEA>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 struct ThreadManager {
     context: Option<SchedulingContext>,
     scheduler_thread: Option<JoinHandle<()>>,
