@@ -98,9 +98,9 @@ where
             Self::create_connection_async_thread(map.clone(), receiver, stats.clone());
         Self {
             name,
-            map: Arc::new(RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS))),
+            map,
             connection_manager,
-            stats: Arc::new(ConnectionCacheStats::default()),
+            stats,
             last_stats: AtomicInterval::default(),
             connection_pool_size,
             connection_config: config,
