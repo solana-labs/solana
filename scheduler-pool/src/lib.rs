@@ -885,7 +885,9 @@ impl ThreadManager {
         }).unwrap()).collect();
     }
 
-    fn stop_threads(&self) {}
+    fn stop_threads(&self) {
+        assert_eq!(self.scheduler_thread.take().unwrap().join().unwrap(), ());
+    }
 }
 
 pub trait InstallableScheduler<SEA: ScheduleExecutionArg>: InstalledScheduler<SEA> {
