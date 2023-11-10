@@ -803,13 +803,17 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     handler: TH,
     address_book: Mutex<AddressBook>,
     preloader: Arc<Preloader>,
-    thread_manager: Mutex<ThreadManager>,
+    thread_manager: ThreadManager,
     _phantom: PhantomData<SEA>,
 }
 
 #[derive(Default)]
 struct ThreadManager {
     is_active: AtomicBool,
+    inner: Mutex<ThreadManagerInner>,
+}
+
+struct ThreadManagerInner {
     scheduler_thread: Option<JoinHandle<()>>,
     handler_threads: Vec<JoinHandle<()>>,
 }
