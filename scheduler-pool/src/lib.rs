@@ -995,9 +995,9 @@ impl ThreadManager {
 
                                     Self::receive_scheduled_transaction(m);
                                     if was_blocked {
-                                        handled_blocked_transaction_sender.send(3).unwrap();
+                                        handled_blocked_transaction_sender.send(m).unwrap();
                                     } else {
-                                        handled_idle_transaction_sender.send(3).unwrap();
+                                        handled_idle_transaction_sender.send(m).unwrap();
                                     }
                                 }
                             }
