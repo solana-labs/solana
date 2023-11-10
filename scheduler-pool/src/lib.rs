@@ -832,7 +832,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             handler,
             address_book: Mutex::new(address_book),
             preloader,
-            thread_manager: Mutex::default(),
+            thread_manager: RwLock::default(),
             _phantom: PhantomData,
         };
         new.ensure_threads();
