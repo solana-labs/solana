@@ -33,11 +33,10 @@ use {
     std::{
         fmt::Debug,
         marker::PhantomData,
-        sync::{atomic::AtomicUsize, Arc, Mutex, RwLock, Weak},
+        sync::{atomic::AtomicUsize, Arc, Mutex, RwLock, RwLockReadGuard, Weak},
         thread::JoinHandle,
     },
 };
-use std::sync::RwLockReadGuard;
 
 type UniqueWeight = u128;
 type CU = u64;
@@ -801,7 +800,7 @@ impl TaskQueueReader for ChannelBackedTaskQueue {
 pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     id: SchedulerId,
     pool: Arc<SchedulerPool<Self, TH, SEA>>, // to be moved to ThreadManager
-    context: Option<SchedulingContext>, // to be moved to ThreadManager
+    context: Option<SchedulingContext>,      // to be moved to ThreadManager
     result_with_timings: Mutex<Option<ResultWithTimings>>, // to be removed
     handler: TH,
     address_book: Mutex<AddressBook>,
@@ -875,18 +874,30 @@ enum SessionedChannel<T> {
 
 impl ThreadManager {
     fn new(initial_context: SchedulingContext) -> Self {
-        Self { context: Some(initial_context), scheduler_thread: None, handler_threads: vec![] }
+        Self {
+            context: Some(initial_context),
+            scheduler_thread: None,
+            handler_threads: vec![],
+        }
     }
     fn is_active(&self) -> bool {
         self.scheduler_thread.is_some()
     }
 
     fn start_threads(&mut self) {
-        let t = std::thread::Builder::new().name("aaaa".to_owned()).spawn(move || {
-        }).unwrap();
+        let t = std::thread::Builder::new()
+            .name("aaaa".to_owned())
+            .spawn(move || {})
+            .unwrap();
         self.scheduler_thread = Some(t);
-        self.handler_threads = (0..10).map(|thx| std::thread::Builder::new().name("aaaa".to_owned()).spawn(move || {
-        }).unwrap()).collect();
+        self.handler_threads = (0..10)
+            .map(|thx| {
+                std::thread::Builder::new()
+                    .name("aaaa".to_owned())
+                    .spawn(move || {})
+                    .unwrap()
+            })
+            .collect();
     }
 
     fn stop_threads(&mut self) {
