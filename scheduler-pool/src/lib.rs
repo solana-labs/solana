@@ -890,6 +890,9 @@ impl ThreadManager {
         self.scheduler_thread.is_some()
     }
 
+    fn receive_new_transaction() {
+    }
+
     fn start_threads(&mut self) {
         let (_transaction_sender, transaction_receiver) = unbounded::<SessionedChannel<Box<Task>>>();
         let (blocked_transaction_sender, blocked_transaction_receiver) = unbounded::<i32>();
@@ -908,7 +911,7 @@ impl ThreadManager {
                     loop {
                         select_biased! {
                             recv(handled_blocked_transaction_receiver) -> m => {m;},
-                            recv(if true { &transaction_receiver } else { never }) -> m => {m;},
+                            recv(if true { &transaction_receiver } else { never }) -> m => { Self::receive_new_transaction(m)},
                             recv(handled_idle_transaction_receiver) -> m => {m; },
                         };
                     }
