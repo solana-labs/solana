@@ -893,7 +893,7 @@ impl ThreadManager {
     fn update_result_with_timings(result_with_timings: &mut ResultWithTimings, msg: &ExecutionEnvironment) {}
     fn receive_handled_transaction(state_machine: &mut SchedulingStateMachine, msg: Box<ExecutionEnvironment>) {}
 
-    fn receive_scheduled_transaction(msg: &mut Box<ExecutionEnvironment>) {}
+    fn receive_scheduled_transaction(bank: &Arc<Bank>, msg: &mut Box<ExecutionEnvironment>) {}
 
     fn start_threads(&mut self) {
         let (_transaction_sender, mut transaction_receiver) =
@@ -1006,7 +1006,7 @@ impl ThreadManager {
                                         },
                                     };
 
-                                    Self::receive_scheduled_transaction(&mut m);
+                                    Self::receive_scheduled_transaction(&bank, &amut m);
                                     if was_blocked {
                                         handled_blocked_transaction_sender.send(m).unwrap();
                                     } else {
