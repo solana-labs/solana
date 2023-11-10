@@ -893,20 +893,24 @@ impl ThreadManager {
         let (_transaction_sender, transaction_receiver) = unbounded::<Box<Task>>();
         let (blocked_transaction_sender, blocked_transaction_receiver) = unbounded::<i32>();
         let (idle_transaction_sender, idle_transaction_receiver) = unbounded::<i32>();
-        let (handled_blocked_transaction_sender, handled_blocked_transaction_receiver) = unbounded::<i32>();
-        let (handled_idle_transaction_sender, handled_idle_transaction_receiver) = unbounded::<i32>();
+        let (handled_blocked_transaction_sender, handled_blocked_transaction_receiver) =
+            unbounded::<i32>();
+        let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
+            unbounded::<i32>();
 
-        self.scheduler_thread = Some(std::thread::Builder::new()
-            .name("aaaa".to_owned())
-            .spawn(move || {
-                select_biased! {
-                    recv(handled_blocked_transaction_receiver) -> m => {m;},
-                    recv(transaction_receiver) -> m => {m;},
-                    recv(handled_idle_transaction_receiver) -> m => {m; },
-                };
-                ()
-            })
-            .unwrap());
+        self.scheduler_thread = Some(
+            std::thread::Builder::new()
+                .name("aaaa".to_owned())
+                .spawn(move || {
+                    select_biased! {
+                        recv(handled_blocked_transaction_receiver) -> m => {m;},
+                        recv(transaction_receiver) -> m => {m;},
+                        recv(handled_idle_transaction_receiver) -> m => {m; },
+                    };
+                    ()
+                })
+                .unwrap(),
+        );
 
         self.handler_threads = (0..10)
             .map({
