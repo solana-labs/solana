@@ -925,10 +925,10 @@ impl ThreadManager {
                         let mut result_with_timings = (Ok(()), Default::default());
                         while !scheduler_is_empty || !will_end_session {
                             select_biased! {
-                                recv(handled_blocked_transaction_receiver) -> m => {
-                                    let m = m.unwrap();
-                                    Self::update_result_with_timings(&mut result_with_timings, &m);
-                                    Self::receive_handled_transaction(&mut state_machine, m);
+                                recv(handled_blocked_transaction_receiver) -> execution_environment => {
+                                    let execution_environment = execution_environment.unwrap();
+                                    Self::update_result_with_timings(&mut result_with_timings, &execution_environment);
+                                    Self::receive_handled_transaction(&mut state_machine, execution_environment);
                                 },
                                 recv(if !will_end_session { &transaction_receiver } else { never }) -> m => {
                                     match m {
@@ -951,10 +951,10 @@ impl ThreadManager {
                                         Err(_) => will_end_thread = true,
                                     }
                                 },
-                                recv(handled_idle_transaction_receiver) -> m => {
-                                    let m = m.unwrap();
-                                    Self::update_result_with_timings(&mut result_with_timings, &m);
-                                    Self::receive_handled_transaction(&mut state_machine, m);
+                                recv(handled_idle_transaction_receiver) -> execution_environment => {
+                                    let execution_environment = execution_environment.unwrap();
+                                    Self::update_result_with_timings(&mut result_with_timings, &execution_environment);
+                                    Self::receive_handled_transaction(&mut state_machine, execution_environment);
                                 },
                             };
                         }
