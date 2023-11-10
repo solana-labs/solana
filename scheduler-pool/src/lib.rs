@@ -965,7 +965,7 @@ impl ThreadManager {
                             move || {
                                 let (m, was_blocked) = select_biased! {
                                     recv(blocked_transaction_receiver) -> m => {
-                                        match mm {
+                                        match m {
                                             SessionedChannel::Payload(payload) => {
                                                 (payload, true)
                                             }
