@@ -870,7 +870,11 @@ impl ThreadManager {
         self.scheduler_thread.is_some()
     }
 
-    fn start_threads(&mut self) {}
+    fn start_threads(&mut self) {
+        let t = std::thread::Builder::new().name("aaaa").spawn(move || {
+        });
+        self.scheduler_thread = Some(t);
+    }
 
     fn stop_threads(&self) {}
 }
