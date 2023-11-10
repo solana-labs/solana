@@ -975,6 +975,7 @@ impl ThreadManager {
                                             }
                                             SessionedChannel::NewContext(next_context) => {
                                                 bank = next_context.bank().clone();
+                                                continue;
                                             }
                                         }
                                     },
