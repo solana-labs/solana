@@ -881,6 +881,7 @@ impl ThreadManager {
         let t = std::thread::Builder::new().name("aaaa".to_owned()).spawn(move || {
         }).unwrap();
         self.scheduler_thread = Some(t);
+        self.handler_threads = (0..10).map(|thx| 3).collect();
     }
 
     fn stop_threads(&self) {}
