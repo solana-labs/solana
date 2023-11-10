@@ -65,8 +65,8 @@ pub type VerifiedVoteSender = Sender<(Pubkey, Vec<Slot>)>;
 pub type VerifiedVoteReceiver = Receiver<(Pubkey, Vec<Slot>)>;
 pub type GossipVerifiedVoteHashSender = Sender<(Pubkey, Slot, Hash)>;
 pub type GossipVerifiedVoteHashReceiver = Receiver<(Pubkey, Slot, Hash)>;
-pub type GossipDuplicateConfirmedSlotsSender = Sender<ThresholdConfirmedSlots>;
-pub type GossipDuplicateConfirmedSlotsReceiver = Receiver<ThresholdConfirmedSlots>;
+pub type DuplicateConfirmedSlotsSender = Sender<ThresholdConfirmedSlots>;
+pub type DuplicateConfirmedSlotsReceiver = Receiver<ThresholdConfirmedSlots>;
 
 const THRESHOLDS_TO_CHECK: [f64; 2] = [DUPLICATE_THRESHOLD, VOTE_THRESHOLD_SIZE];
 const BANK_SEND_VOTES_LOOP_SLEEP_MS: u128 = 10;
@@ -243,7 +243,7 @@ impl ClusterInfoVoteListener {
         replay_votes_receiver: ReplayVoteReceiver,
         blockstore: Arc<Blockstore>,
         bank_notification_sender: Option<BankNotificationSender>,
-        cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
+        duplicate_confirmed_slot_sender: DuplicateConfirmedSlotsSender,
     ) -> Self {
         let (verified_vote_label_packets_sender, verified_vote_label_packets_receiver) =
             unbounded();
@@ -293,7 +293,7 @@ impl ClusterInfoVoteListener {
                     replay_votes_receiver,
                     blockstore,
                     bank_notification_sender,
-                    cluster_confirmed_slot_sender,
+                    duplicate_confirmed_slot_sender,
                 );
             })
             .unwrap();
@@ -495,12 +495,12 @@ impl ClusterInfoVoteListener {
         replay_votes_receiver: ReplayVoteReceiver,
         blockstore: Arc<Blockstore>,
         bank_notification_sender: Option<BankNotificationSender>,
-        cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
+        duplicate_confirmed_slot_sender: DuplicateConfirmedSlotsSender,
     ) -> Result<()> {
         let mut confirmation_verifier =
             OptimisticConfirmationVerifier::new(bank_forks.read().unwrap().root());
         let mut last_process_root = Instant::now();
-        let cluster_confirmed_slot_sender = Some(cluster_confirmed_slot_sender);
+        let duplicate_confirmed_slot_sender = Some(duplicate_confirmed_slot_sender);
         let mut vote_processing_time = Some(VoteProcessingTiming::default());
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -531,7 +531,7 @@ impl ClusterInfoVoteListener {
                 &verified_vote_sender,
                 &replay_votes_receiver,
                 &bank_notification_sender,
-                &cluster_confirmed_slot_sender,
+                &duplicate_confirmed_slot_sender,
                 &mut vote_processing_time,
             );
             match confirmed_slots {
@@ -586,7 +586,7 @@ impl ClusterInfoVoteListener {
         verified_vote_sender: &VerifiedVoteSender,
         replay_votes_receiver: &ReplayVoteReceiver,
         bank_notification_sender: &Option<BankNotificationSender>,
-        cluster_confirmed_slot_sender: &Option<GossipDuplicateConfirmedSlotsSender>,
+        duplicate_confirmed_slot_sender: &Option<DuplicateConfirmedSlotsSender>,
         vote_processing_time: &mut Option<VoteProcessingTiming>,
     ) -> Result<ThresholdConfirmedSlots> {
         let mut sel = Select::new();
@@ -615,7 +615,7 @@ impl ClusterInfoVoteListener {
                     gossip_verified_vote_hash_sender,
                     verified_vote_sender,
                     bank_notification_sender,
-                    cluster_confirmed_slot_sender,
+                    duplicate_confirmed_slot_sender,
                     vote_processing_time,
                 ));
             }
@@ -638,7 +638,7 @@ impl ClusterInfoVoteListener {
         new_optimistic_confirmed_slots: &mut ThresholdConfirmedSlots,
         is_gossip_vote: bool,
         bank_notification_sender: &Option<BankNotificationSender>,
-        cluster_confirmed_slot_sender: &Option<GossipDuplicateConfirmedSlotsSender>,
+        duplicate_confirmed_slot_sender: &Option<DuplicateConfirmedSlotsSender>,
     ) {
         if vote.is_empty() {
             return;
@@ -692,7 +692,7 @@ impl ClusterInfoVoteListener {
                 }
 
                 if reached_threshold_results[0] {
-                    if let Some(sender) = cluster_confirmed_slot_sender {
+                    if let Some(sender) = duplicate_confirmed_slot_sender {
                         let _ = sender.send(vec![(last_vote_slot, last_vote_hash)]);
                     }
                 }
@@ -749,7 +749,7 @@ impl ClusterInfoVoteListener {
         gossip_verified_vote_hash_sender: &GossipVerifiedVoteHashSender,
         verified_vote_sender: &VerifiedVoteSender,
         bank_notification_sender: &Option<BankNotificationSender>,
-        cluster_confirmed_slot_sender: &Option<GossipDuplicateConfirmedSlotsSender>,
+        duplicate_confirmed_slot_sender: &Option<DuplicateConfirmedSlotsSender>,
         vote_processing_time: &mut Option<VoteProcessingTiming>,
     ) -> ThresholdConfirmedSlots {
         let mut diff: HashMap<Slot, HashMap<Pubkey, bool>> = HashMap::new();
@@ -776,7 +776,7 @@ impl ClusterInfoVoteListener {
                 &mut new_optimistic_confirmed_slots,
                 is_gossip,
                 bank_notification_sender,
-                cluster_confirmed_slot_sender,
+                duplicate_confirmed_slot_sender,
             );
         }
         gossip_vote_txn_processing_time.stop();
