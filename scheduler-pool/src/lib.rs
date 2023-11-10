@@ -913,6 +913,7 @@ impl ThreadManager {
                     let mut session_ended = false;
                     let mut scheduler_is_empty = false;
                     let mut next_result_sender = result_sender.clone();
+                    let mut result_with_timings = Default::default();
 
                     loop {
                         while !scheduler_is_empty && !session_ended {
