@@ -914,7 +914,7 @@ impl ThreadManager {
                             recv(if true { &transaction_receiver } else { never }) -> m => { 
                                 match m {
                                     Ok(mm) => Self::receive_new_transaction(mm),
-                                    Err(_) => return;
+                                    Err(_) => break;
                                 }
                             },
                             recv(handled_idle_transaction_receiver) -> m => {m; },
