@@ -889,7 +889,7 @@ impl ThreadManager {
         self.scheduler_thread.is_some()
     }
 
-    fn receive_new_transaction(state_machine: &mut SchedulingStateMachine, msg: SessionedChannel<Box<Task>>) {
+    fn receive_new_transaction(state_machine: &mut SchedulingStateMachine, msg: Box<Task>) {
     }
 
     fn start_threads(&mut self) {
