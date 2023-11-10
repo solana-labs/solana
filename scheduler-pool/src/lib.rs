@@ -917,7 +917,15 @@ impl ThreadManager {
                             recv(if true { &transaction_receiver } else { never }) -> m => { 
                                 match m {
                                     Ok(mm) => {
-                                        match mm {};
+                                        match mm {
+                                            SessionedChannel::Payload(with_transaction_and_index) => {
+                                            }
+                                            SessionedChannel::NextContext(next_context) => {
+                                                bank = next_context.bank().clone();
+                                            }
+                                            SessionedChannel::NextChannel(mut next_receiver_box) => {
+                                            }
+                                        };
                                         Self::receive_new_transaction(&mut state_machine, mm);
                                     },
                                     Err(_) => break,
