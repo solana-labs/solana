@@ -9,6 +9,7 @@
 //! helper fun called `execute_batch()`.
 
 use {
+    crossbeam_channel::{select_biased, unbounded},
     log::*,
     rand::{thread_rng, Rng},
     solana_ledger::blockstore_processor::{
@@ -37,7 +38,6 @@ use {
         thread::JoinHandle,
     },
 };
-use crossbeam_channel::{select_biased, unbounded};
 
 type UniqueWeight = u128;
 type CU = u64;
@@ -899,17 +899,19 @@ impl ThreadManager {
         self.handler_threads = (0..10)
             .map({
                 |thx| {
-                std::thread::Builder::new()
-                    .name("aaaa".to_owned())
-                    .spawn({
-                        let idle_transaction_receiver = idle_transaction_receiver.clone();
-                        move || {
-                        select_biased!{
-                            recv(idle_transaction_receiver.clone()) -> _ => {},
-                        }
-                    }})
-                    .unwrap()
-            }})
+                    std::thread::Builder::new()
+                        .name("aaaa".to_owned())
+                        .spawn({
+                            let idle_transaction_receiver = idle_transaction_receiver.clone();
+                            move || {
+                                select_biased! {
+                                    recv(idle_transaction_receiver.clone()) -> _ => {},
+                                }
+                            }
+                        })
+                        .unwrap()
+                }
+            })
             .collect();
     }
 
