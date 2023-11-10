@@ -174,7 +174,7 @@ mod tests {
             ..
         } = create_slow_genesis_config(10_000);
         let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let bank = bank_forks.read().unwrap().working_bank();
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -283,7 +283,10 @@ mod tests {
             ..
         } = &test_frame;
         let worker_thread = std::thread::spawn(move || worker.run());
-        poh_recorder.write().unwrap().set_bank(bank.clone(), false);
+        poh_recorder
+            .write()
+            .unwrap()
+            .set_bank_for_test(bank.clone());
 
         let pubkey1 = Pubkey::new_unique();
 
@@ -325,7 +328,10 @@ mod tests {
             ..
         } = &test_frame;
         let worker_thread = std::thread::spawn(move || worker.run());
-        poh_recorder.write().unwrap().set_bank(bank.clone(), false);
+        poh_recorder
+            .write()
+            .unwrap()
+            .set_bank_for_test(bank.clone());
 
         let pubkey1 = Pubkey::new_unique();
         let pubkey2 = Pubkey::new_unique();
@@ -370,7 +376,10 @@ mod tests {
             ..
         } = &test_frame;
         let worker_thread = std::thread::spawn(move || worker.run());
-        poh_recorder.write().unwrap().set_bank(bank.clone(), false);
+        poh_recorder
+            .write()
+            .unwrap()
+            .set_bank_for_test(bank.clone());
 
         let pubkey1 = Pubkey::new_unique();
         let pubkey2 = Pubkey::new_unique();

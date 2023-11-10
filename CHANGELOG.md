@@ -4,15 +4,20 @@ All notable changes to this project will be documented in this file.
 Please follow the [guidance](#adding-to-this-changelog) at the bottom of this file when making changes
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
-and follows a [Backwards Compatability Policy](https://docs.solana.com/developing/backwards-compatibility)
+and follows a [Backwards Compatibility Policy](https://docs.solana.com/developing/backwards-compatibility)
 
 Release channels have their own copy of this changelog:
-* [edge - v1.17](#edge-channel)
-* [beta - v1.16](https://github.com/solana-labs/solana/blob/v1.16/CHANGELOG.md)
-* [stable - v1.14](https://github.com/solana-labs/solana/blob/v1.14/CHANGELOG.md)
+* [edge - v1.18](#edge-channel)
+* [beta - v1.17](https://github.com/solana-labs/solana/blob/v1.17/CHANGELOG.md)
+* [stable - v1.16](https://github.com/solana-labs/solana/blob/v1.16/CHANGELOG.md)
 
 <a name="edge-channel"></a>
-## [1.17.0] - Unreleased
+## [1.18.0] - Unreleased
+* Changes
+  * Added a github check to support `changelog` label
+* Upgrade Notes
+
+## [1.17.0]
 * Changes
   * Added a changelog.
 * Upgrade Notes
@@ -49,8 +54,9 @@ This simplifies the process of diffing between versions of the log.
 ## Maintaining This Changelog
 ### When creating a new release branch:
 * Commit to master updating the changelog:
-  * Remove `Unreleased` annotation from vx.y.0 section.
+  * Update the edge, beta, and stable links
   * Create new section: `vx.y+1.0 - Unreleased`
+  * Remove `Unreleased` annotation from vx.y.0 section.
 * Create vx.y branch starting at that commit
 * Tag that commit as vx.y.0
 

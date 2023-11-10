@@ -3,11 +3,12 @@ use {
         account_storage::meta::{
             StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo, StoredAccountMeta,
         },
+        accounts_hash::AccountHash,
         append_vec::{AppendVec, AppendVecError, MatchAccountOwnerError},
         storable_accounts::StorableAccounts,
         tiered_storage::error::TieredStorageError,
     },
-    solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey},
+    solana_sdk::{account::ReadableAccount, clock::Slot, pubkey::Pubkey},
     std::{
         borrow::Borrow,
         mem,
@@ -154,7 +155,7 @@ impl AccountsFile {
         'b,
         T: ReadableAccount + Sync,
         U: StorableAccounts<'a, T>,
-        V: Borrow<Hash>,
+        V: Borrow<AccountHash>,
     >(
         &self,
         accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,

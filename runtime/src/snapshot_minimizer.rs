@@ -368,11 +368,7 @@ impl<'a> SnapshotMinimizer<'a> {
             shrink_in_progress = Some(self.accounts_db().get_store_for_shrink(slot, aligned_total));
             let new_storage = shrink_in_progress.as_ref().unwrap().new_storage();
             self.accounts_db().store_accounts_frozen(
-                (
-                    slot,
-                    &accounts[..],
-                    solana_accounts_db::accounts_db::INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
-                ),
+                (slot, &accounts[..]),
                 Some(hashes),
                 new_storage,
                 Some(Box::new(write_versions.into_iter())),

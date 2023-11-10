@@ -25,6 +25,7 @@ lazy_static = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
 lru = { workspace = true }
+mockall = { workspace = true }
 num_cpus = { workspace = true }
 num_enum = { workspace = true }
 prost = { workspace = true }
@@ -78,6 +79,7 @@ features = ["lz4"]
 bs58 = { workspace = true }
 solana-account-decoder = { workspace = true }
 solana-logger = { workspace = true }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 spl-pod = { workspace = true }
 test-case = { workspace = true }
 

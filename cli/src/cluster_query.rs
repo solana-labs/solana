@@ -1886,23 +1886,17 @@ pub fn process_show_validators(
 
     progress_bar.set_message("Fetching block production...");
     let skip_rate: HashMap<_, _> = rpc_client
-        .get_block_production()
-        .ok()
-        .map(|result| {
-            result
-                .value
-                .by_identity
-                .into_iter()
-                .map(|(identity, (leader_slots, blocks_produced))| {
-                    (
-                        identity,
-                        100. * (leader_slots.saturating_sub(blocks_produced)) as f64
-                            / leader_slots as f64,
-                    )
-                })
-                .collect()
+        .get_block_production()?
+        .value
+        .by_identity
+        .into_iter()
+        .map(|(identity, (leader_slots, blocks_produced))| {
+            (
+                identity,
+                100. * (leader_slots.saturating_sub(blocks_produced)) as f64 / leader_slots as f64,
+            )
         })
-        .unwrap_or_default();
+        .collect();
 
     progress_bar.set_message("Fetching version information...");
     let mut node_version = HashMap::new();

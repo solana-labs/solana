@@ -178,7 +178,7 @@ impl Default for CompressedSlots {
 }
 
 impl CompressedSlots {
-    fn new(max_size: usize) -> Self {
+    pub(crate) fn new(max_size: usize) -> Self {
         CompressedSlots::Uncompressed(Uncompressed::new(max_size))
     }
 

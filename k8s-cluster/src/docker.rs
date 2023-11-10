@@ -139,7 +139,7 @@ COPY ./k8s-cluster/src/scripts /home/solana/k8s-cluster-scripts
 
 RUN mkdir -p /home/solana/ledger
 COPY --chown=solana:solana ./config-k8s/bootstrap-validator  /home/solana/ledger
-            
+
 RUN mkdir -p /home/solana/.cargo/bin
 
 COPY ./{solana_build_directory}/bin/* /home/solana/.cargo/bin/

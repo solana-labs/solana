@@ -1,9 +1,9 @@
-use {super::*, crate::declare_syscall, solana_rbpf::vm::ContextObject};
+use {super::*, solana_rbpf::vm::ContextObject};
 
-declare_syscall!(
+declare_builtin_function!(
     /// Log a user's info message
     SyscallLog,
-    fn inner_call(
+    fn rust(
         invoke_context: &mut InvokeContext,
         addr: u64,
         len: u64,
@@ -36,10 +36,10 @@ declare_syscall!(
     }
 );
 
-declare_syscall!(
+declare_builtin_function!(
     /// Log 5 64-bit values
     SyscallLogU64,
-    fn inner_call(
+    fn rust(
         invoke_context: &mut InvokeContext,
         arg1: u64,
         arg2: u64,
@@ -59,10 +59,10 @@ declare_syscall!(
     }
 );
 
-declare_syscall!(
+declare_builtin_function!(
     /// Log current compute consumption
     SyscallLogBpfComputeUnits,
-    fn inner_call(
+    fn rust(
         invoke_context: &mut InvokeContext,
         _arg1: u64,
         _arg2: u64,
@@ -83,10 +83,10 @@ declare_syscall!(
     }
 );
 
-declare_syscall!(
+declare_builtin_function!(
     /// Log 5 64-bit values
     SyscallLogPubkey,
-    fn inner_call(
+    fn rust(
         invoke_context: &mut InvokeContext,
         pubkey_addr: u64,
         _arg2: u64,
@@ -108,10 +108,10 @@ declare_syscall!(
     }
 );
 
-declare_syscall!(
+declare_builtin_function!(
     /// Log data handling
     SyscallLogData,
-    fn inner_call(
+    fn rust(
         invoke_context: &mut InvokeContext,
         addr: u64,
         len: u64,
