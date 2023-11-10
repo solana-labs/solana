@@ -154,7 +154,7 @@ bincode = "1.3.3"
 bitflags = { version = "2.3.3", features = ["serde"] }
 blake3 = "1.5.0"
 block-buffer = "0.10.4"
-borsh = "0.10.3"
+borsh = "1.1.2"
 bs58 = "0.4.0"
 bv = "0.11.1"
 byte-unit = "4.0.19"
