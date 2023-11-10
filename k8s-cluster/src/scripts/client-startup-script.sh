@@ -29,14 +29,14 @@ shift 3
 runtime_args=()
 while [[ -n $1 ]]; do
   if [[ ${1:0:1} = - ]]; then
-    if [[ $1 = --target-node ]]; then 
+    if [[ $1 = --target-node ]]; then
       echo "--target-node not supported yet...not including" >> logs/client.log 2>&1
       # runtime_args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --duration ]]; then 
+    elif [[ $1 = --duration ]]; then
       runtime_args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --num-nodes ]]; then 
+    elif [[ $1 = --num-nodes ]]; then
       runtime_args+=("$1" "$2")
       shift 2
     else
@@ -44,7 +44,7 @@ while [[ -n $1 ]]; do
       solana-bench-tps --help
       exit 1
     fi
-  else 
+  else
     echo "Unknown argument: $1"
     solana-bench-tps --help
     exit 1

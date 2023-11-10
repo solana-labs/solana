@@ -60,4 +60,3 @@ for i in "${!SECRET_FILES[@]}"; do
 done
 
 mkdir -p /home/solana/logs
-

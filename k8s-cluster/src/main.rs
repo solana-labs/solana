@@ -332,14 +332,14 @@ fn parse_matches() -> ArgMatches<'static> {
                 .takes_value(true)
                 .multiple(true)
                 .number_of_values(1)
-                .help("Client Config. 
+                .help("Client Config.
                 User can optionally provide extraArgs that are transparently
                 supplied to the client program as command line parameters.
                 For example,
                     --bench-tps-args tx_count=25000
                 This will start bench-tps clients, and supply '--tx_count 25000'
-                to the bench-tps client. 
-                If you want multiple args, pass in twice: 
+                to the bench-tps client.
+                If you want multiple args, pass in twice:
                     --bench-tps-args tx_count=25000 --bench-tps-args --other-flag=<val>
                 "),
         )
@@ -347,7 +347,7 @@ fn parse_matches() -> ArgMatches<'static> {
             Arg::with_name("target_node")
                 .long("target-node")
                 .takes_value(true)
-                .help("Client Config. Optional: Specify an exact node to send transactions to. use: --target-node <Pubkey>. 
+                .help("Client Config. Optional: Specify an exact node to send transactions to. use: --target-node <Pubkey>.
                 Not supported yet. TODO..."),
         )
         .arg(
