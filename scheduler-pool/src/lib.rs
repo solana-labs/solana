@@ -890,7 +890,7 @@ impl ThreadManager {
 
     fn receive_new_transaction(state_machine: &mut SchedulingStateMachine, msg: Box<Task>) {}
 
-    fn receive_scheduled_transaction(msg: Box<Task>) {}
+    fn receive_scheduled_transaction(msg: Box<ExecutionEnvironment>) {}
 
     fn start_threads(&mut self) {
         let (_transaction_sender, mut transaction_receiver) =
