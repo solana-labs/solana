@@ -896,7 +896,11 @@ impl ThreadManager {
 
         self.scheduler_thread = Some(std::thread::Builder::new()
             .name("aaaa".to_owned())
-            .spawn(move || {})
+            .spawn(move || {
+                select_biased! {
+                    recv(handled_transaction_receiver) -> m => m,
+                }
+            })
             .unwrap());
 
         self.handler_threads = (0..10)
