@@ -419,6 +419,16 @@ module.exports = {
         },
         {
           type: "link",
+          href: "#rootsubscribe",
+          label: "rootSubscribe",
+        },
+        {
+          type: "link",
+          href: "#rootunsubscribe",
+          label: "rootUnsubscribe",
+        },
+        {
+          type: "link",
           href: "#signaturesubscribe",
           label: "signatureSubscribe",
         },

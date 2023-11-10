@@ -1,6 +1,9 @@
 use {
     crate::{
-        cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
+        cli::{
+            log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
+            ProcessResult,
+        },
         spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
     },
     clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand},
@@ -23,6 +26,7 @@ use {
         message::Message,
         pubkey::Pubkey,
         stake_history::Epoch,
+        system_instruction::SystemError,
         transaction::Transaction,
     },
     std::{cmp::Ordering, collections::HashMap, fmt, rc::Rc, str::FromStr},
@@ -850,8 +854,7 @@ fn process_status(
     let mut features = vec![];
     for feature_ids in feature_ids.chunks(MAX_MULTIPLE_ACCOUNTS) {
         let mut feature_chunk = rpc_client
-            .get_multiple_accounts(feature_ids)
-            .unwrap_or_default()
+            .get_multiple_accounts(feature_ids)?
             .into_iter()
             .zip(feature_ids)
             .map(|(account, feature_id)| {
@@ -957,6 +960,6 @@ fn process_activate(
         FEATURE_NAMES.get(&feature_id).unwrap(),
         feature_id
     );
-    rpc_client.send_and_confirm_transaction_with_spinner(&transaction)?;
-    Ok("".to_string())
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&transaction);
+    log_instruction_custom_error::<SystemError>(result, config)
 }

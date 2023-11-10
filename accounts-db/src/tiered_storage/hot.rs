@@ -3,20 +3,21 @@
 
 use {
     crate::{
-        account_storage::meta::StoredMetaWriteVersion,
+        accounts_hash::AccountHash,
         tiered_storage::{
             byte_block,
             footer::{
                 AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat, TieredStorageFooter,
             },
-            index::AccountIndexFormat,
+            index::{AccountOffset, IndexBlockFormat},
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
+            mmap_utils::get_type,
             TieredStorageFormat, TieredStorageResult,
         },
     },
     memmap2::{Mmap, MmapOptions},
     modular_bitfield::prelude::*,
-    solana_sdk::{hash::Hash, stake_history::Epoch},
+    solana_sdk::stake_history::Epoch,
     std::{fs::OpenOptions, option::Option, path::Path},
 };
 
@@ -24,7 +25,7 @@ pub const HOT_FORMAT: TieredStorageFormat = TieredStorageFormat {
     meta_entry_size: std::mem::size_of::<HotAccountMeta>(),
     account_meta_format: AccountMetaFormat::Hot,
     owners_block_format: OwnersBlockFormat::LocalIndex,
-    account_index_format: AccountIndexFormat::AddressAndOffset,
+    index_block_format: IndexBlockFormat::AddressAndOffset,
     account_block_format: AccountBlockFormat::AlignedRaw,
 };
 
@@ -156,26 +157,13 @@ impl TieredAccountMeta for HotAccountMeta {
 
     /// Returns the account hash by parsing the specified account block.  None
     /// will be returned if this account does not persist this optional field.
-    fn account_hash<'a>(&self, account_block: &'a [u8]) -> Option<&'a Hash> {
+    fn account_hash<'a>(&self, account_block: &'a [u8]) -> Option<&'a AccountHash> {
         self.flags()
             .has_account_hash()
             .then(|| {
                 let offset = self.optional_fields_offset(account_block)
                     + AccountMetaOptionalFields::account_hash_offset(self.flags());
-                byte_block::read_type::<Hash>(account_block, offset)
-            })
-            .flatten()
-    }
-
-    /// Returns the write version by parsing the specified account block.  None
-    /// will be returned if this account does not persist this optional field.
-    fn write_version(&self, account_block: &[u8]) -> Option<StoredMetaWriteVersion> {
-        self.flags
-            .has_write_version()
-            .then(|| {
-                let offset = self.optional_fields_offset(account_block)
-                    + AccountMetaOptionalFields::write_version_offset(self.flags());
-                byte_block::read_type::<StoredMetaWriteVersion>(account_block, offset).copied()
+                byte_block::read_type::<AccountHash>(account_block, offset)
             })
             .flatten()
     }
@@ -233,22 +221,36 @@ impl HotStorageReader {
     pub fn num_accounts(&self) -> usize {
         self.footer.account_entry_count as usize
     }
+
+    /// Returns the account meta located at the specified offset.
+    fn get_account_meta_from_offset(
+        &self,
+        account_offset: AccountOffset,
+    ) -> TieredStorageResult<&HotAccountMeta> {
+        let (meta, _) = get_type::<HotAccountMeta>(&self.mmap, account_offset.block)?;
+        Ok(meta)
+    }
 }
 
 #[cfg(test)]
 pub mod tests {
     use {
         super::*,
-        crate::{
-            account_storage::meta::StoredMetaWriteVersion,
-            tiered_storage::{
-                byte_block::ByteBlockWriter,
-                footer::AccountBlockFormat,
-                meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
+        crate::tiered_storage::{
+            byte_block::ByteBlockWriter,
+            file::TieredStorageFile,
+            footer::{
+                AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat, TieredStorageFooter,
+                FOOTER_SIZE,
             },
+            hot::{HotAccountMeta, HotStorageReader},
+            index::{AccountOffset, IndexBlockFormat},
+            meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
         },
-        ::solana_sdk::{hash::Hash, stake_history::Epoch},
         memoffset::offset_of,
+        rand::Rng,
+        solana_sdk::{hash::Hash, pubkey::Pubkey, stake_history::Epoch},
+        tempfile::TempDir,
     };
 
     #[test]
@@ -310,8 +312,7 @@ pub mod tests {
 
         let optional_fields = AccountMetaOptionalFields {
             rent_epoch: Some(TEST_RENT_EPOCH),
-            account_hash: Some(Hash::new_unique()),
-            write_version: None,
+            account_hash: Some(AccountHash(Hash::new_unique())),
         };
 
         let flags = AccountMetaFlags::new_from(&optional_fields);
@@ -335,12 +336,10 @@ pub mod tests {
         const TEST_LAMPORT: u64 = 2314232137;
         const OWNER_INDEX: u32 = 0x1fef_1234;
         const TEST_RENT_EPOCH: Epoch = 7;
-        const TEST_WRITE_VERSION: StoredMetaWriteVersion = 0;
 
         let optional_fields = AccountMetaOptionalFields {
             rent_epoch: Some(TEST_RENT_EPOCH),
-            account_hash: Some(Hash::new_unique()),
-            write_version: Some(TEST_WRITE_VERSION),
+            account_hash: Some(AccountHash(Hash::new_unique())),
         };
 
         let flags = AccountMetaFlags::new_from(&optional_fields);
@@ -361,7 +360,6 @@ pub mod tests {
         assert_eq!(expected_meta, *meta);
         assert!(meta.flags().has_rent_epoch());
         assert!(meta.flags().has_account_hash());
-        assert!(meta.flags().has_write_version());
         assert_eq!(meta.account_data_padding() as usize, padding.len());
 
         let account_block = &buffer[std::mem::size_of::<HotAccountMeta>()..];
@@ -378,9 +376,91 @@ pub mod tests {
             *(meta.account_hash(account_block).unwrap()),
             optional_fields.account_hash.unwrap()
         );
-        assert_eq!(
-            meta.write_version(account_block),
-            optional_fields.write_version
-        );
+    }
+
+    #[test]
+    fn test_hot_storage_footer() {
+        // Generate a new temp path that is guaranteed to NOT already have a file.
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("test_hot_storage_footer");
+        let expected_footer = TieredStorageFooter {
+            account_meta_format: AccountMetaFormat::Hot,
+            owners_block_format: OwnersBlockFormat::LocalIndex,
+            index_block_format: IndexBlockFormat::AddressAndOffset,
+            account_block_format: AccountBlockFormat::AlignedRaw,
+            account_entry_count: 300,
+            account_meta_entry_size: 16,
+            account_block_size: 4096,
+            owner_count: 250,
+            owner_entry_size: 32,
+            index_block_offset: 1069600,
+            owners_offset: 1081200,
+            hash: Hash::new_unique(),
+            min_account_address: Pubkey::default(),
+            max_account_address: Pubkey::new_unique(),
+            footer_size: FOOTER_SIZE as u64,
+            format_version: 1,
+        };
+
+        {
+            let file = TieredStorageFile::new_writable(&path).unwrap();
+            expected_footer.write_footer_block(&file).unwrap();
+        }
+
+        // Reopen the same storage, and expect the persisted footer is
+        // the same as what we have written.
+        {
+            let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
+            assert_eq!(expected_footer, *hot_storage.footer());
+        }
+    }
+
+    #[test]
+    fn test_hot_storage_get_account_meta_from_offset() {
+        // Generate a new temp path that is guaranteed to NOT already have a file.
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("test_hot_storage_footer");
+
+        const NUM_ACCOUNTS: u32 = 10;
+        let mut rng = rand::thread_rng();
+
+        let hot_account_metas: Vec<_> = (0..NUM_ACCOUNTS)
+            .map(|_| {
+                HotAccountMeta::new()
+                    .with_lamports(rng.gen_range(0..u64::MAX))
+                    .with_owner_index(rng.gen_range(0..NUM_ACCOUNTS))
+            })
+            .collect();
+
+        let account_offsets: Vec<_>;
+        let footer = TieredStorageFooter {
+            account_meta_format: AccountMetaFormat::Hot,
+            account_entry_count: NUM_ACCOUNTS,
+            ..TieredStorageFooter::default()
+        };
+        {
+            let file = TieredStorageFile::new_writable(&path).unwrap();
+            let mut current_offset = 0;
+
+            account_offsets = hot_account_metas
+                .iter()
+                .map(|meta| {
+                    let prev_offset = current_offset;
+                    current_offset += file.write_type(meta).unwrap();
+                    AccountOffset { block: prev_offset }
+                })
+                .collect();
+            // while the test only focuses on account metas, writing a footer
+            // here is necessary to make it a valid tiered-storage file.
+            footer.write_footer_block(&file).unwrap();
+        }
+
+        let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
+
+        for (offset, expected_meta) in account_offsets.iter().zip(hot_account_metas.iter()) {
+            let meta = hot_storage.get_account_meta_from_offset(*offset).unwrap();
+            assert_eq!(meta, expected_meta);
+        }
+        assert_eq!(&footer, hot_storage.footer());
     }
 }

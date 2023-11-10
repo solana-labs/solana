@@ -14,6 +14,7 @@ use {
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[repr(C)]
 /// Information about an account being updated
 pub struct ReplicaAccountInfo<'a> {
     /// The Pubkey for the account
@@ -43,6 +44,7 @@ pub struct ReplicaAccountInfo<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[repr(C)]
 /// Information about an account being updated
 /// (extended with transaction signature doing this update)
 pub struct ReplicaAccountInfoV2<'a> {
@@ -76,6 +78,7 @@ pub struct ReplicaAccountInfoV2<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[repr(C)]
 /// Information about an account being updated
 /// (extended with reference to transaction doing this update)
 pub struct ReplicaAccountInfoV3<'a> {
@@ -112,6 +115,7 @@ pub struct ReplicaAccountInfoV3<'a> {
 /// If there were a change to the structure of ReplicaAccountInfo,
 /// there would be new enum entry for the newer version, forcing
 /// plugin implementations to handle the change.
+#[repr(u32)]
 pub enum ReplicaAccountInfoVersions<'a> {
     V0_0_1(&'a ReplicaAccountInfo<'a>),
     V0_0_2(&'a ReplicaAccountInfoV2<'a>),
@@ -120,6 +124,7 @@ pub enum ReplicaAccountInfoVersions<'a> {
 
 /// Information about a transaction
 #[derive(Clone, Debug)]
+#[repr(C)]
 pub struct ReplicaTransactionInfo<'a> {
     /// The first signature of the transaction, used for identifying the transaction.
     pub signature: &'a Signature,
@@ -136,6 +141,7 @@ pub struct ReplicaTransactionInfo<'a> {
 
 /// Information about a transaction, including index in block
 #[derive(Clone, Debug)]
+#[repr(C)]
 pub struct ReplicaTransactionInfoV2<'a> {
     /// The first signature of the transaction, used for identifying the transaction.
     pub signature: &'a Signature,
@@ -157,12 +163,14 @@ pub struct ReplicaTransactionInfoV2<'a> {
 /// If there were a change to the structure of ReplicaTransactionInfo,
 /// there would be new enum entry for the newer version, forcing
 /// plugin implementations to handle the change.
+#[repr(u32)]
 pub enum ReplicaTransactionInfoVersions<'a> {
     V0_0_1(&'a ReplicaTransactionInfo<'a>),
     V0_0_2(&'a ReplicaTransactionInfoV2<'a>),
 }
 
 #[derive(Clone, Debug)]
+#[repr(C)]
 pub struct ReplicaEntryInfo<'a> {
     /// The slot number of the block containing this Entry
     pub slot: Slot,
@@ -180,11 +188,13 @@ pub struct ReplicaEntryInfo<'a> {
 /// A wrapper to future-proof ReplicaEntryInfo handling. To make a change to the structure of
 /// ReplicaEntryInfo, add an new enum variant wrapping a newer version, which will force plugin
 /// implementations to handle the change.
+#[repr(u32)]
 pub enum ReplicaEntryInfoVersions<'a> {
     V0_0_1(&'a ReplicaEntryInfo<'a>),
 }
 
 #[derive(Clone, Debug)]
+#[repr(C)]
 pub struct ReplicaBlockInfo<'a> {
     pub slot: Slot,
     pub blockhash: &'a str,
@@ -195,6 +205,7 @@ pub struct ReplicaBlockInfo<'a> {
 
 /// Extending ReplicaBlockInfo by sending the executed_transaction_count.
 #[derive(Clone, Debug)]
+#[repr(C)]
 pub struct ReplicaBlockInfoV2<'a> {
     pub parent_slot: Slot,
     pub parent_blockhash: &'a str,
@@ -208,6 +219,7 @@ pub struct ReplicaBlockInfoV2<'a> {
 
 /// Extending ReplicaBlockInfo by sending the entries_count.
 #[derive(Clone, Debug)]
+#[repr(C)]
 pub struct ReplicaBlockInfoV3<'a> {
     pub parent_slot: Slot,
     pub parent_blockhash: &'a str,
@@ -220,6 +232,7 @@ pub struct ReplicaBlockInfoV3<'a> {
     pub entry_count: u64,
 }
 
+#[repr(u32)]
 pub enum ReplicaBlockInfoVersions<'a> {
     V0_0_1(&'a ReplicaBlockInfo<'a>),
     V0_0_2(&'a ReplicaBlockInfoV2<'a>),
@@ -228,6 +241,7 @@ pub enum ReplicaBlockInfoVersions<'a> {
 
 /// Errors returned by plugin calls
 #[derive(Error, Debug)]
+#[repr(u32)]
 pub enum GeyserPluginError {
     /// Error opening the configuration file; for example, when the file
     /// is not found or when the validator process has no permission to read it.
@@ -258,6 +272,7 @@ pub enum GeyserPluginError {
 
 /// The current status of a slot
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
 pub enum SlotStatus {
     /// The highest slot of the heaviest fork processed by the node. Ledger state at this slot is
     /// not derived from a confirmed or finalized block, but if multiple forks are present, is from

@@ -190,7 +190,6 @@ impl Serializer {
 pub fn serialize_parameters(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
-    should_cap_ix_accounts: bool,
     copy_account_data: bool,
 ) -> Result<
     (
@@ -201,7 +200,7 @@ pub fn serialize_parameters(
     InstructionError,
 > {
     let num_ix_accounts = instruction_context.get_number_of_instruction_accounts();
-    if should_cap_ix_accounts && num_ix_accounts > MAX_INSTRUCTION_ACCOUNTS as IndexOfAccount {
+    if num_ix_accounts > MAX_INSTRUCTION_ACCOUNTS as IndexOfAccount {
         return Err(InstructionError::MaxAccountsExceeded);
     }
 
@@ -641,7 +640,6 @@ mod tests {
         struct TestCase {
             num_ix_accounts: usize,
             append_dup_account: bool,
-            should_cap_ix_accounts: bool,
             expected_err: Option<InstructionError>,
             name: &'static str,
         }
@@ -650,55 +648,27 @@ mod tests {
             for TestCase {
                 num_ix_accounts,
                 append_dup_account,
-                should_cap_ix_accounts,
                 expected_err,
                 name,
             } in [
                 TestCase {
-                    name: "serialize max accounts without cap",
-                    num_ix_accounts: usize::from(MAX_INSTRUCTION_ACCOUNTS),
-                    should_cap_ix_accounts: false,
-                    append_dup_account: false,
-                    expected_err: None,
-                },
-                TestCase {
-                    name: "serialize max accounts and append dup without cap",
-                    num_ix_accounts: usize::from(MAX_INSTRUCTION_ACCOUNTS),
-                    should_cap_ix_accounts: false,
-                    append_dup_account: true,
-                    expected_err: None,
-                },
-                TestCase {
                     name: "serialize max accounts with cap",
                     num_ix_accounts: usize::from(MAX_INSTRUCTION_ACCOUNTS),
-                    should_cap_ix_accounts: true,
                     append_dup_account: false,
                     expected_err: None,
                 },
                 TestCase {
                     name: "serialize too many accounts with cap",
                     num_ix_accounts: usize::from(MAX_INSTRUCTION_ACCOUNTS) + 1,
-                    should_cap_ix_accounts: true,
                     append_dup_account: false,
                     expected_err: Some(InstructionError::MaxAccountsExceeded),
                 },
                 TestCase {
                     name: "serialize too many accounts and append dup with cap",
                     num_ix_accounts: usize::from(MAX_INSTRUCTION_ACCOUNTS),
-                    should_cap_ix_accounts: true,
                     append_dup_account: true,
                     expected_err: Some(InstructionError::MaxAccountsExceeded),
                 },
-                // This test case breaks parameter deserialization and can be cleaned up
-                // when should_cap_ix_accounts is enabled.
-                //
-                // TestCase {
-                //     name: "serialize too many accounts and append dup without cap",
-                //     num_ix_accounts: usize::from(MAX_INSTRUCTION_ACCOUNTS) + 1,
-                //     should_cap_ix_accounts: false,
-                //     append_dup_account: true,
-                //     expected_err: None,
-                // },
             ] {
                 let program_id = solana_sdk::pubkey::new_rand();
                 let mut transaction_accounts = vec![(
@@ -757,7 +727,6 @@ mod tests {
                 let serialization_result = serialize_parameters(
                     invoke_context.transaction_context,
                     instruction_context,
-                    should_cap_ix_accounts,
                     copy_account_data,
                 );
                 assert_eq!(
@@ -912,7 +881,6 @@ mod tests {
             let (mut serialized, regions, accounts_metadata) = serialize_parameters(
                 invoke_context.transaction_context,
                 instruction_context,
-                true,
                 copy_account_data,
             )
             .unwrap();
@@ -1004,7 +972,6 @@ mod tests {
             let (mut serialized, regions, account_lengths) = serialize_parameters(
                 invoke_context.transaction_context,
                 instruction_context,
-                true,
                 copy_account_data,
             )
             .unwrap();

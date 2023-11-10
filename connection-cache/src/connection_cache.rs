@@ -22,7 +22,7 @@ use {
 const MAX_CONNECTIONS: usize = 1024;
 
 /// Default connection pool size per remote address
-pub const DEFAULT_CONNECTION_POOL_SIZE: usize = 4;
+pub const DEFAULT_CONNECTION_POOL_SIZE: usize = 2;
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub enum Protocol {
@@ -81,6 +81,7 @@ where
         connection_config: C,
         connection_manager: M,
     ) -> Self {
+        info!("Creating ConnectionCache {name}, pool size: {connection_pool_size}");
         let (sender, receiver) = crossbeam_channel::unbounded();
 
         let map = Arc::new(RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)));

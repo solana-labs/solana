@@ -2,6 +2,8 @@ use {
     predicates::prelude::*,
     std::{
         env, fs,
+        path::PathBuf,
+        str::FromStr,
         sync::atomic::{AtomicBool, Ordering},
     },
 };
@@ -25,7 +27,9 @@ fn run_cargo_build(crate_name: &str, extra_args: &[&str], fail: bool) {
     for arg in extra_args {
         args.push(arg);
     }
-    args.push("--");
+    if !extra_args.contains(&"--") {
+        args.push("--");
+    }
     args.push("-vv");
     let mut cmd = assert_cmd::Command::cargo_bin("cargo-build-sbf").unwrap();
     let assert = cmd.env("RUST_LOG", "debug").args(&args).assert();
@@ -86,6 +90,40 @@ fn test_out_dir() {
     assert!(dir.exists());
     fs::remove_dir_all("tmp_out").expect("Failed to remove tmp_out dir");
     clean_target("noop");
+}
+
+#[test]
+#[serial]
+fn test_target_dir() {
+    let target_dir = "./temp-target-dir";
+    run_cargo_build("noop", &["--", "--target-dir", target_dir], false);
+    let cwd = env::current_dir().expect("Unable to get current working directory");
+    let normal_target_dir = cwd.join("tests").join("crates").join("noop").join("target");
+    assert!(!normal_target_dir.exists());
+    let so_file = PathBuf::from_str(target_dir)
+        .unwrap()
+        .join("deploy")
+        .join("noop.so");
+    assert!(so_file.exists());
+    fs::remove_dir_all(target_dir).expect("Failed to remove custom target dir");
+}
+
+#[test]
+#[serial]
+fn test_target_and_out_dir() {
+    let target_dir = "./temp-target-dir";
+    run_cargo_build(
+        "noop",
+        &["--sbf-out-dir", "tmp_out", "--", "--target-dir", target_dir],
+        false,
+    );
+    let cwd = env::current_dir().expect("Unable to get current working directory");
+    let dir = cwd.join("tmp_out");
+    assert!(dir.exists());
+    fs::remove_dir_all("tmp_out").expect("Failed to remove tmp_out dir");
+    let normal_target_dir = cwd.join("tests").join("crates").join("noop").join("target");
+    assert!(!normal_target_dir.exists());
+    fs::remove_dir_all(target_dir).expect("Failed to remove custom target dir");
 }
 
 #[test]

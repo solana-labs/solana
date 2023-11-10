@@ -13,7 +13,7 @@ use {
     },
 };
 
-const MAX_SLOTS_PER_ENTRY: usize = 2048 * 8;
+pub const MAX_SLOTS_PER_ENTRY: usize = 2048 * 8;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct Uncompressed {
     pub first_slot: Slot,
@@ -178,7 +178,7 @@ impl Default for CompressedSlots {
 }
 
 impl CompressedSlots {
-    fn new(max_size: usize) -> Self {
+    pub(crate) fn new(max_size: usize) -> Self {
         CompressedSlots::Uncompressed(Uncompressed::new(max_size))
     }
 

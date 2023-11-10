@@ -271,15 +271,12 @@ mod tests {
         let my_pubkey = my_keypair.pubkey();
         let genesis_config_info = create_genesis_config_with_leader(10_000, &my_pubkey, 10_000);
         let GenesisConfigInfo { genesis_config, .. } = genesis_config_info;
-        let bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
+        let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests(&genesis_config));
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
-            &bank_forks.working_bank(),
+            &bank_forks.read().unwrap().working_bank(),
         ));
-        let mut duplicate_shred_handler = DuplicateShredHandler::new(
-            blockstore.clone(),
-            leader_schedule_cache,
-            Arc::new(RwLock::new(bank_forks)),
-        );
+        let mut duplicate_shred_handler =
+            DuplicateShredHandler::new(blockstore.clone(), leader_schedule_cache, bank_forks);
         let chunks = create_duplicate_proof(
             my_keypair.clone(),
             None,
@@ -340,13 +337,12 @@ mod tests {
         let my_pubkey = my_keypair.pubkey();
         let genesis_config_info = create_genesis_config_with_leader(10_000, &my_pubkey, 10_000);
         let GenesisConfigInfo { genesis_config, .. } = genesis_config_info;
-        let bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
+        let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests(&genesis_config));
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
-            &bank_forks.working_bank(),
+            &bank_forks.read().unwrap().working_bank(),
         ));
-        let bank_forks_ptr = Arc::new(RwLock::new(bank_forks));
         let mut duplicate_shred_handler =
-            DuplicateShredHandler::new(blockstore.clone(), leader_schedule_cache, bank_forks_ptr);
+            DuplicateShredHandler::new(blockstore.clone(), leader_schedule_cache, bank_forks);
         let start_slot: Slot = 1;
 
         // This proof will not be accepted because num_chunks is too large.

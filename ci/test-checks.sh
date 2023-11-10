@@ -13,6 +13,14 @@ source ci/rust-version.sh nightly
 eval "$(ci/channel-info.sh)"
 cargoNightly="$(readlink -f "./cargo") nightly"
 
+# check that cargo-hack has been installed
+if ! $cargoNightly hack --version >/dev/null 2>&1; then
+  cat >&2 <<EOF
+ERROR: cargo hack failed.
+       install 'cargo hack' with 'cargo install cargo-hack'
+EOF
+fi
+
 echo --- build environment
 (
   set -x
@@ -61,35 +69,7 @@ fi
 
 _ ci/order-crates-for-publishing.py
 
-nightly_clippy_allows=(--allow=clippy::redundant_clone)
-
-# Use nightly clippy, as frozen-abi proc-macro generates a lot of code across
-# various crates in this whole monorepo (frozen-abi is enabled only under nightly
-# due to the use of unstable rust feature). Likewise, frozen-abi(-macro) crates'
-# unit tests are only compiled under nightly.
-# Similarly, nightly is desired to run clippy over all of bench files because
-# the bench itself isn't stabilized yet...
-#   ref: https://github.com/rust-lang/rust/issues/66287
-_ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy --workspace --all-targets --features dummy-for-ci-check -- \
-  --deny=warnings \
-  --deny=clippy::default_trait_access \
-  --deny=clippy::arithmetic_side_effects \
-  --deny=clippy::manual_let_else \
-  --deny=clippy::used_underscore_binding \
-  "${nightly_clippy_allows[@]}"
-
-# temporarily run stable clippy as well to scan the codebase for
-# `redundant_clone`s, which is disabled as nightly clippy is buggy:
-#   https://github.com/solana-labs/solana/issues/31834
-#
-# can't use --all-targets:
-#   error[E0554]: `#![feature]` may not be used on the stable release channel
-_ scripts/cargo-for-all-lock-files.sh -- clippy --workspace  --tests --bins --examples --features dummy-for-ci-check -- \
-  --deny=warnings \
-  --deny=clippy::default_trait_access \
-  --deny=clippy::arithmetic_side_effects \
-  --deny=clippy::manual_let_else \
-  --deny=clippy::used_underscore_binding
+_ scripts/cargo-clippy.sh
 
 if [[ -n $CI ]]; then
   # exclude from printing "Checking xxx ..."

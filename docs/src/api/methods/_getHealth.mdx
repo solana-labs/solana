@@ -12,13 +12,8 @@ import {
 
 ## getHealth
 
-Returns the current health of the node.
-
-:::caution
-If one or more `--known-validator` arguments are provided to `solana-validator` - "ok" is returned
-when the node has within `HEALTH_CHECK_SLOT_DISTANCE` slots of the highest known validator,
-otherwise an error is returned. "ok" is always returned if no known validators are provided.
-:::
+Returns the current health of the node. A healthy node is one that is within
+`HEALTH_CHECK_SLOT_DISTANCE` slots of the latest cluster confirmed slot.
 
 <DocSideBySide>
 <CodeParams>
