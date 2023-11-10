@@ -10872,7 +10872,8 @@ fn test_rent_state_list_len() {
     let num_accounts = tx.message().account_keys.len();
     let sanitized_tx = SanitizedTransaction::try_from_legacy_transaction(tx).unwrap();
     let mut error_counters = TransactionErrorMetrics::default();
-    let loaded_txs = bank.rc.accounts.load_accounts(
+    let loaded_txs = load_accounts(
+        &bank.accounts().accounts_db,
         &bank.ancestors,
         &[sanitized_tx.clone()],
         vec![(Ok(()), None)],
