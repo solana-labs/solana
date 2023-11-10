@@ -916,8 +916,8 @@ impl ThreadManager {
 
                             move || {
                                 let msg = select_biased! {
-                                    recv(blocked_transaction_receiver.clone()) -> m => m,
-                                    recv(idle_transaction_receiver.clone()) -> m => m,
+                                    recv(blocked_transaction_receiver -> m => m,
+                                    recv(idle_transaction_receiver) -> m => m,
                                 };
                                 handled_transaction_sender.send(3).unwrap();
                             }
