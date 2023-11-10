@@ -927,14 +927,14 @@ impl ThreadManager {
                                                 SessionedChannel::Payload(payload) => {
                                                     Self::receive_new_transaction(&mut state_machine, payload);
                                                 }
-                                                SessionedChannel::NewContext(next_context) => {
-                                                    bank = next_context.bank().clone();
-                                                    will_end_session = false;
-                                                }
                                                 SessionedChannel::NextSession(mut next_receiver_box) => {
                                                     will_end_session = true;
                                                     (transaction_receiver, next_result_sender) =
                                                         next_receiver_box.unwrap_channel_pair();
+                                                }
+                                                SessionedChannel::NewContext(next_context) => {
+                                                    bank = next_context.bank().clone();
+                                                    will_end_session = false;
                                                 }
                                             };
                                         },
