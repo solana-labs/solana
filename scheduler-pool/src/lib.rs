@@ -968,6 +968,8 @@ impl ThreadManager {
                                 loop {
                                     let (m, was_blocked) = select_biased! {
                                         recv(blocked_transaction_receiver) -> m => {
+                                            match m {
+                                                Ok(mm) => {
                                             match m.unwrap() {
                                                 SessionedChannel::Payload(payload) => {
                                                     (payload, true)
@@ -980,6 +982,8 @@ impl ThreadManager {
                                                     continue;
                                                 }
                                             }
+                                                },
+                                                Err(_) => break,
                                         },
                                         recv(idle_transaction_receiver) -> m => {
                                             (m.unwrap(), false)
