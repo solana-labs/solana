@@ -37,7 +37,7 @@ use {
         thread::JoinHandle,
     },
 };
-use crossbeam_channel::select_biased;
+use crossbeam_channel::{select_biased, unbounded};
 
 type UniqueWeight = u128;
 type CU = u64;
@@ -1296,7 +1296,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> InstalledScheduler<SEA>
                 .collect::<Vec<_>>();
             let uw = UniqueWeight::max_value() - index as UniqueWeight;
             let task = Task::new_for_queue(uw, (transaction.clone(), locks));
-            let (transaction_sender, transaction_receiver) = crossbeam_channel::unbounded();
+            let (transaction_sender, transaction_receiver) = unbounded();
             let mut runnable_queue = ModeSpecificTaskQueue::BlockVerification(
                 ChannelBackedTaskQueue::new(&transaction_receiver),
             );
