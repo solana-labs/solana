@@ -855,7 +855,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
 }
 
 type ChannelPair<T> = (
-    crossbeam_channel::Receiver<SessionedChannel>,
+    crossbeam_channel::Receiver<SessionedChannel<T>>,
     crossbeam_channel::Sender<T>,
 );
 
