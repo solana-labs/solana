@@ -18,7 +18,7 @@ use {
         Client,
     },
     log::*,
-    solana_sdk::hash::Hash,
+    solana_sdk::{hash::Hash, pubkey::Pubkey},
     std::{collections::BTreeMap, error::Error},
 };
 
@@ -76,21 +76,36 @@ impl<'a> std::fmt::Display for ValidatorConfig<'a> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct ClientConfig {
+    pub num_clients: i32,
+    pub client_delay_start: u64,
+    pub client_type: String,
+    pub client_to_run: String,
+    pub bench_tps_args: Vec<String>,
+    pub target_node: Option<Pubkey>,
+    pub duration: u64,
+    pub num_nodes: Option<u64>,
+}
+
 pub struct Kubernetes<'a> {
     client: Client,
     namespace: &'a str,
     validator_config: &'a mut ValidatorConfig<'a>,
+    client_config: ClientConfig,
 }
 
 impl<'a> Kubernetes<'a> {
     pub async fn new(
         namespace: &'a str,
         validator_config: &'a mut ValidatorConfig<'a>,
+        client_config: ClientConfig,
     ) -> Kubernetes<'a> {
         Kubernetes {
             client: Client::try_default().await.unwrap(),
             namespace,
             validator_config,
+            client_config,
         }
     }
 
@@ -125,6 +140,16 @@ impl<'a> Kubernetes<'a> {
             flags.push("--enable-extended-tx-metadata-storage".to_string());
         }
 
+        if let Some(limit_ledger_size) = self.validator_config.max_ledger_size {
+            flags.push("--limit-ledger-size".to_string());
+            flags.push(limit_ledger_size.to_string());
+        }
+
+        flags
+    }
+
+    fn generate_bootstrap_command_flags(&mut self) -> Vec<String> {
+        let mut flags = self.generate_command_flags();
         if let Some(slot) = self.validator_config.wait_for_supermajority {
             flags.push("--wait-for-supermajority".to_string());
             flags.push(slot.to_string());
@@ -135,16 +160,7 @@ impl<'a> Kubernetes<'a> {
             flags.push(bank_hash.to_string());
         }
 
-        if let Some(limit_ledger_size) = self.validator_config.max_ledger_size {
-            flags.push("--limit-ledger-size".to_string());
-            flags.push(limit_ledger_size.to_string());
-        }
-
         flags
-    }
-
-    fn generate_bootstrap_command_flags(&mut self) -> Vec<String> {
-        self.generate_command_flags()
     }
 
     fn generate_validator_command_flags(&mut self) -> Vec<String> {
@@ -158,6 +174,32 @@ impl<'a> Kubernetes<'a> {
         if let Some(shred_version) = self.validator_config.shred_version {
             flags.push("--expected-shred-version".to_string());
             flags.push(shred_version.to_string());
+        }
+
+        flags
+    }
+
+    fn generate_client_command_flags(&self) -> Vec<String> {
+        let mut flags = vec![];
+
+        flags.push(self.client_config.client_to_run.clone()); //client to run
+        let bench_tps_args = self.client_config.bench_tps_args.join(" ");
+        flags.push(bench_tps_args);
+        flags.push(self.client_config.client_type.clone());
+
+        if let Some(target_node) = self.client_config.target_node {
+            flags.push("--target-node".to_string());
+            flags.push(target_node.to_string());
+        }
+
+        flags.push("--duration".to_string());
+        flags.push(self.client_config.duration.to_string());
+        info!("greg duration: {}", self.client_config.duration);
+
+        if let Some(num_nodes) = self.client_config.num_nodes {
+            flags.push("--num-nodes".to_string());
+            flags.push(num_nodes.to_string());
+            info!("greg num nodes: {}", num_nodes);
         }
 
         flags
@@ -203,20 +245,20 @@ impl<'a> Kubernetes<'a> {
             ..Default::default()
         }];
 
-        let accounts_volume = Volume {
+        let accounts_volume = Some(vec![Volume {
             name: "bootstrap-accounts-volume".into(),
             secret: Some(SecretVolumeSource {
                 secret_name,
                 ..Default::default()
             }),
             ..Default::default()
-        };
+        }]);
 
-        let accounts_volume_mount = VolumeMount {
+        let accounts_volume_mount = Some(vec![VolumeMount {
             name: "bootstrap-accounts-volume".to_string(),
             mount_path: "/home/solana/bootstrap-accounts".to_string(),
             ..Default::default()
-        };
+        }]);
 
         let mut command =
             vec!["/home/solana/k8s-cluster-scripts/bootstrap-startup-script.sh".to_string()];
@@ -252,12 +294,9 @@ impl<'a> Kubernetes<'a> {
         num_validators: i32,
         env_vars: Vec<EnvVar>,
         command: &[String],
-        accounts_volume: Volume,
-        accounts_volume_mount: VolumeMount,
+        volumes: Option<Vec<Volume>>,
+        volume_mounts: Option<Vec<VolumeMount>>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
-        let volumes = vec![accounts_volume];
-        let volume_mounts = vec![accounts_volume_mount];
-
         // Define the pod spec
         let pod_spec = PodTemplateSpec {
             metadata: Some(ObjectMeta {
@@ -271,10 +310,10 @@ impl<'a> Kubernetes<'a> {
                     image_pull_policy: Some("Always".to_string()),
                     env: Some(env_vars),
                     command: Some(command.to_owned()),
-                    volume_mounts: Some(volume_mounts),
+                    volume_mounts,
                     ..Default::default()
                 }],
-                volumes: Some(volumes),
+                volumes,
                 security_context: Some(PodSecurityContext {
                     run_as_user: Some(1000),
                     run_as_group: Some(1000),
@@ -416,6 +455,37 @@ impl<'a> Kubernetes<'a> {
         Ok(secret)
     }
 
+    pub fn create_client_secret(&self, client_index: i32) -> Result<Secret, Box<dyn Error>> {
+        let secret_name = format!("client-accounts-secret-{}", client_index);
+        let faucet_key_path = SOLANA_ROOT.join("config-k8s");
+        let faucet_keypair =
+            std::fs::read(faucet_key_path.join("faucet.json")).unwrap_or_else(|_| {
+                panic!("Failed to read faucet.json file! at: {:?}", faucet_key_path)
+            });
+
+        let mut data = BTreeMap::new();
+        data.insert(
+            "faucet.base64".to_string(),
+            ByteString(
+                general_purpose::STANDARD
+                    .encode(faucet_keypair)
+                    .as_bytes()
+                    .to_vec(),
+            ),
+        );
+
+        let secret = Secret {
+            metadata: ObjectMeta {
+                name: Some(secret_name.to_string()),
+                ..Default::default()
+            },
+            data: Some(data),
+            ..Default::default()
+        };
+
+        Ok(secret)
+    }
+
     pub async fn deploy_replicas_set(
         &self,
         replica_set: &ReplicaSet,
@@ -492,16 +562,8 @@ impl<'a> Kubernetes<'a> {
         Ok(available_validators >= desired_validators)
     }
 
-    pub async fn create_validator_replicas_set(
-        &mut self,
-        container_name: &str,
-        validator_index: i32,
-        image_name: &str,
-        num_validators: i32,
-        secret_name: Option<String>,
-        label_selector: &BTreeMap<String, String>,
-    ) -> Result<ReplicaSet, Box<dyn Error>> {
-        let env_vars = vec![
+    fn set_non_bootstrap_environment_variables(&self) -> Vec<EnvVar> {
+        vec![
             EnvVar {
                 name: "NAMESPACE".to_string(),
                 value_from: Some(EnvVarSource {
@@ -534,22 +596,34 @@ impl<'a> Kubernetes<'a> {
                 ),
                 ..Default::default()
             },
-        ];
+        ]
+    }
 
-        let accounts_volume = Volume {
+    pub async fn create_validator_replica_set(
+        &mut self,
+        container_name: &str,
+        validator_index: i32,
+        image_name: &str,
+        num_validators: i32,
+        secret_name: Option<String>,
+        label_selector: &BTreeMap<String, String>,
+    ) -> Result<ReplicaSet, Box<dyn Error>> {
+        let env_vars = self.set_non_bootstrap_environment_variables();
+
+        let accounts_volume = Some(vec![Volume {
             name: format!("validator-accounts-volume-{}", validator_index),
             secret: Some(SecretVolumeSource {
                 secret_name,
                 ..Default::default()
             }),
             ..Default::default()
-        };
+        }]);
 
-        let accounts_volume_mount = VolumeMount {
+        let accounts_volume_mount = Some(vec![VolumeMount {
             name: format!("validator-accounts-volume-{}", validator_index),
             mount_path: "/home/solana/validator-accounts".to_string(),
             ..Default::default()
-        };
+        }]);
 
         let mut command =
             vec!["/home/solana/k8s-cluster-scripts/validator-startup-script.sh".to_string()];
@@ -565,6 +639,54 @@ impl<'a> Kubernetes<'a> {
             container_name,
             image_name,
             num_validators,
+            env_vars,
+            &command,
+            accounts_volume,
+            accounts_volume_mount,
+        )
+        .await
+    }
+
+    pub async fn create_client_replica_set(
+        &mut self,
+        container_name: &str,
+        client_index: i32,
+        image_name: &str,
+        num_clients: i32,
+        secret_name: Option<String>,
+        label_selector: &BTreeMap<String, String>,
+    ) -> Result<ReplicaSet, Box<dyn Error>> {
+        let env_vars = self.set_non_bootstrap_environment_variables();
+
+        let accounts_volume = Some(vec![Volume {
+            name: format!("client-accounts-volume-{}", client_index),
+            secret: Some(SecretVolumeSource {
+                secret_name,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }]);
+
+        let accounts_volume_mount = Some(vec![VolumeMount {
+            name: format!("client-accounts-volume-{}", client_index),
+            mount_path: "/home/solana/client-accounts".to_string(),
+            ..Default::default()
+        }]);
+
+        let mut command =
+            vec!["/home/solana/k8s-cluster-scripts/client-startup-script.sh".to_string()];
+        command.extend(self.generate_client_command_flags());
+
+        for c in command.iter() {
+            debug!("client command: {}", c);
+        }
+
+        self.create_replicas_set(
+            format!("client-{}", client_index).as_str(),
+            label_selector,
+            container_name,
+            image_name,
+            num_clients,
             env_vars,
             &command,
             accounts_volume,

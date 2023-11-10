@@ -60,6 +60,4 @@ for i in "${!SECRET_FILES[@]}"; do
 done
 
 mkdir -p /home/solana/logs
-# if [ "$validator_type" == "bootstrap" ]; then
-#   tar -xvf /home/solana/genesis/genesis-package.tar.bz2 -C /home/solana/
-# fi
+

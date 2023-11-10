@@ -2,10 +2,9 @@
 #![allow(clippy::arithmetic_side_effects)]
 
 use {
-    crate::{boxed_error, initialize_globals, ValidatorType, LEDGER_DIR, SOLANA_ROOT},
+    crate::{boxed_error, initialize_globals, ValidatorType, SOLANA_ROOT},
     base64::{engine::general_purpose, Engine as _},
     bip39::{Language, Mnemonic, MnemonicType, Seed},
-    bzip2::{write::BzEncoder, Compression},
     log::*,
     solana_clap_v3_utils::{input_parsers::STDOUT_OUTFILE_TOKEN, keygen},
     solana_sdk::{
@@ -14,8 +13,13 @@ use {
         pubkey::Pubkey,
         signature::{keypair_from_seed, write_keypair, write_keypair_file, Keypair, Signer},
     },
-    std::{error::Error, fs::File, io::Read, path::PathBuf, process::Command},
-    tar::Builder,
+    std::{
+        error::Error,
+        fs::{File, OpenOptions},
+        io::{self, BufRead, BufWriter, Read, Write},
+        path::PathBuf,
+        process::Command,
+    },
 };
 
 pub const DEFAULT_WORD_COUNT: usize = 12;
@@ -26,6 +30,7 @@ pub const DEFAULT_INTERNAL_NODE_STAKE_SOL: f64 = 10.0; // 10000000000 lamports
 pub const DEFAULT_INTERNAL_NODE_SOL: f64 = 500.0; // 500000000000 lamports
 pub const DEFAULT_BOOTSTRAP_NODE_STAKE_SOL: f64 = 10.0;
 pub const DEFAULT_BOOTSTRAP_NODE_SOL: f64 = 500.0;
+pub const DEFAULT_CLIENT_LAMPORTS_PER_SIGNATURE: u64 = 42;
 
 fn output_keypair(keypair: &Keypair, outfile: &str) -> Result<(), Box<dyn Error>> {
     if outfile == STDOUT_OUTFILE_TOKEN {
@@ -91,6 +96,34 @@ fn parse_spl_genesis_file(spl_file: &PathBuf) -> Result<Vec<String>, Box<dyn Err
     Ok(args)
 }
 
+fn append_client_accounts_to_file(
+    in_file: &PathBuf,  //bench-tps-x.yml
+    out_file: &PathBuf, //client-accounts.yml
+) -> io::Result<()> {
+    // Open the bench-tps-x file for reading.
+    let input = File::open(in_file)?;
+    let reader = io::BufReader::new(input);
+
+    // Open (or create) client-accounts.yml for appending.
+    let output = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(out_file)?;
+    let mut writer = BufWriter::new(output);
+
+    // Enumerate the lines of the input file, starting from 1.
+    for (index, line) in reader.lines().enumerate().map(|(i, l)| (i + 1, l)) {
+        let line = line?;
+
+        // Skip first line since it is a header aka "---" in a yaml
+        if (index as u64) > 1 {
+            writeln!(writer, "{}", line)?;
+        }
+    }
+
+    Ok(())
+}
+
 pub struct GenesisFlags {
     pub hashes_per_tick: String,
     pub slots_per_epoch: Option<u64>,
@@ -131,13 +164,6 @@ impl std::fmt::Display for GenesisFlags {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct SetupConfig<'a> {
-    pub namespace: &'a str,
-    pub num_validators: i32,
-    pub skip_genesis_build: bool,
-}
-
 pub struct ValidatorAccountKeypairs {
     pub vote_account: Keypair,
     pub identity: Keypair,
@@ -151,6 +177,7 @@ pub struct Genesis {
     pub faucet_keypair: Option<Keypair>,
     pub genesis_config: Option<GenesisConfig>,
     pub all_pubkeys: Vec<Pubkey>,
+    pub primordial_accounts_files: Vec<PathBuf>,
 }
 
 impl Genesis {
@@ -168,6 +195,7 @@ impl Genesis {
             faucet_keypair: None,
             genesis_config: None,
             all_pubkeys: Vec::default(),
+            primordial_accounts_files: Vec::default(),
         }
     }
 
@@ -200,6 +228,53 @@ impl Genesis {
         for i in 0..number_of_accounts {
             self.generate_account(validator_type, &filename_prefix, i)?;
         }
+
+        Ok(())
+    }
+
+    // TODO: only supports one client right now.
+    // append all t
+    pub fn create_client_accounts(
+        &mut self,
+        number_of_clients: i32,
+        target_lamports_per_signature: u64,
+        bench_tps_args: Vec<String>, //todo: need to set this up from argmatches in main.rs
+    ) -> Result<(), Box<dyn Error>> {
+        let client_accounts_file = SOLANA_ROOT.join("config-k8s/client-accounts.yml");
+        for i in 0..number_of_clients {
+            let mut args = Vec::new();
+            let account_path = SOLANA_ROOT.join(format!("config-k8s/bench-tps-{}.yml", i));
+            args.push("--write-client-keys".to_string());
+            args.push(account_path.to_string_lossy().to_string());
+            args.push("--target-lamports-per-signature".to_string());
+            args.push(target_lamports_per_signature.to_string());
+
+            if !bench_tps_args.is_empty() {
+                args.extend(bench_tps_args.clone());
+            }
+
+            for i in bench_tps_args.iter() {
+                info!("bench_tps_arg: {}", i);
+            }
+
+            info!("generating client accounts...");
+            let output = Command::new("solana-bench-tps")
+                .args(&args)
+                .output()
+                .expect("Failed to execute solana-bench-tps");
+
+            if !output.status.success() {
+                return Err(boxed_error!(format!(
+                    "Failed to create client accounts. err: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                )));
+            }
+
+            append_client_accounts_to_file(&account_path, &client_accounts_file)?;
+        }
+
+        // add client accounts file as a primordial account
+        self.primordial_accounts_files.push(client_accounts_file);
 
         Ok(())
     }
@@ -311,6 +386,15 @@ impl Genesis {
             args.push(lamports_per_signature.to_string());
         }
 
+        if SOLANA_ROOT.join("config-k8s/client-accounts.yml").exists() {
+            args.push("--primordial-accounts-file".to_string());
+            args.push(
+                SOLANA_ROOT
+                    .join("config-k8s/client-accounts.yml")
+                    .to_string_lossy()
+                    .to_string(),
+            );
+        }
         args
     }
 
@@ -378,20 +462,5 @@ impl Genesis {
         if v.len() != self.all_pubkeys.len() {
             panic!("Error: validator pubkeys have duplicates!");
         }
-    }
-
-    // solana-genesis creates a genesis.tar.bz2 but if we need to create snapshots, these
-    // are not included in the genesis.tar.bz2. So we package everything including genesis.tar.bz2,
-    // snapshots, etc into genesis-package.tar.bz2 and we use this as our genesis in the
-    // bootstrap validator
-    pub fn package_up(&mut self) -> Result<(), Box<dyn Error>> {
-        info!("Packaging genesis");
-        let folder_to_tar = LEDGER_DIR.join("");
-        let tar_bz2_file = File::create(SOLANA_ROOT.join("config-k8s/genesis-package.tar.bz2"))?;
-        let encoder = BzEncoder::new(tar_bz2_file, Compression::best());
-        let mut tar_builder = Builder::new(encoder);
-        tar_builder.append_dir_all("ledger", folder_to_tar)?;
-
-        Ok(())
     }
 }
