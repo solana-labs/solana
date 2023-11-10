@@ -3353,11 +3353,6 @@ impl Blockstore {
         self.max_root()
     }
 
-    /// For tests
-    pub fn set_max_root(&mut self, root: Slot) {
-        self.max_root.store(root, Ordering::Relaxed);
-    }
-
     // find the first available slot in blockstore that has some data in it
     pub fn lowest_slot(&self) -> Slot {
         for (slot, meta) in self
