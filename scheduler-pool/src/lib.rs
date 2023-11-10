@@ -872,7 +872,7 @@ trait WithChannelPair<T>: Send + Sync {
 }
 
 enum SessionedChannel<T> {
-    Payload((SanitizedTransaction, usize)),
+    Payload(T),
     NextContext(SchedulingContext),
     NextSession(Box<dyn WithChannelPair<T>>),
 }
