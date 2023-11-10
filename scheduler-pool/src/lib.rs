@@ -967,7 +967,9 @@ impl ThreadManager {
                             };
                         }
                         for _ in (0..10) {
-                            blocked_transaction_sender.send(SessionedChannel::NextSession()).unwrap();
+                            blocked_transaction_sender.send(SessionedChannel::NextSession(Box::new(
+                                        ChannelPairOption(Some((3, 4)))
+                                        ))).unwrap();
 
                         }
                         result_sender.send(result_with_timings).unwrap();
