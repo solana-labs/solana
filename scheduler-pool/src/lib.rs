@@ -875,7 +875,7 @@ enum SessionedChannel<T> {
 
 impl ThreadManager {
     fn new(initial_context: SchedulingContext) -> Self {
-        Self { context: Some(initial_context) }
+        Self { context: Some(initial_context), scheduler_thread: None, handler_threads: vec![] }
     }
     fn is_active(&self) -> bool {
         self.scheduler_thread.is_some()
