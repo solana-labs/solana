@@ -22,8 +22,8 @@ use {
     },
     solana_scheduler::SchedulingMode,
     solana_scheduler_pool::{
-        InstallableScheduler, PooledScheduler, TransactionHandler, SchedulerPool,
-        SpawnableScheduler,
+        InstallableScheduler, PooledScheduler, SchedulerPool, SpawnableScheduler,
+        TransactionHandler,
     },
     solana_sdk::{
         system_transaction,
@@ -640,9 +640,7 @@ mod thread_utilization {
     #[derive(Debug, Clone)]
     struct SleepyHandlerWithCompletionSignal(crossbeam_channel::Sender<Signature>);
 
-    impl<SEA: ScheduleExecutionArg> TransactionHandler<SEA>
-        for SleepyHandlerWithCompletionSignal
-    {
+    impl<SEA: ScheduleExecutionArg> TransactionHandler<SEA> for SleepyHandlerWithCompletionSignal {
         fn create<T: SpawnableScheduler<Self, SEA>>(_pool: &SchedulerPool<T, Self, SEA>) -> Self {
             // not needed for bench...
             unimplemented!();

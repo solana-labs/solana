@@ -9,6 +9,7 @@
 //! helper fun called `execute_batch()`.
 
 use {
+    log::*,
     rand::{thread_rng, Rng},
     solana_ledger::blockstore_processor::{
         execute_batch, TransactionBatchWithIndexes, TransactionStatusSender,
@@ -24,18 +25,18 @@ use {
         prioritization_fee_cache::PrioritizationFeeCache,
     },
     solana_scheduler::{SchedulingMode, WithSchedulingMode},
-    solana_sdk::transaction::{Result, SanitizedTransaction},
+    solana_sdk::{
+        pubkey::Pubkey,
+        transaction::{Result, SanitizedTransaction},
+    },
     solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
         fmt::Debug,
         marker::PhantomData,
-        sync::{Arc, Mutex, Weak},
+        sync::{atomic::AtomicUsize, Arc, Mutex, Weak},
+        thread::JoinHandle,
     },
 };
-use solana_sdk::pubkey::Pubkey;
-use std::sync::atomic::AtomicUsize;
-use log::*;
-use std::thread::JoinHandle;
 
 type UniqueWeight = u128;
 type CU = u64;
@@ -80,11 +81,8 @@ pub type DefaultSchedulerPool = SchedulerPool<
     DefaultScheduleExecutionArg,
 >;
 
-impl<
-        T: SpawnableScheduler<TH, SEA>,
-        TH: TransactionHandler<SEA>,
-        SEA: ScheduleExecutionArg,
-    > SchedulerPool<T, TH, SEA>
+impl<T: SpawnableScheduler<TH, SEA>, TH: TransactionHandler<SEA>, SEA: ScheduleExecutionArg>
+    SchedulerPool<T, TH, SEA>
 {
     pub fn new(
         log_messages_bytes_limit: Option<usize>,
@@ -145,11 +143,8 @@ impl<
     }
 }
 
-impl<
-        T: SpawnableScheduler<TH, SEA>,
-        TH: TransactionHandler<SEA>,
-        SEA: ScheduleExecutionArg,
-    > InstalledSchedulerPool<SEA> for SchedulerPool<T, TH, SEA>
+impl<T: SpawnableScheduler<TH, SEA>, TH: TransactionHandler<SEA>, SEA: ScheduleExecutionArg>
+    InstalledSchedulerPool<SEA> for SchedulerPool<T, TH, SEA>
 {
     fn take_scheduler(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler<SEA>> {
         self.do_take_scheduler(context)
@@ -255,9 +250,7 @@ impl Task {
     }
 
     #[inline(never)]
-    fn index_with_address_book(
-        this: &TaskInQueue,
-    ) {
+    fn index_with_address_book(this: &TaskInQueue) {
         for lock_attempt in &*this.lock_attempts_mut() {
             lock_attempt
                 .target_page_mut()
@@ -265,11 +258,13 @@ impl Task {
                 .insert_task(this.unique_weight, Task::clone_in_queue(this));
 
             if lock_attempt.requested_usage == RequestedUsage::Writable {
-                lock_attempt.target_page_mut().write_task_ids.insert(this.unique_weight);
+                lock_attempt
+                    .target_page_mut()
+                    .write_task_ids
+                    .insert(this.unique_weight);
             }
         }
     }
-
 
     fn lock_attempts_mut(&self) -> std::cell::RefMut<'_, Vec<LockAttempt>> {
         self.tx.1 .0.borrow_mut()
@@ -311,7 +306,7 @@ pub struct LockAttempt {
 
 impl PageRc {
     fn page_mut(&self) -> std::cell::RefMut<'_, Page> {
-        self.0.0 .0.borrow_mut()
+        self.0 .0 .0.borrow_mut()
     }
 }
 
@@ -440,7 +435,8 @@ unsafe impl Send for PageRc {}
 unsafe impl Sync for PageRc {}
 unsafe impl Send for LockAttemptsInCell {}
 unsafe impl Sync for LockAttemptsInCell {}
-type WeightedTaskIds2 = std::collections::BTreeMap<UniqueWeight, (TaskInQueue, std::collections::HashSet<PageRc>)>;
+type WeightedTaskIds2 =
+    std::collections::BTreeMap<UniqueWeight, (TaskInQueue, std::collections::HashSet<PageRc>)>;
 
 type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
 #[derive(Default, Debug)]
@@ -467,7 +463,12 @@ impl AddressBook {
         } else if tcuw.unwrap() == *unique_weight {
             true
         } else if attempt.requested_usage == RequestedUsage::Readonly
-            && attempt.target_page_mut().write_task_ids.last().map(|j| unique_weight > j).unwrap_or(true)
+            && attempt
+                .target_page_mut()
+                .write_task_ids
+                .last()
+                .map(|j| unique_weight > j)
+                .unwrap_or(true)
         {
             true
         } else {
@@ -517,11 +518,7 @@ impl AddressBook {
         }
     }
 
-    fn reset_lock(
-        &mut self,
-        attempt: &mut LockAttempt,
-        after_execution: bool,
-    ) -> bool {
+    fn reset_lock(&mut self, attempt: &mut LockAttempt, after_execution: bool) -> bool {
         match attempt.status {
             LockStatus::Succeded => self.unlock(attempt),
             LockStatus::Failed => {
@@ -692,7 +689,8 @@ pub struct ExecutionEnvironment {
     pub task: TaskInQueue,
     pub finalized_lock_attempts: Vec<LockAttempt>,
     pub is_reindexed: bool,
-    pub execution_result: Option<std::result::Result<(), solana_sdk::transaction::TransactionError>>,
+    pub execution_result:
+        Option<std::result::Result<(), solana_sdk::transaction::TransactionError>>,
     pub finish_time: Option<std::time::SystemTime>,
     pub thx: usize,
     pub execution_us: u64,
@@ -739,7 +737,6 @@ impl ExecutionEnvironment {
     }
 }
 
-
 pub struct SchedulablePayload(pub Flushable<TaskInQueue>);
 pub struct ExecutablePayload(pub Flushable<Box<ExecutionEnvironment>>);
 pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment>, pub T);
@@ -780,9 +777,7 @@ impl TaskQueueReader for ChannelBackedTaskQueue {
                 // unblocking recv must have been gurantted to succeed at the time of this method
                 // invocation
                 match self.channel.try_recv().unwrap() {
-                    SchedulablePayload(Flushable::Payload(task)) => {
-                        Some(task)
-                    }
+                    SchedulablePayload(Flushable::Payload(task)) => Some(task),
                     SchedulablePayload(Flushable::Flush) => {
                         assert!(!self.buffered_flush);
                         self.buffered_flush = true;
@@ -840,11 +835,9 @@ impl<TH: TransactionHandler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH,
         new
     }
 
-    fn ensure_threads(&self) {
-    }
+    fn ensure_threads(&self) {}
 
-    fn stop_threads(&self) {
-    }
+    fn stop_threads(&self) {}
 }
 
 pub trait InstallableScheduler<SEA: ScheduleExecutionArg>: InstalledScheduler<SEA> {
@@ -915,11 +908,7 @@ fn attempt_lock_for_execution<'a>(
     let mut provisional_count = 0;
 
     for attempt in lock_attempts.iter_mut() {
-        AddressBook::attempt_lock_address(
-            from_runnable,
-            unique_weight,
-            attempt,
-        );
+        AddressBook::attempt_lock_address(from_runnable, unique_weight, attempt);
 
         match attempt.status {
             LockStatus::Succeded => {}
@@ -942,7 +931,13 @@ impl ScheduleStage {
     #[inline(never)]
     fn get_heaviest_from_contended<'a>(
         address_book: &'a mut AddressBook,
-    ) -> Option<std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, (TaskInQueue, std::collections::HashSet<PageRc>)>> {
+    ) -> Option<
+        std::collections::btree_map::OccupiedEntry<
+            'a,
+            UniqueWeight,
+            (TaskInQueue, std::collections::HashSet<PageRc>),
+        >,
+    > {
         address_book.uncontended_task_ids.last_entry()
     }
 
@@ -997,21 +992,18 @@ impl ScheduleStage {
         failed_lock_count: &mut usize,
     ) -> Option<(UniqueWeight, TaskInQueue, Vec<LockAttempt>)> {
         loop {
-            if let Some((task_source, next_task)) = Self::select_next_task(
-                runnable_queue,
-                address_book,
-                task_selection,
-            ) {
+            if let Some((task_source, next_task)) =
+                Self::select_next_task(runnable_queue, address_book, task_selection)
+            {
                 let from_runnable = matches!(task_source, TaskSource::Runnable);
                 let unique_weight = next_task.unique_weight;
 
-                let (unlockable_count, provisional_count) =
-                    attempt_lock_for_execution(
-                        from_runnable,
-                        address_book,
-                        &unique_weight,
-                        &mut next_task.lock_attempts_mut(),
-                    );
+                let (unlockable_count, provisional_count) = attempt_lock_for_execution(
+                    from_runnable,
+                    address_book,
+                    &unique_weight,
+                    &mut next_task.lock_attempts_mut(),
+                );
 
                 if unlockable_count > 0 {
                     *failed_lock_count += 1;
@@ -1118,10 +1110,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn unlock_after_execution(
-        address_book: &mut AddressBook,
-        lock_attempts: &mut [LockAttempt],
-    ) {
+    fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: &mut [LockAttempt]) {
         for mut l in lock_attempts {
             let newly_uncontended = address_book.reset_lock(&mut l, true);
 
@@ -1131,7 +1120,8 @@ impl ScheduleStage {
                     if task.currently_contended() {
                         let uti = address_book
                             .uncontended_task_ids
-                            .entry(task.unique_weight).or_insert((task, Default::default()));
+                            .entry(task.unique_weight)
+                            .or_insert((task, Default::default()));
                         uti.1.insert(l.target.clone());
                     }
                 }
@@ -1167,18 +1157,12 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn commit_processed_execution(
-        ee: &mut ExecutionEnvironment,
-        address_book: &mut AddressBook,
-    ) {
+    fn commit_processed_execution(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
         ee.reindex_with_address_book();
         assert!(ee.is_reindexed());
 
         // which order for data race free?: unlocking / marking
-        Self::unlock_after_execution(
-            address_book,
-            &mut ee.finalized_lock_attempts,
-        );
+        Self::unlock_after_execution(address_book, &mut ee.finalized_lock_attempts);
         ee.task.mark_as_finished();
     }
 
@@ -1195,9 +1179,7 @@ impl ScheduleStage {
             task_selection,
             failed_lock_count,
         )
-        .map(|(uw, t, ll)| {
-            Self::prepare_scheduled_execution(address_book, uw, t, ll)
-        });
+        .map(|(uw, t, ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll));
         maybe_ee
     }
 }
@@ -1226,26 +1208,20 @@ impl<TH: TransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledScheduler<
         transaction_with_index.with_transaction_and_index(|transaction, index| {
             let locks = transaction.get_account_locks_unchecked();
             let writable_lock_iter = locks.writable.iter().map(|address| {
-                LockAttempt::new(
-                    self.preloader.load(**address),
-                    RequestedUsage::Writable,
-                )
+                LockAttempt::new(self.preloader.load(**address), RequestedUsage::Writable)
             });
             let readonly_lock_iter = locks.readonly.iter().map(|address| {
-                LockAttempt::new(
-                    self.preloader.load(**address),
-                    RequestedUsage::Readonly,
-                )
+                LockAttempt::new(self.preloader.load(**address), RequestedUsage::Readonly)
             });
             let locks = writable_lock_iter
                 .chain(readonly_lock_iter)
                 .collect::<Vec<_>>();
-            let uw = 
-                UniqueWeight::max_value() - index as UniqueWeight;
-            let task =
-                Task::new_for_queue(uw, (transaction.clone(), locks));
+            let uw = UniqueWeight::max_value() - index as UniqueWeight;
+            let task = Task::new_for_queue(uw, (transaction.clone(), locks));
             let (transaction_sender, transaction_receiver) = crossbeam_channel::unbounded();
-            let mut runnable_queue = ModeSpecificTaskQueue::BlockVerification(ChannelBackedTaskQueue::new(&transaction_receiver));
+            let mut runnable_queue = ModeSpecificTaskQueue::BlockVerification(
+                ChannelBackedTaskQueue::new(&transaction_receiver),
+            );
             runnable_queue.add_to_schedule(task.unique_weight, task);
             let mut selection = TaskSelection::OnlyFromContended(usize::max_value());
             let mut address_book = self.address_book.lock().unwrap();
