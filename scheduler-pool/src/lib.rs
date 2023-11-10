@@ -829,7 +829,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
         let mut new = Self {
             id: thread_rng().gen::<SchedulerId>(),
             pool,
-            context: Some(initial_context),
+            context: Some(initial_context.clone()),
             result_with_timings: Mutex::default(),
             handler,
             address_book: Mutex::new(address_book),
