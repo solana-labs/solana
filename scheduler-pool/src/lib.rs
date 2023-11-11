@@ -835,7 +835,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             handler,
             address_book: Mutex::new(address_book),
             preloader,
-            thread_manager: RwLock::new(ThreadManager::<TH>::new(initial_context)),
+            thread_manager: RwLock::new(ThreadManager::<TH, SEA>::new(initial_context)),
             _phantom: PhantomData,
         };
         drop(new.ensure_threads());
@@ -843,7 +843,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
     }
 
     #[must_use]
-    fn ensure_threads(&self) -> RwLockReadGuard<'_, ThreadManager<TH>> {
+    fn ensure_threads(&self) -> RwLockReadGuard<'_, ThreadManager<TH, SEA>>> {
         loop {
             let r = self.thread_manager.read().unwrap();
             if r.is_active() {
@@ -885,7 +885,7 @@ enum SessionedChannel<T> {
     NewContext(SchedulingContext),
 }
 
-impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> ThreadManager {
+impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> ThreadManager<TH, SEA> {
     fn new(initial_context: SchedulingContext) -> Self {
         Self {
             context: Some(initial_context),
