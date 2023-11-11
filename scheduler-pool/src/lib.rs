@@ -1872,6 +1872,8 @@ mod tests {
         }
 
         fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings> {
+            todo!();
+            /*
             if TRIGGER_RACE_CONDITION && matches!(reason, WaitReason::PausedForRecentBlockhash) {
                 // this is equivalent to NOT calling wait_for_paused_scheduler() in
                 // register_recent_blockhash().
@@ -1891,6 +1893,7 @@ mod tests {
             *self.0.result_with_timings.lock().unwrap() = Some((overall_result, overall_timings));
 
             self.0.wait_for_termination(reason)
+            */
         }
 
         fn return_to_pool(self: Box<Self>) {
