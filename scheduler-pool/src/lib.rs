@@ -1009,10 +1009,10 @@ where
                                         let control_frame;
                                         (transaction_receiver, control_frame) = new_channel.channel_pair();
                                         match control_frame {
-                                            ControlFrame::NextSession(aa) => {
-                                                next_result_sender = aa;
+                                            ControlFrame::NextSession(result_sender) => {
+                                                next_result_sender = result_sender;
                                             }
-                                            ControlFrame::NewContext(new_context) => {
+                                            ControlFrame::NewContext(context) => {
                                                 will_end_session = false;
                                                 (
                                                     blocked_transaction_sessioned_sender,
@@ -1022,7 +1022,7 @@ where
                                                     blocked_transaction_sessioned_sender
                                                         .send(ChainedChannel::new_channel(
                                                             blocked_transaction_sessioned_receiver.clone(),
-                                                            ControlFrame::NewContext(new_context.clone()),
+                                                            ControlFrame::NewContext(context.clone()),
                                                         ))
                                                         .unwrap();
                                                 }
