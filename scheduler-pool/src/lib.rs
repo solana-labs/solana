@@ -1525,8 +1525,7 @@ where
                 .collect::<Vec<_>>();
             let uw = UniqueWeight::max_value() - index as UniqueWeight;
             let task = Task::new_for_queue(uw, (transaction.clone(), locks));
-            let task2 = Task::new_for_queue(uw, (transaction.clone(), locks));
-            r.schedule_execution(task2);
+            r.schedule_execution(task.clone());
             let (transaction_sender, transaction_receiver) = unbounded();
             let mut runnable_queue = ModeSpecificTaskQueue::BlockVerification(
                 ChannelBackedTaskQueue::new(&transaction_receiver),
