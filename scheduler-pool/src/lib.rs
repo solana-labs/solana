@@ -888,7 +888,7 @@ enum SessionedChannel<T, U> {
 }
 
 impl<T: Send + Sync + 'static, U: Send + Sync + 'static> SessionedChannel<T, U> {
-    fn next_session(receiver: Receiver<Self>, sender: Sender<U>) -> Self {
+    fn next_session(receiver: Receiver<Self>, sender: U) -> Self {
         Self::NextSession(Box::new(ChannelPairOption(Some((receiver, sender)))))
     }
 }
