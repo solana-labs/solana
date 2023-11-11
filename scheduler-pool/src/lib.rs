@@ -982,24 +982,25 @@ where
                                 Self::receive_handled_transaction(&mut state_machine, execution_environment);
                             },
                             recv(if !will_end_session { &transaction_receiver } else { never }) -> m => {
-                                match m {
-                                    Ok(mm) => {
-                                        match mm {
-                                            SessionedChannel::Payload(payload) => {
-                                                Self::receive_new_transaction(&mut state_machine, payload);
-                                            }
-                                            SessionedChannel::NextSession(mut next_receiver_box) => {
-                                                will_end_session = true;
-                                                (transaction_receiver, next_result_sender) =
-                                                    next_receiver_box.channel_pair();
-                                            }
-                                            SessionedChannel::NewContext(next_context) => {
-                                                bank = next_context.bank().clone();
-                                                will_end_session = false;
-                                            }
-                                        };
-                                    },
-                                    Err(_) => will_end_thread = true,
+                                let Ok(mm) = m else {
+                                    will_end_thread = true;
+                                    continue;
+                                }
+
+                                match mm {
+                                    SessionedChannel::Payload(payload) => {
+                                        Self::receive_new_transaction(&mut state_machine, payload);
+                                    }
+                                    SessionedChannel::NextSession(mut next_receiver_box) => {
+                                        will_end_session = true;
+                                        (transaction_receiver, next_result_sender) =
+                                            next_receiver_box.channel_pair();
+                                    }
+                                    SessionedChannel::NewContext(next_context) => {
+                                        bank = next_context.bank().clone();
+                                        will_end_session = false;
+                                    }
+                                };
                                 }
                             },
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
