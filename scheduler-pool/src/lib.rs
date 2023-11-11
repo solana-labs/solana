@@ -1820,6 +1820,8 @@ mod tests {
             &'a self,
             &(transaction, index): <DefaultScheduleExecutionArg as ScheduleExecutionArg>::TransactionWithIndex<'a>,
         ) {
+            todo!();
+            /*
             let transaction_and_index = (transaction.clone(), index);
             let context = self.context().clone();
             let pool = self.0.pool.clone();
@@ -1843,6 +1845,7 @@ mod tests {
                 );
                 (result, timings)
             }));
+            */
         }
 
         fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings> {
