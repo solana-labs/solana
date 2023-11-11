@@ -965,7 +965,6 @@ where
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
             unbounded::<Box<ExecutionEnvironment>>();
         let (mut result_sender, result_receiver) = unbounded();
-        let (mut dummy_sender, _dummy_receiver) = unbounded();
 
         let scheduler_main_loop = || {
             let mut blocked_transaction_sessioned_sender = blocked_transaction_sessioned_sender.clone();
