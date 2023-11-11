@@ -971,8 +971,10 @@ where
         let (mut result_sender, result_receiver) = unbounded();
 
         let scheduler_main_loop = || {
-            let mut blocked_transaction_sessioned_sender = blocked_transaction_sessioned_sender.clone();
-            let mut blocked_transaction_sessioned_receiver = blocked_transaction_sessioned_receiver.clone();
+            let mut blocked_transaction_sessioned_sender =
+                blocked_transaction_sessioned_sender.clone();
+            let mut blocked_transaction_sessioned_receiver =
+                blocked_transaction_sessioned_receiver.clone();
 
             move || {
                 let never = &never();
@@ -1030,7 +1032,10 @@ where
                         };
                     }
                     for _ in (0..10) {
-                        (blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) = unbounded();
+                        (
+                            blocked_transaction_sessioned_sender,
+                            blocked_transaction_sessioned_receiver,
+                        ) = unbounded();
                         blocked_transaction_sessioned_sender
                             .send(ChainedChannel::next_session(
                                 blocked_transaction_sessioned_receiver.clone(),
@@ -1048,7 +1053,8 @@ where
             let pool = self.pool.clone();
             let handler = self.handler.clone();
             let mut bank = self.context.bank().clone();
-            let mut blocked_transaction_sessioned_receiver = blocked_transaction_sessioned_receiver.clone();
+            let mut blocked_transaction_sessioned_receiver =
+                blocked_transaction_sessioned_receiver.clone();
             let idle_transaction_receiver = idle_transaction_receiver.clone();
             let handled_blocked_transaction_sender = handled_blocked_transaction_sender.clone();
             let handled_idle_transaction_sender = handled_idle_transaction_sender.clone();
