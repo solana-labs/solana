@@ -1034,52 +1034,50 @@ where
         );
 
         let handler_main_loop = || {
-                            let pool = self.pool.clone();
-                            let handler = self.handler.clone();
-                            let mut bank = self.context.as_ref().unwrap().bank().clone();
-                            let mut blocked_transaction_receiver = blocked_transaction_receiver.clone();
-                            let idle_transaction_receiver = idle_transaction_receiver.clone();
-                            let handled_blocked_transaction_sender = handled_blocked_transaction_sender.clone();
-                            let handled_idle_transaction_sender = handled_idle_transaction_sender.clone();
+            let pool = self.pool.clone();
+            let handler = self.handler.clone();
+            let mut bank = self.context.as_ref().unwrap().bank().clone();
+            let mut blocked_transaction_receiver = blocked_transaction_receiver.clone();
+            let idle_transaction_receiver = idle_transaction_receiver.clone();
+            let handled_blocked_transaction_sender = handled_blocked_transaction_sender.clone();
+            let handled_idle_transaction_sender = handled_idle_transaction_sender.clone();
 
-                            move || {
-                                loop {
-                                    let (mut m, was_blocked) = select_biased! {
-                                        recv(blocked_transaction_receiver) -> m => {
-                                            match m {
-                                                Ok(mm) => {
-                                                    match mm {
-                                                        SessionedChannel::Payload(payload) => {
-                                                            (payload, true)
-                                                        }
-                                                        SessionedChannel::NextSession(mut next_receiver_box) => {
-                                                            (blocked_transaction_receiver, _) =
-                                                                next_receiver_box.unwrap_channel_pair();
-                                                            continue;
-                                                        }
-                                                        SessionedChannel::NewContext(next_context) => {
-                                                            bank = next_context.bank().clone();
-                                                            continue;
-                                                        }
-                                                    }
-                                                },
-                                                Err(_) => break,
-                                            }
-                                        },
-                                        recv(idle_transaction_receiver) -> m => {
-                                            (m.unwrap(), false)
-                                        },
-                                    };
-
-                                    Self::receive_scheduled_transaction(&handler, &bank, &mut m, &pool);
-                                    if was_blocked {
-                                        handled_blocked_transaction_sender.send(m).unwrap();
-                                    } else {
-                                        handled_idle_transaction_sender.send(m).unwrap();
+            move || loop {
+                let (mut m, was_blocked) = select_biased! {
+                    recv(blocked_transaction_receiver) -> m => {
+                        match m {
+                            Ok(mm) => {
+                                match mm {
+                                    SessionedChannel::Payload(payload) => {
+                                        (payload, true)
+                                    }
+                                    SessionedChannel::NextSession(mut next_receiver_box) => {
+                                        (blocked_transaction_receiver, _) =
+                                            next_receiver_box.unwrap_channel_pair();
+                                        continue;
+                                    }
+                                    SessionedChannel::NewContext(next_context) => {
+                                        bank = next_context.bank().clone();
+                                        continue;
                                     }
                                 }
-                            }
-                        };
+                            },
+                            Err(_) => break,
+                        }
+                    },
+                    recv(idle_transaction_receiver) -> m => {
+                        (m.unwrap(), false)
+                    },
+                };
+
+                Self::receive_scheduled_transaction(&handler, &bank, &mut m, &pool);
+                if was_blocked {
+                    handled_blocked_transaction_sender.send(m).unwrap();
+                } else {
+                    handled_idle_transaction_sender.send(m).unwrap();
+                }
+            }
+        };
 
         self.handler_threads = (0..10)
             .map({
