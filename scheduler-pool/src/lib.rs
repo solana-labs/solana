@@ -890,8 +890,8 @@ enum ChainedChannel<T, U> {
     NewChannel(Box<dyn WithChannelPair<T, U>>),
 }
 
-enum ControlFrame<U> {
-    NextSession(U),
+enum ControlFrame {
+    NextSession,
     NewContext(SchedulingContext),
 }
 
@@ -966,7 +966,7 @@ where
 
     fn start_threads(&mut self) {
         let (blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) =
-            unbounded::<ChainedChannel<Box<ExecutionEnvironment>, ControlFrame<()>>>();
+            unbounded::<ChainedChannel<Box<ExecutionEnvironment>, ControlFrame>>();
         let (idle_transaction_sender, idle_transaction_receiver) =
             unbounded::<Box<ExecutionEnvironment>>();
         let (handled_blocked_transaction_sender, handled_blocked_transaction_receiver) =
@@ -1015,7 +1015,7 @@ where
                                         let control_frame;
                                         (schedulable_transaction_receiver, control_frame) = new_channel.channel_pair();
                                         match control_frame {
-                                            ControlFrame::NextSession(()) => {}
+                                            ControlFrame::NextSession => {}
                                             ControlFrame::NewContext(context) => {
                                                 will_end_session = false;
                                                 (
@@ -1052,7 +1052,7 @@ where
                         blocked_transaction_sessioned_sender
                             .send(ChainedChannel::new_channel(
                                 blocked_transaction_sessioned_receiver.clone(),
-                                ControlFrame::NextSession(()),
+                                ControlFrame::NextSession,
                             ))
                             .unwrap();
                     }
@@ -1084,7 +1084,7 @@ where
                                 let control_frame;
                                 (blocked_transaction_sessioned_receiver, control_frame) = new_channel.channel_pair();
                                 match control_frame {
-                                    ControlFrame::NextSession(()) => {},
+                                    ControlFrame::NextSession => {},
                                     ControlFrame::NewContext(new_context) => {
                                         bank = new_context.bank().clone();
                                     },
