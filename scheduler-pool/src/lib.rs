@@ -823,7 +823,7 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     handler: TH,
     _phantom: PhantomData<SEA>,
     schedulrable_transaction_sender: Sender<ChainedChannel<Box<Task>, ControlFrame<Sender<ResultWithTimings>>>>,
-    schedulable_transaction_receiver: usize,
+    schedulable_transaction_receiver: Receiver<ChainedChannel<Box<Task>, ControlFrame<Sender<ResultWithTimings>>>>,
 }
 
 impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
