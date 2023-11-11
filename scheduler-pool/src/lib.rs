@@ -1139,7 +1139,7 @@ where
         }
     }
 
-    fn schedule_execution(task: Task) {
+    fn schedule_execution(&self, task: Task) {
     }
 }
 
