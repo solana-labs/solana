@@ -1056,14 +1056,16 @@ where
                             SessionedChannel::Payload(payload) => {
                                 (payload, true)
                             }
-                            SessionedChannel::NextSession(mut next_session) => {
+                            SessionedChannel::Blocked(mut next_session) => {
                                 (blocked_transaction_sessioned_receiver, ()) = next_session.channel_pair();
                                 continue;
                             }
+                            /*
                             SessionedChannel::NewContext(next_context) => {
                                 bank = next_context.bank().clone();
                                 continue;
                             }
+                            */
                         }
                     },
                     recv(idle_transaction_receiver) -> m => {
