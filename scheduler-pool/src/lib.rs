@@ -915,7 +915,7 @@ impl<T: Send + Sync + 'static, U: Send + Sync + 'static> SessionedChannel<T, U> 
 
 impl<T: Send + Sync + 'static, U: Send + Sync + 'static> SessionedChannel2<T, U> {
     fn next_session(receiver: Receiver<Self>, sender: Sender<U>) -> Self {
-        Self::NextSession(Box::new(ChannelPairOption2(Some((receiver, sender)))))
+        Self::NextSession(Box::new(ChannelPairOption(Some((receiver, sender)))))
     }
 }
 
