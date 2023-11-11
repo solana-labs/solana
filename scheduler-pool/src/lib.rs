@@ -1444,7 +1444,7 @@ where
     }
 
     fn context(&self) -> &SchedulingContext {
-        self.context.as_ref().expect("active context should exist")
+        todo!(); //self.context.as_ref().expect("active context should exist")
     }
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
