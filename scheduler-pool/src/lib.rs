@@ -890,10 +890,10 @@ enum SessionedChannel<T> {
 }
 
 impl<T: Send + Sync> SessionedChannel<T> {
-    fn next_session(self, sender: Sender<ResultWithTimings>) -> Self {
+    fn next_session(receiver: Receiver<Self>, sender: Sender<ResultWithTimings>) -> Self {
         Self::NextSession(Box::new(ChannelPairOption(
             Some((
-                self,
+                receiver,
                 sender
             )),
         )))
