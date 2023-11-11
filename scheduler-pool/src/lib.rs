@@ -872,13 +872,13 @@ type ChannelPair<T> = (
 );
 
 trait WithChannelPair<T>: Send + Sync {
-    fn unwrap_channel_pair(&mut self) -> ChannelPair<T>;
+    fn channel_pair(&mut self) -> ChannelPair<T>;
 }
 
 struct ChannelPairOption<T>(Option<ChannelPair<T>>);
 
 impl<T: Send + Sync> WithChannelPair<T> for ChannelPairOption<T> {
-    fn unwrap_channel_pair(&mut self) -> ChannelPair<T> {
+    fn channel_pair(&mut self) -> ChannelPair<T> {
         self.0.take().unwrap()
     }
 }
@@ -991,7 +991,7 @@ where
                                             SessionedChannel::NextSession(mut next_receiver_box) => {
                                                 will_end_session = true;
                                                 (transaction_receiver, next_result_sender) =
-                                                    next_receiver_box.unwrap_channel_pair();
+                                                    next_receiver_box.channel_pair();
                                             }
                                             SessionedChannel::NewContext(next_context) => {
                                                 bank = next_context.bank().clone();
@@ -1044,9 +1044,9 @@ where
                                     SessionedChannel::Payload(payload) => {
                                         (payload, true)
                                     }
-                                    SessionedChannel::NextSession(mut next_receiver_box) => {
+                                    SessionedChannel::NextSession(mut next_session) => {
                                         (blocked_transaction_receiver, _) =
-                                            next_receiver_box.unwrap_channel_pair();
+                                            next_session.unwrap_channel_pair();
                                         continue;
                                     }
                                     SessionedChannel::NewContext(next_context) => {
