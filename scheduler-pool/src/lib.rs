@@ -929,6 +929,7 @@ where
         (result, timings): &mut ResultWithTimings,
         msg: &ExecutionEnvironment,
     ) {
+        timings.accumulate(&msg.result_with_timings.1);
     }
 
     fn receive_handled_transaction(
