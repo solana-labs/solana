@@ -870,13 +870,13 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
 type ChannelPair<T, U> = (Receiver<SessionedChannel<T, U>>, U);
 
 trait WithChannelPair<T, U>: Send + Sync {
-    fn channel_pair(self) -> ChannelPair<T, U>;
+    fn channel_pair(self: Box<Self>) -> ChannelPair<T, U>;
 }
 
 struct ChannelPairOption<T, U>(Option<ChannelPair<T, U>>);
 
 impl<T: Send + Sync, U: Send + Sync> WithChannelPair<T, U> for ChannelPairOption<T, U> {
-    fn channel_pair(self) -> ChannelPair<T, U> {
+    fn channel_pair(self: Box<Self>) -> ChannelPair<T, U> {
         self.0.take().unwrap()
     }
 }
