@@ -1008,7 +1008,7 @@ where
                                             next_receiver_box.channel_pair();
                                         match mmm {
                                             Blocked::NextSession(aa) => {
-                                                let a: usize = aa;
+                                                next_result_sender = aa;
                                             }
                                             Blocked::NewContext(new_context) => {
                                                 will_end_session = false;
