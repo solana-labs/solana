@@ -160,7 +160,7 @@ where
     }
 }
 
-pub trait Handler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + Sized + 'static {
+pub trait Handler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + Sized + Clone + 'static {
     fn create<T: SpawnableScheduler<Self, SEA>>(pool: &SchedulerPool<T, Self, SEA>) -> Self;
 
     fn handle<T: SpawnableScheduler<Self, SEA>>(
