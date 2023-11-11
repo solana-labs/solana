@@ -920,7 +920,9 @@ where
     }
 
     fn receive_scheduled_transaction(handler: &TH, bank: &Arc<Bank>, msg: &mut Box<ExecutionEnvironment>) {
-        TH::handle(handler);
+        let mut result = Ok(());
+        let mut timings = ExecuteTimings::default();
+        TH::handle(handler, &mut result, &mut timings, bank, msg.task.0);
     }
 
     fn start_threads(&mut self) {
