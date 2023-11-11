@@ -1003,7 +1003,7 @@ where
                                             next_receiver_box.channel_pair();
                                     }
                                     SessionedChannel::NewContext(next_context) => {
-                                        (transaction_receiver, new_context) =
+                                        (transaction_receiver, next_context) =
                                             next_context.channel_pair();
                                         will_end_session = false;
                                         for _ in (0..10) {
