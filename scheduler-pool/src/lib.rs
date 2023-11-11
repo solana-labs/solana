@@ -958,7 +958,6 @@ where
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
             unbounded::<Box<ExecutionEnvironment>>();
         let (mut result_sender, result_receiver) = unbounded();
-                let never = &never();
 
         let scheduler_main_loop = || {
             let mut bank = self.context.as_ref().unwrap().bank().clone();
@@ -966,6 +965,7 @@ where
             let mut blocked_transaction_receiver = blocked_transaction_receiver.clone();
 
             move || {
+                let never = &never();
                 let mut state_machine = SchedulingStateMachine;
                 let mut will_end_session = false;
                 let mut will_end_thread = false;
