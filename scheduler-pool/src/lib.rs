@@ -1023,13 +1023,10 @@ where
                     for _ in (0..10) {
                         (blocked_transaction_sender, blocked_transaction_receiver) = unbounded();
                         blocked_transaction_sender
-                            .send(SessionedChannel::NextSession(Box::new(ChannelPairOption(
-                                Some((
-                                    blocked_transaction_receiver.clone(),
-                                    next_result_sender.clone(),
-                                )),
-                            ))))
-                            .unwrap();
+                            .send(SessionedChannel::next_session(
+                                blocked_transaction_receiver.clone(),
+                                next_result_sender.clone(),
+                            )).unwrap();
                     }
                     result_sender.send(result_with_timings).unwrap();
                     result_sender = next_result_sender.clone();
