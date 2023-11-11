@@ -886,7 +886,7 @@ enum ChainedChannel<T, U> {
     NewChannel(Box<dyn WithChannelPair<T, U>>),
 }
 
-enum Blocked<U> {
+enum ControlFrame<U> {
     NextSession(U),
     NewContext(SchedulingContext),
 }
@@ -959,9 +959,9 @@ where
 
     fn start_threads(&mut self) {
         let (_transaction_sender, mut transaction_receiver) =
-            unbounded::<ChainedChannel<Box<Task>, Blocked<Sender<ResultWithTimings>>>>();
+            unbounded::<ChainedChannel<Box<Task>, ControlFrame<Sender<ResultWithTimings>>>>();
         let (blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) =
-            unbounded::<ChainedChannel<Box<ExecutionEnvironment>, Blocked<()>>>();
+            unbounded::<ChainedChannel<Box<ExecutionEnvironment>, ControlFrame<()>>>();
         let (idle_transaction_sender, idle_transaction_receiver) =
             unbounded::<Box<ExecutionEnvironment>>();
         let (handled_blocked_transaction_sender, handled_blocked_transaction_receiver) =
@@ -1007,10 +1007,10 @@ where
                                         (transaction_receiver, mmm) =
                                             next_receiver_box.channel_pair();
                                         match mmm {
-                                            Blocked::NextSession(aa) => {
+                                            ControlFrame::NextSession(aa) => {
                                                 next_result_sender = aa;
                                             }
-                                            Blocked::NewContext(new_context) => {
+                                            ControlFrame::NewContext(new_context) => {
                                                 will_end_session = false;
                                                 for _ in (0..10) {
                                                     //blocked_transaction_sessioned_sender
@@ -1034,7 +1034,7 @@ where
                         blocked_transaction_sessioned_sender
                             .send(ChainedChannel::next_session(
                                 blocked_transaction_sessioned_receiver.clone(),
-                                Blocked::NextSession(()),
+                                ControlFrame::NextSession(()),
                             ))
                             .unwrap();
                     }
@@ -1066,8 +1066,8 @@ where
                                 let blocked;
                                 (blocked_transaction_sessioned_receiver, blocked) = next_session.channel_pair();
                                 match blocked {
-                                    Blocked::NextSession(()) => {},
-                                    Blocked::NewContext(new_context) => {
+                                    ControlFrame::NextSession(()) => {},
+                                    ControlFrame::NewContext(new_context) => {
                                         bank = new_context.bank().clone();
                                     },
                                 }
