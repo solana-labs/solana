@@ -921,6 +921,7 @@ where
         msg: &ExecutionEnvironment,
     ) {
     }
+
     fn receive_handled_transaction(
         state_machine: &mut SchedulingStateMachine,
         msg: Box<ExecutionEnvironment>,
