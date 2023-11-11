@@ -892,7 +892,7 @@ where
     TH: Handler<SEA>,
     SEA: ScheduleExecutionArg,
 {
-    fn new(initial_context: SchedulingContext, handler: TH, pool: Arc<SchedulerPool<Self, TH, SEA>>) -> Self {
+    fn new(initial_context: SchedulingContext, handler: TH, pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>) -> Self {
         Self {
             context: Some(initial_context),
             scheduler_thread: None,
