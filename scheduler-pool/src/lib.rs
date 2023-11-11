@@ -1493,6 +1493,8 @@ where
     }
 
     fn wait_for_termination(&mut self, wait_reason: &WaitReason) -> Option<ResultWithTimings> {
+        todo!();
+        /*
         let keep_result_with_timings = wait_reason.is_paused();
 
         if keep_result_with_timings {
@@ -1511,6 +1513,7 @@ where
                 .expect("not poisoned")
                 .take()
         }
+        */
     }
 
     fn return_to_pool(self: Box<Self>) {
