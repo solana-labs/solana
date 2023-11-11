@@ -1003,8 +1003,11 @@ where
                                     }
                                     SessionedChannel::Blocked(mut next_receiver_box) => {
                                         will_end_session = true;
-                                        (transaction_receiver, next_result_sender) =
+                                        let mmm;
+                                        (transaction_receiver, mmm) =
                                             next_receiver_box.channel_pair();
+                                        match mmm {
+                                        }
                                     }
                                     /*
                                     SessionedChannel::NewContext(next_context) => {
