@@ -1138,6 +1138,9 @@ where
             assert_eq!(j.join().unwrap(), ());
         }
     }
+
+    fn schedule_execution(task: Task) {
+    }
 }
 
 pub trait InstallableScheduler<SEA: ScheduleExecutionArg>: InstalledScheduler<SEA> {
