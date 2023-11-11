@@ -1136,7 +1136,7 @@ where
         }
     }
 
-    fn schedule_execution(&self, task: Arc<Task>) {
+    fn send_task(&self, task: Arc<Task>) {
         self.schedulrable_transaction_sender
             .send(ChainedChannel::Payload(task))
             .unwrap();
@@ -1525,7 +1525,7 @@ where
                 .collect::<Vec<_>>();
             let uw = UniqueWeight::max_value() - index as UniqueWeight;
             let task = Task::new_for_queue(uw, (transaction.clone(), locks));
-            thread_manager.schedule_execution(task.clone());
+            thread_manager.send_task(task.clone());
             let (transaction_sender, transaction_receiver) = unbounded();
             let mut runnable_queue = ModeSpecificTaskQueue::BlockVerification(
                 ChannelBackedTaskQueue::new(&transaction_receiver),
