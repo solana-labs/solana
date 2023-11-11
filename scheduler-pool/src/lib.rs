@@ -945,8 +945,8 @@ where
     ) {
         TH::handle(
             handler,
-            &mut msg.result,
-            &mut msg.timings,
+            &mut msg.result_with_timings.0,
+            &mut msg.result_with_timings.1,
             bank,
             &msg.task.tx.0,
             (UniqueWeight::max_value() - msg.unique_weight) as usize,
