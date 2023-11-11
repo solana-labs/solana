@@ -1032,9 +1032,12 @@ where
                                     SessionedChannel::NewContext(next_context) => {
                                         will_end_session = false;
                                         for _ in (0..10) {
+                                            todo!();
+                                            /*
                                             blocked_transaction_sessioned_sender
-                                                .send(SessionedChannel::NewContext(next_context.clone()))
+                                                .send(SessionedChannel2::NewContext(next_context.clone()))
                                                 .unwrap();
+                                            */
                                         }
                                     }
                                 };
@@ -1049,7 +1052,7 @@ where
                     for _ in (0..10) {
                         (blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) = unbounded();
                         blocked_transaction_sessioned_sender
-                            .send(SessionedChannel::next_session(
+                            .send(SessionedChannel2::next_session(
                                 blocked_transaction_sessioned_receiver.clone(),
                                 dummy_sender.clone(),
                             ))
