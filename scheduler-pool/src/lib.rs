@@ -884,7 +884,7 @@ impl<T: Send + Sync, U: Send + Sync> WithChannelPair<T, U> for ChannelPairOption
 enum SessionedChannel<T, U> {
     Payload(T),
     NextSession(Box<dyn WithChannelPair<T, U>>),
-    NewContext(Box<dyn WithChannelPair<T, SchedulingContext>>),
+    NewContext(SchedulingContext),
 }
 
 impl<T: Send + Sync + 'static, U: Send + Sync + 'static> SessionedChannel<T, U> {
