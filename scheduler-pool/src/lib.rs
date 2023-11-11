@@ -1508,7 +1508,7 @@ where
     }
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
-        let r = self.ensure_threads();
+        let thread_manager = self.ensure_threads();
         let mut executing_queue_count = 0_usize;
         let mut provisioning_tracker_count = 0;
         let mut sequence_time = 0;
@@ -1531,7 +1531,7 @@ where
                 .collect::<Vec<_>>();
             let uw = UniqueWeight::max_value() - index as UniqueWeight;
             let task = Task::new_for_queue(uw, (transaction.clone(), locks));
-            r.schedule_execution(task.clone());
+            thread_manager.schedule_execution(task.clone());
             let (transaction_sender, transaction_receiver) = unbounded();
             let mut runnable_queue = ModeSpecificTaskQueue::BlockVerification(
                 ChannelBackedTaskQueue::new(&transaction_receiver),
@@ -1549,7 +1549,6 @@ where
                 ScheduleStage::commit_processed_execution(&mut ee, &mut address_book);
             }
         });
-        drop(r);
     }
 
     fn wait_for_termination(&mut self, wait_reason: &WaitReason) -> Option<ResultWithTimings> {
