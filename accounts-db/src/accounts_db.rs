@@ -17310,7 +17310,7 @@ pub mod tests {
                                 let alive_total_one_account = 136 + space;
                                 if alive {
                                     assert_eq!(
-                                        shrink_collect.aligned_total_bytes,
+                                        shrink_collect.alive_total_bytes as u64,
                                         PAGE_SIZE
                                             * if account_count >= 100 {
                                                 4
@@ -17331,13 +17331,13 @@ pub mod tests {
                                         expected_alive_total_bytes
                                     );
                                 } else if append_opposite_alive_account {
-                                    assert_eq!(shrink_collect.aligned_total_bytes, 4096);
+                                    assert_eq!(shrink_collect.alive_total_bytes, 4096);
                                     assert_eq!(
                                         shrink_collect.alive_total_bytes,
                                         alive_total_one_account
                                     );
                                 } else {
-                                    assert_eq!(shrink_collect.aligned_total_bytes, 0);
+                                    assert_eq!(shrink_collect.alive_total_bytes, 0);
                                     assert_eq!(shrink_collect.alive_total_bytes, 0);
                                 }
                                 // expected_capacity is determined by what size append vec gets created when the write cache is flushed to an append vec.
