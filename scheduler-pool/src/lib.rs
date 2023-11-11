@@ -1061,6 +1061,7 @@ where
                                 (payload, true)
                             }
                             SessionedChannel::Blocked(mut next_session) => {
+                                let blocked;
                                 (blocked_transaction_sessioned_receiver, blocked) = next_session.channel_pair();
                                 match blocked {
                                     Blocked::NextSession(()) => {},
