@@ -809,7 +809,6 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     pool: Arc<SchedulerPool<Self, TH, SEA>>, // to be moved to ThreadManager
     context: Option<SchedulingContext>,      // to be moved to ThreadManager
     result_with_timings: Mutex<Option<ResultWithTimings>>, // to be removed
-    handler: TH,
     address_book: Mutex<AddressBook>,
     preloader: Arc<Preloader>,
     thread_manager: RwLock<ThreadManager<TH, SEA>>,
@@ -820,7 +819,8 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     context: Option<SchedulingContext>,
     scheduler_thread: Option<JoinHandle<()>>,
     handler_threads: Vec<JoinHandle<()>>,
-    _phantom: PhantomData<(TH, SEA)>,
+    handler: TH,
+    _phantom: PhantomData<SEA>,
 }
 
 impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
@@ -837,10 +837,9 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             pool,
             context: Some(initial_context.clone()),
             result_with_timings: Mutex::default(),
-            handler,
             address_book: Mutex::new(address_book),
             preloader,
-            thread_manager: RwLock::new(ThreadManager::<TH, SEA>::new(initial_context)),
+            thread_manager: RwLock::new(ThreadManager::<TH, SEA>::new(initial_context, handler)),
         };
         drop(new.ensure_threads());
         new
