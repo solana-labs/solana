@@ -975,6 +975,7 @@ where
         let (mut result_sender, result_receiver) = unbounded();
 
         let scheduler_main_loop = || {
+            let schedulable_transaction_receiver = self.schedulable_transaction_receiver.clone();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
             let mut blocked_transaction_sessioned_receiver =
@@ -997,7 +998,7 @@ where
                                 Self::update_result_with_timings(&mut result_with_timings, &execution_environment);
                                 Self::receive_handled_transaction(&mut state_machine, execution_environment);
                             },
-                            recv(if !will_end_session { &transaction_receiver } else { never }) -> m => {
+                            recv(if !will_end_session { &schedulable_transaction_receiver } else { never }) -> m => {
                                 let Ok(mm) = m else {
                                     will_end_thread = true;
                                     continue;
