@@ -809,7 +809,6 @@ impl TaskQueueReader for ChannelBackedTaskQueue {
 pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     id: SchedulerId,
     context: Option<SchedulingContext>, // to be moved to ThreadManager
-    result_with_timings: Mutex<Option<ResultWithTimings>>, // to be removed
     address_book: Mutex<AddressBook>,
     preloader: Arc<Preloader>,
     thread_manager: RwLock<ThreadManager<TH, SEA>>,
@@ -837,7 +836,6 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
         let mut new = Self {
             id: thread_rng().gen::<SchedulerId>(),
             context: Some(initial_context.clone()),
-            result_with_timings: Mutex::default(),
             address_book: Mutex::new(address_book),
             preloader,
             thread_manager: RwLock::new(ThreadManager::<TH, SEA>::new(
