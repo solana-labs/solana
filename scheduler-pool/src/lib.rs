@@ -919,10 +919,10 @@ where
     ) {
     }
 
-    fn receive_scheduled_transaction(handler: &TH, bank: &Arc<Bank>, msg: &mut Box<ExecutionEnvironment>) {
+    fn receive_scheduled_transaction(handler: &TH, bank: &Arc<Bank>, msg: &mut Box<ExecutionEnvironment>, pool: &Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>) {
         let mut result = Ok(());
         let mut timings = ExecuteTimings::default();
-        TH::handle(handler, &mut result, &mut timings, bank, &msg.task.tx.0, (UniqueWeight::max_value() - msg.unique_weight) as usize, 3);
+        TH::handle(handler, &mut result, &mut timings, bank, &msg.task.tx.0, (UniqueWeight::max_value() - msg.unique_weight) as usize, pool);
     }
 
     fn start_threads(&mut self) {
@@ -1010,6 +1010,7 @@ where
                     std::thread::Builder::new()
                         .name("aaaa".to_owned())
                         .spawn({
+                            let pool = self.pool.clone();
                             let handler = self.handler.clone();
                             let mut bank = self.context.as_ref().unwrap().bank().clone();
                             let mut blocked_transaction_receiver = blocked_transaction_receiver.clone();
@@ -1046,7 +1047,7 @@ where
                                         },
                                     };
 
-                                    Self::receive_scheduled_transaction(&handler, &bank, &mut m);
+                                    Self::receive_scheduled_transaction(&handler, &bank, &mut m, &pool);
                                     if was_blocked {
                                         handled_blocked_transaction_sender.send(m).unwrap();
                                     } else {
