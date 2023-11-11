@@ -889,7 +889,7 @@ enum SessionedChannel<T> {
     NewContext(SchedulingContext),
 }
 
-impl<T> SessionedChannel<T> {
+impl<T: Send + Sync> SessionedChannel<T> {
     fn next_session(self, sender: Sender<ResultWithTimings>) -> Self {
         Self::NextSession(Box::new(ChannelPairOption(
             Some((
