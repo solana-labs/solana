@@ -943,12 +943,10 @@ where
         msg: &mut Box<ExecutionEnvironment>,
         pool: &Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
     ) {
-        let mut result = Ok(());
-        let mut timings = ExecuteTimings::default();
         TH::handle(
             handler,
-            &mut result,
-            &mut timings,
+            &mut msg.result,
+            &mut msg.timings,
             bank,
             &msg.task.tx.0,
             (UniqueWeight::max_value() - msg.unique_weight) as usize,
