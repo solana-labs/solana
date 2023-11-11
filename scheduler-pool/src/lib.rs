@@ -884,7 +884,7 @@ impl<T: Send + Sync, U: Send + Sync> WithChannelPair<T, U> for ChannelPairOption
 enum SessionedChannel<T, U> {
     Payload(T),
     NextSession(Box<dyn WithChannelPair<T, U>>),
-    NewContext(Box<dyn WithChannelPair<T, SchedulingContext>>),
+    NewContext(SchedulingContext),
 }
 
 impl<T: Send + Sync + 'static, U: Send + Sync + 'static> SessionedChannel<T, U> {
@@ -1003,8 +1003,6 @@ where
                                             next_receiver_box.channel_pair();
                                     }
                                     SessionedChannel::NewContext(next_context) => {
-                                        (transaction_receiver, next_context) =
-                                            next_context.channel_pair();
                                         will_end_session = false;
                                         for _ in (0..10) {
                                             blocked_transaction_sessioned_sender
