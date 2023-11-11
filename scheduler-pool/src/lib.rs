@@ -959,10 +959,7 @@ where
             unbounded::<Box<ExecutionEnvironment>>();
         let (mut result_sender, result_receiver) = unbounded();
 
-        self.scheduler_thread = Some(
-            std::thread::Builder::new()
-                .name("aaaa".to_owned())
-                .spawn({
+        let scheduler_main_loop = || {
                     let mut bank = self.context.as_ref().unwrap().bank().clone();
                     let mut blocked_transaction_sender = blocked_transaction_sender.clone();
                     let mut blocked_transaction_receiver = blocked_transaction_receiver.clone();
@@ -1021,7 +1018,12 @@ where
                         result_sender.send(result_with_timings).unwrap();
                         result_sender = next_result_sender.clone();
                     }
-                }})
+                }}
+
+        self.scheduler_thread = Some(
+            std::thread::Builder::new()
+                .name("aaaa".to_owned())
+                .spawn(scheduler_main_loop())
                 .unwrap(),
         );
 
