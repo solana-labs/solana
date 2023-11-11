@@ -1038,7 +1038,7 @@ where
         let handler_main_loop = || {
             let pool = self.pool.clone();
             let handler = self.handler.clone();
-            let mut bank = self.context.clone();
+            let mut bank = self.context.bank().clone();
             let mut blocked_transaction_sessioned_receiver = blocked_transaction_sessioned_receiver.clone();
             let idle_transaction_receiver = idle_transaction_receiver.clone();
             let handled_blocked_transaction_sender = handled_blocked_transaction_sender.clone();
