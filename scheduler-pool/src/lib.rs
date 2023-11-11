@@ -896,7 +896,7 @@ impl<T> SessionedChannel<T> {
                 self,
                 sender
             )),
-        ))))
+        )))
     }
 }
 
