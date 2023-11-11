@@ -919,7 +919,9 @@ where
     ) {
     }
 
-    fn receive_scheduled_transaction(bank: &Arc<Bank>, msg: &mut Box<ExecutionEnvironment>) {}
+    fn receive_scheduled_transaction(bank: &Arc<Bank>, msg: &mut Box<ExecutionEnvironment>) {
+        H::handle(3);
+    }
 
     fn start_threads(&mut self) {
         let (_transaction_sender, mut transaction_receiver) =
