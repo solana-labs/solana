@@ -9,7 +9,7 @@
 //! helper fun called `execute_batch()`.
 
 use {
-    crossbeam_channel::{never, select_biased, unbounded, Sender, Receiver},
+    crossbeam_channel::{never, select_biased, unbounded, Receiver, Sender},
     log::*,
     rand::{thread_rng, Rng},
     solana_ledger::blockstore_processor::{
@@ -867,10 +867,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
     }
 }
 
-type ChannelPair<T, U> = (
-    Receiver<SessionedChannel<T, U>>,
-    Sender<U>,
-);
+type ChannelPair<T, U> = (Receiver<SessionedChannel<T, U>>, Sender<U>);
 
 trait WithChannelPair<T, U>: Send + Sync {
     fn channel_pair(&mut self) -> ChannelPair<T, U>;
@@ -891,10 +888,7 @@ enum SessionedChannel<T, U> {
 }
 
 impl<T: Send + Sync + 'static, U: Send + Sync + 'static> SessionedChannel<T, U> {
-    fn next_session(
-        receiver: Receiver<Self>,
-        sender: Sender<U>,
-    ) -> Self {
+    fn next_session(receiver: Receiver<Self>, sender: Sender<U>) -> Self {
         Self::NextSession(Box::new(ChannelPairOption(Some((receiver, sender)))))
     }
 }
