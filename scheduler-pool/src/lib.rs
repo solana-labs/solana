@@ -893,11 +893,12 @@ where
     TH: Handler<SEA>,
     SEA: ScheduleExecutionArg,
 {
-    fn new(initial_context: SchedulingContext) -> Self {
+    fn new(initial_context: SchedulingContext, handler: TH) -> Self {
         Self {
             context: Some(initial_context),
             scheduler_thread: None,
             handler_threads: vec![],
+            handler,
             _phantom: PhantomData,
         }
     }
