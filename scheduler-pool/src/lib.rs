@@ -160,7 +160,9 @@ where
     }
 }
 
-pub trait Handler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + Sized + Clone + 'static {
+pub trait Handler<SEA: ScheduleExecutionArg>:
+    Send + Sync + Debug + Sized + Clone + 'static
+{
     fn create<T: SpawnableScheduler<Self, SEA>>(pool: &SchedulerPool<T, Self, SEA>) -> Self;
 
     fn handle<T: SpawnableScheduler<Self, SEA>>(
@@ -806,7 +808,7 @@ impl TaskQueueReader for ChannelBackedTaskQueue {
 #[derive(Debug)]
 pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     id: SchedulerId,
-    context: Option<SchedulingContext>,      // to be moved to ThreadManager
+    context: Option<SchedulingContext>, // to be moved to ThreadManager
     result_with_timings: Mutex<Option<ResultWithTimings>>, // to be removed
     address_book: Mutex<AddressBook>,
     preloader: Arc<Preloader>,
@@ -838,7 +840,11 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             result_with_timings: Mutex::default(),
             address_book: Mutex::new(address_book),
             preloader,
-            thread_manager: RwLock::new(ThreadManager::<TH, SEA>::new(initial_context, handler, pool)),
+            thread_manager: RwLock::new(ThreadManager::<TH, SEA>::new(
+                initial_context,
+                handler,
+                pool,
+            )),
         };
         drop(new.ensure_threads());
         new
@@ -892,7 +898,11 @@ where
     TH: Handler<SEA>,
     SEA: ScheduleExecutionArg,
 {
-    fn new(initial_context: SchedulingContext, handler: TH, pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>) -> Self {
+    fn new(
+        initial_context: SchedulingContext,
+        handler: TH,
+        pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
+    ) -> Self {
         Self {
             context: Some(initial_context),
             scheduler_thread: None,
@@ -919,10 +929,23 @@ where
     ) {
     }
 
-    fn receive_scheduled_transaction(handler: &TH, bank: &Arc<Bank>, msg: &mut Box<ExecutionEnvironment>, pool: &Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>) {
+    fn receive_scheduled_transaction(
+        handler: &TH,
+        bank: &Arc<Bank>,
+        msg: &mut Box<ExecutionEnvironment>,
+        pool: &Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
+    ) {
         let mut result = Ok(());
         let mut timings = ExecuteTimings::default();
-        TH::handle(handler, &mut result, &mut timings, bank, &msg.task.tx.0, (UniqueWeight::max_value() - msg.unique_weight) as usize, pool);
+        TH::handle(
+            handler,
+            &mut result,
+            &mut timings,
+            bank,
+            &msg.task.tx.0,
+            (UniqueWeight::max_value() - msg.unique_weight) as usize,
+            pool,
+        );
     }
 
     fn start_threads(&mut self) {
@@ -1493,7 +1516,7 @@ where
     }
 
     fn return_to_pool(self: Box<Self>) {
-        todo!();//self.pool.clone().return_scheduler(self)
+        todo!(); //self.pool.clone().return_scheduler(self)
     }
 }
 
