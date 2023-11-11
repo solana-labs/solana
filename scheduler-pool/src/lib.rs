@@ -704,6 +704,7 @@ pub struct ExecutionEnvironment {
     pub thx: usize,
     pub execution_us: u64,
     pub execution_cpu_us: u128,
+    pub result_with_timings: ResultWithTimings,
 }
 
 impl ExecutionEnvironment {
