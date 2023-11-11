@@ -976,7 +976,6 @@ where
             unbounded::<Box<ExecutionEnvironment>>();
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
             unbounded::<Box<ExecutionEnvironment>>();
-        let (mut result_sender, result_receiver) = unbounded();
 
         let scheduler_main_loop = || {
             let mut schedulable_transaction_receiver =
