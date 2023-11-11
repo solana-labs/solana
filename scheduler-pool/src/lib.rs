@@ -1057,7 +1057,7 @@ where
                                 (payload, true)
                             }
                             SessionedChannel::NextSession(mut next_session) => {
-                                (blocked_transaction_receiver, cross_beam::Sender::<()>) = next_session.channel_pair();
+                                (blocked_transaction_receiver, crossbeam_channel::Sender::<()>) = next_session.channel_pair();
                                 continue;
                             }
                             SessionedChannel::NewContext(next_context) => {
