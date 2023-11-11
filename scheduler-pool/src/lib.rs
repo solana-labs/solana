@@ -1094,7 +1094,7 @@ where
                             }
                             SessionedChannel2::NewContext(next_context) => {
                                 (blocked_transaction_sessioned_receiver, _) = next_context.channel_pair();
-                                bank = next_context2.bank().clone();
+                                //bank = next_context2.bank().clone();
                                 continue;
                             }
                         }
