@@ -817,7 +817,7 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
 
 #[derive(Debug)]
 struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
-    pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>, // to be moved to ThreadManager
+    pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
     context: Option<SchedulingContext>,
     scheduler_thread: Option<JoinHandle<()>>,
     handler_threads: Vec<JoinHandle<()>>,
