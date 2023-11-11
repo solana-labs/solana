@@ -985,7 +985,7 @@ where
                                 let Ok(mm) = m else {
                                     will_end_thread = true;
                                     continue;
-                                }
+                                };
 
                                 match mm {
                                     SessionedChannel::Payload(payload) => {
