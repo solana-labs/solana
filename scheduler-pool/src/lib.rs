@@ -892,7 +892,7 @@ enum ControlFrame<U> {
 }
 
 impl<T: Send + Sync + 'static, U: Send + Sync + 'static> ChainedChannel<T, U> {
-    fn next_session(receiver: Receiver<Self>, sender: U) -> Self {
+    fn new_channel(receiver: Receiver<Self>, sender: U) -> Self {
         Self::NewChannel(Box::new(ChannelPairOption(Some((receiver, sender)))))
     }
 }
@@ -1037,7 +1037,7 @@ where
                             blocked_transaction_sessioned_receiver,
                         ) = unbounded();
                         blocked_transaction_sessioned_sender
-                            .send(ChainedChannel::next_session(
+                            .send(ChainedChannel::new_channel(
                                 blocked_transaction_sessioned_receiver.clone(),
                                 ControlFrame::NextSession(()),
                             ))
