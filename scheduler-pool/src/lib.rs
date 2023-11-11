@@ -1148,7 +1148,7 @@ where
             .unwrap();
     }
 
-    fn end_session(&self) -> ResultWithTimings {
+    fn end_session(&mut self) -> ResultWithTimings {
         let pair = unbounded();
         let (
             next_schedulrable_transaction_sender,
