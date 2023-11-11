@@ -914,6 +914,10 @@ impl<T: Send + Sync + 'static, U: Send + Sync + 'static> SessionedChannel<T, U> 
 }
 
 impl<T: Send + Sync + 'static> SessionedChannel2<T, SchedulingContext> {
+    fn next_session(receiver: Receiver<Self>, sender: Sender<U>) -> Self {
+        Self::NextSession(Box::new(ChannelPairOption(Some((receiver, sender)))))
+    }
+
     fn new_context(receiver: Receiver<SessionedChannel2<T, SchedulingContext>>, context: SchedulingContext) -> Self {
         Self::NewContext(Box::new(ChannelPairOption2(Some((receiver, context)))))
     }
