@@ -174,7 +174,7 @@ pub trait Handler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + Sized + Clon
     );
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DefaultTransactionHandler;
 
 impl<SEA: ScheduleExecutionArg> Handler<SEA> for DefaultTransactionHandler {
