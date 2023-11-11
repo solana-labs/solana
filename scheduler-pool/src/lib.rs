@@ -867,7 +867,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
     }
 }
 
-type ChannelPair<T, U> = (Receiver<SessionedChannel<T, U>>, Sender<U>);
+type ChannelPair<T, U> = (Receiver<SessionedChannel<T, U>>, U);
 
 trait WithChannelPair<T, U>: Send + Sync {
     fn channel_pair(&mut self) -> ChannelPair<T, U>;
