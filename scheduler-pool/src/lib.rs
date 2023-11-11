@@ -890,13 +890,11 @@ enum SessionedChannel<T> {
 }
 
 impl<T: Send + Sync + 'static> SessionedChannel<T> {
-    fn next_session(receiver: crossbeam_channel::Receiver<Self>, sender: crossbeam_channel::Sender<ResultWithTimings>) -> Self {
-        Self::NextSession(Box::new(ChannelPairOption(
-            Some((
-                receiver,
-                sender
-            )),
-        )))
+    fn next_session(
+        receiver: crossbeam_channel::Receiver<Self>,
+        sender: crossbeam_channel::Sender<ResultWithTimings>,
+    ) -> Self {
+        Self::NextSession(Box::new(ChannelPairOption(Some((receiver, sender)))))
     }
 }
 
@@ -1026,7 +1024,8 @@ where
                             .send(SessionedChannel::next_session(
                                 blocked_transaction_receiver.clone(),
                                 next_result_sender.clone(),
-                            )).unwrap();
+                            ))
+                            .unwrap();
                     }
                     result_sender.send(result_with_timings).unwrap();
                     result_sender = next_result_sender.clone();
