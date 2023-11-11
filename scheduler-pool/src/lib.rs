@@ -1022,7 +1022,7 @@ where
                                                     blocked_transaction_sessioned_sender
                                                         .send(ChainedChannel::new_channel(
                                                             blocked_transaction_sessioned_receiver.clone(),
-                                                            ControlFrame::NewContext(next_context.clone()))
+                                                            ControlFrame::NewContext(next_context.clone()),
                                                         ))
                                                         .unwrap();
                                                 }
