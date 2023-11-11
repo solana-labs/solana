@@ -1078,9 +1078,9 @@ where
                                 (payload, true)
                             }
                             ChainedChannel::NewChannel(new_channel) => {
-                                let blocked;
-                                (blocked_transaction_sessioned_receiver, blocked) = new_channel.channel_pair();
-                                match blocked {
+                                let control_frame;
+                                (blocked_transaction_sessioned_receiver, control_frame) = new_channel.channel_pair();
+                                match control_frame {
                                     ControlFrame::NextSession(()) => {},
                                     ControlFrame::NewContext(new_context) => {
                                         bank = new_context.bank().clone();
