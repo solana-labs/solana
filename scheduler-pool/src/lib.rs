@@ -1577,7 +1577,8 @@ where
     }
 
     fn return_to_pool(self: Box<Self>) {
-        self.thread_manager.read().unwrap().pool.clone().return_scheduler(self)
+        let pool = self.thread_manager.read().unwrap().pool.clone();
+        pool.return_scheduler(self);
     }
 }
 
