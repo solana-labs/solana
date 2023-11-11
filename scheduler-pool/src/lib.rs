@@ -876,7 +876,7 @@ trait WithChannelPair<T, U>: Send + Sync {
 struct ChannelPairOption<T, U>(Option<ChannelPair<T, U>>);
 
 impl<T: Send + Sync, U: Send + Sync> WithChannelPair<T, U> for ChannelPairOption<T, U> {
-    fn channel_pair(self: Box<Self>) -> ChannelPair<T, U> {
+    fn channel_pair(mut self: Box<Self>) -> ChannelPair<T, U> {
         self.0.take().unwrap()
     }
 }
