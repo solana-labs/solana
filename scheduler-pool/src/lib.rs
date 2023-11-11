@@ -914,6 +914,9 @@ impl<T: Send + Sync + 'static, U: Send + Sync + 'static> SessionedChannel<T, U> 
 }
 
 impl<T: Send + Sync + 'static, U: Send + Sync + 'static> SessionedChannel2<T, U> {
+    fn new_context(receiver: Receiver<Self>, context: U) -> Self {
+        Self::NewContext(Box::new(ChannelPairOption2(Some((receiver, context)))))
+    }
 }
 
 impl<TH, SEA> ThreadManager<TH, SEA>
