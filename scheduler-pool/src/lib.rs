@@ -911,7 +911,7 @@ where
         handler: TH,
         pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
     ) -> Self {
-        let (schedulrable_transaction_sender, mut schedulable_transaction_receiver) = unbounded();
+        let (schedulrable_transaction_sender, schedulable_transaction_receiver) = unbounded();
         Self {
             schedulrable_transaction_sender,
             schedulable_transaction_receiver,
