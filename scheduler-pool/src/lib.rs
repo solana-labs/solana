@@ -963,7 +963,7 @@ where
         let (_transaction_sender, mut transaction_receiver) =
             unbounded::<SessionedChannel<Box<Task>, ResultWithTimings>>();
         let (blocked_transaction_sender, blocked_transaction_receiver) =
-            unbounded::<SessionedChannel<Box<ExecutionEnvironment>, ResultWithTimings>>();
+            unbounded::<SessionedChannel<Box<ExecutionEnvironment>, ()>>();
         let (idle_transaction_sender, idle_transaction_receiver) =
             unbounded::<Box<ExecutionEnvironment>>();
         let (handled_blocked_transaction_sender, handled_blocked_transaction_receiver) =
