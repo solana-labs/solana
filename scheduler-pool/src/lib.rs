@@ -975,7 +975,7 @@ where
         let (mut result_sender, result_receiver) = unbounded();
 
         let scheduler_main_loop = || {
-            let schedulable_transaction_receiver = self.schedulable_transaction_receiver.clone();
+            let mut schedulable_transaction_receiver = self.schedulable_transaction_receiver.clone();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
             let mut blocked_transaction_sessioned_receiver =
