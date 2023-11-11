@@ -915,7 +915,7 @@ impl<T: Send + Sync + 'static, U: Send + Sync + 'static> SessionedChannel<T, U> 
 
 impl<T: Send + Sync + 'static, U: Send + Sync + 'static> SessionedChannel2<T, U> {
     fn new_context(receiver: Receiver<Self>, context: U) -> Self {
-        todo!();//Self::NewContext(Box::new(ChannelPairOption2(Some((receiver, context)))))
+        Self::NewContext(Box::new(ChannelPairOption2(Some((receiver, context)))))
     }
 }
 
