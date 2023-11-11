@@ -978,6 +978,7 @@ where
             unbounded::<Box<ExecutionEnvironment>>();
 
         let scheduler_main_loop = || {
+            let result_sender = self.result_sender.clone();
             let mut schedulable_transaction_receiver =
                 self.schedulable_transaction_receiver.clone();
             let mut blocked_transaction_sessioned_sender =
