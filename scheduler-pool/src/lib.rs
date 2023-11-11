@@ -1033,12 +1033,7 @@ where
                 .unwrap(),
         );
 
-        self.handler_threads = (0..10)
-            .map({
-                |thx| {
-                    std::thread::Builder::new()
-                        .name("aaaa".to_owned())
-                        .spawn({
+        let handler_main_loop = || {
                             let pool = self.pool.clone();
                             let handler = self.handler.clone();
                             let mut bank = self.context.as_ref().unwrap().bank().clone();
@@ -1084,7 +1079,14 @@ where
                                     }
                                 }
                             }
-                        })
+                        };
+
+        self.handler_threads = (0..10)
+            .map({
+                |thx| {
+                    std::thread::Builder::new()
+                        .name("aaaa".to_owned())
+                        .spawn(handler_main_loop())
                         .unwrap()
                 }
             })
