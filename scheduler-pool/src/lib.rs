@@ -1025,7 +1025,7 @@ where
                         blocked_transaction_sessioned_sender
                             .send(SessionedChannel::next_session(
                                 blocked_transaction_sessioned_receiver.clone(),
-                                dummy_sender.clone(),
+                                (),
                             ))
                             .unwrap();
                     }
@@ -1054,7 +1054,7 @@ where
                                 (payload, true)
                             }
                             SessionedChannel::NextSession(mut next_session) => {
-                                (blocked_transaction_sessioned_receiver, Sender::<()> {..}) = next_session.channel_pair();
+                                (blocked_transaction_sessioned_receiver, ()) = next_session.channel_pair();
                                 continue;
                             }
                             SessionedChannel::NewContext(next_context) => {
