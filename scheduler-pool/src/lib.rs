@@ -1056,7 +1056,7 @@ where
                                 (payload, true)
                             }
                             SessionedChannel::NextSession(mut next_session) => {
-                                (blocked_transaction_receiver, _) = next_session.channel_pair();
+                                (blocked_transaction_receiver, ()) = next_session.channel_pair();
                                 continue;
                             }
                             SessionedChannel::NewContext(next_context) => {
