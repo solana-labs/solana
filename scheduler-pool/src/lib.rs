@@ -881,7 +881,7 @@ impl<T: Send + Sync, U: Send + Sync> WithChannelPair<T, U> for ChannelPairOption
     }
 }
 
-type ChannelPair2<T, U> = (Receiver<SessionedChannel<T, U>>, Sender<U>);
+type ChannelPair2<T, U> = (Receiver<SessionedChannel<T, U>>, U);
 
 trait WithChannelPair2<T, U>: Send + Sync {
     fn channel_pair(&mut self) -> ChannelPair2<T, U>;
