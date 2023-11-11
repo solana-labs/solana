@@ -926,7 +926,7 @@ where
     fn receive_new_transaction(state_machine: &mut SchedulingStateMachine, msg: Box<Task>) {}
 
     fn update_result_with_timings(
-        result_with_timings: &mut ResultWithTimings,
+        (result, timings): &mut ResultWithTimings,
         msg: &ExecutionEnvironment,
     ) {
     }
