@@ -146,8 +146,9 @@ impl<T, TH, SEA> SchedulerPool<T, TH, SEA>
     }
 }
 
-impl<T: SpawnableScheduler<TH, SEA>, TH: Handler<SEA>, SEA: ScheduleExecutionArg>
-    InstalledSchedulerPool<SEA> for SchedulerPool<T, TH, SEA>
+impl<T, TH, SEA> InstalledSchedulerPool<SEA> for SchedulerPool<T, TH, SEA>
+where
+    T: SpawnableScheduler<TH, SEA>, TH: Handler<SEA>, SEA: ScheduleExecutionArg
 {
     fn take_scheduler(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler<SEA>> {
         self.do_take_scheduler(context)
