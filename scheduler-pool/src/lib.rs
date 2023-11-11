@@ -931,7 +931,7 @@ where
     ) {
         match msg.result_with_timings.0 {
             Ok(()) => {}
-            Err(e) => overall_result = Err(e),
+            Err(e) => result = Err(e),
         }
         timings.accumulate(&msg.result_with_timings.1);
     }
