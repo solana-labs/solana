@@ -1503,8 +1503,8 @@ where
         self.id
     }
 
-    fn context(&self) -> &SchedulingContext {
-        &self.thread_manager.read().unwrap().context
+    fn context(&self) -> SchedulingContext {
+        self.thread_manager.read().unwrap().context
     }
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
