@@ -887,7 +887,7 @@ enum SessionedChannel<T, U> {
     NewContext(SchedulingContext),
 }
 
-enum Blocked {
+enum Blocked<U> {
     NextSession(U),
     NewContext(SchedulingContext),
 }
