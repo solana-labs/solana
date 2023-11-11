@@ -1001,7 +1001,7 @@ where
                                     SessionedChannel::Payload(payload) => {
                                         Self::receive_new_transaction(&mut state_machine, payload);
                                     }
-                                    SessionedChannel::NextSession(mut next_receiver_box) => {
+                                    SessionedChannel::Blocked(mut next_receiver_box) => {
                                         will_end_session = true;
                                         (transaction_receiver, next_result_sender) =
                                             next_receiver_box.channel_pair();
