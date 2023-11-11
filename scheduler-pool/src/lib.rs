@@ -835,7 +835,6 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             address_book: Mutex::new(address_book),
             preloader,
             thread_manager: RwLock::new(ThreadManager::<TH, SEA>::new(initial_context)),
-            _phantom: PhantomData,
         };
         drop(new.ensure_threads());
         new
@@ -890,6 +889,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> ThreadManager<TH, SEA> {
             context: Some(initial_context),
             scheduler_thread: None,
             handler_threads: vec![],
+            _phantom: PhantomData,
         }
     }
     fn is_active(&self) -> bool {
