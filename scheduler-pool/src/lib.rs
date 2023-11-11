@@ -889,9 +889,10 @@ enum SessionedChannel<T> {
     NewContext(SchedulingContext),
 }
 
-impl<TH, SEA> ThreadManager<TH, SEA> {
+impl<TH, SEA> ThreadManager<TH, SEA>
 where
     TH: Handler<SEA>, SEA: ScheduleExecutionArg
+{
     fn new(initial_context: SchedulingContext) -> Self {
         Self {
             context: Some(initial_context),
