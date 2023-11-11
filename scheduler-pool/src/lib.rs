@@ -1065,16 +1065,12 @@ where
                                 (blocked_transaction_sessioned_receiver, blocked) = next_session.channel_pair();
                                 match blocked {
                                     Blocked::NextSession(()) => {},
-                                    Blocked::NewContext(_) => {},
+                                    Blocked::NewContext(new_context) => {
+                                        bank = new_context.bank().clone();
+                                    },
                                 }
                                 continue;
                             }
-                            /*
-                            SessionedChannel::NewContext(next_context) => {
-                                bank = next_context.bank().clone();
-                                continue;
-                            }
-                            */
                         }
                     },
                     recv(idle_transaction_receiver) -> m => {
