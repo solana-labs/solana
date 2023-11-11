@@ -1001,12 +1001,12 @@ where
                                     ChainedChannel::Payload(payload) => {
                                         Self::receive_new_transaction(&mut state_machine, payload);
                                     }
-                                    ChainedChannel::NewChannel(mut next_receiver_box) => {
+                                    ChainedChannel::NewChannel(new_channel) => {
                                         will_end_session = true;
-                                        let mmm;
-                                        (transaction_receiver, mmm) =
-                                            next_receiver_box.channel_pair();
-                                        match mmm {
+
+                                        let control_frame;
+                                        (transaction_receiver, control_frame) = new_channel.channel_pair();
+                                        match control_frame {
                                             ControlFrame::NextSession(aa) => {
                                                 next_result_sender = aa;
                                             }
