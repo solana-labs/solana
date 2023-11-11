@@ -823,9 +823,9 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     handler: TH,
     _phantom: PhantomData<SEA>,
     schedulrable_transaction_sender:
-        Sender<ChainedChannel<Box<Task>, ControlFrame<Sender<ResultWithTimings>>>>,
+        Sender<ChainedChannel<Arc<Task>, ControlFrame<Sender<ResultWithTimings>>>>,
     schedulable_transaction_receiver:
-        Receiver<ChainedChannel<Box<Task>, ControlFrame<Sender<ResultWithTimings>>>>,
+        Receiver<ChainedChannel<Arc<Task>, ControlFrame<Sender<ResultWithTimings>>>>,
 }
 
 impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
@@ -928,7 +928,7 @@ where
         self.scheduler_thread.is_some()
     }
 
-    fn receive_new_transaction(state_machine: &mut SchedulingStateMachine, msg: Box<Task>) {}
+    fn receive_new_transaction(state_machine: &mut SchedulingStateMachine, msg: Arc<Task>) {}
 
     fn update_result_with_timings(
         (session_result, session_timings): &mut ResultWithTimings,
