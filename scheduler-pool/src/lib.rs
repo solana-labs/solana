@@ -1155,7 +1155,7 @@ where
             next_schedulrable_transaction_receiver,
         ) = &pair;
 
-        self.schedulrable_transaction_sender
+        let res = self.schedulrable_transaction_sender
             .send(ChainedChannel::new_channel(
                 next_schedulrable_transaction_receiver,
                 ControlFrame::NextSession,
@@ -1166,6 +1166,7 @@ where
             self.schedulrable_transaction_sender,
             self.schedulable_transaction_receiver,
         ) = pair;
+        res
     }
 }
 
