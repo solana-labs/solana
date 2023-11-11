@@ -1416,6 +1416,7 @@ impl ScheduleStage {
             execution_us: Default::default(),
             execution_cpu_us: Default::default(),
             finish_time: Default::default(),
+            result_with_timings: (Ok(()), Default::default()),
         })
     }
 
