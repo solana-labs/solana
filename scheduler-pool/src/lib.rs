@@ -1069,7 +1069,7 @@ where
                                 bank = next_context.bank().clone();
                                 continue;
                             }
-                            */NextSession
+                            */
                         }
                     },
                     recv(idle_transaction_receiver) -> m => {
