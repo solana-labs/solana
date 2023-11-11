@@ -1010,7 +1010,7 @@ where
                     std::thread::Builder::new()
                         .name("aaaa".to_owned())
                         .spawn({
-                            let handler = handler.clone();
+                            let handler = self.handler.clone();
                             let mut bank = self.context.as_ref().unwrap().bank().clone();
                             let mut blocked_transaction_receiver = blocked_transaction_receiver.clone();
                             let idle_transaction_receiver = idle_transaction_receiver.clone();
