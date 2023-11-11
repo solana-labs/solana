@@ -1076,14 +1076,15 @@ where
                         let Ok(mm) = m else { break };
 
                         match mm {
-                            SessionedChannel::Payload(payload) => {
+                            SessionedChannel2::Payload(payload) => {
                                 (payload, true)
                             }
-                            SessionedChannel::NextSession(mut next_session) => {
+                            SessionedChannel2::NextSession(mut next_session) => {
                                 (blocked_transaction_sessioned_receiver, Sender::<()> {..}) = next_session.channel_pair();
                                 continue;
                             }
-                            SessionedChannel::NewContext(next_context) => {
+                            SessionedChannel2::NewContext(next_context) => {
+                                (blocked_transaction_sessioned_receiver, next_context) = next_context.channel_pair();
                                 bank = next_context.bank().clone();
                                 continue;
                             }
