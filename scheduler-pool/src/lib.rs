@@ -1900,8 +1900,8 @@ mod tests {
             self.0.id()
         }
 
-        fn context(&self) -> &SchedulingContext {
-            self.0.context()
+        fn context(&self) -> SchedulingContext {
+            self.0.context().clone()
         }
 
         fn schedule_execution<'a>(
