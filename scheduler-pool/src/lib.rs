@@ -1148,6 +1148,7 @@ where
     }
 
     fn receive_result(&self) -> usize {
+        self.result_receiver.recv().unwrap()
     }
 }
 
