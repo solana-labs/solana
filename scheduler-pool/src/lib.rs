@@ -1006,6 +1006,7 @@ where
                                         (transaction_receiver, next_result_sender) =
                                             next_receiver_box.channel_pair();
                                     }
+                                    /*
                                     SessionedChannel::NewContext(next_context) => {
                                         will_end_session = false;
                                         for _ in (0..10) {
@@ -1016,6 +1017,7 @@ where
                                                 */
                                         }
                                     }
+                                    */
                                 };
                             },
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
