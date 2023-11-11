@@ -1031,11 +1031,13 @@ where
                             },
                         };
                     }
+
+                    (
+                        blocked_transaction_sessioned_sender,
+                        blocked_transaction_sessioned_receiver,
+                    ) = unbounded();
+
                     for _ in (0..10) {
-                        (
-                            blocked_transaction_sessioned_sender,
-                            blocked_transaction_sessioned_receiver,
-                        ) = unbounded();
                         blocked_transaction_sessioned_sender
                             .send(ChainedChannel::new_channel(
                                 blocked_transaction_sessioned_receiver.clone(),
