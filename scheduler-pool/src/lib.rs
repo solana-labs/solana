@@ -867,33 +867,33 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
     }
 }
 
-type ChannelPair<T> = (
+type ChannelPair<T, U> = (
     crossbeam_channel::Receiver<SessionedChannel<T>>,
-    crossbeam_channel::Sender<ResultWithTimings>,
+    crossbeam_channel::Sender<U>,
 );
 
-trait WithChannelPair<T>: Send + Sync {
-    fn channel_pair(&mut self) -> ChannelPair<T>;
+trait WithChannelPair<T, U>: Send + Sync {
+    fn channel_pair(&mut self) -> ChannelPair<T, U>;
 }
 
-struct ChannelPairOption<T>(Option<ChannelPair<T>>);
+struct ChannelPairOption<T, U>(Option<ChannelPair<T, U>>);
 
-impl<T: Send + Sync> WithChannelPair<T> for ChannelPairOption<T> {
-    fn channel_pair(&mut self) -> ChannelPair<T> {
+impl<T: Send + Sync> WithChannelPair<T, U> for ChannelPairOption<T, U> {
+    fn channel_pair(&mut self) -> ChannelPair<T, U> {
         self.0.take().unwrap()
     }
 }
 
 enum SessionedChannel<T> {
     Payload(T),
-    NextSession(Box<dyn WithChannelPair<T>>),
+    NextSession(Box<dyn WithChannelPair<T, U>>),
     NewContext(SchedulingContext),
 }
 
-impl<T: Send + Sync + 'static> SessionedChannel<T> {
+impl<T: Send + Sync + 'static, U: Send + Sync + 'static> SessionedChannel<T, U> {
     fn next_session(
         receiver: crossbeam_channel::Receiver<Self>,
-        sender: crossbeam_channel::Sender<ResultWithTimings>,
+        sender: crossbeam_channel::Sender<U>,
     ) -> Self {
         Self::NextSession(Box::new(ChannelPairOption(Some((receiver, sender)))))
     }
