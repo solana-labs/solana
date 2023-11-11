@@ -881,26 +881,6 @@ impl<T: Send + Sync, U: Send + Sync> WithChannelPair<T, U> for ChannelPairOption
     }
 }
 
-type ChannelPair2<T, U> = (Receiver<SessionedChannel2<T, U>>, U);
-
-trait WithChannelPair2<T: Send + Sync, U: Send + Sync>: Send + Sync {
-    fn channel_pair(&mut self) -> ChannelPair2<T, U>;
-}
-
-struct ChannelPairOption2<T, U>(Option<ChannelPair2<T, U>>);
-
-impl<T: Send + Sync> WithChannelPair2<T, SchedulingContext> for ChannelPairOption2<T, SchedulingContext> {
-    fn channel_pair(&mut self) -> ChannelPair2<T, SchedulingContext> {
-        self.0.take().unwrap()
-    }
-}
-
-enum SessionedChannel2<T, U> {
-    Payload(T),
-    NextSession(Box<dyn WithChannelPair<T, U>>),
-    NewContext(Box<dyn WithChannelPair2<T, SchedulingContext>>),
-}
-
 enum SessionedChannel<T, U> {
     Payload(T),
     NextSession(Box<dyn WithChannelPair<T, U>>),
@@ -910,18 +890,6 @@ enum SessionedChannel<T, U> {
 impl<T: Send + Sync + 'static, U: Send + Sync + 'static> SessionedChannel<T, U> {
     fn next_session(receiver: Receiver<Self>, sender: Sender<U>) -> Self {
         Self::NextSession(Box::new(ChannelPairOption(Some((receiver, sender)))))
-    }
-}
-
-impl<T: Send + Sync + 'static, U: Send + Sync + 'static> SessionedChannel2<T, U> {
-    fn next_session(receiver: Receiver<Self>, sender: Sender<U>) -> Self {
-        Self::NextSession(Box::new(ChannelPairOption(Some((receiver, sender)))))
-    }
-}
-
-impl<T: Send + Sync + 'static> SessionedChannel2<T, SchedulingContext> {
-    fn new_context(receiver: Receiver<SessionedChannel2<T, SchedulingContext>>, context: SchedulingContext) -> Self {
-        Self::NewContext(Box::new(ChannelPairOption2(Some((receiver, context)))))
     }
 }
 
@@ -989,7 +957,7 @@ where
         let (_transaction_sender, mut transaction_receiver) =
             unbounded::<SessionedChannel<Box<Task>, ResultWithTimings>>();
         let (blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) =
-            unbounded::<SessionedChannel2<Box<ExecutionEnvironment>, ()>>();
+            unbounded::<SessionedChannel<Box<ExecutionEnvironment>, ()>>();
         let (idle_transaction_sender, idle_transaction_receiver) =
             unbounded::<Box<ExecutionEnvironment>>();
         let (handled_blocked_transaction_sender, handled_blocked_transaction_receiver) =
@@ -1038,12 +1006,9 @@ where
                                     SessionedChannel::NewContext(next_context) => {
                                         will_end_session = false;
                                         for _ in (0..10) {
-                                            todo!();
-                                            /*
                                             blocked_transaction_sessioned_sender
-                                                .send(SessionedChannel2::NewContext(next_context.clone()))
+                                                .send(SessionedChannel::NewContext(next_context.clone()))
                                                 .unwrap();
-                                            */
                                         }
                                     }
                                 };
@@ -1058,7 +1023,7 @@ where
                     for _ in (0..10) {
                         (blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) = unbounded();
                         blocked_transaction_sessioned_sender
-                            .send(SessionedChannel2::next_session(
+                            .send(SessionedChannel::next_session(
                                 blocked_transaction_sessioned_receiver.clone(),
                                 dummy_sender.clone(),
                             ))
@@ -1085,16 +1050,15 @@ where
                         let Ok(mm) = m else { break };
 
                         match mm {
-                            SessionedChannel2::Payload(payload) => {
+                            SessionedChannel::Payload(payload) => {
                                 (payload, true)
                             }
-                            SessionedChannel2::NextSession(mut next_session) => {
+                            SessionedChannel::NextSession(mut next_session) => {
                                 (blocked_transaction_sessioned_receiver, Sender::<()> {..}) = next_session.channel_pair();
                                 continue;
                             }
-                            SessionedChannel2::NewContext(next_context) => {
-                                (blocked_transaction_sessioned_receiver, _) = next_context.channel_pair();
-                                //bank = next_context2.bank().clone();
+                            SessionedChannel::NewContext(next_context) => {
+                                bank = next_context.bank().clone();
                                 continue;
                             }
                         }
