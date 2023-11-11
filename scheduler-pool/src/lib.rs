@@ -84,8 +84,8 @@ pub type DefaultSchedulerPool = SchedulerPool<
     DefaultScheduleExecutionArg,
 >;
 
-impl<T: SpawnableScheduler<TH, SEA>, TH: Handler<SEA>, SEA: ScheduleExecutionArg>
-    SchedulerPool<T, TH, SEA>
+impl<T, TH, SEA> SchedulerPool<T, TH, SEA>
+    where T: SpawnableScheduler<TH, SEA>, TH: Handler<SEA>, SEA: ScheduleExecutionArg
 {
     pub fn new(
         log_messages_bytes_limit: Option<usize>,
