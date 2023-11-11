@@ -1577,7 +1577,7 @@ where
     }
 
     fn return_to_pool(self: Box<Self>) {
-        todo!(); //self.pool.clone().return_scheduler(self)
+        self.thread_manager.pool.clone().return_scheduler(self)
     }
 }
 
