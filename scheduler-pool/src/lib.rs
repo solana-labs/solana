@@ -1140,7 +1140,9 @@ where
     }
 
     fn schedule_execution(&self, task: Arc<Task>) {
-        self.schedulrable_transaction_sender.send(task).unwrap();
+        self.schedulrable_transaction_sender
+                                                        .send(ChainedChannel::Payload(task))
+                                                        .unwrap();
     }
 }
 
