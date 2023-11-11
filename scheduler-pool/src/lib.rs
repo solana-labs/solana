@@ -1506,8 +1506,9 @@ impl SchedulingStateMachine {
 impl Thread
 */
 
-impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> InstallableScheduler<SEA>
+impl<TH, SEA> InstallableScheduler<SEA>
     for PooledScheduler<TH, SEA>
+    where TH: Handler<SEA>, SEA: ScheduleExecutionArg
 {
     fn has_context(&self) -> bool {
         self.context.is_some()
