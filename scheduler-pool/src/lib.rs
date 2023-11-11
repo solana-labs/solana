@@ -1001,7 +1001,6 @@ where
                                         will_end_session = false;
                                     }
                                 };
-                                }
                             },
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
                                 let execution_environment = execution_environment.unwrap();
