@@ -1062,7 +1062,7 @@ where
                             ChainedChannel::Payload(payload) => {
                                 (payload, true)
                             }
-                            ChainedChannel::NewChannel(mut next_session) => {
+                            ChainedChannel::NewChannel(next_session) => {
                                 let blocked;
                                 (blocked_transaction_sessioned_receiver, blocked) = next_session.channel_pair();
                                 match blocked {
