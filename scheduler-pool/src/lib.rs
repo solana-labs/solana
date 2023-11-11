@@ -1007,7 +1007,7 @@ where
                                         will_end_session = false;
                                         for _ in (0..10) {
                                             blocked_transaction_sessioned_sender
-                                                .send(SessionedChannel::NextContext(next_context))
+                                                .send(SessionedChannel::NewContext(next_context))
                                                 .unwrap();
                                         }
                                     }
