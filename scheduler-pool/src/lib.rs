@@ -85,7 +85,10 @@ pub type DefaultSchedulerPool = SchedulerPool<
 >;
 
 impl<T, TH, SEA> SchedulerPool<T, TH, SEA>
-    where T: SpawnableScheduler<TH, SEA>, TH: Handler<SEA>, SEA: ScheduleExecutionArg
+where
+    T: SpawnableScheduler<TH, SEA>,
+    TH: Handler<SEA>,
+    SEA: ScheduleExecutionArg,
 {
     pub fn new(
         log_messages_bytes_limit: Option<usize>,
@@ -148,7 +151,9 @@ impl<T, TH, SEA> SchedulerPool<T, TH, SEA>
 
 impl<T, TH, SEA> InstalledSchedulerPool<SEA> for SchedulerPool<T, TH, SEA>
 where
-    T: SpawnableScheduler<TH, SEA>, TH: Handler<SEA>, SEA: ScheduleExecutionArg
+    T: SpawnableScheduler<TH, SEA>,
+    TH: Handler<SEA>,
+    SEA: ScheduleExecutionArg,
 {
     fn take_scheduler(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler<SEA>> {
         self.do_take_scheduler(context)
@@ -1400,7 +1405,9 @@ impl ScheduleStage {
 }
 
 impl<TH, SEA> InstalledScheduler<SEA> for PooledScheduler<TH, SEA>
-    where TH: Handler<SEA>, SEA: ScheduleExecutionArg
+where
+    TH: Handler<SEA>,
+    SEA: ScheduleExecutionArg,
 {
     fn id(&self) -> SchedulerId {
         self.id
@@ -1507,9 +1514,10 @@ impl SchedulingStateMachine {
 impl Thread
 */
 
-impl<TH, SEA> InstallableScheduler<SEA>
-    for PooledScheduler<TH, SEA>
-    where TH: Handler<SEA>, SEA: ScheduleExecutionArg
+impl<TH, SEA> InstallableScheduler<SEA> for PooledScheduler<TH, SEA>
+where
+    TH: Handler<SEA>,
+    SEA: ScheduleExecutionArg,
 {
     fn has_context(&self) -> bool {
         self.context.is_some()
