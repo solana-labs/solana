@@ -1150,7 +1150,7 @@ where
 
     fn end_session(&self) -> ResultWithTimings {
         let pair = unbounded();
-        &(
+        let (
             next_schedulrable_transaction_sender,
             next_schedulrable_transaction_receiver,
         ) = &pair;
