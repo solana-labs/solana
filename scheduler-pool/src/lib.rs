@@ -890,7 +890,7 @@ trait WithChannelPair2<T: Send + Sync, U: Send + Sync>: Send + Sync {
 struct ChannelPairOption2<T, U>(Option<ChannelPair2<T, U>>);
 
 impl<T: Send + Sync> WithChannelPair2<T, SchedulingContext> for ChannelPairOption2<T, SchedulingContext> {
-    fn channel_pair(&mut self) -> ChannelPair2<T, U> {
+    fn channel_pair(&mut self) -> ChannelPair2<T, SchedulingContext> {
         self.0.take().unwrap()
     }
 }
