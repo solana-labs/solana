@@ -1132,7 +1132,10 @@ where
     }
 
     fn stop_threads(&mut self) {
-        (self.schedulrable_transaction_sender, self.schedulable_transaction_receiver) = unbounded();
+        (
+            self.schedulrable_transaction_sender,
+            self.schedulable_transaction_receiver,
+        ) = unbounded();
         assert_eq!(self.scheduler_thread.take().unwrap().join().unwrap(), ());
         for j in self.handler_threads.drain(..) {
             assert_eq!(j.join().unwrap(), ());
@@ -1140,7 +1143,9 @@ where
     }
 
     fn schedule_execution(&self, task: Arc<Task>) {
-        self.schedulrable_transaction_sender .send(ChainedChannel::Payload(task)) .unwrap();
+        self.schedulrable_transaction_sender
+            .send(ChainedChannel::Payload(task))
+            .unwrap();
     }
 }
 
