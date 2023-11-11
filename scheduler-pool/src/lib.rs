@@ -1066,6 +1066,7 @@ where
                 };
 
                 Self::receive_scheduled_transaction(&handler, &bank, &mut m, &pool);
+
                 if was_blocked {
                     handled_blocked_transaction_sender.send(m).unwrap();
                 } else {
