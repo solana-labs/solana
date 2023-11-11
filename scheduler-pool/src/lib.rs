@@ -889,7 +889,7 @@ enum SessionedChannel<T> {
     NewContext(SchedulingContext),
 }
 
-impl<T: Send + Sync> SessionedChannel<T> {
+impl<T: Send + Sync + 'static> SessionedChannel<T> {
     fn next_session(receiver: crossbeam_channel::Receiver<Self>, sender: crossbeam_channel::Sender<ResultWithTimings>) -> Self {
         Self::NextSession(Box::new(ChannelPairOption(
             Some((
