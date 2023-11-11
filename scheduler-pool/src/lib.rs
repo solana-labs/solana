@@ -926,14 +926,14 @@ where
     fn receive_new_transaction(state_machine: &mut SchedulingStateMachine, msg: Box<Task>) {}
 
     fn update_result_with_timings(
-        (result, timings): &mut ResultWithTimings,
+        (session_result, session_timings): &mut ResultWithTimings,
         msg: &ExecutionEnvironment,
     ) {
         match msg.result_with_timings.0 {
             Ok(()) => {}
-            Err(e) => result = Err(e),
+            Err(e) => session_result = Err(e),
         }
-        timings.accumulate(&msg.result_with_timings.1);
+        session_timings.accumulate(&msg.result_with_timings.1);
     }
 
     fn receive_handled_transaction(
