@@ -961,7 +961,7 @@ where
 
     fn start_threads(&mut self) {
         let (_transaction_sender, mut transaction_receiver) =
-            unbounded::<SessionedChannel<Box<Task>>>();
+            unbounded::<SessionedChannel<Box<Task>, ResultWithTimings>>();
         let (blocked_transaction_sender, blocked_transaction_receiver) =
             unbounded::<SessionedChannel<Box<ExecutionEnvironment>, ResultWithTimings>>();
         let (idle_transaction_sender, idle_transaction_receiver) =
