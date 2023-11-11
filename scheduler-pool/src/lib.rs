@@ -889,6 +889,17 @@ enum SessionedChannel<T> {
     NewContext(SchedulingContext),
 }
 
+impl<T> SessionedChannel<T> {
+    fn next_session(self, sender: Sender<ResultWithTimings>) -> Self {
+        Self::NextSession(Box::new(ChannelPairOption(
+            Some((
+                self,
+                sender
+            )),
+        ))))
+    }
+}
+
 impl<TH, SEA> ThreadManager<TH, SEA>
 where
     TH: Handler<SEA>,
