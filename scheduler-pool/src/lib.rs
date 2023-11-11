@@ -822,6 +822,8 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     handler_threads: Vec<JoinHandle<()>>,
     handler: TH,
     _phantom: PhantomData<SEA>,
+    schedulrable_transaction_sender: usize,
+    schedulable_transaction_receiver: usize,
 }
 
 impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
@@ -907,7 +909,11 @@ where
         handler: TH,
         pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
     ) -> Self {
+        let (schedulrable_transaction_sender, mut schedulable_transaction_receiver) =
+            unbounded::<ChainedChannel<Box<Task>, ControlFrame<Sender<ResultWithTimings>>>>();
         Self {
+            schedulrable_transaction_sender,
+            schedulable_transaction_receiver,
             context: initial_context,
             scheduler_thread: None,
             handler_threads: vec![],
@@ -958,8 +964,6 @@ where
     }
 
     fn start_threads(&mut self) {
-        let (_transaction_sender, mut transaction_receiver) =
-            unbounded::<ChainedChannel<Box<Task>, ControlFrame<Sender<ResultWithTimings>>>>();
         let (blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) =
             unbounded::<ChainedChannel<Box<ExecutionEnvironment>, ControlFrame<()>>>();
         let (idle_transaction_sender, idle_transaction_receiver) =
