@@ -956,7 +956,7 @@ where
     fn start_threads(&mut self) {
         let (_transaction_sender, mut transaction_receiver) =
             unbounded::<SessionedChannel<Box<Task>, ResultWithTimings>>();
-        let (blocked_transaction_sender, blocked_transaction_receiver) =
+        let (blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) =
             unbounded::<SessionedChannel<Box<ExecutionEnvironment>, ()>>();
         let (idle_transaction_sender, idle_transaction_receiver) =
             unbounded::<Box<ExecutionEnvironment>>();
@@ -969,8 +969,8 @@ where
 
         let scheduler_main_loop = || {
             let mut context = self.context.as_ref().unwrap().clone();
-            let mut blocked_transaction_sender = blocked_transaction_sender.clone();
-            let mut blocked_transaction_receiver = blocked_transaction_receiver.clone();
+            let mut blocked_transaction_sessioned_sender = blocked_transaction_sessioned_sender.clone();
+            let mut blocked_transaction_sessioned_receiver = blocked_transaction_sessioned_receiver.clone();
 
             move || {
                 let never = &never();
@@ -1018,10 +1018,10 @@ where
                         };
                     }
                     for _ in (0..10) {
-                        (blocked_transaction_sender, blocked_transaction_receiver) = unbounded();
-                        blocked_transaction_sender
+                        (blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) = unbounded();
+                        blocked_transaction_sessioned_sender
                             .send(SessionedChannel::next_session(
-                                blocked_transaction_receiver.clone(),
+                                blocked_transaction_sessioned_receiver.clone(),
                                 dummy_sender.clone(),
                             ))
                             .unwrap();
@@ -1036,14 +1036,14 @@ where
             let pool = self.pool.clone();
             let handler = self.handler.clone();
             let mut bank = self.context.as_ref().unwrap().bank().clone();
-            let mut blocked_transaction_receiver = blocked_transaction_receiver.clone();
+            let mut blocked_transaction_sessioned_receiver = blocked_transaction_sessioned_receiver.clone();
             let idle_transaction_receiver = idle_transaction_receiver.clone();
             let handled_blocked_transaction_sender = handled_blocked_transaction_sender.clone();
             let handled_idle_transaction_sender = handled_idle_transaction_sender.clone();
 
             move || loop {
                 let (mut m, was_blocked) = select_biased! {
-                    recv(blocked_transaction_receiver) -> m => {
+                    recv(blocked_transaction_sessioned_receiver) -> m => {
                         let Ok(mm) = m else { break };
 
                         match mm {
@@ -1051,7 +1051,7 @@ where
                                 (payload, true)
                             }
                             SessionedChannel::NextSession(mut next_session) => {
-                                (blocked_transaction_receiver, Sender::<()> {..}) = next_session.channel_pair();
+                                (blocked_transaction_sessioned_receiver, Sender::<()> {..}) = next_session.channel_pair();
                                 continue;
                             }
                             SessionedChannel::NewContext(next_context) => {
