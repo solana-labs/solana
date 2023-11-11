@@ -960,65 +960,70 @@ where
         let (mut result_sender, result_receiver) = unbounded();
 
         let scheduler_main_loop = || {
-                    let mut bank = self.context.as_ref().unwrap().bank().clone();
-                    let mut blocked_transaction_sender = blocked_transaction_sender.clone();
-                    let mut blocked_transaction_receiver = blocked_transaction_receiver.clone();
-                    move || {
-                    let never = &never();
-                    let mut state_machine = SchedulingStateMachine;
-                    let mut will_end_session = false;
-                    let mut will_end_thread = false;
-                    let mut scheduler_is_empty = false;
-                    let mut next_result_sender = result_sender.clone();
+            let mut bank = self.context.as_ref().unwrap().bank().clone();
+            let mut blocked_transaction_sender = blocked_transaction_sender.clone();
+            let mut blocked_transaction_receiver = blocked_transaction_receiver.clone();
+            move || {
+                let never = &never();
+                let mut state_machine = SchedulingStateMachine;
+                let mut will_end_session = false;
+                let mut will_end_thread = false;
+                let mut scheduler_is_empty = false;
+                let mut next_result_sender = result_sender.clone();
 
-                    while !will_end_thread {
-                        let mut result_with_timings = (Ok(()), Default::default());
-                        while !(scheduler_is_empty && will_end_session) {
-                            select_biased! {
-                                recv(handled_blocked_transaction_receiver) -> execution_environment => {
-                                    let execution_environment = execution_environment.unwrap();
-                                    Self::update_result_with_timings(&mut result_with_timings, &execution_environment);
-                                    Self::receive_handled_transaction(&mut state_machine, execution_environment);
-                                },
-                                recv(if !will_end_session { &transaction_receiver } else { never }) -> m => {
-                                    match m {
-                                        Ok(mm) => {
-                                            match mm {
-                                                SessionedChannel::Payload(payload) => {
-                                                    Self::receive_new_transaction(&mut state_machine, payload);
-                                                }
-                                                SessionedChannel::NextSession(mut next_receiver_box) => {
-                                                    will_end_session = true;
-                                                    (transaction_receiver, next_result_sender) =
-                                                        next_receiver_box.unwrap_channel_pair();
-                                                }
-                                                SessionedChannel::NewContext(next_context) => {
-                                                    bank = next_context.bank().clone();
-                                                    will_end_session = false;
-                                                }
-                                            };
-                                        },
-                                        Err(_) => will_end_thread = true,
-                                    }
-                                },
-                                recv(handled_idle_transaction_receiver) -> execution_environment => {
-                                    let execution_environment = execution_environment.unwrap();
-                                    Self::update_result_with_timings(&mut result_with_timings, &execution_environment);
-                                    Self::receive_handled_transaction(&mut state_machine, execution_environment);
-                                },
-                            };
-                        }
-                        for _ in (0..10) {
-                            (blocked_transaction_sender, blocked_transaction_receiver) = unbounded();
-                            blocked_transaction_sender.send(SessionedChannel::NextSession(Box::new(
-                                        ChannelPairOption(Some((blocked_transaction_receiver.clone(), next_result_sender.clone())))
-                                        ))).unwrap();
-
-                        }
-                        result_sender.send(result_with_timings).unwrap();
-                        result_sender = next_result_sender.clone();
+                while !will_end_thread {
+                    let mut result_with_timings = (Ok(()), Default::default());
+                    while !(scheduler_is_empty && will_end_session) {
+                        select_biased! {
+                            recv(handled_blocked_transaction_receiver) -> execution_environment => {
+                                let execution_environment = execution_environment.unwrap();
+                                Self::update_result_with_timings(&mut result_with_timings, &execution_environment);
+                                Self::receive_handled_transaction(&mut state_machine, execution_environment);
+                            },
+                            recv(if !will_end_session { &transaction_receiver } else { never }) -> m => {
+                                match m {
+                                    Ok(mm) => {
+                                        match mm {
+                                            SessionedChannel::Payload(payload) => {
+                                                Self::receive_new_transaction(&mut state_machine, payload);
+                                            }
+                                            SessionedChannel::NextSession(mut next_receiver_box) => {
+                                                will_end_session = true;
+                                                (transaction_receiver, next_result_sender) =
+                                                    next_receiver_box.unwrap_channel_pair();
+                                            }
+                                            SessionedChannel::NewContext(next_context) => {
+                                                bank = next_context.bank().clone();
+                                                will_end_session = false;
+                                            }
+                                        };
+                                    },
+                                    Err(_) => will_end_thread = true,
+                                }
+                            },
+                            recv(handled_idle_transaction_receiver) -> execution_environment => {
+                                let execution_environment = execution_environment.unwrap();
+                                Self::update_result_with_timings(&mut result_with_timings, &execution_environment);
+                                Self::receive_handled_transaction(&mut state_machine, execution_environment);
+                            },
+                        };
                     }
-                }};
+                    for _ in (0..10) {
+                        (blocked_transaction_sender, blocked_transaction_receiver) = unbounded();
+                        blocked_transaction_sender
+                            .send(SessionedChannel::NextSession(Box::new(ChannelPairOption(
+                                Some((
+                                    blocked_transaction_receiver.clone(),
+                                    next_result_sender.clone(),
+                                )),
+                            ))))
+                            .unwrap();
+                    }
+                    result_sender.send(result_with_timings).unwrap();
+                    result_sender = next_result_sender.clone();
+                }
+            }
+        };
 
         self.scheduler_thread = Some(
             std::thread::Builder::new()
