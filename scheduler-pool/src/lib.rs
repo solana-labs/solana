@@ -811,7 +811,7 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
 }
 
 #[derive(Debug)]
-struct ThreadManager<TH> {
+struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     context: Option<SchedulingContext>,
     scheduler_thread: Option<JoinHandle<()>>,
     handler_threads: Vec<JoinHandle<()>>,
@@ -885,7 +885,7 @@ enum SessionedChannel<T> {
     NewContext(SchedulingContext),
 }
 
-impl ThreadManager {
+impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> ThreadManager {
     fn new(initial_context: SchedulingContext) -> Self {
         Self {
             context: Some(initial_context),
