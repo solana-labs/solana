@@ -1032,7 +1032,7 @@ where
                         blocked_transaction_sessioned_sender
                             .send(SessionedChannel::next_session(
                                 blocked_transaction_sessioned_receiver.clone(),
-                                (),
+                                Blocked::NextSession(()),
                             ))
                             .unwrap();
                     }
