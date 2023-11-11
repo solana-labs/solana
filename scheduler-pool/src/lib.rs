@@ -9,7 +9,7 @@
 //! helper fun called `execute_batch()`.
 
 use {
-    crossbeam_channel::{never, select_biased, unbounded},
+    crossbeam_channel::{never, select_biased, unbounded, Sender, Receiver},
     log::*,
     rand::{thread_rng, Rng},
     solana_ledger::blockstore_processor::{
@@ -671,13 +671,13 @@ pub struct TaskQueue {
 }
 
 struct ChannelBackedTaskQueue {
-    channel: crossbeam_channel::Receiver<SchedulablePayload>,
+    channel: Receiver<SchedulablePayload>,
     buffered_task: Option<TaskInQueue>,
     buffered_flush: bool,
 }
 
 impl ChannelBackedTaskQueue {
-    fn new(channel: &crossbeam_channel::Receiver<SchedulablePayload>) -> Self {
+    fn new(channel: &Receiver<SchedulablePayload>) -> Self {
         Self {
             channel: channel.clone(),
             buffered_task: None,
@@ -868,8 +868,8 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
 }
 
 type ChannelPair<T, U> = (
-    crossbeam_channel::Receiver<SessionedChannel<T, U>>,
-    crossbeam_channel::Sender<U>,
+    Receiver<SessionedChannel<T, U>>,
+    Sender<U>,
 );
 
 trait WithChannelPair<T, U>: Send + Sync {
@@ -892,8 +892,8 @@ enum SessionedChannel<T, U> {
 
 impl<T: Send + Sync + 'static, U: Send + Sync + 'static> SessionedChannel<T, U> {
     fn next_session(
-        receiver: crossbeam_channel::Receiver<Self>,
-        sender: crossbeam_channel::Sender<U>,
+        receiver: Receiver<Self>,
+        sender: Sender<U>,
     ) -> Self {
         Self::NextSession(Box::new(ChannelPairOption(Some((receiver, sender)))))
     }
@@ -1057,7 +1057,7 @@ where
                                 (payload, true)
                             }
                             SessionedChannel::NextSession(mut next_session) => {
-                                (blocked_transaction_receiver, crossbeam_channel::Sender::<()> {..}) = next_session.channel_pair();
+                                (blocked_transaction_receiver, Sender::<()> {..}) = next_session.channel_pair();
                                 continue;
                             }
                             SessionedChannel::NewContext(next_context) => {
