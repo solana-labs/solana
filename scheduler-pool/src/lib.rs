@@ -1062,9 +1062,9 @@ where
                             ChainedChannel::Payload(payload) => {
                                 (payload, true)
                             }
-                            ChainedChannel::NewChannel(next_session) => {
+                            ChainedChannel::NewChannel(new_channel) => {
                                 let blocked;
-                                (blocked_transaction_sessioned_receiver, blocked) = next_session.channel_pair();
+                                (blocked_transaction_sessioned_receiver, blocked) = new_channel.channel_pair();
                                 match blocked {
                                     ControlFrame::NextSession(()) => {},
                                     ControlFrame::NewContext(new_context) => {
