@@ -1146,6 +1146,9 @@ where
             .send(ChainedChannel::Payload(task))
             .unwrap();
     }
+
+    fn receive_result(&self) -> usize {
+    }
 }
 
 pub trait InstallableScheduler<SEA: ScheduleExecutionArg>: InstalledScheduler<SEA> {
