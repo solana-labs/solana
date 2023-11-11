@@ -995,6 +995,7 @@ where
 
                 while !will_end_thread {
                     let mut result_with_timings = (Ok(()), Default::default());
+
                     while !(scheduler_is_empty && will_end_session) {
                         select_biased! {
                             recv(handled_blocked_transaction_receiver) -> execution_environment => {
@@ -1147,7 +1148,7 @@ where
             .unwrap();
     }
 
-    fn receive_result(&self) -> ResultWithTimings {
+    fn end_session(&self) -> ResultWithTimings {
         self.result_receiver.recv().unwrap()
     }
 }
