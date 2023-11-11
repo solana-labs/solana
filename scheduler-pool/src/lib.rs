@@ -989,7 +989,6 @@ where
                 let mut will_end_session = false;
                 let mut will_end_thread = false;
                 let mut scheduler_is_empty = false;
-                let mut next_result_sender = result_sender.clone();
 
                 while !will_end_thread {
                     let mut result_with_timings = (Ok(()), Default::default());
@@ -1016,9 +1015,7 @@ where
                                         let control_frame;
                                         (schedulable_transaction_receiver, control_frame) = new_channel.channel_pair();
                                         match control_frame {
-                                            ControlFrame::NextSession(result_sender) => {
-                                                next_result_sender = result_sender;
-                                            }
+                                            ControlFrame::NextSession(()) => {}
                                             ControlFrame::NewContext(context) => {
                                                 will_end_session = false;
                                                 (
@@ -1060,7 +1057,6 @@ where
                             .unwrap();
                     }
                     result_sender.send(result_with_timings).unwrap();
-                    result_sender = next_result_sender.clone();
                 }
             }
         };
