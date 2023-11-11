@@ -867,7 +867,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
     }
 }
 
-type ChannelPair<T, U> = (Receiver<SessionedChannel<T, U>>, U);
+type ChannelPair<T, U> = (Receiver<ChainedChannel<T, U>>, U);
 
 trait WithChannelPair<T, U>: Send + Sync {
     fn channel_pair(self: Box<Self>) -> ChannelPair<T, U>;
@@ -881,9 +881,9 @@ impl<T: Send + Sync, U: Send + Sync> WithChannelPair<T, U> for ChannelPairOption
     }
 }
 
-enum SessionedChannel<T, U> {
+enum ChainedChannel<T, U> {
     Payload(T),
-    Blocked(Box<dyn WithChannelPair<T, U>>),
+    NewChannel(Box<dyn WithChannelPair<T, U>>),
 }
 
 enum Blocked<U> {
@@ -891,9 +891,9 @@ enum Blocked<U> {
     NewContext(SchedulingContext),
 }
 
-impl<T: Send + Sync + 'static, U: Send + Sync + 'static> SessionedChannel<T, U> {
+impl<T: Send + Sync + 'static, U: Send + Sync + 'static> ChainedChannel<T, U> {
     fn next_session(receiver: Receiver<Self>, sender: U) -> Self {
-        Self::Blocked(Box::new(ChannelPairOption(Some((receiver, sender)))))
+        Self::NewChannel(Box::new(ChannelPairOption(Some((receiver, sender)))))
     }
 }
 
@@ -959,9 +959,9 @@ where
 
     fn start_threads(&mut self) {
         let (_transaction_sender, mut transaction_receiver) =
-            unbounded::<SessionedChannel<Box<Task>, Blocked<Sender<ResultWithTimings>>>>();
+            unbounded::<ChainedChannel<Box<Task>, Blocked<Sender<ResultWithTimings>>>>();
         let (blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) =
-            unbounded::<SessionedChannel<Box<ExecutionEnvironment>, Blocked<()>>>();
+            unbounded::<ChainedChannel<Box<ExecutionEnvironment>, Blocked<()>>>();
         let (idle_transaction_sender, idle_transaction_receiver) =
             unbounded::<Box<ExecutionEnvironment>>();
         let (handled_blocked_transaction_sender, handled_blocked_transaction_receiver) =
@@ -998,10 +998,10 @@ where
                                 };
 
                                 match mm {
-                                    SessionedChannel::Payload(payload) => {
+                                    ChainedChannel::Payload(payload) => {
                                         Self::receive_new_transaction(&mut state_machine, payload);
                                     }
-                                    SessionedChannel::Blocked(mut next_receiver_box) => {
+                                    ChainedChannel::NewChannel(mut next_receiver_box) => {
                                         will_end_session = true;
                                         let mmm;
                                         (transaction_receiver, mmm) =
@@ -1014,7 +1014,7 @@ where
                                                 will_end_session = false;
                                                 for _ in (0..10) {
                                                     //blocked_transaction_sessioned_sender
-                                                    //    .send(SessionedChannel::NewContext(next_context.clone()))
+                                                    //    .send(ChainedChannel::NewContext(next_context.clone()))
                                                     //    .unwrap();
                                                 }
                                             }
@@ -1032,7 +1032,7 @@ where
                     for _ in (0..10) {
                         (blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) = unbounded();
                         blocked_transaction_sessioned_sender
-                            .send(SessionedChannel::next_session(
+                            .send(ChainedChannel::next_session(
                                 blocked_transaction_sessioned_receiver.clone(),
                                 Blocked::NextSession(()),
                             ))
@@ -1059,10 +1059,10 @@ where
                         let Ok(mm) = m else { break };
 
                         match mm {
-                            SessionedChannel::Payload(payload) => {
+                            ChainedChannel::Payload(payload) => {
                                 (payload, true)
                             }
-                            SessionedChannel::Blocked(mut next_session) => {
+                            ChainedChannel::NewChannel(mut next_session) => {
                                 let blocked;
                                 (blocked_transaction_sessioned_receiver, blocked) = next_session.channel_pair();
                                 match blocked {
