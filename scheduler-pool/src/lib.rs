@@ -898,6 +898,7 @@ where
             scheduler_thread: None,
             handler_threads: vec![],
             handler,
+            pool,
             _phantom: PhantomData,
         }
     }
