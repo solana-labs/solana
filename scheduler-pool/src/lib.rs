@@ -1038,7 +1038,7 @@ where
             move || loop {
                 let (mut m, was_blocked) = select_biased! {
                     recv(blocked_transaction_receiver) -> m => {
-                        if let Ok(mm) = m else break;
+                        if let Ok(mm) = m else { break };
 
                         match mm {
                             SessionedChannel::Payload(payload) => {
