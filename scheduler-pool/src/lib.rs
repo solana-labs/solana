@@ -1026,13 +1026,6 @@ where
             }
         };
 
-        self.scheduler_thread = Some(
-            std::thread::Builder::new()
-                .name("aaaa".to_owned())
-                .spawn(scheduler_main_loop())
-                .unwrap(),
-        );
-
         let handler_main_loop = || {
             let pool = self.pool.clone();
             let handler = self.handler.clone();
@@ -1078,6 +1071,13 @@ where
                 }
             }
         };
+
+        self.scheduler_thread = Some(
+            std::thread::Builder::new()
+                .name("aaaa".to_owned())
+                .spawn(scheduler_main_loop())
+                .unwrap(),
+        );
 
         self.handler_threads = (0..10)
             .map({
