@@ -1007,20 +1007,19 @@ where
                                         (transaction_receiver, mmm) =
                                             next_receiver_box.channel_pair();
                                         match mmm {
+                                            Blocked::NextSession(aa) => {
+                                                let a: usize = aa;
+                                            }
+                                            Blocked::NewContext(new_context) => {
+                                                will_end_session = false;
+                                                for _ in (0..10) {
+                                                    //blocked_transaction_sessioned_sender
+                                                    //    .send(SessionedChannel::NewContext(next_context.clone()))
+                                                    //    .unwrap();
+                                                }
+                                            }
                                         }
                                     }
-                                    /*
-                                    SessionedChannel::NewContext(next_context) => {
-                                        will_end_session = false;
-                                        for _ in (0..10) {
-                                            /*
-                                            blocked_transaction_sessioned_sender
-                                                .send(SessionedChannel::NewContext(next_context.clone()))
-                                                .unwrap();
-                                                */
-                                        }
-                                    }
-                                    */
                                 };
                             },
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
