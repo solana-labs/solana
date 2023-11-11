@@ -1038,24 +1038,20 @@ where
             move || loop {
                 let (mut m, was_blocked) = select_biased! {
                     recv(blocked_transaction_receiver) -> m => {
-                        match m {
-                            Ok(mm) => {
-                                match mm {
-                                    SessionedChannel::Payload(payload) => {
-                                        (payload, true)
-                                    }
-                                    SessionedChannel::NextSession(mut next_session) => {
-                                        (blocked_transaction_receiver, _) =
-                                            next_session.unwrap_channel_pair();
-                                        continue;
-                                    }
-                                    SessionedChannel::NewContext(next_context) => {
-                                        bank = next_context.bank().clone();
-                                        continue;
-                                    }
-                                }
-                            },
-                            Err(_) => break,
+                        if let Ok(mm) = m else break;
+
+                        match mm {
+                            SessionedChannel::Payload(payload) => {
+                                (payload, true)
+                            }
+                            SessionedChannel::NextSession(mut next_session) => {
+                                (blocked_transaction_receiver, _) = next_session.channel_pair();
+                                continue;
+                            }
+                            SessionedChannel::NewContext(next_context) => {
+                                bank = next_context.bank().clone();
+                                continue;
+                            }
                         }
                     },
                     recv(idle_transaction_receiver) -> m => {
