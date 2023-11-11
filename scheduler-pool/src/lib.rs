@@ -919,8 +919,8 @@ where
     ) {
     }
 
-    fn receive_scheduled_transaction(bank: &Arc<Bank>, msg: &mut Box<ExecutionEnvironment>) {
-        TH::handle(3);
+    fn receive_scheduled_transaction(handler: &TH, bank: &Arc<Bank>, msg: &mut Box<ExecutionEnvironment>) {
+        TH::handle(handler);
     }
 
     fn start_threads(&mut self) {
@@ -1008,6 +1008,7 @@ where
                     std::thread::Builder::new()
                         .name("aaaa".to_owned())
                         .spawn({
+                            let handler = handler.clone();
                             let mut bank = self.context.as_ref().unwrap().bank().clone();
                             let mut blocked_transaction_receiver = blocked_transaction_receiver.clone();
                             let idle_transaction_receiver = idle_transaction_receiver.clone();
@@ -1043,7 +1044,7 @@ where
                                         },
                                     };
 
-                                    Self::receive_scheduled_transaction(&bank, &mut m);
+                                    Self::receive_scheduled_transaction(&handler, &bank, &mut m);
                                     if was_blocked {
                                         handled_blocked_transaction_sender.send(m).unwrap();
                                     } else {
