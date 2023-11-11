@@ -1147,7 +1147,7 @@ where
             .unwrap();
     }
 
-    fn receive_result(&self) -> usize {
+    fn receive_result(&self) -> ResultWithTimings {
         self.result_receiver.recv().unwrap()
     }
 }
