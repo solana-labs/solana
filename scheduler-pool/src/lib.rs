@@ -1398,8 +1398,8 @@ impl ScheduleStage {
     }
 }
 
-impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> InstalledScheduler<SEA>
-    for PooledScheduler<TH, SEA>
+impl<TH, SEA> InstalledScheduler<SEA> for PooledScheduler<TH, SEA>
+    where TH: Handler<SEA>, SEA: ScheduleExecutionArg
 {
     fn id(&self) -> SchedulerId {
         self.id
