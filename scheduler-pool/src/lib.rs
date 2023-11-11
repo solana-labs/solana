@@ -968,7 +968,7 @@ where
         let (mut dummy_sender, _dummy_receiver) = unbounded();
 
         let scheduler_main_loop = || {
-            let mut bank = self.context.as_ref().unwrap().bank().clone();
+            let mut context = self.context.as_ref().unwrap().clone();
             let mut blocked_transaction_sender = blocked_transaction_sender.clone();
             let mut blocked_transaction_receiver = blocked_transaction_receiver.clone();
 
@@ -1005,7 +1005,7 @@ where
                                             next_receiver_box.channel_pair();
                                     }
                                     SessionedChannel::NewContext(next_context) => {
-                                        bank = next_context.bank().clone();
+                                        context = next_context;
                                         will_end_session = false;
                                     }
                                 };
