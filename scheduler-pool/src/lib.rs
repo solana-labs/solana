@@ -1504,7 +1504,7 @@ where
     }
 
     fn context(&self) -> &SchedulingContext {
-        todo!(); //self.context.as_ref().expect("active context should exist")
+        self.thread_manager.read().unwrap().context
     }
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
