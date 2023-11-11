@@ -1012,7 +1012,7 @@ where
                                         will_end_session = true;
 
                                         let control_frame;
-                                        (transaction_receiver, control_frame) = new_channel.channel_pair();
+                                        (schedulable_transaction_receiver, control_frame) = new_channel.channel_pair();
                                         match control_frame {
                                             ControlFrame::NextSession(result_sender) => {
                                                 next_result_sender = result_sender;
