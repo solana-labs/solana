@@ -1162,10 +1162,12 @@ where
             ))
             .unwrap();
         self.result_receiver.recv().unwrap();
+
         (
             self.schedulrable_transaction_sender,
             self.schedulable_transaction_receiver,
         ) = pair;
+
         res
     }
 }
