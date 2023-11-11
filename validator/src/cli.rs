@@ -1195,6 +1195,12 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .hidden(hidden_unless_forced())
         )
         .arg(
+            Arg::with_name("accounts_db_test_skip_rewrites")
+                .long("accounts-db-test-skip-rewrites")
+                .help("Debug option to skip rewrites for rent-exempt accounts but still add them in bank delta hash calculation")
+                .hidden(hidden_unless_forced())
+        )
+        .arg(
             Arg::with_name("no_skip_initial_accounts_db_clean")
                 .long("no-skip-initial-accounts-db-clean")
                 .help("Do not skip the initial cleaning of accounts when verifying snapshot bank")

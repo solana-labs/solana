@@ -1,15 +1,15 @@
-//! The `ledger_cleanup_service` drops older ledger data to limit disk space usage.
+//! The `blockstore_cleanup_service` drops older ledger data to limit disk space usage.
 //! The service works by counting the number of live data shreds in the ledger; this
 //! can be done quickly and should have a fairly stable correlation to actual bytes.
 //! Once the shred count (and thus roughly the byte count) reaches a threshold,
 //! the services begins removing data in FIFO order.
 
 use {
-    crossbeam_channel::{Receiver, RecvTimeoutError},
-    solana_ledger::{
+    crate::{
         blockstore::{Blockstore, PurgeType},
         blockstore_db::{Result as BlockstoreResult, DATA_SHRED_CF},
     },
+    crossbeam_channel::{Receiver, RecvTimeoutError},
     solana_measure::measure::Measure,
     solana_sdk::clock::Slot,
     std::{
@@ -40,11 +40,11 @@ pub const DEFAULT_MIN_MAX_LEDGER_SHREDS: u64 = 50_000_000;
 // and starve other blockstore users.
 pub const DEFAULT_PURGE_SLOT_INTERVAL: u64 = 512;
 
-pub struct LedgerCleanupService {
+pub struct BlockstoreCleanupService {
     t_cleanup: JoinHandle<()>,
 }
 
-impl LedgerCleanupService {
+impl BlockstoreCleanupService {
     pub fn new(
         new_root_receiver: Receiver<Slot>,
         blockstore: Arc<Blockstore>,
@@ -54,12 +54,12 @@ impl LedgerCleanupService {
         let mut last_purge_slot = 0;
 
         info!(
-            "LedgerCleanupService active. max ledger shreds={}",
+            "BlockstoreCleanupService active. max ledger shreds={}",
             max_ledger_shreds
         );
 
         let t_cleanup = Builder::new()
-            .name("solLedgerClean".to_string())
+            .name("solBstoreClean".to_string())
             .spawn(move || loop {
                 if exit.load(Ordering::Relaxed) {
                     break;
@@ -296,8 +296,8 @@ impl LedgerCleanupService {
 mod tests {
     use {
         super::*,
+        crate::{blockstore::make_many_slot_entries, get_tmp_ledger_path_auto_delete},
         crossbeam_channel::unbounded,
-        solana_ledger::{blockstore::make_many_slot_entries, get_tmp_ledger_path_auto_delete},
     };
 
     fn flush_blockstore_contents_to_disk(blockstore: Blockstore) -> Blockstore {
@@ -314,7 +314,7 @@ mod tests {
 
     #[test]
     fn test_find_slots_to_clean() {
-        // LedgerCleanupService::find_slots_to_clean() does not modify the
+        // BlockstoreCleanupService::find_slots_to_clean() does not modify the
         // Blockstore, so we can make repeated calls on the same slots
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -334,22 +334,31 @@ mod tests {
         // Ensure no cleaning of slots > last_root
         let last_root = 0;
         let max_ledger_shreds = 0;
-        let (should_clean, lowest_purged, _) =
-            LedgerCleanupService::find_slots_to_clean(&blockstore, last_root, max_ledger_shreds);
+        let (should_clean, lowest_purged, _) = BlockstoreCleanupService::find_slots_to_clean(
+            &blockstore,
+            last_root,
+            max_ledger_shreds,
+        );
         // Slot 0 will exist in blockstore with zero shreds since it is slot
         // 1's parent. Thus, slot 0 will be identified for clean.
         assert!(should_clean && lowest_purged == 0);
         // Now, set max_ledger_shreds to 1, slot 0 still eligible for clean
         let max_ledger_shreds = 1;
-        let (should_clean, lowest_purged, _) =
-            LedgerCleanupService::find_slots_to_clean(&blockstore, last_root, max_ledger_shreds);
+        let (should_clean, lowest_purged, _) = BlockstoreCleanupService::find_slots_to_clean(
+            &blockstore,
+            last_root,
+            max_ledger_shreds,
+        );
         assert!(should_clean && lowest_purged == 0);
 
         // Ensure no cleaning if blockstore contains fewer than max_ledger_shreds
         let last_root = num_slots;
         let max_ledger_shreds = (shreds_per_slot * num_slots) + 1;
-        let (should_clean, lowest_purged, _) =
-            LedgerCleanupService::find_slots_to_clean(&blockstore, last_root, max_ledger_shreds);
+        let (should_clean, lowest_purged, _) = BlockstoreCleanupService::find_slots_to_clean(
+            &blockstore,
+            last_root,
+            max_ledger_shreds,
+        );
         assert!(!should_clean && lowest_purged == 0);
 
         for slot in 1..=num_slots {
@@ -357,7 +366,7 @@ mod tests {
             let last_root = slot;
             // Set max_ledger_shreds to 0 so that all eligible slots are cleaned
             let max_ledger_shreds = 0;
-            let (should_clean, lowest_purged, _) = LedgerCleanupService::find_slots_to_clean(
+            let (should_clean, lowest_purged, _) = BlockstoreCleanupService::find_slots_to_clean(
                 &blockstore,
                 last_root,
                 max_ledger_shreds,
@@ -369,7 +378,7 @@ mod tests {
             // Set max_ledger_shreds to the number of shreds in slots > slot.
             // This will make it so that slots [1, slot] are cleaned
             let max_ledger_shreds = shreds_per_slot * (num_slots - slot);
-            let (should_clean, lowest_purged, _) = LedgerCleanupService::find_slots_to_clean(
+            let (should_clean, lowest_purged, _) = BlockstoreCleanupService::find_slots_to_clean(
                 &blockstore,
                 last_root,
                 max_ledger_shreds,
@@ -393,8 +402,14 @@ mod tests {
         //send a signal to kill all but 5 shreds, which will be in the newest slots
         let mut last_purge_slot = 0;
         sender.send(50).unwrap();
-        LedgerCleanupService::cleanup_ledger(&receiver, &blockstore, 5, &mut last_purge_slot, 10)
-            .unwrap();
+        BlockstoreCleanupService::cleanup_ledger(
+            &receiver,
+            &blockstore,
+            5,
+            &mut last_purge_slot,
+            10,
+        )
+        .unwrap();
         assert_eq!(last_purge_slot, 50);
 
         //check that 0-40 don't exist
@@ -437,7 +452,7 @@ mod tests {
 
             let mut time = Measure::start("purge time");
             sender.send(slot + num_slots).unwrap();
-            LedgerCleanupService::cleanup_ledger(
+            BlockstoreCleanupService::cleanup_ledger(
                 &receiver,
                 &blockstore,
                 initial_slots,

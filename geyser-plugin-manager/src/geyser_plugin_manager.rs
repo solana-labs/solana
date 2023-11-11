@@ -177,6 +177,22 @@ impl GeyserPluginManager {
                 data: None,
             })?;
 
+        // Then see if a plugin with this name already exists. If so, abort
+        if self
+            .plugins
+            .iter()
+            .any(|plugin| plugin.name().eq(new_plugin.name()))
+        {
+            return Err(jsonrpc_core::Error {
+                code: ErrorCode::InvalidRequest,
+                message: format!(
+                    "There already exists a plugin named {} loaded, while reloading {name}. Did not load requested plugin",
+                    new_plugin.name()
+                ),
+                data: None,
+            });
+        }
+
         // Attempt to on_load with new plugin
         match new_plugin.on_load(new_parsed_config_file) {
             // On success, push plugin and library
@@ -244,13 +260,13 @@ pub enum GeyserPluginManagerError {
     #[error("Invalid plugin path")]
     InvalidPluginPath,
 
-    #[error("Cannot load plugin shared library")]
+    #[error("Cannot load plugin shared library (error: {0})")]
     PluginLoadError(String),
 
     #[error("The geyser plugin {0} is already loaded shared library")]
     PluginAlreadyLoaded(String),
 
-    #[error("The GeyserPlugin on_load method failed")]
+    #[error("The GeyserPlugin on_load method failed (error: {0})")]
     PluginStartError(String),
 }
 

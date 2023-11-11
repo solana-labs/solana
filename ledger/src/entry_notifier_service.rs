@@ -1,5 +1,5 @@
 use {
-    crate::entry_notifier_interface::EntryNotifierLock,
+    crate::entry_notifier_interface::EntryNotifierArc,
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     solana_entry::entry::EntrySummary,
     solana_sdk::clock::Slot,
@@ -28,7 +28,7 @@ pub struct EntryNotifierService {
 }
 
 impl EntryNotifierService {
-    pub fn new(entry_notifier: EntryNotifierLock, exit: Arc<AtomicBool>) -> Self {
+    pub fn new(entry_notifier: EntryNotifierArc, exit: Arc<AtomicBool>) -> Self {
         let (entry_notification_sender, entry_notification_receiver) = unbounded();
         let thread_hdl = Builder::new()
             .name("solEntryNotif".to_string())
@@ -52,14 +52,11 @@ impl EntryNotifierService {
 
     fn notify_entry(
         entry_notification_receiver: &EntryNotifierReceiver,
-        entry_notifier: EntryNotifierLock,
+        entry_notifier: EntryNotifierArc,
     ) -> Result<(), RecvTimeoutError> {
         let EntryNotification { slot, index, entry } =
             entry_notification_receiver.recv_timeout(Duration::from_secs(1))?;
-        entry_notifier
-            .write()
-            .unwrap()
-            .notify_entry(slot, index, &entry);
+        entry_notifier.notify_entry(slot, index, &entry);
         Ok(())
     }
 

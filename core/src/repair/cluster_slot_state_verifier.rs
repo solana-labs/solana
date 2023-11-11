@@ -16,7 +16,7 @@ pub(crate) type DuplicateSlotsTracker = BTreeSet<Slot>;
 pub(crate) type DuplicateSlotsToRepair = HashMap<Slot, Hash>;
 pub(crate) type PurgeRepairSlotCounter = BTreeMap<Slot, usize>;
 pub(crate) type EpochSlotsFrozenSlots = BTreeMap<Slot, Hash>;
-pub(crate) type GossipDuplicateConfirmedSlots = BTreeMap<Slot, Hash>;
+pub(crate) type DuplicateConfirmedSlots = BTreeMap<Slot, Hash>;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum ClusterConfirmedHash {
@@ -95,13 +95,13 @@ impl DeadState {
     pub fn new_from_state(
         slot: Slot,
         duplicate_slots_tracker: &DuplicateSlotsTracker,
-        gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
+        duplicate_confirmed_slots: &DuplicateConfirmedSlots,
         fork_choice: &HeaviestSubtreeForkChoice,
         epoch_slots_frozen_slots: &EpochSlotsFrozenSlots,
     ) -> Self {
         let cluster_confirmed_hash = get_cluster_confirmed_hash_from_state(
             slot,
-            gossip_duplicate_confirmed_slots,
+            duplicate_confirmed_slots,
             epoch_slots_frozen_slots,
             fork_choice,
             None,
@@ -132,13 +132,13 @@ impl BankFrozenState {
         slot: Slot,
         frozen_hash: Hash,
         duplicate_slots_tracker: &DuplicateSlotsTracker,
-        gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
+        duplicate_confirmed_slots: &DuplicateConfirmedSlots,
         fork_choice: &HeaviestSubtreeForkChoice,
         epoch_slots_frozen_slots: &EpochSlotsFrozenSlots,
     ) -> Self {
         let cluster_confirmed_hash = get_cluster_confirmed_hash_from_state(
             slot,
-            gossip_duplicate_confirmed_slots,
+            duplicate_confirmed_slots,
             epoch_slots_frozen_slots,
             fork_choice,
             Some(frozen_hash),
@@ -196,7 +196,7 @@ pub struct DuplicateState {
 impl DuplicateState {
     pub fn new_from_state(
         slot: Slot,
-        gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
+        duplicate_confirmed_slots: &DuplicateConfirmedSlots,
         fork_choice: &HeaviestSubtreeForkChoice,
         is_dead: impl Fn() -> bool,
         get_hash: impl Fn() -> Option<Hash>,
@@ -208,7 +208,7 @@ impl DuplicateState {
         // to skip marking the slot as duplicate.
         let duplicate_confirmed_hash = get_duplicate_confirmed_hash_from_state(
             slot,
-            gossip_duplicate_confirmed_slots,
+            duplicate_confirmed_slots,
             fork_choice,
             bank_status.bank_hash(),
         );
@@ -236,7 +236,7 @@ impl EpochSlotsFrozenState {
     pub fn new_from_state(
         slot: Slot,
         epoch_slots_frozen_hash: Hash,
-        gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
+        duplicate_confirmed_slots: &DuplicateConfirmedSlots,
         fork_choice: &HeaviestSubtreeForkChoice,
         is_dead: impl Fn() -> bool,
         get_hash: impl Fn() -> Option<Hash>,
@@ -245,7 +245,7 @@ impl EpochSlotsFrozenState {
         let bank_status = BankStatus::new(is_dead, get_hash);
         let duplicate_confirmed_hash = get_duplicate_confirmed_hash_from_state(
             slot,
-            gossip_duplicate_confirmed_slots,
+            duplicate_confirmed_slots,
             fork_choice,
             bank_status.bank_hash(),
         );
@@ -689,12 +689,12 @@ fn on_popular_pruned_fork(slot: Slot) -> Vec<ResultingStateChange> {
 /// aggregated through hashes sent in response to requests from `ancestor_hashes_service`
 fn get_cluster_confirmed_hash_from_state(
     slot: Slot,
-    gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
+    duplicate_confirmed_slots: &DuplicateConfirmedSlots,
     epoch_slots_frozen_slots: &EpochSlotsFrozenSlots,
     fork_choice: &HeaviestSubtreeForkChoice,
     bank_frozen_hash: Option<Hash>,
 ) -> Option<ClusterConfirmedHash> {
-    let gossip_duplicate_confirmed_hash = gossip_duplicate_confirmed_slots.get(&slot).cloned();
+    let duplicate_confirmed_hash = duplicate_confirmed_slots.get(&slot).cloned();
     // If the bank hasn't been frozen yet, then we haven't duplicate confirmed a local version
     // this slot through replay yet.
     let is_local_replay_duplicate_confirmed = if let Some(bank_frozen_hash) = bank_frozen_hash {
@@ -707,7 +707,7 @@ fn get_cluster_confirmed_hash_from_state(
 
     get_duplicate_confirmed_hash(
         slot,
-        gossip_duplicate_confirmed_hash,
+        duplicate_confirmed_hash,
         bank_frozen_hash,
         is_local_replay_duplicate_confirmed,
     )
@@ -721,11 +721,11 @@ fn get_cluster_confirmed_hash_from_state(
 
 fn get_duplicate_confirmed_hash_from_state(
     slot: Slot,
-    gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
+    duplicate_confirmed_slots: &DuplicateConfirmedSlots,
     fork_choice: &HeaviestSubtreeForkChoice,
     bank_frozen_hash: Option<Hash>,
 ) -> Option<Hash> {
-    let gossip_duplicate_confirmed_hash = gossip_duplicate_confirmed_slots.get(&slot).cloned();
+    let duplicate_confirmed_hash = duplicate_confirmed_slots.get(&slot).cloned();
     // If the bank hasn't been frozen yet, then we haven't duplicate confirmed a local version
     // this slot through replay yet.
     let is_local_replay_duplicate_confirmed = if let Some(bank_frozen_hash) = bank_frozen_hash {
@@ -738,7 +738,7 @@ fn get_duplicate_confirmed_hash_from_state(
 
     get_duplicate_confirmed_hash(
         slot,
-        gossip_duplicate_confirmed_hash,
+        duplicate_confirmed_hash,
         bank_frozen_hash,
         is_local_replay_duplicate_confirmed,
     )
@@ -747,13 +747,13 @@ fn get_duplicate_confirmed_hash_from_state(
 /// Finds the duplicate confirmed hash for a slot.
 ///
 /// 1) If `is_local_replay_duplicate_confirmed`, return Some(local frozen hash)
-/// 2) If we have a `gossip_duplicate_confirmed_hash`, return Some(gossip_hash)
+/// 2) If we have a `duplicate_confirmed_hash`, return Some(duplicate_confirmed_hash)
 /// 3) Else return None
 ///
 /// Assumes that if `is_local_replay_duplicate_confirmed`, `bank_frozen_hash` is not None
 fn get_duplicate_confirmed_hash(
     slot: Slot,
-    gossip_duplicate_confirmed_hash: Option<Hash>,
+    duplicate_confirmed_hash: Option<Hash>,
     bank_frozen_hash: Option<Hash>,
     is_local_replay_duplicate_confirmed: bool,
 ) -> Option<Hash> {
@@ -767,22 +767,19 @@ fn get_duplicate_confirmed_hash(
         None
     };
 
-    match (
-        local_duplicate_confirmed_hash,
-        gossip_duplicate_confirmed_hash,
-    ) {
-        (Some(local_duplicate_confirmed_hash), Some(gossip_duplicate_confirmed_hash)) => {
-            if local_duplicate_confirmed_hash != gossip_duplicate_confirmed_hash {
+    match (local_duplicate_confirmed_hash, duplicate_confirmed_hash) {
+        (Some(local_duplicate_confirmed_hash), Some(duplicate_confirmed_hash)) => {
+            if local_duplicate_confirmed_hash != duplicate_confirmed_hash {
                 error!(
                     "For slot {}, the gossip duplicate confirmed hash {}, is not equal
                 to the confirmed hash we replayed: {}",
-                    slot, gossip_duplicate_confirmed_hash, local_duplicate_confirmed_hash
+                    slot, duplicate_confirmed_hash, local_duplicate_confirmed_hash
                 );
             }
             Some(local_duplicate_confirmed_hash)
         }
         (Some(bank_frozen_hash), None) => Some(bank_frozen_hash),
-        _ => gossip_duplicate_confirmed_hash,
+        _ => duplicate_confirmed_hash,
     }
 }
 
@@ -1841,14 +1838,14 @@ mod test {
         // 2) None (a slot that hasn't even started replay yet).
         let root = 0;
         let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
-        let gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
+        let duplicate_confirmed_slots = DuplicateConfirmedSlots::default();
         let mut epoch_slots_frozen_slots = EpochSlotsFrozenSlots::default();
         let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
         let mut purge_repair_slot_counter = PurgeRepairSlotCounter::default();
         let duplicate_slot = 2;
         let duplicate_state = DuplicateState::new_from_state(
             duplicate_slot,
-            &gossip_duplicate_confirmed_slots,
+            &duplicate_confirmed_slots,
             &heaviest_subtree_fork_choice,
             || progress.is_dead(duplicate_slot).unwrap_or(false),
             || initial_bank_hash,
@@ -1887,7 +1884,7 @@ mod test {
             duplicate_slot,
             frozen_duplicate_slot_hash,
             &duplicate_slots_tracker,
-            &gossip_duplicate_confirmed_slots,
+            &duplicate_confirmed_slots,
             &heaviest_subtree_fork_choice,
             &epoch_slots_frozen_slots,
         );
@@ -1951,11 +1948,11 @@ mod test {
         let root = 0;
         let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
         let mut purge_repair_slot_counter = PurgeRepairSlotCounter::default();
-        let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
+        let mut duplicate_confirmed_slots = DuplicateConfirmedSlots::default();
 
         // Mark slot 2 as duplicate confirmed
         let slot2_hash = bank_forks.read().unwrap().get(2).unwrap().hash();
-        gossip_duplicate_confirmed_slots.insert(2, slot2_hash);
+        duplicate_confirmed_slots.insert(2, slot2_hash);
         let duplicate_confirmed_state = DuplicateConfirmedState::new_from_state(
             slot2_hash,
             || progress.is_dead(2).unwrap_or(false),
@@ -1996,7 +1993,7 @@ mod test {
         // fork choice
         let duplicate_state = DuplicateState::new_from_state(
             3,
-            &gossip_duplicate_confirmed_slots,
+            &duplicate_confirmed_slots,
             &heaviest_subtree_fork_choice,
             || progress.is_dead(3).unwrap_or(false),
             || Some(slot3_hash),
@@ -2059,14 +2056,14 @@ mod test {
         );
         let root = 0;
         let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
-        let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
+        let mut duplicate_confirmed_slots = DuplicateConfirmedSlots::default();
         let mut purge_repair_slot_counter = PurgeRepairSlotCounter::default();
 
         // Mark 2 as duplicate
         let slot2_hash = bank_forks.read().unwrap().get(2).unwrap().hash();
         let duplicate_state = DuplicateState::new_from_state(
             2,
-            &gossip_duplicate_confirmed_slots,
+            &duplicate_confirmed_slots,
             &heaviest_subtree_fork_choice,
             || progress.is_dead(2).unwrap_or(false),
             || Some(slot2_hash),
@@ -2103,7 +2100,7 @@ mod test {
         );
 
         // Mark slot 3 as duplicate confirmed, should mark slot 2 as duplicate confirmed as well
-        gossip_duplicate_confirmed_slots.insert(3, slot3_hash);
+        duplicate_confirmed_slots.insert(3, slot3_hash);
         let duplicate_confirmed_state = DuplicateConfirmedState::new_from_state(
             slot3_hash,
             || progress.is_dead(3).unwrap_or(false),
@@ -2177,13 +2174,13 @@ mod test {
         );
         let root = 0;
         let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
-        let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
+        let mut duplicate_confirmed_slots = DuplicateConfirmedSlots::default();
         let mut epoch_slots_frozen_slots = EpochSlotsFrozenSlots::default();
         let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
         let mut purge_repair_slot_counter = PurgeRepairSlotCounter::default();
 
         // Mark 3 as duplicate confirmed
-        gossip_duplicate_confirmed_slots.insert(3, slot3_hash);
+        duplicate_confirmed_slots.insert(3, slot3_hash);
         let duplicate_confirmed_state = DuplicateConfirmedState::new_from_state(
             slot3_hash,
             || progress.is_dead(3).unwrap_or(false),
@@ -2215,7 +2212,7 @@ mod test {
         let slot1_hash = bank_forks.read().unwrap().get(1).unwrap().hash();
         let duplicate_state = DuplicateState::new_from_state(
             1,
-            &gossip_duplicate_confirmed_slots,
+            &duplicate_confirmed_slots,
             &heaviest_subtree_fork_choice,
             || progress.is_dead(1).unwrap_or(false),
             || Some(slot1_hash),
@@ -2258,7 +2255,7 @@ mod test {
         );
         let root = 0;
         let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
-        let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
+        let mut duplicate_confirmed_slots = DuplicateConfirmedSlots::default();
         let mut epoch_slots_frozen_slots = EpochSlotsFrozenSlots::default();
         let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
         let mut purge_repair_slot_counter = PurgeRepairSlotCounter::default();
@@ -2269,7 +2266,7 @@ mod test {
         let epoch_slots_frozen_state = EpochSlotsFrozenState::new_from_state(
             3,
             slot3_hash,
-            &gossip_duplicate_confirmed_slots,
+            &duplicate_confirmed_slots,
             &heaviest_subtree_fork_choice,
             || progress.is_dead(3).unwrap_or(false),
             || Some(slot3_hash),
@@ -2298,7 +2295,7 @@ mod test {
 
         // Mark 3 as duplicate confirmed and epoch slots frozen with the same hash. Should
         // duplicate confirm all descendants of 3
-        gossip_duplicate_confirmed_slots.insert(3, slot3_hash);
+        duplicate_confirmed_slots.insert(3, slot3_hash);
         expected_is_duplicate_confirmed = true;
         let duplicate_confirmed_state = DuplicateConfirmedState::new_from_state(
             slot3_hash,
@@ -2350,7 +2347,7 @@ mod test {
         );
         let root = 0;
         let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
-        let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
+        let mut duplicate_confirmed_slots = DuplicateConfirmedSlots::default();
         let mut epoch_slots_frozen_slots = EpochSlotsFrozenSlots::default();
         let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
         let mut purge_repair_slot_counter = PurgeRepairSlotCounter::default();
@@ -2363,7 +2360,7 @@ mod test {
         let epoch_slots_frozen_state = EpochSlotsFrozenState::new_from_state(
             3,
             mismatched_hash,
-            &gossip_duplicate_confirmed_slots,
+            &duplicate_confirmed_slots,
             &heaviest_subtree_fork_choice,
             || progress.is_dead(3).unwrap_or(false),
             || Some(slot3_hash),
@@ -2395,7 +2392,7 @@ mod test {
         // the epoch slots frozen hash above. Should duplicate confirm all descendants of
         // 3 and remove the mismatched hash from `duplicate_slots_to_repair`, since we
         // have the right version now, no need to repair
-        gossip_duplicate_confirmed_slots.insert(3, slot3_hash);
+        duplicate_confirmed_slots.insert(3, slot3_hash);
         expected_is_duplicate_confirmed = true;
         let duplicate_confirmed_state = DuplicateConfirmedState::new_from_state(
             slot3_hash,

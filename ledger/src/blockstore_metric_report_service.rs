@@ -1,7 +1,7 @@
-//! The `ledger_metric_report_service` periodically reports ledger store metrics.
+//! The `blockstore_metric_report_service` periodically reports ledger store metrics.
 
 use {
-    solana_ledger::blockstore::Blockstore,
+    crate::blockstore::Blockstore,
     std::{
         string::ToString,
         sync::{
@@ -14,15 +14,15 @@ use {
 };
 
 // Determines how often we report blockstore metrics under
-// LedgerMetricReportService.  Note that there're other blockstore
-// metrics that are reported outside LedgerMetricReportService.
+// BlockstoreMetricReportService. Note that there are other blockstore
+// metrics that are reported outside BlockstoreMetricReportService.
 const BLOCKSTORE_METRICS_REPORT_PERIOD_MILLIS: u64 = 10000;
 
-pub struct LedgerMetricReportService {
+pub struct BlockstoreMetricReportService {
     t_cf_metric: JoinHandle<()>,
 }
 
-impl LedgerMetricReportService {
+impl BlockstoreMetricReportService {
     pub fn new(blockstore: Arc<Blockstore>, exit: Arc<AtomicBool>) -> Self {
         let t_cf_metric = Builder::new()
             .name("solRocksCfMtrcs".to_string())
