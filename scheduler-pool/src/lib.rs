@@ -929,7 +929,7 @@ where
         (session_result, session_timings): &mut ResultWithTimings,
         msg: &ExecutionEnvironment,
     ) {
-        match msg.result_with_timings.0 {
+        match &msg.result_with_timings.0 {
             Ok(()) => {}
             Err(e) => *session_result = Err(e),
         }
