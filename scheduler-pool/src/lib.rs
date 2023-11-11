@@ -971,6 +971,7 @@ where
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
             unbounded::<Box<ExecutionEnvironment>>();
         let (mut result_sender, result_receiver) = unbounded();
+        let (mut dummy_sender, _dummy_receiver) = unbounded();
 
         let scheduler_main_loop = || {
             let mut bank = self.context.as_ref().unwrap().bank().clone();
@@ -1027,7 +1028,7 @@ where
                         blocked_transaction_sender
                             .send(SessionedChannel::next_session(
                                 blocked_transaction_receiver.clone(),
-                                next_result_sender.clone(),
+                                dummy_sender.clone(),
                             ))
                             .unwrap();
                     }
