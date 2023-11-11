@@ -1554,12 +1554,14 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn has_context(&self) -> bool {
-        self.context.is_some()
+        todo!();
+        //self.context.is_some()
     }
 
     fn replace_context(&mut self, context: SchedulingContext) {
-        self.context = Some(context);
-        *self.result_with_timings.lock().expect("not poisoned") = None;
+        todo!();
+        //self.context = Some(context);
+        //*self.result_with_timings.lock().expect("not poisoned") = None;
     }
 }
 
