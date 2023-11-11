@@ -908,6 +908,7 @@ where
             _phantom: PhantomData,
         }
     }
+
     fn is_active(&self) -> bool {
         self.scheduler_thread.is_some()
     }
