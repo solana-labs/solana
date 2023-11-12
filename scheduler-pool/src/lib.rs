@@ -1699,7 +1699,6 @@ mod tests {
     #[test]
     fn test_scheduler_spawn() {
         solana_logger::setup();
-        info!("aaa");
 
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
