@@ -885,7 +885,7 @@ where
     }
 
     fn preloader(&self) -> &Arc<Preloader> {
-        self.preloader
+        &self.preloader
     }
 
     fn is_active(&self) -> bool {
