@@ -1074,8 +1074,9 @@ where
                     }
                 }
 
+                let res = result_with_timings.take().unwrap();
                 info!("solScheduler thread is ended at: {:?}", std::thread::current());
-                result_with_timings.take().unwrap()
+                res
             }
         };
 
