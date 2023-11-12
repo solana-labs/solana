@@ -1064,7 +1064,7 @@ where
                     will_end_session = false;
                 }
 
-                result_with_timings.take().unwrap()
+                *result_with_timings.take().unwrap()
             }
         };
 
