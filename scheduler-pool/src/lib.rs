@@ -1510,7 +1510,7 @@ impl ScheduleStage {
             task_selection,
             failed_lock_count,
         )
-        .map(|(uw, t, ll)| Self::prepare_scheduled_execution(t, ll))
+        .map(|(t, ll)| Self::prepare_scheduled_execution(t, ll))
     }
 }
 
