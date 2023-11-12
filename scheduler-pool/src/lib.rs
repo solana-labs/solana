@@ -1091,45 +1091,47 @@ where
             let handled_blocked_transaction_sender = handled_blocked_transaction_sender.clone();
             let handled_idle_transaction_sender = handled_idle_transaction_sender.clone();
 
-            move || loop {
+            move || {
                 info!("solScHandler{:02} thread is started at: {:?}", thx, std::thread::current());
-                let (mut m, was_blocked) = select_biased! {
-                    recv(blocked_transaction_sessioned_receiver) -> m => {
-                        let Ok(mm) = m else { break };
+                loop {
+                    let (mut m, was_blocked) = select_biased! {
+                        recv(blocked_transaction_sessioned_receiver) -> m => {
+                            let Ok(mm) = m else { break };
 
-                        match mm {
-                            ChainedChannel::Payload(payload) => {
-                                (payload, true)
-                            }
-                            ChainedChannel::ChannelWithPayload(new_channel) => {
-                                let control_frame;
-                                (blocked_transaction_sessioned_receiver, control_frame) = new_channel.channel_and_payload();
-                                match control_frame {
-                                    ControlFrame::StartSession(new_context) => {
-                                        bank = new_context.bank().clone();
-                                    },
-                                    ControlFrame::EndSession => unreachable!(),
+                            match mm {
+                                ChainedChannel::Payload(payload) => {
+                                    (payload, true)
                                 }
-                                continue;
+                                ChainedChannel::ChannelWithPayload(new_channel) => {
+                                    let control_frame;
+                                    (blocked_transaction_sessioned_receiver, control_frame) = new_channel.channel_and_payload();
+                                    match control_frame {
+                                        ControlFrame::StartSession(new_context) => {
+                                            bank = new_context.bank().clone();
+                                        },
+                                        ControlFrame::EndSession => unreachable!(),
+                                    }
+                                    continue;
+                                }
                             }
-                        }
-                    },
-                    recv(idle_transaction_receiver) -> m => {
-                        let Ok(mm) = m else { 
-                            idle_transaction_receiver = never();
-                            continue;
-                        };
+                        },
+                        recv(idle_transaction_receiver) -> m => {
+                            let Ok(mm) = m else { 
+                                idle_transaction_receiver = never();
+                                continue;
+                            };
 
-                        (mm, false)
-                    },
-                };
+                            (mm, false)
+                        },
+                    };
 
-                Self::receive_scheduled_transaction(&handler, &bank, &mut m, &pool);
+                    Self::receive_scheduled_transaction(&handler, &bank, &mut m, &pool);
 
-                if was_blocked {
-                    handled_blocked_transaction_sender.send(m).unwrap();
-                } else {
-                    handled_idle_transaction_sender.send(m).unwrap();
+                    if was_blocked {
+                        handled_blocked_transaction_sender.send(m).unwrap();
+                    } else {
+                        handled_idle_transaction_sender.send(m).unwrap();
+                    }
                 }
                 info!("solScHandler{:02} thread is ended at: {:?}", thx, std::thread::current());
             }
