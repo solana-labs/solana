@@ -1436,9 +1436,8 @@ impl ScheduleStage {
 
                 return Some((next_task, lock_attempts));
             } else {
-                break;
+                return None;
             }
-        None
     }
 
     #[inline(never)]
