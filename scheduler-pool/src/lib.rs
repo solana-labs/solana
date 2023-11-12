@@ -1159,6 +1159,7 @@ where
     }
 
     fn send_task(&self, task: Arc<Task>) {
+        debug!("send_task()");
         self.schedulrable_transaction_sender
             .send(ChainedChannel::Payload(task))
             .unwrap();
