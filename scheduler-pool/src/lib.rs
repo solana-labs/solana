@@ -959,13 +959,13 @@ where
                 .take()
                 .or(Some((Ok(()), Default::default())));
             let mut address_book = self.address_book.take().unwrap();
+            let mut state_machine = SchedulingStateMachine::default();
 
             move || {
                 info!(
                     "solScheduler thread is started at: {:?}",
                     std::thread::current()
                 );
-                let mut state_machine = SchedulingStateMachine::default();
                 let mut will_end_session = false;
                 let mut will_end_thread = false;
 
