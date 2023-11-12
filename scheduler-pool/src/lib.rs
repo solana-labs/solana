@@ -984,6 +984,7 @@ where
             unbounded::<Box<ExecutionEnvironment>>();
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
             unbounded::<Box<ExecutionEnvironment>>();
+        let lane_count = self.lane_count;
 
         let scheduler_main_loop = || {
             let result_sender = self.result_sender.clone();
@@ -1034,7 +1035,7 @@ where
                                                     blocked_transaction_sessioned_sender,
                                                     blocked_transaction_sessioned_receiver,
                                                 ) = unbounded();
-                                                for _ in (0..10) {
+                                                for _ in (0..lane_count) {
                                                     blocked_transaction_sessioned_sender
                                                         .send(ChainedChannel::new_channel(
                                                             blocked_transaction_sessioned_receiver.clone(),
@@ -1060,7 +1061,7 @@ where
                         blocked_transaction_sessioned_receiver,
                     ) = unbounded();
 
-                    for _ in (0..10) {
+                    for _ in (0..lane_count) {
                         blocked_transaction_sessioned_sender
                             .send(ChainedChannel::new_channel(
                                 blocked_transaction_sessioned_receiver.clone(),
@@ -1127,7 +1128,7 @@ where
                 .unwrap(),
         );
 
-        self.handler_threads = (0..10)
+        self.handler_threads = (0..lane_count)
             .map({
                 |thx| {
                     std::thread::Builder::new()
