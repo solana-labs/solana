@@ -1585,7 +1585,7 @@ where
 struct SchedulingStateMachine(std::collections::VecDeque<Arc<Task>>, usize, AddressBook);
 
 impl SchedulingStateMachine {
-    fn new(address_book) -> Self {
+    fn new(address_book: AddressBook) -> Self {
         Self(
             Default::default(),
             Default::default(),
