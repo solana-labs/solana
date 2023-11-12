@@ -911,6 +911,7 @@ where
         initial_context: SchedulingContext,
         handler: TH,
         pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
+        lane_count: usize,
     ) -> Self {
         let (schedulrable_transaction_sender, schedulable_transaction_receiver) = unbounded();
         let (result_sender, result_receiver) = unbounded();
@@ -921,7 +922,7 @@ where
             result_receiver,
             context: initial_context,
             scheduler_thread: None,
-            handler_threads: vec![],
+            handler_threads: Vec::with_capacity(lane_count),
             handler,
             pool,
         }
