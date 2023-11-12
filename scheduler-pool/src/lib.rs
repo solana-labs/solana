@@ -874,23 +874,23 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
     }
 }
 
-type ChannelPair<T, U> = (Receiver<ChainedChannel<T, U>>, U);
+type ChannelAndPayload<T, U> = (Receiver<ChainedChannel<T, U>>, U);
 
-trait WithChannelPair<T, U>: Send + Sync {
-    fn channel_pair(self: Box<Self>) -> ChannelPair<T, U>;
+trait WithChannelAndPayload<T, U>: Send + Sync {
+    fn channel_and_payload(self: Box<Self>) -> ChannelAndPayload<T, U>;
 }
 
-struct ChannelPairOption<T, U>(Option<ChannelPair<T, U>>);
+struct ChannelPairOption<T, U>(Option<ChannelAndPayload<T, U>>);
 
-impl<T: Send + Sync, U: Send + Sync> WithChannelPair<T, U> for ChannelPairOption<T, U> {
-    fn channel_pair(mut self: Box<Self>) -> ChannelPair<T, U> {
+impl<T: Send + Sync, U: Send + Sync> WithChannelAndPayload<T, U> for ChannelPairOption<T, U> {
+    fn channel_and_payload(mut self: Box<Self>) -> ChannelAndPayload<T, U> {
         self.0.take().unwrap()
     }
 }
 
 enum ChainedChannel<T, U> {
     Payload(T),
-    NewChannel(Box<dyn WithChannelPair<T, U>>),
+    ChannelWithPayload(Box<dyn WithChannelAndPayload<T, U>>),
 }
 
 enum ControlFrame {
@@ -900,7 +900,7 @@ enum ControlFrame {
 
 impl<T: Send + Sync + 'static, U: Send + Sync + 'static> ChainedChannel<T, U> {
     fn new_channel(receiver: Receiver<Self>, sender: U) -> Self {
-        Self::NewChannel(Box::new(ChannelPairOption(Some((receiver, sender)))))
+        Self::ChannelWithPayload(Box::new(ChannelPairOption(Some((receiver, sender)))))
     }
 }
 
@@ -1022,9 +1022,9 @@ where
                                     ChainedChannel::Payload(payload) => {
                                         Self::receive_new_transaction(&mut state_machine, payload);
                                     }
-                                    ChainedChannel::NewChannel(new_channel) => {
+                                    ChainedChannel::ChannelWithPayload(new_channel) => {
                                         let control_frame;
-                                        (schedulable_transaction_receiver, control_frame) = new_channel.channel_pair();
+                                        (schedulable_transaction_receiver, control_frame) = new_channel.channel_and_payload();
                                         match control_frame {
                                             ControlFrame::StartSession(context) => {
                                                 will_end_session = false;
@@ -1096,9 +1096,9 @@ where
                             ChainedChannel::Payload(payload) => {
                                 (payload, true)
                             }
-                            ChainedChannel::NewChannel(new_channel) => {
+                            ChainedChannel::ChannelWithPayload(new_channel) => {
                                 let control_frame;
-                                (blocked_transaction_sessioned_receiver, control_frame) = new_channel.channel_pair();
+                                (blocked_transaction_sessioned_receiver, control_frame) = new_channel.channel_and_payload();
                                 match control_frame {
                                     ControlFrame::StartSession(new_context) => {
                                         bank = new_context.bank().clone();
