@@ -996,7 +996,6 @@ where
                 blocked_transaction_sessioned_sender.clone();
 
             move || {
-                let never = &never();
                 let mut state_machine = SchedulingStateMachine;
                 let mut will_end_session = false;
                 let mut will_end_thread = false;
@@ -1012,7 +1011,7 @@ where
                                 Self::update_result_with_timings(&mut result_with_timings, &execution_environment);
                                 Self::receive_handled_transaction(&mut state_machine, execution_environment);
                             },
-                            recv(if !will_end_session { &schedulable_transaction_receiver } else { never }) -> m => {
+                            recv(schedulable_transaction_receiver) -> m => {
                                 let Ok(mm) = m else {
                                     will_end_thread = true;
                                     continue;
