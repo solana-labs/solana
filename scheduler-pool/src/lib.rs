@@ -1637,8 +1637,7 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn has_context(&self) -> bool {
-        todo!();
-        //self.context.is_some()
+        true // consider to remove this method entirely???
     }
 
     fn replace_context(&mut self, context: SchedulingContext) {
