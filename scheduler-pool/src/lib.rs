@@ -1061,8 +1061,9 @@ where
                         };
                     }
 
+                    let next_blocked_transaction_sessioned_sender;
                     (
-                        blocked_transaction_sessioned_sender,
+                        next_blocked_transaction_sessioned_sender,
                         blocked_transaction_sessioned_receiver,
                     ) = unbounded();
 
@@ -1074,6 +1075,7 @@ where
                             ))
                             .unwrap();
                     }
+                    blocked_transaction_sessioned_sender = next_blocked_transaction_sessioned_sender;
                     result_sender.send(result_with_timings).unwrap();
                 }
             }
