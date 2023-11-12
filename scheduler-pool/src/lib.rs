@@ -944,7 +944,7 @@ where
     }
 
     fn receive_new_transaction(state_machine: &mut SchedulingStateMachine, msg: Arc<Task>) {
-        state_machine.0.push(msg);
+        state_machine.add_task(msg);
     }
 
     fn update_result_with_timings(
@@ -1013,13 +1013,11 @@ where
                 let mut state_machine = SchedulingStateMachine::default();
                 let mut will_end_session = false;
                 let mut will_end_thread = false;
-                let mut task_count = 0;
 
                 while !will_end_thread {
                     result_with_timings = Some((Ok(()), Default::default()));
-                    let mut scheduler_is_empty = task_count == 0;
 
-                    while !(scheduler_is_empty && (will_end_session || will_end_thread)) {
+                    while !(state_machine.is_empty() && (will_end_session || will_end_thread)) {
                         select_biased! {
                             recv(handled_blocked_transaction_receiver) -> execution_environment => {
                                 let execution_environment = execution_environment.unwrap();
@@ -1662,6 +1660,11 @@ struct SchedulingStateMachine(Vec<Arc<Task>>, usize);
 impl SchedulingStateMachine {
     fn is_empty(&self) -> bool {
         self.1 == 0
+    }
+
+    fn add_task(&mut self, Arc<Task>) {
+        self.0.push(msg);
+        self.1 += 1;
     }
 }
 
