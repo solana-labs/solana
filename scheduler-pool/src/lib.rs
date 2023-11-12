@@ -1396,7 +1396,7 @@ impl ScheduleStage {
                         Task::index_with_address_book(&next_task);
                     }
 
-                    break;
+                    return None;
                 }
 
                 trace!(
