@@ -1031,6 +1031,7 @@ where
                                             ControlFrame::NextSession => {}
                                             ControlFrame::NewContext(context) => {
                                                 will_end_session = false;
+                                                let next_blocked_transaction_sessioned_sender;
                                                 (
                                                     next_blocked_transaction_sessioned_sender,
                                                     blocked_transaction_sessioned_receiver,
