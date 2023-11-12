@@ -1128,6 +1128,7 @@ where
                 } else {
                     handled_idle_transaction_sender.send(m).unwrap();
                 }
+                info!("solScHandler{:02} thread is ended at: {:?}", thx, std::thread::current());
             }
         };
 
