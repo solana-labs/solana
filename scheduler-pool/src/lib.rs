@@ -979,8 +979,8 @@ where
 
     fn start_threads(&mut self) {
         if self.is_active() {
-            debug!("start_threads(): already started");
-            return;
+            warn!("start_threads(): already started");
+            return
         }
         debug!("start_threads(): doing now");
 
@@ -1162,7 +1162,9 @@ where
 
     fn end_session(&mut self) -> ResultWithTimings {
         debug!("end_session(): will end session...");
-        self.start_threads();
+        if !self.is_active() {
+            self.start_threads();
+        }
 
         let next_sender_and_receiver = unbounded();
         let (_next_sender, next_receiver) = &next_sender_and_receiver;
@@ -1184,7 +1186,9 @@ where
     }
 
     fn start_session(&mut self, context: SchedulingContext) {
-        self.start_threads();
+        if !self.is_active() {
+            self.start_threads();
+        }
 
         let next_sender_and_receiver = unbounded();
         let (_next_sender, next_receiver) = &next_sender_and_receiver;
