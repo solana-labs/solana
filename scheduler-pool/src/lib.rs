@@ -1536,8 +1536,6 @@ impl ScheduleStage {
         task: TaskInQueue,
         finalized_lock_attempts: Vec<LockAttempt>,
     ) -> Box<ExecutionEnvironment> {
-        let mut rng = rand::thread_rng();
-
         Box::new(ExecutionEnvironment {
             task,
             unique_weight: task.unique_weight,
