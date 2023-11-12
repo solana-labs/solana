@@ -1084,7 +1084,7 @@ where
             let mut bank = self.context.bank().clone();
             let mut blocked_transaction_sessioned_receiver =
                 blocked_transaction_sessioned_receiver.clone();
-            let idle_transaction_receiver = idle_transaction_receiver.clone();
+            let mut idle_transaction_receiver = idle_transaction_receiver.clone();
             let handled_blocked_transaction_sender = handled_blocked_transaction_sender.clone();
             let handled_idle_transaction_sender = handled_idle_transaction_sender.clone();
 
@@ -1112,7 +1112,12 @@ where
                         }
                     },
                     recv(idle_transaction_receiver) -> m => {
-                        (m.unwrap(), false)
+                        let Ok(mm) = m else { 
+                            idle_transaction_receiver = never();
+                            continue;
+                        };
+
+                        (mm, false)
                     },
                 };
 
