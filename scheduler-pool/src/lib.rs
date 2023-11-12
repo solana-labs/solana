@@ -628,7 +628,6 @@ trait TaskQueueReader {
     fn heaviest_entry_to_execute(&mut self) -> Option<TaskInQueue>;
     fn task_count_hint(&self) -> usize;
     fn has_no_task_hint(&self) -> bool;
-    fn is_backed_by_channel(&self) -> bool;
 }
 
 impl TaskQueueReader for TaskQueue {
@@ -650,10 +649,6 @@ impl TaskQueueReader for TaskQueue {
 
     fn has_no_task_hint(&self) -> bool {
         self.tasks.is_empty()
-    }
-
-    fn is_backed_by_channel(&self) -> bool {
-        false
     }
 }
 
@@ -783,10 +778,6 @@ impl TaskQueueReader for ChannelBackedTaskQueue {
                 }
             }
         }
-    }
-
-    fn is_backed_by_channel(&self) -> bool {
-        true
     }
 }
 
