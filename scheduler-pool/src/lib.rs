@@ -1149,13 +1149,13 @@ where
     }
 
     fn end_session(&mut self) -> ResultWithTimings {
-        let sender_and_receiver = unbounded();
-        let (next_schedulrable_transaction_sender, next_schedulrable_transaction_receiver) =
-            &sender_and_receiver;
+        let next_sender_and_receiver = unbounded();
+        let (_next_sender, next_receiver) =
+            &next_sender_and_receiver;
 
         self.schedulrable_transaction_sender
             .send(ChainedChannel::new_channel(
-                next_schedulrable_transaction_receiver.clone(),
+                next_receiver.clone(),
                 ControlFrame::NextSession,
             ))
             .unwrap();
@@ -1164,19 +1164,19 @@ where
         (
             self.schedulrable_transaction_sender,
             self.schedulable_transaction_receiver,
-        ) = sender_and_receiver;
+        ) = next_sender_and_receiver;
 
         res
     }
 
     fn send_new_context(&mut self, context: SchedulingContext) {
-        let sender_and_receiver = unbounded();
-        let (next_schedulrable_transaction_sender, next_schedulrable_transaction_receiver) =
-            &sender_and_receiver;
+        let next_sender_and_receiver = unbounded();
+        let (_next_sender, next_receiver) =
+            &next_sender_and_receiver;
 
         self.schedulrable_transaction_sender
             .send(ChainedChannel::new_channel(
-                next_schedulrable_transaction_receiver.clone(),
+                next_receiver.clone(),
                 ControlFrame::NewContext(context),
             ))
             .unwrap();
@@ -1184,7 +1184,7 @@ where
         (
             self.schedulrable_transaction_sender,
             self.schedulable_transaction_receiver,
-        ) = sender_and_receiver;
+        ) = next_sender_and_receiver;
     }
 }
 
