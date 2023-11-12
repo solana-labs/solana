@@ -852,12 +852,12 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             )),
         };
         // is this benefitical?
-        //drop(new.ensure_threads());
+        //drop(new.ensure_thread_manager_started());
         new
     }
 
     #[must_use]
-    fn ensure_manager_started(&self) -> RwLockReadGuard<'_, ThreadManager<TH, SEA>> {
+    fn ensure_thread_manager_started(&self) -> RwLockReadGuard<'_, ThreadManager<TH, SEA>> {
         loop {
             let r = self.thread_manager.read().unwrap();
             if r.is_active() {
@@ -873,8 +873,8 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
         }
     }
 
-    fn stop_manager(&self) {
-        debug!("stop_manager()");
+    fn stop_thread_manager(&self) {
+        debug!("stop_thread_manager()");
         self.thread_manager.write().unwrap().stop_threads();
     }
 }
@@ -1583,7 +1583,7 @@ where
     }
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
-        let thread_manager = self.ensure_manager_started();
+        let thread_manager = self.ensure_thread_manager_started();
         let mut executing_queue_count = 0_usize;
         let mut provisioning_tracker_count = 0;
         let mut sequence_time = 0;
@@ -1631,7 +1631,7 @@ where
             self.completed_result_with_timings = Some(self.thread_manager.write().unwrap().end_session());
         }
 
-        self.stop_threads();
+        self.stop_thread_manager();
 
         if wait_reason.is_paused() {
             None
