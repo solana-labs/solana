@@ -754,7 +754,7 @@ impl TaskQueueReader for ChannelBackedTaskQueue {
 pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     id: SchedulerId,
     completed_result_with_timings: Option<ResultWithTimings>,
-    address_book: Mutex<AddressBook>,
+    address_book: AddressBook,
     preloader: Arc<Preloader>,
     thread_manager: RwLock<ThreadManager<TH, SEA>>,
 }
