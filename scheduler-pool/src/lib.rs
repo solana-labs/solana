@@ -1653,7 +1653,8 @@ where
     }
 }
 
-struct SchedulingStateMachine;
+#[derive(Default)]
+struct SchedulingStateMachine(vec<Arc<Task>>);
 /*
 
 enum Event {
