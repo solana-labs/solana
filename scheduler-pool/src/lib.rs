@@ -1143,8 +1143,9 @@ where
             self.schedulrable_transaction_sender,
             self.schedulable_transaction_receiver,
         ) = unbounded();
-        self.session_result_with_timings =
-            Some(self.scheduler_thread.take().unwrap().join().unwrap());
+        let (result_with_timings, address_book) = self.scheduler_thread.take().unwrap().join().unwrap();
+        self.session_result_with_timings = Some(result_with_timings);
+        self.address_book = Some(address_book);
 
         for j in self.handler_threads.drain(..) {
             debug!("joining...: {:?}", j);
