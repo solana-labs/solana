@@ -441,7 +441,7 @@ type WeightedTaskIds2 =
     std::collections::BTreeMap<UniqueWeight, (TaskInQueue, std::collections::HashSet<PageRc>)>;
 
 type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct AddressBook {
     book: AddressMap,
     uncontended_task_ids: WeightedTaskIds2,
