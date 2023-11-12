@@ -924,7 +924,6 @@ where
             handler_threads: vec![],
             handler,
             pool,
-            _phantom: PhantomData,
         }
     }
 
