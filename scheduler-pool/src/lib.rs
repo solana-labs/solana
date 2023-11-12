@@ -1593,6 +1593,10 @@ impl SchedulingStateMachine {
         )
     }
 
+    fn into_address_book(self) -> AddressBook {
+        self.address_book
+    }
+
     fn is_empty(&self) -> bool {
         self.1 == 0
     }
