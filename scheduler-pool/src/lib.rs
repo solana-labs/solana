@@ -1027,8 +1027,6 @@ where
                                         (schedulable_transaction_receiver, control_frame) = new_channel.channel_and_payload();
                                         match control_frame {
                                             ControlFrame::StartSession(context) => {
-                                                will_end_session = false;
-
                                                 let (
                                                     next_blocked_transaction_sessioned_sender,
                                                     blocked_transaction_sessioned_receiver,
@@ -1059,6 +1057,7 @@ where
                     }
 
                     result_sender.send(result_with_timings).unwrap();
+                    will_end_session = false;
                 }
             }
         };
