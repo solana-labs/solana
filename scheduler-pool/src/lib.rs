@@ -1586,6 +1586,8 @@ where
             let uw = UniqueWeight::max_value() - index as UniqueWeight;
             let task = Task::new_for_queue(uw, (transaction.clone(), locks));
             thread_manager.send_task(task.clone());
+            return;
+
             let (transaction_sender, transaction_receiver) = unbounded();
             let mut runnable_queue = ModeSpecificTaskQueue::BlockVerification(
                 ChannelBackedTaskQueue::new(&transaction_receiver),
