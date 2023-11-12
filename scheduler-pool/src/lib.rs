@@ -971,6 +971,7 @@ where
         msg: &mut Box<ExecutionEnvironment>,
         pool: &Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
     ) {
+        debug!("handling task at {:?}", std::thread::current());
         TH::handle(
             handler,
             &mut msg.result_with_timings.0,
