@@ -874,23 +874,23 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
     }
 }
 
-type ChannelAndPayload<T1, U> = (Receiver<ChainedChannel<T1, U>>, U);
+type ChannelAndPayload<T1, T2> = (Receiver<ChainedChannel<T1, T2>>, T2);
 
-trait WithChannelAndPayload<T1, U>: Send + Sync {
-    fn channel_and_payload(self: Box<Self>) -> ChannelAndPayload<T1, U>;
+trait WithChannelAndPayload<T1, T2>: Send + Sync {
+    fn channel_and_payload(self: Box<Self>) -> ChannelAndPayload<T1, T2>;
 }
 
-struct ChannelPairOption<T1, U>(Option<ChannelAndPayload<T1, U>>);
+struct ChannelPairOption<T1, T2>(Option<ChannelAndPayload<T1, T2>>);
 
-impl<T1: Send + Sync, U: Send + Sync> WithChannelAndPayload<T1, U> for ChannelPairOption<T1, U> {
-    fn channel_and_payload(mut self: Box<Self>) -> ChannelAndPayload<T1, U> {
+impl<T1: Send + Sync, T2: Send + Sync> WithChannelAndPayload<T1, T2> for ChannelPairOption<T1, T2> {
+    fn channel_and_payload(mut self: Box<Self>) -> ChannelAndPayload<T1, T2> {
         self.0.take().unwrap()
     }
 }
 
-enum ChainedChannel<T1, U> {
+enum ChainedChannel<T1, T2> {
     Payload(T1),
-    ChannelWithPayload(Box<dyn WithChannelAndPayload<T1, U>>),
+    ChannelWithPayload(Box<dyn WithChannelAndPayload<T1, T2>>),
 }
 
 enum ControlFrame {
@@ -898,8 +898,8 @@ enum ControlFrame {
     EndSession,
 }
 
-impl<T1: Send + Sync + 'static, U: Send + Sync + 'static> ChainedChannel<T1, U> {
-    fn new_channel(receiver: Receiver<Self>, sender: U) -> Self {
+impl<T1: Send + Sync + 'static, T2: Send + Sync + 'static> ChainedChannel<T1, T2> {
+    fn new_channel(receiver: Receiver<Self>, sender: T2) -> Self {
         Self::ChannelWithPayload(Box::new(ChannelPairOption(Some((receiver, sender)))))
     }
 }
