@@ -1,7 +1,7 @@
 use {
     clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches},
     log::*,
-    solana_core::ledger_cleanup_service::{
+    solana_ledger::blockstore_cleanup_service::{
         DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS,
     },
     solana_k8s_cluster::{
