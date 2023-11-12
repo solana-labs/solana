@@ -1683,7 +1683,7 @@ where
 }
 
 #[derive(Default)]
-struct SchedulingStateMachine(VecDeque<Arc<Task>>, usize);
+struct SchedulingStateMachine(std::collections::VecDeque<Arc<Task>>, usize);
 
 impl SchedulingStateMachine {
     fn is_empty(&self) -> bool {
