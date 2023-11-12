@@ -1363,71 +1363,71 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         (task_source, next_task): (TaskSource, TaskInQueue),
     ) -> Option<(TaskInQueue, Vec<LockAttempt>)> {
-            let from_runnable = matches!(task_source, TaskSource::Runnable);
-            let unique_weight = next_task.unique_weight;
+        let from_runnable = matches!(task_source, TaskSource::Runnable);
+        let unique_weight = next_task.unique_weight;
 
-            let unlockable_count = attempt_lock_for_execution(
-                from_runnable,
+        let unlockable_count = attempt_lock_for_execution(
+            from_runnable,
+            address_book,
+            &unique_weight,
+            &mut next_task.lock_attempts_mut(),
+        );
+
+        if unlockable_count > 0 {
+            Self::reset_lock_for_failed_execution(
                 address_book,
                 &unique_weight,
                 &mut next_task.lock_attempts_mut(),
             );
+            let lock_count = next_task.lock_attempts_mut().len();
+            next_task
+                .contention_count
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-            if unlockable_count > 0 {
-                Self::reset_lock_for_failed_execution(
-                    address_book,
-                    &unique_weight,
-                    &mut next_task.lock_attempts_mut(),
-                );
-                let lock_count = next_task.lock_attempts_mut().len();
-                next_task
-                    .contention_count
-                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
-                if from_runnable {
-                    next_task.mark_as_contended();
-                    Task::index_with_address_book(&next_task);
-                }
-
-                return None;
+            if from_runnable {
+                next_task.mark_as_contended();
+                Task::index_with_address_book(&next_task);
             }
 
-            trace!(
-                "successful lock: (from_runnable: {}) after {} contentions",
-                from_runnable,
-                next_task
-                    .contention_count
-                    .load(std::sync::atomic::Ordering::SeqCst)
-            );
+            return None;
+        }
 
-            assert!(!next_task.already_finished());
-            if !from_runnable {
-                next_task.mark_as_uncontended();
-                if let TaskSource::Contended(uncontendeds) = task_source {
-                    for lock_attempt in next_task
-                        .lock_attempts_mut()
-                        .iter()
-                        .filter(|l| l.requested_usage == RequestedUsage::Readonly)
+        trace!(
+            "successful lock: (from_runnable: {}) after {} contentions",
+            from_runnable,
+            next_task
+                .contention_count
+                .load(std::sync::atomic::Ordering::SeqCst)
+        );
+
+        assert!(!next_task.already_finished());
+        if !from_runnable {
+            next_task.mark_as_uncontended();
+            if let TaskSource::Contended(uncontendeds) = task_source {
+                for lock_attempt in next_task
+                    .lock_attempts_mut()
+                    .iter()
+                    .filter(|l| l.requested_usage == RequestedUsage::Readonly)
+                {
+                    if let Some(task) = lock_attempt
+                        .target_page_mut()
+                        .task_ids
+                        .reindex(false, &unique_weight)
                     {
-                        if let Some(task) = lock_attempt
-                            .target_page_mut()
-                            .task_ids
-                            .reindex(false, &unique_weight)
-                        {
-                            if task.currently_contended() {
-                                let uti = address_book
-                                    .uncontended_task_ids
-                                    .entry(task.unique_weight)
-                                    .or_insert((task, Default::default()));
-                                uti.1.insert(lock_attempt.target.clone());
-                            }
+                        if task.currently_contended() {
+                            let uti = address_book
+                                .uncontended_task_ids
+                                .entry(task.unique_weight)
+                                .or_insert((task, Default::default()));
+                            uti.1.insert(lock_attempt.target.clone());
                         }
                     }
                 }
             }
-            let lock_attempts = std::mem::take(&mut *next_task.lock_attempts_mut());
+        }
+        let lock_attempts = std::mem::take(&mut *next_task.lock_attempts_mut());
 
-            return Some((next_task, lock_attempts));
+        return Some((next_task, lock_attempts));
     }
 
     #[inline(never)]
@@ -1496,8 +1496,8 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         task_selection: &mut TaskSelection,
     ) -> Option<Box<ExecutionEnvironment>> {
-        Self::select_next_task(runnable_queue, address_book, task_selection).and_then(|a|
-        Self::pop_from_queue_then_lock(runnable_queue, address_book, a))
+        Self::select_next_task(runnable_queue, address_book, task_selection)
+            .and_then(|a| Self::pop_from_queue_then_lock(runnable_queue, address_book, a))
             .map(|(task, lock_attemps)| Self::prepare_scheduled_execution(task, lock_attemps))
     }
 }
