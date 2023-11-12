@@ -1023,12 +1023,9 @@ where
                                         Self::receive_new_transaction(&mut state_machine, payload);
                                     }
                                     ChainedChannel::NewChannel(new_channel) => {
-                                        will_end_session = true;
-
                                         let control_frame;
                                         (schedulable_transaction_receiver, control_frame) = new_channel.channel_pair();
                                         match control_frame {
-                                            ControlFrame::EndSession => {}
                                             ControlFrame::StartSession(context) => {
                                                 will_end_session = false;
 
@@ -1046,6 +1043,9 @@ where
                                                         .unwrap();
                                                 }
                                                 blocked_transaction_sessioned_sender = next_blocked_transaction_sessioned_sender;
+                                            }
+                                            ControlFrame::EndSession => {
+                                                will_end_session = true;
                                             }
                                         }
                                     }
@@ -1100,10 +1100,10 @@ where
                                 let control_frame;
                                 (blocked_transaction_sessioned_receiver, control_frame) = new_channel.channel_pair();
                                 match control_frame {
-                                    ControlFrame::EndSession => {},
                                     ControlFrame::StartSession(new_context) => {
                                         bank = new_context.bank().clone();
                                     },
+                                    ControlFrame::EndSession => {},
                                 }
                                 continue;
                             }
