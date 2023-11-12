@@ -1590,7 +1590,7 @@ where
             );
             runnable_queue.add_to_schedule(task.unique_weight, task);
             let mut selection = TaskSelection::OnlyFromContended(usize::max_value());
-            let mut address_book = self.address_book.clone();
+            let mut address_book = thread_manager.address_book.clone();
             let maybe_ee = ScheduleStage::schedule_next_execution(
                 &mut runnable_queue,
                 &mut address_book,
