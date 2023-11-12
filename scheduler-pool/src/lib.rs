@@ -1247,7 +1247,6 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
 enum TaskSource {
     Runnable,
     Contended(std::collections::HashSet<PageRc>),
-    Stuck,
 }
 
 enum TaskSelection {
@@ -1408,13 +1407,7 @@ impl ScheduleStage {
                         Task::index_with_address_book(&next_task);
                     }
 
-                    if from_runnable || matches!(task_source, TaskSource::Stuck) {
-                        break;
-                    } else if matches!(task_source, TaskSource::Contended(_)) {
-                        break;
-                    } else {
-                        unreachable!();
-                    }
+                    break;
                 } else if provisional_count > 0 {
                     assert!(!from_runnable);
                     assert_eq!(unlockable_count, 0);
