@@ -754,8 +754,6 @@ impl TaskQueueReader for ChannelBackedTaskQueue {
 pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     id: SchedulerId,
     completed_result_with_timings: Option<ResultWithTimings>,
-    address_book: AddressBook,
-    preloader: Arc<Preloader>,
     thread_manager: RwLock<ThreadManager<TH, SEA>>,
 }
 
@@ -772,6 +770,8 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     result_receiver: Receiver<ResultWithTimings>,
     handler_count: usize,
     session_result_with_timings: Option<ResultWithTimings>,
+    session_address_book: Option<AddressBook>,
+    preloader: Arc<Preloader>,
 }
 
 impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
@@ -780,14 +780,10 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
         initial_context: SchedulingContext,
         handler: TH,
     ) -> Self {
-        let address_book = AddressBook::default();
-        let preloader = Arc::new(address_book.preloader());
-
         let mut new = Self {
             id: thread_rng().gen::<SchedulerId>(),
             completed_result_with_timings: None,
             address_book: address_book,
-            preloader,
             thread_manager: RwLock::new(ThreadManager::<TH, SEA>::new(
                 initial_context,
                 handler,
@@ -868,6 +864,9 @@ where
     ) -> Self {
         let (schedulrable_transaction_sender, schedulable_transaction_receiver) = unbounded();
         let (result_sender, result_receiver) = unbounded();
+        let address_book = AddressBook::default();
+        let preloader = Arc::new(address_book.preloader());
+
         Self {
             schedulrable_transaction_sender,
             schedulable_transaction_receiver,
@@ -880,6 +879,8 @@ where
             handler,
             pool,
             session_result_with_timings: None,
+            address_book: Some(address_book),
+            preloader,
         }
     }
 
@@ -1569,10 +1570,10 @@ where
         transaction_with_index.with_transaction_and_index(|transaction, index| {
             let locks = transaction.get_account_locks_unchecked();
             let writable_lock_iter = locks.writable.iter().map(|address| {
-                LockAttempt::new(self.preloader.load(**address), RequestedUsage::Writable)
+                LockAttempt::new(thread_manager.preloader().load(**address), RequestedUsage::Writable)
             });
             let readonly_lock_iter = locks.readonly.iter().map(|address| {
-                LockAttempt::new(self.preloader.load(**address), RequestedUsage::Readonly)
+                LockAttempt::new(thread_manager.preloader().load(**address), RequestedUsage::Readonly)
             });
             let locks = writable_lock_iter
                 .chain(readonly_lock_iter)
