@@ -970,8 +970,6 @@ where
                 let mut will_end_thread = false;
 
                 while !will_end_thread {
-                    result_with_timings = Some((Ok(()), Default::default()));
-
                     while !(state_machine.is_empty() && (will_end_session || will_end_thread)) {
                         select_biased! {
                             recv(handled_blocked_transaction_receiver) -> execution_environment => {
@@ -1032,7 +1030,11 @@ where
 
                     if !will_end_thread {
                         result_sender
-                            .send(result_with_timings.take().unwrap())
+                            .send(
+                                result_with_timings
+                                    .replace((Ok(()), Default::default()))
+                                    .unwrap(),
+                            )
                             .unwrap();
                         will_end_session = false;
                     }
