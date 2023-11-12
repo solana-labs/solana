@@ -1069,8 +1069,7 @@ where
                             },
                         };
 
-                        if let Some(task) = state_machine.0.pop() {
-                            let ee = ScheduleStage::prepare_scheduled_execution(task, vec![]);
+                        if let Some(ee) = state_machine.pop_scheduled_task() {
                             blocked_transaction_sessioned_sender.send(ChainedChannel::Payload(ee));
                         }
                     }
@@ -1666,6 +1665,12 @@ impl SchedulingStateMachine {
     fn add_task(&mut self, task: Arc<Task>) {
         self.0.push(task);
         self.1 += 1;
+    }
+
+    fn pop_scheduled_task(mut self) -> Option<Box<ExecutionEnvironment>> {
+        state_machine.0.pop().map(|task| 
+           ScheduleStage::prepare_scheduled_execution(task, vec![])
+        )
     }
 
     fn decrement_task_count(&mut self) {
