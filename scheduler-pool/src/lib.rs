@@ -1583,7 +1583,7 @@ where
     }
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
-        let thread_manager = self.ensure_threads();
+        let thread_manager = self.ensure_manager_started();
         let mut executing_queue_count = 0_usize;
         let mut provisioning_tracker_count = 0;
         let mut sequence_time = 0;
