@@ -1171,7 +1171,7 @@ where
         res
     }
 
-    fn send_new_context(&mut self) {
+    fn send_new_context(&mut self, context: SchedulingContext) {
         let pair = unbounded();
         let (
             next_schedulrable_transaction_sender,
@@ -1661,7 +1661,7 @@ where
     }
 
     fn replace_context(&mut self, context: SchedulingContext) {
-        self.thread_manager.read().unwrap().send_new_context();
+        self.thread_manager.read().unwrap().send_new_context(context);
     }
 }
 
