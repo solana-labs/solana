@@ -1428,7 +1428,7 @@ impl ScheduleStage {
                 }
                 let lock_attempts = std::mem::take(&mut *next_task.lock_attempts_mut());
 
-                return Some((unique_weight, next_task, lock_attempts));
+                return Some((next_task, lock_attempts));
             } else {
                 break;
             }
