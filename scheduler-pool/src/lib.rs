@@ -1161,6 +1161,7 @@ where
     }
 
     fn end_session(&mut self) -> ResultWithTimings {
+        debug!("end_session(): will end session...");
         self.start_threads();
 
         let next_sender_and_receiver = unbounded();
