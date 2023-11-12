@@ -894,8 +894,8 @@ enum ChainedChannel<T, U> {
 }
 
 enum ControlFrame {
-    EndSession,
     StartSession(SchedulingContext),
+    EndSession,
 }
 
 impl<T: Send + Sync + 'static, U: Send + Sync + 'static> ChainedChannel<T, U> {
