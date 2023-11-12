@@ -1363,7 +1363,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         task_selection: &mut TaskSelection,
         failed_lock_count: &mut usize,
-    ) -> Option<(UniqueWeight, TaskInQueue, Vec<LockAttempt>)> {
+    ) -> Option<(TaskInQueue, Vec<LockAttempt>)> {
         loop {
             if let Some((task_source, next_task)) =
                 Self::select_next_task(runnable_queue, address_book, task_selection)
