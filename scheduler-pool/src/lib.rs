@@ -900,7 +900,7 @@ enum ControlFrame {
 
 impl<T1: Send + Sync + 'static, T2: Send + Sync + 'static> ChainedChannel<T1, T2> {
     fn new_channel(receiver: Receiver<Self>, sender: T2) -> Self {
-        Self::ChannelWithPayload(Box::new(ChannelPairOption(Some((receiver, sender)))))
+        Self::ChannelWithPayload(Box::new(ChannelPairOption((receiver, sender))))
     }
 }
 
