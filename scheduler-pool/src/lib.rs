@@ -884,7 +884,7 @@ where
         }
     }
 
-    fn preloader(&self) -> &Preloader {
+    fn preloader(&self) -> &Arc<Preloader> {
         self.preloader
     }
 
