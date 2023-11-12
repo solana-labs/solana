@@ -884,6 +884,10 @@ where
         }
     }
 
+    fn preloader(&self) -> &Preloader {
+        self.preloader
+    }
+
     fn is_active(&self) -> bool {
         self.scheduler_thread.is_some()
     }
