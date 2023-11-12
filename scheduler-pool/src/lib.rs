@@ -1661,7 +1661,7 @@ where
     }
 
     fn replace_context(&mut self, context: SchedulingContext) {
-        self.thread_manager.read().unwrap().send_new_context(context);
+        self.thread_manager.write().unwrap().send_new_context(context);
     }
 }
 
