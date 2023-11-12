@@ -931,6 +931,7 @@ where
             handler_count,
             handler,
             pool,
+            result_with_timings: None,
         }
     }
 
