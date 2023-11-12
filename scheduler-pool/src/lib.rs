@@ -1069,6 +1069,11 @@ where
                                 Self::receive_handled_transaction(&mut state_machine, execution_environment);
                             },
                         };
+
+                        if let Some(task) = state_machine.0.pop() {
+                            let ee = task;
+                            blocked_transaction_sessioned_sender.send(ChainedChannel::Payload(ee));
+                        }
                     }
 
                     if !will_end_thread {
