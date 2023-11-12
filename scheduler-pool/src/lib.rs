@@ -1170,6 +1170,26 @@ where
 
         res
     }
+
+    fn send_new_context(&mut self) {
+        let pair = unbounded();
+        let (
+            next_schedulrable_transaction_sender,
+            next_schedulrable_transaction_receiver,
+        ) = &pair;
+
+        self.schedulrable_transaction_sender
+            .send(ChainedChannel::new_channel(
+                next_schedulrable_transaction_receiver.clone(),
+                ControlFrame::NewContext(context),
+            ))
+            .unwrap();
+
+        (
+            self.schedulrable_transaction_sender,
+            self.schedulable_transaction_receiver,
+        ) = pair;
+    }
 }
 
 pub trait InstallableScheduler<SEA: ScheduleExecutionArg>: InstalledScheduler<SEA> {
@@ -1641,23 +1661,7 @@ where
     }
 
     fn replace_context(&mut self, context: SchedulingContext) {
-        let pair = unbounded();
-        let (
-            next_schedulrable_transaction_sender,
-            next_schedulrable_transaction_receiver,
-        ) = &pair;
-
-        self.schedulrable_transaction_sender
-            .send(ChainedChannel::new_channel(
-                next_schedulrable_transaction_receiver.clone(),
-                ControlFrame::NewContext(context),
-            ))
-            .unwrap();
-
-        (
-            self.schedulrable_transaction_sender,
-            self.schedulable_transaction_receiver,
-        ) = pair;
+        self.thread_manager.read().unwrap().send_new_context();
     }
 }
 
