@@ -1084,7 +1084,7 @@ where
             let handled_idle_transaction_sender = handled_idle_transaction_sender.clone();
 
             move || loop {
-                info!("solScheduler handler {:02} is started: {}", thx, std::thread::current());
+                info!("solScheduler handler {:02} is started at: {:?}", thx, std::thread::current());
                 let (mut m, was_blocked) = select_biased! {
                     recv(blocked_transaction_sessioned_receiver) -> m => {
                         let Ok(mm) = m else { break };
