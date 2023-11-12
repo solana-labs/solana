@@ -943,7 +943,9 @@ where
         self.scheduler_thread.is_some()
     }
 
-    fn receive_new_transaction(state_machine: &mut SchedulingStateMachine, msg: Arc<Task>) {}
+    fn receive_new_transaction(state_machine: &mut SchedulingStateMachine, msg: Arc<Task>) {
+        state_machine.0.push(msg);
+    }
 
     fn update_result_with_timings(
         (session_result, session_timings): &mut ResultWithTimings,
