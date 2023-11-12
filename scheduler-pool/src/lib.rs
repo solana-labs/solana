@@ -253,12 +253,10 @@ impl Task {
             contention_count: Default::default(),
         })
     }
-    #[inline(never)]
     pub fn clone_in_queue(this: &TaskInQueue) -> TaskInQueue {
         TaskInQueue::clone(this)
     }
 
-    #[inline(never)]
     fn index_with_address_book(this: &TaskInQueue) {
         for lock_attempt in &*this.lock_attempts_mut() {
             lock_attempt
@@ -389,19 +387,16 @@ impl Page {
 }
 
 impl BTreeMapTaskIds {
-    #[inline(never)]
     pub fn insert_task(&mut self, u: UniqueWeight, task: TaskInQueue) {
         let pre_existed = self.task_ids.insert(u, task);
         assert!(pre_existed.is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
     }
 
-    #[inline(never)]
     pub fn remove_task(&mut self, u: &UniqueWeight) {
         let removed_entry = self.task_ids.remove(u);
         assert!(removed_entry.is_some());
     }
 
-    #[inline(never)]
     fn heaviest_task_cursor(&self) -> impl Iterator<Item = &TaskInQueue> {
         self.task_ids.values().rev()
     }
@@ -410,7 +405,6 @@ impl BTreeMapTaskIds {
         self.task_ids.last_entry().map(|j| *j.key())
     }
 
-    #[inline(never)]
     fn reindex(&mut self, should_remove: bool, uq: &UniqueWeight) -> Option<TaskInQueue> {
         if should_remove {
             self.remove_task(uq);
@@ -448,7 +442,6 @@ pub struct AddressBook {
 }
 
 impl AddressBook {
-    #[inline(never)]
     fn attempt_lock_address(
         from_runnable: bool,
         unique_weight: &UniqueWeight,
@@ -519,7 +512,6 @@ impl AddressBook {
         }
     }
 
-    #[inline(never)]
     fn unlock(&mut self, attempt: &mut LockAttempt) -> bool {
         let mut newly_uncontended = false;
 
@@ -565,7 +557,6 @@ pub struct Preloader {
 }
 
 impl Preloader {
-    #[inline(never)]
     pub fn load(&self, address: Pubkey) -> PageRc {
         PageRc::clone(&self.book.entry(address).or_insert_with(|| {
             PageRc(by_address::ByAddress(PageRcInner::new((
@@ -597,14 +588,12 @@ trait TaskQueueReader {
 }
 
 impl TaskQueueReader for TaskQueue {
-    #[inline(never)]
     fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: TaskInQueue) {
         //trace!("TaskQueue::add(): {:?}", unique_weight);
         let pre_existed = self.tasks.insert(unique_weight, task);
         assert!(pre_existed.is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
     }
 
-    #[inline(never)]
     fn heaviest_entry_to_execute(&mut self) -> Option<TaskInQueue> {
         self.tasks.pop_last().map(|(_k, v)| v)
     }
@@ -662,7 +651,6 @@ pub struct ExecutionEnvironment {
 }
 
 impl ExecutionEnvironment {
-    #[inline(never)]
     fn reindex_with_address_book(&mut self) {
         assert!(!self.is_reindexed());
         self.is_reindexed = true;
@@ -712,7 +700,6 @@ pub enum Flushable<T> {
 }
 
 impl TaskQueueReader for ChannelBackedTaskQueue {
-    #[inline(never)]
     fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: TaskInQueue) {
         self.buffer(task)
     }
@@ -729,7 +716,6 @@ impl TaskQueueReader for ChannelBackedTaskQueue {
         self.task_count_hint() == 0
     }
 
-    #[inline(never)]
     fn heaviest_entry_to_execute(&mut self) -> Option<TaskInQueue> {
         match self.buffered_task.take() {
             Some(task) => Some(task),
@@ -1269,7 +1255,6 @@ impl TaskSelection {
     }
 }
 
-#[inline(never)]
 fn attempt_lock_for_execution<'a>(
     from_runnable: bool,
     address_book: &mut AddressBook,
@@ -1300,7 +1285,6 @@ fn attempt_lock_for_execution<'a>(
 
 pub struct ScheduleStage {}
 impl ScheduleStage {
-    #[inline(never)]
     fn get_heaviest_from_contended<'a>(
         address_book: &'a mut AddressBook,
     ) -> Option<
@@ -1313,7 +1297,6 @@ impl ScheduleStage {
         address_book.uncontended_task_ids.last_entry()
     }
 
-    #[inline(never)]
     fn select_next_task_to_lock<'a>(
         runnable_queue: &'a mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
@@ -1356,7 +1339,6 @@ impl ScheduleStage {
         }
     }
 
-    #[inline(never)]
     fn try_lock_for_task(
         address_book: &mut AddressBook,
         (task_source, next_task): (TaskSource, TaskInQueue),
@@ -1428,7 +1410,6 @@ impl ScheduleStage {
         return Some((next_task, lock_attempts));
     }
 
-    #[inline(never)]
     fn reset_lock_for_failed_execution(
         address_book: &mut AddressBook,
         unique_weight: &UniqueWeight,
@@ -1439,7 +1420,6 @@ impl ScheduleStage {
         }
     }
 
-    #[inline(never)]
     fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: &mut [LockAttempt]) {
         for mut l in lock_attempts {
             let newly_uncontended = address_book.reset_lock(&mut l);
@@ -1459,7 +1439,6 @@ impl ScheduleStage {
         }
     }
 
-    #[inline(never)]
     fn prepare_scheduled_execution(
         task: TaskInQueue,
         finalized_lock_attempts: Vec<LockAttempt>,
@@ -1478,7 +1457,6 @@ impl ScheduleStage {
         })
     }
 
-    #[inline(never)]
     fn commit_processed_execution(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
         ee.reindex_with_address_book();
         assert!(ee.is_reindexed());
@@ -1488,7 +1466,6 @@ impl ScheduleStage {
         ee.task.mark_as_finished();
     }
 
-    #[inline(never)]
     fn schedule_next_execution(
         runnable_queue: &mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
