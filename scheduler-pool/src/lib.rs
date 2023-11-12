@@ -1888,7 +1888,7 @@ mod tests {
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
 
         assert_eq!(bank.transaction_count(), 0);
-        let scheduler = pool.take_scheduler(context);
+        let scheduler = pool.do_take_scheduler(context);
         scheduler.schedule_execution(&(tx0, 0));
         let bank = BankWithScheduler::new(bank, Some(scheduler));
         assert_matches!(bank.wait_for_completed_scheduler(), Some((Ok(()), _)));
