@@ -1010,10 +1010,11 @@ where
                 let mut state_machine = SchedulingStateMachine;
                 let mut will_end_session = false;
                 let mut will_end_thread = false;
-                let mut scheduler_is_empty = false;
+                let mut task_count = 0;
 
                 while !will_end_thread {
                     result_with_timings = Some((Ok(()), Default::default()));
+                    let mut scheduler_is_empty = task_count == 0;
 
                     while !(scheduler_is_empty && (will_end_session || will_end_thread)) {
                         select_biased! {
@@ -1052,6 +1053,7 @@ where
                                                 blocked_transaction_sessioned_sender = next_blocked_transaction_sessioned_sender;
                                             }
                                             ControlFrame::EndSession => {
+                                                debug!("scheduler_main_loop: will_end_session = true");
                                                 will_end_session = true;
                                             }
                                         }
