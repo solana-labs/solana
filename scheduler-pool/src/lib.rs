@@ -1501,8 +1501,8 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         task_selection: &mut TaskSelection,
     ) -> Option<Box<ExecutionEnvironment>> {
-        let a = Self::select_next_task(runnable_queue, address_book, task_selection);
-        Self::pop_from_queue_then_lock(runnable_queue, address_book, a)
+        Self::select_next_task(runnable_queue, address_book, task_selection).and_then(|a|
+        Self::pop_from_queue_then_lock(runnable_queue, address_book, a))
             .map(|(task, lock_attemps)| Self::prepare_scheduled_execution(task, lock_attemps))
     }
 }
