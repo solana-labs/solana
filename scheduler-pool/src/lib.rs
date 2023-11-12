@@ -826,6 +826,7 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     schedulable_transaction_receiver: Receiver<ChainedChannel<Arc<Task>, ControlFrame>>,
     result_sender: Sender<ResultWithTimings>,
     result_receiver: Receiver<ResultWithTimings>,
+    lane_count: usize,
 }
 
 impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
@@ -846,6 +847,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
                 initial_context,
                 handler,
                 pool,
+                10,
             )),
         };
         drop(new.ensure_threads());
@@ -923,6 +925,7 @@ where
             context: initial_context,
             scheduler_thread: None,
             handler_threads: Vec::with_capacity(lane_count),
+            lane_count,
             handler,
             pool,
         }
