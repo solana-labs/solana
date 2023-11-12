@@ -538,8 +538,6 @@ impl AddressBook {
 
     #[inline(never)]
     fn unlock(&mut self, attempt: &mut LockAttempt) -> bool {
-        //debug_assert!(attempt.is_success());
-
         let mut newly_uncontended = false;
 
         let mut page = attempt.target_page_mut();
