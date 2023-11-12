@@ -1156,6 +1156,7 @@ where
 
     fn stop_threads(&mut self) {
         if !self.is_active() {
+            warn!("stop_threads(): alrady not active anymore...");
             return;
         }
 
@@ -1166,6 +1167,7 @@ where
         self.session_result_with_timings = Some(self.scheduler_thread.take().unwrap().join().unwrap());
 
         for j in self.handler_threads.drain(..) {
+            debug!("joining...: {:?}", j);
             assert_eq!(j.join().unwrap(), ());
         }
     }
