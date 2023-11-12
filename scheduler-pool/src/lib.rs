@@ -822,7 +822,6 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     scheduler_thread: Option<JoinHandle<()>>,
     handler_threads: Vec<JoinHandle<()>>,
     handler: TH,
-    _phantom: PhantomData<SEA>,
     schedulrable_transaction_sender: Sender<ChainedChannel<Arc<Task>, ControlFrame>>,
     schedulable_transaction_receiver: Receiver<ChainedChannel<Arc<Task>, ControlFrame>>,
     result_sender: Sender<ResultWithTimings>,
