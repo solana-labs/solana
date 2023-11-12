@@ -1636,6 +1636,7 @@ where
         }
 
         self.stop_thread_manager();
+        self.ensure_thread_manager_started();
 
         if wait_reason.is_paused() {
             None
