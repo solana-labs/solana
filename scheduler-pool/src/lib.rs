@@ -1533,7 +1533,6 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn prepare_scheduled_execution(
-        unique_weight: UniqueWeight,
         task: TaskInQueue,
         finalized_lock_attempts: Vec<LockAttempt>,
     ) -> Box<ExecutionEnvironment> {
@@ -1541,7 +1540,7 @@ impl ScheduleStage {
 
         Box::new(ExecutionEnvironment {
             task,
-            unique_weight,
+            task.unique_weight,
             finalized_lock_attempts,
             is_reindexed: Default::default(),
             execution_result: Default::default(),
@@ -1576,7 +1575,7 @@ impl ScheduleStage {
             task_selection,
             failed_lock_count,
         )
-        .map(|(uw, t, ll)| Self::prepare_scheduled_execution(uw, t, ll));
+        .map(|(uw, t, ll)| Self::prepare_scheduled_execution(t, ll));
         maybe_ee
     }
 }
