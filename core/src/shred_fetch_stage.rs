@@ -10,7 +10,7 @@ use {
     solana_perf::packet::{PacketBatch, PacketBatchRecycler, PacketFlags, PACKETS_PER_BATCH},
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
-        clock::{Slot, DEFAULT_MS_PER_SLOT},
+        clock::DEFAULT_MS_PER_SLOT,
         packet::{Meta, PACKET_DATA_SIZE},
         pubkey::Pubkey,
     },
@@ -43,7 +43,6 @@ impl ShredFetchStage {
         flags: PacketFlags,
         repair_context: Option<(&UdpSocket, &ClusterInfo)>,
         turbine_disabled: Arc<AtomicBool>,
-        slots_to_repair_for_wen_restart: Option<Arc<RwLock<Vec<Slot>>>>,
     ) {
         const STATS_SUBMIT_CADENCE: Duration = Duration::from_secs(1);
         let mut last_updated = Instant::now();
@@ -63,10 +62,6 @@ impl ShredFetchStage {
         let mut stats = ShredFetchStats::default();
 
         for mut packet_batch in recvr {
-            let my_slots_to_repair_for_wen_restart = slots_to_repair_for_wen_restart
-                .as_ref()
-                .map(|slots| slots.read().unwrap().clone());
-
             if last_updated.elapsed().as_millis() as u64 > DEFAULT_MS_PER_SLOT {
                 last_updated = Instant::now();
                 let root_bank = {
@@ -100,14 +95,7 @@ impl ShredFetchStage {
             let turbine_disabled = turbine_disabled.load(Ordering::Relaxed);
             for packet in packet_batch.iter_mut().filter(|p| !p.meta().discard()) {
                 if turbine_disabled
-                    || should_discard_shred(
-                        packet,
-                        last_root,
-                        max_slot,
-                        shred_version,
-                        &my_slots_to_repair_for_wen_restart,
-                        &mut stats,
-                    )
+                    || should_discard_shred(packet, last_root, max_slot, shred_version, &mut stats)
                 {
                     packet.meta_mut().set_discard(true);
                 } else {
@@ -133,7 +121,6 @@ impl ShredFetchStage {
         flags: PacketFlags,
         repair_context: Option<(Arc<UdpSocket>, Arc<ClusterInfo>)>,
         turbine_disabled: Arc<AtomicBool>,
-        slots_to_repair_for_wen_restart: Option<Arc<RwLock<Vec<Slot>>>>,
     ) -> (Vec<JoinHandle<()>>, JoinHandle<()>) {
         let (packet_sender, packet_receiver) = unbounded();
         let streamers = sockets
@@ -166,7 +153,6 @@ impl ShredFetchStage {
                     flags,
                     repair_context,
                     turbine_disabled,
-                    slots_to_repair_for_wen_restart.clone(),
                 )
             })
             .unwrap();
@@ -185,7 +171,6 @@ impl ShredFetchStage {
         cluster_info: Arc<ClusterInfo>,
         turbine_disabled: Arc<AtomicBool>,
         exit: Arc<AtomicBool>,
-        slots_to_repair_for_wen_restart: Option<Arc<RwLock<Vec<Slot>>>>,
     ) -> Self {
         let recycler = PacketBatchRecycler::warmed(100, 1024);
 
@@ -200,7 +185,6 @@ impl ShredFetchStage {
             PacketFlags::empty(),
             None, // repair_context
             turbine_disabled.clone(),
-            slots_to_repair_for_wen_restart.clone(),
         );
 
         let (repair_receiver, repair_handler) = Self::packet_modifier(
@@ -214,7 +198,6 @@ impl ShredFetchStage {
             PacketFlags::REPAIR,
             Some((repair_socket, cluster_info)),
             turbine_disabled.clone(),
-            slots_to_repair_for_wen_restart.clone(),
         );
 
         tvu_threads.extend(repair_receiver);
@@ -228,7 +211,6 @@ impl ShredFetchStage {
             let exit = exit.clone();
             let sender = sender.clone();
             let turbine_disabled = turbine_disabled.clone();
-            let slots_to_repair_for_wen_restart = slots_to_repair_for_wen_restart.clone();
             tvu_threads.extend([
                 Builder::new()
                     .name("solTvuRecvRpr".to_string())
@@ -253,7 +235,6 @@ impl ShredFetchStage {
                             PacketFlags::REPAIR,
                             None, // repair_context; no ping packets!
                             turbine_disabled,
-                            slots_to_repair_for_wen_restart,
                         )
                     })
                     .unwrap(),
@@ -285,7 +266,6 @@ impl ShredFetchStage {
                         PacketFlags::empty(),
                         None, // repair_context
                         turbine_disabled,
-                        slots_to_repair_for_wen_restart.clone(),
                     )
                 })
                 .unwrap(),
@@ -433,7 +413,6 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            &None,
             &mut stats,
         ));
         let coding = solana_ledger::shred::Shredder::generate_coding_shreds(
@@ -447,7 +426,6 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            &None,
             &mut stats,
         ));
     }
@@ -469,7 +447,6 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            &None,
             &mut stats,
         ));
         assert_eq!(stats.index_overrun, 1);
@@ -491,13 +468,12 @@ mod tests {
             3,
             max_slot,
             shred_version,
-            &None,
             &mut stats,
         ));
         assert_eq!(stats.slot_out_of_range, 1);
 
         assert!(should_discard_shred(
-            &packet, last_root, max_slot, /*shred_version:*/ 345, &None, &mut stats,
+            &packet, last_root, max_slot, /*shred_version:*/ 345, &mut stats,
         ));
         assert_eq!(stats.shred_version_mismatch, 1);
 
@@ -507,7 +483,6 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            &None,
             &mut stats,
         ));
 
@@ -529,7 +504,6 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            &None,
             &mut stats,
         ));
 
@@ -541,36 +515,6 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            &None,
-            &mut stats,
-        ));
-
-        // Should respect wen_restart list.
-        let shred = Shred::new_from_data(
-            last_root + 1,
-            2,
-            1,
-            &[],
-            ShredFlags::LAST_SHRED_IN_SLOT,
-            0,
-            shred_version,
-            0,
-        );
-        shred.copy_to_packet(&mut packet);
-        assert!(!should_discard_shred(
-            &packet,
-            last_root,
-            max_slot,
-            shred_version,
-            &Some(vec![last_root + 1, last_root + 2]),
-            &mut stats,
-        ));
-        assert!(should_discard_shred(
-            &packet,
-            last_root,
-            max_slot,
-            shred_version,
-            &Some(vec![last_root + 3]),
             &mut stats,
         ));
     }

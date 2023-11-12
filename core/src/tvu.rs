@@ -165,7 +165,6 @@ impl Tvu {
             cluster_info.clone(),
             turbine_disabled,
             exit.clone(),
-            slots_to_repair_for_wen_restart.clone(),
         );
 
         let (verified_sender, verified_receiver) = unbounded();
