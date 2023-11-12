@@ -9,7 +9,7 @@ use {
             footer::{
                 AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat, TieredStorageFooter,
             },
-            index::{AccountOffset, IndexBlockFormat},
+            index::{AccountOffset, IndexBlockFormat, IndexOffset},
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
             mmap_utils::get_type,
             TieredStorageFormat, TieredStorageResult,
@@ -230,6 +230,13 @@ impl HotStorageReader {
         let (meta, _) = get_type::<HotAccountMeta>(&self.mmap, account_offset.block)?;
         Ok(meta)
     }
+
+    /// Returns the offset to the account given the specified index.
+    fn get_account_offset(&self, index_offset: IndexOffset) -> TieredStorageResult<AccountOffset> {
+        self.footer
+            .index_block_format
+            .get_account_offset(&self.mmap, &self.footer, index_offset)
+    }
 }
 
 #[cfg(test)]
@@ -244,7 +251,7 @@ pub mod tests {
                 FOOTER_SIZE,
             },
             hot::{HotAccountMeta, HotStorageReader},
-            index::{AccountOffset, IndexBlockFormat},
+            index::{AccountIndexWriterEntry, AccountOffset, IndexBlockFormat, IndexOffset},
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
         },
         memoffset::offset_of,
@@ -462,5 +469,54 @@ pub mod tests {
             assert_eq!(meta, expected_meta);
         }
         assert_eq!(&footer, hot_storage.footer());
+    }
+
+    #[test]
+    fn test_hot_storage_get_account_offset() {
+        // Generate a new temp path that is guaranteed to NOT already have a file.
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("test_hot_storage_get_account_offset");
+        const NUM_ACCOUNTS: u32 = 10;
+        let mut rng = rand::thread_rng();
+
+        let addresses: Vec<_> = std::iter::repeat_with(Pubkey::new_unique)
+            .take(NUM_ACCOUNTS as usize)
+            .collect();
+
+        let index_writer_entries: Vec<_> = addresses
+            .iter()
+            .map(|address| AccountIndexWriterEntry {
+                address,
+                block_offset: rng.gen_range(0..u64::MAX),
+                intra_block_offset: rng.gen_range(0..4096),
+            })
+            .collect();
+
+        let footer = TieredStorageFooter {
+            account_meta_format: AccountMetaFormat::Hot,
+            account_entry_count: NUM_ACCOUNTS,
+            // Set index_block_offset to 0 as we didn't write any account
+            // meta/data in this test
+            index_block_offset: 0,
+            ..TieredStorageFooter::default()
+        };
+        {
+            let file = TieredStorageFile::new_writable(&path).unwrap();
+
+            footer
+                .index_block_format
+                .write_index_block(&file, &index_writer_entries)
+                .unwrap();
+
+            // while the test only focuses on account metas, writing a footer
+            // here is necessary to make it a valid tiered-storage file.
+            footer.write_footer_block(&file).unwrap();
+        }
+
+        let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
+        for (i, index_writer_entry) in index_writer_entries.iter().enumerate() {
+            let account_offset = hot_storage.get_account_offset(IndexOffset(i)).unwrap();
+            assert_eq!(account_offset.block as u64, index_writer_entry.block_offset);
+        }
     }
 }
