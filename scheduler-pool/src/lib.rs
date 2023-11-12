@@ -1654,7 +1654,7 @@ where
 }
 
 #[derive(Default)]
-struct SchedulingStateMachine(vec<Arc<Task>>);
+struct SchedulingStateMachine(Vec<Arc<Task>>);
 /*
 
 enum Event {
