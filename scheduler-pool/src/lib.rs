@@ -1691,13 +1691,13 @@ impl SchedulingStateMachine {
     }
 
     fn add_task(&mut self, task: Arc<Task>) {
-        self.0.push(task);
+        self.0.push_back(task);
         self.1 += 1;
     }
 
     fn pop_scheduled_task(&mut self) -> Option<Box<ExecutionEnvironment>> {
         self.0
-            .pop()
+            .pop_front()
             .map(|task| ScheduleStage::prepare_scheduled_execution(task, vec![]))
     }
 
