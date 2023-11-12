@@ -1003,7 +1003,7 @@ where
             let mut result_with_timings = self.session_result_with_timings.take().or(Some((Ok(()), Default::default())));
 
             move || {
-                info!("solScheduler thread is started");
+                info!("solScheduler thread is started at: {:?}", std::thread::current());
                 let mut state_machine = SchedulingStateMachine;
                 let mut will_end_session = false;
                 let mut will_end_thread = false;
@@ -1084,7 +1084,7 @@ where
             let handled_idle_transaction_sender = handled_idle_transaction_sender.clone();
 
             move || loop {
-                info!("solScheduler handler {:02} is started at: {:?}", thx, std::thread::current());
+                info!("solScHandler{:02} thread is started at: {:?}", thx, std::thread::current());
                 let (mut m, was_blocked) = select_biased! {
                     recv(blocked_transaction_sessioned_receiver) -> m => {
                         let Ok(mm) = m else { break };
