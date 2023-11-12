@@ -987,7 +987,7 @@ where
             // this can't be promoted to panic! as read => write upgrade isn't completely
             // race-free in ensure_threads()...
             warn!("start_threads(): already started");
-            return
+            return;
         }
         debug!("start_threads(): doing now");
 
@@ -1007,10 +1007,16 @@ where
                 self.schedulable_transaction_receiver.clone();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
-            let mut result_with_timings = self.session_result_with_timings.take().or(Some((Ok(()), Default::default())));
+            let mut result_with_timings = self
+                .session_result_with_timings
+                .take()
+                .or(Some((Ok(()), Default::default())));
 
             move || {
-                info!("solScheduler thread is started at: {:?}", std::thread::current());
+                info!(
+                    "solScheduler thread is started at: {:?}",
+                    std::thread::current()
+                );
                 let mut state_machine = SchedulingStateMachine::default();
                 let mut will_end_session = false;
                 let mut will_end_thread = false;
@@ -1075,13 +1081,18 @@ where
                     }
 
                     if !will_end_thread {
-                        result_sender.send(result_with_timings.take().unwrap()).unwrap();
+                        result_sender
+                            .send(result_with_timings.take().unwrap())
+                            .unwrap();
                         will_end_session = false;
                     }
                 }
 
                 let res = result_with_timings.take().unwrap();
-                info!("solScheduler thread is ended at: {:?}", std::thread::current());
+                info!(
+                    "solScheduler thread is ended at: {:?}",
+                    std::thread::current()
+                );
                 res
             }
         };
@@ -1097,7 +1108,11 @@ where
             let handled_idle_transaction_sender = handled_idle_transaction_sender.clone();
 
             move || {
-                info!("solScHandler{:02} thread is started at: {:?}", thx, std::thread::current());
+                info!(
+                    "solScHandler{:02} thread is started at: {:?}",
+                    thx,
+                    std::thread::current()
+                );
                 loop {
                     let (mut m, was_blocked) = select_biased! {
                         recv(blocked_transaction_sessioned_receiver) -> m => {
@@ -1121,7 +1136,7 @@ where
                             }
                         },
                         recv(idle_transaction_receiver) -> m => {
-                            let Ok(mm) = m else { 
+                            let Ok(mm) = m else {
                                 idle_transaction_receiver = never();
                                 continue;
                             };
@@ -1138,7 +1153,11 @@ where
                         handled_idle_transaction_sender.send(m).unwrap();
                     }
                 }
-                info!("solScHandler{:02} thread is ended at: {:?}", thx, std::thread::current());
+                info!(
+                    "solScHandler{:02} thread is ended at: {:?}",
+                    thx,
+                    std::thread::current()
+                );
             }
         };
 
@@ -1166,19 +1185,26 @@ where
             warn!("stop_threads(): alrady not active anymore...");
             return;
         }
-        debug!("stop_threads(): stopping threads by {:?}", std::thread::current());
+        debug!(
+            "stop_threads(): stopping threads by {:?}",
+            std::thread::current()
+        );
 
         (
             self.schedulrable_transaction_sender,
             self.schedulable_transaction_receiver,
         ) = unbounded();
-        self.session_result_with_timings = Some(self.scheduler_thread.take().unwrap().join().unwrap());
+        self.session_result_with_timings =
+            Some(self.scheduler_thread.take().unwrap().join().unwrap());
 
         for j in self.handler_threads.drain(..) {
             debug!("joining...: {:?}", j);
             assert_eq!(j.join().unwrap(), ());
         }
-        debug!("stop_threads(): successfully stopped threads by {:?}", std::thread::current());
+        debug!(
+            "stop_threads(): successfully stopped threads by {:?}",
+            std::thread::current()
+        );
     }
 
     fn send_task(&self, task: Arc<Task>) {
@@ -1635,7 +1661,8 @@ where
 
     fn wait_for_termination(&mut self, wait_reason: &WaitReason) -> Option<ResultWithTimings> {
         if self.completed_result_with_timings.is_none() {
-            self.completed_result_with_timings = Some(self.thread_manager.write().unwrap().end_session());
+            self.completed_result_with_timings =
+                Some(self.thread_manager.write().unwrap().end_session());
         }
 
         self.stop_thread_manager();
@@ -1668,9 +1695,9 @@ impl SchedulingStateMachine {
     }
 
     fn pop_scheduled_task(&mut self) -> Option<Box<ExecutionEnvironment>> {
-        self.0.pop().map(|task| 
-           ScheduleStage::prepare_scheduled_execution(task, vec![])
-        )
+        self.0
+            .pop()
+            .map(|task| ScheduleStage::prepare_scheduled_execution(task, vec![]))
     }
 
     fn decrement_task_count(&mut self) {
