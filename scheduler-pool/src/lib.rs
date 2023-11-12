@@ -1540,7 +1540,7 @@ impl ScheduleStage {
 
         Box::new(ExecutionEnvironment {
             task,
-            task.unique_weight,
+            unique_weight: task.unique_weight,
             finalized_lock_attempts,
             is_reindexed: Default::default(),
             execution_result: Default::default(),
