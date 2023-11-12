@@ -858,11 +858,12 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
     #[must_use]
     fn ensure_threads(&self) -> RwLockReadGuard<'_, ThreadManager<TH, SEA>> {
         loop {
-            debug!("ensure_threads()...");
             let r = self.thread_manager.read().unwrap();
             if r.is_active() {
+                debug!("ensure_threads(): is now active...");
                 return r;
             } else {
+                debug!("ensure_threads(): will start threads...");
                 drop(r);
                 let mut w = self.thread_manager.write().unwrap();
                 w.start_threads();
