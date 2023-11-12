@@ -1132,6 +1132,10 @@ where
     }
 
     fn stop_threads(&mut self) {
+        if !self.is_active() {
+            return;
+        }
+
         (
             self.schedulrable_transaction_sender,
             self.schedulable_transaction_receiver,
