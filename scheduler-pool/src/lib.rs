@@ -1533,7 +1533,6 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn prepare_scheduled_execution(
-        address_book: &mut AddressBook,
         unique_weight: UniqueWeight,
         task: TaskInQueue,
         finalized_lock_attempts: Vec<LockAttempt>,
@@ -1577,7 +1576,7 @@ impl ScheduleStage {
             task_selection,
             failed_lock_count,
         )
-        .map(|(uw, t, ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll));
+        .map(|(uw, t, ll)| Self::prepare_scheduled_execution(uw, t, ll));
         maybe_ee
     }
 }
