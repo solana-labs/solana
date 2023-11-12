@@ -1153,6 +1153,8 @@ where
     }
 
     fn end_session(&mut self) -> ResultWithTimings {
+        self.start_threads();
+
         let next_sender_and_receiver = unbounded();
         let (_next_sender, next_receiver) = &next_sender_and_receiver;
 
@@ -1172,7 +1174,9 @@ where
         res
     }
 
-    fn send_new_context(&mut self, context: SchedulingContext) {
+    fn start_session(&mut self, context: SchedulingContext) {
+        self.start_threads();
+
         let next_sender_and_receiver = unbounded();
         let (_next_sender, next_receiver) = &next_sender_and_receiver;
 
@@ -1650,7 +1654,7 @@ where
         self.thread_manager
             .write()
             .unwrap()
-            .send_new_context(context);
+            .start_session(context);
     }
 }
 
