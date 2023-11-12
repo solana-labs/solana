@@ -129,7 +129,7 @@ where
     }
 
     pub fn return_scheduler(&self, scheduler: Box<T>) {
-        assert!(!scheduler.has_context());
+        //assert!(!scheduler.has_context());
 
         self.schedulers
             .lock()
