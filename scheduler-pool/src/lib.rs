@@ -770,7 +770,7 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     result_receiver: Receiver<ResultWithTimings>,
     handler_count: usize,
     session_result_with_timings: Option<ResultWithTimings>,
-    session_address_book: Option<AddressBook>,
+    address_book: Option<AddressBook>,
     preloader: Arc<Preloader>,
 }
 
