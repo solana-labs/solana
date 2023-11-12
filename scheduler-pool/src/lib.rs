@@ -1058,21 +1058,6 @@ where
                         };
                     }
 
-                    let (
-                        next_blocked_transaction_sessioned_sender,
-                        blocked_transaction_sessioned_receiver,
-                    ) = unbounded();
-
-                    for _ in (0..handler_count) {
-                        blocked_transaction_sessioned_sender
-                            .send(ChainedChannel::new_channel(
-                                blocked_transaction_sessioned_receiver.clone(),
-                                ControlFrame::EndSession,
-                            ))
-                            .unwrap();
-                    }
-                    blocked_transaction_sessioned_sender =
-                        next_blocked_transaction_sessioned_sender;
                     result_sender.send(result_with_timings).unwrap();
                 }
             }
@@ -1104,7 +1089,7 @@ where
                                     ControlFrame::StartSession(new_context) => {
                                         bank = new_context.bank().clone();
                                     },
-                                    ControlFrame::EndSession => {},
+                                    ControlFrame::EndSession => unreachable!(),
                                 }
                                 continue;
                             }
