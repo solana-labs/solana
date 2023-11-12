@@ -1667,7 +1667,7 @@ impl SchedulingStateMachine {
         self.1 += 1;
     }
 
-    fn pop_scheduled_task(mut self) -> Option<Box<ExecutionEnvironment>> {
+    fn pop_scheduled_task(&mut self) -> Option<Box<ExecutionEnvironment>> {
         self.0.pop().map(|task| 
            ScheduleStage::prepare_scheduled_execution(task, vec![])
         )
