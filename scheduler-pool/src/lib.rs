@@ -1060,8 +1060,8 @@ where
 
                     if !will_end_thread {
                         result_sender.send(result_with_timings.take().unwrap()).unwrap();
+                        will_end_session = false;
                     }
-                    will_end_session = false;
                 }
 
                 result_with_timings.take().unwrap()
