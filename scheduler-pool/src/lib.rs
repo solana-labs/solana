@@ -1361,10 +1361,8 @@ impl ScheduleStage {
     fn pop_from_queue_then_lock(
         runnable_queue: &mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
-        next_task2: Option<(TaskSource, TaskInQueue)>
+        (task_source, next_task): (TaskSource, TaskInQueue),
     ) -> Option<(TaskInQueue, Vec<LockAttempt>)> {
-        if let Some((task_source, next_task)) = next_task2
-        {
             let from_runnable = matches!(task_source, TaskSource::Runnable);
             let unique_weight = next_task.unique_weight;
 
@@ -1430,9 +1428,6 @@ impl ScheduleStage {
             let lock_attempts = std::mem::take(&mut *next_task.lock_attempts_mut());
 
             return Some((next_task, lock_attempts));
-        } else {
-            return None;
-        }
     }
 
     #[inline(never)]
