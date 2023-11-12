@@ -1361,10 +1361,9 @@ impl ScheduleStage {
     fn pop_from_queue_then_lock(
         runnable_queue: &mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
-        task_selection: &mut TaskSelection,
+        next_task2: Option<(TaskSource, TaskInQueue)>
     ) -> Option<(TaskInQueue, Vec<LockAttempt>)> {
-        if let Some((task_source, next_task)) =
-            Self::select_next_task(runnable_queue, address_book, task_selection)
+        if let Some((task_source, next_task)) = next_task2
         {
             let from_runnable = matches!(task_source, TaskSource::Runnable);
             let unique_weight = next_task.unique_weight;
@@ -1377,10 +1376,6 @@ impl ScheduleStage {
             );
 
             if unlockable_count > 0 {
-                if let TaskSelection::OnlyFromContended(ref mut retry_count) = task_selection {
-                    *retry_count = retry_count.checked_sub(1).unwrap();
-                }
-
                 Self::reset_lock_for_failed_execution(
                     address_book,
                     &unique_weight,
@@ -1506,7 +1501,8 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         task_selection: &mut TaskSelection,
     ) -> Option<Box<ExecutionEnvironment>> {
-        Self::pop_from_queue_then_lock(runnable_queue, address_book, task_selection)
+        let a = Self::select_next_task(runnable_queue, address_book, task_selection);
+        Self::pop_from_queue_then_lock(runnable_queue, address_book, a)
             .map(|(task, lock_attemps)| Self::prepare_scheduled_execution(task, lock_attemps))
     }
 }
