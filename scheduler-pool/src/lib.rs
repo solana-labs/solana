@@ -1595,27 +1595,16 @@ where
     }
 
     fn wait_for_termination(&mut self, wait_reason: &WaitReason) -> Option<ResultWithTimings> {
-        todo!();
-        /*
+        if self.result_with_timings.is_none() {
+            self.result_with_timings = self.thread_manager.write().unwrap().end_session();
+        }
         let keep_result_with_timings = wait_reason.is_paused();
 
         if keep_result_with_timings {
             None
         } else {
-            drop(
-                self.context
-                    .take()
-                    .expect("active context should be dropped"),
-            );
-            // current simplest form of this trait impl doesn't block the current thread materially
-            // just with the following single mutex lock. Suppose more elaborated synchronization
-            // across worker threads here in the future...
-            self.result_with_timings
-                .lock()
-                .expect("not poisoned")
-                .take()
+            self.result_with_timings.take()
         }
-        */
     }
 
     fn return_to_pool(self: Box<Self>) {
