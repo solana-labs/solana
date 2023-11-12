@@ -960,6 +960,7 @@ where
                 .session_result_with_timings
                 .take()
                 .or(Some((Ok(()), Default::default())));
+            let mut address_book = self.address_book.take().unwrap();
 
             move || {
                 info!(
@@ -1042,7 +1043,7 @@ where
                     "solScheduler thread is ended at: {:?}",
                     std::thread::current()
                 );
-                res
+                (res, address_book)
             }
         };
 
