@@ -1,9 +1,6 @@
 use {
     clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches},
     log::*,
-    solana_ledger::blockstore_cleanup_service::{
-        DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS,
-    },
     solana_k8s_cluster::{
         docker::{DockerConfig, DockerImageConfig},
         genesis::{
@@ -15,6 +12,9 @@ use {
         ledger_helper::LedgerHelper,
         release::{BuildConfig, Deploy},
         ValidatorType,
+    },
+    solana_ledger::blockstore_cleanup_service::{
+        DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS,
     },
     solana_sdk::pubkey::Pubkey,
     std::{thread, time::Duration},
