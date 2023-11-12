@@ -809,6 +809,7 @@ impl TaskQueueReader for ChannelBackedTaskQueue {
 #[derive(Debug)]
 pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     id: SchedulerId,
+    result_with_timings: Option<ResultWithTimings>,
     address_book: Mutex<AddressBook>,
     preloader: Arc<Preloader>,
     thread_manager: RwLock<ThreadManager<TH, SEA>>,
