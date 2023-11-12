@@ -1008,7 +1008,7 @@ where
 
             move || {
                 info!("solScheduler thread is started at: {:?}", std::thread::current());
-                let mut state_machine = SchedulingStateMachine;
+                let mut state_machine = SchedulingStateMachine::default();
                 let mut will_end_session = false;
                 let mut will_end_thread = false;
                 let mut task_count = 0;
