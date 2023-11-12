@@ -1071,7 +1071,7 @@ where
                         };
 
                         if let Some(task) = state_machine.0.pop() {
-                            let ee = task;
+                            let ee = prepare_scheduled_execution(task, vec![]);
                             blocked_transaction_sessioned_sender.send(ChainedChannel::Payload(ee));
                         }
                     }
