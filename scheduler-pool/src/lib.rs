@@ -373,7 +373,6 @@ pub enum RequestedUsage {
 pub struct Page {
     address_str: String,
     current_usage: Usage,
-    next_usage: Usage,
     task_ids: TaskIds,
     write_task_ids: std::collections::BTreeSet<UniqueWeight>,
 }
@@ -383,15 +382,9 @@ impl Page {
         Self {
             address_str: format!("{}", address),
             current_usage,
-            next_usage: Usage::Unused,
             task_ids: Default::default(),
             write_task_ids: Default::default(),
         }
-    }
-
-    fn switch_to_next_usage(&mut self) {
-        self.current_usage = self.next_usage;
-        self.next_usage = Usage::Unused;
     }
 }
 
@@ -497,25 +490,15 @@ impl AddressBook {
         } = attempt;
         let mut page = target.page_mut();
 
-        let next_usage = page.next_usage;
         match page.current_usage {
             Usage::Unused => {
-                assert_eq!(page.next_usage, Usage::Unused);
                 page.current_usage = Usage::renew(*requested_usage);
                 *status = LockStatus::Succeded;
             }
             Usage::Readonly(ref mut count) => match requested_usage {
                 RequestedUsage::Readonly => {
-                    // prevent newer read-locks (even from runnable too)
-                    match next_usage {
-                        Usage::Unused => {
-                            *count += 1;
-                            *status = LockStatus::Succeded;
-                        }
-                        Usage::Readonly(_) | Usage::Writable => {
-                            *status = LockStatus::Failed;
-                        }
-                    }
+                    *count += 1;
+                    *status = LockStatus::Succeded;
                 }
                 RequestedUsage::Writable => {
                     *status = LockStatus::Failed;
@@ -567,21 +550,6 @@ impl AddressBook {
         }
 
         newly_uncontended
-    }
-
-    #[inline(never)]
-    fn cancel(&mut self, attempt: &mut LockAttempt) {
-        let mut page = attempt.target_page_mut();
-
-        match page.next_usage {
-            Usage::Unused => {
-                unreachable!();
-            }
-            // support multiple readonly locks!
-            Usage::Readonly(_) | Usage::Writable => {
-                page.next_usage = Usage::Unused;
-            }
-        }
     }
 
     pub fn preloader(&self) -> Preloader {
@@ -1513,7 +1481,7 @@ impl ScheduleStage {
             let newly_uncontended = address_book.reset_lock(&mut l);
 
             let mut page = l.target.page_mut();
-            if newly_uncontended && page.next_usage == Usage::Unused {
+            if newly_uncontended {
                 if let Some(task) = l.heaviest_uncontended.take() {
                     if task.currently_contended() {
                         let uti = address_book
@@ -1524,11 +1492,6 @@ impl ScheduleStage {
                     }
                 }
             }
-            if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
-                page.switch_to_next_usage();
-            }
-
-            // todo: mem::forget and panic in LockAttempt::drop()
         }
     }
 
