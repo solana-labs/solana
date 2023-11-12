@@ -996,7 +996,7 @@ where
                 self.schedulable_transaction_receiver.clone();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
-            let mut result_with_timings = Some((Ok(()), Default::default()));
+            let mut result_with_timings = self.result_with_timings;
 
             move || {
                 let mut state_machine = SchedulingStateMachine;
