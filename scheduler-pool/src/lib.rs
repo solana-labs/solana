@@ -1052,7 +1052,7 @@ where
                             },
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
                                 let execution_environment = execution_environment.unwrap();
-                                Self::update_result_with_timings(result_with_timings.unwrap(), &execution_environment);
+                                Self::update_result_with_timings(&mut result_with_timings.unwrap(), &execution_environment);
                                 Self::receive_handled_transaction(&mut state_machine, execution_environment);
                             },
                         };
