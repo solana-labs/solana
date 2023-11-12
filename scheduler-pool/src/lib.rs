@@ -1504,14 +1504,13 @@ impl ScheduleStage {
         task_selection: &mut TaskSelection,
         failed_lock_count: &mut usize,
     ) -> Option<Box<ExecutionEnvironment>> {
-        let maybe_ee = Self::pop_from_queue_then_lock(
+        Self::pop_from_queue_then_lock(
             runnable_queue,
             address_book,
             task_selection,
             failed_lock_count,
         )
-        .map(|(uw, t, ll)| Self::prepare_scheduled_execution(t, ll));
-        maybe_ee
+        .map(|(uw, t, ll)| Self::prepare_scheduled_execution(t, ll))
     }
 }
 
