@@ -851,7 +851,8 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
                 10,
             )),
         };
-        drop(new.ensure_threads());
+        // is this benefitical?
+        //drop(new.ensure_threads());
         new
     }
 
