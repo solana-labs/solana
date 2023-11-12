@@ -1026,7 +1026,7 @@ where
                         };
 
                         if let Some(ee) = state_machine.pop_scheduled_task() {
-                            blocked_transaction_sessioned_sender.send(ChainedChannel::Payload(ee));
+                            blocked_transaction_sessioned_sender.send(ChainedChannel::Payload(ee)).unwrap();
                         }
                     }
 
