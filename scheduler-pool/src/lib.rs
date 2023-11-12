@@ -1004,7 +1004,7 @@ where
                 while !will_end_thread {
                     let mut result_with_timings = (Ok(()), Default::default());
 
-                    while !(scheduler_is_empty && will_end_session) {
+                    while !(scheduler_is_empty && (will_end_session || will_end_thread)) {
                         select_biased! {
                             recv(handled_blocked_transaction_receiver) -> execution_environment => {
                                 let execution_environment = execution_environment.unwrap();
