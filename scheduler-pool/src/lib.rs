@@ -1121,7 +1121,7 @@ where
 
         self.scheduler_thread = Some(
             std::thread::Builder::new()
-                .name("aaaa".to_owned())
+                .name("solScheduler".to_owned())
                 .spawn(scheduler_main_loop())
                 .unwrap(),
         );
@@ -1130,7 +1130,7 @@ where
             .map({
                 |thx| {
                     std::thread::Builder::new()
-                        .name("aaaa".to_owned())
+                        .name(format!("solScHandler{:02}", thx))
                         .spawn(handler_main_loop())
                         .unwrap()
                 }
