@@ -1315,7 +1315,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn select_next_task<'a>(
+    fn select_next_task_to_lock<'a>(
         runnable_queue: &'a mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
         task_selection: &mut TaskSelection,
@@ -1495,7 +1495,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         task_selection: &mut TaskSelection,
     ) -> Option<Box<ExecutionEnvironment>> {
-        Self::select_next_task(runnable_queue, address_book, task_selection)
+        Self::select_next_task_to_lock(runnable_queue, address_book, task_selection)
             .and_then(|task| Self::try_lock_for_task(address_book, task))
             .map(|(task, lock_attemps)| Self::prepare_scheduled_execution(task, lock_attemps))
     }
