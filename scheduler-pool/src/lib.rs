@@ -738,9 +738,7 @@ impl TaskQueueReader for ChannelBackedTaskQueue {
                 // invocation
                 match self.channel.try_recv().unwrap() {
                     SchedulablePayload(Flushable::Payload(task)) => Some(task),
-                    SchedulablePayload(Flushable::Flush) => {
-                        None
-                    }
+                    SchedulablePayload(Flushable::Flush) => None,
                 }
             }
         }
@@ -1026,7 +1024,9 @@ where
                         };
 
                         if let Some(ee) = state_machine.pop_scheduled_task() {
-                            blocked_transaction_sessioned_sender.send(ChainedChannel::Payload(ee)).unwrap();
+                            blocked_transaction_sessioned_sender
+                                .send(ChainedChannel::Payload(ee))
+                                .unwrap();
                         }
                     }
 
@@ -1144,7 +1144,8 @@ where
             self.schedulrable_transaction_sender,
             self.schedulable_transaction_receiver,
         ) = unbounded();
-        let (result_with_timings, address_book) = self.scheduler_thread.take().unwrap().join().unwrap();
+        let (result_with_timings, address_book) =
+            self.scheduler_thread.take().unwrap().join().unwrap();
         self.session_result_with_timings = Some(result_with_timings);
         self.address_book = Some(address_book);
 
@@ -1575,10 +1576,16 @@ where
         transaction_with_index.with_transaction_and_index(|transaction, index| {
             let locks = transaction.get_account_locks_unchecked();
             let writable_lock_iter = locks.writable.iter().map(|address| {
-                LockAttempt::new(thread_manager.preloader().load(**address), RequestedUsage::Writable)
+                LockAttempt::new(
+                    thread_manager.preloader().load(**address),
+                    RequestedUsage::Writable,
+                )
             });
             let readonly_lock_iter = locks.readonly.iter().map(|address| {
-                LockAttempt::new(thread_manager.preloader().load(**address), RequestedUsage::Readonly)
+                LockAttempt::new(
+                    thread_manager.preloader().load(**address),
+                    RequestedUsage::Readonly,
+                )
             });
             let locks = writable_lock_iter
                 .chain(readonly_lock_iter)
