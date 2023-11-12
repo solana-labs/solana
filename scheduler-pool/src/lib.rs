@@ -1161,6 +1161,7 @@ where
             warn!("stop_threads(): alrady not active anymore...");
             return;
         }
+        debug!("stop_threads(): stopping threads by {:?}", std::thread::current());
 
         (
             self.schedulrable_transaction_sender,
@@ -1172,6 +1173,7 @@ where
             debug!("joining...: {:?}", j);
             assert_eq!(j.join().unwrap(), ());
         }
+        debug!("stop_threads(): successfully stopped threads by {:?}", std::thread::current());
     }
 
     fn send_task(&self, task: Arc<Task>) {
