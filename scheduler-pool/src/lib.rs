@@ -1276,10 +1276,9 @@ fn attempt_lock_for_execution<'a>(
     address_book: &mut AddressBook,
     unique_weight: &UniqueWeight,
     lock_attempts: &mut [LockAttempt],
-) -> (usize, usize) {
+) -> usize {
     // no short-cuircuit; we at least all need to add to the contended queue
     let mut unlockable_count = 0;
-    let mut provisional_count = 0;
 
     for attempt in lock_attempts.iter_mut() {
         AddressBook::attempt_lock_address(from_runnable, unique_weight, attempt);
@@ -1297,7 +1296,7 @@ fn attempt_lock_for_execution<'a>(
         }
     }
 
-    (unlockable_count, provisional_count)
+    unlockable_count
 }
 
 pub struct ScheduleStage {}
@@ -1372,7 +1371,7 @@ impl ScheduleStage {
                 let from_runnable = matches!(task_source, TaskSource::Runnable);
                 let unique_weight = next_task.unique_weight;
 
-                let (unlockable_count, provisional_count) = attempt_lock_for_execution(
+                let unlockable_count = attempt_lock_for_execution(
                     from_runnable,
                     address_book,
                     &unique_weight,
@@ -1396,24 +1395,10 @@ impl ScheduleStage {
                         .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
                     if from_runnable {
-                        trace!(
-                            "move to contended due to lock failure [{}/{}/{}]",
-                            unlockable_count,
-                            provisional_count,
-                            lock_count
-                        );
                         next_task.mark_as_contended();
-
                         Task::index_with_address_book(&next_task);
                     }
 
-                    break;
-                } else if provisional_count > 0 {
-                    assert!(!from_runnable);
-                    assert_eq!(unlockable_count, 0);
-                    let lock_count = next_task.lock_attempts_mut().len();
-                    trace!("provisional exec: [{}/{}]", provisional_count, lock_count);
-                    next_task.mark_as_uncontended();
                     break;
                 }
 
@@ -1429,7 +1414,7 @@ impl ScheduleStage {
                 if !from_runnable {
                     next_task.mark_as_uncontended();
                     if let TaskSource::Contended(uncontendeds) = task_source {
-                        for lock_attempt in next_task.lock_attempts_mut().iter().filter(|l| l.requested_usage == RequestedUsage::Readonly /*&& uncontendeds.contains(&l.target)*/) {
+                        for lock_attempt in next_task.lock_attempts_mut().iter().filter(|l| l.requested_usage == RequestedUsage::Readonly) {
                             if let Some(task) = lock_attempt.target_page_mut().task_ids.reindex(false, &unique_weight) {
                                 if task.currently_contended() {
                                     let uti = address_book
