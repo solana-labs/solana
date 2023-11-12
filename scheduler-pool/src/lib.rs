@@ -1406,20 +1406,6 @@ impl ScheduleStage {
                         next_task.mark_as_contended();
 
                         Task::index_with_address_book(&next_task);
-
-                        // maybe run lightweight prune logic on contended_queue here.
-                    } else {
-                        trace!(
-                            "relock failed [{}/{}/{}]; remains in contended: {:?} contention: {}",
-                            unlockable_count,
-                            provisional_count,
-                            lock_count,
-                            &unique_weight,
-                            next_task
-                                .contention_count
-                                .load(std::sync::atomic::Ordering::SeqCst)
-                        );
-                        //address_book.uncontended_task_ids.clear();
                     }
 
                     if from_runnable || matches!(task_source, TaskSource::Stuck) {
