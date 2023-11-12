@@ -962,6 +962,7 @@ where
         state_machine: &mut SchedulingStateMachine,
         msg: Box<ExecutionEnvironment>,
     ) {
+        state_machine.decrement_task_count();
     }
 
     fn receive_scheduled_transaction(
@@ -1665,6 +1666,10 @@ impl SchedulingStateMachine {
     fn add_task(&mut self, task: Arc<Task>) {
         self.0.push(task);
         self.1 += 1;
+    }
+
+    fn decrement_task_count(&mut self) {
+        self.1 -= 1;
     }
 }
 
