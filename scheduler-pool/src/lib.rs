@@ -1641,9 +1641,23 @@ where
     }
 
     fn replace_context(&mut self, context: SchedulingContext) {
-        todo!();
-        //self.context = Some(context);
-        //*self.result_with_timings.lock().expect("not poisoned") = None;
+        let pair = unbounded();
+        let (
+            next_schedulrable_transaction_sender,
+            next_schedulrable_transaction_receiver,
+        ) = &pair;
+
+        self.schedulrable_transaction_sender
+            .send(ChainedChannel::new_channel(
+                next_schedulrable_transaction_receiver.clone(),
+                ControlFrame::NewContext(context),
+            ))
+            .unwrap();
+
+        (
+            self.schedulrable_transaction_sender,
+            self.schedulable_transaction_receiver,
+        ) = pair;
     }
 }
 
