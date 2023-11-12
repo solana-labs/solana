@@ -860,7 +860,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
         loop {
             let r = self.thread_manager.read().unwrap();
             if r.is_active() {
-                debug!("ensure_threads(): is now active...");
+                debug!("ensure_threads(): is already active...");
                 return r;
             } else {
                 debug!("ensure_threads(): will start threads...");
@@ -979,6 +979,8 @@ where
 
     fn start_threads(&mut self) {
         if self.is_active() {
+            // this can't be promoted to panic! as read => write upgrade isn't completely
+            // race-free in ensure_threads()...
             warn!("start_threads(): already started");
             return
         }
