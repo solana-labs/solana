@@ -895,7 +895,7 @@ enum ChainedChannel<T, U> {
 
 enum ControlFrame {
     EndSession,
-    NewContext(SchedulingContext),
+    StartSession(SchedulingContext),
 }
 
 impl<T: Send + Sync + 'static, U: Send + Sync + 'static> ChainedChannel<T, U> {
@@ -1029,7 +1029,7 @@ where
                                         (schedulable_transaction_receiver, control_frame) = new_channel.channel_pair();
                                         match control_frame {
                                             ControlFrame::EndSession => {}
-                                            ControlFrame::NewContext(context) => {
+                                            ControlFrame::StartSession(context) => {
                                                 will_end_session = false;
 
                                                 let next_blocked_transaction_sessioned_sender;
@@ -1041,7 +1041,7 @@ where
                                                     blocked_transaction_sessioned_sender
                                                         .send(ChainedChannel::new_channel(
                                                             blocked_transaction_sessioned_receiver.clone(),
-                                                            ControlFrame::NewContext(context.clone()),
+                                                            ControlFrame::StartSession(context.clone()),
                                                         ))
                                                         .unwrap();
                                                 }
@@ -1101,7 +1101,7 @@ where
                                 (blocked_transaction_sessioned_receiver, control_frame) = new_channel.channel_pair();
                                 match control_frame {
                                     ControlFrame::EndSession => {},
-                                    ControlFrame::NewContext(new_context) => {
+                                    ControlFrame::StartSession(new_context) => {
                                         bank = new_context.bank().clone();
                                     },
                                 }
@@ -1195,7 +1195,7 @@ where
         self.schedulrable_transaction_sender
             .send(ChainedChannel::new_channel(
                 next_receiver.clone(),
-                ControlFrame::NewContext(context),
+                ControlFrame::StartSession(context),
             ))
             .unwrap();
 
