@@ -2,6 +2,7 @@ pub use rocksdb::Direction as IteratorDirection;
 use {
     crate::{
         blockstore_meta,
+        blockstore_meta::MerkleRootMeta,
         blockstore_metrics::{
             maybe_enable_rocksdb_perf, report_rocksdb_read_perf, report_rocksdb_write_perf,
             BlockstoreRocksDbColumnFamilyMetrics, PerfSamplingStatus, PERF_METRIC_OP_NAME_GET,
@@ -103,6 +104,8 @@ const BLOCK_HEIGHT_CF: &str = "block_height";
 const PROGRAM_COSTS_CF: &str = "program_costs";
 /// Column family for optimistic slots
 const OPTIMISTIC_SLOTS_CF: &str = "optimistic_slots";
+/// Column family for merkle roots
+const MERKLE_ROOT_META_CF: &str = "merkle_root_meta";
 
 #[derive(Error, Debug)]
 pub enum BlockstoreError {
@@ -339,6 +342,19 @@ pub mod columns {
     /// * value type: [`blockstore_meta::OptimisticSlotMetaVersioned`]
     pub struct OptimisticSlots;
 
+    #[derive(Debug)]
+    /// The merkle root meta column
+    ///
+    /// Each merkle shred is part of a merkle tree for
+    /// its FEC set. This column stores that merkle root and associated
+    /// meta information about the first shred received.
+    ///
+    /// Its index type is (Slot, fec_set_index).
+    ///
+    /// * index type: `crate::shred::ErasureSetId` `(Slot, fec_set_index: u32)`
+    /// * value type: [`blockstore_meta::MerkleRootMeta`]`
+    pub struct MerkleRootMeta;
+
     // When adding a new column ...
     // - Add struct below and implement `Column` and `ColumnName` traits
     // - Add descriptor in Rocks::cf_descriptors() and name in Rocks::columns()
@@ -474,6 +490,7 @@ impl Rocks {
             new_cf_descriptor::<BlockHeight>(options, oldest_slot),
             new_cf_descriptor::<ProgramCosts>(options, oldest_slot),
             new_cf_descriptor::<OptimisticSlots>(options, oldest_slot),
+            new_cf_descriptor::<MerkleRootMeta>(options, oldest_slot),
         ]
     }
 
@@ -501,6 +518,7 @@ impl Rocks {
             BlockHeight::NAME,
             ProgramCosts::NAME,
             OptimisticSlots::NAME,
+            MerkleRootMeta::NAME,
         ]
     }
 
@@ -1225,6 +1243,39 @@ impl ColumnName for columns::OptimisticSlots {
 }
 impl TypedColumn for columns::OptimisticSlots {
     type Type = blockstore_meta::OptimisticSlotMetaVersioned;
+}
+
+impl Column for columns::MerkleRootMeta {
+    type Index = (Slot, /*fec_set_index:*/ u32);
+
+    fn index(key: &[u8]) -> Self::Index {
+        let slot = BigEndian::read_u64(&key[..8]);
+        let fec_set_index = BigEndian::read_u32(&key[8..]);
+
+        (slot, fec_set_index)
+    }
+
+    fn key((slot, fec_set_index): Self::Index) -> Vec<u8> {
+        let mut key = vec![0; 12];
+        BigEndian::write_u64(&mut key[..8], slot);
+        BigEndian::write_u32(&mut key[8..], fec_set_index);
+        key
+    }
+
+    fn slot((slot, _fec_set_index): Self::Index) -> Slot {
+        slot
+    }
+
+    fn as_index(slot: Slot) -> Self::Index {
+        (slot, 0)
+    }
+}
+
+impl ColumnName for columns::MerkleRootMeta {
+    const NAME: &'static str = MERKLE_ROOT_META_CF;
+}
+impl TypedColumn for columns::MerkleRootMeta {
+    type Type = MerkleRootMeta;
 }
 
 #[derive(Debug)]
