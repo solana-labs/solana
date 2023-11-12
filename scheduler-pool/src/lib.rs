@@ -628,7 +628,6 @@ trait TaskQueueReader {
     fn heaviest_entry_to_execute(&mut self) -> Option<TaskInQueue>;
     fn task_count_hint(&self) -> usize;
     fn has_no_task_hint(&self) -> bool;
-    fn take_buffered_flush(&mut self) -> Option<Flushable<TaskInQueue>>;
     fn is_backed_by_channel(&self) -> bool;
 }
 
@@ -653,10 +652,6 @@ impl TaskQueueReader for TaskQueue {
         self.tasks.is_empty()
     }
 
-    fn take_buffered_flush(&mut self) -> Option<Flushable<TaskInQueue>> {
-        None
-    }
-
     fn is_backed_by_channel(&self) -> bool {
         false
     }
@@ -673,7 +668,6 @@ pub struct TaskQueue {
 struct ChannelBackedTaskQueue {
     channel: Receiver<SchedulablePayload>,
     buffered_task: Option<TaskInQueue>,
-    buffered_flush: bool,
 }
 
 impl ChannelBackedTaskQueue {
@@ -681,7 +675,6 @@ impl ChannelBackedTaskQueue {
         Self {
             channel: channel.clone(),
             buffered_task: None,
-            buffered_flush: false,
         }
     }
 
@@ -775,10 +768,6 @@ impl TaskQueueReader for ChannelBackedTaskQueue {
         self.task_count_hint() == 0
     }
 
-    fn take_buffered_flush(&mut self) -> Option<Flushable<TaskInQueue>> {
-        std::mem::take(&mut self.buffered_flush).then_some(Flushable::Flush)
-    }
-
     #[inline(never)]
     fn heaviest_entry_to_execute(&mut self) -> Option<TaskInQueue> {
         match self.buffered_task.take() {
@@ -789,8 +778,6 @@ impl TaskQueueReader for ChannelBackedTaskQueue {
                 match self.channel.try_recv().unwrap() {
                     SchedulablePayload(Flushable::Payload(task)) => Some(task),
                     SchedulablePayload(Flushable::Flush) => {
-                        assert!(!self.buffered_flush);
-                        self.buffered_flush = true;
                         None
                     }
                 }
