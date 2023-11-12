@@ -809,7 +809,7 @@ impl TaskQueueReader for ChannelBackedTaskQueue {
 #[derive(Debug)]
 pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     id: SchedulerId,
-    result_with_timings: Option<ResultWithTimings>,
+    completed_result_with_timings: Option<ResultWithTimings>,
     address_book: Mutex<AddressBook>,
     preloader: Arc<Preloader>,
     thread_manager: RwLock<ThreadManager<TH, SEA>>,
@@ -841,7 +841,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
 
         let mut new = Self {
             id: thread_rng().gen::<SchedulerId>(),
-            result_with_timings: None,
+            completed_result_with_timings: None,
             address_book: Mutex::new(address_book),
             preloader,
             thread_manager: RwLock::new(ThreadManager::<TH, SEA>::new(
@@ -1601,14 +1601,14 @@ where
     }
 
     fn wait_for_termination(&mut self, wait_reason: &WaitReason) -> Option<ResultWithTimings> {
-        if self.result_with_timings.is_none() {
-            self.result_with_timings = Some(self.thread_manager.write().unwrap().end_session());
+        if self.completed_result_with_timings.is_none() {
+            self.completed_result_with_timings = Some(self.thread_manager.write().unwrap().end_session());
         }
 
         if wait_reason.is_paused() {
             None
         } else {
-            self.result_with_timings.take()
+            self.completed_result_with_timings.take()
         }
     }
 
