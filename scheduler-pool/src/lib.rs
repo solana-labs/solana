@@ -994,8 +994,6 @@ where
                 self.schedulable_transaction_receiver.clone();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
-            let mut blocked_transaction_sessioned_receiver =
-                blocked_transaction_sessioned_receiver.clone();
 
             move || {
                 let never = &never();
@@ -1031,8 +1029,7 @@ where
                                             ControlFrame::StartSession(context) => {
                                                 will_end_session = false;
 
-                                                let next_blocked_transaction_sessioned_sender;
-                                                (
+                                                let (
                                                     next_blocked_transaction_sessioned_sender,
                                                     blocked_transaction_sessioned_receiver,
                                                 ) = unbounded();
@@ -1061,8 +1058,7 @@ where
                         };
                     }
 
-                    let next_blocked_transaction_sessioned_sender;
-                    (
+                    let (
                         next_blocked_transaction_sessioned_sender,
                         blocked_transaction_sessioned_receiver,
                     ) = unbounded();
