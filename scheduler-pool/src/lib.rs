@@ -826,7 +826,7 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     schedulable_transaction_receiver: Receiver<ChainedChannel<Arc<Task>, ControlFrame>>,
     result_sender: Sender<ResultWithTimings>,
     result_receiver: Receiver<ResultWithTimings>,
-    lane_count: usize,
+    handler_count: usize,
 }
 
 impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
@@ -913,7 +913,7 @@ where
         initial_context: SchedulingContext,
         handler: TH,
         pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
-        lane_count: usize,
+        handler_count: usize,
     ) -> Self {
         let (schedulrable_transaction_sender, schedulable_transaction_receiver) = unbounded();
         let (result_sender, result_receiver) = unbounded();
@@ -924,8 +924,8 @@ where
             result_receiver,
             context: initial_context,
             scheduler_thread: None,
-            handler_threads: Vec::with_capacity(lane_count),
-            lane_count,
+            handler_threads: Vec::with_capacity(handler_count),
+            handler_count,
             handler,
             pool,
         }
@@ -984,7 +984,7 @@ where
             unbounded::<Box<ExecutionEnvironment>>();
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
             unbounded::<Box<ExecutionEnvironment>>();
-        let lane_count = self.lane_count;
+        let handler_count = self.handler_count;
 
         let scheduler_main_loop = || {
             let result_sender = self.result_sender.clone();
@@ -1035,7 +1035,7 @@ where
                                                     blocked_transaction_sessioned_sender,
                                                     blocked_transaction_sessioned_receiver,
                                                 ) = unbounded();
-                                                for _ in (0..lane_count) {
+                                                for _ in (0..handler_count) {
                                                     blocked_transaction_sessioned_sender
                                                         .send(ChainedChannel::new_channel(
                                                             blocked_transaction_sessioned_receiver.clone(),
@@ -1061,7 +1061,7 @@ where
                         blocked_transaction_sessioned_receiver,
                     ) = unbounded();
 
-                    for _ in (0..lane_count) {
+                    for _ in (0..handler_count) {
                         blocked_transaction_sessioned_sender
                             .send(ChainedChannel::new_channel(
                                 blocked_transaction_sessioned_receiver.clone(),
@@ -1128,7 +1128,7 @@ where
                 .unwrap(),
         );
 
-        self.handler_threads = (0..lane_count)
+        self.handler_threads = (0..handler_count)
             .map({
                 |thx| {
                     std::thread::Builder::new()
