@@ -1060,9 +1060,9 @@ where
                     result_sender.send(result_with_timings).unwrap();
                     will_end_session = false;
                 }
-            }
 
-            result_with_timings
+                result_with_timings
+            }
         };
 
         let handler_main_loop = || {
