@@ -1362,7 +1362,6 @@ impl ScheduleStage {
         runnable_queue: &mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
         task_selection: &mut TaskSelection,
-        failed_lock_count: &mut usize,
     ) -> Option<(TaskInQueue, Vec<LockAttempt>)> {
         loop {
             if let Some((task_source, next_task)) =
@@ -1379,7 +1378,6 @@ impl ScheduleStage {
                 );
 
                 if unlockable_count > 0 {
-                    *failed_lock_count += 1;
                     if let TaskSelection::OnlyFromContended(ref mut retry_count) = task_selection {
                         *retry_count = retry_count.checked_sub(1).unwrap();
                     }
@@ -1502,13 +1500,11 @@ impl ScheduleStage {
         runnable_queue: &mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
         task_selection: &mut TaskSelection,
-        failed_lock_count: &mut usize,
     ) -> Option<Box<ExecutionEnvironment>> {
         Self::pop_from_queue_then_lock(
             runnable_queue,
             address_book,
             task_selection,
-            failed_lock_count,
         )
         .map(|(t, ll)| Self::prepare_scheduled_execution(t, ll))
     }
@@ -1537,7 +1533,6 @@ where
         let mut commit_clock = 0;
         let mut processed_count = 0_usize;
         let mut interval_count = 0;
-        let mut failed_lock_count = 0;
         transaction_with_index.with_transaction_and_index(|transaction, index| {
             let locks = transaction.get_account_locks_unchecked();
             let writable_lock_iter = locks.writable.iter().map(|address| {
@@ -1571,7 +1566,6 @@ where
                 &mut runnable_queue,
                 &mut address_book,
                 &mut selection,
-                &mut failed_lock_count,
             );
             if let Some(mut ee) = maybe_ee {
                 ScheduleStage::commit_processed_execution(&mut ee, &mut address_book);
