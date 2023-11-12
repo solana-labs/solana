@@ -978,10 +978,11 @@ where
     }
 
     fn start_threads(&mut self) {
-        debug!("start_threads()...");
         if self.is_active() {
+            debug!("start_threads(): already started");
             return;
         }
+        debug!("start_threads(): doing now");
 
         let (blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) =
             unbounded::<ChainedChannel<Box<ExecutionEnvironment>, ControlFrame>>();
