@@ -1663,7 +1663,7 @@ impl SchedulingStateMachine {
     }
 
     fn add_task(&mut self, task: Arc<Task>) {
-        self.0.push(msg);
+        self.0.push(task);
         self.1 += 1;
     }
 }
