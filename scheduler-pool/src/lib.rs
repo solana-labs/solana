@@ -880,11 +880,11 @@ trait WithChannelAndPayload<T1, T2>: Send + Sync {
     fn channel_and_payload(self: Box<Self>) -> ChannelAndPayload<T1, T2>;
 }
 
-struct ChannelPairOption<T1, T2>(Option<ChannelAndPayload<T1, T2>>);
+struct ChannelPairOption<T1, T2>(ChannelAndPayload<T1, T2>);
 
 impl<T1: Send + Sync, T2: Send + Sync> WithChannelAndPayload<T1, T2> for ChannelPairOption<T1, T2> {
     fn channel_and_payload(mut self: Box<Self>) -> ChannelAndPayload<T1, T2> {
-        self.0.take().unwrap()
+        self.0
     }
 }
 
