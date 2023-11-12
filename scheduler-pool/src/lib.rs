@@ -827,7 +827,7 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     result_sender: Sender<ResultWithTimings>,
     result_receiver: Receiver<ResultWithTimings>,
     handler_count: usize,
-    result_with_timings: Option<ResultWithTimings>,
+    session_result_with_timings: Option<ResultWithTimings>,
 }
 
 impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
@@ -931,7 +931,7 @@ where
             handler_count,
             handler,
             pool,
-            result_with_timings: None,
+            session_result_with_timings: None,
         }
     }
 
@@ -1143,7 +1143,7 @@ where
             self.schedulrable_transaction_sender,
             self.schedulable_transaction_receiver,
         ) = unbounded();
-        self.result_with_timings = Some(self.scheduler_thread.take().unwrap().join().unwrap());
+        self.session_result_with_timings = Some(self.scheduler_thread.take().unwrap().join().unwrap());
 
         for j in self.handler_threads.drain(..) {
             assert_eq!(j.join().unwrap(), ());
