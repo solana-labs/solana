@@ -1149,11 +1149,11 @@ where
     }
 
     fn end_session(&mut self) -> ResultWithTimings {
-        let pair = unbounded();
+        let sender_and_receiver = unbounded();
         let (
             next_schedulrable_transaction_sender,
             next_schedulrable_transaction_receiver,
-        ) = &pair;
+        ) = &sender_and_receiver;
 
         self.schedulrable_transaction_sender
             .send(ChainedChannel::new_channel(
@@ -1166,17 +1166,17 @@ where
         (
             self.schedulrable_transaction_sender,
             self.schedulable_transaction_receiver,
-        ) = pair;
+        ) = sender_and_receiver;
 
         res
     }
 
     fn send_new_context(&mut self, context: SchedulingContext) {
-        let pair = unbounded();
+        let sender_and_receiver = unbounded();
         let (
             next_schedulrable_transaction_sender,
             next_schedulrable_transaction_receiver,
-        ) = &pair;
+        ) = &sender_and_receiver;
 
         self.schedulrable_transaction_sender
             .send(ChainedChannel::new_channel(
@@ -1188,7 +1188,7 @@ where
         (
             self.schedulrable_transaction_sender,
             self.schedulable_transaction_receiver,
-        ) = pair;
+        ) = sender_and_receiver;
     }
 }
 
