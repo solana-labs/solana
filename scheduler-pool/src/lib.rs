@@ -996,7 +996,7 @@ where
                 self.schedulable_transaction_receiver.clone();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
-            let mut result_with_timings = &mut Some((Ok(()), Default::default()));
+            let mut result_with_timings = Some((Ok(()), Default::default()));
 
             move || {
                 let mut state_machine = SchedulingStateMachine;
@@ -1005,7 +1005,7 @@ where
                 let mut scheduler_is_empty = false;
 
                 while !will_end_thread {
-                    *result_with_timings = Some((Ok(()), Default::default()));
+                    result_with_timings = Some((Ok(()), Default::default()));
 
                     while !(scheduler_is_empty && (will_end_session || will_end_thread)) {
                         select_biased! {
@@ -1064,7 +1064,7 @@ where
                     will_end_session = false;
                 }
 
-                *result_with_timings.take().unwrap()
+                result_with_timings.take().unwrap()
             }
         };
 
