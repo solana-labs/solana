@@ -1594,7 +1594,7 @@ impl SchedulingStateMachine {
     }
 
     fn into_address_book(self) -> AddressBook {
-        self.address_book
+        self.2
     }
 
     fn is_empty(&self) -> bool {
