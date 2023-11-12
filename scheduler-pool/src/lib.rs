@@ -958,8 +958,7 @@ where
                 .session_result_with_timings
                 .take()
                 .or(Some((Ok(()), Default::default())));
-            let mut address_book = self.address_book.take().unwrap();
-            let mut state_machine = SchedulingStateMachine::default();
+            let mut state_machine = SchedulingStateMachine::new(self.address_book.take().unwrap());
 
             move || {
                 info!(
@@ -1045,7 +1044,7 @@ where
                     "solScheduler thread is ended at: {:?}",
                     std::thread::current()
                 );
-                (res, address_book)
+                (res, state_machine.into_address_book())
             }
         };
 
@@ -1583,10 +1582,17 @@ where
     }
 }
 
-#[derive(Default)]
-struct SchedulingStateMachine(std::collections::VecDeque<Arc<Task>>, usize);
+struct SchedulingStateMachine(std::collections::VecDeque<Arc<Task>>, usize, AddressBook);
 
 impl SchedulingStateMachine {
+    fn new(address_book) -> Self {
+        Self(
+            Default::default(),
+            Default::default(),
+            address_book,
+        )
+    }
+
     fn is_empty(&self) -> bool {
         self.1 == 0
     }
