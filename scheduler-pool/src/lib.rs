@@ -882,7 +882,9 @@ trait WithChannelAndPayload<T1, T2>: Send + Sync {
 
 struct ChannelAndPayloadTuple<T1, T2>(ChannelAndPayload<T1, T2>);
 
-impl<T1: Send + Sync, T2: Send + Sync> WithChannelAndPayload<T1, T2> for ChannelAndPayloadTuple<T1, T2> {
+impl<T1: Send + Sync, T2: Send + Sync> WithChannelAndPayload<T1, T2>
+    for ChannelAndPayloadTuple<T1, T2>
+{
     fn channel_and_payload(mut self: Box<Self>) -> ChannelAndPayload<T1, T2> {
         self.0
     }
@@ -1663,10 +1665,7 @@ where
     }
 
     fn replace_context(&mut self, context: SchedulingContext) {
-        self.thread_manager
-            .write()
-            .unwrap()
-            .start_session(context);
+        self.thread_manager.write().unwrap().start_session(context);
     }
 }
 
