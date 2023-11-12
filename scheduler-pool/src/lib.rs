@@ -1058,7 +1058,7 @@ where
                         };
                     }
 
-                    result_sender.send(result_with_timings).unwrap();
+                    result_sender.send(result_with_timings.clone()).unwrap();
                     will_end_session = false;
                 }
 
