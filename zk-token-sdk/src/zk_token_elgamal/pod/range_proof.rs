@@ -45,7 +45,7 @@ impl TryFrom<decoded::RangeProof> for RangeProofU64 {
 
     fn try_from(decoded_proof: decoded::RangeProof) -> Result<Self, Self::Error> {
         if decoded_proof.ipp_proof.serialized_size() != INNER_PRODUCT_PROOF_U64_LEN {
-            return Err(RangeProofVerificationError::Deserialization.into());
+            return Err(RangeProofVerificationError::Deserialization);
         }
 
         let mut buf = [0_u8; RANGE_PROOF_U64_LEN];
@@ -76,7 +76,7 @@ impl TryFrom<decoded::RangeProof> for RangeProofU128 {
 
     fn try_from(decoded_proof: decoded::RangeProof) -> Result<Self, Self::Error> {
         if decoded_proof.ipp_proof.serialized_size() != INNER_PRODUCT_PROOF_U128_LEN {
-            return Err(RangeProofVerificationError::Deserialization.into());
+            return Err(RangeProofVerificationError::Deserialization);
         }
 
         let mut buf = [0_u8; RANGE_PROOF_U128_LEN];
@@ -107,7 +107,7 @@ impl TryFrom<decoded::RangeProof> for RangeProofU256 {
 
     fn try_from(decoded_proof: decoded::RangeProof) -> Result<Self, Self::Error> {
         if decoded_proof.ipp_proof.serialized_size() != INNER_PRODUCT_PROOF_U256_LEN {
-            return Err(RangeProofVerificationError::Deserialization.into());
+            return Err(RangeProofVerificationError::Deserialization);
         }
 
         let mut buf = [0_u8; RANGE_PROOF_U256_LEN];

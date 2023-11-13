@@ -244,7 +244,7 @@ impl RangeProof {
         let bp_gens = BulletproofGens::new(nm);
 
         if !nm.is_power_of_two() {
-            return Err(RangeProofVerificationError::InvalidBitSize.into());
+            return Err(RangeProofVerificationError::InvalidBitSize);
         }
 
         // append proof data to transcript and derive appropriate challenge scalars
@@ -326,7 +326,7 @@ impl RangeProof {
         if mega_check.is_identity() {
             Ok(())
         } else {
-            Err(RangeProofVerificationError::AlgebraicRelation.into())
+            Err(RangeProofVerificationError::AlgebraicRelation)
         }
     }
 
@@ -349,10 +349,10 @@ impl RangeProof {
     // changed.
     pub fn from_bytes(slice: &[u8]) -> Result<RangeProof, RangeProofVerificationError> {
         if slice.len() % 32 != 0 {
-            return Err(RangeProofVerificationError::Deserialization.into());
+            return Err(RangeProofVerificationError::Deserialization);
         }
         if slice.len() < 7 * 32 {
-            return Err(RangeProofVerificationError::Deserialization.into());
+            return Err(RangeProofVerificationError::Deserialization);
         }
 
         let A = CompressedRistretto(util::read32(&slice[0..]));

@@ -208,10 +208,10 @@ impl InnerProductProof {
         if lg_n >= 32 {
             // 4 billion multiplications should be enough for anyone
             // and this check prevents overflow in 1<<lg_n below.
-            return Err(RangeProofVerificationError::InvalidBitSize.into());
+            return Err(RangeProofVerificationError::InvalidBitSize);
         }
         if n != (1 << lg_n) {
-            return Err(RangeProofVerificationError::InvalidBitSize.into());
+            return Err(RangeProofVerificationError::InvalidBitSize);
         }
 
         transcript.innerproduct_domain_separator(n as u64);
@@ -329,7 +329,7 @@ impl InnerProductProof {
         if expect_P == *P {
             Ok(())
         } else {
-            Err(RangeProofVerificationError::AlgebraicRelation.into())
+            Err(RangeProofVerificationError::AlgebraicRelation)
         }
     }
 
@@ -366,18 +366,18 @@ impl InnerProductProof {
     pub fn from_bytes(slice: &[u8]) -> Result<InnerProductProof, RangeProofVerificationError> {
         let b = slice.len();
         if b % 32 != 0 {
-            return Err(RangeProofVerificationError::Deserialization.into());
+            return Err(RangeProofVerificationError::Deserialization);
         }
         let num_elements = b / 32;
         if num_elements < 2 {
-            return Err(RangeProofVerificationError::Deserialization.into());
+            return Err(RangeProofVerificationError::Deserialization);
         }
         if (num_elements - 2) % 2 != 0 {
-            return Err(RangeProofVerificationError::Deserialization.into());
+            return Err(RangeProofVerificationError::Deserialization);
         }
         let lg_n = (num_elements - 2) / 2;
         if lg_n >= 32 {
-            return Err(RangeProofVerificationError::Deserialization.into());
+            return Err(RangeProofVerificationError::Deserialization);
         }
 
         let mut L_vec: Vec<CompressedRistretto> = Vec::with_capacity(lg_n);
