@@ -962,12 +962,12 @@ impl ClusterInfo {
         }
     }
 
-    pub fn push_restart_last_voted_fork_slots(&self, update: &[Slot], last_vote_bankhash: Hash) {
+    pub fn push_restart_last_voted_fork_slots(&self, fork: &[Slot], last_vote_bankhash: Hash) {
         let now = timestamp();
         match RestartLastVotedForkSlots::new(
             self.id(),
             now,
-            update,
+            fork,
             last_vote_bankhash,
             self.my_shred_version(),
         ) {
