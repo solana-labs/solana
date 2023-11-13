@@ -396,9 +396,7 @@ impl BTreeMapTaskIds {
         }
 
         self.heaviest_task_cursor()
-            .find(|task| {
-                task.currently_contended()
-            })
+            .find(|task| task.currently_contended())
             .map(|task| Task::clone_in_queue(task))
     }
 }
