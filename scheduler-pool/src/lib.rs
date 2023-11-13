@@ -45,7 +45,7 @@ type CU = u64;
 type Tasks = BTreeMapTaskIds;
 #[derive(Debug, Default)]
 pub struct BTreeMapTaskIds {
-    blocked_tx_queue: std::collections::BTreeMap<UniqueWeight, TaskInQueue>,
+    blocked_task_queue: std::collections::BTreeMap<UniqueWeight, TaskInQueue>,
 }
 
 // SchedulerPool must be accessed via dyn by solana-runtime code, because of its internal fields'
@@ -261,7 +261,7 @@ impl Task {
         for lock_attempt in &*this.lock_attempts_mut() {
             let mut page = lock_attempt.target_page_mut();
 
-            page.blocked_tx_queue.insert_task(Task::clone_in_queue(this));
+            page.blocked_task_queue.insert_task(Task::clone_in_queue(this));
             if lock_attempt.requested_usage == RequestedUsage::Writable {
                 page.write_task_ids.insert(this.unique_weight);
             }
@@ -356,7 +356,7 @@ pub enum RequestedUsage {
 pub struct Page {
     address_str: String,
     current_usage: Usage,
-    blocked_tx_queue: Tasks,
+    blocked_task_queue: Tasks,
     write_task_ids: std::collections::BTreeSet<UniqueWeight>,
 }
 
@@ -365,7 +365,7 @@ impl Page {
         Self {
             address_str: format!("{}", address),
             current_usage,
-            blocked_tx_queue: Default::default(),
+            blocked_task_queue: Default::default(),
             write_task_ids: Default::default(),
         }
     }
@@ -373,21 +373,21 @@ impl Page {
 
 impl BTreeMapTaskIds {
     pub fn insert_task(&mut self, task: TaskInQueue) {
-        let pre_existed = self.blocked_tx_queue.insert(task.unique_weight, task);
+        let pre_existed = self.blocked_task_queue.insert(task.unique_weight, task);
         assert!(pre_existed.is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
     }
 
     fn remove_task(&mut self, u: &UniqueWeight) {
-        let removed_entry = self.blocked_tx_queue.remove(u);
+        let removed_entry = self.blocked_task_queue.remove(u);
         assert!(removed_entry.is_some());
     }
 
     fn heaviest_task_cursor(&self) -> impl Iterator<Item = &TaskInQueue> {
-        self.blocked_tx_queue.values().rev()
+        self.blocked_task_queue.values().rev()
     }
 
     pub fn heaviest_weight(&mut self) -> Option<UniqueWeight> {
-        self.blocked_tx_queue.last_entry().map(|j| *j.key())
+        self.blocked_task_queue.last_entry().map(|j| *j.key())
     }
 
     fn reindex(&mut self, should_remove: bool, uq: &UniqueWeight) -> Option<TaskInQueue> {
@@ -419,7 +419,7 @@ type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
 #[derive(Default, Debug, Clone)]
 pub struct AddressBook {
     book: AddressMap,
-    retryable_tx_queue: WeightedTaskIds,
+    retryable_task_queue: WeightedTaskIds,
 }
 
 impl AddressBook {
@@ -430,7 +430,7 @@ impl AddressBook {
     ) {
         let tcuw = attempt
             .target_page_mut()
-            .blocked_tx_queue
+            .blocked_task_queue
             .heaviest_weight();
 
         let strictly_lockable = if tcuw.is_none() {
@@ -635,7 +635,7 @@ impl ExecutionEnvironment {
         for lock_attempt in self.finalized_lock_attempts.iter_mut() {
             let heaviest_uncontended = lock_attempt
                 .target_page_mut()
-                .blocked_tx_queue
+                .blocked_task_queue
                 .reindex(should_remove, &uq);
             lock_attempt.heaviest_uncontended = heaviest_uncontended;
 
@@ -1250,7 +1250,7 @@ impl ScheduleStage {
             TaskInQueue,
         >,
     > {
-        address_book.retryable_tx_queue.last_entry()
+        address_book.retryable_task_queue.last_entry()
     }
 
     fn select_next_task_to_lock<'a>(
@@ -1344,7 +1344,7 @@ impl ScheduleStage {
             {
                 if let Some(next_contended_task) = read_only_lock_attempt
                     .target_page_mut()
-                    .blocked_tx_queue
+                    .blocked_task_queue
                     .reindex(false, &next_task.unique_weight)
                 {
                     if !next_contended_task.currently_contended() {
@@ -1352,7 +1352,7 @@ impl ScheduleStage {
                     }
 
                     address_book
-                        .retryable_tx_queue
+                        .retryable_task_queue
                         .entry(next_contended_task.unique_weight)
                         .or_insert(next_contended_task);
                 }
@@ -1385,7 +1385,7 @@ impl ScheduleStage {
                 }
 
                 address_book
-                    .retryable_tx_queue
+                    .retryable_task_queue
                     .entry(uncontended_task.unique_weight)
                     .or_insert(uncontended_task);
             }
