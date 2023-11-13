@@ -1385,7 +1385,7 @@ impl ScheduleStage {
                     address_book
                         .retry_queue
                         .entry(uncontended_task.unique_weight)
-                        .or_insert(uncontended_task)
+                        .or_insert(uncontended_task);
                 }
             }
         }
