@@ -294,7 +294,7 @@ pub struct LockAttempt {
 }
 
 impl PageRc {
-    fn page_mut(&self) -> std::cell::RefMut<'_, Page> {
+    fn as_mut(&self) -> std::cell::RefMut<'_, Page> {
         self.0 .0 .0.borrow_mut()
     }
 }
@@ -317,7 +317,7 @@ impl LockAttempt {
     }
 
     fn target_page_mut(&self) -> std::cell::RefMut<'_, Page> {
-        self.page.page_mut()
+        self.page.as_mut()
     }
 }
 
@@ -453,7 +453,7 @@ impl AddressBook {
             status,
             ..
         } = attempt;
-        let mut page = page.page_mut();
+        let mut page = page.as_mut();
 
         match page.current_usage {
             Usage::Unused => {
