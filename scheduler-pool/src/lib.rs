@@ -1349,13 +1349,8 @@ impl ScheduleStage {
         }
     }
 
-    fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: &mut [LockAttempt]) {
+    fn unlock_after_execution(should_remove: bool, address_book: &mut AddressBook, lock_attempts: &mut [LockAttempt]) {
         let uq = self.task.unique_weight;
-        let should_remove = self
-            .task
-            .contention_count
-            .load(std::sync::atomic::Ordering::SeqCst)
-            > 0;
 
         for unlock_attempt in lock_attempts {
             let is_newly_uncontended = AddressBook::reset_lock(unlock_attempt);
@@ -1401,7 +1396,12 @@ impl ScheduleStage {
         ee.reindex_with_address_book();
 
         // which order for data race free?: unlocking / marking
-        Self::unlock_after_execution(address_book, &mut ee.finalized_lock_attempts);
+        let should_remove = ee
+            .task
+            .contention_count
+            .load(std::sync::atomic::Ordering::SeqCst)
+            > 0;
+        Self::unlock_after_execution(should_remove, address_book, &mut ee.finalized_lock_attempts);
     }
 
     fn schedule_next_execution(
