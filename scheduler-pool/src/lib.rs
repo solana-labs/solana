@@ -440,6 +440,7 @@ impl AddressBook {
         } else {
             false
         };
+        drop(page);
 
         if !strictly_lockable {
             attempt.status = LockStatus::Failed;
