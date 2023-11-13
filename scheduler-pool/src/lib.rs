@@ -262,7 +262,7 @@ impl Task {
             lock_attempt
                 .target_page_mut()
                 .task_ids
-                .insert_task(this.unique_weight, Task::clone_in_queue(this));
+                .insert_task(Task::clone_in_queue(this));
 
             if lock_attempt.requested_usage == RequestedUsage::Writable {
                 lock_attempt
@@ -387,8 +387,8 @@ impl Page {
 }
 
 impl BTreeMapTaskIds {
-    pub fn insert_task(&mut self, u: UniqueWeight, task: TaskInQueue) {
-        let pre_existed = self.task_ids.insert(u, task);
+    pub fn insert_task(&mut self, task: TaskInQueue) {
+        let pre_existed = self.task_ids.insert(task.unique_weight, task);
         assert!(pre_existed.is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
     }
 
