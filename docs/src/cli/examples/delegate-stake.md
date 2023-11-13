@@ -7,7 +7,7 @@ For an overview of staking, read first the
 
 ---
 
-After you have [received SOL](transfer-tokens.md), you might consider putting it
+After you have [received SOL](./transfer-tokens.md), you might consider putting it
 to use by delegating _stake_ to a validator. Stake is what we call tokens in a
 _stake account_. Solana weights validator votes by the amount of stake delegated
 to them, which gives those validators more influence in determining then next
