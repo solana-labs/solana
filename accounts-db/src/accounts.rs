@@ -19,27 +19,20 @@ use {
     dashmap::DashMap,
     log::*,
     solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount},
+        account::{AccountSharedData, ReadableAccount},
         account_utils::StateMut,
         address_lookup_table::{self, error::AddressLookupError, state::AddressLookupTable},
         clock::{BankId, Slot},
         genesis_config::ClusterType,
         message::{
             v0::{LoadedAddresses, MessageAddressTableLookup},
-            SanitizedMessage,
         },
         nonce::{
             state::{DurableNonce, Versions as NonceVersions},
             State as NonceState,
         },
         pubkey::Pubkey,
-<<<<<<< HEAD
-        rent::RentDue,
-        saturating_add_assign,
-=======
->>>>>>> 77129f4b5 (Move load_accounts to runtime)
         slot_hashes::SlotHashes,
-        sysvar::{self, instructions::construct_instructions_data},
         transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
         transaction_context::{IndexOfAccount, TransactionAccount},
     },
@@ -210,14 +203,7 @@ impl Accounts {
         }
     }
 
-    pub fn construct_instructions_account(message: &SanitizedMessage) -> AccountSharedData {
-        AccountSharedData::from(Account {
-            data: construct_instructions_data(&message.decompile_instructions()),
-            owner: sysvar::id(),
-            ..Account::default()
-        })
-    }
-    
+
     pub fn load_lookup_table_addresses(
         &self,
         ancestors: &Ancestors,
@@ -971,94 +957,6 @@ mod tests {
         }
     }
 
-<<<<<<< HEAD
-    fn load_accounts_with_fee_and_rent(
-        tx: Transaction,
-        ka: &[TransactionAccount],
-        lamports_per_signature: u64,
-        rent_collector: &RentCollector,
-        error_counters: &mut TransactionErrorMetrics,
-        feature_set: &FeatureSet,
-        fee_structure: &FeeStructure,
-    ) -> Vec<TransactionLoadResult> {
-        let mut hash_queue = BlockhashQueue::new(100);
-        hash_queue.register_hash(&tx.message().recent_blockhash, lamports_per_signature);
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
-        for ka in ka.iter() {
-            accounts.store_for_tests(0, &ka.0, &ka.1);
-        }
-
-        let ancestors = vec![(0, 0)].into_iter().collect();
-        let sanitized_tx = SanitizedTransaction::from_transaction_for_tests(tx);
-        accounts.load_accounts(
-            &ancestors,
-            &[sanitized_tx],
-            vec![(Ok(()), None)],
-            &hash_queue,
-            error_counters,
-            rent_collector,
-            feature_set,
-            fee_structure,
-            None,
-            RewardInterval::OutsideInterval,
-            &HashMap::new(),
-            &LoadedProgramsForTxBatch::default(),
-            true,
-        )
-    }
-
-    /// get a feature set with all features activated
-    /// with the optional except of 'exclude'
-    fn all_features_except(exclude: Option<&[Pubkey]>) -> FeatureSet {
-        let mut features = FeatureSet::all_enabled();
-        if let Some(exclude) = exclude {
-            features.active.retain(|k, _v| !exclude.contains(k));
-        }
-        features
-    }
-
-    fn load_accounts_with_fee(
-        tx: Transaction,
-        ka: &[TransactionAccount],
-        lamports_per_signature: u64,
-        error_counters: &mut TransactionErrorMetrics,
-        exclude_features: Option<&[Pubkey]>,
-    ) -> Vec<TransactionLoadResult> {
-        load_accounts_with_fee_and_rent(
-            tx,
-            ka,
-            lamports_per_signature,
-            &RentCollector::default(),
-            error_counters,
-            &all_features_except(exclude_features),
-            &FeeStructure::default(),
-        )
-    }
-
-    fn load_accounts(
-        tx: Transaction,
-        ka: &[TransactionAccount],
-        error_counters: &mut TransactionErrorMetrics,
-    ) -> Vec<TransactionLoadResult> {
-        load_accounts_with_fee(tx, ka, 0, error_counters, None)
-    }
-
-    fn load_accounts_with_excluded_features(
-        tx: Transaction,
-        ka: &[TransactionAccount],
-        error_counters: &mut TransactionErrorMetrics,
-        exclude_features: Option<&[Pubkey]>,
-    ) -> Vec<TransactionLoadResult> {
-        load_accounts_with_fee(tx, ka, 0, error_counters, exclude_features)
-    }
-
-=======
->>>>>>> 77129f4b5 (Move load_accounts to runtime)
     #[test]
     fn test_hold_range_in_memory() {
         let accts = Accounts::default_for_tests();
@@ -1880,99 +1778,6 @@ mod tests {
         accounts.accounts_db.clean_accounts_for_tests();
     }
 
-<<<<<<< HEAD
-    fn load_accounts_no_store(
-        accounts: &Accounts,
-        tx: Transaction,
-        account_overrides: Option<&AccountOverrides>,
-    ) -> Vec<TransactionLoadResult> {
-        let tx = SanitizedTransaction::from_transaction_for_tests(tx);
-        let rent_collector = RentCollector::default();
-        let mut hash_queue = BlockhashQueue::new(100);
-        hash_queue.register_hash(tx.message().recent_blockhash(), 10);
-
-        let ancestors = vec![(0, 0)].into_iter().collect();
-        let mut error_counters = TransactionErrorMetrics::default();
-        accounts.load_accounts(
-            &ancestors,
-            &[tx],
-            vec![(Ok(()), None)],
-            &hash_queue,
-            &mut error_counters,
-            &rent_collector,
-            &FeatureSet::all_enabled(),
-            &FeeStructure::default(),
-            account_overrides,
-            RewardInterval::OutsideInterval,
-            &HashMap::new(),
-            &LoadedProgramsForTxBatch::default(),
-            true,
-        )
-    }
-
-    #[test]
-    fn test_instructions() {
-        solana_logger::setup();
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
-
-        let instructions_key = solana_sdk::sysvar::instructions::id();
-        let keypair = Keypair::new();
-        let instructions = vec![CompiledInstruction::new(1, &(), vec![0, 1])];
-        let tx = Transaction::new_with_compiled_instructions(
-            &[&keypair],
-            &[solana_sdk::pubkey::new_rand(), instructions_key],
-            Hash::default(),
-            vec![native_loader::id()],
-            instructions,
-        );
-
-        let loaded_accounts = load_accounts_no_store(&accounts, tx, None);
-        assert_eq!(loaded_accounts.len(), 1);
-        assert!(loaded_accounts[0].0.is_err());
-    }
-
-    #[test]
-    fn test_overrides() {
-        solana_logger::setup();
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
-        let mut account_overrides = AccountOverrides::default();
-        let slot_history_id = sysvar::slot_history::id();
-        let account = AccountSharedData::new(42, 0, &Pubkey::default());
-        account_overrides.set_slot_history(Some(account));
-
-        let keypair = Keypair::new();
-        let account = AccountSharedData::new(1_000_000, 0, &Pubkey::default());
-        accounts.store_slow_uncached(0, &keypair.pubkey(), &account);
-
-        let instructions = vec![CompiledInstruction::new(2, &(), vec![0])];
-        let tx = Transaction::new_with_compiled_instructions(
-            &[&keypair],
-            &[slot_history_id],
-            Hash::default(),
-            vec![native_loader::id()],
-            instructions,
-        );
-
-        let loaded_accounts = load_accounts_no_store(&accounts, tx, Some(&account_overrides));
-        assert_eq!(loaded_accounts.len(), 1);
-        let loaded_transaction = loaded_accounts[0].0.as_ref().unwrap();
-        assert_eq!(loaded_transaction.accounts[0].0, keypair.pubkey());
-        assert_eq!(loaded_transaction.accounts[1].0, slot_history_id);
-        assert_eq!(loaded_transaction.accounts[1].1.lamports(), 42);
-    }
-
-=======
->>>>>>> 77129f4b5 (Move load_accounts to runtime)
     fn create_accounts_prepare_if_nonce_account() -> (
         Pubkey,
         AccountSharedData,

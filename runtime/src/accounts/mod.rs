@@ -7,7 +7,7 @@ use {
     solana_accounts_db::{
         account_overrides::AccountOverrides,
         accounts::{
-            Accounts, LoadedTransaction, RewardInterval, TransactionLoadResult, TransactionRent,
+            LoadedTransaction, RewardInterval, TransactionLoadResult, TransactionRent,
         },
         accounts_db::AccountsDb,
         ancestors::Ancestors,
@@ -23,7 +23,7 @@ use {
         loaded_programs::LoadedProgramsForTxBatch,
     },
     solana_sdk::{
-        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         feature_set::{
@@ -32,10 +32,12 @@ use {
             simplify_writable_program_account_check, FeatureSet,
         },
         fee::FeeStructure,
+        message::SanitizedMessage,
         native_loader,
         nonce::State as NonceState,
         pubkey::Pubkey,
         saturating_add_assign,
+        sysvar::{self, instructions::construct_instructions_data},
         transaction::{Result, SanitizedTransaction, TransactionError},
         transaction_context::IndexOfAccount,
     },
@@ -180,7 +182,7 @@ fn load_transaction_accounts(
             let mut account_found = true;
             #[allow(clippy::collapsible_else_if)]
             let account = if solana_sdk::sysvar::instructions::check_id(key) {
-                Accounts::construct_instructions_account(message)
+                construct_instructions_account(message)
             } else {
                 let instruction_account = u8::try_from(i)
                     .map(|i| instruction_accounts.contains(&&i))
@@ -532,6 +534,14 @@ fn validate_fee_payer(
     )
 }
 
+pub fn construct_instructions_account(message: &SanitizedMessage) -> AccountSharedData {
+    AccountSharedData::from(Account {
+        data: construct_instructions_data(&message.decompile_instructions()),
+        owner: sysvar::id(),
+        ..Account::default()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use {
@@ -540,6 +550,7 @@ mod tests {
         solana_accounts_db::{
             accounts_db::AccountShrinkThreshold, accounts_index::AccountSecondaryIndexes,
             rent_collector::RentCollector,
+            accounts::Accounts,
         },
         solana_program_runtime::{
             compute_budget_processor,
