@@ -5,21 +5,9 @@ use {
         banking_trace::BankingTracer,
         cache_block_meta_service::CacheBlockMetaSender,
         cluster_info_vote_listener::{
-            DuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VoteTracker,
+            DuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver,
         },
         commitment_service::{AggregateCommitmentService, CommitmentAggregationData},
-        consensus::{
-            cluster_slots::ClusterSlots,
-            cluster_slots_service::ClusterSlotsUpdateSender,
-            fork_choice::{ForkChoice, HeaviestForkFailures, SelectVoteAndResetForkResult},
-            heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
-            latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
-            progress_map::{ForkProgress, ProgressMap, PropagatedStats, ReplaySlotStats},
-            tower_storage::{SavedTower, SavedTowerVersions, TowerStorage},
-            vote_stake_tracker::initialize_progress_and_fork_choice,
-            ComputedBankState, Stake, SwitchForkDecision, ThresholdDecision, Tower, VotedStakes,
-            SUPERMINORITY_THRESHOLD, SWITCH_FORK_THRESHOLD,
-        },
         cost_update_service::CostUpdate,
         repair::{
             ancestor_hashes_service::AncestorHashesReplayUpdateSender,
@@ -37,6 +25,20 @@ use {
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     lazy_static::lazy_static,
     rayon::{prelude::*, ThreadPool},
+    solana_consensus::{
+        cluster_slots::ClusterSlots,
+        cluster_slots_service::ClusterSlotsUpdateSender,
+        consensus::{
+            ComputedBankState, Stake, SwitchForkDecision, ThresholdDecision, Tower, VotedStakes,
+            SUPERMINORITY_THRESHOLD, SWITCH_FORK_THRESHOLD,
+        },
+        fork_choice::ForkChoice,
+        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+        latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
+        progress_map::{ForkProgress, ProgressMap, PropagatedStats, ReplaySlotStats},
+        tower_storage::{SavedTower, SavedTowerVersions, TowerStorage},
+        vote_stake_tracker::VoteTracker,
+    },
     solana_entry::entry::VerifyRecyclers,
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierArc,
     solana_gossip::cluster_info::ClusterInfo,
@@ -81,6 +83,7 @@ use {
     solana_vote_program::vote_state::VoteTransaction,
     std::{
         collections::{HashMap, HashSet},
+        ops::Deref,
         result,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
@@ -93,8 +96,6 @@ use {
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
 pub const MAX_UNCONFIRMED_SLOTS: usize = 5;
-pub const DUPLICATE_LIVENESS_THRESHOLD: f64 = 0.1;
-pub const DUPLICATE_THRESHOLD: f64 = 1.0 - SWITCH_FORK_THRESHOLD - DUPLICATE_LIVENESS_THRESHOLD;
 const MAX_VOTE_SIGNATURES: usize = 200;
 const MAX_VOTE_REFRESH_INTERVAL_MILLIS: usize = 5000;
 // Expect this number to be small enough to minimize thread pool overhead while large enough
@@ -108,6 +109,32 @@ lazy_static! {
         .thread_name(|i| format!("solReplay{i:02}"))
         .build()
         .unwrap();
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub enum HeaviestForkFailures {
+    LockedOut(u64),
+    FailedThreshold(
+        Slot,
+        /* Observed stake */ u64,
+        /* Total stake */ u64,
+    ),
+    FailedSwitchThreshold(
+        Slot,
+        /* Observed stake */ u64,
+        /* Total stake */ u64,
+    ),
+    NoPropagatedConfirmation(
+        Slot,
+        /* Observed stake */ u64,
+        /* Total stake */ u64,
+    ),
+}
+
+pub struct SelectVoteAndResetForkResult {
+    pub vote_bank: Option<(Arc<Bank>, SwitchForkDecision)>,
+    pub reset_bank: Option<Arc<Bank>>,
+    pub heaviest_fork_failures: Vec<HeaviestForkFailures>,
 }
 
 // Implement a destructor for the ReplayStage thread to signal it exited
@@ -927,7 +954,7 @@ impl ReplayStage {
                                 })
                                 .unwrap_or_else(|err| {
                                     if err.is_file_missing() {
-                                        Tower::new_from_bankforks(
+                                        Self::new_tower_from_bankforks(
                                             &bank_forks.read().unwrap(),
                                             &my_pubkey,
                                             &vote_account,
@@ -1217,13 +1244,45 @@ impl ReplayStage {
             )
         };
 
-        initialize_progress_and_fork_choice(
+        Self::initialize_progress_and_fork_choice(
             &root_bank,
             frozen_banks,
             my_pubkey,
             vote_account,
             duplicate_slot_hashes,
         )
+    }
+
+    pub fn initialize_progress_and_fork_choice(
+        root_bank: &Bank,
+        mut frozen_banks: Vec<Arc<Bank>>,
+        my_pubkey: &Pubkey,
+        vote_account: &Pubkey,
+        duplicate_slot_hashes: Vec<(Slot, Hash)>,
+    ) -> (ProgressMap, HeaviestSubtreeForkChoice) {
+        let mut progress = ProgressMap::default();
+
+        frozen_banks.sort_by_key(|bank| bank.slot());
+
+        // Initialize progress map with any root banks
+        for bank in &frozen_banks {
+            let prev_leader_slot = progress.get_bank_prev_leader_slot(bank);
+            progress.insert(
+                bank.slot(),
+                ForkProgress::new_from_bank(bank, my_pubkey, vote_account, prev_leader_slot, 0, 0),
+            );
+        }
+        let root = root_bank.slot();
+        let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_frozen_banks(
+            (root, root_bank.hash()),
+            &frozen_banks,
+        );
+
+        for slot_hash in duplicate_slot_hashes {
+            heaviest_subtree_fork_choice.mark_fork_invalid_candidate(&slot_hash);
+        }
+
+        (progress, heaviest_subtree_fork_choice)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -4007,6 +4066,31 @@ impl ReplayStage {
         Bank::new_from_parent_with_options(parent, leader, slot, new_bank_options)
     }
 
+    pub fn new_tower_from_bankforks(
+        bank_forks: &BankForks,
+        node_pubkey: &Pubkey,
+        vote_account: &Pubkey,
+    ) -> Tower {
+        let root_bank = bank_forks.root_bank();
+        let (_progress, heaviest_subtree_fork_choice) = Self::initialize_progress_and_fork_choice(
+            root_bank.deref(),
+            bank_forks.frozen_banks().values().cloned().collect(),
+            node_pubkey,
+            vote_account,
+            vec![],
+        );
+        let root = root_bank.slot();
+
+        let (best_slot, best_hash) = heaviest_subtree_fork_choice.best_overall_slot();
+        let heaviest_bank = bank_forks
+            .get_with_checked_hash((best_slot, best_hash))
+            .expect(
+                "The best overall slot must be one of `frozen_banks` which all exist in bank_forks",
+            );
+
+        Tower::new(node_pubkey, vote_account, root, &heaviest_bank)
+    }
+
     fn record_rewards(bank: &Bank, rewards_recorder_sender: &Option<RewardsRecorderSender>) {
         if let Some(rewards_recorder_sender) = rewards_recorder_sender {
             let rewards = bank.rewards.read().unwrap();
@@ -4043,17 +4127,17 @@ pub(crate) mod tests {
     use {
         super::*,
         crate::{
-            consensus::{
-                progress_map::{ValidatorStakeInfo, RETRANSMIT_BASE_DELAY_MS},
-                tower_storage::NullTowerStorage,
-                tree_diff::TreeDiff,
-                Tower,
-            },
             replay_stage::ReplayStage,
             vote_simulator::{self, VoteSimulator},
         },
         crossbeam_channel::unbounded,
         itertools::Itertools,
+        solana_consensus::{
+            consensus::Tower,
+            progress_map::{ValidatorStakeInfo, RETRANSMIT_BASE_DELAY_MS},
+            tower_storage::NullTowerStorage,
+            tree_diff::TreeDiff,
+        },
         solana_entry::entry::{self, Entry},
         solana_gossip::{cluster_info::Node, crds::Cursor},
         solana_ledger::{
@@ -4187,7 +4271,7 @@ pub(crate) mod tests {
 
         // Tower
         let my_vote_pubkey = my_keypairs.vote_keypair.pubkey();
-        let tower = Tower::new_from_bankforks(
+        let tower = ReplayStage::new_tower_from_bankforks(
             &bank_forks.read().unwrap(),
             &cluster_info.id(),
             &my_vote_pubkey,

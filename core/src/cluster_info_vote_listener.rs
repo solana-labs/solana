@@ -1,9 +1,7 @@
 use {
     crate::{
         banking_trace::{BankingPacketBatch, BankingPacketSender},
-        consensus::vote_stake_tracker::SlotVoteTracker,
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
-        replay_stage::DUPLICATE_THRESHOLD,
         result::{Error, Result},
         sigverify,
         verified_vote_packets::{
@@ -12,6 +10,7 @@ use {
     },
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Select, Sender},
     log::*,
+    solana_consensus::{consensus::DUPLICATE_THRESHOLD, vote_stake_tracker::VoteTracker},
     solana_gossip::{
         cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
         crds::Cursor,
@@ -70,55 +69,6 @@ pub type DuplicateConfirmedSlotsReceiver = Receiver<ThresholdConfirmedSlots>;
 
 const THRESHOLDS_TO_CHECK: [f64; 2] = [DUPLICATE_THRESHOLD, VOTE_THRESHOLD_SIZE];
 const BANK_SEND_VOTES_LOOP_SLEEP_MS: u128 = 10;
-
-#[derive(Default)]
-pub struct VoteTracker {
-    // Map from a slot to a set of validators who have voted for that slot
-    slot_vote_trackers: RwLock<HashMap<Slot, Arc<RwLock<SlotVoteTracker>>>>,
-}
-
-impl VoteTracker {
-    fn get_or_insert_slot_tracker(&self, slot: Slot) -> Arc<RwLock<SlotVoteTracker>> {
-        if let Some(slot_vote_tracker) = self.slot_vote_trackers.read().unwrap().get(&slot) {
-            return slot_vote_tracker.clone();
-        }
-        let mut slot_vote_trackers = self.slot_vote_trackers.write().unwrap();
-        slot_vote_trackers.entry(slot).or_default().clone()
-    }
-
-    pub(crate) fn get_slot_vote_tracker(&self, slot: Slot) -> Option<Arc<RwLock<SlotVoteTracker>>> {
-        self.slot_vote_trackers.read().unwrap().get(&slot).cloned()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn insert_vote(&self, slot: Slot, pubkey: Pubkey) {
-        let mut w_slot_vote_trackers = self.slot_vote_trackers.write().unwrap();
-
-        let slot_vote_tracker = w_slot_vote_trackers.entry(slot).or_default();
-
-        let mut w_slot_vote_tracker = slot_vote_tracker.write().unwrap();
-
-        w_slot_vote_tracker.voted.insert(pubkey, true);
-        if let Some(ref mut voted_slot_updates) = w_slot_vote_tracker.voted_slot_updates {
-            voted_slot_updates.push(pubkey)
-        } else {
-            w_slot_vote_tracker.voted_slot_updates = Some(vec![pubkey]);
-        }
-    }
-
-    fn purge_stale_state(&self, root_bank: &Bank) {
-        // Purge any outdated slot data
-        let new_root = root_bank.slot();
-        self.slot_vote_trackers
-            .write()
-            .unwrap()
-            .retain(|slot, _| *slot >= new_root);
-    }
-
-    fn progress_with_new_root_bank(&self, root_bank: &Bank) {
-        self.purge_stale_state(root_bank);
-    }
-}
 
 struct BankVoteSenderState {
     bank: Arc<Bank>,
@@ -909,18 +859,10 @@ mod tests {
         // the ref count, which would prevent cleanup
         let new_voter_ = new_voter;
         vote_tracker.insert_vote(bank.slot(), new_voter_);
-        assert!(vote_tracker
-            .slot_vote_trackers
-            .read()
-            .unwrap()
-            .contains_key(&bank.slot()));
+        assert!(vote_tracker.get_slot_vote_tracker(bank.slot()).is_some());
         let bank1 = Bank::new_from_parent(bank.clone(), &Pubkey::default(), bank.slot() + 1);
         vote_tracker.progress_with_new_root_bank(&bank1);
-        assert!(!vote_tracker
-            .slot_vote_trackers
-            .read()
-            .unwrap()
-            .contains_key(&bank.slot()));
+        assert!(!vote_tracker.get_slot_vote_tracker(bank.slot()).is_some());
 
         // Check `keys` and `epoch_authorized_voters` are purged when new
         // root bank moves to the next epoch
@@ -1034,7 +976,7 @@ mod tests {
         .unwrap();
 
         // Should be no updates since everything was ignored
-        assert!(vote_tracker.slot_vote_trackers.read().unwrap().is_empty());
+        assert_eq!(vote_tracker.num_trackers(), 0);
     }
 
     fn send_vote_txs(

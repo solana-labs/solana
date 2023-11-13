@@ -7,15 +7,10 @@ use {
         admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
         banking_trace::{self, BankingTracer},
         cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
-        cluster_info_vote_listener::VoteTracker,
         completed_data_sets_service::CompletedDataSetsService,
-        consensus::{
-            reconcile_blockstore_roots_with_external_source,
-            tower_storage::{NullTowerStorage, TowerStorage},
-            ExternalRootSource, Result as ConsensusResult, Tower, TowerError,
-        },
         poh_timing_report_service::PohTimingReportService,
         repair::{self, serve_repair::ServeRepair, serve_repair_service::ServeRepairService},
+        replay_stage::ReplayStage,
         rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
         sample_performance_service::SamplePerformanceService,
         sigverify,
@@ -37,6 +32,14 @@ use {
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     },
     solana_client::connection_cache::{ConnectionCache, Protocol},
+    solana_consensus::{
+        consensus::{
+            reconcile_blockstore_roots_with_external_source, ExternalRootSource,
+            Result as ConsensusResult, Tower, TowerError, WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT,
+        },
+        tower_storage::{NullTowerStorage, TowerStorage},
+        vote_stake_tracker::VoteTracker,
+    },
     solana_entry::poh::compute_hash_time_ns,
     solana_geyser_plugin_manager::{
         geyser_plugin_service::GeyserPluginService, GeyserPluginManagerRequest,
@@ -137,7 +140,6 @@ use {
 };
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
-const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
 
 #[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
 #[strum(serialize_all = "kebab-case")]
@@ -1665,7 +1667,7 @@ fn post_process_restored_tower(
                 );
             }
 
-            Tower::new_from_bankforks(bank_forks, validator_identity, vote_account)
+            ReplayStage::new_tower_from_bankforks(bank_forks, validator_identity, vote_account)
         }
     };
 

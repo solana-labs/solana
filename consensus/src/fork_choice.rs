@@ -1,41 +1,15 @@
 use {
-    crate::consensus::{
+    crate::{
+        consensus::Tower,
         latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
-        progress_map::ProgressMap, SwitchForkDecision, Tower,
+        progress_map::ProgressMap,
     },
     solana_runtime::{bank::Bank, bank_forks::BankForks},
-    solana_sdk::slot_history::Slot,
     std::{
         collections::{HashMap, HashSet},
         sync::{Arc, RwLock},
     },
 };
-
-#[derive(PartialEq, Eq, Debug)]
-pub enum HeaviestForkFailures {
-    LockedOut(u64),
-    FailedThreshold(
-        Slot,
-        /* Observed stake */ u64,
-        /* Total stake */ u64,
-    ),
-    FailedSwitchThreshold(
-        Slot,
-        /* Observed stake */ u64,
-        /* Total stake */ u64,
-    ),
-    NoPropagatedConfirmation(
-        Slot,
-        /* Observed stake */ u64,
-        /* Total stake */ u64,
-    ),
-}
-
-pub struct SelectVoteAndResetForkResult {
-    pub vote_bank: Option<(Arc<Bank>, SwitchForkDecision)>,
-    pub reset_bank: Option<Arc<Bank>>,
-    pub heaviest_fork_failures: Vec<HeaviestForkFailures>,
-}
 
 pub trait ForkChoice {
     type ForkChoiceKey;

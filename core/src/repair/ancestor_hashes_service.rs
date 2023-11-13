@@ -1,6 +1,5 @@
 use {
     crate::{
-        consensus::cluster_slots::ClusterSlots,
         repair::{
             duplicate_repair_status::{
                 AncestorRequestDecision, AncestorRequestStatus, AncestorRequestType,
@@ -14,12 +13,12 @@ use {
                 self, AncestorHashesRepairType, AncestorHashesResponse, RepairProtocol, ServeRepair,
             },
         },
-        replay_stage::DUPLICATE_THRESHOLD,
         shred_fetch_stage::receive_repair_quic_packets,
     },
     bincode::serialize,
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     dashmap::{mapref::entry::Entry::Occupied, DashMap},
+    solana_consensus::{cluster_slots::ClusterSlots, consensus::DUPLICATE_THRESHOLD},
     solana_gossip::{cluster_info::ClusterInfo, contact_info::Protocol, ping_pong::Pong},
     solana_ledger::blockstore::Blockstore,
     solana_perf::{

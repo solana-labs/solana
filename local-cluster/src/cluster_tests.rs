@@ -10,7 +10,7 @@ use {
         connection_cache::{ConnectionCache, Protocol},
         thin_client::ThinClient,
     },
-    solana_core::consensus::VOTE_THRESHOLD_DEPTH,
+    solana_consensus::consensus::VOTE_THRESHOLD_DEPTH,
     solana_entry::entry::{Entry, EntrySlice},
     solana_gossip::{
         cluster_info::{self, ClusterInfo},

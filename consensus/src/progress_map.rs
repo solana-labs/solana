@@ -1,7 +1,8 @@
 use {
-    crate::consensus::{
-        cluster_slots::SlotPubkeys, vote_stake_tracker::SlotVoteTracker, Stake, ThresholdDecision,
-        VotedStakes, SUPERMINORITY_THRESHOLD,
+    crate::{
+        cluster_slots::SlotPubkeys,
+        consensus::{Stake, ThresholdDecision, VotedStakes, SUPERMINORITY_THRESHOLD},
+        vote_stake_tracker::SlotVoteTracker,
     },
     solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
     solana_program_runtime::{report_execute_timings, timings::ExecuteTimingType},
@@ -166,8 +167,8 @@ pub const RETRANSMIT_BACKOFF_CAP: u32 = 6;
 
 #[derive(Debug)]
 pub struct RetransmitInfo {
-    pub(crate) retry_time: Instant,
-    pub(crate) retry_iteration: u32,
+    pub retry_time: Instant,
+    pub retry_iteration: u32,
 }
 
 impl RetransmitInfo {

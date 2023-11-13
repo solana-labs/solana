@@ -9,12 +9,12 @@ use {
         accounts_db::create_accounts_run_and_snapshot_dirs, hardened_unpack::open_genesis_config,
     },
     solana_client::thin_client::ThinClient,
+    solana_consensus::{
+        consensus::{Tower, DUPLICATE_THRESHOLD, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
+        tower_storage::FileTowerStorage,
+    },
     solana_core::{
-        consensus::{
-            tower_storage::FileTowerStorage, Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH,
-        },
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
-        replay_stage::DUPLICATE_THRESHOLD,
         validator::ValidatorConfig,
     },
     solana_download_utils::download_snapshot_archive,

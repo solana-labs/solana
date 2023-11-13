@@ -4942,6 +4942,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-consensus"
+version = "1.18.0"
+dependencies = [
+ "bincode",
+ "chrono",
+ "crossbeam-channel",
+ "eager",
+ "etcd-client",
+ "itertools",
+ "log",
+ "rustc_version",
+ "serde",
+ "serde_derive",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
+ "solana-gossip",
+ "solana-ledger",
+ "solana-measure",
+ "solana-metrics",
+ "solana-program-runtime",
+ "solana-runtime",
+ "solana-sdk",
+ "solana-streamer",
+ "solana-vote",
+ "solana-vote-program",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "trees",
+]
+
+[[package]]
 name = "solana-core"
 version = "1.18.0"
 dependencies = [
@@ -4977,6 +5009,7 @@ dependencies = [
  "solana-accounts-db",
  "solana-bloom",
  "solana-client",
+ "solana-consensus",
  "solana-cost-model",
  "solana-entry",
  "solana-frozen-abi",
@@ -6381,6 +6414,7 @@ dependencies = [
  "solana-accounts-db",
  "solana-cli-output",
  "solana-client",
+ "solana-consensus",
  "solana-core",
  "solana-geyser-plugin-manager",
  "solana-gossip",
@@ -6535,6 +6569,7 @@ dependencies = [
  "solana-accounts-db",
  "solana-clap-utils",
  "solana-cli-config",
+ "solana-consensus",
  "solana-core",
  "solana-download-utils",
  "solana-entry",

@@ -1,14 +1,9 @@
 use {
-    crate::consensus::{
-        fork_choice::ForkChoice,
-        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
-        progress_map::{ForkProgress, ProgressMap},
-    },
     solana_runtime::bank::Bank,
     solana_sdk::{hash::Hash, pubkey::Pubkey, slot_history::Slot},
     std::{
         collections::{HashMap, HashSet},
-        sync::Arc,
+        sync::{Arc, RwLock},
     },
 };
 
@@ -70,46 +65,70 @@ pub struct SlotVoteTracker {
 }
 
 impl SlotVoteTracker {
-    pub(crate) fn get_voted_slot_updates(&mut self) -> Option<Vec<Pubkey>> {
+    pub fn get_voted_slot_updates(&mut self) -> Option<Vec<Pubkey>> {
         self.voted_slot_updates.take()
     }
 
     pub fn get_or_insert_optimistic_votes_tracker(&mut self, hash: Hash) -> &mut VoteStakeTracker {
         self.optimistic_votes_tracker.entry(hash).or_default()
     }
-    pub(crate) fn optimistic_votes_tracker(&self, hash: &Hash) -> Option<&VoteStakeTracker> {
+    pub fn optimistic_votes_tracker(&self, hash: &Hash) -> Option<&VoteStakeTracker> {
         self.optimistic_votes_tracker.get(hash)
     }
 }
 
-pub fn initialize_progress_and_fork_choice(
-    root_bank: &Bank,
-    mut frozen_banks: Vec<Arc<Bank>>,
-    my_pubkey: &Pubkey,
-    vote_account: &Pubkey,
-    duplicate_slot_hashes: Vec<(Slot, Hash)>,
-) -> (ProgressMap, HeaviestSubtreeForkChoice) {
-    let mut progress = ProgressMap::default();
+#[derive(Default)]
+pub struct VoteTracker {
+    // Map from a slot to a set of validators who have voted for that slot
+    slot_vote_trackers: RwLock<HashMap<Slot, Arc<RwLock<SlotVoteTracker>>>>,
+}
 
-    frozen_banks.sort_by_key(|bank| bank.slot());
-
-    // Initialize progress map with any root banks
-    for bank in &frozen_banks {
-        let prev_leader_slot = progress.get_bank_prev_leader_slot(bank);
-        progress.insert(
-            bank.slot(),
-            ForkProgress::new_from_bank(bank, my_pubkey, vote_account, prev_leader_slot, 0, 0),
-        );
-    }
-    let root = root_bank.slot();
-    let mut heaviest_subtree_fork_choice =
-        HeaviestSubtreeForkChoice::new_from_frozen_banks((root, root_bank.hash()), &frozen_banks);
-
-    for slot_hash in duplicate_slot_hashes {
-        heaviest_subtree_fork_choice.mark_fork_invalid_candidate(&slot_hash);
+impl VoteTracker {
+    pub fn get_or_insert_slot_tracker(&self, slot: Slot) -> Arc<RwLock<SlotVoteTracker>> {
+        if let Some(slot_vote_tracker) = self.slot_vote_trackers.read().unwrap().get(&slot) {
+            return slot_vote_tracker.clone();
+        }
+        let mut slot_vote_trackers = self.slot_vote_trackers.write().unwrap();
+        slot_vote_trackers.entry(slot).or_default().clone()
     }
 
-    (progress, heaviest_subtree_fork_choice)
+    pub fn get_slot_vote_tracker(&self, slot: Slot) -> Option<Arc<RwLock<SlotVoteTracker>>> {
+        self.slot_vote_trackers.read().unwrap().get(&slot).cloned()
+    }
+
+    /// pub for tests
+    pub fn insert_vote(&self, slot: Slot, pubkey: Pubkey) {
+        let mut w_slot_vote_trackers = self.slot_vote_trackers.write().unwrap();
+
+        let slot_vote_tracker = w_slot_vote_trackers.entry(slot).or_default();
+
+        let mut w_slot_vote_tracker = slot_vote_tracker.write().unwrap();
+
+        w_slot_vote_tracker.voted.insert(pubkey, true);
+        if let Some(ref mut voted_slot_updates) = w_slot_vote_tracker.voted_slot_updates {
+            voted_slot_updates.push(pubkey)
+        } else {
+            w_slot_vote_tracker.voted_slot_updates = Some(vec![pubkey]);
+        }
+    }
+
+    fn purge_stale_state(&self, root_bank: &Bank) {
+        // Purge any outdated slot data
+        let new_root = root_bank.slot();
+        self.slot_vote_trackers
+            .write()
+            .unwrap()
+            .retain(|slot, _| *slot >= new_root);
+    }
+
+    pub fn progress_with_new_root_bank(&self, root_bank: &Bank) {
+        self.purge_stale_state(root_bank);
+    }
+
+    /// pub for tests
+    pub fn num_trackers(&self) -> usize {
+        self.slot_vote_trackers.read().unwrap().len()
+    }
 }
 
 #[cfg(test)]

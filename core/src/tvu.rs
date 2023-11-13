@@ -7,13 +7,8 @@ use {
         cache_block_meta_service::CacheBlockMetaSender,
         cluster_info_vote_listener::{
             DuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VerifiedVoteReceiver,
-            VoteTracker,
         },
         completed_data_sets_service::CompletedDataSetsSender,
-        consensus::{
-            cluster_slots::ClusterSlots, cluster_slots_service::ClusterSlotsService,
-            tower_storage::TowerStorage, Tower,
-        },
         cost_update_service::CostUpdateService,
         drop_bank_service::DropBankService,
         repair::{quic_endpoint::LocalRequest, repair_service::RepairInfo},
@@ -27,6 +22,10 @@ use {
     bytes::Bytes,
     crossbeam_channel::{unbounded, Receiver, Sender},
     solana_client::connection_cache::ConnectionCache,
+    solana_consensus::{
+        cluster_slots::ClusterSlots, cluster_slots_service::ClusterSlotsService, consensus::Tower,
+        tower_storage::TowerStorage, vote_stake_tracker::VoteTracker,
+    },
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierArc,
     solana_gossip::{
         cluster_info::ClusterInfo, duplicate_shred_handler::DuplicateShredHandler,
@@ -373,8 +372,8 @@ impl Tvu {
 pub mod tests {
     use {
         super::*,
-        crate::consensus::tower_storage::FileTowerStorage,
         serial_test::serial,
+        solana_consensus::tower_storage::FileTowerStorage,
         solana_gossip::cluster_info::{ClusterInfo, Node},
         solana_ledger::{
             blockstore::BlockstoreSignals,

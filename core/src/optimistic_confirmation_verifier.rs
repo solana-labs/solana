@@ -1,5 +1,5 @@
 use {
-    crate::cluster_info_vote_listener::VoteTracker,
+    solana_consensus::vote_stake_tracker::VoteTracker,
     solana_ledger::blockstore::Blockstore,
     solana_runtime::bank::Bank,
     solana_sdk::{clock::Slot, hash::Hash, timing::timestamp},

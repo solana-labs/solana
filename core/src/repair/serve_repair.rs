@@ -1,14 +1,11 @@
 use {
-    crate::{
-        consensus::cluster_slots::ClusterSlots,
-        repair::{
-            duplicate_repair_status::get_ancestor_hash_repair_sample_size,
-            quic_endpoint::{LocalRequest, RemoteRequest},
-            repair_response,
-            repair_service::{OutstandingShredRepairs, RepairStats, REPAIR_MS},
-            request_response::RequestResponse,
-            result::{Error, RepairVerifyError, Result},
-        },
+    crate::repair::{
+        duplicate_repair_status::get_ancestor_hash_repair_sample_size,
+        quic_endpoint::{LocalRequest, RemoteRequest},
+        repair_response,
+        repair_service::{OutstandingShredRepairs, RepairStats, REPAIR_MS},
+        request_response::RequestResponse,
+        result::{Error, RepairVerifyError, Result},
     },
     bincode::{serialize, Options},
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
@@ -17,6 +14,7 @@ use {
         distributions::{Distribution, WeightedError, WeightedIndex},
         Rng,
     },
+    solana_consensus::cluster_slots::ClusterSlots,
     solana_gossip::{
         cluster_info::{ClusterInfo, ClusterInfoError},
         contact_info::{LegacyContactInfo as ContactInfo, LegacyContactInfo, Protocol},

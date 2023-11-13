@@ -1,28 +1,15 @@
-pub mod cluster_slots;
-pub mod cluster_slots_service;
-pub mod fork_choice;
-pub mod heaviest_subtree_fork_choice;
-pub(crate) mod latest_validator_votes_for_frozen_banks;
-pub mod progress_map;
-mod tower1_14_11;
-mod tower1_7_14;
-pub mod tower_storage;
-pub mod tree_diff;
-pub mod vote_stake_tracker;
-
 use {
-    crate::consensus::{
+    crate::{
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
         progress_map::{LockoutIntervals, ProgressMap},
         tower1_14_11::Tower1_14_11,
         tower1_7_14::Tower1_7_14,
         tower_storage::{SavedTower, SavedTowerVersions, TowerStorage},
-        vote_stake_tracker::initialize_progress_and_fork_choice,
     },
     chrono::prelude::*,
     solana_ledger::{ancestor_iterator::AncestorIterator, blockstore::Blockstore, blockstore_db},
-    solana_runtime::{bank::Bank, bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE},
+    solana_runtime::{bank::Bank, commitment::VOTE_THRESHOLD_SIZE},
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
         hash::Hash,
@@ -43,15 +30,17 @@ use {
     std::{
         cmp::Ordering,
         collections::{HashMap, HashSet},
-        ops::{
-            Bound::{Included, Unbounded},
-            Deref,
-        },
+        ops::Bound::{Included, Unbounded},
     },
     thiserror::Error,
 };
 
+pub const DUPLICATE_LIVENESS_THRESHOLD: f64 = 0.1;
+pub const DUPLICATE_THRESHOLD: f64 = 1.0 - SWITCH_FORK_THRESHOLD - DUPLICATE_LIVENESS_THRESHOLD;
 pub const SUPERMINORITY_THRESHOLD: f64 = 1f64 / 3f64;
+pub const SWITCH_FORK_THRESHOLD: f64 = 0.38;
+pub const VOTE_THRESHOLD_DEPTH: usize = 8;
+pub const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Default)]
 pub enum ThresholdDecision {
@@ -146,16 +135,13 @@ impl SwitchForkDecision {
     }
 }
 
-pub const VOTE_THRESHOLD_DEPTH: usize = 8;
-pub const SWITCH_FORK_THRESHOLD: f64 = 0.38;
-
 pub type Result<T> = std::result::Result<T, TowerError>;
 
 pub type Stake = u64;
 pub type VotedStakes = HashMap<Slot, Stake>;
 pub type PubkeyVotes = Vec<(Pubkey, Slot)>;
 
-pub(crate) struct ComputedBankState {
+pub struct ComputedBankState {
     pub voted_stakes: VotedStakes,
     pub total_stake: Stake,
     #[allow(dead_code)]
@@ -219,7 +205,7 @@ pub struct Tower {
     pub node_pubkey: Pubkey,
     threshold_depth: usize,
     threshold_size: f64,
-    pub(crate) vote_state: VoteState,
+    pub vote_state: VoteState,
     last_vote: VoteTransaction,
     #[serde(skip)]
     // The blockhash used in the last vote transaction, may or may not equal the
@@ -275,7 +261,7 @@ impl Tower {
         tower
     }
 
-    #[cfg(test)]
+    /// pub for tests
     pub fn new_for_tests(threshold_depth: usize, threshold_size: f64) -> Self {
         Self {
             threshold_depth,
@@ -284,32 +270,7 @@ impl Tower {
         }
     }
 
-    pub fn new_from_bankforks(
-        bank_forks: &BankForks,
-        node_pubkey: &Pubkey,
-        vote_account: &Pubkey,
-    ) -> Self {
-        let root_bank = bank_forks.root_bank();
-        let (_progress, heaviest_subtree_fork_choice) = initialize_progress_and_fork_choice(
-            root_bank.deref(),
-            bank_forks.frozen_banks().values().cloned().collect(),
-            node_pubkey,
-            vote_account,
-            vec![],
-        );
-        let root = root_bank.slot();
-
-        let (best_slot, best_hash) = heaviest_subtree_fork_choice.best_overall_slot();
-        let heaviest_bank = bank_forks
-            .get_with_checked_hash((best_slot, best_hash))
-            .expect(
-                "The best overall slot must be one of `frozen_banks` which all exist in bank_forks",
-            );
-
-        Self::new(node_pubkey, vote_account, root, &heaviest_bank)
-    }
-
-    pub(crate) fn collect_vote_lockouts(
+    pub fn collect_vote_lockouts(
         vote_account_pubkey: &Pubkey,
         bank_slot: Slot,
         vote_accounts: &VoteAccountsHashMap,
@@ -524,7 +485,7 @@ impl Tower {
 
     /// If we've recently updated the vote state by applying a new vote
     /// or syncing from a bank, generate the proper last_vote.
-    pub(crate) fn update_last_vote_from_vote_state(&mut self, vote_hash: Hash) {
+    pub fn update_last_vote_from_vote_state(&mut self, vote_hash: Hash) {
         let mut new_vote = VoteTransaction::from(VoteStateUpdate::new(
             self.vote_state
                 .votes
@@ -571,7 +532,7 @@ impl Tower {
         }
     }
 
-    #[cfg(test)]
+    /// Used for tests
     pub fn record_vote(&mut self, slot: Slot, hash: Hash) -> Option<Slot> {
         self.record_bank_vote_and_update_lockouts(slot, hash)
     }
@@ -1009,7 +970,7 @@ impl Tower {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn check_switch_threshold(
+    pub fn check_switch_threshold(
         &mut self,
         switch_slot: Slot,
         ancestors: &HashMap<Slot, HashSet<u64>>,
@@ -1514,10 +1475,9 @@ pub fn reconcile_blockstore_roots_with_external_source(
 pub mod test {
     use {
         super::*,
-        crate::consensus::{
-            heaviest_subtree_fork_choice::SlotHashKey, tower_storage::FileTowerStorage,
-        },
+        crate::{heaviest_subtree_fork_choice::SlotHashKey, tower_storage::FileTowerStorage},
         itertools::Itertools,
+        solana_core::{replay_stage::HeaviestForkFailures, vote_simulator::VoteSimulator},
         solana_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path_auto_delete},
         solana_sdk::{
             account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -1537,6 +1497,7 @@ pub mod test {
             sync::Arc,
         },
         tempfile::TempDir,
+        trees::tr,
     };
 
     fn gen_stakes(stake_votes: &[(u64, &[u64])]) -> VoteAccountsHashMap {
@@ -1615,6 +1576,592 @@ pub mod test {
                 Hash::default()
             ))
         );
+    }
+
+    #[test]
+    fn test_simple_votes() {
+        use solana_consensus::consensus::Tower;
+        // Init state
+        let mut vote_simulator = VoteSimulator::new(1);
+        let node_pubkey = vote_simulator.node_pubkeys[0];
+        let mut tower = Tower::default();
+
+        // Create the tree of banks
+        let forks = tr(0) / (tr(1) / (tr(2) / (tr(3) / (tr(4) / tr(5)))));
+
+        // Set the voting behavior
+        let mut cluster_votes = HashMap::new();
+        let votes = vec![1, 2, 3, 4, 5];
+        cluster_votes.insert(node_pubkey, votes.clone());
+        vote_simulator.fill_bank_forks(forks, &cluster_votes, true);
+
+        // Simulate the votes
+        for vote in votes {
+            assert!(vote_simulator
+                .simulate_vote(vote, &node_pubkey, &mut tower,)
+                .is_empty());
+        }
+
+        for i in 1..5 {
+            assert_eq!(tower.vote_state.votes[i - 1].slot() as usize, i);
+            assert_eq!(
+                tower.vote_state.votes[i - 1].confirmation_count() as usize,
+                6 - i
+            );
+        }
+    }
+
+    #[test]
+    fn test_switch_threshold_duplicate_rollback() {
+        run_test_switch_threshold_duplicate_rollback(false);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_switch_threshold_duplicate_rollback_panic() {
+        run_test_switch_threshold_duplicate_rollback(true);
+    }
+
+    fn setup_switch_test(num_accounts: usize) -> (Arc<Bank>, VoteSimulator, u64) {
+        // Init state
+        assert!(num_accounts > 1);
+        let mut vote_simulator = VoteSimulator::new(num_accounts);
+        let bank0 = vote_simulator.bank_forks.read().unwrap().get(0).unwrap();
+        let total_stake = bank0.total_epoch_stake();
+        assert_eq!(
+            total_stake,
+            vote_simulator.validator_keypairs.len() as u64 * 10_000
+        );
+
+        // Create the tree of banks
+        let forks = tr(0)
+            / (tr(1)
+                / (tr(2)
+                    // Minor fork 1
+                    / (tr(10) / (tr(11) / (tr(12) / (tr(13) / (tr(14))))))
+                    / (tr(43)
+                        / (tr(44)
+                            // Minor fork 2
+                            / (tr(45) / (tr(46) / (tr(47) / (tr(48) / (tr(49) / (tr(50)))))))
+                            / (tr(110)))
+                        / tr(112))));
+
+        // Fill the BankForks according to the above fork structure
+        vote_simulator.fill_bank_forks(forks, &HashMap::new(), true);
+        for (_, fork_progress) in vote_simulator.progress.iter_mut() {
+            fork_progress.fork_stats.computed = true;
+        }
+
+        (bank0, vote_simulator, total_stake)
+    }
+
+    fn run_test_switch_threshold_duplicate_rollback(should_panic: bool) {
+        use solana_consensus::{
+            consensus::{SwitchForkDecision, Tower},
+            fork_choice::ForkChoice,
+        };
+        let (bank0, mut vote_simulator, total_stake) = setup_switch_test(2);
+        let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
+        let descendants = vote_simulator.bank_forks.read().unwrap().descendants();
+        let mut tower = Tower::default();
+
+        // Last vote is 47
+        tower.record_vote(
+            47,
+            vote_simulator
+                .bank_forks
+                .read()
+                .unwrap()
+                .get(47)
+                .unwrap()
+                .hash(),
+        );
+
+        // Trying to switch to an ancestor of last vote should only not panic
+        // if the current vote has a duplicate ancestor
+        let ancestor_of_voted_slot = 43;
+        let duplicate_ancestor1 = 44;
+        let duplicate_ancestor2 = 45;
+        vote_simulator
+            .heaviest_subtree_fork_choice
+            .mark_fork_invalid_candidate(&(
+                duplicate_ancestor1,
+                vote_simulator
+                    .bank_forks
+                    .read()
+                    .unwrap()
+                    .get(duplicate_ancestor1)
+                    .unwrap()
+                    .hash(),
+            ));
+        vote_simulator
+            .heaviest_subtree_fork_choice
+            .mark_fork_invalid_candidate(&(
+                duplicate_ancestor2,
+                vote_simulator
+                    .bank_forks
+                    .read()
+                    .unwrap()
+                    .get(duplicate_ancestor2)
+                    .unwrap()
+                    .hash(),
+            ));
+        assert_eq!(
+            tower.check_switch_threshold(
+                ancestor_of_voted_slot,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
+            ),
+            SwitchForkDecision::FailedSwitchDuplicateRollback(duplicate_ancestor2)
+        );
+        let mut confirm_ancestors = vec![duplicate_ancestor1];
+        if should_panic {
+            // Adding the last duplicate ancestor will
+            // 1) Cause loop below to confirm last ancestor
+            // 2) Check switch threshold on a vote ancestor when there
+            // are no duplicates on that fork, which will cause a panic
+            confirm_ancestors.push(duplicate_ancestor2);
+        }
+        for (i, duplicate_ancestor) in confirm_ancestors.into_iter().enumerate() {
+            vote_simulator
+                .heaviest_subtree_fork_choice
+                .mark_fork_valid_candidate(&(
+                    duplicate_ancestor,
+                    vote_simulator
+                        .bank_forks
+                        .read()
+                        .unwrap()
+                        .get(duplicate_ancestor)
+                        .unwrap()
+                        .hash(),
+                ));
+            let res = tower.check_switch_threshold(
+                ancestor_of_voted_slot,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
+            );
+            if i == 0 {
+                assert_eq!(
+                    res,
+                    SwitchForkDecision::FailedSwitchDuplicateRollback(duplicate_ancestor2)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_switch_threshold() {
+        use solana_consensus::consensus::{SwitchForkDecision, Tower};
+        let (bank0, mut vote_simulator, total_stake) = setup_switch_test(2);
+        let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
+        let mut descendants = vote_simulator.bank_forks.read().unwrap().descendants();
+        let mut tower = Tower::default();
+        let other_vote_account = vote_simulator.vote_pubkeys[1];
+
+        // Last vote is 47
+        tower.record_vote(47, Hash::default());
+
+        // Trying to switch to a descendant of last vote should always work
+        assert_eq!(
+            tower.check_switch_threshold(
+                48,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
+            ),
+            SwitchForkDecision::SameFork
+        );
+
+        // Trying to switch to another fork at 110 should fail
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
+            ),
+            SwitchForkDecision::FailedSwitchThreshold(0, 20000)
+        );
+
+        // Adding another validator lockout on a descendant of last vote should
+        // not count toward the switch threshold
+        vote_simulator.simulate_lockout_interval(50, (49, 100), &other_vote_account);
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
+            ),
+            SwitchForkDecision::FailedSwitchThreshold(0, 20000)
+        );
+
+        // Adding another validator lockout on an ancestor of last vote should
+        // not count toward the switch threshold
+        vote_simulator.simulate_lockout_interval(50, (45, 100), &other_vote_account);
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
+            ),
+            SwitchForkDecision::FailedSwitchThreshold(0, 20000)
+        );
+
+        // Adding another validator lockout on a different fork, but the lockout
+        // doesn't cover the last vote, should not satisfy the switch threshold
+        vote_simulator.simulate_lockout_interval(14, (12, 46), &other_vote_account);
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
+            ),
+            SwitchForkDecision::FailedSwitchThreshold(0, 20000)
+        );
+
+        // Adding another validator lockout on a different fork, and the lockout
+        // covers the last vote would count towards the switch threshold,
+        // unless the bank is not the most recent frozen bank on the fork (14 is a
+        // frozen/computed bank > 13 on the same fork in this case)
+        vote_simulator.simulate_lockout_interval(13, (12, 47), &other_vote_account);
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
+            ),
+            SwitchForkDecision::FailedSwitchThreshold(0, 20000)
+        );
+
+        // Adding another validator lockout on a different fork, and the lockout
+        // covers the last vote, should satisfy the switch threshold
+        vote_simulator.simulate_lockout_interval(14, (12, 47), &other_vote_account);
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
+            ),
+            SwitchForkDecision::SwitchProof(Hash::default())
+        );
+
+        // Adding another unfrozen descendant of the tip of 14 should not remove
+        // slot 14 from consideration because it is still the most recent frozen
+        // bank on its fork
+        descendants.get_mut(&14).unwrap().insert(10000);
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
+            ),
+            SwitchForkDecision::SwitchProof(Hash::default())
+        );
+
+        // If we set a root, then any lockout intervals below the root shouldn't
+        // count toward the switch threshold. This means the other validator's
+        // vote lockout no longer counts
+        tower.vote_state.root_slot = Some(43);
+        // Refresh ancestors and descendants for new root.
+        let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
+        let descendants = vote_simulator.bank_forks.read().unwrap().descendants();
+
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
+            ),
+            SwitchForkDecision::FailedSwitchThreshold(0, 20000)
+        );
+    }
+
+    #[test]
+    fn test_switch_threshold_use_gossip_votes() {
+        use solana_consensus::consensus::{SwitchForkDecision, Tower};
+        let num_validators = 2;
+        let (bank0, mut vote_simulator, total_stake) = setup_switch_test(2);
+        let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
+        let descendants = vote_simulator.bank_forks.read().unwrap().descendants();
+        let mut tower = Tower::default();
+        let other_vote_account = vote_simulator.vote_pubkeys[1];
+
+        // Last vote is 47
+        tower.record_vote(47, Hash::default());
+
+        // Trying to switch to another fork at 110 should fail
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
+            ),
+            SwitchForkDecision::FailedSwitchThreshold(0, num_validators * 10000)
+        );
+
+        // Adding a vote on the descendant shouldn't count toward the switch threshold
+        vote_simulator.simulate_lockout_interval(50, (49, 100), &other_vote_account);
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
+            ),
+            SwitchForkDecision::FailedSwitchThreshold(0, 20000)
+        );
+
+        // Adding a later vote from gossip that isn't on the same fork should count toward the
+        // switch threshold
+        vote_simulator
+            .latest_validator_votes_for_frozen_banks
+            .check_add_vote(
+                other_vote_account,
+                112,
+                Some(
+                    vote_simulator
+                        .bank_forks
+                        .read()
+                        .unwrap()
+                        .get(112)
+                        .unwrap()
+                        .hash(),
+                ),
+                false,
+            );
+
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
+            ),
+            SwitchForkDecision::SwitchProof(Hash::default())
+        );
+
+        // If we now set a root that causes slot 112 to be purged from BankForks, then
+        // the switch proof will now fail since that validator's vote can no longer be
+        // included in the switching proof
+        vote_simulator.set_root(44);
+        let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
+        let descendants = vote_simulator.bank_forks.read().unwrap().descendants();
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
+            ),
+            SwitchForkDecision::FailedSwitchThreshold(0, 20000)
+        );
+    }
+
+    #[test]
+    fn test_switch_threshold_votes() {
+        use solana_consensus::consensus::Tower;
+        // Init state
+        let mut vote_simulator = VoteSimulator::new(4);
+        let node_pubkey = vote_simulator.node_pubkeys[0];
+        let mut tower = Tower::default();
+        let forks = tr(0)
+            / (tr(1)
+                / (tr(2)
+                    // Minor fork 1
+                    / (tr(10) / (tr(11) / (tr(12) / (tr(13) / (tr(14))))))
+                    / (tr(43)
+                        / (tr(44)
+                            // Minor fork 2
+                            / (tr(45) / (tr(46))))
+                        / (tr(110)))));
+
+        // Have two validators, each representing 20% of the stake vote on
+        // minor fork 2 at slots 46 + 47
+        let mut cluster_votes: HashMap<Pubkey, Vec<Slot>> = HashMap::new();
+        cluster_votes.insert(vote_simulator.node_pubkeys[1], vec![46]);
+        cluster_votes.insert(vote_simulator.node_pubkeys[2], vec![47]);
+        vote_simulator.fill_bank_forks(forks, &cluster_votes, true);
+
+        // Vote on the first minor fork at slot 14, should succeed
+        assert!(vote_simulator
+            .simulate_vote(14, &node_pubkey, &mut tower,)
+            .is_empty());
+
+        // The other two validators voted at slots 46, 47, which
+        // will only both show up in slot 48, at which point
+        // 2/5 > SWITCH_FORK_THRESHOLD of the stake has voted
+        // on another fork, so switching should succeed
+        let votes_to_simulate = (46..=48).collect();
+        let results = vote_simulator.create_and_vote_new_branch(
+            45,
+            48,
+            &cluster_votes,
+            &votes_to_simulate,
+            &node_pubkey,
+            &mut tower,
+        );
+        assert_eq!(
+            *results.get(&46).unwrap(),
+            vec![HeaviestForkFailures::FailedSwitchThreshold(46, 0, 40000)]
+        );
+        assert_eq!(
+            *results.get(&47).unwrap(),
+            vec![HeaviestForkFailures::FailedSwitchThreshold(
+                47, 10000, 40000
+            )]
+        );
+        assert!(results.get(&48).unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_double_partition() {
+        use solana_consensus::consensus::Tower;
+        // Init state
+        let mut vote_simulator = VoteSimulator::new(2);
+        let node_pubkey = vote_simulator.node_pubkeys[0];
+        let vote_pubkey = vote_simulator.vote_pubkeys[0];
+        let mut tower = Tower::default();
+
+        let num_slots_to_try = 200;
+        // Create the tree of banks
+        let forks = tr(0)
+            / (tr(1)
+                / (tr(2)
+                    / (tr(3)
+                        / (tr(4)
+                            / (tr(5)
+                                / (tr(6)
+                                    / (tr(7)
+                                        / (tr(8)
+                                            / (tr(9)
+                                                // Minor fork 1
+                                                / (tr(10) / (tr(11) / (tr(12) / (tr(13) / (tr(14))))))
+                                                / (tr(43)
+                                                    / (tr(44)
+                                                        // Minor fork 2
+                                                        / (tr(45) / (tr(46) / (tr(47) / (tr(48) / (tr(49) / (tr(50)))))))
+                                                        / (tr(110) / (tr(110 + 2 * num_slots_to_try))))))))))))));
+
+        // Set the successful voting behavior
+        let mut cluster_votes = HashMap::new();
+        let mut my_votes: Vec<Slot> = vec![];
+        let next_unlocked_slot = 110;
+        // Vote on the first minor fork
+        my_votes.extend(1..=14);
+        // Come back to the main fork
+        my_votes.extend(43..=44);
+        // Vote on the second minor fork
+        my_votes.extend(45..=50);
+        // Vote to come back to main fork
+        my_votes.push(next_unlocked_slot);
+        cluster_votes.insert(node_pubkey, my_votes.clone());
+        // Make the other validator vote fork to pass the threshold checks
+        let other_votes = my_votes.clone();
+        cluster_votes.insert(vote_simulator.node_pubkeys[1], other_votes);
+        vote_simulator.fill_bank_forks(forks, &cluster_votes, true);
+
+        // Simulate the votes.
+        for vote in &my_votes {
+            // All these votes should be ok
+            assert!(vote_simulator
+                .simulate_vote(*vote, &node_pubkey, &mut tower,)
+                .is_empty());
+        }
+
+        info!("local tower: {:#?}", tower.vote_state.votes);
+        let observed = vote_simulator
+            .bank_forks
+            .read()
+            .unwrap()
+            .get(next_unlocked_slot)
+            .unwrap()
+            .get_vote_account(&vote_pubkey)
+            .unwrap();
+        let state = observed.vote_state();
+        info!("observed tower: {:#?}", state.as_ref().unwrap().votes);
+
+        let num_slots_to_try = 200;
+        cluster_votes
+            .get_mut(&vote_simulator.node_pubkeys[1])
+            .unwrap()
+            .extend(next_unlocked_slot + 1..next_unlocked_slot + num_slots_to_try);
+        assert!(vote_simulator.can_progress_on_fork(
+            &node_pubkey,
+            &mut tower,
+            next_unlocked_slot,
+            num_slots_to_try,
+            &mut cluster_votes,
+        ));
     }
 
     #[test]
@@ -2090,6 +2637,193 @@ pub mod test {
     }
 
     #[test]
+    fn test_switch_threshold_across_tower_reload() {
+        use solana_consensus::consensus::{SwitchForkDecision, Tower};
+        solana_logger::setup();
+        // Init state
+        let mut vote_simulator = VoteSimulator::new(2);
+        let other_vote_account = vote_simulator.vote_pubkeys[1];
+        let bank0 = vote_simulator.bank_forks.read().unwrap().get(0).unwrap();
+        let total_stake = bank0.total_epoch_stake();
+        assert_eq!(
+            total_stake,
+            vote_simulator.validator_keypairs.len() as u64 * 10_000
+        );
+
+        // Create the tree of banks
+        let forks = tr(0)
+            / (tr(1)
+                / (tr(2)
+                    / tr(10)
+                    / (tr(43)
+                        / (tr(44)
+                            // Minor fork 2
+                            / (tr(45) / (tr(46) / (tr(47) / (tr(48) / (tr(49) / (tr(50)))))))
+                            / (tr(110) / tr(111))))));
+
+        // Fill the BankForks according to the above fork structure
+        vote_simulator.fill_bank_forks(forks, &HashMap::new(), true);
+        for (_, fork_progress) in vote_simulator.progress.iter_mut() {
+            fork_progress.fork_stats.computed = true;
+        }
+
+        let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
+        let descendants = vote_simulator.bank_forks.read().unwrap().descendants();
+        let mut tower = Tower::default();
+
+        tower.record_vote(43, Hash::default());
+        tower.record_vote(44, Hash::default());
+        tower.record_vote(45, Hash::default());
+        tower.record_vote(46, Hash::default());
+        tower.record_vote(47, Hash::default());
+        tower.record_vote(48, Hash::default());
+        tower.record_vote(49, Hash::default());
+
+        // Trying to switch to a descendant of last vote should always work
+        assert_eq!(
+            tower.check_switch_threshold(
+                50,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
+            ),
+            SwitchForkDecision::SameFork
+        );
+
+        // Trying to switch to another fork at 110 should fail
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
+            ),
+            SwitchForkDecision::FailedSwitchThreshold(0, 20000)
+        );
+
+        vote_simulator.simulate_lockout_interval(111, (10, 49), &other_vote_account);
+
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
+            ),
+            SwitchForkDecision::SwitchProof(Hash::default())
+        );
+
+        assert_eq!(tower.voted_slots(), vec![43, 44, 45, 46, 47, 48, 49]);
+        {
+            let mut tower = tower.clone();
+            tower.record_vote(110, Hash::default());
+            tower.record_vote(111, Hash::default());
+            assert_eq!(tower.voted_slots(), vec![43, 110, 111]);
+            assert_eq!(tower.vote_state.root_slot, Some(0));
+        }
+
+        // Prepare simulated validator restart!
+        let mut vote_simulator = VoteSimulator::new(2);
+        let other_vote_account = vote_simulator.vote_pubkeys[1];
+        let bank0 = vote_simulator.bank_forks.read().unwrap().get(0).unwrap();
+        let total_stake = bank0.total_epoch_stake();
+        let forks = tr(0)
+            / (tr(1)
+                / (tr(2)
+                    / tr(10)
+                    / (tr(43)
+                        / (tr(44)
+                            // Minor fork 2
+                            / (tr(45) / (tr(46) / (tr(47) / (tr(48) / (tr(49) / (tr(50)))))))
+                            / (tr(110) / tr(111))))));
+        let replayed_root_slot = 44;
+
+        // Fill the BankForks according to the above fork structure
+        vote_simulator.fill_bank_forks(forks, &HashMap::new(), true);
+        for (_, fork_progress) in vote_simulator.progress.iter_mut() {
+            fork_progress.fork_stats.computed = true;
+        }
+
+        // prepend tower restart!
+        let mut slot_history = SlotHistory::default();
+        vote_simulator.set_root(replayed_root_slot);
+        let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
+        let descendants = vote_simulator.bank_forks.read().unwrap().descendants();
+        for slot in &[0, 1, 2, 43, replayed_root_slot] {
+            slot_history.add(*slot);
+        }
+        let mut tower = tower
+            .adjust_lockouts_after_replay(replayed_root_slot, &slot_history)
+            .unwrap();
+
+        assert_eq!(tower.voted_slots(), vec![45, 46, 47, 48, 49]);
+
+        // Trying to switch to another fork at 110 should fail
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
+            ),
+            SwitchForkDecision::FailedSwitchThreshold(0, 20000)
+        );
+
+        // Add lockout_interval which should be excluded
+        vote_simulator.simulate_lockout_interval(111, (45, 50), &other_vote_account);
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
+            ),
+            SwitchForkDecision::FailedSwitchThreshold(0, 20000)
+        );
+
+        // Add lockout_interval which should not be excluded
+        vote_simulator.simulate_lockout_interval(111, (110, 200), &other_vote_account);
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
+            ),
+            SwitchForkDecision::SwitchProof(Hash::default())
+        );
+
+        tower.record_vote(110, Hash::default());
+        tower.record_vote(111, Hash::default());
+        assert_eq!(tower.voted_slots(), vec![110, 111]);
+        assert_eq!(tower.vote_state.root_slot, Some(replayed_root_slot));
+    }
+
+    #[test]
     fn test_load_tower_ok() {
         let (tower, loaded) =
             run_test_load_tower_snapshot(|tower, pubkey| tower.node_pubkey = *pubkey, |_| ());
@@ -2321,7 +3055,7 @@ pub mod test {
 
         assert_eq!(tower.voted_slots(), vec![] as Vec<Slot>);
         assert_eq!(tower.root(), replayed_root_slot);
-        assert_eq!(tower.stray_restored_slot, None);
+        assert_eq!(tower.stray_restored_slot(), None);
     }
 
     #[test]
@@ -2665,7 +3399,7 @@ pub mod test {
             .unwrap();
         assert_eq!(tower.root(), 12);
         assert_eq!(tower.voted_slots(), vec![13, 14]);
-        assert_eq!(tower.stray_restored_slot, Some(14));
+        assert_eq!(tower.stray_restored_slot(), Some(14));
     }
 
     #[test]

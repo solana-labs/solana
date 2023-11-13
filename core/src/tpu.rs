@@ -8,7 +8,7 @@ use {
         banking_trace::{BankingTracer, TracerThread},
         cluster_info_vote_listener::{
             ClusterInfoVoteListener, DuplicateConfirmedSlotsSender, GossipVerifiedVoteHashSender,
-            VerifiedVoteSender, VoteTracker,
+            VerifiedVoteSender,
         },
         fetch_stage::FetchStage,
         sigverify::TransactionSigVerifier,
@@ -20,6 +20,7 @@ use {
     bytes::Bytes,
     crossbeam_channel::{unbounded, Receiver},
     solana_client::connection_cache::{ConnectionCache, Protocol},
+    solana_consensus::vote_stake_tracker::VoteTracker,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         blockstore::Blockstore, blockstore_processor::TransactionStatusSender,

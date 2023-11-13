@@ -18,10 +18,11 @@ use {
     },
     log::*,
     solana_accounts_db::accounts_db::create_accounts_run_and_snapshot_dirs,
-    solana_core::{
-        consensus::{tower_storage::FileTowerStorage, Tower, SWITCH_FORK_THRESHOLD},
-        validator::{is_snapshot_config_valid, ValidatorConfig},
+    solana_consensus::{
+        consensus::{Tower, SWITCH_FORK_THRESHOLD},
+        tower_storage::FileTowerStorage,
     },
+    solana_core::validator::{is_snapshot_config_valid, ValidatorConfig},
     solana_gossip::gossip_service::discover_cluster,
     solana_ledger::{
         ancestor_iterator::AncestorIterator,
