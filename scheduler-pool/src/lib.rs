@@ -293,7 +293,6 @@ pub struct LockAttempt {
     target_page: PageRc,
     status: LockStatus,
     requested_usage: RequestedUsage,
-    heaviest_uncontended: Option<TaskInQueue>,
 }
 
 impl PageRc {
@@ -308,7 +307,6 @@ impl LockAttempt {
             target_page,
             status: LockStatus::Succeded,
             requested_usage,
-            heaviest_uncontended: Default::default(),
         }
     }
 
@@ -317,7 +315,6 @@ impl LockAttempt {
             target_page: self.target_page.clone(),
             status: LockStatus::Succeded,
             requested_usage: self.requested_usage,
-            heaviest_uncontended: Default::default(),
         }
     }
 
@@ -626,23 +623,6 @@ pub struct ExecutionEnvironment {
 
 impl ExecutionEnvironment {
     fn reindex_with_address_book(&mut self) {
-        let uq = self.task.unique_weight;
-        let should_remove = self
-            .task
-            .contention_count
-            .load(std::sync::atomic::Ordering::SeqCst)
-            > 0;
-        for lock_attempt in self.finalized_lock_attempts.iter_mut() {
-            let heaviest_uncontended = lock_attempt
-                .target_page_mut()
-                .blocked_task_queue
-                .reindex(should_remove, &uq);
-            lock_attempt.heaviest_uncontended = heaviest_uncontended;
-
-            if should_remove && lock_attempt.requested_usage == RequestedUsage::Writable {
-                lock_attempt.target_page_mut().write_task_ids.remove(&uq);
-            }
-        }
     }
 }
 
@@ -1370,13 +1350,29 @@ impl ScheduleStage {
     }
 
     fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: &mut [LockAttempt]) {
+        let uq = self.task.unique_weight;
+        let should_remove = self
+            .task
+            .contention_count
+            .load(std::sync::atomic::Ordering::SeqCst)
+            > 0;
+
         for unlock_attempt in lock_attempts {
             let is_newly_uncontended = AddressBook::reset_lock(unlock_attempt);
             if !is_newly_uncontended {
                 continue;
             }
 
-            if let Some(uncontended_task) = unlock_attempt.heaviest_uncontended.take() {
+            let heaviest_uncontended = unlock_attempt
+                .target_page_mut()
+                .blocked_task_queue
+                .reindex(should_remove, &uq);
+
+            if should_remove && unlock_attempt.requested_usage == RequestedUsage::Writable {
+                unlock_attempt.target_page_mut().write_task_ids.remove(&uq);
+            }
+
+            if let Some(uncontended_task) = heaviest_uncontended {
                 if !uncontended_task.currently_contended() {
                     continue;
                 }
