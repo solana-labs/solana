@@ -288,7 +288,7 @@ impl Task {
 
 #[derive(Debug)]
 pub struct LockAttempt {
-    target_page: PageRc,
+    page: PageRc,
     status: LockStatus,
     requested_usage: RequestedUsage,
 }
@@ -300,9 +300,9 @@ impl PageRc {
 }
 
 impl LockAttempt {
-    pub fn new(target_page: PageRc, requested_usage: RequestedUsage) -> Self {
+    pub fn new(page: PageRc, requested_usage: RequestedUsage) -> Self {
         Self {
-            target_page,
+            page,
             status: LockStatus::Succeded,
             requested_usage,
         }
@@ -310,14 +310,14 @@ impl LockAttempt {
 
     pub fn clone_for_test(&self) -> Self {
         Self {
-            target_page: self.target_page.clone(),
+            page: self.page.clone(),
             status: LockStatus::Succeded,
             requested_usage: self.requested_usage,
         }
     }
 
     fn target_page_mut(&self) -> std::cell::RefMut<'_, Page> {
-        self.target_page.page_mut()
+        self.page.page_mut()
     }
 }
 
@@ -448,12 +448,12 @@ impl AddressBook {
         }
 
         let LockAttempt {
-            target_page,
+            page,
             requested_usage,
             status,
             ..
         } = attempt;
-        let mut page = target_page.page_mut();
+        let mut page = page.page_mut();
 
         match page.current_usage {
             Usage::Unused => {
