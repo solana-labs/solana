@@ -116,10 +116,10 @@ impl ZkProofData<BatchedGroupedCiphertext2HandlesValidityProofContext>
         let grouped_ciphertext_hi: GroupedElGamalCiphertext<2> =
             self.context.grouped_ciphertext_hi.try_into()?;
 
-        let destination_handle_lo = grouped_ciphertext_lo.handles.get(0).unwrap();
+        let destination_handle_lo = grouped_ciphertext_lo.handles.first().unwrap();
         let auditor_handle_lo = grouped_ciphertext_lo.handles.get(1).unwrap();
 
-        let destination_handle_hi = grouped_ciphertext_hi.handles.get(0).unwrap();
+        let destination_handle_hi = grouped_ciphertext_hi.handles.first().unwrap();
         let auditor_handle_hi = grouped_ciphertext_hi.handles.get(1).unwrap();
 
         let proof: BatchedGroupedCiphertext2HandlesValidityProof = self.proof.try_into()?;
