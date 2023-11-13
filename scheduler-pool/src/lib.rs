@@ -1343,17 +1343,16 @@ impl ScheduleStage {
         (task_source, next_task): (TaskSource, TaskInQueue),
     ) -> Option<(TaskInQueue, Vec<LockAttempt>)> {
         let from_runnable = matches!(task_source, TaskSource::Runnable);
-        let unique_weight = next_task.unique_weight;
 
         let unlockable_count = attempt_lock_for_execution(
             from_runnable,
-            &unique_weight,
+            &next_task.unique_weight,
             &mut next_task.lock_attempts_mut(),
         );
 
         if unlockable_count > 0 {
             Self::reset_lock_for_failed_execution(
-                &unique_weight,
+                &next_task.unique_weight,
                 &mut next_task.lock_attempts_mut(),
             );
             let lock_count = next_task.lock_attempts_mut().len();
@@ -1388,7 +1387,7 @@ impl ScheduleStage {
                 if let Some(task) = lock_attempt
                     .target_page_mut()
                     .task_ids
-                    .reindex(false, &unique_weight)
+                    .reindex(false, &next_task.unique_weight)
                 {
                     if task.currently_contended() {
                         let uti = address_book
