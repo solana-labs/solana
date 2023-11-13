@@ -264,7 +264,7 @@ impl Task {
             page.blocked_task_queue
                 .insert_task(Task::clone_in_queue(this));
             if lock_attempt.requested_usage == RequestedUsage::Writable {
-                page.write_task_ids.insert(this.unique_weight);
+                page.blocked_write_requesting_task_ids.insert(this.unique_weight);
             }
         }
     }
@@ -355,7 +355,7 @@ pub struct Page {
     address_str: String,
     current_usage: Usage,
     blocked_task_queue: Tasks,
-    write_task_ids: std::collections::BTreeSet<UniqueWeight>,
+    blocked_write_requesting_task_ids: std::collections::BTreeSet<UniqueWeight>,
 }
 
 impl Page {
@@ -364,7 +364,7 @@ impl Page {
             address_str: format!("{}", address),
             current_usage,
             blocked_task_queue: Default::default(),
-            write_task_ids: Default::default(),
+            blocked_write_requesting_task_ids: Default::default(),
         }
     }
 }
@@ -434,9 +434,9 @@ impl AddressBook {
         } else if attempt.requested_usage == RequestedUsage::Readonly
             && attempt
                 .target_page_mut()
-                .write_task_ids
+                .blocked_write_requesting_task_ids
                 .last()
-                .map(|existing_unique_weights| unique_weight > existing_unique_weights)
+                .map(|existing_unique_weight| unique_weight > existing_unique_weight)
                 .unwrap_or(true)
         {
             // this _read-only_ unique_weight is heavier than any of contened write locks.
@@ -1348,7 +1348,7 @@ impl ScheduleStage {
                 .reindex(should_remove, &uq);
 
             if should_remove && unlock_attempt.requested_usage == RequestedUsage::Writable {
-                unlock_attempt.target_page_mut().write_task_ids.remove(&uq);
+                unlock_attempt.target_page_mut().blocked_write_requesting_task_ids.remove(&uq);
             }
 
             let is_unused_now = AddressBook::reset_lock(unlock_attempt);
