@@ -636,8 +636,6 @@ impl ChannelBackedTaskQueue {
 
 #[derive(Debug)]
 pub struct ExecutionEnvironment {
-    //accounts: Vec<i8>,
-    pub unique_weight: UniqueWeight,
     pub task: TaskInQueue,
     pub finalized_lock_attempts: Vec<LockAttempt>,
     pub execution_result:
@@ -647,7 +645,7 @@ pub struct ExecutionEnvironment {
 
 impl ExecutionEnvironment {
     fn reindex_with_address_book(&mut self) {
-        let uq = self.unique_weight;
+        let uq = self.task.unique_weight;
         let should_remove = self
             .task
             .contention_count
