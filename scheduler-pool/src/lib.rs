@@ -1337,6 +1337,7 @@ impl ScheduleStage {
             // as soon as next tack is succeeded in locking, trigger re-checks on read only
             // addresses so that more readonly transactions can be executed
             next_task.mark_as_uncontended();
+
             for read_only_lock_attempt in next_task
                 .lock_attempts_mut()
                 .iter()
