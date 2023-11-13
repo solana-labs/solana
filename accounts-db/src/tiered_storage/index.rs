@@ -30,7 +30,7 @@ pub struct AccountOffset {
 /// This can be used to obtain the AccountOffset and address by looking through
 /// the accounts index block.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct IndexOffset(usize);
+pub struct IndexOffset(pub usize);
 
 /// The index format of a tiered accounts file.
 #[repr(u16)]
