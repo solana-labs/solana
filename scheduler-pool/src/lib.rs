@@ -264,7 +264,8 @@ impl Task {
             page.blocked_task_queue
                 .insert_task(Task::clone_in_queue(this));
             if lock_attempt.requested_usage == RequestedUsage::Writable {
-                page.blocked_write_requesting_task_ids.insert(this.unique_weight);
+                page.blocked_write_requesting_task_ids
+                    .insert(this.unique_weight);
             }
         }
     }
@@ -1348,7 +1349,10 @@ impl ScheduleStage {
                 .reindex(should_remove, &uq);
 
             if should_remove && unlock_attempt.requested_usage == RequestedUsage::Writable {
-                unlock_attempt.target_page_mut().blocked_write_requesting_task_ids.remove(&uq);
+                unlock_attempt
+                    .target_page_mut()
+                    .blocked_write_requesting_task_ids
+                    .remove(&uq);
             }
 
             let is_unused_now = AddressBook::reset_lock(unlock_attempt);
