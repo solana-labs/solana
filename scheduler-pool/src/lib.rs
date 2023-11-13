@@ -419,7 +419,7 @@ type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
 #[derive(Default, Debug, Clone)]
 pub struct AddressBook {
     book: AddressMap,
-    retry_queue: WeightedTaskIds,
+    retryable_tx_queue: WeightedTaskIds,
 }
 
 impl AddressBook {
@@ -1250,7 +1250,7 @@ impl ScheduleStage {
             TaskInQueue,
         >,
     > {
-        address_book.retry_queue.last_entry()
+        address_book.retryable_tx_queue.last_entry()
     }
 
     fn select_next_task_to_lock<'a>(
@@ -1352,7 +1352,7 @@ impl ScheduleStage {
                     }
 
                     address_book
-                        .retry_queue
+                        .retryable_tx_queue
                         .entry(next_contended_task.unique_weight)
                         .or_insert(next_contended_task);
                 }
@@ -1385,7 +1385,7 @@ impl ScheduleStage {
                 }
 
                 address_book
-                    .retry_queue
+                    .retryable_tx_queue
                     .entry(uncontended_task.unique_weight)
                     .or_insert(uncontended_task);
             }
