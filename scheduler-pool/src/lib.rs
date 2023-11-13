@@ -1375,10 +1375,9 @@ impl ScheduleStage {
 
     fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: &mut [LockAttempt]) {
         for l in lock_attempts {
-            let newly_uncontended = AddressBook::reset_lock(l);
+            let is_newly_uncontended = AddressBook::reset_lock(l);
 
-            let mut page = l.target.page_mut();
-            if newly_uncontended {
+            if is_newly_uncontended {
                 if let Some(task) = l.heaviest_uncontended.take() {
                     if task.currently_contended() {
                         let uti = address_book
