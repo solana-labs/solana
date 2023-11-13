@@ -184,7 +184,7 @@ module.exports = {
       {
         docs: {
           path: "src",
-          breadcrumbs: false,
+          breadcrumbs: true,
           routeBasePath: "/",
           sidebarPath: require.resolve("./sidebars.js"),
           remarkPlugins: [math],
