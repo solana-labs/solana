@@ -1376,17 +1376,19 @@ impl ScheduleStage {
     fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: &mut [LockAttempt]) {
         for unlock_attempt in lock_attempts {
             let is_newly_uncontended = AddressBook::reset_lock(unlock_attempt);
-            if is_newly_uncontended {
-                if let Some(uncontended_task) = unlock_attempt.heaviest_uncontended.take() {
-                    if !uncontended_task.currently_contended() {
-                        continue;
-                    }
+            if !is_newly_uncontended {
+                continue;
+            }
 
-                    address_book
-                        .retry_queue
-                        .entry(uncontended_task.unique_weight)
-                        .or_insert(uncontended_task);
+            if let Some(uncontended_task) = unlock_attempt.heaviest_uncontended.take() {
+                if !uncontended_task.currently_contended() {
+                    continue;
                 }
+
+                address_book
+                    .retry_queue
+                    .entry(uncontended_task.unique_weight)
+                    .or_insert(uncontended_task);
             }
         }
     }
