@@ -420,16 +420,14 @@ impl AddressBook {
         attempt: &mut LockAttempt,
     ) {
         let mut page = attempt.target_page_mut();
-        let tcuw = page 
-            .blocked_task_queue
-            .heaviest_weight();
+        let tcuw = page.blocked_task_queue.heaviest_weight();
 
         let strictly_lockable = if tcuw.is_none() {
             true
         } else if tcuw.unwrap() == *unique_weight {
             true
         } else if attempt.requested_usage == RequestedUsage::Readonly
-            && page 
+            && page
                 .blocked_write_requesting_task_ids
                 .last()
                 .map(|existing_unique_weight| unique_weight > existing_unique_weight)
