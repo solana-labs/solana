@@ -1563,11 +1563,7 @@ struct SchedulingStateMachine(std::collections::VecDeque<Arc<Task>>, usize, Addr
 
 impl SchedulingStateMachine {
     fn new(address_book: AddressBook) -> Self {
-        Self(
-            Default::default(),
-            Default::default(),
-            address_book,
-        )
+        Self(Default::default(), Default::default(), address_book)
     }
 
     fn into_address_book(self) -> AddressBook {
