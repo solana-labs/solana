@@ -243,7 +243,7 @@ No special handling or timing considerations are required. Use the
 
 If the Authorized Voter or Withdrawer is to be transferred to another entity
 then a two-stage signing process using a
-[Durable Nonce](../offline-signing/durable-nonce) is recommended.
+[Durable Nonce](../cli/examples/durable-nonce.md) is recommended.
 
 1. Entity B creates a durable nonce using `solana create-nonce-account`
 2. Entity B then runs a `solana vote-authorize-voter-checked` or

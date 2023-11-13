@@ -8,7 +8,7 @@ include:
 
 - Collecting signatures from geographically disparate signers in a
   [multi-signature scheme](https://spl.solana.com/token#multisig-usage)
-- Signing transactions using an [airgapped](<https://en.wikipedia.org/wiki/Air_gap_(networking)>)
+- Signing transactions using an [air-gapped](<https://en.wikipedia.org/wiki/Air_gap_(networking)>)
   signing device
 
 This document describes using Solana's CLI to separately sign and submit a
@@ -18,26 +18,26 @@ transaction.
 
 At present, the following commands support offline signing:
 
-- [`create-stake-account`](cli/usage.md#solana-create-stake-account)
-- [`create-stake-account-checked`](cli/usage.md#solana-create-stake-account-checked)
-- [`deactivate-stake`](cli/usage.md#solana-deactivate-stake)
-- [`delegate-stake`](cli/usage.md#solana-delegate-stake)
-- [`split-stake`](cli/usage.md#solana-split-stake)
-- [`stake-authorize`](cli/usage.md#solana-stake-authorize)
-- [`stake-authorize-checked`](cli/usage.md#solana-stake-authorize-checked)
-- [`stake-set-lockup`](cli/usage.md#solana-stake-set-lockup)
-- [`stake-set-lockup-checked`](cli/usage.md#solana-stake-set-lockup-checked)
-- [`transfer`](cli/usage.md#solana-transfer)
-- [`withdraw-stake`](cli/usage.md#solana-withdraw-stake)
+- [`create-stake-account`](../usage.md#solana-create-stake-account)
+- [`create-stake-account-checked`](../usage.md#solana-create-stake-account-checked)
+- [`deactivate-stake`](../usage.md#solana-deactivate-stake)
+- [`delegate-stake`](../usage.md#solana-delegate-stake)
+- [`split-stake`](../usage.md#solana-split-stake)
+- [`stake-authorize`](../usage.md#solana-stake-authorize)
+- [`stake-authorize-checked`](../usage.md#solana-stake-authorize-checked)
+- [`stake-set-lockup`](../usage.md#solana-stake-set-lockup)
+- [`stake-set-lockup-checked`](../usage.md#solana-stake-set-lockup-checked)
+- [`transfer`](../usage.md#solana-transfer)
+- [`withdraw-stake`](../usage.md#solana-withdraw-stake)
 
-- [`create-vote-account`](cli/usage.md#solana-create-vote-account)
-- [`vote-authorize-voter`](cli/usage.md#solana-vote-authorize-voter)
-- [`vote-authorize-voter-checked`](cli/usage.md#solana-vote-authorize-voter-checked)
-- [`vote-authorize-withdrawer`](cli/usage.md#solana-vote-authorize-withdrawer)
-- [`vote-authorize-withdrawer-checked`](cli/usage.md#solana-vote-authorize-withdrawer-checked)
-- [`vote-update-commission`](cli/usage.md#solana-vote-update-commission)
-- [`vote-update-validator`](cli/usage.md#solana-vote-update-validator)
-- [`withdraw-from-vote-account`](cli/usage.md#solana-withdraw-from-vote-account)
+- [`create-vote-account`](../usage.md#solana-create-vote-account)
+- [`vote-authorize-voter`](../usage.md#solana-vote-authorize-voter)
+- [`vote-authorize-voter-checked`](../usage.md#solana-vote-authorize-voter-checked)
+- [`vote-authorize-withdrawer`](../usage.md#solana-vote-authorize-withdrawer)
+- [`vote-authorize-withdrawer-checked`](../usage.md#solana-vote-authorize-withdrawer-checked)
+- [`vote-update-commission`](../usage.md#solana-vote-update-commission)
+- [`vote-update-validator`](../usage.md#solana-vote-update-validator)
+- [`withdraw-from-vote-account`](../usage.md#solana-withdraw-from-vote-account)
 
 ## Signing Transactions Offline
 
@@ -170,5 +170,5 @@ ohGKvpRC46jAduwU9NW8tP91JkCT5r8Mo67Ysnid4zc76tiiV1Ho6jv3BKFSbBcr2NcPPCarmfTLSkTH
 Typically a Solana transaction must be signed and accepted by the network within
 a number of slots from the blockhash in its `recent_blockhash` field (~1min at
 the time of this writing). If your signing procedure takes longer than this, a
-[Durable Transaction Nonce](offline-signing/durable-nonce.md) can give you the extra time you
+[Durable Transaction Nonce](./durable-nonce.md) can give you the extra time you
 need.

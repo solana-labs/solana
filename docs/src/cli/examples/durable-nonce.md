@@ -11,7 +11,7 @@ about in the [proposal](../implemented-proposals/durable-tx-nonces.md).
 ## Usage Examples
 
 Full usage details for durable nonce CLI commands can be found in the
-[CLI reference](../cli/usage.md).
+[CLI reference](../usage.md).
 
 ### Nonce Authority
 
@@ -52,10 +52,10 @@ solana create-nonce-account nonce-keypair.json 1
 ```
 
 > To keep the keypair entirely offline, use the
-> [Paper Wallet](../cli/wallets/paper.md) keypair generation
-> [instructions](../cli/wallets/paper.md#seed-phrase-generation) instead
+> [Paper Wallet](../wallets/paper.md) keypair generation
+> [instructions](../wallets/paper.md#seed-phrase-generation) instead
 
-> [Full usage documentation](../cli/usage.md#solana-create-nonce-account)
+> [Full usage documentation](../usage.md#solana-create-nonce-account)
 
 ### Querying the Stored Nonce Value
 
@@ -75,7 +75,7 @@ solana nonce nonce-keypair.json
 8GRipryfxcsxN8mAGjy8zbFo9ezaUsh47TsPzmZbuytU
 ```
 
-> [Full usage documentation](../cli/usage.md#solana-get-nonce)
+> [Full usage documentation](../usage.md#solana-get-nonce)
 
 ### Advancing the Stored Nonce Value
 
@@ -94,7 +94,7 @@ solana new-nonce nonce-keypair.json
 44jYe1yPKrjuYDmoFTdgPjg8LFpYyh1PFKJqm5SC1PiSyAL8iw1bhadcAX1SL7KDmREEkmHpYvreKoNv6fZgfvUK
 ```
 
-> [Full usage documentation](../cli/usage.md#solana-new-nonce)
+> [Full usage documentation](../usage.md#solana-new-nonce)
 
 ### Display Nonce Account
 
@@ -114,7 +114,7 @@ minimum balance required: 0.00136416 SOL
 nonce: DZar6t2EaCFQTbUP4DHKwZ1wT8gCPW2aRfkVWhydkBvS
 ```
 
-> [Full usage documentation](../cli/usage.md#solana-nonce-account)
+> [Full usage documentation](../usage.md#solana-nonce-account)
 
 ### Withdraw Funds from a Nonce Account
 
@@ -134,7 +134,7 @@ solana withdraw-from-nonce-account nonce-keypair.json ~/.config/solana/id.json 0
 
 > Close a nonce account by withdrawing the full balance
 
-> [Full usage documentation](../cli/usage.md#solana-withdraw-from-nonce-account)
+> [Full usage documentation](../usage.md#solana-withdraw-from-nonce-account)
 
 ### Assign a New Authority to a Nonce Account
 
@@ -152,7 +152,7 @@ solana authorize-nonce-account nonce-keypair.json nonce-authority.json
 3F9cg4zN9wHxLGx4c3cUKmqpej4oa67QbALmChsJbfxTgTffRiL3iUehVhR9wQmWgPua66jPuAYeL1K2pYYjbNoT
 ```
 
-> [Full usage documentation](../cli/usage.md#solana-authorize-nonce-account)
+> [Full usage documentation](../usage.md#solana-authorize-nonce-account)
 
 ## Other Commands Supporting Durable Nonces
 
@@ -164,9 +164,9 @@ supported.
 
 The following subcommands have received this treatment so far
 
-- [`pay`](../cli/usage.md#solana-pay)
-- [`delegate-stake`](../cli/usage.md#solana-delegate-stake)
-- [`deactivate-stake`](../cli/usage.md#solana-deactivate-stake)
+- [`pay`](../usage.md#solana-pay)
+- [`delegate-stake`](../usage.md#solana-delegate-stake)
+- [`deactivate-stake`](../usage.md#solana-deactivate-stake)
 
 ### Example Pay Using Durable Nonce
 

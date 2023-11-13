@@ -71,8 +71,8 @@ stored hash, and thus unusable.
 
 To initialize a newly created account, an `InitializeNonceAccount` instruction must be
 issued. This instruction takes one parameter, the `Pubkey` of the account's
-[authority](../offline-signing/durable-nonce.md#nonce-authority). Nonce accounts
-must be [rent-exempt](rent.md#two-tiered-rent-regime) to meet the data-persistence
+[authority](../cli/examples/durable-nonce.md#nonce-authority). Nonce accounts
+must be [rent-exempt](./rent.md#two-tiered-rent-regime) to meet the data-persistence
 requirements of the feature, and as such, require that sufficient lamports be
 deposited before they can be initialized. Upon successful initialization, the
 cluster's most recent blockhash is stored along with specified nonce authority
@@ -83,7 +83,7 @@ value. It stores the cluster's most recent blockhash in the account's state data
 failing if that matches the value already stored there. This check prevents
 replaying transactions within the same block.
 
-Due to nonce accounts' [rent-exempt](rent.md#two-tiered-rent-regime) requirement,
+Due to nonce accounts' [rent-exempt](./rent.md#two-tiered-rent-regime) requirement,
 a custom withdraw instruction is used to move funds out of the account.
 The `WithdrawNonceAccount` instruction takes a single argument, lamports to withdraw,
 and enforces rent-exemption by preventing the account's balance from falling
@@ -92,12 +92,12 @@ would be zero lamports, which makes the account eligible for deletion. This
 account closure detail has an additional requirement that the stored nonce value
 must not match the cluster's most recent blockhash, as per `AdvanceNonceAccount`.
 
-The account's [nonce authority](../offline-signing/durable-nonce.md#nonce-authority)
+The account's [nonce authority](../cli/examples/durable-nonce.md#nonce-authority)
 can be changed using the `AuthorizeNonceAccount` instruction. It takes one parameter,
 the `Pubkey` of the new authority. Executing this instruction grants full
 control over the account and its balance to the new authority.
 
-> `AdvanceNonceAccount`, `WithdrawNonceAccount` and `AuthorizeNonceAccount` all require the current [nonce authority](../offline-signing/durable-nonce.md#nonce-authority) for the account to sign the transaction.
+> `AdvanceNonceAccount`, `WithdrawNonceAccount` and `AuthorizeNonceAccount` all require the current [nonce authority](../cli/examples/durable-nonce.md#nonce-authority) for the account to sign the transaction.
 
 ### Runtime Support
 
