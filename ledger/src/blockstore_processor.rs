@@ -74,9 +74,11 @@ use {
     thiserror::Error,
 };
 
+#[derive(Clone)]
 struct TransactionBatchWithIndexes<'a, 'b> {
     pub batch: TransactionBatch<'a, 'b>,
     pub transaction_indexes: Vec<usize>,
+    pub conflicting_entry: bool,
 }
 
 struct ReplayEntry {
@@ -146,6 +148,7 @@ fn execute_batch(
     let TransactionBatchWithIndexes {
         batch,
         transaction_indexes,
+        ..
     } = batch;
     let record_token_balances = transaction_status_sender.is_some();
 
@@ -362,6 +365,7 @@ fn schedule_batches_for_execution(
     for TransactionBatchWithIndexes {
         batch,
         transaction_indexes,
+        ..
     } in batches
     {
         bank.schedule_transaction_executions(
@@ -390,6 +394,7 @@ fn rebatch_transactions<'a>(
     TransactionBatchWithIndexes {
         batch: tx_batch,
         transaction_indexes,
+        conflicting_entry: false,
     }
 }
 
@@ -406,7 +411,17 @@ fn rebatch_and_execute_batches(
         return Ok(());
     }
 
-    let ((lock_results, sanitized_txs), transaction_indexes): ((Vec<_>, Vec<_>), Vec<_>) = batches
+    let mut non_conflicting_batches: Vec<TransactionBatchWithIndexes> = vec![];
+    let mut conflicting_batches: Vec<TransactionBatchWithIndexes> = vec![];
+    for batch in batches.into_iter() {
+        if !batch.conflicting_entry {
+            non_conflicting_batches.push(batch.clone());
+        } else {
+            conflicting_batches.push(batch.clone());
+        }
+    }
+
+    let ((lock_results, sanitized_txs), transaction_indexes): ((Vec<_>, Vec<_>), Vec<_>) = non_conflicting_batches
         .iter()
         .flat_map(|batch| {
             batch
@@ -447,6 +462,7 @@ fn rebatch_and_execute_batches(
     let target_batch_count = get_thread_count() as u64;
 
     let mut tx_batches: Vec<TransactionBatchWithIndexes> = vec![];
+    let mut concatenated_vec = Vec::new();
     let rebatched_txs = if total_cost > target_batch_count.saturating_mul(minimal_tx_cost) {
         let target_batch_cost = total_cost / target_batch_count;
         let mut batch_cost: u64 = 0;
@@ -471,7 +487,13 @@ fn rebatch_and_execute_batches(
                     batch_cost = 0;
                 }
             });
-        &tx_batches[..]
+        
+        concatenated_vec.extend(tx_batches);
+        concatenated_vec.extend(conflicting_batches);
+
+
+        let batches_array = &*concatenated_vec;
+        batches_array
     } else {
         batches
     };
@@ -589,7 +611,7 @@ fn process_entries(
                     (starting_index..starting_index.saturating_add(transactions.len())).collect();
                 loop {
                     // try to lock the accounts
-                    let batch = bank.prepare_sanitized_batch(transactions);
+                    let (batch, self_conflicting_batch) = bank.prepare_sanitized_batch_with_conflicting_txs(transactions);
                     let first_lock_err = first_err(batch.lock_results());
 
                     // if locking worked
@@ -597,6 +619,7 @@ fn process_entries(
                         batches.push(TransactionBatchWithIndexes {
                             batch,
                             transaction_indexes,
+                            conflicting_entry: self_conflicting_batch
                         });
                         // done with this entry
                         break;

@@ -75,6 +75,12 @@ const ENTRY_ACCTS_LOOKUP_TABLE_SIZE: usize = 1024;
 
 pub type PubkeyAccountSlot = (Pubkey, AccountSharedData, Slot);
 
+#[derive(Debug, Default)]
+struct EntryAcctLocks {
+    writables: HashSet<Pubkey>,
+    readables: HashSet<Pubkey>,
+}
+
 #[derive(Debug, Default, AbiExample)]
 pub struct AccountLocks {
     write_locks: HashSet<Pubkey>,
@@ -1130,6 +1136,57 @@ impl Accounts {
         self.accounts_db.store_uncached(slot, &[(pubkey, account)]);
     }
 
+    fn lock_account_with_conflicting_txs(
+        &self,
+        account_locks: &mut AccountLocks,
+        writable_keys: Vec<&Pubkey>,
+        readonly_keys: Vec<&Pubkey>,
+        entry_accts_lookup: &mut EntryAcctLocks,
+    ) -> (Result<()>, bool) {
+        let mut self_conflicting_account: bool;
+        let mut self_conflicting_accounts = Vec::new();
+        let mut self_conflicting_tx = false;
+        for k in writable_keys.iter() {
+            if account_locks.is_locked_write(k) || account_locks.is_locked_readonly(k)
+            {
+                self_conflicting_account = entry_accts_lookup.writables.contains(k);
+                if !self_conflicting_account {
+                    debug!("Writable account in use: {:?}", k);
+                    return (Err(TransactionError::AccountInUse),self_conflicting_tx);
+                } else {
+                    self_conflicting_accounts.push(self_conflicting_account);
+                }
+            }
+        }
+        for k in readonly_keys.iter() {
+            if account_locks.is_locked_write(k) { 
+                self_conflicting_account = entry_accts_lookup.readables.contains(k);
+                if !self_conflicting_account {
+                    debug!("Read-only account in use: {:?}", k);
+                    return (Err(TransactionError::AccountInUse),self_conflicting_tx);
+                } else {
+                    self_conflicting_accounts.push(self_conflicting_account);
+                }
+            }
+        }
+
+        self_conflicting_tx = self_conflicting_accounts.iter().any(|&x| x);
+
+        for k in writable_keys {
+            account_locks.write_locks.insert(*k);
+            entry_accts_lookup.writables.insert(*k);
+        }
+
+        for k in readonly_keys {
+            if !account_locks.lock_readonly(k) {
+                account_locks.insert_new_readonly(k);
+                entry_accts_lookup.readables.insert(*k);
+            }
+        }
+
+        (Ok(()),self_conflicting_tx)
+    }
+
     fn lock_account(
         &self,
         account_locks: &mut AccountLocks,
@@ -1191,6 +1248,21 @@ impl Accounts {
         self.lock_accounts_inner(tx_account_locks_results)
     }
 
+    /// This function will prevent multiple threads from modifying the same account state at the
+    /// same time
+    #[must_use]
+    #[allow(clippy::needless_collect)]
+    pub fn lock_accounts_with_conflicting_txs<'a>(
+        &self,
+        txs: impl Iterator<Item = &'a SanitizedTransaction>,
+        tx_account_lock_limit: usize,
+    ) -> (Vec<Result<()>>, bool) {
+        let tx_account_locks_results: Vec<Result<_>> = txs
+            .map(|tx| tx.get_account_locks(tx_account_lock_limit))
+            .collect();
+        self.lock_accounts_inner_with_conflicting_txs(tx_account_locks_results)
+    }
+
     #[must_use]
     #[allow(clippy::needless_collect)]
     pub fn lock_accounts_with_results<'a>(
@@ -1207,6 +1279,32 @@ impl Accounts {
             })
             .collect();
         self.lock_accounts_inner(tx_account_locks_results)
+    }
+
+    #[must_use]
+    fn lock_accounts_inner_with_conflicting_txs(
+        &self,
+        tx_account_locks_results: Vec<Result<TransactionAccountLocks>>,
+    ) -> (Vec<Result<()>>, bool) {
+        let account_locks = &mut self.account_locks.lock().unwrap();
+        let mut entry_accts_lookup = EntryAcctLocks::default();
+        let mut self_conflicting_batch = false;
+        (tx_account_locks_results
+            .into_iter()
+            .map(|tx_account_locks_result| match tx_account_locks_result {
+                Ok(tx_account_locks) => {
+                    let (res, conflicting_tx) = self.lock_account_with_conflicting_txs(
+                    account_locks,
+                    tx_account_locks.writable,
+                    tx_account_locks.readonly,
+                    &mut entry_accts_lookup,
+                );
+                self_conflicting_batch = conflicting_tx;
+                res
+            },
+                Err(err) => Err(err),
+            })
+            .collect(), self_conflicting_batch)
     }
 
     #[must_use]
