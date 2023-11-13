@@ -10,6 +10,7 @@ use {
             IteratorMode, LedgerColumn, Result, WriteBatch,
         },
         blockstore_meta::*,
+        blockstore_metrics::BlockstoreRpcApiMetrics,
         blockstore_options::{
             AccessType, BlockstoreOptions, LedgerColumnOptions, BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
             BLOCKSTORE_DIRECTORY_ROCKS_LEVEL,
@@ -222,6 +223,7 @@ pub struct Blockstore {
     pub shred_timing_point_sender: Option<PohTimingSender>,
     pub lowest_cleanup_slot: RwLock<Slot>,
     pub slots_stats: SlotsStats,
+    rpc_api_metrics: BlockstoreRpcApiMetrics,
 }
 
 pub struct IndexMetaWorkingSetEntry {
@@ -362,6 +364,7 @@ impl Blockstore {
             max_root,
             lowest_cleanup_slot: RwLock::<Slot>::default(),
             slots_stats: SlotsStats::default(),
+            rpc_api_metrics: BlockstoreRpcApiMetrics::default(),
         };
         blockstore.cleanup_old_entries()?;
         blockstore.update_highest_primary_index_slot()?;
@@ -715,6 +718,11 @@ impl Blockstore {
         self.bank_hash_cf.submit_rocksdb_cf_metrics();
         self.optimistic_slots_cf.submit_rocksdb_cf_metrics();
         self.merkle_root_meta_cf.submit_rocksdb_cf_metrics();
+    }
+
+    /// Report the accumulated RPC API metrics
+    pub(crate) fn report_rpc_api_metrics(&self) {
+        self.rpc_api_metrics.report();
     }
 
     fn try_shred_recovery(
@@ -1961,10 +1969,9 @@ impl Blockstore {
     }
 
     pub fn get_rooted_block_time(&self, slot: Slot) -> Result<UnixTimestamp> {
-        datapoint_info!(
-            "blockstore-rpc-api",
-            ("method", "get_rooted_block_time", String)
-        );
+        self.rpc_api_metrics
+            .num_get_rooted_block_time
+            .fetch_add(1, Ordering::Relaxed);
         let _lock = self.check_lowest_cleanup_slot(slot)?;
 
         if self.is_root(slot) {
@@ -1981,8 +1988,11 @@ impl Blockstore {
     }
 
     pub fn get_block_height(&self, slot: Slot) -> Result<Option<u64>> {
-        datapoint_info!("blockstore-rpc-api", ("method", "get_block_height", String));
+        self.rpc_api_metrics
+            .num_get_block_height
+            .fetch_add(1, Ordering::Relaxed);
         let _lock = self.check_lowest_cleanup_slot(slot)?;
+
         self.block_height_cf.get(slot)
     }
 
@@ -2010,7 +2020,9 @@ impl Blockstore {
         slot: Slot,
         require_previous_blockhash: bool,
     ) -> Result<VersionedConfirmedBlock> {
-        datapoint_info!("blockstore-rpc-api", ("method", "get_rooted_block", String));
+        self.rpc_api_metrics
+            .num_get_rooted_block
+            .fetch_add(1, Ordering::Relaxed);
         let _lock = self.check_lowest_cleanup_slot(slot)?;
 
         if self.is_root(slot) {
@@ -2033,10 +2045,9 @@ impl Blockstore {
         slot: Slot,
         require_previous_blockhash: bool,
     ) -> Result<VersionedConfirmedBlockWithEntries> {
-        datapoint_info!(
-            "blockstore-rpc-api",
-            ("method", "get_rooted_block_with_entries", String)
-        );
+        self.rpc_api_metrics
+            .num_get_rooted_block_with_entries
+            .fetch_add(1, Ordering::Relaxed);
         let _lock = self.check_lowest_cleanup_slot(slot)?;
 
         if self.is_root(slot) {
@@ -2441,10 +2452,10 @@ impl Blockstore {
         &self,
         signature: Signature,
     ) -> Result<Option<(Slot, TransactionStatusMeta)>> {
-        datapoint_info!(
-            "blockstore-rpc-api",
-            ("method", "get_rooted_transaction_status", String)
-        );
+        self.rpc_api_metrics
+            .num_get_rooted_transaction_status
+            .fetch_add(1, Ordering::Relaxed);
+
         self.get_transaction_status(signature, &HashSet::default())
     }
 
@@ -2454,10 +2465,10 @@ impl Blockstore {
         signature: Signature,
         confirmed_unrooted_slots: &HashSet<Slot>,
     ) -> Result<Option<(Slot, TransactionStatusMeta)>> {
-        datapoint_info!(
-            "blockstore-rpc-api",
-            ("method", "get_transaction_status", String)
-        );
+        self.rpc_api_metrics
+            .num_get_transaction_status
+            .fetch_add(1, Ordering::Relaxed);
+
         self.get_transaction_status_with_counter(signature, confirmed_unrooted_slots)
             .map(|(status, _)| status)
     }
@@ -2467,10 +2478,10 @@ impl Blockstore {
         &self,
         signature: Signature,
     ) -> Result<Option<ConfirmedTransactionWithStatusMeta>> {
-        datapoint_info!(
-            "blockstore-rpc-api",
-            ("method", "get_rooted_transaction", String)
-        );
+        self.rpc_api_metrics
+            .num_get_rooted_transaction
+            .fetch_add(1, Ordering::Relaxed);
+
         self.get_transaction_with_status(signature, &HashSet::default())
     }
 
@@ -2480,10 +2491,10 @@ impl Blockstore {
         signature: Signature,
         highest_confirmed_slot: Slot,
     ) -> Result<Option<ConfirmedTransactionWithStatusMeta>> {
-        datapoint_info!(
-            "blockstore-rpc-api",
-            ("method", "get_complete_transaction", String)
-        );
+        self.rpc_api_metrics
+            .num_get_complete_transaction
+            .fetch_add(1, Ordering::Relaxed);
+
         let max_root = self.max_root();
         let confirmed_unrooted_slots: HashSet<_> =
             AncestorIterator::new_inclusive(highest_confirmed_slot, self)
@@ -2593,10 +2604,10 @@ impl Blockstore {
         start_slot: Slot,
         end_slot: Slot,
     ) -> Result<Vec<Signature>> {
-        datapoint_info!(
-            "blockstore-rpc-api",
-            ("method", "get_confirmed_signatures_for_address", String)
-        );
+        self.rpc_api_metrics
+            .num_get_confirmed_signatures_for_address
+            .fetch_add(1, Ordering::Relaxed);
+
         self.find_address_signatures(pubkey, start_slot, end_slot)
             .map(|signatures| signatures.iter().map(|(_, signature)| *signature).collect())
     }
@@ -2631,10 +2642,10 @@ impl Blockstore {
         until: Option<Signature>,
         limit: usize,
     ) -> Result<SignatureInfosForAddress> {
-        datapoint_info!(
-            "blockstore-rpc-api",
-            ("method", "get_confirmed_signatures_for_address2", String)
-        );
+        self.rpc_api_metrics
+            .num_get_confirmed_signatures_for_address2
+            .fetch_add(1, Ordering::Relaxed);
+
         let max_root = self.max_root();
         let confirmed_unrooted_slots: HashSet<_> =
             AncestorIterator::new_inclusive(highest_slot, self)
