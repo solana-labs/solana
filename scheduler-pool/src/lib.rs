@@ -1342,7 +1342,7 @@ impl ScheduleStage {
                 .iter()
                 .filter(|l| l.requested_usage == RequestedUsage::Readonly)
             {
-                if let Some(task) = read_only_lock_attempt
+                if let Some(next_contended_task) = read_only_lock_attempt
                     .target_page_mut()
                     .task_ids
                     .reindex(false, &next_task.unique_weight)
@@ -1350,8 +1350,8 @@ impl ScheduleStage {
                     if task.currently_contended() {
                         address_book
                             .retry_queue
-                            .entry(task.unique_weight)
-                            .or_insert(task);
+                            .entry(next_contended_task.unique_weight)
+                            .or_insert(next_contended_task);
                     }
                 }
             }
