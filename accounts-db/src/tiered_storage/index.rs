@@ -80,14 +80,14 @@ impl IndexBlockFormat {
         &self,
         map: &'a Mmap,
         footer: &TieredStorageFooter,
-        offset: IndexOffset,
+        index_offset: IndexOffset,
     ) -> TieredStorageResult<&'a Pubkey> {
-        let offset = match self {
+        let account_offset = match self {
             Self::AddressAndOffset => {
-                footer.index_block_offset as usize + std::mem::size_of::<Pubkey>() * offset.0
+                footer.index_block_offset as usize + std::mem::size_of::<Pubkey>() * index_offset.0
             }
         };
-        let (address, _) = get_type::<Pubkey>(map, offset)?;
+        let (address, _) = get_type::<Pubkey>(map, account_offset)?;
         Ok(address)
     }
 
@@ -96,14 +96,14 @@ impl IndexBlockFormat {
         &self,
         map: &Mmap,
         footer: &TieredStorageFooter,
-        offset: IndexOffset,
+        index_offset: IndexOffset,
     ) -> TieredStorageResult<AccountOffset> {
         match self {
             Self::AddressAndOffset => {
-                let offset = footer.index_block_offset as usize
+                let account_offset = footer.index_block_offset as usize
                     + std::mem::size_of::<Pubkey>() * footer.account_entry_count as usize
-                    + offset.0 * std::mem::size_of::<u64>();
-                let (account_block_offset, _) = get_type(map, offset)?;
+                    + index_offset.0 * std::mem::size_of::<u64>();
+                let (account_block_offset, _) = get_type(map, account_offset)?;
                 Ok(AccountOffset {
                     block: *account_block_offset,
                 })
