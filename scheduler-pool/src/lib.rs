@@ -422,7 +422,7 @@ type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
 #[derive(Default, Debug, Clone)]
 pub struct AddressBook {
     book: AddressMap,
-    uncontended_task_ids: WeightedTaskIds2,
+    retry_queue: WeightedTaskIds2,
 }
 
 impl AddressBook {
@@ -1253,7 +1253,7 @@ impl ScheduleStage {
             (TaskInQueue, std::collections::HashSet<PageRc>),
         >,
     > {
-        address_book.uncontended_task_ids.last_entry()
+        address_book.retry_queue.last_entry()
     }
 
     fn select_next_task_to_lock<'a>(
@@ -1351,7 +1351,7 @@ impl ScheduleStage {
                 {
                     if task.currently_contended() {
                         let uti = address_book
-                            .uncontended_task_ids
+                            .retry_queue
                             .entry(task.unique_weight)
                             .or_insert((task, Default::default()));
                         uti.1.insert(read_only_lock_attempt.target_page.clone());
@@ -1383,7 +1383,7 @@ impl ScheduleStage {
                     }
 
                     address_book
-                        .uncontended_task_ids
+                        .retry_queue
                         .entry(uncontended_task.unique_weight)
                         .or_insert((uncontended_task, Default::default()))
                         .1.insert(unlock_attempt.target_page.clone());
