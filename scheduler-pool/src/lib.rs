@@ -1374,10 +1374,10 @@ impl ScheduleStage {
     }
 
     fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: &mut [LockAttempt]) {
-        for l in lock_attempts {
-            let is_newly_uncontended = AddressBook::reset_lock(l);
+        for unlock_attempt in lock_attempts {
+            let is_newly_uncontended = AddressBook::reset_lock(unlock_attempt);
             if is_newly_uncontended {
-                if let Some(uncontended_task) = l.heaviest_uncontended.take() {
+                if let Some(uncontended_task) = unlock_attempt.heaviest_uncontended.take() {
                     if !uncontended_task.currently_contended() {
                         continue;
                     }
@@ -1385,8 +1385,8 @@ impl ScheduleStage {
                     address_book
                         .uncontended_task_ids
                         .entry(uncontended_task.unique_weight)
-                        .or_insert((uncontended_tasktask, Default::default()))
-                        .1.insert(l.target_page.clone());
+                        .or_insert((uncontended_task, Default::default()))
+                        .1.insert(unlock_attempt.target_page.clone());
                 }
             }
         }
