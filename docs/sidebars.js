@@ -58,7 +58,7 @@ module.exports = {
     },
   ],
   cliSidebar: [
-    "cli",
+    "cli/index",
     "cli/install-solana-cli-tools",
     {
       type: "category",

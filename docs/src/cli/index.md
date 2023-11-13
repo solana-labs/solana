@@ -1,10 +1,11 @@
 ---
-title: Command-line Guide
+title: Solana Command Line Guide
+sidebar_label: Solana CLI Tool Suite
 ---
 
 In this section, we will describe how to use the Solana command-line tools to
-create a _wallet_, to send and receive SOL tokens, and to participate in
-the cluster by delegating stake.
+create a _wallet_, to send and receive SOL tokens, and to participate in the
+cluster by delegating stake.
 
 To interact with a Solana cluster, we will use its command-line interface, also
 known as the CLI. We use the command-line because it is the first place the
