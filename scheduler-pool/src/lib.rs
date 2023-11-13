@@ -503,16 +503,16 @@ impl AddressBook {
         }
     }
 
-    fn reset_lock(&mut self, attempt: &mut LockAttempt) -> bool {
+    fn reset_lock(attempt: &mut LockAttempt) -> bool {
         match attempt.status {
-            LockStatus::Succeded => self.unlock(attempt),
+            LockStatus::Succeded => Self::unlock(attempt),
             LockStatus::Failed => {
                 false // do nothing
             }
         }
     }
 
-    fn unlock(&mut self, attempt: &mut LockAttempt) -> bool {
+    fn unlock(attempt: &mut LockAttempt) -> bool {
         let mut newly_uncontended = false;
 
         let mut page = attempt.target_page_mut();
@@ -1355,7 +1355,6 @@ impl ScheduleStage {
 
         if unlockable_count > 0 {
             Self::reset_lock_for_failed_execution(
-                address_book,
                 &unique_weight,
                 &mut next_task.lock_attempts_mut(),
             );
@@ -1409,18 +1408,17 @@ impl ScheduleStage {
     }
 
     fn reset_lock_for_failed_execution(
-        address_book: &mut AddressBook,
         unique_weight: &UniqueWeight,
         lock_attempts: &mut [LockAttempt],
     ) {
         for l in lock_attempts {
-            address_book.reset_lock(l);
+            AddressBook::reset_lock(l);
         }
     }
 
     fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: &mut [LockAttempt]) {
         for mut l in lock_attempts {
-            let newly_uncontended = address_book.reset_lock(&mut l);
+            let newly_uncontended = AddressBook::reset_lock(&mut l);
 
             let mut page = l.target.page_mut();
             if newly_uncontended {
