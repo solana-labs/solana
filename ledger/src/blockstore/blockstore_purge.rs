@@ -401,7 +401,7 @@ impl Blockstore {
                 .into_iter()
                 .flat_map(|entry| entry.transactions);
             for (i, transaction) in transactions.enumerate() {
-                if let Some(&signature) = transaction.signatures.get(0) {
+                if let Some(&signature) = transaction.signatures.first() {
                     batch.delete::<cf::TransactionStatus>((signature, slot))?;
                     batch.delete::<cf::TransactionMemos>((signature, slot))?;
                     if !primary_indexes.is_empty() {

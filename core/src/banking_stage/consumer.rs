@@ -1264,7 +1264,7 @@ mod tests {
             let commit_transactions_result = commit_transactions_result.unwrap();
             assert_eq!(commit_transactions_result.len(), 2);
             assert_matches!(
-                commit_transactions_result.get(0),
+                commit_transactions_result.first(),
                 Some(CommitTransactionDetails::Committed { .. })
             );
             assert_matches!(
@@ -1274,7 +1274,7 @@ mod tests {
             assert_eq!(retryable_transaction_indexes, vec![1]);
 
             let expected_block_cost = if !apply_cost_tracker_during_replay_enabled {
-                let actual_bpf_execution_cost = match commit_transactions_result.get(0).unwrap() {
+                let actual_bpf_execution_cost = match commit_transactions_result.first().unwrap() {
                     CommitTransactionDetails::Committed { compute_units } => *compute_units,
                     CommitTransactionDetails::NotCommitted => {
                         unreachable!()
