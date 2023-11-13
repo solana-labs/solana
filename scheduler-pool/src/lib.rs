@@ -308,7 +308,7 @@ pub struct LockAttempt {
     target: PageRc,
     status: LockStatus,
     requested_usage: RequestedUsage,
-    pub heaviest_uncontended: Option<TaskInQueue>,
+    heaviest_uncontended: Option<TaskInQueue>,
 }
 
 impl PageRc {
