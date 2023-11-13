@@ -49,6 +49,9 @@ pub struct ConnectionCache<
     T, // NewConnectionConfig
 > {
     name: &'static str,
+    // CAUTION: When acquiring the locks for both map and connection_manager
+    // the lock for map must always be acquired before the lock for connection_manager
+    // to prevent deadlocks
     map: Arc<RwLock<IndexMap<SocketAddr, /*ConnectionPool:*/ R>>>,
     connection_manager: Arc<RwLock<S>>,
     stats: Arc<ConnectionCacheStats>,
