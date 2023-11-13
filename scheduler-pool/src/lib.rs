@@ -1350,7 +1350,7 @@ impl ScheduleStage {
                     .reindex(false, &next_task.unique_weight)
                 {
                     if task.currently_contended() {
-                        let uti = address_book
+                        address_book
                             .retry_queue
                             .entry(task.unique_weight)
                             .or_insert(task);
