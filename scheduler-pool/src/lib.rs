@@ -257,7 +257,7 @@ impl Task {
         TaskInQueue::clone(this)
     }
 
-    fn index_with_address_book(this: &TaskInQueue) {
+    fn index_with_page(this: &TaskInQueue) {
         for lock_attempt in &*this.lock_attempts_mut() {
             lock_attempt
                 .target_page_mut()
@@ -1339,7 +1339,7 @@ impl ScheduleStage {
 
             if from_runnable {
                 next_task.mark_as_contended();
-                Task::index_with_address_book(&next_task);
+                Task::index_with_page(&next_task);
             }
 
             return None;
