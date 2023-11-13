@@ -80,7 +80,7 @@ struct PacketAccumulator {
     pub chunks: Vec<PacketChunk>,
 }
 
-#[allow(clippy::too_many_arguments, clippy::type_complexity)]
+#[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
     name: &'static str,
     sock: UdpSocket,

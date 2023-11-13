@@ -405,7 +405,6 @@ fn main() {
             post_init: admin_service_post_init,
             tower_storage: tower_storage.clone(),
             rpc_to_plugin_manager_sender,
-            //todo: is this right?
             notifies: Vec::new(),
         },
     );
