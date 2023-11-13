@@ -290,7 +290,7 @@ impl Task {
 
 #[derive(Debug)]
 pub struct LockAttempt {
-    target: PageRc,
+    target_page: PageRc,
     status: LockStatus,
     requested_usage: RequestedUsage,
     heaviest_uncontended: Option<TaskInQueue>,
@@ -303,9 +303,9 @@ impl PageRc {
 }
 
 impl LockAttempt {
-    pub fn new(target: PageRc, requested_usage: RequestedUsage) -> Self {
+    pub fn new(target_page: PageRc, requested_usage: RequestedUsage) -> Self {
         Self {
-            target,
+            target_page,
             status: LockStatus::Succeded,
             requested_usage,
             heaviest_uncontended: Default::default(),
@@ -314,7 +314,7 @@ impl LockAttempt {
 
     pub fn clone_for_test(&self) -> Self {
         Self {
-            target: self.target.clone(),
+            target_page: self.target_page.clone(),
             status: LockStatus::Succeded,
             requested_usage: self.requested_usage,
             heaviest_uncontended: Default::default(),
@@ -322,7 +322,7 @@ impl LockAttempt {
     }
 
     fn target_page_mut(&self) -> std::cell::RefMut<'_, Page> {
-        self.target.page_mut()
+        self.target_page.page_mut()
     }
 }
 
@@ -460,12 +460,12 @@ impl AddressBook {
         }
 
         let LockAttempt {
-            target,
+            target_page,
             requested_usage,
             status,
             ..
         } = attempt;
-        let mut page = target.page_mut();
+        let mut page = target_page.page_mut();
 
         match page.current_usage {
             Usage::Unused => {
@@ -1354,7 +1354,7 @@ impl ScheduleStage {
                             .uncontended_task_ids
                             .entry(task.unique_weight)
                             .or_insert((task, Default::default()));
-                        uti.1.insert(read_only_lock_attempt.target.clone());
+                        uti.1.insert(read_only_lock_attempt.target_page.clone());
                     }
                 }
             }
@@ -1377,14 +1377,16 @@ impl ScheduleStage {
         for l in lock_attempts {
             let is_newly_uncontended = AddressBook::reset_lock(l);
             if is_newly_uncontended {
-                if let Some(task) = l.heaviest_uncontended.take() {
-                    if task.currently_contended() {
-                        address_book
-                            .uncontended_task_ids
-                            .entry(task.unique_weight)
-                            .or_insert((task, Default::default()))
-                            .1.insert(l.target.clone());
+                if let Some(uncontended_task) = l.heaviest_uncontended.take() {
+                    if !uncontended_task.currently_contended() {
+                        continue;
                     }
+
+                    address_book
+                        .uncontended_task_ids
+                        .entry(uncontended_task.unique_weight)
+                        .or_insert((uncontended_tasktask, Default::default()))
+                        .1.insert(l.target_page.clone());
                 }
             }
         }
