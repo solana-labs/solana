@@ -1,5 +1,7 @@
 ---
-title: Using Solana CLI
+title: Introduction to the Solana CLI
+sidebar_label: Overview
+sidebar_position: 1
 ---
 
 Before running any Solana CLI commands, let's go over some conventions that
