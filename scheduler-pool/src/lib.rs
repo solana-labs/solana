@@ -415,14 +415,14 @@ unsafe impl Send for PageRc {}
 unsafe impl Sync for PageRc {}
 unsafe impl Send for LockAttemptsInCell {}
 unsafe impl Sync for LockAttemptsInCell {}
-type WeightedTaskIds2 =
-    std::collections::BTreeMap<UniqueWeight, (TaskInQueue, std::collections::HashSet<PageRc>)>;
+type WeightedTaskIds =
+    std::collections::BTreeMap<UniqueWeight, TaskInQueue>;
 
 type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
 #[derive(Default, Debug, Clone)]
 pub struct AddressBook {
     book: AddressMap,
-    retry_queue: WeightedTaskIds2,
+    retry_queue: WeightedTaskIds,
 }
 
 impl AddressBook {
@@ -1191,7 +1191,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
 
 enum TaskSource {
     Runnable,
-    Contended(std::collections::HashSet<PageRc>),
+    Contended,
 }
 
 enum TaskSelection {
@@ -1250,7 +1250,7 @@ impl ScheduleStage {
         std::collections::btree_map::OccupiedEntry<
             'a,
             UniqueWeight,
-            (TaskInQueue, std::collections::HashSet<PageRc>),
+            TaskInQueue,
         >,
     > {
         address_book.retry_queue.last_entry()
@@ -1285,7 +1285,7 @@ impl ScheduleStage {
                     None
                 } else {
                     let t = weight_from_contended.remove();
-                    Some((TaskSource::Contended(t.1), t.0))
+                    Some((TaskSource::Contended, t))
                 }
             }
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
