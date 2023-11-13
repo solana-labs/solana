@@ -265,8 +265,7 @@ impl Task {
                 .insert_task(Task::clone_in_queue(this));
 
             if lock_attempt.requested_usage == RequestedUsage::Writable {
-                lock_attempt
-                    .target_page_mut()
+                page
                     .write_task_ids
                     .insert(this.unique_weight);
             }
