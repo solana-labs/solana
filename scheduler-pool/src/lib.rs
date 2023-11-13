@@ -1357,10 +1357,7 @@ impl ScheduleStage {
             }
 
             if let Some(uncontended_task) = heaviest_uncontended {
-                if !uncontended_task.currently_contended() {
-                    continue;
-                }
-
+                assert!(uncontended_task.currently_contended());
                 address_book
                     .retryable_task_queue
                     .entry(uncontended_task.unique_weight)
