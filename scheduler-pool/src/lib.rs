@@ -465,7 +465,7 @@ impl AddressBook {
                 .map(|existing_unique_weights| unique_weight > existing_unique_weights)
                 .unwrap_or(true)
         {
-            // this unique_weight is heavier than any of contened write locks.
+            // this _read-only_ unique_weight is heavier than any of contened write locks.
             true
         } else {
             false
