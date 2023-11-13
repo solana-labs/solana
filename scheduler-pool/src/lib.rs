@@ -491,7 +491,7 @@ impl AddressBook {
     }
 
     fn unlock(attempt: &mut LockAttempt) -> bool {
-        let mut newly_uncontended = false;
+        let mut is_unused_now = false;
 
         let mut page = attempt.target_page_mut();
 
@@ -499,7 +499,7 @@ impl AddressBook {
             Usage::Readonly(ref mut count) => match &attempt.requested_usage {
                 RequestedUsage::Readonly => {
                     if *count == SOLE_USE_COUNT {
-                        newly_uncontended = true;
+                        is_unused_now = true;
                     } else {
                         *count -= 1;
                     }
@@ -508,18 +508,18 @@ impl AddressBook {
             },
             Usage::Writable => match &attempt.requested_usage {
                 RequestedUsage::Writable => {
-                    newly_uncontended = true;
+                    is_unused_now = true;
                 }
                 RequestedUsage::Readonly => unreachable!(),
             },
             Usage::Unused => unreachable!(),
         }
 
-        if newly_uncontended {
+        if is_unused_now {
             page.current_usage = Usage::Unused;
         }
 
-        newly_uncontended
+        is_unused_now
     }
 
     pub fn preloader(&self) -> Preloader {
@@ -1347,11 +1347,6 @@ impl ScheduleStage {
     fn unlock_after_execution(should_remove: bool, uq: UniqueWeight, address_book: &mut AddressBook, lock_attempts: &mut [LockAttempt]) {
 
         for unlock_attempt in lock_attempts {
-            let is_newly_uncontended = AddressBook::reset_lock(unlock_attempt);
-            if !is_newly_uncontended {
-                continue;
-            }
-
             let heaviest_uncontended = unlock_attempt
                 .target_page_mut()
                 .blocked_task_queue
@@ -1359,6 +1354,11 @@ impl ScheduleStage {
 
             if should_remove && unlock_attempt.requested_usage == RequestedUsage::Writable {
                 unlock_attempt.target_page_mut().write_task_ids.remove(&uq);
+            }
+
+            let is_unused_now = AddressBook::reset_lock(unlock_attempt);
+            if !is_unused_now {
+                continue;
             }
 
             if let Some(uncontended_task) = heaviest_uncontended {
