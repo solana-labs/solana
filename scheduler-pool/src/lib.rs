@@ -260,8 +260,8 @@ impl Task {
     fn index_with_pages(this: &TaskInQueue) {
         for lock_attempt in &*this.lock_attempts_mut() {
             let mut page = lock_attempt.target_page_mut();
-            page.task_ids.insert_task(Task::clone_in_queue(this));
 
+            page.task_ids.insert_task(Task::clone_in_queue(this));
             if lock_attempt.requested_usage == RequestedUsage::Writable {
                 page.write_task_ids.insert(this.unique_weight);
             }
