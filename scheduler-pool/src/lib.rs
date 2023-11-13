@@ -1385,8 +1385,7 @@ impl ScheduleStage {
                     address_book
                         .retry_queue
                         .entry(uncontended_task.unique_weight)
-                        .or_insert((uncontended_task, Default::default()))
-                        .insert(unlock_attempt.target_page.clone());
+                        .or_insert(uncontended_task)
                 }
             }
         }
