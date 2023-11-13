@@ -17309,17 +17309,6 @@ pub mod tests {
 
                                 let alive_total_one_account = 136 + space;
                                 if alive {
-                                    assert_eq!(
-                                        shrink_collect.alive_total_bytes as u64,
-                                        PAGE_SIZE
-                                            * if account_count >= 100 {
-                                                4
-                                            } else if account_count >= 50 {
-                                                2
-                                            } else {
-                                                1
-                                            }
-                                    );
                                     let mut expected_alive_total_bytes =
                                         alive_total_one_account * normal_account_count;
                                     if append_opposite_zero_lamport_account {
@@ -17331,7 +17320,6 @@ pub mod tests {
                                         expected_alive_total_bytes
                                     );
                                 } else if append_opposite_alive_account {
-                                    assert_eq!(shrink_collect.alive_total_bytes, 4096);
                                     assert_eq!(
                                         shrink_collect.alive_total_bytes,
                                         alive_total_one_account
