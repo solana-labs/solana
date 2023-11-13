@@ -886,7 +886,7 @@ where
             &mut msg.result_with_timings.1,
             bank,
             &msg.task.tx.0,
-            (UniqueWeight::max_value() - msg.unique_weight) as usize,
+            (UniqueWeight::max_value() - msg.task.unique_weight) as usize,
             pool,
         );
     }
