@@ -20,7 +20,8 @@ use {
         extract_and_fmt_memos, ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
         ConfirmedTransactionWithStatusMeta, Reward, TransactionByAddrInfo,
         TransactionConfirmationStatus, TransactionStatus, TransactionStatusMeta,
-        TransactionWithStatusMeta, VersionedConfirmedBlock, VersionedTransactionWithStatusMeta,
+        TransactionWithStatusMeta, VersionedConfirmedBlock, VersionedConfirmedBlockWithEntries,
+        VersionedTransactionWithStatusMeta,
     },
     std::{
         collections::{HashMap, HashSet},
@@ -883,7 +884,27 @@ impl LedgerStorage {
             "LedgerStorage::upload_confirmed_block request received: {:?}",
             slot
         );
+        self.upload_confirmed_block_with_entries(
+            slot,
+            VersionedConfirmedBlockWithEntries {
+                block: confirmed_block,
+                entries: vec![],
+            },
+        )
+        .await
+    }
+
+    pub async fn upload_confirmed_block_with_entries(
+        &self,
+        slot: Slot,
+        confirmed_block: VersionedConfirmedBlockWithEntries,
+    ) -> Result<()> {
+        trace!(
+            "LedgerStorage::upload_confirmed_block_with_entries request received: {:?}",
+            slot
+        );
         let mut by_addr: HashMap<&Pubkey, Vec<TransactionByAddrInfo>> = HashMap::new();
+        let confirmed_block = confirmed_block.block;
 
         let mut tx_cells = vec![];
         for (index, transaction_with_meta) in confirmed_block.transactions.iter().enumerate() {

@@ -4,7 +4,6 @@ use {
     log::*,
     solana_measure::measure::Measure,
     solana_sdk::clock::Slot,
-    solana_transaction_status::VersionedConfirmedBlockWithEntries,
     std::{
         cmp::{max, min},
         collections::HashSet,
@@ -225,13 +224,11 @@ pub async fn upload_confirmed_blocks(
                 num_blocks -= 1;
                 None
             }
-            Some(VersionedConfirmedBlockWithEntries {
-                block: confirmed_block,
-                ..
-            }) => {
+            Some(confirmed_block) => {
                 let bt = bigtable.clone();
                 Some(tokio::spawn(async move {
-                    bt.upload_confirmed_block(slot, confirmed_block).await
+                    bt.upload_confirmed_block_with_entries(slot, confirmed_block)
+                        .await
                 }))
             }
         });
