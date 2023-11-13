@@ -1,5 +1,7 @@
 ---
-title: Install the Solana Tool Suite
+title: Install the Solana CLI
+sidebar_label: Installation
+sidebar_position: 1
 ---
 
 There are multiple ways to install the Solana tools on your computer
