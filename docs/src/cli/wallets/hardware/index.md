@@ -1,5 +1,7 @@
 ---
-title: Using Hardware Wallets on the Solana CLI
+title: Using Hardware Wallets in the Solana CLI
+sidebar_label: Using in the Solana CLI
+sidebar_position: 0
 ---
 
 Signing a transaction requires a private key, but storing a private

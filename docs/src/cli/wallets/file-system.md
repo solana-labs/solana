@@ -1,5 +1,6 @@
 ---
-title: File System Wallet
+title: File System Wallets
+sidebar_position: 2
 ---
 
 This document describes how to create and use a file system wallet with the
