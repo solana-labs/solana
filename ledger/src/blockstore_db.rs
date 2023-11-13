@@ -1107,7 +1107,7 @@ impl Column for columns::MerkleRootMeta {
         key
     }
 
-    fn slot((slot, _fec_set_index): Self::Index) -> Slot {
+    fn primary_index((slot, _fec_set_index): Self::Index) -> Slot {
         slot
     }
 

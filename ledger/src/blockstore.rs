@@ -193,12 +193,8 @@ pub struct Blockstore {
     program_costs_cf: LedgerColumn<cf::ProgramCosts>,
     bank_hash_cf: LedgerColumn<cf::BankHash>,
     optimistic_slots_cf: LedgerColumn<cf::OptimisticSlots>,
-<<<<<<< HEAD
-    last_root: RwLock<Slot>,
-=======
-    max_root: AtomicU64,
     merkle_root_meta_cf: LedgerColumn<cf::MerkleRootMeta>,
->>>>>>> e457c02879 (add merkle root meta column to blockstore (#33979))
+    last_root: RwLock<Slot>,
     insert_shreds_lock: Mutex<()>,
     new_shreds_signals: Mutex<Vec<Sender<bool>>>,
     completed_slots_senders: Mutex<Vec<CompletedSlotsSender>>,
