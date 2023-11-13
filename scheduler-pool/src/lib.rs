@@ -662,13 +662,10 @@ impl ExecutionEnvironment {
             .load(std::sync::atomic::Ordering::SeqCst)
             > 0;
         for lock_attempt in self.finalized_lock_attempts.iter_mut() {
-            let ll = lock_attempt
+            lock_attempt.heaviest_uncontended = lock_attempt
                 .target_page_mut()
                 .task_ids
                 .reindex(should_remove, &uq);
-            if let Some(heaviest_uncontended) = ll {
-                lock_attempt.heaviest_uncontended = Some(heaviest_uncontended);
-            };
 
             if should_remove && lock_attempt.requested_usage == RequestedUsage::Writable {
                 lock_attempt.target_page_mut().write_task_ids.remove(&uq);
