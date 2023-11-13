@@ -1387,9 +1387,6 @@ impl ScheduleStage {
     }
 
     fn commit_processed_execution(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
-        ee.reindex_with_address_book();
-
-        // which order for data race free?: unlocking / marking
         let should_remove = ee
             .task
             .contention_count
