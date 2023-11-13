@@ -1,5 +1,7 @@
 ---
 title: Command Line Wallets
+sidebar_label: Overview
+sidebar_position: 0
 ---
 
 Solana supports several different types of wallets that can be used to interface
