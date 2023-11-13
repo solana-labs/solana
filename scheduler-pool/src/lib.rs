@@ -419,8 +419,8 @@ impl AddressBook {
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) {
-        let tcuw = attempt
-            .target_page_mut()
+        let page = attempt.target_page_mut();
+        let tcuw = page 
             .blocked_task_queue
             .heaviest_weight();
 
@@ -429,8 +429,7 @@ impl AddressBook {
         } else if tcuw.unwrap() == *unique_weight {
             true
         } else if attempt.requested_usage == RequestedUsage::Readonly
-            && attempt
-                .target_page_mut()
+            && page 
                 .blocked_write_requesting_task_ids
                 .last()
                 .map(|existing_unique_weight| unique_weight > existing_unique_weight)
