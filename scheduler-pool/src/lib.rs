@@ -261,7 +261,8 @@ impl Task {
         for lock_attempt in &*this.lock_attempts_mut() {
             let mut page = lock_attempt.target_page_mut();
 
-            page.blocked_task_queue.insert_task(Task::clone_in_queue(this));
+            page.blocked_task_queue
+                .insert_task(Task::clone_in_queue(this));
             if lock_attempt.requested_usage == RequestedUsage::Writable {
                 page.write_task_ids.insert(this.unique_weight);
             }
@@ -398,10 +399,7 @@ impl BTreeMapTaskIds {
     }
 }
 
-type PageRcInner = Arc<(
-    std::cell::RefCell<Page>,
-    std::sync::atomic::AtomicUsize,
-)>;
+type PageRcInner = Arc<(std::cell::RefCell<Page>, std::sync::atomic::AtomicUsize)>;
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct PageRc(by_address::ByAddress<PageRcInner>);
@@ -409,8 +407,7 @@ unsafe impl Send for PageRc {}
 unsafe impl Sync for PageRc {}
 unsafe impl Send for LockAttemptsInCell {}
 unsafe impl Sync for LockAttemptsInCell {}
-type WeightedTaskIds =
-    std::collections::BTreeMap<UniqueWeight, TaskInQueue>;
+type WeightedTaskIds = std::collections::BTreeMap<UniqueWeight, TaskInQueue>;
 
 type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
 #[derive(Default, Debug, Clone)]
@@ -1218,13 +1215,7 @@ pub struct ScheduleStage {}
 impl ScheduleStage {
     fn get_heaviest_from_contended<'a>(
         address_book: &'a mut AddressBook,
-    ) -> Option<
-        std::collections::btree_map::OccupiedEntry<
-            'a,
-            UniqueWeight,
-            TaskInQueue,
-        >,
-    > {
+    ) -> Option<std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, TaskInQueue>> {
         address_book.retryable_task_queue.last_entry()
     }
 
@@ -1344,8 +1335,12 @@ impl ScheduleStage {
         }
     }
 
-    fn unlock_after_execution(should_remove: bool, uq: UniqueWeight, address_book: &mut AddressBook, lock_attempts: &mut [LockAttempt]) {
-
+    fn unlock_after_execution(
+        should_remove: bool,
+        uq: UniqueWeight,
+        address_book: &mut AddressBook,
+        lock_attempts: &mut [LockAttempt],
+    ) {
         for unlock_attempt in lock_attempts {
             let heaviest_uncontended = unlock_attempt
                 .target_page_mut()
@@ -1393,7 +1388,12 @@ impl ScheduleStage {
             .load(std::sync::atomic::Ordering::SeqCst)
             > 0;
         let uq = ee.task.unique_weight;
-        Self::unlock_after_execution(should_remove, uq, address_book, &mut ee.finalized_lock_attempts);
+        Self::unlock_after_execution(
+            should_remove,
+            uq,
+            address_book,
+            &mut ee.finalized_lock_attempts,
+        );
     }
 
     fn schedule_next_execution(
