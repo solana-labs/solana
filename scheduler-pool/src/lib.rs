@@ -1347,10 +1347,7 @@ impl ScheduleStage {
                     .blocked_task_queue
                     .reindex(false, &next_task.unique_weight)
                 {
-                    if !heaviest_blocked_task.currently_contended() {
-                        continue;
-                    }
-
+                    assert!(heaviest_blocked_task.currently_contended());
                     address_book
                         .retryable_task_queue
                         .entry(heaviest_blocked_task.unique_weight)
