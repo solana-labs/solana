@@ -642,10 +642,6 @@ pub struct ExecutionEnvironment {
     pub finalized_lock_attempts: Vec<LockAttempt>,
     pub execution_result:
         Option<std::result::Result<(), solana_sdk::transaction::TransactionError>>,
-    pub finish_time: Option<std::time::SystemTime>,
-    pub thx: usize,
-    pub execution_us: u64,
-    pub execution_cpu_us: u128,
     pub result_with_timings: ResultWithTimings,
 }
 
@@ -1423,10 +1419,6 @@ impl ScheduleStage {
             task,
             finalized_lock_attempts,
             execution_result: Default::default(),
-            thx: Default::default(),
-            execution_us: Default::default(),
-            execution_cpu_us: Default::default(),
-            finish_time: Default::default(),
             result_with_timings: (Ok(()), Default::default()),
         })
     }
