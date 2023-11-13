@@ -19,9 +19,9 @@ To start this guide, you will be running commands on your trusted computer, not 
 
 ## Install The Solana CLI Locally
 
-To create your validator vote account, you need to install the [Solana command line interface](../../cli.md) on your local computer.
+To create your validator vote account, you need to install the [Solana command line interface](../../cli/index.md) on your local computer.
 
-You can either use [Solana's Install Tool](../../cli/install-solana-cli-tools#use-solanas-install-tool) section from the Solana docs to install the CLI, or alternatively, you can also [build from source](../../cli/install-solana-cli-tools#build-from-source).
+You can either use [Solana's Install Tool](../../cli/install.md#use-solanas-install-tool) section from the Solana docs to install the CLI, or alternatively, you can also [build from source](../../cli/install.md#build-from-source).
 
 > Building from source is a great option for those that want a more secure and potentially more performant executable.
 
@@ -317,7 +317,7 @@ su - sol
 
 ## Install The Solana CLI on Remote Machine
 
-Your remote machine will need the Solana cli installed to run the validator software.  Refer again to [Solana's Install Tool](../../cli/install-solana-cli-tools#use-solanas-install-tool) or [build from source](../../cli/install-solana-cli-tools#build-from-source).  It is best for operators to build from source rather than using the pre built binaries.
+Your remote machine will need the Solana cli installed to run the validator software.  Refer again to [Solana's Install Tool](../../cli/install.md#use-solanas-install-tool) or [build from source](../../cli/install.md#build-from-source).  It is best for operators to build from source rather than using the pre built binaries.
 
 ## Create A Validator Startup Script
 

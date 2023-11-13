@@ -141,7 +141,7 @@ solana-keygen pubkey ASK
 
 and then entering your seed phrase.
 
-See [Paper Wallet Usage](../wallet-guide/paper-wallet.md) for more info.
+See [Paper Wallet Usage](../cli/wallets/paper.md) for more info.
 
 ---
 
@@ -298,7 +298,7 @@ The ledger will be placed in the `ledger/` directory by default, use the
 `--ledger` argument to specify a different location.
 
 > Note: You can use a
-> [paper wallet seed phrase](../wallet-guide/paper-wallet.md) for your
+> [paper wallet seed phrase](../cli/wallets/paper.md#seed-phrase-generation) for your
 > `--identity` and/or `--authorized-voter` keypairs. To use these, pass the
 > respective argument as
 > `solana-validator --identity ASK ... --authorized-voter ASK ...` and you will

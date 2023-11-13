@@ -7,7 +7,7 @@ sidebar_position: 0
 Solana supports several different types of wallets that can be used to interface
 directly with the Solana command-line tools.
 
-To use a Command Line Wallet, you must first [install the Solana CLI tools](../cli/install-solana-cli-tools.md)
+To use a Command Line Wallet, you must first [install the Solana CLI tools](../install.md)
 
 ## File System Wallet
 
@@ -28,7 +28,7 @@ keypairs are stored on your computer as files, a skilled hacker with physical
 access to your computer may be able to access it. Using an encrypted hard
 drive, such as FileVault on MacOS, minimizes that risk.
 
-[File System Wallet](file-system-wallet.md)
+See [File System Wallets](./file-system.md) for more details.
 
 ## Paper Wallet
 
@@ -41,9 +41,9 @@ regenerate a keypair on demand.
 In terms of convenience versus security, a paper wallet sits at the opposite
 side of the spectrum from an FS wallet. It is terribly inconvenient to use, but
 offers excellent security. That high security is further amplified when paper
-wallets are used in conjunction with [offline signing](../offline-signing.md).
+wallets are used in conjunction with [offline signing](../examples/offline-signing.md).
 
-[Paper Wallets](paper-wallet.md)
+See [Paper Wallets](./paper.md) for more details
 
 ## Hardware Wallet
 
@@ -58,4 +58,4 @@ security and convenience for cryptocurrencies. It effectively automates the
 process of offline signing while retaining nearly all the convenience of a file
 system wallet.
 
-[Hardware Wallets](hardware-wallets.md)
+See [Hardware Wallets](./hardware/index.md) for more details

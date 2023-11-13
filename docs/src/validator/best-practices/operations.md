@@ -18,7 +18,7 @@ is an important part of being a good operator.
 
 The Solana validator community holds regular educational workshops. You can
 watch past workshops through the
-[solana validator educational workshops playlist](https://www.youtube.com/watch?v=86zySQ5vGW8&list=PLilwLeBwGuK6jKrmn7KOkxRxS9tvbRa5p).
+[Solana validator educational workshops playlist](https://www.youtube.com/watch?v=86zySQ5vGW8&list=PLilwLeBwGuK6jKrmn7KOkxRxS9tvbRa5p).
 
 ## Help with the validator command line
 
@@ -61,7 +61,7 @@ solana-validator exit --help
 ## Upgrading
 
 There are many ways to upgrade the
-[Solana software](../../cli/install-solana-cli-tools.md). As an operator, you
+[Solana CLI software](../../cli/install.md). As an operator, you
 will need to upgrade often, so it is important to get comfortable with this
 process.
 
@@ -79,7 +79,7 @@ your `solana-validator` binary to your specific hardware.
 If you build from source on the validator machine (or a machine with the same
 CPU), you can target your specific architecture using the `-march` flag. Refer
 to the Solana docs for
-[instructions on building from source](../../cli/install-solana-cli-tools.md#build-from-source).
+[instructions on building from source](../../cli/install.md#build-from-source).
 
 ### solana-install
 
@@ -100,7 +100,7 @@ options.
 
 > **Note** this command only works if you already have the solana cli installed.
 > If you do not have the cli installed, refer to
-> [install solana cli tools](../../cli/install-solana-cli-tools.md)
+> [install solana cli tools](../../cli/install.md)
 
 ### Restart
 

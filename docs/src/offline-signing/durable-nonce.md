@@ -52,8 +52,8 @@ solana create-nonce-account nonce-keypair.json 1
 ```
 
 > To keep the keypair entirely offline, use the
-> [Paper Wallet](wallet-guide/paper-wallet.md) keypair generation
-> [instructions](wallet-guide/paper-wallet.md#seed-phrase-generation) instead
+> [Paper Wallet](../cli/wallets/paper.md) keypair generation
+> [instructions](../cli/wallets/paper.md#seed-phrase-generation) instead
 
 > [Full usage documentation](../cli/usage.md#solana-create-nonce-account)
 

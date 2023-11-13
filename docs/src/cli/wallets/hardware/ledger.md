@@ -9,7 +9,7 @@ interact with Solana using the command line tools.
 ## Before You Begin
 
 - [Set up a Nano with the Solana App](https://support.ledger.com/hc/en-us/articles/360016265659-Solana-SOL-?docs=true)
-- [Install the Solana command-line tools](../../cli/install-solana-cli-tools.md)
+- [Install the Solana command-line tools](../../install.md)
 
 ## Use Ledger Nano with Solana CLI
 
@@ -39,7 +39,7 @@ specific Ledger, see
 
 Your Nano supports an arbitrary number of valid wallet addresses and signers. To
 view any address, use the `solana-keygen pubkey` command, as shown below,
-followed by a valid [keypair URL](../hardware-wallets.md#specify-a-keypair-url).
+followed by a valid [keypair URL](./index.md#specify-a-keypair-url).
 
 Multiple wallet addresses can be useful if you want to transfer tokens between
 your own accounts for different purposes, or use different keypairs on the
@@ -212,6 +212,6 @@ solana-keygen pubkey usb://ledger\?key=0
 You can find additional support and get help on the
 [Solana StackExchange](https://solana.stackexchange.com).
 
-Read more about [sending and receiving tokens](../../cli/transfer-tokens.md) and
-[delegating stake](../../cli/delegate-stake.md). You can use your Ledger keypair
+Read more about [sending and receiving tokens](../../examples/transfer-tokens.md) and
+[delegating stake](../../examples/delegate-stake.md). You can use your Ledger keypair
 URL anywhere you see an option or argument that accepts a `<KEYPAIR>`.

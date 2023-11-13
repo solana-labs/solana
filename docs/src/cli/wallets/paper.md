@@ -28,7 +28,7 @@ come to the right place.
 
 ## Before You Begin
 
-- [Install the Solana command-line tools](../cli/install-solana-cli-tools.md)
+- [Install the Solana command-line tools](../install.md)
 
 ### Check your installation
 
@@ -66,7 +66,7 @@ solana-keygen new --no-outfile
 
 > If the `--no-outfile` flag is **omitted**, the default behavior is to write
 > the keypair to `~/.config/solana/id.json`, resulting in a
-> [file system wallet](file-system-wallet.md).
+> [file system wallet](./file-system.md).
 
 The output of this command will display a line like this:
 
@@ -190,7 +190,7 @@ Public keys can then be typed manually or transferred via a USB stick to a
 networked machine.
 
 Next, configure the `solana` CLI tool to
-[connect to a particular cluster](../cli/choose-a-cluster.md):
+[connect to a particular cluster](../examples/choose-a-cluster.md):
 
 ```bash
 solana config set --url <CLUSTER URL> # (i.e. https://api.mainnet-beta.solana.com)

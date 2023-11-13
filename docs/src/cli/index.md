@@ -18,7 +18,7 @@ secure access to your Solana accounts.
 
 To get started using the Solana Command Line (CLI) tools:
 
-- [Install the Solana Tools](cli/install-solana-cli-tools.md)
-- [Choose a Cluster](cli/choose-a-cluster.md)
-- [Create a Wallet](wallet-guide/cli.md)
-- [Check out our CLI conventions](cli/conventions.md)
+- [Install the Solana CLI Tool Suite](./install.md)
+- [Choose a Cluster](./examples/choose-a-cluster.md)
+- [Create a Wallet](./wallets/index.md)
+- [Introduction to our CLI conventions](./intro.md)

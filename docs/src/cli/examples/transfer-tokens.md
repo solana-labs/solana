@@ -3,12 +3,12 @@ title: Send and Receive Tokens
 ---
 
 This page describes how to receive and send SOL tokens using the command line
-tools with a command line wallet such as a [paper wallet](../wallet-guide/paper-wallet.md),
-a [file system wallet](../wallet-guide/file-system-wallet.md), or a
-[hardware wallet](../wallet-guide/hardware-wallets.md). Before you begin, make sure
+tools with a command line wallet such as a [paper wallet](../wallets/paper.md),
+a [file system wallet](../wallets/file-system.md), or a
+[hardware wallet](../wallets/hardware/index.md). Before you begin, make sure
 you have created a wallet and have access to its address (pubkey) and the
 signing keypair. Check out our
-[conventions for entering keypairs for different wallet types](../cli/conventions.md#keypair-conventions).
+[conventions for entering keypairs for different wallet types](../intro.md#keypair-conventions).
 
 ## Testing your Wallet
 
@@ -67,9 +67,9 @@ pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
 ```
 
 You can also create a second (or more) wallet of any type:
-[paper](../wallet-guide/paper-wallet#creating-multiple-paper-wallet-addresses),
-[file system](../wallet-guide/file-system-wallet.md#creating-multiple-file-system-wallet-addresses),
-or [hardware](../wallet-guide/hardware-wallets.md#multiple-addresses-on-a-single-hardware-wallet).
+[paper](../wallets/paper.md#creating-multiple-paper-wallet-addresses),
+[file system](../wallets/file-system.md#creating-multiple-file-system-wallet-addresses),
+or [hardware](../wallets/hardware/index.md#multiple-addresses-on-a-single-hardware-wallet).
 
 #### Transfer tokens from your first wallet to the second address
 
@@ -143,7 +143,7 @@ To receive tokens, you will need an address for others to send tokens to. In
 Solana, the wallet address is the public key of a keypair. There are a variety
 of techniques for generating keypairs. The method you choose will depend on how
 you choose to store keypairs. Keypairs are stored in wallets. Before receiving
-tokens, you will need to [create a wallet](../wallet-guide/cli.md).
+tokens, you will need to [create a wallet](../wallets/index.md).
 Once completed, you should have a public key
 for each keypair you generated. The public key is a long string of base58
 characters. Its length varies from 32 to 44 characters.

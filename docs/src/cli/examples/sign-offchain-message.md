@@ -57,7 +57,7 @@ solana sign-offchain-message -k usb://ledger <MESSAGE>
 ```
 
 For more information on how to setup and work with the ledger device see this
-[link](../wallet-guide/hardware-wallets/ledger.md).
+[link](../wallets/hardware/ledger.md).
 
 Please note that UTF-8 encoded messages require `Allow blind sign` option
 enabled in Solana Ledger App. Also, due to the lack of UTF-8 support in Ledger
