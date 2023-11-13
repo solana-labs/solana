@@ -392,7 +392,7 @@ impl BTreeMapTaskIds {
         assert!(pre_existed.is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
     }
 
-    pub fn remove_task(&mut self, u: &UniqueWeight) {
+    fn remove_task(&mut self, u: &UniqueWeight) {
         let removed_entry = self.task_ids.remove(u);
         assert!(removed_entry.is_some());
     }
