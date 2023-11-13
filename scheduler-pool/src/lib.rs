@@ -1238,7 +1238,7 @@ fn attempt_lock_for_execution<'a>(
     lock_attempts: &mut [LockAttempt],
 ) -> usize {
     // no short-cuircuit; we at least all need to add to the contended queue
-    let mut unlockable_count = 0;
+    let mut lock_failure_count = 0;
 
     for attempt in lock_attempts.iter_mut() {
         AddressBook::attempt_lock_address(from_runnable, unique_weight, attempt);
@@ -1251,12 +1251,12 @@ fn attempt_lock_for_execution<'a>(
                     attempt.target_page_mut().address_str,
                     attempt.requested_usage
                 );
-                unlockable_count += 1;
+                lock_failure_count += 1;
             }
         }
     }
 
-    unlockable_count
+    lock_failure_count
 }
 
 pub struct ScheduleStage {}
@@ -1321,13 +1321,13 @@ impl ScheduleStage {
     ) -> Option<(TaskInQueue, Vec<LockAttempt>)> {
         let from_runnable = matches!(task_source, TaskSource::Runnable);
 
-        let unlockable_count = attempt_lock_for_execution(
+        let lock_failure_count = attempt_lock_for_execution(
             from_runnable,
             &next_task.unique_weight,
             &mut next_task.lock_attempts_mut(),
         );
 
-        if unlockable_count > 0 {
+        if lock_failure_count > 0 {
             Self::reset_lock_for_failed_execution(
                 &next_task.unique_weight,
                 &mut next_task.lock_attempts_mut(),
