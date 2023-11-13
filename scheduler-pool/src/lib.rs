@@ -1383,24 +1383,22 @@ impl ScheduleStage {
         assert!(!next_task.already_finished());
         if !from_runnable {
             next_task.mark_as_uncontended();
-            if let TaskSource::Contended(uncontendeds) = task_source {
-                for lock_attempt in next_task
-                    .lock_attempts_mut()
-                    .iter()
-                    .filter(|l| l.requested_usage == RequestedUsage::Readonly)
+            for lock_attempt in next_task
+                .lock_attempts_mut()
+                .iter()
+                .filter(|l| l.requested_usage == RequestedUsage::Readonly)
+            {
+                if let Some(task) = lock_attempt
+                    .target_page_mut()
+                    .task_ids
+                    .reindex(false, &unique_weight)
                 {
-                    if let Some(task) = lock_attempt
-                        .target_page_mut()
-                        .task_ids
-                        .reindex(false, &unique_weight)
-                    {
-                        if task.currently_contended() {
-                            let uti = address_book
-                                .uncontended_task_ids
-                                .entry(task.unique_weight)
-                                .or_insert((task, Default::default()));
-                            uti.1.insert(lock_attempt.target.clone());
-                        }
+                    if task.currently_contended() {
+                        let uti = address_book
+                            .uncontended_task_ids
+                            .entry(task.unique_weight)
+                            .or_insert((task, Default::default()));
+                        uti.1.insert(lock_attempt.target.clone());
                     }
                 }
             }
