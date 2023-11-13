@@ -42,10 +42,10 @@ use {
 type UniqueWeight = u128;
 type CU = u64;
 
-type TaskIds = BTreeMapTaskIds;
+type Tasks = BTreeMapTaskIds;
 #[derive(Debug, Default)]
 pub struct BTreeMapTaskIds {
-    task_ids: std::collections::BTreeMap<UniqueWeight, TaskInQueue>,
+    blocked_tx_queue: std::collections::BTreeMap<UniqueWeight, TaskInQueue>,
 }
 
 // SchedulerPool must be accessed via dyn by solana-runtime code, because of its internal fields'
@@ -261,7 +261,7 @@ impl Task {
         for lock_attempt in &*this.lock_attempts_mut() {
             let mut page = lock_attempt.target_page_mut();
 
-            page.task_ids.insert_task(Task::clone_in_queue(this));
+            page.blocked_tx_queue.insert_task(Task::clone_in_queue(this));
             if lock_attempt.requested_usage == RequestedUsage::Writable {
                 page.write_task_ids.insert(this.unique_weight);
             }
@@ -356,7 +356,7 @@ pub enum RequestedUsage {
 pub struct Page {
     address_str: String,
     current_usage: Usage,
-    task_ids: TaskIds,
+    blocked_tx_queue: Tasks,
     write_task_ids: std::collections::BTreeSet<UniqueWeight>,
 }
 
@@ -365,7 +365,7 @@ impl Page {
         Self {
             address_str: format!("{}", address),
             current_usage,
-            task_ids: Default::default(),
+            blocked_tx_queue: Default::default(),
             write_task_ids: Default::default(),
         }
     }
@@ -373,21 +373,21 @@ impl Page {
 
 impl BTreeMapTaskIds {
     pub fn insert_task(&mut self, task: TaskInQueue) {
-        let pre_existed = self.task_ids.insert(task.unique_weight, task);
+        let pre_existed = self.blocked_tx_queue.insert(task.unique_weight, task);
         assert!(pre_existed.is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
     }
 
     fn remove_task(&mut self, u: &UniqueWeight) {
-        let removed_entry = self.task_ids.remove(u);
+        let removed_entry = self.blocked_tx_queue.remove(u);
         assert!(removed_entry.is_some());
     }
 
     fn heaviest_task_cursor(&self) -> impl Iterator<Item = &TaskInQueue> {
-        self.task_ids.values().rev()
+        self.blocked_tx_queue.values().rev()
     }
 
     pub fn heaviest_task_id(&mut self) -> Option<UniqueWeight> {
-        self.task_ids.last_entry().map(|j| *j.key())
+        self.blocked_tx_queue.last_entry().map(|j| *j.key())
     }
 
     fn reindex(&mut self, should_remove: bool, uq: &UniqueWeight) -> Option<TaskInQueue> {
@@ -403,7 +403,6 @@ impl BTreeMapTaskIds {
 
 type PageRcInner = Arc<(
     std::cell::RefCell<Page>,
-    //SkipListTaskIds,
     std::sync::atomic::AtomicUsize,
 )>;
 
@@ -431,7 +430,7 @@ impl AddressBook {
     ) {
         let tcuw = attempt
             .target_page_mut()
-            .task_ids
+            .blocked_tx_queue
             .heaviest_task_id();
 
         let strictly_lockable = if tcuw.is_none() {
@@ -636,7 +635,7 @@ impl ExecutionEnvironment {
         for lock_attempt in self.finalized_lock_attempts.iter_mut() {
             let heaviest_uncontended = lock_attempt
                 .target_page_mut()
-                .task_ids
+                .blocked_tx_queue
                 .reindex(should_remove, &uq);
             lock_attempt.heaviest_uncontended = heaviest_uncontended;
 
@@ -1345,7 +1344,7 @@ impl ScheduleStage {
             {
                 if let Some(next_contended_task) = read_only_lock_attempt
                     .target_page_mut()
-                    .task_ids
+                    .blocked_tx_queue
                     .reindex(false, &next_task.unique_weight)
                 {
                     if !next_contended_task.currently_contended() {
