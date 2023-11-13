@@ -1257,7 +1257,6 @@ impl TaskSelection {
 
 fn attempt_lock_for_execution<'a>(
     from_runnable: bool,
-    address_book: &mut AddressBook,
     unique_weight: &UniqueWeight,
     lock_attempts: &mut [LockAttempt],
 ) -> usize {
@@ -1348,7 +1347,6 @@ impl ScheduleStage {
 
         let unlockable_count = attempt_lock_for_execution(
             from_runnable,
-            address_book,
             &unique_weight,
             &mut next_task.lock_attempts_mut(),
         );
