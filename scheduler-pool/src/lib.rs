@@ -462,9 +462,10 @@ impl AddressBook {
                 .target_page_mut()
                 .write_task_ids
                 .last()
-                .map(|j| unique_weight > j)
+                .map(|existing_unique_weights| unique_weight > existing_unique_weights)
                 .unwrap_or(true)
         {
+            // this unique_weight is heavier than any of contened write locks.
             true
         } else {
             false
