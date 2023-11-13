@@ -24,7 +24,7 @@ use {
     itertools::Itertools,
     log::*,
     solana_program_runtime::{
-        compute_budget::{self, ComputeBudget},
+        compute_budget_processor::process_compute_budget_instructions,
         loaded_programs::LoadedProgramsForTxBatch,
     },
     solana_sdk::{
@@ -34,9 +34,8 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
         feature_set::{
-            self, add_set_tx_loaded_accounts_data_size_instruction,
-            include_loaded_accounts_data_size_in_fee_calculation,
-            remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
+            self, include_loaded_accounts_data_size_in_fee_calculation,
+            remove_congestion_multiplier_from_fee_calculation,
             simplify_writable_program_account_check, FeatureSet,
         },
         fee::FeeStructure,
@@ -60,10 +59,7 @@ use {
     solana_system_program::{get_system_account_kind, SystemAccountKind},
     std::{
         cmp::Reverse,
-        collections::{
-            hash_map::{self, Entry},
-            BinaryHeap, HashMap, HashSet,
-        },
+        collections::{hash_map, BinaryHeap, HashMap, HashSet},
         num::NonZeroUsize,
         ops::RangeBounds,
         path::PathBuf,
@@ -246,15 +242,16 @@ impl Accounts {
         feature_set: &FeatureSet,
     ) -> Result<Option<NonZeroUsize>> {
         if feature_set.is_active(&feature_set::cap_transaction_accounts_data_size::id()) {
-            let mut compute_budget =
-                ComputeBudget::new(compute_budget::MAX_COMPUTE_UNIT_LIMIT as u64);
-            let _process_transaction_result = compute_budget.process_instructions(
+            let compute_budget_limits = process_compute_budget_instructions(
                 tx.message().program_instructions_iter(),
-                !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
-                feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
-            );
+                feature_set,
+            )
+            .unwrap_or_default();
             // sanitize against setting size limit to zero
-            NonZeroUsize::new(compute_budget.loaded_accounts_data_size_limit).map_or(
+            NonZeroUsize::new(
+                usize::try_from(compute_budget_limits.loaded_accounts_bytes).unwrap_or_default(),
+            )
+            .map_or(
                 Err(TransactionError::InvalidLoadedAccountsDataSizeLimit),
                 |v| Ok(Some(v)),
             )
@@ -638,59 +635,6 @@ impl Accounts {
         )
     }
 
-    /// Returns a hash map of executable program accounts (program accounts that are not writable
-    /// in the given transactions), and their owners, for the transactions with a valid
-    /// blockhash or nonce.
-    pub fn filter_executable_program_accounts<'a>(
-        &self,
-        ancestors: &Ancestors,
-        txs: &[SanitizedTransaction],
-        lock_results: &mut [TransactionCheckResult],
-        program_owners: &'a [Pubkey],
-        hash_queue: &BlockhashQueue,
-    ) -> HashMap<Pubkey, (&'a Pubkey, u64)> {
-        let mut result: HashMap<Pubkey, (&'a Pubkey, u64)> = HashMap::new();
-        lock_results.iter_mut().zip(txs).for_each(|etx| {
-            if let ((Ok(()), nonce), tx) = etx {
-                if nonce
-                    .as_ref()
-                    .map(|nonce| nonce.lamports_per_signature())
-                    .unwrap_or_else(|| {
-                        hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
-                    })
-                    .is_some()
-                {
-                    tx.message()
-                        .account_keys()
-                        .iter()
-                        .for_each(|key| match result.entry(*key) {
-                            Entry::Occupied(mut entry) => {
-                                let (_, count) = entry.get_mut();
-                                saturating_add_assign!(*count, 1);
-                            }
-                            Entry::Vacant(entry) => {
-                                if let Ok(index) = self.accounts_db.account_matches_owners(
-                                    ancestors,
-                                    key,
-                                    program_owners,
-                                ) {
-                                    program_owners
-                                        .get(index)
-                                        .map(|owner| entry.insert((owner, 1)));
-                                }
-                            }
-                        });
-                } else {
-                    // If the transaction's nonce account was not valid, and blockhash is not found,
-                    // the transaction will fail to process. Let's not load any programs from the
-                    // transaction, and update the status of the transaction.
-                    *etx.0 = (Err(TransactionError::BlockhashNotFound), None);
-                }
-            }
-        });
-        result
-    }
-
     #[allow(clippy::too_many_arguments)]
     pub fn load_accounts(
         &self,
@@ -721,7 +665,7 @@ impl Accounts {
                         fee_structure.calculate_fee(
                             tx.message(),
                             lamports_per_signature,
-                            &ComputeBudget::fee_budget_limits(tx.message().program_instructions_iter(), feature_set),
+                            &process_compute_budget_instructions(tx.message().program_instructions_iter(), feature_set).unwrap_or_default().into(),
                             feature_set.is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
                             feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                         )
@@ -1470,8 +1414,9 @@ mod tests {
             transaction_results::{DurableNonceFee, TransactionExecutionDetails},
         },
         assert_matches::assert_matches,
-        solana_program_runtime::prioritization_fee::{
-            PrioritizationFeeDetails, PrioritizationFeeType,
+        solana_program_runtime::{
+            compute_budget_processor,
+            prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
         },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
@@ -1747,13 +1692,15 @@ mod tests {
         );
 
         let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
+        feature_set.deactivate(&solana_sdk::feature_set::remove_deprecated_request_unit_ix::id());
 
         let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
         let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,
-            &ComputeBudget::fee_budget_limits(message.program_instructions_iter(), &feature_set),
+            &process_compute_budget_instructions(message.program_instructions_iter(), &feature_set)
+                .unwrap_or_default()
+                .into(),
             true,
             false,
         );
@@ -1995,220 +1942,6 @@ mod tests {
             loaded_accounts[0],
             (Err(TransactionError::InvalidProgramForExecution), None,)
         );
-    }
-
-    #[test]
-    fn test_filter_executable_program_accounts() {
-        let mut tx_accounts: Vec<TransactionAccount> = Vec::new();
-
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
-
-        let non_program_pubkey1 = Pubkey::new_unique();
-        let non_program_pubkey2 = Pubkey::new_unique();
-        let program1_pubkey = Pubkey::new_unique();
-        let program2_pubkey = Pubkey::new_unique();
-        let account1_pubkey = Pubkey::new_unique();
-        let account2_pubkey = Pubkey::new_unique();
-        let account3_pubkey = Pubkey::new_unique();
-        let account4_pubkey = Pubkey::new_unique();
-
-        let account5_pubkey = Pubkey::new_unique();
-
-        tx_accounts.push((
-            non_program_pubkey1,
-            AccountSharedData::new(1, 10, &account5_pubkey),
-        ));
-        tx_accounts.push((
-            non_program_pubkey2,
-            AccountSharedData::new(1, 10, &account5_pubkey),
-        ));
-        tx_accounts.push((
-            program1_pubkey,
-            AccountSharedData::new(40, 1, &account5_pubkey),
-        ));
-        tx_accounts.push((
-            program2_pubkey,
-            AccountSharedData::new(40, 1, &account5_pubkey),
-        ));
-        tx_accounts.push((
-            account1_pubkey,
-            AccountSharedData::new(1, 10, &non_program_pubkey1),
-        ));
-        tx_accounts.push((
-            account2_pubkey,
-            AccountSharedData::new(1, 10, &non_program_pubkey2),
-        ));
-        tx_accounts.push((
-            account3_pubkey,
-            AccountSharedData::new(40, 1, &program1_pubkey),
-        ));
-        tx_accounts.push((
-            account4_pubkey,
-            AccountSharedData::new(40, 1, &program2_pubkey),
-        ));
-
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
-        for tx_account in tx_accounts.iter() {
-            accounts.store_for_tests(0, &tx_account.0, &tx_account.1);
-        }
-
-        let mut hash_queue = BlockhashQueue::new(100);
-
-        let tx1 = Transaction::new_with_compiled_instructions(
-            &[&keypair1],
-            &[non_program_pubkey1],
-            Hash::new_unique(),
-            vec![account1_pubkey, account2_pubkey, account3_pubkey],
-            vec![CompiledInstruction::new(1, &(), vec![0])],
-        );
-        hash_queue.register_hash(&tx1.message().recent_blockhash, 0);
-        let sanitized_tx1 = SanitizedTransaction::from_transaction_for_tests(tx1);
-
-        let tx2 = Transaction::new_with_compiled_instructions(
-            &[&keypair2],
-            &[non_program_pubkey2],
-            Hash::new_unique(),
-            vec![account4_pubkey, account3_pubkey, account2_pubkey],
-            vec![CompiledInstruction::new(1, &(), vec![0])],
-        );
-        hash_queue.register_hash(&tx2.message().recent_blockhash, 0);
-        let sanitized_tx2 = SanitizedTransaction::from_transaction_for_tests(tx2);
-
-        let ancestors = vec![(0, 0)].into_iter().collect();
-        let owners = &[program1_pubkey, program2_pubkey];
-        let programs = accounts.filter_executable_program_accounts(
-            &ancestors,
-            &[sanitized_tx1, sanitized_tx2],
-            &mut [(Ok(()), None), (Ok(()), None)],
-            owners,
-            &hash_queue,
-        );
-
-        // The result should contain only account3_pubkey, and account4_pubkey as the program accounts
-        assert_eq!(programs.len(), 2);
-        assert_eq!(
-            programs
-                .get(&account3_pubkey)
-                .expect("failed to find the program account"),
-            &(&program1_pubkey, 2)
-        );
-        assert_eq!(
-            programs
-                .get(&account4_pubkey)
-                .expect("failed to find the program account"),
-            &(&program2_pubkey, 1)
-        );
-    }
-
-    #[test]
-    fn test_filter_executable_program_accounts_invalid_blockhash() {
-        let mut tx_accounts: Vec<TransactionAccount> = Vec::new();
-
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
-
-        let non_program_pubkey1 = Pubkey::new_unique();
-        let non_program_pubkey2 = Pubkey::new_unique();
-        let program1_pubkey = Pubkey::new_unique();
-        let program2_pubkey = Pubkey::new_unique();
-        let account1_pubkey = Pubkey::new_unique();
-        let account2_pubkey = Pubkey::new_unique();
-        let account3_pubkey = Pubkey::new_unique();
-        let account4_pubkey = Pubkey::new_unique();
-
-        let account5_pubkey = Pubkey::new_unique();
-
-        tx_accounts.push((
-            non_program_pubkey1,
-            AccountSharedData::new(1, 10, &account5_pubkey),
-        ));
-        tx_accounts.push((
-            non_program_pubkey2,
-            AccountSharedData::new(1, 10, &account5_pubkey),
-        ));
-        tx_accounts.push((
-            program1_pubkey,
-            AccountSharedData::new(40, 1, &account5_pubkey),
-        ));
-        tx_accounts.push((
-            program2_pubkey,
-            AccountSharedData::new(40, 1, &account5_pubkey),
-        ));
-        tx_accounts.push((
-            account1_pubkey,
-            AccountSharedData::new(1, 10, &non_program_pubkey1),
-        ));
-        tx_accounts.push((
-            account2_pubkey,
-            AccountSharedData::new(1, 10, &non_program_pubkey2),
-        ));
-        tx_accounts.push((
-            account3_pubkey,
-            AccountSharedData::new(40, 1, &program1_pubkey),
-        ));
-        tx_accounts.push((
-            account4_pubkey,
-            AccountSharedData::new(40, 1, &program2_pubkey),
-        ));
-
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
-        for tx_account in tx_accounts.iter() {
-            accounts.store_for_tests(0, &tx_account.0, &tx_account.1);
-        }
-
-        let mut hash_queue = BlockhashQueue::new(100);
-
-        let tx1 = Transaction::new_with_compiled_instructions(
-            &[&keypair1],
-            &[non_program_pubkey1],
-            Hash::new_unique(),
-            vec![account1_pubkey, account2_pubkey, account3_pubkey],
-            vec![CompiledInstruction::new(1, &(), vec![0])],
-        );
-        hash_queue.register_hash(&tx1.message().recent_blockhash, 0);
-        let sanitized_tx1 = SanitizedTransaction::from_transaction_for_tests(tx1);
-
-        let tx2 = Transaction::new_with_compiled_instructions(
-            &[&keypair2],
-            &[non_program_pubkey2],
-            Hash::new_unique(),
-            vec![account4_pubkey, account3_pubkey, account2_pubkey],
-            vec![CompiledInstruction::new(1, &(), vec![0])],
-        );
-        // Let's not register blockhash from tx2. This should cause the tx2 to fail
-        let sanitized_tx2 = SanitizedTransaction::from_transaction_for_tests(tx2);
-
-        let ancestors = vec![(0, 0)].into_iter().collect();
-        let owners = &[program1_pubkey, program2_pubkey];
-        let mut lock_results = vec![(Ok(()), None), (Ok(()), None)];
-        let programs = accounts.filter_executable_program_accounts(
-            &ancestors,
-            &[sanitized_tx1, sanitized_tx2],
-            &mut lock_results,
-            owners,
-            &hash_queue,
-        );
-
-        // The result should contain only account3_pubkey as the program accounts
-        assert_eq!(programs.len(), 1);
-        assert_eq!(
-            programs
-                .get(&account3_pubkey)
-                .expect("failed to find the program account"),
-            &(&program1_pubkey, 1)
-        );
-        assert_eq!(lock_results[1].0, Err(TransactionError::BlockhashNotFound));
     }
 
     #[test]
@@ -4249,7 +3982,11 @@ mod tests {
 
         let result_no_limit = Ok(None);
         let result_default_limit = Ok(Some(
-            NonZeroUsize::new(compute_budget::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES).unwrap(),
+            NonZeroUsize::new(
+                usize::try_from(compute_budget_processor::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES)
+                    .unwrap(),
+            )
+            .unwrap(),
         ));
         let result_requested_limit: Result<Option<NonZeroUsize>> =
             Ok(Some(NonZeroUsize::new(99).unwrap()));
@@ -4277,7 +4014,10 @@ mod tests {
         //    if tx doesn't set limit, then default limit (64MiB)
         //    if tx sets limit, then requested limit
         //    if tx sets limit to zero, then TransactionError::InvalidLoadedAccountsDataSizeLimit
-        feature_set.activate(&add_set_tx_loaded_accounts_data_size_instruction::id(), 0);
+        feature_set.activate(
+            &solana_sdk::feature_set::add_set_tx_loaded_accounts_data_size_instruction::id(),
+            0,
+        );
         test(tx_not_set_limit, &feature_set, &result_default_limit);
         test(tx_set_limit_99, &feature_set, &result_requested_limit);
         test(tx_set_limit_0, &feature_set, &result_invalid_limit);
@@ -4312,13 +4052,15 @@ mod tests {
         );
 
         let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
+        feature_set.deactivate(&solana_sdk::feature_set::remove_deprecated_request_unit_ix::id());
 
         let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
         let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,
-            &ComputeBudget::fee_budget_limits(message.program_instructions_iter(), &feature_set),
+            &process_compute_budget_instructions(message.program_instructions_iter(), &feature_set)
+                .unwrap_or_default()
+                .into(),
             true,
             false,
         );

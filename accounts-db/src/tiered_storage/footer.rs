@@ -1,6 +1,6 @@
 use {
     crate::tiered_storage::{
-        error::TieredStorageError, file::TieredStorageFile, index::AccountIndexFormat,
+        error::TieredStorageError, file::TieredStorageFile, index::IndexBlockFormat,
         mmap_utils::get_type, TieredStorageResult as TsResult,
     },
     memmap2::Mmap,
@@ -95,7 +95,7 @@ pub struct TieredStorageFooter {
     /// The format of the owners block.
     pub owners_block_format: OwnersBlockFormat,
     /// The format of the account index block.
-    pub account_index_format: AccountIndexFormat,
+    pub index_block_format: IndexBlockFormat,
     /// The format of the account block.
     pub account_block_format: AccountBlockFormat,
 
@@ -120,7 +120,7 @@ pub struct TieredStorageFooter {
     // Offsets
     // Note that offset to the account blocks is omitted as it's always 0.
     /// The offset pointing to the first byte of the account index block.
-    pub account_index_offset: u64,
+    pub index_block_offset: u64,
     /// The offset pointing to the first byte of the owners block.
     pub owners_offset: u64,
 
@@ -149,14 +149,14 @@ impl Default for TieredStorageFooter {
         Self {
             account_meta_format: AccountMetaFormat::default(),
             owners_block_format: OwnersBlockFormat::default(),
-            account_index_format: AccountIndexFormat::default(),
+            index_block_format: IndexBlockFormat::default(),
             account_block_format: AccountBlockFormat::default(),
             account_entry_count: 0,
             account_meta_entry_size: 0,
             account_block_size: 0,
             owner_count: 0,
             owner_entry_size: 0,
-            account_index_offset: 0,
+            index_block_offset: 0,
             owners_offset: 0,
             hash: Hash::new_unique(),
             min_account_address: Pubkey::default(),
@@ -241,14 +241,14 @@ mod tests {
         let expected_footer = TieredStorageFooter {
             account_meta_format: AccountMetaFormat::Hot,
             owners_block_format: OwnersBlockFormat::LocalIndex,
-            account_index_format: AccountIndexFormat::AddressAndOffset,
+            index_block_format: IndexBlockFormat::AddressAndOffset,
             account_block_format: AccountBlockFormat::AlignedRaw,
             account_entry_count: 300,
             account_meta_entry_size: 24,
             account_block_size: 4096,
             owner_count: 250,
             owner_entry_size: 32,
-            account_index_offset: 1069600,
+            index_block_offset: 1069600,
             owners_offset: 1081200,
             hash: Hash::new_unique(),
             min_account_address: Pubkey::default(),
@@ -275,7 +275,7 @@ mod tests {
     fn test_footer_layout() {
         assert_eq!(offset_of!(TieredStorageFooter, account_meta_format), 0x00);
         assert_eq!(offset_of!(TieredStorageFooter, owners_block_format), 0x02);
-        assert_eq!(offset_of!(TieredStorageFooter, account_index_format), 0x04);
+        assert_eq!(offset_of!(TieredStorageFooter, index_block_format), 0x04);
         assert_eq!(offset_of!(TieredStorageFooter, account_block_format), 0x06);
         assert_eq!(offset_of!(TieredStorageFooter, account_entry_count), 0x08);
         assert_eq!(
@@ -285,7 +285,7 @@ mod tests {
         assert_eq!(offset_of!(TieredStorageFooter, account_block_size), 0x10);
         assert_eq!(offset_of!(TieredStorageFooter, owner_count), 0x18);
         assert_eq!(offset_of!(TieredStorageFooter, owner_entry_size), 0x1C);
-        assert_eq!(offset_of!(TieredStorageFooter, account_index_offset), 0x20);
+        assert_eq!(offset_of!(TieredStorageFooter, index_block_offset), 0x20);
         assert_eq!(offset_of!(TieredStorageFooter, owners_offset), 0x28);
         assert_eq!(offset_of!(TieredStorageFooter, min_account_address), 0x30);
         assert_eq!(offset_of!(TieredStorageFooter, max_account_address), 0x50);

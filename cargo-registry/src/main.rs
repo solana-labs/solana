@@ -2,7 +2,7 @@
 use {
     crate::{
         client::Client,
-        crate_handler::{CratePackage, Error, Program, UnpackedCrate},
+        crate_handler::{Error, Program, UnpackedCrate},
         sparse_index::RegistryIndex,
     },
     hyper::{
@@ -38,14 +38,15 @@ impl CargoRegistryService {
 
         match bytes {
             Ok(data) => {
-                let Ok(crate_object) = CratePackage(data).into() else {
+                let Ok(unpacked_crate) = UnpackedCrate::new(data) else {
                     return response_builder::error_response(
                         hyper::StatusCode::INTERNAL_SERVER_ERROR,
                         "Failed to parse the crate information",
                     );
                 };
                 let Ok(result) =
-                    tokio::task::spawn_blocking(move || crate_object.publish(client, index)).await
+                    tokio::task::spawn_blocking(move || unpacked_crate.publish(client, index))
+                        .await
                 else {
                     return response_builder::error_response(
                         hyper::StatusCode::INTERNAL_SERVER_ERROR,
@@ -83,7 +84,7 @@ impl CargoRegistryService {
         _request: &hyper::Request<hyper::Body>,
         client: Arc<Client>,
     ) -> hyper::Response<hyper::Body> {
-        let Some((path, crate_name, _version)) = Self::get_crate_name_and_version(path) else {
+        let Some((path, crate_name, version)) = Self::get_crate_name_and_version(path) else {
             return response_builder::error_in_parsing();
         };
 
@@ -92,10 +93,10 @@ impl CargoRegistryService {
         }
 
         let package = Program::crate_name_to_program_id(crate_name)
-            .and_then(|id| UnpackedCrate::fetch(id, client).ok());
+            .and_then(|id| UnpackedCrate::fetch(id, version, client).ok());
 
         // Return the package to the caller in the response
-        if let Some(package) = package {
+        if let Some((package, _meta)) = package {
             response_builder::success_response_bytes(package.0)
         } else {
             response_builder::error_response(

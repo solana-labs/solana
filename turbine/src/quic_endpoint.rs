@@ -5,7 +5,8 @@ use {
     log::error,
     quinn::{
         ClientConfig, ConnectError, Connecting, Connection, ConnectionError, Endpoint,
-        EndpointConfig, SendDatagramError, ServerConfig, TokioRuntime, TransportConfig, VarInt,
+        EndpointConfig, IdleTimeout, SendDatagramError, ServerConfig, TokioRuntime,
+        TransportConfig, VarInt,
     },
     rcgen::RcgenError,
     rustls::{Certificate, PrivateKey},
@@ -21,9 +22,10 @@ use {
         io::Error as IoError,
         net::{IpAddr, SocketAddr, UdpSocket},
         sync::{
-            atomic::{AtomicBool, Ordering},
+            atomic::{AtomicBool, AtomicU64, Ordering},
             Arc, RwLock,
         },
+        time::Duration,
     },
     thiserror::Error,
     tokio::{
@@ -38,9 +40,16 @@ use {
 const CLIENT_CHANNEL_BUFFER: usize = 1 << 14;
 const ROUTER_CHANNEL_BUFFER: usize = 64;
 const CONNECTION_CACHE_CAPACITY: usize = 3072;
-const INITIAL_MAXIMUM_TRANSMISSION_UNIT: u16 = 1280;
 const ALPN_TURBINE_PROTOCOL_ID: &[u8] = b"solana-turbine";
 const CONNECT_SERVER_NAME: &str = "solana-turbine";
+
+// Transport config.
+const DATAGRAM_RECEIVE_BUFFER_SIZE: usize = 256 * 1024 * 1024;
+const DATAGRAM_SEND_BUFFER_SIZE: usize = 128 * 1024 * 1024;
+const INITIAL_MAXIMUM_TRANSMISSION_UNIT: u16 = MINIMUM_MAXIMUM_TRANSMISSION_UNIT;
+const KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(4);
+const MAX_IDLE_TIMEOUT: Duration = Duration::from_secs(10);
+const MINIMUM_MAXIMUM_TRANSMISSION_UNIT: u16 = 1280;
 
 const CONNECTION_CLOSE_ERROR_CODE_SHUTDOWN: VarInt = VarInt::from_u32(1);
 const CONNECTION_CLOSE_ERROR_CODE_DROPPED: VarInt = VarInt::from_u32(2);
@@ -60,12 +69,12 @@ pub type AsyncTryJoinHandle = TryJoin<JoinHandle<()>, JoinHandle<()>>;
 pub enum Error {
     #[error(transparent)]
     CertificateError(#[from] RcgenError),
+    #[error("Channel Send Error")]
+    ChannelSendError,
     #[error(transparent)]
     ConnectError(#[from] ConnectError),
     #[error(transparent)]
     ConnectionError(#[from] ConnectionError),
-    #[error("Channel Send Error")]
-    ChannelSendError,
     #[error("Invalid Identity: {0:?}")]
     InvalidIdentity(SocketAddr),
     #[error(transparent)]
@@ -74,6 +83,12 @@ pub enum Error {
     SendDatagramError(#[from] SendDatagramError),
     #[error(transparent)]
     TlsError(#[from] rustls::Error),
+}
+
+macro_rules! add_metric {
+    ($metric: expr) => {{
+        $metric.fetch_add(1, Ordering::Relaxed);
+    }};
 }
 
 #[allow(clippy::type_complexity)]
@@ -166,11 +181,18 @@ fn new_client_config(cert: Certificate, key: PrivateKey) -> Result<ClientConfig,
 }
 
 fn new_transport_config() -> TransportConfig {
+    let max_idle_timeout = IdleTimeout::try_from(MAX_IDLE_TIMEOUT).unwrap();
     let mut config = TransportConfig::default();
     config
+        .datagram_receive_buffer_size(Some(DATAGRAM_RECEIVE_BUFFER_SIZE))
+        .datagram_send_buffer_size(DATAGRAM_SEND_BUFFER_SIZE)
+        .initial_mtu(INITIAL_MAXIMUM_TRANSMISSION_UNIT)
+        .keep_alive_interval(Some(KEEP_ALIVE_INTERVAL))
         .max_concurrent_bidi_streams(VarInt::from(0u8))
         .max_concurrent_uni_streams(VarInt::from(0u8))
-        .initial_mtu(INITIAL_MAXIMUM_TRANSMISSION_UNIT);
+        .max_idle_timeout(Some(max_idle_timeout))
+        .min_mtu(MINIMUM_MAXIMUM_TRANSMISSION_UNIT)
+        .mtu_discovery_config(None);
     config
 }
 
@@ -182,8 +204,11 @@ async fn run_server(
     router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
     cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
 ) {
+    let stats = Arc::<TurbineQuicStats>::default();
+    let report_metrics_task =
+        tokio::task::spawn(report_metrics_task("repair_quic_server", stats.clone()));
     while let Some(connecting) = endpoint.accept().await {
-        tokio::task::spawn(handle_connecting_error(
+        tokio::task::spawn(handle_connecting_task(
             endpoint.clone(),
             connecting,
             sender.clone(),
@@ -191,8 +216,10 @@ async fn run_server(
             prune_cache_pending.clone(),
             router.clone(),
             cache.clone(),
+            stats.clone(),
         ));
     }
+    report_metrics_task.abort();
 }
 
 async fn run_client(
@@ -204,13 +231,17 @@ async fn run_client(
     router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
     cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
 ) {
+    let stats = Arc::<TurbineQuicStats>::default();
+    let report_metrics_task =
+        tokio::task::spawn(report_metrics_task("repair_quic_client", stats.clone()));
     while let Some((remote_address, bytes)) = receiver.recv().await {
-        let Some(bytes) = try_route_bytes(&remote_address, bytes, &*router.read().await) else {
+        let Some(bytes) = try_route_bytes(&remote_address, bytes, &*router.read().await, &stats)
+        else {
             continue;
         };
         let receiver = {
             let mut router = router.write().await;
-            let Some(bytes) = try_route_bytes(&remote_address, bytes, &router) else {
+            let Some(bytes) = try_route_bytes(&remote_address, bytes, &router, &stats) else {
                 continue;
             };
             let (sender, receiver) = tokio::sync::mpsc::channel(ROUTER_CHANNEL_BUFFER);
@@ -227,24 +258,28 @@ async fn run_client(
             prune_cache_pending.clone(),
             router.clone(),
             cache.clone(),
+            stats.clone(),
         ));
     }
     close_quic_endpoint(&endpoint);
     // Drop sender channels to unblock threads waiting on the receiving end.
     router.write().await.clear();
+    report_metrics_task.abort();
 }
 
 fn try_route_bytes(
     remote_address: &SocketAddr,
     bytes: Bytes,
     router: &HashMap<SocketAddr, AsyncSender<Bytes>>,
+    stats: &TurbineQuicStats,
 ) -> Option<Bytes> {
     match router.get(remote_address) {
         None => Some(bytes),
         Some(sender) => match sender.try_send(bytes) {
             Ok(()) => None,
             Err(TrySendError::Full(_)) => {
-                error!("TrySendError::Full {remote_address}");
+                debug!("TrySendError::Full {remote_address}");
+                add_metric!(stats.router_try_send_error_full);
                 None
             }
             Err(TrySendError::Closed(bytes)) => Some(bytes),
@@ -252,7 +287,7 @@ fn try_route_bytes(
     }
 }
 
-async fn handle_connecting_error(
+async fn handle_connecting_task(
     endpoint: Endpoint,
     connecting: Connecting,
     sender: Sender<(Pubkey, SocketAddr, Bytes)>,
@@ -260,6 +295,7 @@ async fn handle_connecting_error(
     prune_cache_pending: Arc<AtomicBool>,
     router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
     cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
+    stats: Arc<TurbineQuicStats>,
 ) {
     if let Err(err) = handle_connecting(
         endpoint,
@@ -269,10 +305,12 @@ async fn handle_connecting_error(
         prune_cache_pending,
         router,
         cache,
+        stats.clone(),
     )
     .await
     {
-        error!("handle_connecting: {err:?}");
+        debug!("handle_connecting: {err:?}");
+        record_error(&err, &stats);
     }
 }
 
@@ -284,6 +322,7 @@ async fn handle_connecting(
     prune_cache_pending: Arc<AtomicBool>,
     router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
     cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
+    stats: Arc<TurbineQuicStats>,
 ) -> Result<(), Error> {
     let connection = connecting.await?;
     let remote_address = connection.remote_address();
@@ -304,6 +343,7 @@ async fn handle_connecting(
         prune_cache_pending,
         router,
         cache,
+        stats,
     )
     .await;
     Ok(())
@@ -321,6 +361,7 @@ async fn handle_connection(
     prune_cache_pending: Arc<AtomicBool>,
     router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
     cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
+    stats: Arc<TurbineQuicStats>,
 ) {
     cache_connection(
         remote_pubkey,
@@ -338,15 +379,18 @@ async fn handle_connection(
         remote_pubkey,
         connection.clone(),
         sender,
+        stats.clone(),
     ));
     match futures::future::try_join(send_datagram_task, read_datagram_task).await {
         Err(err) => error!("handle_connection: {remote_pubkey}, {remote_address}, {err:?}"),
         Ok(out) => {
             if let (Err(ref err), _) = out {
-                error!("send_datagram_task: {remote_pubkey}, {remote_address}, {err:?}");
+                debug!("send_datagram_task: {remote_pubkey}, {remote_address}, {err:?}");
+                record_error(err, &stats);
             }
             if let (_, Err(ref err)) = out {
-                error!("read_datagram_task: {remote_pubkey}, {remote_address}, {err:?}");
+                debug!("read_datagram_task: {remote_pubkey}, {remote_address}, {err:?}");
+                record_error(err, &stats);
             }
         }
     }
@@ -364,6 +408,7 @@ async fn read_datagram_task(
     remote_pubkey: Pubkey,
     connection: Connection,
     sender: Sender<(Pubkey, SocketAddr, Bytes)>,
+    stats: Arc<TurbineQuicStats>,
 ) -> Result<(), Error> {
     // Assert that send won't block.
     debug_assert_eq!(sender.capacity(), None);
@@ -379,7 +424,8 @@ async fn read_datagram_task(
                 if let Some(err) = connection.close_reason() {
                     return Err(Error::from(err));
                 }
-                error!("connection.read_datagram: {remote_pubkey}, {remote_address}, {err:?}");
+                debug!("connection.read_datagram: {remote_pubkey}, {remote_address}, {err:?}");
+                record_error(&Error::from(err), &stats);
             }
         };
     }
@@ -404,6 +450,7 @@ async fn make_connection_task(
     prune_cache_pending: Arc<AtomicBool>,
     router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
     cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
+    stats: Arc<TurbineQuicStats>,
 ) {
     if let Err(err) = make_connection(
         endpoint,
@@ -414,10 +461,12 @@ async fn make_connection_task(
         prune_cache_pending,
         router,
         cache,
+        stats.clone(),
     )
     .await
     {
-        error!("make_connection: {remote_address}, {err:?}");
+        debug!("make_connection: {remote_address}, {err:?}");
+        record_error(&err, &stats);
     }
 }
 
@@ -430,6 +479,7 @@ async fn make_connection(
     prune_cache_pending: Arc<AtomicBool>,
     router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<Bytes>>>>,
     cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
+    stats: Arc<TurbineQuicStats>,
 ) -> Result<(), Error> {
     let connection = endpoint
         .connect(remote_address, CONNECT_SERVER_NAME)?
@@ -445,6 +495,7 @@ async fn make_connection(
         prune_cache_pending,
         router,
         cache,
+        stats,
     )
     .await;
     Ok(())
@@ -558,6 +609,175 @@ impl<T> From<crossbeam_channel::SendError<T>> for Error {
     fn from(_: crossbeam_channel::SendError<T>) -> Self {
         Error::ChannelSendError
     }
+}
+
+#[derive(Default)]
+struct TurbineQuicStats {
+    connect_error_invalid_remote_address: AtomicU64,
+    connect_error_other: AtomicU64,
+    connect_error_too_many_connections: AtomicU64,
+    connection_error_application_closed: AtomicU64,
+    connection_error_connection_closed: AtomicU64,
+    connection_error_locally_closed: AtomicU64,
+    connection_error_reset: AtomicU64,
+    connection_error_timed_out: AtomicU64,
+    connection_error_transport_error: AtomicU64,
+    connection_error_version_mismatch: AtomicU64,
+    invalid_identity: AtomicU64,
+    router_try_send_error_full: AtomicU64,
+    send_datagram_error_connection_lost: AtomicU64,
+    send_datagram_error_too_large: AtomicU64,
+    send_datagram_error_unsupported_by_peer: AtomicU64,
+}
+
+async fn report_metrics_task(name: &'static str, stats: Arc<TurbineQuicStats>) {
+    loop {
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        report_metrics(name, &stats);
+    }
+}
+
+fn record_error(err: &Error, stats: &TurbineQuicStats) {
+    match err {
+        Error::CertificateError(_) => (),
+        Error::ChannelSendError => (),
+        Error::ConnectError(ConnectError::EndpointStopping) => {
+            add_metric!(stats.connect_error_other)
+        }
+        Error::ConnectError(ConnectError::TooManyConnections) => {
+            add_metric!(stats.connect_error_too_many_connections)
+        }
+        Error::ConnectError(ConnectError::InvalidDnsName(_)) => {
+            add_metric!(stats.connect_error_other)
+        }
+        Error::ConnectError(ConnectError::InvalidRemoteAddress(_)) => {
+            add_metric!(stats.connect_error_invalid_remote_address)
+        }
+        Error::ConnectError(ConnectError::NoDefaultClientConfig) => {
+            add_metric!(stats.connect_error_other)
+        }
+        Error::ConnectError(ConnectError::UnsupportedVersion) => {
+            add_metric!(stats.connect_error_other)
+        }
+        Error::ConnectionError(ConnectionError::VersionMismatch) => {
+            add_metric!(stats.connection_error_version_mismatch)
+        }
+        Error::ConnectionError(ConnectionError::TransportError(_)) => {
+            add_metric!(stats.connection_error_transport_error)
+        }
+        Error::ConnectionError(ConnectionError::ConnectionClosed(_)) => {
+            add_metric!(stats.connection_error_connection_closed)
+        }
+        Error::ConnectionError(ConnectionError::ApplicationClosed(_)) => {
+            add_metric!(stats.connection_error_application_closed)
+        }
+        Error::ConnectionError(ConnectionError::Reset) => add_metric!(stats.connection_error_reset),
+        Error::ConnectionError(ConnectionError::TimedOut) => {
+            add_metric!(stats.connection_error_timed_out)
+        }
+        Error::ConnectionError(ConnectionError::LocallyClosed) => {
+            add_metric!(stats.connection_error_locally_closed)
+        }
+        Error::InvalidIdentity(_) => add_metric!(stats.invalid_identity),
+        Error::IoError(_) => (),
+        Error::SendDatagramError(SendDatagramError::UnsupportedByPeer) => {
+            add_metric!(stats.send_datagram_error_unsupported_by_peer)
+        }
+        Error::SendDatagramError(SendDatagramError::Disabled) => (),
+        Error::SendDatagramError(SendDatagramError::TooLarge) => {
+            add_metric!(stats.send_datagram_error_too_large)
+        }
+        Error::SendDatagramError(SendDatagramError::ConnectionLost(_)) => {
+            add_metric!(stats.send_datagram_error_connection_lost)
+        }
+        Error::TlsError(_) => (),
+    }
+}
+
+fn report_metrics(name: &'static str, stats: &TurbineQuicStats) {
+    macro_rules! reset_metric {
+        ($metric: expr) => {
+            $metric.swap(0, Ordering::Relaxed)
+        };
+    }
+    datapoint_info!(
+        name,
+        (
+            "connect_error_invalid_remote_address",
+            reset_metric!(stats.connect_error_invalid_remote_address),
+            i64
+        ),
+        (
+            "connect_error_other",
+            reset_metric!(stats.connect_error_other),
+            i64
+        ),
+        (
+            "connect_error_too_many_connections",
+            reset_metric!(stats.connect_error_too_many_connections),
+            i64
+        ),
+        (
+            "connection_error_application_closed",
+            reset_metric!(stats.connection_error_application_closed),
+            i64
+        ),
+        (
+            "connection_error_connection_closed",
+            reset_metric!(stats.connection_error_connection_closed),
+            i64
+        ),
+        (
+            "connection_error_locally_closed",
+            reset_metric!(stats.connection_error_locally_closed),
+            i64
+        ),
+        (
+            "connection_error_reset",
+            reset_metric!(stats.connection_error_reset),
+            i64
+        ),
+        (
+            "connection_error_timed_out",
+            reset_metric!(stats.connection_error_timed_out),
+            i64
+        ),
+        (
+            "connection_error_transport_error",
+            reset_metric!(stats.connection_error_transport_error),
+            i64
+        ),
+        (
+            "connection_error_version_mismatch",
+            reset_metric!(stats.connection_error_version_mismatch),
+            i64
+        ),
+        (
+            "invalid_identity",
+            reset_metric!(stats.invalid_identity),
+            i64
+        ),
+        (
+            "router_try_send_error_full",
+            reset_metric!(stats.router_try_send_error_full),
+            i64
+        ),
+        (
+            "send_datagram_error_connection_lost",
+            reset_metric!(stats.send_datagram_error_connection_lost),
+            i64
+        ),
+        (
+            "send_datagram_error_too_large",
+            reset_metric!(stats.send_datagram_error_too_large),
+            i64
+        ),
+        (
+            "send_datagram_error_unsupported_by_peer",
+            reset_metric!(stats.send_datagram_error_unsupported_by_peer),
+            i64
+        ),
+    );
 }
 
 #[cfg(test)]

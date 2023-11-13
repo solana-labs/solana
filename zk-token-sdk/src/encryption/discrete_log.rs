@@ -130,7 +130,7 @@ impl DiscreteLog {
         &mut self,
         compression_batch_size: usize,
     ) -> Result<(), DiscreteLogError> {
-        if compression_batch_size >= TWO16 as usize {
+        if compression_batch_size >= TWO16 as usize || compression_batch_size == 0 {
             return Err(DiscreteLogError::DiscreteLogBatchSize);
         }
         self.compression_batch_size = compression_batch_size;

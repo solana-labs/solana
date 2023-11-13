@@ -19,7 +19,7 @@ use {
     },
     error::TieredStorageError,
     footer::{AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat},
-    index::AccountIndexFormat,
+    index::IndexBlockFormat,
     readable::TieredStorageReader,
     solana_sdk::account::ReadableAccount,
     std::{
@@ -40,7 +40,7 @@ pub struct TieredStorageFormat {
     pub meta_entry_size: usize,
     pub account_meta_format: AccountMetaFormat,
     pub owners_block_format: OwnersBlockFormat,
-    pub account_index_format: AccountIndexFormat,
+    pub index_block_format: IndexBlockFormat,
     pub account_block_format: AccountBlockFormat,
 }
 
@@ -236,7 +236,7 @@ mod tests {
         assert_eq!(tiered_storage_readonly.reader().unwrap().num_accounts(), 0);
         assert_eq!(footer.account_meta_format, HOT_FORMAT.account_meta_format);
         assert_eq!(footer.owners_block_format, HOT_FORMAT.owners_block_format);
-        assert_eq!(footer.account_index_format, HOT_FORMAT.account_index_format);
+        assert_eq!(footer.index_block_format, HOT_FORMAT.index_block_format);
         assert_eq!(footer.account_block_format, HOT_FORMAT.account_block_format);
         assert_eq!(
             tiered_storage_readonly.file_size().unwrap() as usize,
@@ -379,7 +379,7 @@ mod tests {
         let expected_footer = TieredStorageFooter {
             account_meta_format: expected_format.account_meta_format,
             owners_block_format: expected_format.owners_block_format,
-            account_index_format: expected_format.account_index_format,
+            index_block_format: expected_format.index_block_format,
             account_block_format: expected_format.account_block_format,
             account_entry_count: expected_accounts.len() as u32,
             // Hash is not yet implemented, so we bypass the check
