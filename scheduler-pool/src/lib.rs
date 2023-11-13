@@ -621,11 +621,6 @@ pub struct ExecutionEnvironment {
     pub result_with_timings: ResultWithTimings,
 }
 
-impl ExecutionEnvironment {
-    fn reindex_with_address_book(&mut self) {
-    }
-}
-
 pub struct SchedulablePayload(pub Flushable<TaskInQueue>);
 pub struct ExecutablePayload(pub Flushable<Box<ExecutionEnvironment>>);
 pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment>, pub T);
