@@ -1382,7 +1382,7 @@ impl ScheduleStage {
                         address_book
                             .uncontended_task_ids
                             .entry(task.unique_weight)
-                            .or_insert((task, Default::default()));
+                            .or_insert((task, Default::default()))
                             .1.insert(l.target.clone());
                     }
                 }
