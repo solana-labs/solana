@@ -415,7 +415,6 @@ pub struct AddressBook {
 
 impl AddressBook {
     fn attempt_lock_address(
-        from_runnable: bool,
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) {
@@ -1180,7 +1179,6 @@ impl TaskSelection {
 }
 
 fn attempt_lock_for_execution<'a>(
-    from_runnable: bool,
     unique_weight: &UniqueWeight,
     lock_attempts: &mut [LockAttempt],
 ) -> usize {
@@ -1188,7 +1186,7 @@ fn attempt_lock_for_execution<'a>(
     let mut lock_failure_count = 0;
 
     for attempt in lock_attempts.iter_mut() {
-        AddressBook::attempt_lock_address(from_runnable, unique_weight, attempt);
+        AddressBook::attempt_lock_address(unique_weight, attempt);
 
         match attempt.status {
             LockStatus::Succeded => {}
@@ -1263,7 +1261,6 @@ impl ScheduleStage {
         let from_runnable = matches!(task_source, TaskSource::Runnable);
 
         let lock_failure_count = attempt_lock_for_execution(
-            from_runnable,
             &next_task.unique_weight,
             &mut next_task.lock_attempts_mut(),
         );
