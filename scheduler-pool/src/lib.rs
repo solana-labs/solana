@@ -1342,19 +1342,19 @@ impl ScheduleStage {
                 .iter()
                 .filter(|l| l.requested_usage == RequestedUsage::Readonly)
             {
-                if let Some(next_contended_task) = read_only_lock_attempt
+                if let Some(heaviest_blocked_task) = read_only_lock_attempt
                     .target_page_mut()
                     .blocked_task_queue
                     .reindex(false, &next_task.unique_weight)
                 {
-                    if !next_contended_task.currently_contended() {
+                    if !heaviest_blocked_task.currently_contended() {
                         continue;
                     }
 
                     address_book
                         .retryable_task_queue
-                        .entry(next_contended_task.unique_weight)
-                        .or_insert(next_contended_task);
+                        .entry(heaviest_blocked_task.unique_weight)
+                        .or_insert(heaviest_blocked_task);
                 }
             }
         }
