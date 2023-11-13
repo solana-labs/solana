@@ -1413,7 +1413,6 @@ impl ScheduleStage {
         finalized_lock_attempts: Vec<LockAttempt>,
     ) -> Box<ExecutionEnvironment> {
         Box::new(ExecutionEnvironment {
-            unique_weight: task.unique_weight,
             task,
             finalized_lock_attempts,
             execution_result: Default::default(),
