@@ -640,7 +640,6 @@ pub struct ExecutionEnvironment {
     pub unique_weight: UniqueWeight,
     pub task: TaskInQueue,
     pub finalized_lock_attempts: Vec<LockAttempt>,
-    pub is_reindexed: bool,
     pub execution_result:
         Option<std::result::Result<(), solana_sdk::transaction::TransactionError>>,
     pub finish_time: Option<std::time::SystemTime>,
@@ -652,9 +651,6 @@ pub struct ExecutionEnvironment {
 
 impl ExecutionEnvironment {
     fn reindex_with_address_book(&mut self) {
-        assert!(!self.is_reindexed());
-        self.is_reindexed = true;
-
         let uq = self.unique_weight;
         let should_remove = self
             .task
@@ -671,18 +667,6 @@ impl ExecutionEnvironment {
             if should_remove && lock_attempt.requested_usage == RequestedUsage::Writable {
                 lock_attempt.target_page_mut().write_task_ids.remove(&uq);
             }
-        }
-    }
-
-    fn is_reindexed(&self) -> bool {
-        self.is_reindexed
-    }
-
-    pub fn is_aborted(&self) -> bool {
-        if let Some(r) = &self.execution_result {
-            r.is_err()
-        } else {
-            false
         }
     }
 }
@@ -1438,7 +1422,6 @@ impl ScheduleStage {
             unique_weight: task.unique_weight,
             task,
             finalized_lock_attempts,
-            is_reindexed: Default::default(),
             execution_result: Default::default(),
             thx: Default::default(),
             execution_us: Default::default(),
@@ -1450,7 +1433,6 @@ impl ScheduleStage {
 
     fn commit_processed_execution(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
         ee.reindex_with_address_book();
-        assert!(ee.is_reindexed());
 
         // which order for data race free?: unlocking / marking
         Self::unlock_after_execution(address_book, &mut ee.finalized_lock_attempts);
