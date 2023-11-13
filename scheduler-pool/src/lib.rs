@@ -1315,7 +1315,6 @@ impl ScheduleStage {
                 &next_task.unique_weight,
                 &mut next_task.lock_attempts_mut(),
             );
-            let lock_count = next_task.lock_attempts_mut().len();
             next_task
                 .contention_count
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
