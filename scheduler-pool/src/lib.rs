@@ -253,16 +253,13 @@ impl Task {
             contention_count: Default::default(),
         })
     }
-    pub fn clone_in_queue(this: &TaskInQueue) -> TaskInQueue {
-        TaskInQueue::clone(this)
-    }
 
     fn index_with_pages(this: &TaskInQueue) {
         for lock_attempt in &*this.lock_attempts_mut() {
             let mut page = lock_attempt.target_page_mut();
 
             page.blocked_task_queue
-                .insert_task(Task::clone_in_queue(this));
+                .insert_task(this.clone());
             if lock_attempt.requested_usage == RequestedUsage::Writable {
                 page.blocked_write_requesting_task_ids
                     .insert(this.unique_weight);
@@ -396,7 +393,7 @@ impl BTreeMapTaskIds {
 
         self.heaviest_task_cursor()
             .find(|task| task.currently_contended())
-            .map(|task| Task::clone_in_queue(task))
+            .cloned()
     }
 }
 
