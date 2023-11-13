@@ -1,6 +1,7 @@
 ---
-title: Solana Command Line Guide
-sidebar_label: Solana CLI Tool Suite
+title: Solana CLI Tool Suite
+sidebar_label: Overview
+sidebar_position: 0
 ---
 
 In this section, we will describe how to use the Solana command-line tools to
