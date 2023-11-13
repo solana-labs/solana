@@ -1,4 +1,3 @@
-pub use target_arch::*;
 use {super::pod, crate::curve25519::ristretto::PodRistrettoPoint};
 
 impl From<(pod::PedersenCommitment, pod::DecryptHandle)> for pod::ElGamalCiphertext {
