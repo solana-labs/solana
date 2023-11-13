@@ -10,16 +10,16 @@ source ../ci/env.sh
 eval "$(../ci/channel-info.sh)"
 
 # set the output file' location
-out=${1:-src/cli/usage/detailed.md}
+out=${1:-src/cli/usage.md}
 
 # load the usage file's header
-cat src/cli/.detailed-usage.md.header > "$out"
+cat src/cli/.usage.md.header > "$out"
 
 # Skip generating the detailed usage doc for non deployment commits of the docs
 if [[ -n $CI ]]; then
   if [[ $CI_BRANCH != $EDGE_CHANNEL* ]] && [[ $CI_BRANCH != $BETA_CHANNEL* ]] && [[ $CI_BRANCH != $STABLE_CHANNEL* ]]; then
-    echo "**NOTE:** The detailed usage doc is only auto-generated during full production deployments of the docs"
-    echo "**NOTE:** This detailed usage doc is auto-generated during deployments" >> "$out"
+    echo "**NOTE:** The usage doc is only auto-generated during full production deployments of the docs"
+    echo "**NOTE:** This usage doc is auto-generated during deployments" >> "$out"
     exit
   fi
 fi
