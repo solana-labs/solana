@@ -1379,11 +1379,11 @@ impl ScheduleStage {
             if is_newly_uncontended {
                 if let Some(task) = l.heaviest_uncontended.take() {
                     if task.currently_contended() {
-                        let uti = address_book
+                        address_book
                             .uncontended_task_ids
                             .entry(task.unique_weight)
                             .or_insert((task, Default::default()));
-                        uti.1.insert(l.target.clone());
+                            .1.insert(l.target.clone());
                     }
                 }
             }
