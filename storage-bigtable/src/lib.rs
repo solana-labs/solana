@@ -15,7 +15,7 @@ use {
         timing::AtomicInterval,
         transaction::{TransactionError, VersionedTransaction},
     },
-    solana_storage_proto::convert::{generated, tx_by_addr},
+    solana_storage_proto::convert::{entries, generated, tx_by_addr},
     solana_transaction_status::{
         extract_and_fmt_memos, ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
         ConfirmedTransactionWithStatusMeta, Reward, TransactionByAddrInfo,
@@ -89,6 +89,10 @@ fn slot_to_key(slot: Slot) -> String {
 }
 
 fn slot_to_blocks_key(slot: Slot) -> String {
+    slot_to_key(slot)
+}
+
+fn slot_to_entries_key(slot: Slot) -> String {
     slot_to_key(slot)
 }
 
@@ -904,7 +908,10 @@ impl LedgerStorage {
             slot
         );
         let mut by_addr: HashMap<&Pubkey, Vec<TransactionByAddrInfo>> = HashMap::new();
-        let confirmed_block = confirmed_block.block;
+        let VersionedConfirmedBlockWithEntries {
+            block: confirmed_block,
+            entries,
+        } = confirmed_block;
 
         let mut tx_cells = vec![];
         for (index, transaction_with_meta) in confirmed_block.transactions.iter().enumerate() {
@@ -955,6 +962,14 @@ impl LedgerStorage {
             })
             .collect();
 
+        let num_entries = entries.len();
+        let entry_cell = (
+            slot_to_entries_key(slot),
+            entries::Entries {
+                entries: entries.into_iter().enumerate().map(Into::into).collect(),
+            },
+        );
+
         let mut tasks = vec![];
 
         if !tx_cells.is_empty() {
@@ -973,6 +988,14 @@ impl LedgerStorage {
                     &tx_by_addr_cells,
                 )
                 .await
+            }));
+        }
+
+        if num_entries > 0 {
+            let conn = self.connection.clone();
+            tasks.push(tokio::spawn(async move {
+                conn.put_protobuf_cells_with_retry::<entries::Entries>("entries", &[entry_cell])
+                    .await
             }));
         }
 
@@ -1016,6 +1039,7 @@ impl LedgerStorage {
             "storage-bigtable-upload-block",
             ("slot", slot, i64),
             ("transactions", num_transactions, i64),
+            ("entries", num_entries, i64),
             ("bytes", bytes_written, i64),
         );
         Ok(())
