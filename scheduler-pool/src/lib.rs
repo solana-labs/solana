@@ -478,7 +478,7 @@ impl AddressBook {
         let LockAttempt {
             target,
             requested_usage,
-            status, /*, remembered*/
+            status,
             ..
         } = attempt;
         let mut page = target.page_mut();
