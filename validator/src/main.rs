@@ -243,7 +243,8 @@ fn wait_for_restart_window(
                 {
                     Err("Current epoch is almost complete".to_string())
                 } else {
-                    while leader_schedule.front()
+                    while leader_schedule
+                        .front()
                         .map(|slot| *slot < epoch_info.absolute_slot)
                         .unwrap_or(false)
                     {

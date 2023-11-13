@@ -2602,7 +2602,8 @@ pub fn process_delegate_stake(
         } = rpc_client.get_vote_accounts_with_config(get_vote_accounts_config)?;
         // filter should return at most one result
         let rpc_vote_account =
-            current.first()
+            current
+                .first()
                 .or_else(|| delinquent.first())
                 .ok_or(CliError::RpcRequestError(format!(
                     "Vote account not found: {vote_account_pubkey}"
