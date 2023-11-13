@@ -281,10 +281,6 @@ impl Task {
         self.uncontended.load(std::sync::atomic::Ordering::SeqCst) == 1
     }
 
-    pub fn already_finished(&self) -> bool {
-        self.uncontended.load(std::sync::atomic::Ordering::SeqCst) == 3
-    }
-
     fn mark_as_contended(&self) {
         self.uncontended
             .store(1, std::sync::atomic::Ordering::SeqCst)
@@ -294,12 +290,6 @@ impl Task {
         assert!(self.currently_contended());
         self.uncontended
             .store(2, std::sync::atomic::Ordering::SeqCst)
-    }
-
-    fn mark_as_finished(&self) {
-        assert!(!self.already_finished() && !self.currently_contended());
-        self.uncontended
-            .store(3, std::sync::atomic::Ordering::SeqCst)
     }
 }
 
@@ -412,7 +402,6 @@ impl BTreeMapTaskIds {
 
         self.heaviest_task_cursor()
             .find(|task| {
-                assert!(!task.already_finished());
                 task.currently_contended()
             })
             .map(|task| Task::clone_in_queue(task))
@@ -1353,15 +1342,16 @@ impl ScheduleStage {
                 .load(std::sync::atomic::Ordering::SeqCst)
         );
 
-        assert!(!next_task.already_finished());
         if !from_runnable {
+            // as soon as next tack is succeeded in locking, trigger re-checks on read only
+            // addresses so that more readonly transactions can be executed
             next_task.mark_as_uncontended();
-            for lock_attempt in next_task
+            for read_only_lock_attempt in next_task
                 .lock_attempts_mut()
                 .iter()
                 .filter(|l| l.requested_usage == RequestedUsage::Readonly)
             {
-                if let Some(task) = lock_attempt
+                if let Some(task) = read_only_lock_attempt
                     .target_page_mut()
                     .task_ids
                     .reindex(false, &next_task.unique_weight)
@@ -1371,7 +1361,7 @@ impl ScheduleStage {
                             .uncontended_task_ids
                             .entry(task.unique_weight)
                             .or_insert((task, Default::default()));
-                        uti.1.insert(lock_attempt.target.clone());
+                        uti.1.insert(read_only_lock_attempt.target.clone());
                     }
                 }
             }
@@ -1426,7 +1416,6 @@ impl ScheduleStage {
 
         // which order for data race free?: unlocking / marking
         Self::unlock_after_execution(address_book, &mut ee.finalized_lock_attempts);
-        ee.task.mark_as_finished();
     }
 
     fn schedule_next_execution(
