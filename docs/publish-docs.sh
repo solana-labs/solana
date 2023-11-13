@@ -47,6 +47,7 @@ cat > "$CONFIG_FILE" <<EOF
     { "source": "/apps/builtins", "destination": "/developing/runtime-facilities/programs" },
     { "source": "/apps/backwards-compatibility", "destination": "/developing/backwards-compatibility" },
     { "source": "/implemented-proposals/secp256k1_instruction", "destination": "/developing/runtime-facilities/programs#secp256k1-program" },
+    { "source": "/implemented-proposals/implemented-proposals", "destination": "/implemented-proposals" },
     { "destination": "https://solana.com/docs/terminology", "source": "/terminology" },
     { "destination": "https://solana.com/docs/core/rent", "source": "/developing/intro/rent" },
     { "destination": "https://solana.com/docs/core/programs", "source": "/developing/intro/programs" },
