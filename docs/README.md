@@ -34,11 +34,11 @@ Running this build script requires **Docker**, and will auto fetch the [solanala
 
 This build script will also:
 
-- generate the `cli/usage.md` document from the output of each of the Solana CLI commands and sub-commands
+- generate the `cli/usage/detailed.md` document from the output of each of the Solana CLI commands and sub-commands
 - convert each of the `art/*.bob` files into SVG images used throughout the docs
 - generate the language [Translations](#translations)
 
-> Note: Running this build script is **required** before being able to run the site locally via the `npm run start` command since it will generate the `cli/usage.md` document.
+> Note: Running this build script is **required** before being able to run the site locally via the `npm run start` command since it will generate the `cli/usage/detailed.md` document.
 
 If you run into errors or issues with this step, see [Common Issues](#common-issues) below. See also [CI Build Flow](#ci-build-flow) for more details on production deployments of the docs.
 
@@ -81,17 +81,17 @@ In each post-commit build, docs are built and published using `vercel` to their 
 
 ## Common Issues
 
-### Bad sidebars file (or `cli/usage` not found)
+### Bad sidebars file (or `cli/usage/detailed` not found)
 
 ```bash
 Error: Bad sidebars file.
 These sidebar document ids do not exist:
-- cli/usage,
+- cli/usage/detailed,
 ```
 
-If you have NOT successfully run the build script, then the `cli/usage.md` file will not exist within your local repo (since it is in `.gitignore`). Not having this doc file, will result in the error message above.
+If you have NOT successfully run the build script, then the `cli/usage/detailed.md` file will not exist within your local repo (since it is in `.gitignore`). Not having this doc file, will result in the error message above.
 
-If the Rust toolchain (specifically `cargo`) is installed on your system, you can specifically build the `cli/usage.md` document via:
+If the Rust toolchain (specifically `cargo`) is installed on your system, you can specifically build the `cli/usage/detailed.md` document via:
 
 ```bash
 ./build-cli-usage.sh
