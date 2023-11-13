@@ -419,7 +419,7 @@ impl AddressBook {
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) {
-        let page = attempt.target_page_mut();
+        let mut page = attempt.target_page_mut();
         let tcuw = page 
             .blocked_task_queue
             .heaviest_weight();
