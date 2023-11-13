@@ -459,6 +459,14 @@ pub struct LoadedPrograms<FG: ForkGraph> {
     pub latest_root_epoch: Epoch,
     /// Environments of the current epoch
     pub environments: ProgramRuntimeEnvironments,
+    /// Anticipated replacement for `environments` at the next epoch
+    ///
+    /// This is `None` during most of an epoch, and only `Some` around the boundaries (at the end and beginning of an epoch).
+    /// More precisely, it starts with the recompilation phase a few hundred slots before the epoch boundary,
+    /// and it ends with the first rerooting after the epoch boundary.
+    pub upcoming_environments: Option<ProgramRuntimeEnvironments>,
+    /// List of loaded programs which should be recompiled before the next epoch (but don't have to).
+    pub programs_to_recompile: Vec<(Pubkey, Arc<LoadedProgram>)>,
     pub stats: Stats,
     pub fork_graph: Option<Arc<RwLock<FG>>>,
 }
@@ -481,6 +489,8 @@ impl<FG: ForkGraph> Default for LoadedPrograms<FG> {
             latest_root_slot: 0,
             latest_root_epoch: 0,
             environments: ProgramRuntimeEnvironments::default(),
+            upcoming_environments: None,
+            programs_to_recompile: Vec::default(),
             stats: Stats::default(),
             fork_graph: None,
         }
@@ -567,7 +577,12 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
     }
 
     /// Returns the current environments depending on the given epoch
-    pub fn get_environments_for_epoch(&self, _epoch: Epoch) -> &ProgramRuntimeEnvironments {
+    pub fn get_environments_for_epoch(&self, epoch: Epoch) -> &ProgramRuntimeEnvironments {
+        if epoch != self.latest_root_epoch {
+            if let Some(upcoming_environments) = self.upcoming_environments.as_ref() {
+                return upcoming_environments;
+            }
+        }
         &self.environments
     }
 
@@ -630,22 +645,6 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         entry
     }
 
-    /// On the epoch boundary this removes all programs of the outdated feature set
-    pub fn prune_feature_set_transition(&mut self) {
-        for second_level in self.entries.values_mut() {
-            second_level.retain(|entry| {
-                if Self::matches_environment(entry, &self.environments) {
-                    return true;
-                }
-                self.stats
-                    .prunes_environment
-                    .fetch_add(1, Ordering::Relaxed);
-                false
-            });
-        }
-        self.remove_programs_with_no_entries();
-    }
-
     pub fn prune_by_deployment_slot(&mut self, slot: Slot) {
         self.entries.retain(|_key, second_level| {
             *second_level = second_level
@@ -668,6 +667,15 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
             error!("Failed to lock fork graph for reading.");
             return;
         };
+        let mut recompilation_phase_ends = false;
+        if self.latest_root_epoch != new_root_epoch {
+            self.latest_root_epoch = new_root_epoch;
+            if let Some(upcoming_environments) = self.upcoming_environments.take() {
+                recompilation_phase_ends = true;
+                self.environments = upcoming_environments;
+                self.programs_to_recompile.clear();
+            }
+        }
         for second_level in self.entries.values_mut() {
             // Remove entries un/re/deployed on orphan forks
             let mut first_ancestor_found = false;
@@ -697,6 +705,15 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                             return false;
                         }
                     }
+                    // Remove outdated environment of previous feature set
+                    if recompilation_phase_ends
+                        && !Self::matches_environment(entry, &self.environments)
+                    {
+                        self.stats
+                            .prunes_environment
+                            .fetch_add(1, Ordering::Relaxed);
+                        return false;
+                    }
                     true
                 })
                 .cloned()
@@ -706,9 +723,6 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         self.remove_programs_with_no_entries();
         debug_assert!(self.latest_root_slot <= new_root_slot);
         self.latest_root_slot = new_root_slot;
-        if self.latest_root_epoch < new_root_epoch {
-            self.latest_root_epoch = new_root_epoch;
-        }
     }
 
     fn matches_environment(

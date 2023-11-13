@@ -14,7 +14,6 @@ use {
             tower_storage::{NullTowerStorage, TowerStorage},
             ExternalRootSource, Tower,
         },
-        ledger_metric_report_service::LedgerMetricReportService,
         poh_timing_report_service::PohTimingReportService,
         repair::{self, serve_repair::ServeRepair, serve_repair_service::ServeRepairService},
         rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
@@ -56,6 +55,7 @@ use {
         blockstore::{
             Blockstore, BlockstoreError, BlockstoreSignals, CompletedSlotsReceiver, PurgeType,
         },
+        blockstore_metric_report_service::BlockstoreMetricReportService,
         blockstore_options::{BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions},
         blockstore_processor::{self, TransactionStatusSender},
         entry_notifier_interface::EntryNotifierArc,
@@ -465,7 +465,7 @@ pub struct Validator {
     pub bank_forks: Arc<RwLock<BankForks>>,
     pub blockstore: Arc<Blockstore>,
     geyser_plugin_service: Option<GeyserPluginService>,
-    ledger_metric_report_service: LedgerMetricReportService,
+    blockstore_metric_report_service: BlockstoreMetricReportService,
     accounts_background_service: AccountsBackgroundService,
     accounts_hash_verifier: AccountsHashVerifier,
     turbine_quic_endpoint: Endpoint,
@@ -1102,8 +1102,8 @@ impl Validator {
         )
         .map_err(|err| format!("wait_for_supermajority failed: {err:?}"))?;
 
-        let ledger_metric_report_service =
-            LedgerMetricReportService::new(blockstore.clone(), exit.clone());
+        let blockstore_metric_report_service =
+            BlockstoreMetricReportService::new(blockstore.clone(), exit.clone());
 
         let wait_for_vote_to_start_leader =
             !waited_for_supermajority && !config.no_wait_for_vote_to_start_leader;
@@ -1128,7 +1128,7 @@ impl Validator {
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
         let (gossip_verified_vote_hash_sender, gossip_verified_vote_hash_receiver) = unbounded();
-        let (cluster_confirmed_slot_sender, cluster_confirmed_slot_receiver) = unbounded();
+        let (duplicate_confirmed_slot_sender, duplicate_confirmed_slots_receiver) = unbounded();
 
         let rpc_completed_slots_service = RpcCompletedSlotsService::spawn(
             completed_slots_receiver,
@@ -1263,7 +1263,7 @@ impl Validator {
             replay_vote_sender.clone(),
             completed_data_sets_sender,
             bank_notification_sender.clone(),
-            cluster_confirmed_slot_receiver,
+            duplicate_confirmed_slots_receiver,
             TvuConfig {
                 max_ledger_shreds: config.max_ledger_shreds,
                 shred_version: node.info.shred_version(),
@@ -1328,7 +1328,7 @@ impl Validator {
             replay_vote_sender,
             bank_notification_sender.map(|sender| sender.sender),
             config.tpu_coalesce,
-            cluster_confirmed_slot_sender,
+            duplicate_confirmed_slot_sender,
             &connection_cache,
             turbine_quic_endpoint_sender,
             &identity_keypair,
@@ -1378,7 +1378,7 @@ impl Validator {
             bank_forks,
             blockstore,
             geyser_plugin_service,
-            ledger_metric_report_service,
+            blockstore_metric_report_service,
             accounts_background_service,
             accounts_hash_verifier,
             turbine_quic_endpoint,
@@ -1507,7 +1507,7 @@ impl Validator {
         self.stats_reporter_service
             .join()
             .expect("stats_reporter_service");
-        self.ledger_metric_report_service
+        self.blockstore_metric_report_service
             .join()
             .expect("ledger_metric_report_service");
         self.accounts_background_service
@@ -1747,7 +1747,7 @@ fn load_blockstore(
     blockstore.shred_timing_point_sender = poh_timing_point_sender;
     // following boot sequence (esp BankForks) could set root. so stash the original value
     // of blockstore root away here as soon as possible.
-    let original_blockstore_root = blockstore.last_root();
+    let original_blockstore_root = blockstore.max_root();
 
     let blockstore = Arc::new(blockstore);
     let blockstore_root_scan = BlockstoreRootScan::new(config, blockstore.clone(), exit.clone());

@@ -71,17 +71,14 @@ use {
     },
     blake3::traits::digest::Digest,
     crossbeam_channel::{unbounded, Receiver, Sender},
-    dashmap::{
-        mapref::entry::Entry::{Occupied, Vacant},
-        DashMap, DashSet,
-    },
+    dashmap::{DashMap, DashSet},
     log::*,
     rand::{thread_rng, Rng},
     rayon::{prelude::*, ThreadPool},
     serde::{Deserialize, Serialize},
     smallvec::SmallVec,
     solana_measure::{measure::Measure, measure_us},
-    solana_nohash_hasher::IntSet,
+    solana_nohash_hasher::{IntMap, IntSet},
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -4328,7 +4325,7 @@ impl AccountsDb {
         shrink_slots: &ShrinkCandidates,
         shrink_ratio: f64,
         oldest_non_ancient_slot: Option<Slot>,
-    ) -> (HashMap<Slot, Arc<AccountStorageEntry>>, ShrinkCandidates) {
+    ) -> (IntMap<Slot, Arc<AccountStorageEntry>>, ShrinkCandidates) {
         struct StoreUsageInfo {
             slot: Slot,
             alive_ratio: f64,
@@ -4371,7 +4368,7 @@ impl AccountsDb {
 
         // Working from the beginning of store_usage which are the most sparse and see when we can stop
         // shrinking while still achieving the overall goals.
-        let mut shrink_slots = HashMap::new();
+        let mut shrink_slots = IntMap::default();
         let mut shrink_slots_next_batch = ShrinkCandidates::default();
         for usage in &store_usage {
             let store = &usage.store;
@@ -9368,12 +9365,7 @@ impl AccountsDb {
                             let unique_keys =
                                 HashSet::<Pubkey>::from_iter(slot_keys.iter().map(|(_, key)| *key));
                             for (slot, key) in slot_keys {
-                                match self.uncleaned_pubkeys.entry(slot) {
-                                    Occupied(mut occupied) => occupied.get_mut().push(key),
-                                    Vacant(vacant) => {
-                                        vacant.insert(vec![key]);
-                                    }
-                                }
+                                self.uncleaned_pubkeys.entry(slot).or_default().push(key);
                             }
                             let unique_pubkeys_by_bin_inner =
                                 unique_keys.into_iter().collect::<Vec<_>>();
@@ -9405,51 +9397,84 @@ impl AccountsDb {
                 ..GenerateIndexTimings::default()
             };
 
-            // subtract data.len() from accounts_data_len for all old accounts that are in the index twice
-            let mut accounts_data_len_dedup_timer =
-                Measure::start("handle accounts data len duplicates");
-            let uncleaned_roots = Mutex::new(HashSet::<Slot>::default());
             if pass == 0 {
-                let accounts_data_len_from_duplicates = unique_pubkeys_by_bin
+                #[derive(Debug, Default)]
+                struct DuplicatePubkeysVisitedInfo {
+                    accounts_data_len_from_duplicates: u64,
+                    uncleaned_roots: IntSet<Slot>,
+                }
+                impl DuplicatePubkeysVisitedInfo {
+                    fn reduce(mut a: Self, mut b: Self) -> Self {
+                        if a.uncleaned_roots.len() >= b.uncleaned_roots.len() {
+                            a.merge(b);
+                            a
+                        } else {
+                            b.merge(a);
+                            b
+                        }
+                    }
+                    fn merge(&mut self, other: Self) {
+                        self.accounts_data_len_from_duplicates +=
+                            other.accounts_data_len_from_duplicates;
+                        self.uncleaned_roots.extend(other.uncleaned_roots);
+                    }
+                }
+
+                // subtract data.len() from accounts_data_len for all old accounts that are in the index twice
+                let mut accounts_data_len_dedup_timer =
+                    Measure::start("handle accounts data len duplicates");
+                let DuplicatePubkeysVisitedInfo {
+                    accounts_data_len_from_duplicates,
+                    uncleaned_roots,
+                } = unique_pubkeys_by_bin
                     .par_iter()
-                    .map(|unique_keys| {
-                        unique_keys
-                            .par_chunks(4096)
-                            .map(|pubkeys| {
-                                let (count, uncleaned_roots_this_group) = self
-                                    .visit_duplicate_pubkeys_during_startup(
-                                        pubkeys,
-                                        &rent_collector,
-                                        &timings,
-                                    );
-                                let mut uncleaned_roots = uncleaned_roots.lock().unwrap();
-                                uncleaned_roots_this_group.into_iter().for_each(|slot| {
-                                    uncleaned_roots.insert(slot);
-                                });
-                                count
-                            })
-                            .sum::<u64>()
-                    })
-                    .sum();
+                    .fold(
+                        DuplicatePubkeysVisitedInfo::default,
+                        |accum, pubkeys_by_bin| {
+                            let intermediate = pubkeys_by_bin
+                                .par_chunks(4096)
+                                .fold(DuplicatePubkeysVisitedInfo::default, |accum, pubkeys| {
+                                    let (accounts_data_len_from_duplicates, uncleaned_roots) = self
+                                        .visit_duplicate_pubkeys_during_startup(
+                                            pubkeys,
+                                            &rent_collector,
+                                            &timings,
+                                        );
+                                    let intermediate = DuplicatePubkeysVisitedInfo {
+                                        accounts_data_len_from_duplicates,
+                                        uncleaned_roots,
+                                    };
+                                    DuplicatePubkeysVisitedInfo::reduce(accum, intermediate)
+                                })
+                                .reduce(
+                                    DuplicatePubkeysVisitedInfo::default,
+                                    DuplicatePubkeysVisitedInfo::reduce,
+                                );
+                            DuplicatePubkeysVisitedInfo::reduce(accum, intermediate)
+                        },
+                    )
+                    .reduce(
+                        DuplicatePubkeysVisitedInfo::default,
+                        DuplicatePubkeysVisitedInfo::reduce,
+                    );
+                accounts_data_len_dedup_timer.stop();
+                timings.accounts_data_len_dedup_time_us = accounts_data_len_dedup_timer.as_us();
+                timings.slots_to_clean = uncleaned_roots.len() as u64;
+
+                self.accounts_index
+                    .add_uncleaned_roots(uncleaned_roots.into_iter());
                 accounts_data_len.fetch_sub(accounts_data_len_from_duplicates, Ordering::Relaxed);
                 info!(
                     "accounts data len: {}",
                     accounts_data_len.load(Ordering::Relaxed)
                 );
             }
-            accounts_data_len_dedup_timer.stop();
-            timings.accounts_data_len_dedup_time_us = accounts_data_len_dedup_timer.as_us();
-
-            let uncleaned_roots = uncleaned_roots.into_inner().unwrap();
-            timings.slots_to_clean = uncleaned_roots.len() as u64;
 
             if pass == 0 {
                 // Need to add these last, otherwise older updates will be cleaned
                 for root in &slots {
                     self.accounts_index.add_root(*root);
                 }
-                self.accounts_index
-                    .add_uncleaned_roots(uncleaned_roots.into_iter());
 
                 self.set_storage_count_and_alive_bytes(storage_info, &mut timings);
             }
@@ -9501,9 +9526,9 @@ impl AccountsDb {
         pubkeys: &[Pubkey],
         rent_collector: &RentCollector,
         timings: &GenerateIndexTimings,
-    ) -> (u64, HashSet<Slot>) {
+    ) -> (u64, IntSet<Slot>) {
         let mut accounts_data_len_from_duplicates = 0;
-        let mut uncleaned_slots = HashSet::<Slot>::default();
+        let mut uncleaned_slots = IntSet::default();
         let mut removed_rent_paying = 0;
         let mut removed_top_off = 0;
         self.accounts_index.scan(
