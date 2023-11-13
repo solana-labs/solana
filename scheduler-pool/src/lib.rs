@@ -1353,8 +1353,7 @@ impl ScheduleStage {
                         let uti = address_book
                             .retry_queue
                             .entry(task.unique_weight)
-                            .or_insert((task, Default::default()));
-                        uti.1.insert(read_only_lock_attempt.target_page.clone());
+                            .or_insert(task);
                     }
                 }
             }
