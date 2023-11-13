@@ -1347,12 +1347,14 @@ impl ScheduleStage {
                     .task_ids
                     .reindex(false, &next_task.unique_weight)
                 {
-                    if task.currently_contended() {
-                        address_book
-                            .retry_queue
-                            .entry(next_contended_task.unique_weight)
-                            .or_insert(next_contended_task);
+                    if !next_contended_task.currently_contended() {
+                        continue;
                     }
+
+                    address_book
+                        .retry_queue
+                        .entry(next_contended_task.unique_weight)
+                        .or_insert(next_contended_task);
                 }
             }
         }
