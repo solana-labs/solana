@@ -17,7 +17,7 @@ use {
     crossbeam_channel::RecvTimeoutError,
     solana_measure::measure_us,
     solana_runtime::bank_forks::BankForks,
-    solana_sdk::timing::AtomicInterval,
+    solana_sdk::{saturating_add_assign, timing::AtomicInterval},
     std::{
         sync::{Arc, RwLock},
         time::Duration,
@@ -77,7 +77,7 @@ impl SchedulerController {
             // bypass sanitization and buffering and immediately drop the packets.
             let (decision, decision_time_us) =
                 measure_us!(self.decision_maker.make_consume_or_forward_decision());
-            self.timing_metrics.decision_time_us += decision_time_us;
+            saturating_add_assign!(self.timing_metrics.decision_time_us, decision_time_us);
 
             self.process_transactions(&decision)?;
             self.receive_completed()?;
@@ -101,12 +101,12 @@ impl SchedulerController {
             BufferedPacketsDecision::Consume(_bank_start) => {
                 let (num_scheduled, schedule_time_us) =
                     measure_us!(self.scheduler.schedule(&mut self.container)?);
-                self.count_metrics.num_scheduled += num_scheduled;
-                self.timing_metrics.schedule_time_us += schedule_time_us;
+                saturating_add_assign!(self.count_metrics.num_scheduled, num_scheduled);
+                saturating_add_assign!(self.timing_metrics.schedule_time_us, schedule_time_us);
             }
             BufferedPacketsDecision::Forward => {
                 let (_, clear_time_us) = measure_us!(self.clear_container());
-                self.timing_metrics.clear_time_us += clear_time_us;
+                saturating_add_assign!(self.timing_metrics.clear_time_us, clear_time_us);
             }
             BufferedPacketsDecision::ForwardAndHold | BufferedPacketsDecision::Hold => {}
         }
@@ -119,7 +119,7 @@ impl SchedulerController {
     fn clear_container(&mut self) {
         while let Some(id) = self.container.pop() {
             self.container.remove_by_id(&id.id);
-            self.count_metrics.num_dropped_on_clear += 1;
+            saturating_add_assign!(self.count_metrics.num_dropped_on_clear, 1);
         }
     }
 
@@ -127,9 +127,12 @@ impl SchedulerController {
     fn receive_completed(&mut self) -> Result<(), SchedulerError> {
         let ((num_transactions, num_retryable), receive_completed_time_us) =
             measure_us!(self.scheduler.receive_completed(&mut self.container)?);
-        self.count_metrics.num_finished += num_transactions;
-        self.count_metrics.num_retryable += num_retryable;
-        self.timing_metrics.receive_completed_time_us += receive_completed_time_us;
+        saturating_add_assign!(self.count_metrics.num_finished, num_transactions);
+        saturating_add_assign!(self.count_metrics.num_retryable, num_retryable);
+        saturating_add_assign!(
+            self.timing_metrics.receive_completed_time_us,
+            receive_completed_time_us
+        );
         Ok(())
     }
 
@@ -156,19 +159,22 @@ impl SchedulerController {
         let (received_packet_results, receive_time_us) = measure_us!(self
             .packet_receiver
             .receive_packets(recv_timeout, remaining_queue_capacity));
-        self.timing_metrics.receive_time_us += receive_time_us;
+        saturating_add_assign!(self.timing_metrics.receive_time_us, receive_time_us);
 
         match received_packet_results {
             Ok(receive_packet_results) => {
                 let num_received_packets = receive_packet_results.deserialized_packets.len();
-                self.count_metrics.num_received += num_received_packets;
+                saturating_add_assign!(self.count_metrics.num_received, num_received_packets);
                 if should_buffer {
                     let (_, buffer_time_us) = measure_us!(
                         self.buffer_packets(receive_packet_results.deserialized_packets)
                     );
-                    self.timing_metrics.buffer_time_us += buffer_time_us;
+                    saturating_add_assign!(self.timing_metrics.buffer_time_us, buffer_time_us);
                 } else {
-                    self.count_metrics.num_dropped_on_receive += num_received_packets;
+                    saturating_add_assign!(
+                        self.count_metrics.num_dropped_on_receive,
+                        num_received_packets
+                    );
                 }
             }
             Err(RecvTimeoutError::Timeout) => {}
@@ -188,7 +194,7 @@ impl SchedulerController {
             let Some(transaction) =
                 packet.build_sanitized_transaction(feature_set, vote_only, bank.as_ref())
             else {
-                self.count_metrics.num_dropped_on_sanitization += 1;
+                saturating_add_assign!(self.count_metrics.num_dropped_on_sanitization, 1);
                 continue;
             };
 
@@ -203,9 +209,9 @@ impl SchedulerController {
                 transaction_ttl,
                 transaction_priority_details,
             ) {
-                self.count_metrics.num_dropped_on_capacity += 1;
+                saturating_add_assign!(self.count_metrics.num_dropped_on_capacity, 1);
             }
-            self.count_metrics.num_buffered += 1;
+            saturating_add_assign!(self.count_metrics.num_buffered, 1);
         }
     }
 }
