@@ -437,7 +437,6 @@ impl AddressBook {
         attempt: &mut LockAttempt,
     ) {
         let tcuw = attempt
-            //.target_contended_unique_weights()
             .target_page_mut()
             .task_ids
             .heaviest_task_id();
