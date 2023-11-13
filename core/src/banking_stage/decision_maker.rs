@@ -28,6 +28,7 @@ impl BufferedPacketsDecision {
     }
 }
 
+#[derive(Clone)]
 pub struct DecisionMaker {
     my_pubkey: Pubkey,
     poh_recorder: Arc<RwLock<PohRecorder>>,
