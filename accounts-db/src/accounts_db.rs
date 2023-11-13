@@ -459,7 +459,6 @@ impl AncientSlotPubkeys {
 pub(crate) struct ShrinkCollect<'a, T: ShrinkCollectRefs<'a>> {
     pub(crate) slot: Slot,
     pub(crate) capacity: u64,
-    pub(crate) aligned_total_bytes: u64,
     pub(crate) unrefed_pubkeys: Vec<&'a Pubkey>,
     pub(crate) alive_accounts: T,
     /// total size in storage of all alive accounts
@@ -4047,7 +4046,6 @@ impl AccountsDb {
         ShrinkCollect {
             slot,
             capacity: *capacity,
-            aligned_total_bytes,
             unrefed_pubkeys,
             alive_accounts,
             alive_total_bytes,
@@ -4114,7 +4112,10 @@ impl AccountsDb {
             self.shrink_collect::<AliveAccounts<'_>>(store, &unique_accounts, &self.shrink_stats);
 
         // This shouldn't happen if alive_bytes/approx_stored_count are accurate
-        if Self::should_not_shrink(shrink_collect.aligned_total_bytes, shrink_collect.capacity) {
+        if Self::should_not_shrink(
+            shrink_collect.alive_total_bytes as u64,
+            shrink_collect.capacity,
+        ) {
             self.shrink_stats
                 .skipped_shrink
                 .fetch_add(1, Ordering::Relaxed);
@@ -4130,20 +4131,20 @@ impl AccountsDb {
 
         let total_accounts_after_shrink = shrink_collect.alive_accounts.len();
         debug!(
-            "shrinking: slot: {}, accounts: ({} => {}) bytes: ({} ; aligned to: {}) original: {}",
+            "shrinking: slot: {}, accounts: ({} => {}) bytes: {} original: {}",
             slot,
             shrink_collect.total_starting_accounts,
             total_accounts_after_shrink,
             shrink_collect.alive_total_bytes,
-            shrink_collect.aligned_total_bytes,
             shrink_collect.capacity,
         );
 
         let mut stats_sub = ShrinkStatsSub::default();
         let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
-        if shrink_collect.aligned_total_bytes > 0 {
-            let (shrink_in_progress, time_us) =
-                measure_us!(self.get_store_for_shrink(slot, shrink_collect.aligned_total_bytes));
+        if shrink_collect.alive_total_bytes > 0 {
+            let (shrink_in_progress, time_us) = measure_us!(
+                self.get_store_for_shrink(slot, shrink_collect.alive_total_bytes as u64)
+            );
             stats_sub.create_and_insert_store_elapsed_us = time_us;
 
             // here, we're writing back alive_accounts. That should be an atomic operation
@@ -8186,26 +8187,24 @@ impl AccountsDb {
         }
     }
 
-    fn should_not_shrink(aligned_bytes: u64, total_bytes: u64) -> bool {
-        aligned_bytes + PAGE_SIZE > total_bytes
+    fn should_not_shrink(alive_bytes: u64, total_bytes: u64) -> bool {
+        alive_bytes + PAGE_SIZE > total_bytes
     }
 
     fn is_shrinking_productive(slot: Slot, store: &Arc<AccountStorageEntry>) -> bool {
         let alive_count = store.count();
         let stored_count = store.approx_stored_count();
-        let alive_bytes = store.alive_bytes();
+        let alive_bytes = store.alive_bytes() as u64;
         let total_bytes = store.capacity();
 
-        let aligned_bytes = Self::page_align(alive_bytes as u64);
-        if Self::should_not_shrink(aligned_bytes, total_bytes) {
+        if Self::should_not_shrink(alive_bytes, total_bytes) {
             trace!(
-                "shrink_slot_forced ({}): not able to shrink at all: alive/stored: ({} / {}) ({}b / {}b) save: {}",
+                "shrink_slot_forced ({}): not able to shrink at all: alive/stored: {} ({}b / {}b) save: {}",
                 slot,
                 alive_count,
                 stored_count,
-                aligned_bytes,
                 total_bytes,
-                total_bytes.saturating_sub(aligned_bytes),
+                total_bytes.saturating_sub(alive_bytes),
             );
             return false;
         }
@@ -17343,17 +17342,6 @@ pub mod tests {
 
                                 let alive_total_one_account = 136 + space;
                                 if alive {
-                                    assert_eq!(
-                                        shrink_collect.aligned_total_bytes,
-                                        PAGE_SIZE
-                                            * if account_count >= 100 {
-                                                4
-                                            } else if account_count >= 50 {
-                                                2
-                                            } else {
-                                                1
-                                            }
-                                    );
                                     let mut expected_alive_total_bytes =
                                         alive_total_one_account * normal_account_count;
                                     if append_opposite_zero_lamport_account {
@@ -17365,13 +17353,11 @@ pub mod tests {
                                         expected_alive_total_bytes
                                     );
                                 } else if append_opposite_alive_account {
-                                    assert_eq!(shrink_collect.aligned_total_bytes, 4096);
                                     assert_eq!(
                                         shrink_collect.alive_total_bytes,
                                         alive_total_one_account
                                     );
                                 } else {
-                                    assert_eq!(shrink_collect.aligned_total_bytes, 0);
                                     assert_eq!(shrink_collect.alive_total_bytes, 0);
                                 }
                                 // expected_capacity is determined by what size append vec gets created when the write cache is flushed to an append vec.
