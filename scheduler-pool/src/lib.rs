@@ -386,7 +386,7 @@ impl BTreeMapTaskIds {
         self.blocked_tx_queue.values().rev()
     }
 
-    pub fn heaviest_task_id(&mut self) -> Option<UniqueWeight> {
+    pub fn heaviest_weight(&mut self) -> Option<UniqueWeight> {
         self.blocked_tx_queue.last_entry().map(|j| *j.key())
     }
 
@@ -431,7 +431,7 @@ impl AddressBook {
         let tcuw = attempt
             .target_page_mut()
             .blocked_tx_queue
-            .heaviest_task_id();
+            .heaviest_weight();
 
         let strictly_lockable = if tcuw.is_none() {
             true
