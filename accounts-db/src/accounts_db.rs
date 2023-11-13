@@ -17326,7 +17326,6 @@ pub mod tests {
                                     );
                                 } else {
                                     assert_eq!(shrink_collect.alive_total_bytes, 0);
-                                    assert_eq!(shrink_collect.alive_total_bytes, 0);
                                 }
                                 // expected_capacity is determined by what size append vec gets created when the write cache is flushed to an append vec.
                                 let mut expected_capacity =
