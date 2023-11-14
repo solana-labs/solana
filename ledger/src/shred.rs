@@ -337,6 +337,8 @@ impl Shred {
     dispatch!(pub fn payload(&self) -> &Vec<u8>);
     dispatch!(pub fn sanitize(&self) -> Result<(), Error>);
 
+    dispatch!(pub fn merkle_root(&self) -> Option<Hash>);
+
     // Only for tests.
     dispatch!(pub fn set_index(&mut self, index: u32));
     dispatch!(pub fn set_slot(&mut self, slot: Slot));
