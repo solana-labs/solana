@@ -1277,7 +1277,7 @@ impl ScheduleStage {
         lock_attempts: &mut [LockAttempt],
     ) {
         for l in lock_attempts {
-            AddressBook::reset_lock(l);
+            Self::reset_lock(l);
         }
     }
 
@@ -1300,7 +1300,7 @@ impl ScheduleStage {
                     .remove(&uq);
             }
 
-            let is_unused_now = ScheduleStage::reset_lock(unlock_attempt);
+            let is_unused_now = Self::reset_lock(unlock_attempt);
             if !is_unused_now {
                 continue;
             }
