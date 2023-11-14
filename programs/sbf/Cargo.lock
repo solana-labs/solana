@@ -4693,6 +4693,7 @@ dependencies = [
  "tar",
  "tempfile",
  "thiserror",
+ "zstd",
 ]
 
 [[package]]
@@ -5276,11 +5277,13 @@ dependencies = [
  "static_assertions",
  "strum",
  "strum_macros",
+ "tar",
  "tempfile",
  "thiserror",
  "tokio",
  "tokio-stream",
  "trees",
+ "zstd",
 ]
 
 [[package]]
