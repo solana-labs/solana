@@ -34,6 +34,7 @@ impl BlockstoreMetricReportService {
                     BLOCKSTORE_METRICS_REPORT_PERIOD_MILLIS,
                 ));
                 blockstore.submit_rocksdb_cf_metrics_for_all_cfs();
+                blockstore.report_rpc_api_metrics();
             })
             .unwrap();
         Self { t_cf_metric }

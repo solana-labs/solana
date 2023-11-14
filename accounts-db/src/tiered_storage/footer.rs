@@ -122,7 +122,7 @@ pub struct TieredStorageFooter {
     /// The offset pointing to the first byte of the account index block.
     pub index_block_offset: u64,
     /// The offset pointing to the first byte of the owners block.
-    pub owners_offset: u64,
+    pub owners_block_offset: u64,
 
     // account range
     /// The smallest account address in this file.
@@ -157,7 +157,7 @@ impl Default for TieredStorageFooter {
             owner_count: 0,
             owner_entry_size: 0,
             index_block_offset: 0,
-            owners_offset: 0,
+            owners_block_offset: 0,
             hash: Hash::new_unique(),
             min_account_address: Pubkey::default(),
             max_account_address: Pubkey::default(),
@@ -249,7 +249,7 @@ mod tests {
             owner_count: 250,
             owner_entry_size: 32,
             index_block_offset: 1069600,
-            owners_offset: 1081200,
+            owners_block_offset: 1081200,
             hash: Hash::new_unique(),
             min_account_address: Pubkey::default(),
             max_account_address: Pubkey::new_unique(),
@@ -286,7 +286,7 @@ mod tests {
         assert_eq!(offset_of!(TieredStorageFooter, owner_count), 0x18);
         assert_eq!(offset_of!(TieredStorageFooter, owner_entry_size), 0x1C);
         assert_eq!(offset_of!(TieredStorageFooter, index_block_offset), 0x20);
-        assert_eq!(offset_of!(TieredStorageFooter, owners_offset), 0x28);
+        assert_eq!(offset_of!(TieredStorageFooter, owners_block_offset), 0x28);
         assert_eq!(offset_of!(TieredStorageFooter, min_account_address), 0x30);
         assert_eq!(offset_of!(TieredStorageFooter, max_account_address), 0x50);
         assert_eq!(offset_of!(TieredStorageFooter, hash), 0x70);

@@ -64,7 +64,7 @@ impl LatestValidatorVotePacket {
                 let &pubkey = message
                     .message
                     .static_account_keys()
-                    .get(0)
+                    .first()
                     .ok_or(DeserializedPacketError::VoteTransactionError)?;
                 let slot = vote_state_update_instruction.last_voted_slot().unwrap_or(0);
                 let timestamp = vote_state_update_instruction.timestamp();

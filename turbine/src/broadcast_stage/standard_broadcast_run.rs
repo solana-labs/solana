@@ -580,7 +580,7 @@ mod test {
         // Slot 2 interrupted slot 1
         let shreds = run.finish_prev_slot(&keypair, 0, &mut ProcessShredsStats::default());
         let shred = shreds
-            .get(0)
+            .first()
             .expect("Expected a shred that signals an interrupt");
 
         // Validate the shred
