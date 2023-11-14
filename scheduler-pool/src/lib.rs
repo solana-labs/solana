@@ -413,10 +413,7 @@ pub struct AddressBook {
 }
 
 impl AddressBook {
-    fn attempt_lock_address(
-        unique_weight: &UniqueWeight,
-        attempt: &mut LockAttempt,
-    ) {
+    fn attempt_lock_address(unique_weight: &UniqueWeight, attempt: &mut LockAttempt) {
         let mut page = attempt.target_page_mut();
         let tcuw = page.blocked_task_queue.heaviest_weight();
 
@@ -1206,9 +1203,7 @@ impl ScheduleStage {
     ) -> Option<(TaskSource, TaskInQueue)> {
         let selected_heaviest_tasks = match task_selection {
             TaskSelection::OnlyFromRunnable => (runnable_queue.heaviest_entry_to_execute(), None),
-            TaskSelection::OnlyFromContended(_) => {
-                (None, retryable_task_queue.last_entry())
-            }
+            TaskSelection::OnlyFromContended(_) => (None, retryable_task_queue.last_entry()),
         };
 
         match selected_heaviest_tasks {
