@@ -1242,7 +1242,7 @@ impl ScheduleStage {
     }
 
     fn try_lock_for_task(
-        address_book: &mut AddressBook,
+        retryable_task_queue: &mut WeightedTaskQueue,
         (task_source, next_task): (TaskSource, TaskInQueue),
     ) -> Option<(TaskInQueue, Vec<LockAttempt>)> {
         let from_runnable = matches!(task_source, TaskSource::Runnable);
@@ -1293,8 +1293,7 @@ impl ScheduleStage {
                     .reindex(false, &next_task.unique_weight)
                 {
                     assert!(heaviest_blocked_task.currently_contended());
-                    address_book
-                        .retryable_task_queue
+                    retryable_task_queue
                         .entry(heaviest_blocked_task.unique_weight)
                         .or_insert(heaviest_blocked_task);
                 }
@@ -1381,7 +1380,7 @@ impl ScheduleStage {
         task_selection: &mut TaskSelection,
     ) -> Option<Box<ExecutionEnvironment>> {
         Self::select_next_task_to_lock(runnable_queue, &mut address_book.retryable_task_queue, task_selection)
-            .and_then(|task| Self::try_lock_for_task(address_book, task))
+            .and_then(|task| Self::try_lock_for_task(&mut address_book.retryable_task_queue, task))
             .map(|(task, lock_attemps)| Self::prepare_scheduled_execution(task, lock_attemps))
     }
 }
