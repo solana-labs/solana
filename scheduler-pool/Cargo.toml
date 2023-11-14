@@ -13,7 +13,6 @@ edition = { workspace = true }
 by_address = { workspace = true }
 crossbeam-channel = { workspace = true }
 dashmap = { workspace = true }
-enum_dispatch = { workspace = true }
 rand = { workspace = true }
 log = { workspace = true }
 solana-ledger = { workspace = true }
