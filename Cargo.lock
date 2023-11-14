@@ -2963,7 +2963,7 @@ dependencies = [
  "secrecy",
  "serde",
  "serde_json",
- "serde_yaml 0.9.25",
+ "serde_yaml 0.9.27",
  "thiserror",
  "tokio",
  "tokio-util 0.7.9",
@@ -6406,7 +6406,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "serde_yaml 0.9.25",
+ "serde_yaml 0.9.27",
  "serial_test",
  "solana-accounts-db",
  "solana-bloom",
@@ -8725,7 +8725,7 @@ dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime",
- "toml_edit 0.20.4",
+ "toml_edit 0.21.0",
 ]
 
 [[package]]
@@ -8739,6 +8739,20 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
+version = "0.19.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b5bb770da30e5cbfde35a2d7b9b8a2c4b8ef89548a7a6aeab5c9a576e3e7421"
+dependencies = [
+ "indexmap 2.1.0",
+ "toml_datetime",
+ "winnow",
+]
+
+[[package]]
+name = "toml_edit"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d34d383cd00a163b4a5b85053df514d45bc330f6de7737edfe0a93311d1eaa03"
 dependencies = [
  "indexmap 2.1.0",
  "serde",
