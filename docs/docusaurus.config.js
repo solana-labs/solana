@@ -56,7 +56,7 @@ module.exports = {
       },
       items: [
         {
-          to: "cluster/overview",
+          to: "architecture",
           label: "Architecture",
           position: "left",
         },
@@ -128,7 +128,7 @@ module.exports = {
             },
             {
               label: "Architecture",
-              to: "cluster/overview",
+              to: "architecture",
             },
           ],
         },
