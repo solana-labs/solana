@@ -652,6 +652,8 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     id: SchedulerId,
     completed_result_with_timings: Option<ResultWithTimings>,
     thread_manager: RwLock<ThreadManager<TH, SEA>>,
+    address_book: AddressBook,
+    preloader: Arc<Preloader>,
 }
 
 #[derive(Debug)]
@@ -667,8 +669,6 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     result_receiver: Receiver<ResultWithTimings>,
     handler_count: usize,
     session_result_with_timings: Option<ResultWithTimings>,
-    address_book: Option<AddressBook>,
-    preloader: Arc<Preloader>,
 }
 
 impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
@@ -677,6 +677,8 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
         initial_context: SchedulingContext,
         handler: TH,
     ) -> Self {
+        let address_book = AddressBook::default();
+        let preloader = Arc::new(address_book.preloader());
         let mut new = Self {
             id: thread_rng().gen::<SchedulerId>(),
             completed_result_with_timings: None,
@@ -686,6 +688,8 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
                 pool,
                 10,
             )),
+            address_book,
+            preloader,
         };
         // is this benefitical?
         //drop(new.ensure_thread_manager_started());
@@ -760,8 +764,6 @@ where
     ) -> Self {
         let (schedulrable_transaction_sender, schedulable_transaction_receiver) = unbounded();
         let (result_sender, result_receiver) = unbounded();
-        let address_book = AddressBook::default();
-        let preloader = Arc::new(address_book.preloader());
 
         Self {
             schedulrable_transaction_sender,
@@ -775,8 +777,6 @@ where
             handler,
             pool,
             session_result_with_timings: None,
-            address_book: Some(address_book),
-            preloader,
         }
     }
 
@@ -857,7 +857,7 @@ where
                 .session_result_with_timings
                 .take()
                 .or(Some((Ok(()), Default::default())));
-            let mut state_machine = SchedulingStateMachine::new(self.address_book.take().unwrap());
+            let mut state_machine = SchedulingStateMachine::new();
 
             move || {
                 info!(
@@ -1044,10 +1044,9 @@ where
             self.schedulrable_transaction_sender,
             self.schedulable_transaction_receiver,
         ) = unbounded();
-        let (result_with_timings, address_book) =
+        let result_with_timings =
             self.scheduler_thread.take().unwrap().join().unwrap();
         self.session_result_with_timings = Some(result_with_timings);
-        self.address_book = Some(address_book);
 
         for j in self.handler_threads.drain(..) {
             debug!("joining...: {:?}", j);
@@ -1401,13 +1400,13 @@ where
             let locks = transaction.get_account_locks_unchecked();
             let writable_lock_iter = locks.writable.iter().map(|address| {
                 LockAttempt::new(
-                    thread_manager.preloader().load(**address),
+                    self.preloader().load(**address),
                     RequestedUsage::Writable,
                 )
             });
             let readonly_lock_iter = locks.readonly.iter().map(|address| {
                 LockAttempt::new(
-                    thread_manager.preloader().load(**address),
+                    self.preloader().load(**address),
                     RequestedUsage::Readonly,
                 )
             });
@@ -1456,11 +1455,11 @@ where
     }
 }
 
-struct SchedulingStateMachine(std::collections::VecDeque<Arc<Task>>, usize, AddressBook);
+struct SchedulingStateMachine(std::collections::VecDeque<Arc<Task>>, usize);
 
 impl SchedulingStateMachine {
-    fn new(address_book: AddressBook) -> Self {
-        Self(Default::default(), Default::default(), address_book)
+    fn new() -> Self {
+        Self(Default::default(), Default::default())
     }
 
     fn into_address_book(self) -> AddressBook {
