@@ -287,6 +287,10 @@ impl ErasureSetId {
     pub(crate) fn store_key(&self) -> (Slot, /*fec_set_index:*/ u64) {
         (self.0, u64::from(self.1))
     }
+
+    pub(crate) fn key(&self) -> (Slot, /*fec_set_index:*/ u32) {
+        (self.0, self.1)
+    }
 }
 
 macro_rules! dispatch {
