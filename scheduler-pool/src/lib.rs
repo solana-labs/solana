@@ -419,10 +419,6 @@ impl AddressBook {
     }
 }
 
-type TaskQueueEntry<'a> = std::collections::btree_map::Entry<'a, UniqueWeight, TaskInQueue>;
-type TaskQueueOccupiedEntry<'a> =
-    std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, TaskInQueue>;
-
 #[derive(Debug)]
 pub struct ExecutionEnvironment {
     pub task: TaskInQueue,
