@@ -3285,7 +3285,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
         // Now we copy these blocks to A
         let b_blockstore = open_blockstore(&val_b_ledger_path);
         let a_blockstore = open_blockstore(&val_a_ledger_path);
-        copy_blocks(b_last_vote, &b_blockstore, &a_blockstore);
+        copy_blocks(b_last_vote, &b_blockstore, &a_blockstore, false);
 
         // Purge uneccessary slots
         purge_slots_with_count(&a_blockstore, next_slot_on_a + 1, truncated_slots);
@@ -3538,6 +3538,7 @@ fn test_fork_choice_refresh_old_votes() {
                 first_slot_in_lighter_partition,
                 &lighter_fork_blockstore,
                 &smallest_blockstore,
+                false,
             );
 
             // Restart the smallest validator that we killed earlier in `on_partition_start()`
@@ -4459,7 +4460,7 @@ fn test_slot_hash_expiry() {
         // Here we let B know about the missing blocks that A had produced on its partition
         let a_blockstore = open_blockstore(&a_ledger_path);
         let b_blockstore = open_blockstore(&b_ledger_path);
-        copy_blocks(last_vote_on_a, &a_blockstore, &b_blockstore);
+        copy_blocks(last_vote_on_a, &a_blockstore, &b_blockstore, false);
     }
 
     // Now restart A and B and see if B is able to eventually switch onto the majority fork
@@ -4714,11 +4715,17 @@ fn test_duplicate_with_pruned_ancestor() {
             remove_tower(&our_node_ledger_path, &majority_pubkey);
         }
 
-        // Copy minority fork. Rewind our root so that we can copy over the purged bank
+        // Copy minority fork to our blockstore
+        // Set trusted=true in blockstore copy to skip the parent slot >= latest root check;
+        // this check would otherwise prevent the pruned fork from being inserted
         let minority_blockstore = open_blockstore(&minority_validator_info.info.ledger_path);
-        let mut our_blockstore = open_blockstore(&our_node_info.info.ledger_path);
-        our_blockstore.set_last_root(fork_slot - 1);
-        copy_blocks(last_minority_vote, &minority_blockstore, &our_blockstore);
+        let our_blockstore = open_blockstore(&our_node_info.info.ledger_path);
+        copy_blocks(
+            last_minority_vote,
+            &minority_blockstore,
+            &our_blockstore,
+            true,
+        );
 
         // Change last block parent to chain off of (purged) minority fork
         info!("For our node, changing parent of {last_majority_vote} to {last_minority_vote}");
@@ -4737,9 +4744,6 @@ fn test_duplicate_with_pruned_ancestor() {
             true, // merkle_variant
         );
         our_blockstore.insert_shreds(shreds, None, false).unwrap();
-
-        // Update the root to set minority fork back as pruned
-        our_blockstore.set_last_root(fork_slot + fork_length);
     }
 
     // Actual test, `our_node` will replay the minority fork, then the majority fork which will
@@ -5320,7 +5324,7 @@ fn test_duplicate_shreds_switch_failure() {
     {
         let blockstore1 = open_blockstore(&duplicate_leader_ledger_path);
         let blockstore2 = open_blockstore(&target_switch_fork_validator_ledger_path);
-        copy_blocks(dup_slot, &blockstore1, &blockstore2);
+        copy_blocks(dup_slot, &blockstore1, &blockstore2, false);
     }
     clear_ledger_and_tower(
         &target_switch_fork_validator_ledger_path,
@@ -5353,7 +5357,7 @@ fn test_duplicate_shreds_switch_failure() {
     {
         let blockstore1 = open_blockstore(&duplicate_fork_validator1_ledger_path);
         let blockstore2 = open_blockstore(&duplicate_fork_validator2_ledger_path);
-        copy_blocks(dup_slot, &blockstore1, &blockstore2);
+        copy_blocks(dup_slot, &blockstore1, &blockstore2, false);
     }
 
     // Set entrypoint to `target_switch_fork_validator_pubkey` so we can run discovery in gossip even without the

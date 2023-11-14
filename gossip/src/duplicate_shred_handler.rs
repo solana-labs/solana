@@ -78,7 +78,7 @@ impl DuplicateShredHandler {
     }
 
     fn cache_root_info(&mut self) {
-        let last_root = self.blockstore.last_root();
+        let last_root = self.blockstore.max_root();
         if last_root == self.last_root && !self.cached_staked_nodes.is_empty() {
             return;
         }
@@ -361,7 +361,7 @@ mod tests {
 
         // This proof will be rejected because the slot is too far away in the future.
         let future_slot =
-            blockstore.last_root() + duplicate_shred_handler.cached_slots_in_epoch + start_slot;
+            blockstore.max_root() + duplicate_shred_handler.cached_slots_in_epoch + start_slot;
         let chunks = create_duplicate_proof(
             my_keypair.clone(),
             None,

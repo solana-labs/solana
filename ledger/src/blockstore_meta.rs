@@ -138,6 +138,16 @@ pub(crate) struct ErasureConfig {
     num_coding: usize,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct MerkleRootMeta {
+    /// The merkle root
+    merkle_root: Hash,
+    /// The first received shred index
+    first_received_shred_index: u32,
+    /// The shred type of the first received shred
+    first_received_shred_type: ShredType,
+}
+
 #[derive(Deserialize, Serialize)]
 pub struct DuplicateSlotProof {
     #[serde(with = "serde_bytes")]
