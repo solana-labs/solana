@@ -1386,7 +1386,7 @@ where
             });
             let readonly_lock_iter = locks.readonly.iter().map(|address| {
                 LockAttempt::new(
-                    self.addresss_book.load(**address),
+                    self.address_book.load(**address),
                     RequestedUsage::Readonly,
                 )
             });
