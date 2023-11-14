@@ -608,7 +608,7 @@ where
         );
     }
 
-    fn propagate_context(blocked_transaction_sessioned_sender: usize, context: SchedulingContext) {
+    fn propagate_context(blocked_transaction_sessioned_sender: Sender<ChainedChannel<Arc<Task>, ControlFrame>>, context: SchedulingContext) -> Sender<ChainedChannel<Arc<Task>, ControlFrame>> {
         let (
             next_blocked_transaction_sessioned_sender,
             blocked_transaction_sessioned_receiver,
@@ -621,7 +621,7 @@ where
                 ))
                 .unwrap();
         }
-        next_blocked_transaction_sessioned_sender;
+        next_blocked_transaction_sessioned_sender
     }
 
     fn start_threads(&mut self) {
