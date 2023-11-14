@@ -1445,9 +1445,10 @@ impl SchedulingStateMachine {
     }
 
     fn schedule_retryalbe_task(&mut self) -> Option<Box<ExecutionEnvironment>> {
-        self.0
+        /*self.0
             .pop_front()
             .map(|task| ScheduleStage::prepare_scheduled_execution(task, vec![]))
+            */ todo!();
     }
 
     fn decrement_task_count(&mut self) {
