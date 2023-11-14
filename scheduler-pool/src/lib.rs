@@ -39,7 +39,7 @@ use {
     },
 };
 
-type UniqueWeight = u128;
+type UniqueWeight = u64;
 
 type Tasks = BTreeMapTaskIds;
 #[derive(Debug, Default)]
