@@ -348,7 +348,6 @@ pub enum RequestedUsage {
 
 #[derive(Debug)]
 pub struct Page {
-    address_str: String,
     current_usage: Usage,
     blocked_task_queue: Tasks,
     blocked_write_requesting_task_ids: std::collections::BTreeSet<UniqueWeight>,
@@ -357,7 +356,6 @@ pub struct Page {
 impl Page {
     fn new(address: &Pubkey, current_usage: Usage) -> Self {
         Self {
-            address_str: format!("{}", address),
             current_usage,
             blocked_task_queue: Default::default(),
             blocked_write_requesting_task_ids: Default::default(),
