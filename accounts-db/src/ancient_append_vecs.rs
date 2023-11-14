@@ -3261,7 +3261,6 @@ pub mod tests {
                 // irrelevant fields
                 slot: 0,
                 capacity: 0,
-                aligned_total_bytes: 0,
                 alive_accounts: ShrinkCollectAliveSeparatedByRefs {
                     one_ref: AliveAccounts::default(),
                     many_refs_this_is_newest_alive: AliveAccounts::default(),

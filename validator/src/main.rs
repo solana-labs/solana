@@ -244,7 +244,7 @@ fn wait_for_restart_window(
                     Err("Current epoch is almost complete".to_string())
                 } else {
                     while leader_schedule
-                        .get(0)
+                        .front()
                         .map(|slot| *slot < epoch_info.absolute_slot)
                         .unwrap_or(false)
                     {
@@ -258,7 +258,7 @@ fn wait_for_restart_window(
                         upcoming_idle_windows.pop();
                     }
 
-                    match leader_schedule.get(0) {
+                    match leader_schedule.front() {
                         None => {
                             Ok(()) // Validator has no leader slots
                         }

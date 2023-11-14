@@ -1644,7 +1644,7 @@ declare_builtin_function!(
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),
         )?
-        .get(0)
+        .first()
         .ok_or(SyscallError::InvalidLength)?;
 
         if params.base_len > 512 || params.exponent_len > 512 || params.modulus_len > 512 {

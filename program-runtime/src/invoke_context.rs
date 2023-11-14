@@ -984,7 +984,7 @@ mod tests {
             (solana_sdk::pubkey::new_rand(), loader_account),
         ];
         let metas = vec![
-            AccountMeta::new(transaction_accounts.get(0).unwrap().0, false),
+            AccountMeta::new(transaction_accounts.first().unwrap().0, false),
             AccountMeta::new(transaction_accounts.get(1).unwrap().0, false),
             AccountMeta::new_readonly(transaction_accounts.get(2).unwrap().0, false),
         ];

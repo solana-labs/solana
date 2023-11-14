@@ -105,7 +105,7 @@ impl ZkProofData<GroupedCiphertext2HandlesValidityProofContext>
         let grouped_ciphertext: GroupedElGamalCiphertext<2> =
             self.context.grouped_ciphertext.try_into()?;
 
-        let destination_handle = grouped_ciphertext.handles.get(0).unwrap();
+        let destination_handle = grouped_ciphertext.handles.first().unwrap();
         let auditor_handle = grouped_ciphertext.handles.get(1).unwrap();
 
         let proof: GroupedCiphertext2HandlesValidityProof = self.proof.try_into()?;

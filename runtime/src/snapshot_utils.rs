@@ -36,7 +36,7 @@ use {
         path::{Path, PathBuf},
         process::ExitStatus,
         str::FromStr,
-        sync::{atomic::AtomicU32, Arc, Mutex},
+        sync::{Arc, Mutex},
         thread::{Builder, JoinHandle},
     },
     tar::{self, Archive},
@@ -1234,7 +1234,11 @@ pub fn verify_and_unarchive_snapshots(
     full_snapshot_archive_info: &FullSnapshotArchiveInfo,
     incremental_snapshot_archive_info: Option<&IncrementalSnapshotArchiveInfo>,
     account_paths: &[PathBuf],
-) -> Result<(UnarchivedSnapshot, Option<UnarchivedSnapshot>, AtomicU32)> {
+) -> Result<(
+    UnarchivedSnapshot,
+    Option<UnarchivedSnapshot>,
+    AtomicAppendVecId,
+)> {
     check_are_snapshots_compatible(
         full_snapshot_archive_info,
         incremental_snapshot_archive_info,
