@@ -943,7 +943,7 @@ where
                     "solScheduler thread is ended at: {:?}",
                     std::thread::current()
                 );
-                (res, state_machine.into_address_book())
+                res
             }
         };
 
@@ -1460,10 +1460,6 @@ struct SchedulingStateMachine(std::collections::VecDeque<Arc<Task>>, usize);
 impl SchedulingStateMachine {
     fn new() -> Self {
         Self(Default::default(), Default::default())
-    }
-
-    fn into_address_book(self) -> AddressBook {
-        self.2
     }
 
     fn is_empty(&self) -> bool {
