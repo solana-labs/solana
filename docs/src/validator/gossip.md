@@ -1,5 +1,6 @@
 ---
 title: Gossip Service
+sidebar_position: 5
 ---
 
 The Gossip Service acts as a gateway to nodes in the

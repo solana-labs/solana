@@ -1,5 +1,7 @@
 ---
-title: TPU
+title: Transaction Processing Unit
+sidebar_label: TPU
+sidebar_position: 2
 ---
 
 TPU (Transaction Processing Unit) is the logic of the validator
