@@ -88,6 +88,12 @@ else
   SOLANA_METRICS_CONFIG="host=$host,db=$netBasename,u=scratch_writer,p=topsecret"
 fi
 
-echo "export SOLANA_METRICS_CONFIG=\"$SOLANA_METRICS_CONFIG\"" >> "$configFile"
+# Skip echo into config file if running from `k8s-cluster`` repo
+real_metrics_script_path=$(readlink -f "$0") # real path of the script
+invoked_path="$0" #invoked path
+full_invoked_path="$(pwd)${invoked_path:1}"
+if [[ "$real_metrics_script_path" == "$full_invoked_path" ]]; then
+  echo "export SOLANA_METRICS_CONFIG=\"$SOLANA_METRICS_CONFIG\"" >> "$configFile"
+fi
 
 exit 0

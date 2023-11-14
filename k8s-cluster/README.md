@@ -66,6 +66,22 @@ cargo run --bin solana-k8s --
     --tag v2
 ```
 
+## Metrics are now supported as of 11/14/23!! ~woo~
+1) Setup metrics database:
+```
+cd k8s-cluster/src/scripts
+./init-metrics -c <database-name> <metrics-username>
+# enter password when promted
+```
+2) add the following to your `solana-k8s` command from above
+```
+--metrics-host https://internal-metrics.solana.com # need the `https://` here
+--metrics-port 8086
+--metrics-db <database-name>            # from (1)
+--metrics-username <metrics-username>   # from (1)
+--metrics-password <metrics-password>   # from (1)
+```
+
 Verify validators have deployed:
 ```
 kubectl get pods -n <namespace>

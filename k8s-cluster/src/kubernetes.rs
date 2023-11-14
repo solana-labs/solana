@@ -1,5 +1,5 @@
 use {
-    crate::SOLANA_ROOT,
+    crate::{boxed_error, SOLANA_ROOT},
     base64::{engine::general_purpose, Engine as _},
     k8s_openapi::{
         api::{
@@ -88,11 +88,45 @@ pub struct ClientConfig {
     pub num_nodes: Option<u64>,
 }
 
+#[derive(Clone, Debug)]
+pub struct Metrics {
+    pub host: String,
+    pub port: String,
+    pub database: String,
+    pub username: String,
+    password: String,
+}
+
+impl Metrics {
+    pub fn new(
+        host: String,
+        port: String,
+        database: String,
+        username: String,
+        password: String,
+    ) -> Self {
+        Metrics {
+            host,
+            port,
+            database,
+            username,
+            password,
+        }
+    }
+    pub fn to_env_string(&self) -> String {
+        format!(
+            "host={}:{},db={},u={},p={}",
+            self.host, self.port, self.database, self.username, self.password
+        )
+    }
+}
+
 pub struct Kubernetes<'a> {
     client: Client,
     namespace: &'a str,
     validator_config: &'a mut ValidatorConfig<'a>,
     client_config: ClientConfig,
+    pub metrics: Option<Metrics>,
 }
 
 impl<'a> Kubernetes<'a> {
@@ -100,12 +134,14 @@ impl<'a> Kubernetes<'a> {
         namespace: &'a str,
         validator_config: &'a mut ValidatorConfig<'a>,
         client_config: ClientConfig,
+        metrics: Option<Metrics>,
     ) -> Kubernetes<'a> {
         Kubernetes {
             client: Client::try_default().await.unwrap(),
             namespace,
             validator_config,
             client_config,
+            metrics,
         }
     }
 
@@ -233,7 +269,7 @@ impl<'a> Kubernetes<'a> {
         secret_name: Option<String>,
         label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
-        let env_var = vec![EnvVar {
+        let mut env_var = vec![EnvVar {
             name: "MY_POD_IP".to_string(),
             value_from: Some(EnvVarSource {
                 field_ref: Some(ObjectFieldSelector {
@@ -244,6 +280,10 @@ impl<'a> Kubernetes<'a> {
             }),
             ..Default::default()
         }];
+
+        if let Some(_) = &self.metrics {
+            env_var.push(self.get_metrics_env_var_secret())
+        }
 
         let accounts_volume = Some(vec![Volume {
             name: "bootstrap-accounts-volume".into(),
@@ -347,6 +387,46 @@ impl<'a> Kubernetes<'a> {
     pub async fn deploy_secret(&self, secret: &Secret) -> Result<Secret, kube::Error> {
         let secrets_api: Api<Secret> = Api::namespaced(self.client.clone(), self.namespace);
         secrets_api.create(&PostParams::default(), secret).await
+    }
+
+    pub fn create_metrics_secret(&self) -> Result<Secret, Box<dyn Error>> {
+        let mut data = BTreeMap::new();
+        if let Some(metrics) = &self.metrics {
+            data.insert(
+                "SOLANA_METRICS_CONFIG".to_string(),
+                ByteString(metrics.to_env_string().into_bytes()),
+            );
+        } else {
+            return Err(boxed_error!(format!(
+                "Called create_metrics_secret() but metrics were not provided."
+            )));
+        }
+
+        let secret = Secret {
+            metadata: ObjectMeta {
+                name: Some("solana-metrics-secret".to_string()),
+                ..Default::default()
+            },
+            data: Some(data),
+            ..Default::default()
+        };
+
+        Ok(secret)
+    }
+
+    pub fn get_metrics_env_var_secret(&self) -> EnvVar {
+        EnvVar {
+            name: "SOLANA_METRICS_CONFIG".to_string(),
+            value_from: Some(k8s_openapi::api::core::v1::EnvVarSource {
+                secret_key_ref: Some(k8s_openapi::api::core::v1::SecretKeySelector {
+                    name: Some("solana-metrics-secret".to_string()),
+                    key: "SOLANA_METRICS_CONFIG".to_string(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
     }
 
     pub fn create_bootstrap_secret(&self, secret_name: &str) -> Result<Secret, Box<dyn Error>> {
@@ -608,7 +688,10 @@ impl<'a> Kubernetes<'a> {
         secret_name: Option<String>,
         label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
-        let env_vars = self.set_non_bootstrap_environment_variables();
+        let mut env_vars = self.set_non_bootstrap_environment_variables();
+        if let Some(_) = &self.metrics {
+            env_vars.push(self.get_metrics_env_var_secret())
+        }
 
         let accounts_volume = Some(vec![Volume {
             name: format!("validator-accounts-volume-{}", validator_index),
@@ -656,7 +739,10 @@ impl<'a> Kubernetes<'a> {
         secret_name: Option<String>,
         label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
-        let env_vars = self.set_non_bootstrap_environment_variables();
+        let mut env_vars = self.set_non_bootstrap_environment_variables();
+        if let Some(_) = &self.metrics {
+            env_vars.push(self.get_metrics_env_var_secret())
+        }
 
         let accounts_volume = Some(vec![Volume {
             name: format!("client-accounts-volume-{}", client_index),
