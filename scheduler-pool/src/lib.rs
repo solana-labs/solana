@@ -926,7 +926,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
 
 enum TaskSource {
     Runnable,
-    Contended,
+    Retryable,
 }
 
 pub struct ScheduleStage;
@@ -1245,7 +1245,7 @@ impl SchedulingStateMachine {
 
     fn schedule_retryable_task(&mut self) -> Option<Box<ExecutionEnvironment>> {
         self.0.pop_last().and_then(|(_, task)|
-            ScheduleStage::try_lock_for_task((TaskSource::Contended, task), &mut self.0)
+            ScheduleStage::try_lock_for_task((TaskSource::Retryable, task), &mut self.0)
         ).map(|(task, lock_attemps)| ScheduleStage::prepare_scheduled_execution(task, lock_attemps))
     }
 
