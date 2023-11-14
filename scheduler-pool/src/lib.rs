@@ -1380,7 +1380,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         task_selection: &mut TaskSelection,
     ) -> Option<Box<ExecutionEnvironment>> {
-        Self::select_next_task_to_lock(runnable_queue, address_book.retryable_task_queue, task_selection)
+        Self::select_next_task_to_lock(runnable_queue, &mut address_book.retryable_task_queue, task_selection)
             .and_then(|task| Self::try_lock_for_task(address_book, task))
             .map(|(task, lock_attemps)| Self::prepare_scheduled_execution(task, lock_attemps))
     }
