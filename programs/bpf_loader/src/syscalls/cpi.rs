@@ -1461,7 +1461,8 @@ fn update_caller_account(
             // invalid address.
             let min_capacity = caller_account.original_data_len;
             if callee_account.capacity() < min_capacity {
-                callee_account.reserve(min_capacity.saturating_sub(callee_account.capacity()))?;
+                callee_account
+                    .reserve(min_capacity.saturating_sub(callee_account.get_data().len()))?;
                 zero_all_mapped_spare_capacity = true;
             }
 
