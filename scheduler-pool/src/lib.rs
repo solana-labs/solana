@@ -1443,7 +1443,7 @@ impl SchedulingStateMachine {
         ScheduleStage::unlock_after_execution(
             should_remove,
             uq,
-            &mut self.1,
+            &mut self.0,
             &mut ee.finalized_lock_attempts,
         );
     }
