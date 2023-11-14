@@ -717,6 +717,10 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
         debug!("stop_thread_manager()");
         self.thread_manager.write().unwrap().stop_threads();
     }
+
+    fn preloader(&self) -> &Arc<Preloader> {
+        &self.preloader
+    }
 }
 
 type ChannelAndPayload<T1, T2> = (Receiver<ChainedChannel<T1, T2>>, T2);
@@ -778,10 +782,6 @@ where
             pool,
             session_result_with_timings: None,
         }
-    }
-
-    fn preloader(&self) -> &Arc<Preloader> {
-        &self.preloader
     }
 
     fn is_active(&self) -> bool {
