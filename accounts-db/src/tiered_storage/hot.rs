@@ -401,7 +401,7 @@ pub mod tests {
             owner_count: 250,
             owner_entry_size: 32,
             index_block_offset: 1069600,
-            owners_offset: 1081200,
+            owners_block_offset: 1081200,
             hash: Hash::new_unique(),
             min_account_address: Pubkey::default(),
             max_account_address: Pubkey::new_unique(),
