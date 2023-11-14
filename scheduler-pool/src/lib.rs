@@ -746,8 +746,7 @@ where
                                     }
                                 }
                             };
-                        }
-                        if let Ok(execution_environment) = handled_idle_transaction_receiver.try_recv() {
+                        } else if let Ok(execution_environment) = handled_idle_transaction_receiver.try_recv() {
                             Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
                             state_machine.deschedule_task(execution_environment);
                         }
