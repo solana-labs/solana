@@ -465,12 +465,12 @@ mod tests {
         // Load two plugins
         // First
         let (mut plugin, lib, config) = dummy_plugin_and_library(TestPlugin, TESTPLUGIN_CONFIG);
-        plugin.on_load(config).unwrap();
+        plugin.on_load(config, false).unwrap();
         plugin_manager_lock.plugins.push(plugin);
         plugin_manager_lock.libs.push(lib);
         // Second
         let (mut plugin, lib, config) = dummy_plugin_and_library(TestPlugin2, TESTPLUGIN2_CONFIG);
-        plugin.on_load(config).unwrap();
+        plugin.on_load(config, false).unwrap();
         plugin_manager_lock.plugins.push(plugin);
         plugin_manager_lock.libs.push(lib);
 
