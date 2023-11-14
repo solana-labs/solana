@@ -1306,7 +1306,7 @@ impl ScheduleStage {
     fn unlock_after_execution(
         should_remove: bool,
         uq: UniqueWeight,
-        address_book: &mut AddressBook,
+        retryable_task_queue: &mut WeightedTaskQueue,
         lock_attempts: &mut [LockAttempt],
     ) {
         for unlock_attempt in lock_attempts {
@@ -1329,8 +1329,7 @@ impl ScheduleStage {
 
             if let Some(uncontended_task) = heaviest_uncontended {
                 assert!(uncontended_task.currently_contended());
-                address_book
-                    .retryable_task_queue
+                retryable_task_queue
                     .entry(uncontended_task.unique_weight)
                     .or_insert(uncontended_task);
             }
@@ -1349,7 +1348,7 @@ impl ScheduleStage {
         })
     }
 
-    fn commit_processed_execution(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
+    fn commit_processed_execution(ee: &mut ExecutionEnvironment, retryable_task_queue: &mut WeightedTaskQueue) {
         let should_remove = ee
             .task
             .contention_count
@@ -1359,7 +1358,7 @@ impl ScheduleStage {
         Self::unlock_after_execution(
             should_remove,
             uq,
-            address_book,
+            retryable_task_queue,
             &mut ee.finalized_lock_attempts,
         );
     }
@@ -1433,7 +1432,7 @@ where
                 &mut selection,
             );
             if let Some(mut ee) = maybe_ee {
-                ScheduleStage::commit_processed_execution(&mut ee, &mut address_book);
+                ScheduleStage::commit_processed_execution(&mut ee, &mut address_book.retryable_task_queue);
             }
         });
     }
