@@ -1432,7 +1432,7 @@ impl SchedulingStateMachine {
         ).map(|(task, lock_attemps)| ScheduleStage::prepare_scheduled_execution(task, lock_attemps))
     }
 
-    fn deschedule_task(&mut self, ee: Box<ExecutionEnvironment>) {
+    fn deschedule_task(&mut self, mut ee: Box<ExecutionEnvironment>) {
         self.1 -= 1;
         let should_remove = ee
             .task
