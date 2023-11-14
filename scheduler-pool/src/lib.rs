@@ -1199,12 +1199,6 @@ fn attempt_lock_for_execution<'a>(
 
 pub struct ScheduleStage {}
 impl ScheduleStage {
-    fn get_heaviest_from_contended<'a>(
-        address_book: &'a mut AddressBook,
-    ) -> Option<std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, TaskInQueue>> {
-        address_book.retryable_task_queue.last_entry()
-    }
-
     fn select_next_task_to_lock<'a>(
         runnable_queue: &'a mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
@@ -1213,7 +1207,7 @@ impl ScheduleStage {
         let selected_heaviest_tasks = match task_selection {
             TaskSelection::OnlyFromRunnable => (runnable_queue.heaviest_entry_to_execute(), None),
             TaskSelection::OnlyFromContended(_) => {
-                (None, Self::get_heaviest_from_contended(address_book))
+                (None, address_book.retryable_task_queue.last_entry())
             }
         };
 
