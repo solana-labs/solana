@@ -716,10 +716,8 @@ where
                                 .unwrap();
                         }
 
-                        let mut continue_to_drain = true;
-
-                        while continue_to_drain {
-                            if let Ok(execution_environment) =
+                        loop {
+                            let did_nothing = if let Ok(execution_environment) =
                                 handled_blocked_transaction_receiver.try_recv()
                             {
                                 Self::update_result_with_timings(
@@ -727,6 +725,7 @@ where
                                     &execution_environment,
                                 );
                                 state_machine.deschedule_task(execution_environment);
+                                false
                             } else if let Ok(mm) = schedulable_transaction_receiver.try_recv() {
                                 match mm {
                                     ChainedChannel::Payload(payload) => {
@@ -757,6 +756,7 @@ where
                                         }
                                     }
                                 };
+                                false
                             } else if let Ok(execution_environment) =
                                 handled_idle_transaction_receiver.try_recv()
                             {
@@ -765,14 +765,17 @@ where
                                     &execution_environment,
                                 );
                                 state_machine.deschedule_task(execution_environment);
+                                false
                             } else {
-                                continue_to_drain = false;
+                                true;
                             }
 
                             if let Some(ee) = state_machine.schedule_retryable_task() {
                                 blocked_transaction_sessioned_sender
                                     .send(ChainedChannel::Payload(ee))
                                     .unwrap();
+                            } else if did_nothing {
+                                break
                             }
                         }
                     }
