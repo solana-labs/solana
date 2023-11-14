@@ -1242,12 +1242,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk."),
         )
         .arg(
-            Arg::with_name("disable_accounts_disk_index")
-                .long("disable-accounts-disk-index")
-                .help("Disable the disk-based accounts index if it is enabled by default.")
-                .conflicts_with("accounts_index_memory_limit_mb")
-        )
-        .arg(
             Arg::with_name("accounts_index_bins")
                 .long("accounts-index-bins")
                 .value_name("BINS")
@@ -1729,6 +1723,10 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
             .help("Enables faster starting of validators by skipping startup clean and shrink."),
         usage_warning: "Enabled by default",
     );
+    add_arg!(Arg::with_name("disable_accounts_disk_index")
+        .long("disable-accounts-disk-index")
+        .help("Disable the disk-based accounts index if it is enabled by default.")
+        .conflicts_with("accounts_index_memory_limit_mb"));
     add_arg!(
         Arg::with_name("disable_quic_servers")
             .long("disable-quic-servers")
