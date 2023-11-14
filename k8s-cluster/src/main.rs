@@ -790,7 +790,7 @@ async fn main() {
         .value_of("validator_image_name")
         .expect("Validator image name is required");
 
-    if let Some(_) = &kub_controller.metrics {
+    if kub_controller.metrics.is_some() {
         let metrics_secret = match kub_controller.create_metrics_secret() {
             Ok(secret) => secret,
             Err(err) => {

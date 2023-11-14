@@ -281,7 +281,7 @@ impl<'a> Kubernetes<'a> {
             ..Default::default()
         }];
 
-        if let Some(_) = &self.metrics {
+        if self.metrics.is_some() {
             env_var.push(self.get_metrics_env_var_secret())
         }
 
@@ -689,7 +689,7 @@ impl<'a> Kubernetes<'a> {
         label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
         let mut env_vars = self.set_non_bootstrap_environment_variables();
-        if let Some(_) = &self.metrics {
+        if self.metrics.is_some() {
             env_vars.push(self.get_metrics_env_var_secret())
         }
 
@@ -740,7 +740,7 @@ impl<'a> Kubernetes<'a> {
         label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
         let mut env_vars = self.set_non_bootstrap_environment_variables();
-        if let Some(_) = &self.metrics {
+        if self.metrics.is_some() {
             env_vars.push(self.get_metrics_env_var_secret())
         }
 
