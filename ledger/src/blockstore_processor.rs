@@ -500,6 +500,7 @@ fn process_entries_with_callback(
     // }).flatten()
     // .map(|tx| *tx.signature())
     // .collect::<Vec<Signature>>();
+    info!("chk1 starts replay");
     let transaction_message_hashes: Vec<Hash> = entries.iter().filter_map(|e| match &e.entry {
         EntryType::Transactions(txns) => Some(txns),
         _ => None
@@ -904,7 +905,7 @@ fn confirm_full_slot(
     let mut confirmation_timing = ConfirmationTiming::default();
     let skip_verification = !opts.poh_verify;
     let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
-
+    info!("chk1 confirm_slot");
     confirm_slot(
         blockstore,
         bank,
@@ -1061,7 +1062,7 @@ pub fn confirm_slot(
         }
         load_result
     }?;
-
+    info!("chk1 confirm_slot_entries");
     confirm_slot_entries(
         bank,
         slot_entries_load_result,
@@ -1180,6 +1181,7 @@ fn confirm_slot_entries(
                 })
                 .collect();
             // Note: This will shuffle entries' transactions in-place.
+            info!("chk1 process_entries_with_callback");
             let process_result = process_entries_with_callback(
                 bank,
                 &mut replay_entries,
@@ -1385,6 +1387,7 @@ fn load_frozen_forks(
             let mut progress = ConfirmationProgress::new(last_entry_hash);
 
             let bank = bank_forks.write().unwrap().insert(bank);
+            info!("chk1 process single slot");
             if process_single_slot(
                 blockstore,
                 &bank,
@@ -1598,6 +1601,7 @@ fn process_single_slot(
 ) -> result::Result<(), BlockstoreProcessorError> {
     // Mark corrupt slots as dead so validators don't replay this slot and
     // see AlreadyProcessed errors later in ReplayStage
+    info!("chk1 confirm full slot");
     confirm_full_slot(
         blockstore,
         bank,

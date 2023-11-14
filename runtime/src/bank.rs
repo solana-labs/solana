@@ -6676,7 +6676,7 @@ impl Bank {
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
         let mut receipt_root = [0u8; 32];
 
-        if let Ok(mut r) = self.receipt_queue.read() {
+        if let Ok(mut r) = self.receipt_queue.try_read() {
             let mut hashes= r.deref().clone();
             hashes.par_sort_unstable_by(|a,b| a.0.as_ref().cmp(b.0.as_ref()));
             let receipt_hashes: Vec<Hash> = hashes.par_iter().map(|item| item.1).collect();
@@ -6687,10 +6687,13 @@ impl Bank {
            }
            if hashes.len() > 0 {
             hashes.clear();
+           
            }
         }
-      
-        info!("receipt root: {:?}", receipt_root);
+        if let Ok(mut write_q) = self.receipt_queue.write(){
+            write_q.clear();
+        }
+        info!("change_ receipt root: {:?}", receipt_root);
         let mut hash = hashv(&[
             self.parent_hash.as_ref(),
             accounts_delta_hash.hash.as_ref(),

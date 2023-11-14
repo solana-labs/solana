@@ -401,7 +401,7 @@ impl Validator {
     ) -> Self {
         let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
-
+        error!("chk1 enters validator");
         warn!("identity: {}", id);
         warn!("vote account: {}", vote_account);
 
@@ -690,6 +690,7 @@ impl Validator {
         };
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
+        info!("chk1 creates_process_blockstore");
         let mut process_blockstore = ProcessBlockStore::new(
             &id,
             vote_account,
@@ -715,6 +716,7 @@ impl Validator {
         );
 
         if config.process_ledger_before_services {
+            info!("chk1 runs_process_blockstore");
             process_blockstore.process();
         }
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
