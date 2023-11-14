@@ -723,8 +723,7 @@ where
                         if let Ok(execution_environment) = handled_blocked_transaction_receiver.try_recv() {
                             Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
                             state_machine.deschedule_task(execution_environment);
-                        }
-                        if let Ok(mm) = schedulable_transaction_receiver.try_recv() {
+                        } else if let Ok(mm) = schedulable_transaction_receiver.try_recv() {
                             match mm {
                                 ChainedChannel::Payload(payload) => {
                                     if let Some(ee) = state_machine.schedule_new_task(payload) {
