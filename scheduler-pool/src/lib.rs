@@ -719,8 +719,13 @@ where
                         let mut continue_to_drain = true;
 
                         while continue_to_drain {
-                            if let Ok(execution_environment) = handled_blocked_transaction_receiver.try_recv() {
-                                Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
+                            if let Ok(execution_environment) =
+                                handled_blocked_transaction_receiver.try_recv()
+                            {
+                                Self::update_result_with_timings(
+                                    result_with_timings.as_mut().unwrap(),
+                                    &execution_environment,
+                                );
                                 state_machine.deschedule_task(execution_environment);
                             } else if let Ok(mm) = schedulable_transaction_receiver.try_recv() {
                                 match mm {
@@ -733,20 +738,32 @@ where
                                     }
                                     ChainedChannel::ChannelWithPayload(new_channel) => {
                                         let control_frame;
-                                        (schedulable_transaction_receiver, control_frame) = new_channel.channel_and_payload();
+                                        (schedulable_transaction_receiver, control_frame) =
+                                            new_channel.channel_and_payload();
                                         match control_frame {
                                             ControlFrame::StartSession(context) => {
-                                                Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count);
+                                                Self::propagate_context(
+                                                    &mut blocked_transaction_sessioned_sender,
+                                                    context,
+                                                    handler_count,
+                                                );
                                             }
                                             ControlFrame::EndSession => {
-                                                debug!("scheduler_main_loop: will_end_session = true");
+                                                debug!(
+                                                    "scheduler_main_loop: will_end_session = true"
+                                                );
                                                 will_end_session = true;
                                             }
                                         }
                                     }
                                 };
-                            } else if let Ok(execution_environment) = handled_idle_transaction_receiver.try_recv() {
-                                Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
+                            } else if let Ok(execution_environment) =
+                                handled_idle_transaction_receiver.try_recv()
+                            {
+                                Self::update_result_with_timings(
+                                    result_with_timings.as_mut().unwrap(),
+                                    &execution_environment,
+                                );
                                 state_machine.deschedule_task(execution_environment);
                             } else {
                                 continue_to_drain = false;
