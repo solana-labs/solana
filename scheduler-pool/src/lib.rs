@@ -1446,7 +1446,7 @@ impl SchedulingStateMachine {
     }
 
     fn schedule_retryalbe_task(&mut self) -> Option<Box<ExecutionEnvironment>> {
-        self.0.last_entry().map(|entry|
+        self.0.last_entry().and_then(|entry|
             ScheduleStage::try_lock_for_task((TaskSource::Contended, entry.remove()), &mut self.0)
         ).map(|(task, lock_attemps)| ScheduleStage::prepare_scheduled_execution(task, lock_attemps))
     }
