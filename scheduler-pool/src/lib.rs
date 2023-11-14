@@ -929,28 +929,8 @@ enum TaskSource {
     Contended,
 }
 
-enum TaskSelection {
-    OnlyFromRunnable,
-    OnlyFromContended(usize),
-}
+pub struct ScheduleStage;
 
-impl TaskSelection {
-    fn should_proceed(&self) -> bool {
-        match self {
-            TaskSelection::OnlyFromRunnable => true,
-            TaskSelection::OnlyFromContended(retry_count) => *retry_count > 0,
-        }
-    }
-
-    fn runnable_exclusive(&self) -> bool {
-        match self {
-            TaskSelection::OnlyFromRunnable => true,
-            TaskSelection::OnlyFromContended(_) => false,
-        }
-    }
-}
-
-pub struct ScheduleStage {}
 impl ScheduleStage {
     fn attempt_lock_for_execution(
         unique_weight: &UniqueWeight,
