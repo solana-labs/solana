@@ -264,7 +264,12 @@ impl BankWithScheduler {
             .as_ref()
             .map(|scheduler| scheduler.context().bank().clone())
         {
-            assert!(Arc::ptr_eq(&bank, &bank_in_context), "different bank!? {} {}", bank.slot(), bank_in_context.slot());
+            assert!(
+                Arc::ptr_eq(&bank, &bank_in_context),
+                "different bank!? {} {}",
+                bank.slot(),
+                bank_in_context.slot()
+            );
         }
 
         Self {
