@@ -625,7 +625,7 @@ where
                 ))
                 .unwrap();
         }
-        std::mem::replace(blocked_transaction_sessioned_sender, next_blocked_transaction_sessioned_sender)
+        std::mem::replace(blocked_transaction_sessioned_sender, next_blocked_transaction_sessioned_sender);
     }
 
     fn start_threads(&mut self) {
