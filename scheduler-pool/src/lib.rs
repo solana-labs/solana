@@ -767,7 +767,7 @@ where
                                 state_machine.deschedule_task(execution_environment);
                                 false
                             } else {
-                                true;
+                                true
                             };
 
                             if let Some(ee) = state_machine.schedule_retryable_task() {
