@@ -743,7 +743,7 @@ where
                             recv(handled_blocked_transaction_receiver) -> execution_environment => {
                                 let execution_environment = execution_environment.unwrap();
                                 Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
-                                state_machine.decrement_task_count();
+                                state_machine.deschedule_task(execution_environment);
                             },
                             recv(schedulable_transaction_receiver) -> m => {
                                 let Ok(mm) = m else {
@@ -789,11 +789,11 @@ where
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
                                 let execution_environment = execution_environment.unwrap();
                                 Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
-                                state_machine.decrement_task_count();
+                                state_machine.deschedule_task(execution_environment);
                             },
                         };
 
-                        if let Some(ee) = state_machine.schedule_retryalbe_task() {
+                        if let Some(ee) = state_machine.schedule_retryable_task() {
                             blocked_transaction_sessioned_sender
                                 .send(ChainedChannel::Payload(ee))
                                 .unwrap();
@@ -1438,13 +1438,13 @@ impl SchedulingStateMachine {
             .map(|(task, lock_attemps)| ScheduleStage::prepare_scheduled_execution(task, lock_attemps))
     }
 
-    fn schedule_retryalbe_task(&mut self) -> Option<Box<ExecutionEnvironment>> {
+    fn schedule_retryable_task(&mut self) -> Option<Box<ExecutionEnvironment>> {
         self.0.pop_last().and_then(|(_, task)|
             ScheduleStage::try_lock_for_task((TaskSource::Contended, task), &mut self.0)
         ).map(|(task, lock_attemps)| ScheduleStage::prepare_scheduled_execution(task, lock_attemps))
     }
 
-    fn decrement_task_count(&mut self) {
+    fn deschedule_task(&mut self, task: Box<ExecutionEnvironment>) {
         self.1 -= 1;
     }
 }
