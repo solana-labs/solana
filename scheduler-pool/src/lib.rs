@@ -1159,46 +1159,6 @@ impl ScheduleStage {
         is_unused_now
     }
 
-    fn select_next_task_to_lock(
-        runnable_queue: &mut ModeSpecificTaskQueue,
-        retryable_task_queue: &mut WeightedTaskQueue,
-        task_selection: &mut TaskSelection,
-    ) -> Option<(TaskSource, TaskInQueue)> {
-        let selected_heaviest_tasks = match task_selection {
-            TaskSelection::OnlyFromRunnable => (runnable_queue.heaviest_entry_to_execute(), None),
-            TaskSelection::OnlyFromContended(_) => (None, retryable_task_queue.last_entry()),
-        };
-
-        match selected_heaviest_tasks {
-            (Some(heaviest_runnable_entry), None) => {
-                trace!("select: runnable only");
-                if task_selection.runnable_exclusive() {
-                    let t = heaviest_runnable_entry; // .remove();
-                    trace!("new task: {:032x}", t.unique_weight);
-                    Some((TaskSource::Runnable, t))
-                } else {
-                    None
-                }
-            }
-            (None, Some(weight_from_contended)) => {
-                trace!("select: contended only");
-                if task_selection.runnable_exclusive() {
-                    None
-                } else {
-                    let t = weight_from_contended.remove();
-                    Some((TaskSource::Contended, t))
-                }
-            }
-            (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
-                unreachable!("heaviest_entry_to_execute isn't idempotent....");
-            }
-            (None, None) => {
-                trace!("select: none");
-                None
-            }
-        }
-    }
-
     fn try_lock_for_task(
         (task_source, next_task): (TaskSource, TaskInQueue),
         retryable_task_queue: &mut WeightedTaskQueue,
@@ -1315,22 +1275,6 @@ impl ScheduleStage {
             result_with_timings: (Ok(()), Default::default()),
         })
     }
-
-    fn commit_processed_execution(
-        ee: &mut ExecutionEnvironment,
-        retryable_task_queue: &mut WeightedTaskQueue,
-    ) {
-    }
-
-    fn schedule_next_execution(
-        runnable_queue: &mut ModeSpecificTaskQueue,
-        retryable_task_queue: &mut WeightedTaskQueue,
-        task_selection: &mut TaskSelection,
-    ) -> Option<Box<ExecutionEnvironment>> {
-        Self::select_next_task_to_lock(runnable_queue, retryable_task_queue, task_selection)
-            .and_then(|task| Self::try_lock_for_task(task, retryable_task_queue))
-            .map(|(task, lock_attemps)| Self::prepare_scheduled_execution(task, lock_attemps))
-    }
 }
 
 impl<TH, SEA> InstalledScheduler<SEA> for PooledScheduler<TH, SEA>
@@ -1370,23 +1314,6 @@ where
             let uw = UniqueWeight::max_value() - index as UniqueWeight;
             let task = Task::new_for_queue(uw, (transaction.clone(), locks));
             thread_manager.send_task(task.clone());
-            return;
-
-            let (transaction_sender, transaction_receiver) = unbounded();
-            let mut runnable_queue = ModeSpecificTaskQueue::BlockVerification(
-                ChannelBackedTaskQueue::new(&transaction_receiver),
-            );
-            runnable_queue.add_to_schedule(task.unique_weight, task);
-            let mut selection = TaskSelection::OnlyFromContended(usize::max_value());
-            let mut retryable_task_queue = WeightedTaskQueue::default();
-            let maybe_ee = ScheduleStage::schedule_next_execution(
-                &mut runnable_queue,
-                &mut retryable_task_queue,
-                &mut selection,
-            );
-            if let Some(mut ee) = maybe_ee {
-                ScheduleStage::commit_processed_execution(&mut ee, &mut retryable_task_queue);
-            }
         });
     }
 
