@@ -690,7 +690,7 @@ where
                                         (schedulable_transaction_receiver, control_frame) = new_channel.channel_and_payload();
                                         match control_frame {
                                             ControlFrame::StartSession(context) => {
-                                                blocked_transaction_sessioned_sender = Self::propagate_context(blocked_transaction_sessioned_sender, context)
+                                                blocked_transaction_sessioned_sender = Self::propagate_context(blocked_transaction_sessioned_sender, context, handler_count)
                                             }
                                             ControlFrame::EndSession => {
                                                 debug!("scheduler_main_loop: will_end_session = true");
