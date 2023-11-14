@@ -512,7 +512,7 @@ struct LoadAccountsIndexForShrink<'a, T: ShrinkCollectRefs<'a>> {
 }
 
 impl<'a, T: ShrinkCollectRefs<'a>> LoadAccountsIndexForShrink<'a, T> {
-    pub fn reduce(mut a: Self, mut b: Self) -> Self {
+    fn reduce(mut a: Self, mut b: Self) -> Self {
         a.alive_accounts.collect(b.alive_accounts);
         a.unrefed_pubkeys.append(&mut b.unrefed_pubkeys);
         a.index_entries_being_shrunk
@@ -521,7 +521,7 @@ impl<'a, T: ShrinkCollectRefs<'a>> LoadAccountsIndexForShrink<'a, T> {
         a
     }
 
-    pub fn new(capacity: usize, slot: u64) -> Self {
+    fn new(capacity: usize, slot: u64) -> Self {
         Self {
             alive_accounts: T::with_capacity(capacity, slot),
             unrefed_pubkeys: Vec::with_capacity(capacity),
