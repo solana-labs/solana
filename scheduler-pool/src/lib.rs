@@ -669,10 +669,6 @@ where
         self.scheduler_thread.is_some()
     }
 
-    fn receive_new_transaction(state_machine: &mut SchedulingStateMachine, msg: Arc<Task>) {
-        state_machine.add_task(msg);
-    }
-
     fn update_result_with_timings(
         (session_result, session_timings): &mut ResultWithTimings,
         msg: &ExecutionEnvironment,
@@ -764,7 +760,11 @@ where
 
                                 match mm {
                                     ChainedChannel::Payload(payload) => {
-                                        Self::receive_new_transaction(&mut state_machine, payload);
+                                        if let Some(ee) = state_machine.schedule_new_task(msg, payload) {
+                                            blocked_transaction_sessioned_sender
+                                                .send(ChainedChannel::Payload(ee))
+                                                .unwrap();
+                                        }
                                     }
                                     ChainedChannel::ChannelWithPayload(new_channel) => {
                                         let control_frame;
@@ -800,7 +800,7 @@ where
                             },
                         };
 
-                        if let Some(ee) = state_machine.pop_scheduled_task() {
+                        if let Some(ee) = state_machine.schedule_retryalbe_task() {
                             blocked_transaction_sessioned_sender
                                 .send(ChainedChannel::Payload(ee))
                                 .unwrap();
@@ -1428,7 +1428,7 @@ where
     }
 }
 
-struct SchedulingStateMachine(std::collections::VecDeque<Arc<Task>>, usize);
+struct SchedulingStateMachine(WeightedTaskQueue, usize);
 
 impl SchedulingStateMachine {
     fn new() -> Self {
@@ -1439,12 +1439,12 @@ impl SchedulingStateMachine {
         self.1 == 0
     }
 
-    fn add_task(&mut self, task: Arc<Task>) {
-        self.0.push_back(task);
-        self.1 += 1;
+    fn schedule_new_task(&mut self, task: Arc<Task>) -> Option<Box<ExecutionEnvironment>> {
+        ScheduleStage::try_lock_for_task((TaskSource::Runnable, task), &mut self.0)
+            .map(|(task, lock_attemps)| ScheduleStage::prepare_scheduled_execution(task, lock_attemps))
     }
 
-    fn pop_scheduled_task(&mut self) -> Option<Box<ExecutionEnvironment>> {
+    fn schedule_retryalbe_task(&mut self) -> Option<Box<ExecutionEnvironment>> {
         self.0
             .pop_front()
             .map(|task| ScheduleStage::prepare_scheduled_execution(task, vec![]))
