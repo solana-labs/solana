@@ -409,7 +409,6 @@ type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
 #[derive(Default, Debug, Clone)]
 pub struct AddressBook {
     book: AddressMap,
-    retryable_task_queue: WeightedTaskQueue,
 }
 
 impl AddressBook {
