@@ -56,18 +56,18 @@ module.exports = {
       },
       items: [
         {
-          to: "architecture",
-          label: "Architecture",
-          position: "left",
-        },
-        {
           to: "cli",
           label: "CLI",
           position: "left",
         },
         {
+          to: "architecture",
+          label: "Architecture",
+          position: "left",
+        },
+        {
           to: "running-validator",
-          label: "Validators",
+          label: "Operating a Validator",
           position: "left",
         },
         { label: "Proposals", to: "proposals" },
