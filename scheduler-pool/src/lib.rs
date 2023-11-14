@@ -1050,29 +1050,29 @@ impl TaskSelection {
     }
 }
 
-fn attempt_lock_for_execution(
-    unique_weight: &UniqueWeight,
-    lock_attempts: &mut [LockAttempt],
-) -> usize {
-    // no short-cuircuit; we at least all need to add to the contended queue
-    let mut lock_failure_count = 0;
-
-    for attempt in lock_attempts.iter_mut() {
-        AddressBook::attempt_lock_address(unique_weight, attempt);
-
-        match attempt.status {
-            LockStatus::Succeded => {}
-            LockStatus::Failed => {
-                lock_failure_count += 1;
-            }
-        }
-    }
-
-    lock_failure_count
-}
-
 pub struct ScheduleStage {}
 impl ScheduleStage {
+    fn attempt_lock_for_execution(
+        unique_weight: &UniqueWeight,
+        lock_attempts: &mut [LockAttempt],
+    ) -> usize {
+        // no short-cuircuit; we at least all need to add to the contended queue
+        let mut lock_failure_count = 0;
+
+        for attempt in lock_attempts.iter_mut() {
+            Self::attempt_lock_address(unique_weight, attempt);
+
+            match attempt.status {
+                LockStatus::Succeded => {}
+                LockStatus::Failed => {
+                    lock_failure_count += 1;
+                }
+            }
+        }
+
+        lock_failure_count
+    }
+
     fn attempt_lock_address(unique_weight: &UniqueWeight, attempt: &mut LockAttempt) {
         let mut page = attempt.target_page_mut();
         let tcuw = page.blocked_task_queue.heaviest_weight();
@@ -1215,7 +1215,7 @@ impl ScheduleStage {
     ) -> Option<(TaskInQueue, Vec<LockAttempt>)> {
         let from_runnable = matches!(task_source, TaskSource::Runnable);
 
-        let lock_failure_count = attempt_lock_for_execution(
+        let lock_failure_count = Self::attempt_lock_for_execution(
             &next_task.unique_weight,
             &mut next_task.lock_attempts_mut(),
         );
