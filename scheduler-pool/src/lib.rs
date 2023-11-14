@@ -1425,14 +1425,14 @@ where
             );
             runnable_queue.add_to_schedule(task.unique_weight, task);
             let mut selection = TaskSelection::OnlyFromContended(usize::max_value());
-            let mut address_book = thread_manager.address_book.clone().unwrap();
+            let mut retryable_task_queue = WeightedTaskQueue::default();
             let maybe_ee = ScheduleStage::schedule_next_execution(
                 &mut runnable_queue,
-                &mut address_book.retryable_task_queue,
+                &mut retryable_task_queue,
                 &mut selection,
             );
             if let Some(mut ee) = maybe_ee {
-                ScheduleStage::commit_processed_execution(&mut ee, &mut address_book.retryable_task_queue);
+                ScheduleStage::commit_processed_execution(&mut ee, &mut retryable_task_queue);
             }
         });
     }
