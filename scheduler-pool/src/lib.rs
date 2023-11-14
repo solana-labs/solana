@@ -1232,8 +1232,8 @@ impl ScheduleStage {
     }
 
     fn try_lock_for_task(
-        retryable_task_queue: &mut WeightedTaskQueue,
         (task_source, next_task): (TaskSource, TaskInQueue),
+        retryable_task_queue: &mut WeightedTaskQueue,
     ) -> Option<(TaskInQueue, Vec<LockAttempt>)> {
         let from_runnable = matches!(task_source, TaskSource::Runnable);
 
@@ -1370,7 +1370,7 @@ impl ScheduleStage {
         task_selection: &mut TaskSelection,
     ) -> Option<Box<ExecutionEnvironment>> {
         Self::select_next_task_to_lock(runnable_queue, retryable_task_queue, task_selection)
-            .and_then(|task| Self::try_lock_for_task(retryable_task_queue, task))
+            .and_then(|task| Self::try_lock_for_task(task, retryable_task_queue))
             .map(|(task, lock_attemps)| Self::prepare_scheduled_execution(task, lock_attemps))
     }
 }
