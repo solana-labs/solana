@@ -395,7 +395,7 @@ impl BTreeMapTaskIds {
     }
 }
 
-type PageRcInner = Arc<(std::cell::RefCell<Page>, std::sync::atomic::AtomicUsize)>;
+type PageRcInner = Arc<(std::cell::RefCell<Page>,)>;
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct PageRc(by_address::ByAddress<PageRcInner>);
