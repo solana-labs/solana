@@ -403,13 +403,13 @@ unsafe impl Send for PageRc {}
 unsafe impl Sync for PageRc {}
 unsafe impl Send for LockAttemptsInCell {}
 unsafe impl Sync for LockAttemptsInCell {}
-type WeightedTaskIds = std::collections::BTreeMap<UniqueWeight, TaskInQueue>;
+type WeightedTaskQueue = std::collections::BTreeMap<UniqueWeight, TaskInQueue>;
 
 type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
 #[derive(Default, Debug, Clone)]
 pub struct AddressBook {
     book: AddressMap,
-    retryable_task_queue: WeightedTaskIds,
+    retryable_task_queue: WeightedTaskQueue,
 }
 
 impl AddressBook {
@@ -1201,7 +1201,7 @@ pub struct ScheduleStage {}
 impl ScheduleStage {
     fn select_next_task_to_lock(
         runnable_queue: &mut ModeSpecificTaskQueue,
-        retryable_task_queue: &mut WeightedTaskIds,
+        retryable_task_queue: &mut WeightedTaskQueue,
         task_selection: &mut TaskSelection,
     ) -> Option<(TaskSource, TaskInQueue)> {
         let selected_heaviest_tasks = match task_selection {
