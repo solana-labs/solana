@@ -660,7 +660,7 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
 struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
     context: SchedulingContext,
-    scheduler_thread: Option<JoinHandle<(ResultWithTimings, AddressBook)>>,
+    scheduler_thread: Option<JoinHandle<ResultWithTimings>>,
     handler_threads: Vec<JoinHandle<()>>,
     handler: TH,
     schedulrable_transaction_sender: Sender<ChainedChannel<Arc<Task>, ControlFrame>>,
