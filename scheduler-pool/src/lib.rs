@@ -428,16 +428,6 @@ pub struct ExecutionEnvironment {
     pub result_with_timings: ResultWithTimings,
 }
 
-pub struct SchedulablePayload(pub Flushable<TaskInQueue>);
-pub struct ExecutablePayload(pub Flushable<Box<ExecutionEnvironment>>);
-pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment>, pub T);
-pub struct ExaminablePayload<T>(pub Flushable<(Box<ExecutionEnvironment>, T)>);
-
-pub enum Flushable<T> {
-    Payload(T),
-    Flush,
-}
-
 // Currently, simplest possible implementation (i.e. single-threaded)
 // this will be replaced with more proper implementation...
 // not usable at all, especially for mainnet-beta
@@ -470,8 +460,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
         initial_context: SchedulingContext,
         handler: TH,
     ) -> Self {
-        let address_book = AddressBook::default();
-        let mut new = Self {
+        Self {
             id: thread_rng().gen::<SchedulerId>(),
             completed_result_with_timings: None,
             thread_manager: RwLock::new(ThreadManager::<TH, SEA>::new(
@@ -480,11 +469,8 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
                 pool,
                 10,
             )),
-            address_book,
-        };
-        // is this benefitical?
-        //drop(new.ensure_thread_manager_started());
-        new
+            address_book: AddressBook::default(),
+        }
     }
 
     #[must_use]
@@ -1116,7 +1102,7 @@ impl ScheduleStage {
         }
         let lock_attempts = std::mem::take(&mut *next_task.lock_attempts_mut());
 
-        return Some((next_task, lock_attempts));
+        Some((next_task, lock_attempts))
     }
 
     fn reset_lock_for_failed_execution(
