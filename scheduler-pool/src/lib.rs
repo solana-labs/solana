@@ -1277,32 +1277,6 @@ impl SchedulingStateMachine {
     }
 }
 
-/*
-
-enum Event {
-    New(Transaction),
-    Executed(Transaction),
-}
-
-enum Action {
-    Execute,
-    Abort,
-}
-
-enum ActionResult {
-    NoTransaction,
-    Runnable(Transaction),
-    Aborted,
-}
-
-impl SchedulingStateMachine {
-    fn tick_by_event(Event) {}
-    fn tick_by_action(Action) -> ActionResult {}
-}
-
-impl Thread
-*/
-
 impl<TH, SEA> InstallableScheduler<SEA> for PooledScheduler<TH, SEA>
 where
     TH: Handler<SEA>,
