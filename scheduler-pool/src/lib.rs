@@ -1168,7 +1168,7 @@ impl TaskSelection {
     }
 }
 
-fn attempt_lock_for_execution<'a>(
+fn attempt_lock_for_execution(
     unique_weight: &UniqueWeight,
     lock_attempts: &mut [LockAttempt],
 ) -> usize {
@@ -1181,11 +1181,6 @@ fn attempt_lock_for_execution<'a>(
         match attempt.status {
             LockStatus::Succeded => {}
             LockStatus::Failed => {
-                trace!(
-                    "lock failed: {}/{:?}",
-                    attempt.target_page_mut().address_str,
-                    attempt.requested_usage
-                );
                 lock_failure_count += 1;
             }
         }
