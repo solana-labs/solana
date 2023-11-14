@@ -768,7 +768,7 @@ where
                                 false
                             } else {
                                 true;
-                            }
+                            };
 
                             if let Some(ee) = state_machine.schedule_retryable_task() {
                                 blocked_transaction_sessioned_sender
