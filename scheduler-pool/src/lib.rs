@@ -1226,20 +1226,20 @@ where
     }
 }
 
-struct SchedulingStateMachine(WeightedTaskQueue, usize);
+#[derive(Default)]
+struct SchedulingStateMachine {
+    retryable_task_queue: WeightedTaskQueue,
+    active_task_count: usize,
+}
 
 impl SchedulingStateMachine {
-    fn new() -> Self {
-        Self(Default::default(), Default::default())
-    }
-
     fn is_empty(&self) -> bool {
-        self.1 == 0
+        self.active_task_count == 0
     }
 
     fn schedule_new_task(&mut self, task: Arc<Task>) -> Option<Box<ExecutionEnvironment>> {
-        self.1 += 1;
-        ScheduleStage::try_lock_for_task((TaskSource::Runnable, task), &mut self.0).map(
+        self.active_task_count += 1;
+        ScheduleStage::try_lock_for_task((TaskSource::Runnable, task), &mut self.retryable_task_queue).map(
             |(task, lock_attemps)| ScheduleStage::prepare_scheduled_execution(task, lock_attemps),
         )
     }
@@ -1248,7 +1248,7 @@ impl SchedulingStateMachine {
         self.0
             .pop_last()
             .and_then(|(_, task)| {
-                ScheduleStage::try_lock_for_task((TaskSource::Retryable, task), &mut self.0)
+                ScheduleStage::try_lock_for_task((TaskSource::Retryable, task), &mut self.retryable_task_queue)
             })
             .map(|(task, lock_attemps)| {
                 ScheduleStage::prepare_scheduled_execution(task, lock_attemps)
@@ -1256,7 +1256,7 @@ impl SchedulingStateMachine {
     }
 
     fn deschedule_task(&mut self, mut ee: Box<ExecutionEnvironment>) {
-        self.1 -= 1;
+        self.active_task_count -= 1;
         let should_remove = ee
             .task
             .contention_count
@@ -1266,7 +1266,7 @@ impl SchedulingStateMachine {
         ScheduleStage::unlock_after_execution(
             should_remove,
             uq,
-            &mut self.0,
+            &mut self.retryable_task_queue,
             &mut ee.finalized_lock_attempts,
         );
     }
