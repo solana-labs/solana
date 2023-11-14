@@ -514,7 +514,7 @@ impl AddressBook {
 
     pub fn preloader(&self) -> Preloader {
         Preloader {
-            book: std::sync::Arc::clone(&self.book),
+            book: self.book.clone(),
         }
     }
 }
