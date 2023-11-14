@@ -459,7 +459,6 @@ impl AncientSlotPubkeys {
 pub(crate) struct ShrinkCollect<'a, T: ShrinkCollectRefs<'a>> {
     pub(crate) slot: Slot,
     pub(crate) capacity: u64,
-    pub(crate) aligned_total_bytes: u64,
     pub(crate) unrefed_pubkeys: Vec<&'a Pubkey>,
     pub(crate) alive_accounts: T,
     /// total size in storage of all alive accounts
@@ -4047,7 +4046,6 @@ impl AccountsDb {
         ShrinkCollect {
             slot,
             capacity: *capacity,
-            aligned_total_bytes,
             unrefed_pubkeys,
             alive_accounts,
             alive_total_bytes,
@@ -4114,7 +4112,10 @@ impl AccountsDb {
             self.shrink_collect::<AliveAccounts<'_>>(store, &unique_accounts, &self.shrink_stats);
 
         // This shouldn't happen if alive_bytes/approx_stored_count are accurate
-        if Self::should_not_shrink(shrink_collect.aligned_total_bytes, shrink_collect.capacity) {
+        if Self::should_not_shrink(
+            shrink_collect.alive_total_bytes as u64,
+            shrink_collect.capacity,
+        ) {
             self.shrink_stats
                 .skipped_shrink
                 .fetch_add(1, Ordering::Relaxed);
@@ -4130,20 +4131,20 @@ impl AccountsDb {
 
         let total_accounts_after_shrink = shrink_collect.alive_accounts.len();
         debug!(
-            "shrinking: slot: {}, accounts: ({} => {}) bytes: ({} ; aligned to: {}) original: {}",
+            "shrinking: slot: {}, accounts: ({} => {}) bytes: {} original: {}",
             slot,
             shrink_collect.total_starting_accounts,
             total_accounts_after_shrink,
             shrink_collect.alive_total_bytes,
-            shrink_collect.aligned_total_bytes,
             shrink_collect.capacity,
         );
 
         let mut stats_sub = ShrinkStatsSub::default();
         let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
-        if shrink_collect.aligned_total_bytes > 0 {
-            let (shrink_in_progress, time_us) =
-                measure_us!(self.get_store_for_shrink(slot, shrink_collect.aligned_total_bytes));
+        if shrink_collect.alive_total_bytes > 0 {
+            let (shrink_in_progress, time_us) = measure_us!(
+                self.get_store_for_shrink(slot, shrink_collect.alive_total_bytes as u64)
+            );
             stats_sub.create_and_insert_store_elapsed_us = time_us;
 
             // here, we're writing back alive_accounts. That should be an atomic operation
@@ -8186,26 +8187,24 @@ impl AccountsDb {
         }
     }
 
-    fn should_not_shrink(aligned_bytes: u64, total_bytes: u64) -> bool {
-        aligned_bytes + PAGE_SIZE > total_bytes
+    fn should_not_shrink(alive_bytes: u64, total_bytes: u64) -> bool {
+        alive_bytes + PAGE_SIZE > total_bytes
     }
 
     fn is_shrinking_productive(slot: Slot, store: &Arc<AccountStorageEntry>) -> bool {
         let alive_count = store.count();
         let stored_count = store.approx_stored_count();
-        let alive_bytes = store.alive_bytes();
+        let alive_bytes = store.alive_bytes() as u64;
         let total_bytes = store.capacity();
 
-        let aligned_bytes = Self::page_align(alive_bytes as u64);
-        if Self::should_not_shrink(aligned_bytes, total_bytes) {
+        if Self::should_not_shrink(alive_bytes, total_bytes) {
             trace!(
-                "shrink_slot_forced ({}): not able to shrink at all: alive/stored: ({} / {}) ({}b / {}b) save: {}",
+                "shrink_slot_forced ({}): not able to shrink at all: alive/stored: {} ({}b / {}b) save: {}",
                 slot,
                 alive_count,
                 stored_count,
-                aligned_bytes,
                 total_bytes,
-                total_bytes.saturating_sub(aligned_bytes),
+                total_bytes.saturating_sub(alive_bytes),
             );
             return false;
         }
@@ -9397,51 +9396,84 @@ impl AccountsDb {
                 ..GenerateIndexTimings::default()
             };
 
-            // subtract data.len() from accounts_data_len for all old accounts that are in the index twice
-            let mut accounts_data_len_dedup_timer =
-                Measure::start("handle accounts data len duplicates");
-            let uncleaned_roots = Mutex::new(IntSet::default());
             if pass == 0 {
-                let accounts_data_len_from_duplicates = unique_pubkeys_by_bin
+                #[derive(Debug, Default)]
+                struct DuplicatePubkeysVisitedInfo {
+                    accounts_data_len_from_duplicates: u64,
+                    uncleaned_roots: IntSet<Slot>,
+                }
+                impl DuplicatePubkeysVisitedInfo {
+                    fn reduce(mut a: Self, mut b: Self) -> Self {
+                        if a.uncleaned_roots.len() >= b.uncleaned_roots.len() {
+                            a.merge(b);
+                            a
+                        } else {
+                            b.merge(a);
+                            b
+                        }
+                    }
+                    fn merge(&mut self, other: Self) {
+                        self.accounts_data_len_from_duplicates +=
+                            other.accounts_data_len_from_duplicates;
+                        self.uncleaned_roots.extend(other.uncleaned_roots);
+                    }
+                }
+
+                // subtract data.len() from accounts_data_len for all old accounts that are in the index twice
+                let mut accounts_data_len_dedup_timer =
+                    Measure::start("handle accounts data len duplicates");
+                let DuplicatePubkeysVisitedInfo {
+                    accounts_data_len_from_duplicates,
+                    uncleaned_roots,
+                } = unique_pubkeys_by_bin
                     .par_iter()
-                    .map(|unique_keys| {
-                        unique_keys
-                            .par_chunks(4096)
-                            .map(|pubkeys| {
-                                let (count, uncleaned_roots_this_group) = self
-                                    .visit_duplicate_pubkeys_during_startup(
-                                        pubkeys,
-                                        &rent_collector,
-                                        &timings,
-                                    );
-                                let mut uncleaned_roots = uncleaned_roots.lock().unwrap();
-                                uncleaned_roots_this_group.into_iter().for_each(|slot| {
-                                    uncleaned_roots.insert(slot);
-                                });
-                                count
-                            })
-                            .sum::<u64>()
-                    })
-                    .sum();
+                    .fold(
+                        DuplicatePubkeysVisitedInfo::default,
+                        |accum, pubkeys_by_bin| {
+                            let intermediate = pubkeys_by_bin
+                                .par_chunks(4096)
+                                .fold(DuplicatePubkeysVisitedInfo::default, |accum, pubkeys| {
+                                    let (accounts_data_len_from_duplicates, uncleaned_roots) = self
+                                        .visit_duplicate_pubkeys_during_startup(
+                                            pubkeys,
+                                            &rent_collector,
+                                            &timings,
+                                        );
+                                    let intermediate = DuplicatePubkeysVisitedInfo {
+                                        accounts_data_len_from_duplicates,
+                                        uncleaned_roots,
+                                    };
+                                    DuplicatePubkeysVisitedInfo::reduce(accum, intermediate)
+                                })
+                                .reduce(
+                                    DuplicatePubkeysVisitedInfo::default,
+                                    DuplicatePubkeysVisitedInfo::reduce,
+                                );
+                            DuplicatePubkeysVisitedInfo::reduce(accum, intermediate)
+                        },
+                    )
+                    .reduce(
+                        DuplicatePubkeysVisitedInfo::default,
+                        DuplicatePubkeysVisitedInfo::reduce,
+                    );
+                accounts_data_len_dedup_timer.stop();
+                timings.accounts_data_len_dedup_time_us = accounts_data_len_dedup_timer.as_us();
+                timings.slots_to_clean = uncleaned_roots.len() as u64;
+
+                self.accounts_index
+                    .add_uncleaned_roots(uncleaned_roots.into_iter());
                 accounts_data_len.fetch_sub(accounts_data_len_from_duplicates, Ordering::Relaxed);
                 info!(
                     "accounts data len: {}",
                     accounts_data_len.load(Ordering::Relaxed)
                 );
             }
-            accounts_data_len_dedup_timer.stop();
-            timings.accounts_data_len_dedup_time_us = accounts_data_len_dedup_timer.as_us();
-
-            let uncleaned_roots = uncleaned_roots.into_inner().unwrap();
-            timings.slots_to_clean = uncleaned_roots.len() as u64;
 
             if pass == 0 {
                 // Need to add these last, otherwise older updates will be cleaned
                 for root in &slots {
                     self.accounts_index.add_root(*root);
                 }
-                self.accounts_index
-                    .add_uncleaned_roots(uncleaned_roots.into_iter());
 
                 self.set_storage_count_and_alive_bytes(storage_info, &mut timings);
             }
@@ -10905,7 +10937,7 @@ pub mod tests {
                 expected[0].push(raw_expected[index]);
             }
             let mut result2 = (0..range).map(|_| Vec::default()).collect::<Vec<_>>();
-            if let Some(m) = result.get(0) {
+            if let Some(m) = result.first() {
                 m.load_all(&mut result2, bin, &PubkeyBinCalculator24::new(bins));
             } else {
                 result2 = vec![];
@@ -17310,17 +17342,6 @@ pub mod tests {
 
                                 let alive_total_one_account = 136 + space;
                                 if alive {
-                                    assert_eq!(
-                                        shrink_collect.aligned_total_bytes,
-                                        PAGE_SIZE
-                                            * if account_count >= 100 {
-                                                4
-                                            } else if account_count >= 50 {
-                                                2
-                                            } else {
-                                                1
-                                            }
-                                    );
                                     let mut expected_alive_total_bytes =
                                         alive_total_one_account * normal_account_count;
                                     if append_opposite_zero_lamport_account {
@@ -17332,13 +17353,11 @@ pub mod tests {
                                         expected_alive_total_bytes
                                     );
                                 } else if append_opposite_alive_account {
-                                    assert_eq!(shrink_collect.aligned_total_bytes, 4096);
                                     assert_eq!(
                                         shrink_collect.alive_total_bytes,
                                         alive_total_one_account
                                     );
                                 } else {
-                                    assert_eq!(shrink_collect.aligned_total_bytes, 0);
                                     assert_eq!(shrink_collect.alive_total_bytes, 0);
                                 }
                                 // expected_capacity is determined by what size append vec gets created when the write cache is flushed to an append vec.

@@ -17,6 +17,7 @@ pub struct EntryNotification {
     pub slot: Slot,
     pub index: usize,
     pub entry: EntrySummary,
+    pub starting_transaction_index: usize,
 }
 
 pub type EntryNotifierSender = Sender<EntryNotification>;
@@ -54,9 +55,13 @@ impl EntryNotifierService {
         entry_notification_receiver: &EntryNotifierReceiver,
         entry_notifier: EntryNotifierArc,
     ) -> Result<(), RecvTimeoutError> {
-        let EntryNotification { slot, index, entry } =
-            entry_notification_receiver.recv_timeout(Duration::from_secs(1))?;
-        entry_notifier.notify_entry(slot, index, &entry);
+        let EntryNotification {
+            slot,
+            index,
+            entry,
+            starting_transaction_index,
+        } = entry_notification_receiver.recv_timeout(Duration::from_secs(1))?;
+        entry_notifier.notify_entry(slot, index, &entry, starting_transaction_index);
         Ok(())
     }
 

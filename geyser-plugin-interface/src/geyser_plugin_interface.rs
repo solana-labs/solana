@@ -185,12 +185,31 @@ pub struct ReplicaEntryInfo<'a> {
     pub executed_transaction_count: u64,
 }
 
+#[derive(Clone, Debug)]
+#[repr(C)]
+pub struct ReplicaEntryInfoV2<'a> {
+    /// The slot number of the block containing this Entry
+    pub slot: Slot,
+    /// The Entry's index in the block
+    pub index: usize,
+    /// The number of hashes since the previous Entry
+    pub num_hashes: u64,
+    /// The Entry's SHA-256 hash, generated from the previous Entry's hash with
+    /// `solana_entry::entry::next_hash()`
+    pub hash: &'a [u8],
+    /// The number of executed transactions in the Entry
+    pub executed_transaction_count: u64,
+    /// The index-in-block of the first executed transaction in this Entry
+    pub starting_transaction_index: usize,
+}
+
 /// A wrapper to future-proof ReplicaEntryInfo handling. To make a change to the structure of
 /// ReplicaEntryInfo, add an new enum variant wrapping a newer version, which will force plugin
 /// implementations to handle the change.
 #[repr(u32)]
 pub enum ReplicaEntryInfoVersions<'a> {
     V0_0_1(&'a ReplicaEntryInfo<'a>),
+    V0_0_2(&'a ReplicaEntryInfoV2<'a>),
 }
 
 #[derive(Clone, Debug)]

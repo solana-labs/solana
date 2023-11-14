@@ -161,7 +161,7 @@ impl WithdrawProof {
 
         Self {
             commitment: pod_commitment,
-            equality_proof: equality_proof.try_into().expect("equality proof"),
+            equality_proof: equality_proof.into(),
             range_proof: range_proof.try_into().expect("range proof"),
         }
     }
