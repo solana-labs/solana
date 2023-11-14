@@ -423,64 +423,6 @@ type TaskQueueEntry<'a> = std::collections::btree_map::Entry<'a, UniqueWeight, T
 type TaskQueueOccupiedEntry<'a> =
     std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, TaskInQueue>;
 
-use enum_dispatch::enum_dispatch;
-
-#[enum_dispatch]
-enum ModeSpecificTaskQueue {
-    BlockVerification(ChannelBackedTaskQueue),
-}
-
-#[enum_dispatch(ModeSpecificTaskQueue)]
-trait TaskQueueReader {
-    fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: TaskInQueue);
-    fn heaviest_entry_to_execute(&mut self) -> Option<TaskInQueue>;
-    fn task_count_hint(&self) -> usize;
-    fn has_no_task_hint(&self) -> bool;
-}
-
-impl TaskQueueReader for TaskQueue {
-    fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: TaskInQueue) {
-        let pre_existed = self.tasks.insert(unique_weight, task);
-        assert!(pre_existed.is_none());
-    }
-
-    fn heaviest_entry_to_execute(&mut self) -> Option<TaskInQueue> {
-        self.tasks.pop_last().map(|(_k, v)| v)
-    }
-
-    fn task_count_hint(&self) -> usize {
-        self.tasks.len()
-    }
-
-    fn has_no_task_hint(&self) -> bool {
-        self.tasks.is_empty()
-    }
-}
-
-#[derive(Default, Debug, Clone)]
-pub struct TaskQueue {
-    tasks: std::collections::BTreeMap<UniqueWeight, TaskInQueue>,
-}
-
-struct ChannelBackedTaskQueue {
-    channel: Receiver<SchedulablePayload>,
-    buffered_task: Option<TaskInQueue>,
-}
-
-impl ChannelBackedTaskQueue {
-    fn new(channel: &Receiver<SchedulablePayload>) -> Self {
-        Self {
-            channel: channel.clone(),
-            buffered_task: None,
-        }
-    }
-
-    fn buffer(&mut self, task: TaskInQueue) {
-        assert!(self.buffered_task.is_none());
-        self.buffered_task = Some(task);
-    }
-}
-
 #[derive(Debug)]
 pub struct ExecutionEnvironment {
     pub task: TaskInQueue,
@@ -498,38 +440,6 @@ pub struct ExaminablePayload<T>(pub Flushable<(Box<ExecutionEnvironment>, T)>);
 pub enum Flushable<T> {
     Payload(T),
     Flush,
-}
-
-impl TaskQueueReader for ChannelBackedTaskQueue {
-    fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: TaskInQueue) {
-        self.buffer(task)
-    }
-
-    fn task_count_hint(&self) -> usize {
-        self.channel.len()
-            + (match self.buffered_task {
-                None => 0,
-                Some(_) => 1,
-            })
-    }
-
-    fn has_no_task_hint(&self) -> bool {
-        self.task_count_hint() == 0
-    }
-
-    fn heaviest_entry_to_execute(&mut self) -> Option<TaskInQueue> {
-        match self.buffered_task.take() {
-            Some(task) => Some(task),
-            None => {
-                // unblocking recv must have been gurantted to succeed at the time of this method
-                // invocation
-                match self.channel.try_recv().unwrap() {
-                    SchedulablePayload(Flushable::Payload(task)) => Some(task),
-                    SchedulablePayload(Flushable::Flush) => None,
-                }
-            }
-        }
-    }
 }
 
 // Currently, simplest possible implementation (i.e. single-threaded)
