@@ -494,7 +494,7 @@ impl Sanitize for NodeInstance {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample, AbiEnumVisitor)]
-pub enum SlotsOffsets {
+enum SlotsOffsets {
     RunLengthEncoding(RunLengthEncoding),
     RawOffsets(RawOffsets),
 }
@@ -503,71 +503,71 @@ pub enum SlotsOffsets {
 struct U16(#[serde(with = "serde_varint")] u16);
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, AbiExample)]
-pub struct RunLengthEncoding {
+struct RunLengthEncoding {
     // The vector always starts with 1. Encode number of 1's and 0's consecutively.
     // For example, 110000111 is [2, 4, 3].
     encoded: Vec<U16>,
 }
 
 impl RunLengthEncoding {
-    pub fn new(bits: &BitVec<u8>) -> Self {
+    fn new(bits: &BitVec<u8>) -> Self {
         let encoded = (0..bits.len())
             .map(|i| bits.get(i))
             .dedup_with_count()
             .map_while(|(count, _)| u16::try_from(count).ok())
             .scan(0, |current_bytes, count| {
-                *current_bytes += ((u16::BITS - count.leading_zeros() + 6) / 7).max(1);
-                if *current_bytes > RestartLastVotedForkSlots::MAX_BYTES as u32 {
-                    return None;
-                }
-                Some(U16(count))
+                *current_bytes += ((u16::BITS - count.leading_zeros() + 6) / 7).max(1) as usize;
+                (*current_bytes <= RestartLastVotedForkSlots::MAX_BYTES).then_some(U16(count))
             })
             .collect();
         Self { encoded }
     }
 
-    pub fn slots_count(&self) -> usize {
+    fn num_encoded_slots(&self) -> usize {
         self.encoded.iter().map(|x| usize::from(x.0)).sum::<usize>()
     }
 
-    pub fn to_slots(&self, last_slot: Slot, min_slot: Slot) -> Vec<Slot> {
-        let mut result: Vec<Slot> = self
+    fn to_slots(&self, last_slot: Slot, min_slot: Slot) -> Vec<Slot> {
+        let mut slots: Vec<Slot> = self
             .encoded
             .iter()
             .zip([1, 0].iter().cycle())
             .flat_map(|(bit_count, bit)| std::iter::repeat(bit).take(usize::from(bit_count.0)))
             .enumerate()
-            .filter(|(_, bit)| **bit > 0)
-            .map(|(offset, _)| last_slot.saturating_sub(offset as Slot))
+            .filter(|(_, bit)| **bit == 1)
+            .map_while(|(offset, _)| {
+                let offset = Slot::try_from(offset).ok()?;
+                last_slot.checked_sub(offset)
+            })
             .take(MAX_SLOTS_PER_ENTRY)
             .take_while(|slot| *slot >= min_slot)
             .collect();
-        result.reverse();
-        result
+        slots.reverse();
+        slots
     }
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, AbiExample)]
-pub struct RawOffsets {
+struct RawOffsets {
     bits: BitVec<u8>,
 }
 
 impl RawOffsets {
-    pub fn new(mut bits: BitVec<u8>) -> Self {
+    fn new(mut bits: BitVec<u8>) -> Self {
         bits.truncate(RestartLastVotedForkSlots::MAX_BYTES as u64 * 8);
         bits.shrink_to_fit();
         Self { bits }
     }
 
-    pub fn to_slots(&self, last_slot: Slot, min_slot: Slot) -> Vec<Slot> {
-        let mut result: Vec<Slot> = (0..self.bits.len())
+    fn to_slots(&self, last_slot: Slot, min_slot: Slot) -> Vec<Slot> {
+        let mut slots: Vec<Slot> = (0..self.bits.len())
             .filter(|index| self.bits.get(*index))
-            .map(|offset| last_slot.saturating_sub(offset))
+            .map_while(|offset| last_slot.checked_sub(offset))
             .take_while(|slot| *slot >= min_slot)
             .take(MAX_SLOTS_PER_ENTRY)
             .collect();
-        result.reverse();
-        result
+        slots.reverse();
+        slots
     }
 }
 
@@ -587,6 +587,12 @@ impl Sanitize for RestartLastVotedForkSlots {
     }
 }
 
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct RestartLastVotedForkSlotsError {
+    error: String,
+}
+
 impl RestartLastVotedForkSlots {
     // This number is MAX_CRDS_OBJECT_SIZE - empty serialized RestartLastVotedForkSlots.
     const MAX_BYTES: usize = 824;
@@ -597,11 +603,13 @@ impl RestartLastVotedForkSlots {
         last_voted_fork: &[Slot],
         last_voted_hash: Hash,
         shred_version: u16,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, RestartLastVotedForkSlotsError> {
         let Some((first_voted_slot, last_voted_slot)) =
             last_voted_fork.iter().minmax().into_option()
         else {
-            return Err("Last voted slot must be specified".to_string());
+            return Err(RestartLastVotedForkSlotsError {
+                error: "Last voted slot must be specified".to_string(),
+            });
         };
         let max_size = last_voted_slot.saturating_sub(*first_voted_slot) + 1;
         let mut uncompressed_bitvec = BitVec::new_fill(false, max_size);
@@ -610,7 +618,7 @@ impl RestartLastVotedForkSlots {
         }
         let run_length_encoding = RunLengthEncoding::new(&uncompressed_bitvec);
         let offsets =
-            if run_length_encoding.slots_count() > RestartLastVotedForkSlots::MAX_BYTES * 8 {
+            if run_length_encoding.num_encoded_slots() > RestartLastVotedForkSlots::MAX_BYTES * 8 {
                 SlotsOffsets::RunLengthEncoding(run_length_encoding)
             } else {
                 SlotsOffsets::RawOffsets(RawOffsets::new(uncompressed_bitvec))
