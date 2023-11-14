@@ -368,7 +368,7 @@ impl Page {
 impl BTreeMapTaskIds {
     pub fn insert_task(&mut self, task: TaskInQueue) {
         let pre_existed = self.blocked_task_queue.insert(task.unique_weight, task);
-        assert!(pre_existed.is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
+        assert!(pre_existed.is_none());
     }
 
     fn remove_task(&mut self, u: &UniqueWeight) {
