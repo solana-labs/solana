@@ -529,8 +529,6 @@ impl Preloader {
         PageRc::clone(&self.book.entry(address).or_insert_with(|| {
             PageRc(by_address::ByAddress(PageRcInner::new((
                 core::cell::RefCell::new(Page::new(&address, Usage::unused())),
-                //Default::default(),
-                AtomicUsize::default(),
             ))))
         }))
     }
