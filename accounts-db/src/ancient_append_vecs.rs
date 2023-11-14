@@ -918,13 +918,17 @@ impl<'a> AccountsToStore<'a> {
 }
 
 /// capacity of an ancient append vec
-pub fn get_ancient_append_vec_capacity() -> u64 {
+#[allow(clippy::assertions_on_constants)]
+pub const fn get_ancient_append_vec_capacity() -> u64 {
     use crate::append_vec::MAXIMUM_APPEND_VEC_FILE_SIZE;
-    // smaller than max by a bit just in case
-    // some functions add slop on allocation
-    // The bigger an append vec is, the more unwieldy it becomes to shrink, create, write.
-    // 1/10 of max is a reasonable size in practice.
-    MAXIMUM_APPEND_VEC_FILE_SIZE / 10 - 2048
+    const PAGE_SIZE: u64 = 4 * 1024;
+
+    // There is a trade-off for selecting the ancient append vec size. Too small size will result in
+    // too many ancient append vec memory mapped files. Too big size will make it difficult to clean and shrink.
+    // Hence, we choose approximately 130MB (i.e. 134,217,728 bytes) for the ancient append vec size.
+    const RESULT: u64 = PAGE_SIZE * 32768;
+    const _: () = assert!(RESULT < MAXIMUM_APPEND_VEC_FILE_SIZE);
+    RESULT
 }
 
 /// is this a max-size append vec designed to be used as an ancient append vec?
