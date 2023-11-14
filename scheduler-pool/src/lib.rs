@@ -1320,18 +1320,6 @@ impl ScheduleStage {
         ee: &mut ExecutionEnvironment,
         retryable_task_queue: &mut WeightedTaskQueue,
     ) {
-        let should_remove = ee
-            .task
-            .contention_count
-            .load(std::sync::atomic::Ordering::SeqCst)
-            > 0;
-        let uq = ee.task.unique_weight;
-        Self::unlock_after_execution(
-            should_remove,
-            uq,
-            retryable_task_queue,
-            &mut ee.finalized_lock_attempts,
-        );
     }
 
     fn schedule_next_execution(
@@ -1444,8 +1432,20 @@ impl SchedulingStateMachine {
         ).map(|(task, lock_attemps)| ScheduleStage::prepare_scheduled_execution(task, lock_attemps))
     }
 
-    fn deschedule_task(&mut self, task: Box<ExecutionEnvironment>) {
+    fn deschedule_task(&mut self, ee: Box<ExecutionEnvironment>) {
         self.1 -= 1;
+        let should_remove = ee
+            .task
+            .contention_count
+            .load(std::sync::atomic::Ordering::SeqCst)
+            > 0;
+        let uq = ee.task.unique_weight;
+        ScheduleStage::unlock_after_execution(
+            should_remove,
+            uq,
+            retryable_task_queue,
+            &mut ee.finalized_lock_attempts,
+        );
     }
 }
 
