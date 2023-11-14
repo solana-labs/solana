@@ -72,7 +72,7 @@ slot for which it has not completed accounts db replication. The `ReplicaAccount
 the `ReplicaAccountMeta`, Hash and the AccountData. The `ReplicaAccountMeta` contains info about
 the existing `AccountMeta` in addition to the account data length in bytes.
 
-The `ReplicaAccountsServer`: this service is reponsible for serving the `ReplicaAccountsRequest`
+The `ReplicaAccountsServer`: this service is responsible for serving the `ReplicaAccountsRequest`
 and sends `ReplicaAccountsResponse` to the requestor. The response contains the count of the
 ReplAccountInfo and the vector of ReplAccountInfo. This service runs both in the validator
 and the replica relaying replication information. The server can stream the account information
