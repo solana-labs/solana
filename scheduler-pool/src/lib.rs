@@ -609,7 +609,7 @@ where
     }
 
     fn propagate_context(
-        blocked_transaction_sessioned_sender: Sender<
+        blocked_transaction_sessioned_sender: &mut Sender<
             ChainedChannel<Box<ExecutionEnvironment>, ControlFrame>,
         >,
         context: SchedulingContext,
@@ -625,7 +625,7 @@ where
                 ))
                 .unwrap();
         }
-        next_blocked_transaction_sessioned_sender
+        std::mem::replace(blocked_transaction_sessioned_sender, next_blocked_transaction_sessioned_sender)
     }
 
     fn start_threads(&mut self) {
@@ -694,7 +694,7 @@ where
                                         (schedulable_transaction_receiver, control_frame) = new_channel.channel_and_payload();
                                         match control_frame {
                                             ControlFrame::StartSession(context) => {
-                                                blocked_transaction_sessioned_sender = Self::propagate_context(blocked_transaction_sessioned_sender, context, handler_count)
+                                                Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count)
                                             }
                                             ControlFrame::EndSession => {
                                                 debug!("scheduler_main_loop: will_end_session = true");
