@@ -66,7 +66,7 @@ module.exports = {
           position: "left",
         },
         {
-          to: "running-validator",
+          to: "operations",
           label: "Operating a Validator",
           position: "left",
         },
