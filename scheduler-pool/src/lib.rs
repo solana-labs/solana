@@ -608,7 +608,7 @@ where
         );
     }
 
-    fn propagate_context(blocked_transaction_sessioned_sender: Sender<ChainedChannel<Box<ExecutionEnvironment>, ControlFrame>>, context: SchedulingContext) -> Sender<ChainedChannel<Box<ExecutionEnvironment>, ControlFrame>> {
+    fn propagate_context(blocked_transaction_sessioned_sender: Sender<ChainedChannel<Box<ExecutionEnvironment>, ControlFrame>>, context: SchedulingContext, handler_count: usize) -> Sender<ChainedChannel<Box<ExecutionEnvironment>, ControlFrame>> {
         let (
             next_blocked_transaction_sessioned_sender,
             blocked_transaction_sessioned_receiver,
