@@ -1440,15 +1440,15 @@ impl SchedulingStateMachine {
     }
 
     fn schedule_new_task(&mut self, task: Arc<Task>) -> Option<Box<ExecutionEnvironment>> {
+        self.1 += 1;
         ScheduleStage::try_lock_for_task((TaskSource::Runnable, task), &mut self.0)
             .map(|(task, lock_attemps)| ScheduleStage::prepare_scheduled_execution(task, lock_attemps))
     }
 
     fn schedule_retryalbe_task(&mut self) -> Option<Box<ExecutionEnvironment>> {
-        /*self.0
-            .pop_front()
-            .map(|task| ScheduleStage::prepare_scheduled_execution(task, vec![]))
-            */ todo!();
+        self.retryable_task_queue.last_entry().remove().map(|task|
+            ScheduleStage::try_lock_for_task((TaskSource::Contended, task), &mut self.0)
+        ).map(|(task, lock_attemps)| ScheduleStage::prepare_scheduled_execution(task, lock_attemps))
     }
 
     fn decrement_task_count(&mut self) {
