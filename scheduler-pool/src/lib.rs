@@ -1199,15 +1199,15 @@ fn attempt_lock_for_execution<'a>(
 
 pub struct ScheduleStage {}
 impl ScheduleStage {
-    fn select_next_task_to_lock<'a>(
-        runnable_queue: &'a mut ModeSpecificTaskQueue,
-        address_book: &mut AddressBook,
+    fn select_next_task_to_lock(
+        runnable_queue: &mut ModeSpecificTaskQueue,
+        retryable_task_queue: &mut WeightedTaskIds,
         task_selection: &mut TaskSelection,
     ) -> Option<(TaskSource, TaskInQueue)> {
         let selected_heaviest_tasks = match task_selection {
             TaskSelection::OnlyFromRunnable => (runnable_queue.heaviest_entry_to_execute(), None),
             TaskSelection::OnlyFromContended(_) => {
-                (None, address_book.retryable_task_queue.last_entry())
+                (None, retryable_task_queue.last_entry())
             }
         };
 
@@ -1380,7 +1380,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         task_selection: &mut TaskSelection,
     ) -> Option<Box<ExecutionEnvironment>> {
-        Self::select_next_task_to_lock(runnable_queue, address_book, task_selection)
+        Self::select_next_task_to_lock(runnable_queue, address_book.retryable_task_queue, task_selection)
             .and_then(|task| Self::try_lock_for_task(address_book, task))
             .map(|(task, lock_attemps)| Self::prepare_scheduled_execution(task, lock_attemps))
     }
