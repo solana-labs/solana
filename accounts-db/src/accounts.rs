@@ -382,16 +382,27 @@ impl Accounts {
                         self.accounts_db
                             .load_with_fixed_root(ancestors, key)
                             .map(|(mut account, _)| {
-                                if should_collect_rent && message.is_writable(i) {
-                                    let rent_due = rent_collector
-                                        .collect_from_existing_account(
-                                            key,
-                                            &mut account,
-                                            self.accounts_db.filler_account_suffix.as_ref(),
-                                            set_exempt_rent_epoch_max,
-                                        )
-                                        .rent_amount;
-                                    (account.data().len(), account, rent_due)
+                                if message.is_writable(i) {
+                                    if should_collect_rent {
+                                        let rent_due = rent_collector
+                                            .collect_from_existing_account(
+                                                key,
+                                                &mut account,
+                                                self.accounts_db.filler_account_suffix.as_ref(),
+                                                set_exempt_rent_epoch_max,
+                                            )
+                                            .rent_amount;
+
+                                        (account.data().len(), account, rent_due)
+                                    } else {
+                                        // All rent-exempt accounts need to have their rent_epoch set to u64::max. This is done inside
+                                        // `collect_from_existing_account` when we collect rent. When rent collection is disabled,
+                                        // we should also enforce that the rent_epoch on these accounts is set to u64::MAX too.
+                                        if set_exempt_rent_epoch_max {
+                                            account.set_rent_epoch(u64::MAX);
+                                        }
+                                        (account.data().len(), account, 0)
+                                    }
                                 } else {
                                     (account.data().len(), account, 0)
                                 }
