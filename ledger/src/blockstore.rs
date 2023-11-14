@@ -4126,7 +4126,7 @@ pub fn create_new_ledger(
         zstd::Encoder::auto_finish(zstd::Encoder::new(File::create(&archive_path)?, 0)?);
     let mut archive = tar::Builder::new(archive_stream);
     archive.append_path_with_name(ledger_path.join(DEFAULT_GENESIS_FILE), DEFAULT_GENESIS_FILE)?;
-    archive.append_dir_all("rocksdb", ledger_path.join(blockstore_dir))?;
+    archive.append_dir_all(blockstore_dir, ledger_path.join(blockstore_dir))?;
     archive.finish()?;
     drop(archive);
 
