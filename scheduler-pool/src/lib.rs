@@ -608,11 +608,15 @@ where
         );
     }
 
-    fn propagate_context(blocked_transaction_sessioned_sender: Sender<ChainedChannel<Box<ExecutionEnvironment>, ControlFrame>>, context: SchedulingContext, handler_count: usize) -> Sender<ChainedChannel<Box<ExecutionEnvironment>, ControlFrame>> {
-        let (
-            next_blocked_transaction_sessioned_sender,
-            blocked_transaction_sessioned_receiver,
-        ) = unbounded();
+    fn propagate_context(
+        blocked_transaction_sessioned_sender: Sender<
+            ChainedChannel<Box<ExecutionEnvironment>, ControlFrame>,
+        >,
+        context: SchedulingContext,
+        handler_count: usize,
+    ) -> Sender<ChainedChannel<Box<ExecutionEnvironment>, ControlFrame>> {
+        let (next_blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) =
+            unbounded();
         for _ in (0..handler_count) {
             blocked_transaction_sessioned_sender
                 .send(ChainedChannel::new_channel(
