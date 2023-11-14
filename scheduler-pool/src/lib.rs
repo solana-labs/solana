@@ -555,9 +555,8 @@ trait TaskQueueReader {
 
 impl TaskQueueReader for TaskQueue {
     fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: TaskInQueue) {
-        //trace!("TaskQueue::add(): {:?}", unique_weight);
         let pre_existed = self.tasks.insert(unique_weight, task);
-        assert!(pre_existed.is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
+        assert!(pre_existed.is_none());
     }
 
     fn heaviest_entry_to_execute(&mut self) -> Option<TaskInQueue> {
