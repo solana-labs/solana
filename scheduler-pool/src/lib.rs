@@ -608,6 +608,22 @@ where
         );
     }
 
+    fn propagate_context(blocked_transaction_sessioned_sender: usize, context: SchedulingContext) {
+        let (
+            next_blocked_transaction_sessioned_sender,
+            blocked_transaction_sessioned_receiver,
+        ) = unbounded();
+        for _ in (0..handler_count) {
+            blocked_transaction_sessioned_sender
+                .send(ChainedChannel::new_channel(
+                    blocked_transaction_sessioned_receiver.clone(),
+                    ControlFrame::StartSession(context.clone()),
+                ))
+                .unwrap();
+        }
+        next_blocked_transaction_sessioned_sender;
+    }
+
     fn start_threads(&mut self) {
         if self.is_active() {
             // this can't be promoted to panic! as read => write upgrade isn't completely
@@ -674,19 +690,7 @@ where
                                         (schedulable_transaction_receiver, control_frame) = new_channel.channel_and_payload();
                                         match control_frame {
                                             ControlFrame::StartSession(context) => {
-                                                let (
-                                                    next_blocked_transaction_sessioned_sender,
-                                                    blocked_transaction_sessioned_receiver,
-                                                ) = unbounded();
-                                                for _ in (0..handler_count) {
-                                                    blocked_transaction_sessioned_sender
-                                                        .send(ChainedChannel::new_channel(
-                                                            blocked_transaction_sessioned_receiver.clone(),
-                                                            ControlFrame::StartSession(context.clone()),
-                                                        ))
-                                                        .unwrap();
-                                                }
-                                                blocked_transaction_sessioned_sender = next_blocked_transaction_sessioned_sender;
+                                                blocked_transaction_sessioned_sender = Self::propagate_context(blocked_transaction_sessioned_sender, context)
                                             }
                                             ControlFrame::EndSession => {
                                                 debug!("scheduler_main_loop: will_end_session = true");
