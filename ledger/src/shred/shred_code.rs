@@ -47,10 +47,10 @@ impl ShredCode {
         }
     }
 
-    pub(super) fn merkle_root(&self) -> Option<Hash> {
+    pub(super) fn merkle_root(&self) -> Result<Hash, Error> {
         match self {
-            Self::Legacy(_) => None,
-            Self::Merkle(shred) => shred.merkle_root().ok(),
+            Self::Legacy(_) => Err(Error::InvalidShredType),
+            Self::Merkle(shred) => shred.merkle_root(),
         }
     }
 
