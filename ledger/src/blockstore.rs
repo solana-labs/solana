@@ -4074,9 +4074,10 @@ fn slot_has_updates(slot_meta: &SlotMeta, slot_meta_backup: &Option<SlotMeta>) -
         (slot_meta_backup.is_some() && slot_meta_backup.as_ref().unwrap().consumed != slot_meta.consumed))
 }
 
-// Creates a new ledger with slot 0 full of ticks (and only ticks).
-//
-// Returns the blockhash that can be used to append entries with.
+/// Creates a new ledger containing a genesis.bin, genesis archive and
+/// Blockstore full of ticks (and only ticks) in a rooted slot 0.
+///
+/// Returns the blockhash that can be used to append entries with.
 pub fn create_new_ledger(
     ledger_path: &Path,
     genesis_config: &GenesisConfig,
@@ -4087,7 +4088,6 @@ pub fn create_new_ledger(
     genesis_config.write(ledger_path)?;
 
     // Fill slot 0 with ticks that link back to the genesis_config to bootstrap the ledger.
-    let blockstore_dir = column_options.shred_storage_type.blockstore_directory();
     let blockstore = Blockstore::open_with_options(
         ledger_path,
         BlockstoreOptions {
@@ -4118,8 +4118,6 @@ pub fn create_new_ledger(
 
     blockstore.insert_shreds(shreds, None, false)?;
     blockstore.set_roots(std::iter::once(&0))?;
-    // Explicitly close the blockstore before we create the archived genesis file
-    drop(blockstore);
 
     let archive_path = ledger_path.join(DEFAULT_GENESIS_ARCHIVE);
     let args = vec![
@@ -4128,7 +4126,6 @@ pub fn create_new_ledger(
         "-C",
         ledger_path.to_str().unwrap(),
         DEFAULT_GENESIS_FILE,
-        blockstore_dir,
     ];
     let output = std::process::Command::new("tar")
         .args(args)
@@ -4182,16 +4179,6 @@ pub fn create_new_ledger(
                 let _ = write!(
                     &mut error_messages,
                     "/failed to stash problematic {DEFAULT_GENESIS_FILE}: {e}"
-                );
-            });
-            fs::rename(
-                ledger_path.join(blockstore_dir),
-                ledger_path.join(format!("{blockstore_dir}.failed")),
-            )
-            .unwrap_or_else(|e| {
-                let _ = write!(
-                    &mut error_messages,
-                    "/failed to stash problematic {blockstore_dir}: {e}"
                 );
             });
 
