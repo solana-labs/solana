@@ -927,8 +927,7 @@ where
             self.schedulrable_transaction_sender,
             self.schedulable_transaction_receiver,
         ) = unbounded();
-        let result_with_timings =
-            self.scheduler_thread.take().unwrap().join().unwrap();
+        let result_with_timings = self.scheduler_thread.take().unwrap().join().unwrap();
         self.session_result_with_timings = Some(result_with_timings);
 
         for j in self.handler_threads.drain(..) {
@@ -1326,7 +1325,10 @@ impl ScheduleStage {
         })
     }
 
-    fn commit_processed_execution(ee: &mut ExecutionEnvironment, retryable_task_queue: &mut WeightedTaskQueue) {
+    fn commit_processed_execution(
+        ee: &mut ExecutionEnvironment,
+        retryable_task_queue: &mut WeightedTaskQueue,
+    ) {
         let should_remove = ee
             .task
             .contention_count
@@ -1378,16 +1380,10 @@ where
         transaction_with_index.with_transaction_and_index(|transaction, index| {
             let locks = transaction.get_account_locks_unchecked();
             let writable_lock_iter = locks.writable.iter().map(|address| {
-                LockAttempt::new(
-                    self.address_book.load(**address),
-                    RequestedUsage::Writable,
-                )
+                LockAttempt::new(self.address_book.load(**address), RequestedUsage::Writable)
             });
             let readonly_lock_iter = locks.readonly.iter().map(|address| {
-                LockAttempt::new(
-                    self.address_book.load(**address),
-                    RequestedUsage::Readonly,
-                )
+                LockAttempt::new(self.address_book.load(**address), RequestedUsage::Readonly)
             });
             let locks = writable_lock_iter
                 .chain(readonly_lock_iter)
