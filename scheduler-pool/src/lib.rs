@@ -871,13 +871,14 @@ where
             self.start_threads();
         }
 
+        self.context = context;
         let next_sender_and_receiver = unbounded();
         let (_next_sender, next_receiver) = &next_sender_and_receiver;
 
         self.schedulrable_transaction_sender
             .send(ChainedChannel::new_channel(
                 next_receiver.clone(),
-                ControlFrame::StartSession(context),
+                ControlFrame::StartSession(self.context.clone()),
             ))
             .unwrap();
 
