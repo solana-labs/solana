@@ -2104,7 +2104,7 @@ fn check_payer(
     }
     if !write_messages.is_empty() {
         // Assume all write messages cost the same
-        if let Some(message) = write_messages.get(0) {
+        if let Some(message) = write_messages.first() {
             fee += rpc_client.get_fee_for_message(message)? * (write_messages.len() as u64);
         }
     }

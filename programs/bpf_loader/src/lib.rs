@@ -2687,7 +2687,7 @@ mod tests {
             &elf_orig,
             &elf_new,
         );
-        *instruction_accounts.get_mut(3).unwrap() = instruction_accounts.get(0).unwrap().clone();
+        *instruction_accounts.get_mut(3).unwrap() = instruction_accounts.first().unwrap().clone();
         process_instruction(
             transaction_accounts,
             instruction_accounts,

@@ -36,6 +36,7 @@ pub(super) struct PreBalanceInfo {
     pub mint_decimals: HashMap<Pubkey, u8>,
 }
 
+#[derive(Clone)]
 pub struct Committer {
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: ReplayVoteSender,

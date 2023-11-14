@@ -317,7 +317,7 @@ impl TowerStorage for EtcdTowerStorage {
 
         for op_response in response.op_responses() {
             if let etcd_client::TxnOpResponse::Get(get_response) = op_response {
-                if let Some(kv) = get_response.kvs().get(0) {
+                if let Some(kv) = get_response.kvs().first() {
                     return bincode::deserialize_from(kv.value())
                         .map_err(|e| e.into())
                         .and_then(|t: SavedTowerVersions| t.try_into_tower(node_pubkey));
