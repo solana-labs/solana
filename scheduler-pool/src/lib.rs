@@ -412,102 +412,6 @@ pub struct AddressBook {
 }
 
 impl AddressBook {
-    fn attempt_lock_address(unique_weight: &UniqueWeight, attempt: &mut LockAttempt) {
-        let mut page = attempt.target_page_mut();
-        let tcuw = page.blocked_task_queue.heaviest_weight();
-
-        let strictly_lockable = if tcuw.is_none() {
-            true
-        } else if tcuw.unwrap() == *unique_weight {
-            true
-        } else if attempt.requested_usage == RequestedUsage::Readonly
-            && page
-                .blocked_write_requesting_task_ids
-                .last()
-                .map(|existing_unique_weight| unique_weight > existing_unique_weight)
-                .unwrap_or(true)
-        {
-            // this _read-only_ unique_weight is heavier than any of contened write locks.
-            true
-        } else {
-            false
-        };
-        drop(page);
-
-        if !strictly_lockable {
-            attempt.status = LockStatus::Failed;
-            return;
-        }
-
-        let LockAttempt {
-            page,
-            requested_usage,
-            status,
-            ..
-        } = attempt;
-        let mut page = page.as_mut();
-
-        match page.current_usage {
-            Usage::Unused => {
-                page.current_usage = Usage::renew(*requested_usage);
-                *status = LockStatus::Succeded;
-            }
-            Usage::Readonly(ref mut count) => match requested_usage {
-                RequestedUsage::Readonly => {
-                    *count += 1;
-                    *status = LockStatus::Succeded;
-                }
-                RequestedUsage::Writable => {
-                    *status = LockStatus::Failed;
-                }
-            },
-            Usage::Writable => {
-                *status = LockStatus::Failed;
-            }
-        }
-    }
-
-    fn reset_lock(attempt: &mut LockAttempt) -> bool {
-        match attempt.status {
-            LockStatus::Succeded => Self::unlock(attempt),
-            LockStatus::Failed => {
-                false // do nothing
-            }
-        }
-    }
-
-    fn unlock(attempt: &mut LockAttempt) -> bool {
-        let mut is_unused_now = false;
-
-        let mut page = attempt.target_page_mut();
-
-        match &mut page.current_usage {
-            Usage::Readonly(ref mut count) => match &attempt.requested_usage {
-                RequestedUsage::Readonly => {
-                    if *count == SOLE_USE_COUNT {
-                        is_unused_now = true;
-                    } else {
-                        *count -= 1;
-                    }
-                }
-                RequestedUsage::Writable => unreachable!(),
-            },
-            Usage::Writable => match &attempt.requested_usage {
-                RequestedUsage::Writable => {
-                    is_unused_now = true;
-                }
-                RequestedUsage::Readonly => unreachable!(),
-            },
-            Usage::Unused => unreachable!(),
-        }
-
-        if is_unused_now {
-            page.current_usage = Usage::Unused;
-        }
-
-        is_unused_now
-    }
-
     pub fn load(&self, address: Pubkey) -> PageRc {
         PageRc::clone(&self.book.entry(address).or_insert_with(|| {
             PageRc(by_address::ByAddress(PageRcInner::new(
@@ -1169,6 +1073,102 @@ fn attempt_lock_for_execution(
 
 pub struct ScheduleStage {}
 impl ScheduleStage {
+    fn attempt_lock_address(unique_weight: &UniqueWeight, attempt: &mut LockAttempt) {
+        let mut page = attempt.target_page_mut();
+        let tcuw = page.blocked_task_queue.heaviest_weight();
+
+        let strictly_lockable = if tcuw.is_none() {
+            true
+        } else if tcuw.unwrap() == *unique_weight {
+            true
+        } else if attempt.requested_usage == RequestedUsage::Readonly
+            && page
+                .blocked_write_requesting_task_ids
+                .last()
+                .map(|existing_unique_weight| unique_weight > existing_unique_weight)
+                .unwrap_or(true)
+        {
+            // this _read-only_ unique_weight is heavier than any of contened write locks.
+            true
+        } else {
+            false
+        };
+        drop(page);
+
+        if !strictly_lockable {
+            attempt.status = LockStatus::Failed;
+            return;
+        }
+
+        let LockAttempt {
+            page,
+            requested_usage,
+            status,
+            ..
+        } = attempt;
+        let mut page = page.as_mut();
+
+        match page.current_usage {
+            Usage::Unused => {
+                page.current_usage = Usage::renew(*requested_usage);
+                *status = LockStatus::Succeded;
+            }
+            Usage::Readonly(ref mut count) => match requested_usage {
+                RequestedUsage::Readonly => {
+                    *count += 1;
+                    *status = LockStatus::Succeded;
+                }
+                RequestedUsage::Writable => {
+                    *status = LockStatus::Failed;
+                }
+            },
+            Usage::Writable => {
+                *status = LockStatus::Failed;
+            }
+        }
+    }
+
+    fn reset_lock(attempt: &mut LockAttempt) -> bool {
+        match attempt.status {
+            LockStatus::Succeded => Self::unlock(attempt),
+            LockStatus::Failed => {
+                false // do nothing
+            }
+        }
+    }
+
+    fn unlock(attempt: &mut LockAttempt) -> bool {
+        let mut is_unused_now = false;
+
+        let mut page = attempt.target_page_mut();
+
+        match &mut page.current_usage {
+            Usage::Readonly(ref mut count) => match &attempt.requested_usage {
+                RequestedUsage::Readonly => {
+                    if *count == SOLE_USE_COUNT {
+                        is_unused_now = true;
+                    } else {
+                        *count -= 1;
+                    }
+                }
+                RequestedUsage::Writable => unreachable!(),
+            },
+            Usage::Writable => match &attempt.requested_usage {
+                RequestedUsage::Writable => {
+                    is_unused_now = true;
+                }
+                RequestedUsage::Readonly => unreachable!(),
+            },
+            Usage::Unused => unreachable!(),
+        }
+
+        if is_unused_now {
+            page.current_usage = Usage::Unused;
+        }
+
+        is_unused_now
+    }
+
     fn select_next_task_to_lock(
         runnable_queue: &mut ModeSpecificTaskQueue,
         retryable_task_queue: &mut WeightedTaskQueue,
