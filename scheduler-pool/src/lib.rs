@@ -1300,7 +1300,7 @@ impl ScheduleStage {
                     .remove(&uq);
             }
 
-            let is_unused_now = AddressBook::reset_lock(unlock_attempt);
+            let is_unused_now = ScheduleStage::reset_lock(unlock_attempt);
             if !is_unused_now {
                 continue;
             }
