@@ -614,7 +614,7 @@ where
         >,
         context: SchedulingContext,
         handler_count: usize,
-    ) -> Sender<ChainedChannel<Box<ExecutionEnvironment>, ControlFrame>> {
+    ) {
         let (next_blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) =
             unbounded();
         for _ in (0..handler_count) {
@@ -694,7 +694,7 @@ where
                                         (schedulable_transaction_receiver, control_frame) = new_channel.channel_and_payload();
                                         match control_frame {
                                             ControlFrame::StartSession(context) => {
-                                                Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count)
+                                                Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count);
                                             }
                                             ControlFrame::EndSession => {
                                                 debug!("scheduler_main_loop: will_end_session = true");
