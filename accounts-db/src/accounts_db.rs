@@ -8996,11 +8996,7 @@ impl AccountsDb {
             return None;
         }
         (rent_collector.should_collect_rent(pubkey, account)
-            && !rent_collector
-                .get_rent_due(
-                    account, true, /* For rent stats, we want to always calculate rent. */
-                )
-                .is_exempt())
+            && !rent_collector.get_rent_due(account).is_exempt())
         .then(|| {
             let min_balance = rent_collector.rent.minimum_balance(account.data().len());
             // return lamports required to top off this account to make it rent exempt

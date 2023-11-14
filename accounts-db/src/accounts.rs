@@ -382,14 +382,13 @@ impl Accounts {
                         self.accounts_db
                             .load_with_fixed_root(ancestors, key)
                             .map(|(mut account, _)| {
-                                if message.is_writable(i) {
+                                if should_collect_rent && message.is_writable(i) {
                                     let rent_due = rent_collector
                                         .collect_from_existing_account(
                                             key,
                                             &mut account,
                                             self.accounts_db.filler_account_suffix.as_ref(),
                                             set_exempt_rent_epoch_max,
-                                            should_collect_rent,
                                         )
                                         .rent_amount;
                                     (account.data().len(), account, rent_due)

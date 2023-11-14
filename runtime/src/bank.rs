@@ -5924,16 +5924,19 @@ impl Bank {
             .is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
         let mut skipped_rewrites = Vec::default();
         for (pubkey, account, _loaded_slot) in accounts.iter_mut() {
-            let (rent_collected_info, measure) =
-                measure!(self.rent_collector.collect_from_existing_account(
-                    pubkey,
-                    account,
-                    self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
-                    set_exempt_rent_epoch_max,
-                    self.should_collect_rent(),
-                ));
-            time_collecting_rent_us += measure.as_us();
-
+            let rent_collected_info = if self.should_collect_rent() {
+                let (rent_collected_info, measure) =
+                    measure!(self.rent_collector.collect_from_existing_account(
+                        pubkey,
+                        account,
+                        self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
+                        set_exempt_rent_epoch_max,
+                    ));
+                time_collecting_rent_us += measure.as_us();
+                rent_collected_info
+            } else {
+                CollectedInfo::default()
+            };
             // only store accounts where we collected rent
             // but get the hash for all these accounts even if collected rent is 0 (= not updated).
             // Also, there's another subtle side-effect from rewrites: this
@@ -8375,11 +8378,7 @@ impl TotalAccountsStats {
         }
 
         if !rent_collector.should_collect_rent(address, account)
-            || rent_collector
-                .get_rent_due(
-                    account, true, /* For rent stat, we want to always calculate rent. */
-                )
-                .is_exempt()
+            || rent_collector.get_rent_due(account).is_exempt()
         {
             self.num_rent_exempt_accounts += 1;
         } else {
