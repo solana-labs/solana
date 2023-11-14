@@ -509,19 +509,6 @@ impl AddressBook {
         is_unused_now
     }
 
-    pub fn preloader(&self) -> Preloader {
-        Preloader {
-            book: self.book.clone(),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Preloader {
-    book: AddressMap,
-}
-
-impl Preloader {
     pub fn load(&self, address: Pubkey) -> PageRc {
         PageRc::clone(&self.book.entry(address).or_insert_with(|| {
             PageRc(by_address::ByAddress(PageRcInner::new(
@@ -653,7 +640,6 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     completed_result_with_timings: Option<ResultWithTimings>,
     thread_manager: RwLock<ThreadManager<TH, SEA>>,
     address_book: AddressBook,
-    preloader: Arc<Preloader>,
 }
 
 #[derive(Debug)]
@@ -678,7 +664,6 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
         handler: TH,
     ) -> Self {
         let address_book = AddressBook::default();
-        let preloader = Arc::new(address_book.preloader());
         let mut new = Self {
             id: thread_rng().gen::<SchedulerId>(),
             completed_result_with_timings: None,
@@ -689,7 +674,6 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
                 10,
             )),
             address_book,
-            preloader,
         };
         // is this benefitical?
         //drop(new.ensure_thread_manager_started());
@@ -716,10 +700,6 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
     fn stop_thread_manager(&self) {
         debug!("stop_thread_manager()");
         self.thread_manager.write().unwrap().stop_threads();
-    }
-
-    fn preloader(&self) -> &Arc<Preloader> {
-        &self.preloader
     }
 }
 
@@ -1400,13 +1380,13 @@ where
             let locks = transaction.get_account_locks_unchecked();
             let writable_lock_iter = locks.writable.iter().map(|address| {
                 LockAttempt::new(
-                    self.preloader().load(**address),
+                    self.address_book.load(**address),
                     RequestedUsage::Writable,
                 )
             });
             let readonly_lock_iter = locks.readonly.iter().map(|address| {
                 LockAttempt::new(
-                    self.preloader().load(**address),
+                    self.addresss_book.load(**address),
                     RequestedUsage::Readonly,
                 )
             });
