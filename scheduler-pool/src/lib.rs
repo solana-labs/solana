@@ -1376,11 +1376,11 @@ impl ScheduleStage {
 
     fn schedule_next_execution(
         runnable_queue: &mut ModeSpecificTaskQueue,
-        address_book: &mut AddressBook,
+        retryable_task_queue: &mut WeightedTaskQueue,
         task_selection: &mut TaskSelection,
     ) -> Option<Box<ExecutionEnvironment>> {
-        Self::select_next_task_to_lock(runnable_queue, &mut address_book.retryable_task_queue, task_selection)
-            .and_then(|task| Self::try_lock_for_task(&mut address_book.retryable_task_queue, task))
+        Self::select_next_task_to_lock(runnable_queue, &mut retryable_task_queue, task_selection)
+            .and_then(|task| Self::try_lock_for_task(&mut retryable_task_queue, task))
             .map(|(task, lock_attemps)| Self::prepare_scheduled_execution(task, lock_attemps))
     }
 }
@@ -1439,7 +1439,7 @@ where
             let mut address_book = thread_manager.address_book.clone().unwrap();
             let maybe_ee = ScheduleStage::schedule_next_execution(
                 &mut runnable_queue,
-                &mut address_book,
+                &mut address_book.retryable_task_queue,
                 &mut selection,
             );
             if let Some(mut ee) = maybe_ee {
