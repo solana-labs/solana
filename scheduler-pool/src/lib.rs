@@ -1245,7 +1245,7 @@ impl SchedulingStateMachine {
     }
 
     fn schedule_retryable_task(&mut self) -> Option<Box<ExecutionEnvironment>> {
-        self.0
+        self.retryable_task_queue
             .pop_last()
             .and_then(|(_, task)| {
                 ScheduleStage::try_lock_for_task((TaskSource::Retryable, task), &mut self.retryable_task_queue)
