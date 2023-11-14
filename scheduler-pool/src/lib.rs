@@ -294,7 +294,7 @@ pub struct LockAttempt {
 
 impl PageRc {
     fn as_mut(&self) -> std::cell::RefMut<'_, Page> {
-        self.0 .0 .0.borrow_mut()
+        self.0 .0.borrow_mut()
     }
 }
 
