@@ -680,13 +680,6 @@ where
         session_timings.accumulate(&msg.result_with_timings.1);
     }
 
-    fn receive_handled_transaction(
-        state_machine: &mut SchedulingStateMachine,
-        msg: Box<ExecutionEnvironment>,
-    ) {
-        state_machine.decrement_task_count();
-    }
-
     fn receive_scheduled_transaction(
         handler: &TH,
         bank: &Arc<Bank>,
@@ -750,7 +743,7 @@ where
                             recv(handled_blocked_transaction_receiver) -> execution_environment => {
                                 let execution_environment = execution_environment.unwrap();
                                 Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
-                                Self::receive_handled_transaction(&mut state_machine, execution_environment);
+                                state_machine.decrement_task_count();
                             },
                             recv(schedulable_transaction_receiver) -> m => {
                                 let Ok(mm) = m else {
@@ -796,7 +789,7 @@ where
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
                                 let execution_environment = execution_environment.unwrap();
                                 Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
-                                Self::receive_handled_transaction(&mut state_machine, execution_environment);
+                                state_machine.decrement_task_count();
                             },
                         };
 
