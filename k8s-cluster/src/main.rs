@@ -8,7 +8,7 @@ use {
             DEFAULT_INTERNAL_NODE_SOL, DEFAULT_INTERNAL_NODE_STAKE_SOL,
         },
         get_solana_root, initialize_globals,
-        kubernetes::{ClientConfig, Kubernetes, ValidatorConfig},
+        kubernetes::{ClientConfig, Kubernetes, Metrics, ValidatorConfig},
         ledger_helper::LedgerHelper,
         release::{BuildConfig, Deploy},
         ValidatorType,
@@ -364,6 +364,37 @@ fn parse_matches() -> ArgMatches<'static> {
                 .takes_value(true)
                 .help("Client Config. Optional: Wait for NUM nodes to converge: --num-nodes <NUM> "),
         )
+        .arg(
+            Arg::with_name("metrics_host")
+                .long("metrics-host")
+                .takes_value(true)
+                .requires_all(&["metrics_port", "metrics_db", "metrics_username", "metrics_password"])
+                .help("Metrics Config. Optional: specify metrics host. e.g. https://internal-metrics.solana.com"),
+        )
+        .arg(
+            Arg::with_name("metrics_port")
+                .long("metrics-port")
+                .takes_value(true)
+                .help("Client Config. Optional: specify metrics port. e.g. 8086"),
+        )
+        .arg(
+            Arg::with_name("metrics_db")
+                .long("metrics-db")
+                .takes_value(true)
+                .help("Client Config. Optional: specify metrics database. e.g. k8s-cluster-<your name>"),
+        )
+        .arg(
+            Arg::with_name("metrics_username")
+                .long("metrics-username")
+                .takes_value(true)
+                .help("Client Config. Optional: specify metrics username"),
+        )
+        .arg(
+            Arg::with_name("metrics_password")
+                .long("metrics-password")
+                .takes_value(true)
+                .help("Client Config. Optional: Specify metrics password"),
+        )
         .get_matches()
 }
 
@@ -565,11 +596,24 @@ async fn main() {
 
     info!("Runtime Config: {}", validator_config);
 
+    let metrics = if matches.is_present("metrics_host") {
+        Some(Metrics::new(
+            matches.value_of("metrics_host").unwrap().to_string(),
+            matches.value_of("metrics_port").unwrap().to_string(),
+            matches.value_of("metrics_db").unwrap().to_string(),
+            matches.value_of("metrics_username").unwrap().to_string(),
+            matches.value_of("metrics_password").unwrap().to_string(),
+        ))
+    } else {
+        None
+    };
+
     // Check if namespace exists
     let mut kub_controller = Kubernetes::new(
         setup_config.namespace,
         &mut validator_config,
         client_config.clone(),
+        metrics,
     )
     .await;
     match kub_controller.namespace_exists().await {
@@ -745,6 +789,23 @@ async fn main() {
     let client_image_name = matches
         .value_of("validator_image_name")
         .expect("Validator image name is required");
+
+    if kub_controller.metrics.is_some() {
+        let metrics_secret = match kub_controller.create_metrics_secret() {
+            Ok(secret) => secret,
+            Err(err) => {
+                error!("Failed to create metrics secret! {}", err);
+                return;
+            }
+        };
+        match kub_controller.deploy_secret(&metrics_secret).await {
+            Ok(_) => (),
+            Err(err) => {
+                error!("{}", err);
+                return;
+            }
+        }
+    };
 
     let bootstrap_secret = match kub_controller.create_bootstrap_secret("bootstrap-accounts-secret")
     {

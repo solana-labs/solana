@@ -74,7 +74,23 @@ solana_cli=$(solana_program)
 export RUST_BACKTRACE=1
 
 echo "solana command: $solana_validator"
-echo "post solana command"
+
+# https://gist.github.com/cdown/1163649
+urlencode() {
+  declare s="$1"
+  declare l=$((${#s} - 1))
+  for i in $(seq 0 $l); do
+    declare c="${s:$i:1}"
+    case $c in
+      [a-zA-Z0-9.~_-])
+        echo -n "$c"
+        ;;
+      *)
+        printf '%%%02X' "'$c"
+        ;;
+    esac
+  done
+}
 
 default_arg() {
   declare name=$1
