@@ -95,8 +95,6 @@ struct CallerAccount<'a, 'b> {
     // the pointer field and ref_to_len_in_vm points to the length field.
     vm_data_addr: u64,
     ref_to_len_in_vm: VmValue<'b, 'a, u64>,
-    // To be removed once `feature_set::move_serialized_len_ptr_in_cpi` is active everywhere
-    serialized_len_ptr: *mut u64,
     executable: bool,
     rent_epoch: u64,
 }
@@ -156,7 +154,7 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
             invoke_context.get_check_aligned(),
         )?;
 
-        let (serialized_data, vm_data_addr, ref_to_len_in_vm, serialized_len_ptr) = {
+        let (serialized_data, vm_data_addr, ref_to_len_in_vm) = {
             // Double translate data out of RefCell
             let data = *translate_type::<&[u8]>(
                 memory_mapping,
@@ -203,20 +201,6 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
                 )? as *mut u64;
                 VmValue::Translated(unsafe { &mut *translated })
             };
-            let serialized_len_ptr = if invoke_context
-                .feature_set
-                .is_active(&feature_set::move_serialized_len_ptr_in_cpi::id())
-            {
-                std::ptr::null_mut()
-            } else {
-                let ref_of_len_in_input_buffer =
-                    (data.as_ptr() as *const _ as u64).saturating_sub(8);
-                translate_type_mut::<u64>(
-                    memory_mapping,
-                    ref_of_len_in_input_buffer,
-                    invoke_context.get_check_aligned(),
-                )?
-            };
             let vm_data_addr = data.as_ptr() as u64;
 
             let serialized_data = if direct_mapping {
@@ -239,15 +223,9 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
                     vm_data_addr,
                     data.len() as u64,
                     invoke_context.get_check_aligned(),
-                    invoke_context.get_check_size(),
                 )?
             };
-            (
-                serialized_data,
-                vm_data_addr,
-                ref_to_len_in_vm,
-                serialized_len_ptr,
-            )
+            (serialized_data, vm_data_addr, ref_to_len_in_vm)
         };
 
         Ok(CallerAccount {
@@ -257,7 +235,6 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
             serialized_data,
             vm_data_addr,
             ref_to_len_in_vm,
-            serialized_len_ptr,
             executable: if is_disable_cpi_setting_executable_and_rent_epoch_active {
                 false
             } else {
@@ -344,7 +321,6 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
                 account_info.data_addr,
                 account_info.data_len,
                 invoke_context.get_check_aligned(),
-                invoke_context.get_check_size(),
             )?
         };
 
@@ -378,21 +354,6 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
             VmValue::Translated(unsafe { &mut *(data_len_addr as *mut u64) })
         };
 
-        let ref_of_len_in_input_buffer =
-            (account_info.data_addr as *mut u8 as u64).saturating_sub(8);
-        let serialized_len_ptr = if invoke_context
-            .feature_set
-            .is_active(&feature_set::move_serialized_len_ptr_in_cpi::id())
-        {
-            std::ptr::null_mut()
-        } else {
-            translate_type_mut::<u64>(
-                memory_mapping,
-                ref_of_len_in_input_buffer,
-                invoke_context.get_check_aligned(),
-            )?
-        };
-
         Ok(CallerAccount {
             lamports,
             owner,
@@ -400,7 +361,6 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
             serialized_data,
             vm_data_addr: account_info.data_addr,
             ref_to_len_in_vm,
-            serialized_len_ptr,
             executable: if is_disable_cpi_setting_executable_and_rent_epoch_active {
                 false
             } else {
@@ -498,7 +458,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
             ix.accounts.as_ptr() as u64,
             ix.accounts.len() as u64,
             invoke_context.get_check_aligned(),
-            invoke_context.get_check_size(),
         )?;
         let accounts = if invoke_context
             .feature_set
@@ -542,7 +501,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
             ix.data.as_ptr() as u64,
             ix_data_len,
             invoke_context.get_check_aligned(),
-            invoke_context.get_check_size(),
         )?
         .to_vec();
 
@@ -597,7 +555,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
                 signers_seeds_addr,
                 signers_seeds_len,
                 invoke_context.get_check_aligned(),
-                invoke_context.get_check_size(),
             )?;
             if signers_seeds.len() > MAX_SIGNERS {
                 return Err(Box::new(SyscallError::TooManySigners));
@@ -608,7 +565,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
                     signer_seeds.as_ptr() as *const _ as u64,
                     signer_seeds.len() as u64,
                     invoke_context.get_check_aligned(),
-                    invoke_context.get_check_size(),
                 )?;
                 if untranslated_seeds.len() > MAX_SEEDS {
                     return Err(Box::new(InstructionError::MaxSeedLengthExceeded));
@@ -621,7 +577,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
                             untranslated_seed.as_ptr() as *const _ as u64,
                             untranslated_seed.len() as u64,
                             invoke_context.get_check_aligned(),
-                            invoke_context.get_check_size(),
                         )
                     })
                     .collect::<Result<Vec<_>, Error>>()?;
@@ -740,7 +695,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
             ix_c.accounts_addr,
             ix_c.accounts_len,
             invoke_context.get_check_aligned(),
-            invoke_context.get_check_size(),
         )?;
 
         let ix_data_len = ix_c.data_len;
@@ -761,7 +715,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
             ix_c.data_addr,
             ix_data_len,
             invoke_context.get_check_aligned(),
-            invoke_context.get_check_size(),
         )?
         .to_vec();
 
@@ -862,7 +815,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
                 signers_seeds_addr,
                 signers_seeds_len,
                 invoke_context.get_check_aligned(),
-                invoke_context.get_check_size(),
             )?;
             if signers_seeds.len() > MAX_SIGNERS {
                 return Err(Box::new(SyscallError::TooManySigners));
@@ -875,7 +827,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
                         signer_seeds.addr,
                         signer_seeds.len,
                         invoke_context.get_check_aligned(),
-                        invoke_context.get_check_size(),
                     )?;
                     if seeds.len() > MAX_SEEDS {
                         return Err(Box::new(InstructionError::MaxSeedLengthExceeded) as Error);
@@ -888,7 +839,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
                                 seed.addr,
                                 seed.len,
                                 invoke_context.get_check_aligned(),
-                                invoke_context.get_check_size(),
                             )
                         })
                         .collect::<Result<Vec<_>, Error>>()?;
@@ -917,7 +867,6 @@ where
         account_infos_addr,
         account_infos_len,
         invoke_context.get_check_aligned(),
-        invoke_context.get_check_size(),
     )?;
     check_account_infos(account_infos.len(), invoke_context)?;
     let account_info_keys = if invoke_context
@@ -1336,7 +1285,6 @@ fn update_callee_account(
                             .saturating_add(caller_account.original_data_len as u64),
                         realloc_bytes_used as u64,
                         invoke_context.get_check_aligned(),
-                        invoke_context.get_check_size(),
                     )?;
                     callee_account
                         .get_data_mut()?
@@ -1461,7 +1409,8 @@ fn update_caller_account(
             // invalid address.
             let min_capacity = caller_account.original_data_len;
             if callee_account.capacity() < min_capacity {
-                callee_account.reserve(min_capacity.saturating_sub(callee_account.capacity()))?;
+                callee_account
+                    .reserve(min_capacity.saturating_sub(callee_account.get_data().len()))?;
                 zero_all_mapped_spare_capacity = true;
             }
 
@@ -1580,7 +1529,6 @@ fn update_caller_account(
                             .saturating_add(dirty_realloc_start as u64),
                         dirty_realloc_len as u64,
                         invoke_context.get_check_aligned(),
-                        invoke_context.get_check_size(),
                     )?;
                     serialized_data.fill(0);
                 }
@@ -1601,30 +1549,20 @@ fn update_caller_account(
                 caller_account.vm_data_addr,
                 post_len as u64,
                 false, // Don't care since it is byte aligned
-                invoke_context.get_check_size(),
             )?;
         }
         // this is the len field in the AccountInfo::data slice
         *caller_account.ref_to_len_in_vm.get_mut()? = post_len as u64;
 
         // this is the len field in the serialized parameters
-        if invoke_context
-            .feature_set
-            .is_active(&feature_set::move_serialized_len_ptr_in_cpi::id())
-        {
-            let serialized_len_ptr = translate_type_mut::<u64>(
-                memory_mapping,
-                caller_account
-                    .vm_data_addr
-                    .saturating_sub(std::mem::size_of::<u64>() as u64),
-                invoke_context.get_check_aligned(),
-            )?;
-            *serialized_len_ptr = post_len as u64;
-        } else {
-            unsafe {
-                *caller_account.serialized_len_ptr = post_len as u64;
-            }
-        }
+        let serialized_len_ptr = translate_type_mut::<u64>(
+            memory_mapping,
+            caller_account
+                .vm_data_addr
+                .saturating_sub(std::mem::size_of::<u64>() as u64),
+            invoke_context.get_check_aligned(),
+        )?;
+        *serialized_len_ptr = post_len as u64;
     }
     if !direct_mapping {
         let to_slice = &mut caller_account.serialized_data;
@@ -1665,7 +1603,6 @@ fn update_caller_account(
                     .saturating_add(caller_account.original_data_len as u64),
                 realloc_bytes_used as u64,
                 invoke_context.get_check_aligned(),
-                invoke_context.get_check_size(),
             )?
         };
         let from_slice = callee_account
@@ -2181,15 +2118,9 @@ mod tests {
 
                 // check that the caller account data pointer always matches the callee account data pointer
                 assert_eq!(
-                    translate_slice::<u8>(
-                        &memory_mapping,
-                        caller_account.vm_data_addr,
-                        1,
-                        true,
-                        true
-                    )
-                    .unwrap()
-                    .as_ptr(),
+                    translate_slice::<u8>(&memory_mapping, caller_account.vm_data_addr, 1, true,)
+                        .unwrap()
+                        .as_ptr(),
                     callee_account.get_data().as_ptr()
                 );
 
@@ -2209,7 +2140,6 @@ mod tests {
                         .saturating_add(caller_account.original_data_len as u64),
                     MAX_PERMITTED_DATA_INCREASE as u64,
                     invoke_context.get_check_aligned(),
-                    invoke_context.get_check_size(),
                 )
                 .unwrap();
 
@@ -2358,7 +2288,6 @@ mod tests {
             &memory_mapping,
             caller_account.vm_data_addr,
             callee_account.get_data().len() as u64,
-            true,
             true,
         )
         .unwrap();
@@ -2631,7 +2560,6 @@ mod tests {
                 .saturating_add(caller_account.original_data_len as u64),
             3,
             invoke_context.get_check_aligned(),
-            invoke_context.get_check_size(),
         )
         .unwrap();
         serialized_data.copy_from_slice(b"baz");
@@ -2830,7 +2758,6 @@ mod tests {
                 serialized_data: data,
                 vm_data_addr: self.vm_addr + mem::size_of::<u64>() as u64,
                 ref_to_len_in_vm: VmValue::Translated(&mut self.len),
-                serialized_len_ptr: std::ptr::null_mut(),
                 executable: false,
                 rent_epoch: 0,
             }

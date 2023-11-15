@@ -329,7 +329,7 @@ pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
     /// of the config file. The config must be in JSON format and
     /// include a field "libpath" indicating the full path
     /// name of the shared library implementing this interface.
-    fn on_load(&mut self, _config_file: &str) -> Result<()> {
+    fn on_load(&mut self, _config_file: &str, _is_reload: bool) -> Result<()> {
         Ok(())
     }
 

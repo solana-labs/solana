@@ -34,7 +34,6 @@ pub enum TransactionExecutionResult {
     Executed {
         details: TransactionExecutionDetails,
         programs_modified_by_tx: Box<LoadedProgramsForTxBatch>,
-        programs_updated_only_for_global_cache: Box<LoadedProgramsForTxBatch>,
     },
     NotExecuted(TransactionError),
 }
