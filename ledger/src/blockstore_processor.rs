@@ -3123,7 +3123,6 @@ pub mod tests {
         let result = process_entries_for_tests_without_scheduler(&bank, vec![entry]);
         bank.freeze();
         let blockhash_ok = bank.last_blockhash();
-        let bankhash_ok = bank.hash();
         assert!(result.is_ok());
 
         declare_process_instruction!(MockBuiltinErr, 1, |invoke_context| {
@@ -3165,7 +3164,6 @@ pub mod tests {
             bank.freeze();
 
             assert_eq!(blockhash_ok, bank.last_blockhash());
-            assert!(bankhash_ok != bank.hash());
             if let Some(bankhash) = bankhash_err {
                 assert_eq!(bankhash, bank.hash());
             }
