@@ -647,6 +647,10 @@ mod tests {
         fn new_connection_config(&self) -> Self::NewConnectionConfig {
             MockUdpConfig::new().unwrap()
         }
+
+        fn update_key(&mut self, _key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
+            Ok(())
+        }
     }
 
     impl BlockingClientConnection for MockUdpConnection {
