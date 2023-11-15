@@ -10,11 +10,11 @@ use {
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum ProofGenerationError {
-    #[error("proof generation failed")]
+    #[error("not enough funds in account")]
     NotEnoughFunds,
     #[error("transfer fee calculation error")]
     FeeCalculation,
-    #[error("illegal number of commitment")]
+    #[error("illegal number of commitments")]
     IllegalCommitmentLength,
     #[error("illegal amount bit length")]
     IllegalAmountBitLength,
