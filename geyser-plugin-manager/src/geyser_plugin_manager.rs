@@ -217,9 +217,13 @@ impl GeyserPluginManager {
     }
 
     fn _drop_plugin(&mut self, idx: usize) {
+        let current_lib = self.libs.remove(idx);
         let mut current_plugin = self.plugins.remove(idx);
-        let _current_lib = self.libs.remove(idx);
+        let name = current_plugin.name().to_string();
         current_plugin.on_unload();
+        drop(current_plugin);
+        drop(current_lib);
+        info!("Unloaded plugin {name} at idx {idx}");
     }
 }
 
