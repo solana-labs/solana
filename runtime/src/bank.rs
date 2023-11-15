@@ -4911,10 +4911,6 @@ impl Bank {
             self.slot,
             programs_loaded_for_tx_batch.environments.clone(),
         );
-        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::new(
-            self.slot,
-            programs_loaded_for_tx_batch.environments.clone(),
-        );
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
             tx.message(),
@@ -4923,7 +4919,6 @@ impl Bank {
             log_collector.clone(),
             programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
-            &mut programs_updated_only_for_global_cache,
             self.feature_set.clone(),
             compute_budget,
             timings,
@@ -5023,9 +5018,6 @@ impl Bank {
                 accounts_data_len_delta,
             },
             programs_modified_by_tx: Box::new(programs_modified_by_tx),
-            programs_updated_only_for_global_cache: Box::new(
-                programs_updated_only_for_global_cache,
-            ),
         }
     }
 
@@ -5308,7 +5300,6 @@ impl Bank {
                     if let TransactionExecutionResult::Executed {
                         details,
                         programs_modified_by_tx,
-                        programs_updated_only_for_global_cache: _,
                     } = &result
                     {
                         // Update batch specific cache of the loaded programs with the modifications
@@ -5685,13 +5676,11 @@ impl Bank {
             if let TransactionExecutionResult::Executed {
                 details,
                 programs_modified_by_tx,
-                programs_updated_only_for_global_cache,
             } = execution_result
             {
                 if details.status.is_ok() {
                     let mut cache = self.loaded_programs_cache.write().unwrap();
                     cache.merge(programs_modified_by_tx);
-                    cache.merge(programs_updated_only_for_global_cache);
                 }
             }
         }

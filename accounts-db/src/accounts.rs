@@ -1459,7 +1459,6 @@ mod tests {
                 accounts_data_len_delta: 0,
             },
             programs_modified_by_tx: Box::<LoadedProgramsForTxBatch>::default(),
-            programs_updated_only_for_global_cache: Box::<LoadedProgramsForTxBatch>::default(),
         }
     }
 
