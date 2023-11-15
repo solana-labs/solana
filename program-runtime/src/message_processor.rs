@@ -56,7 +56,6 @@ impl MessageProcessor {
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         programs_loaded_for_tx_batch: &LoadedProgramsForTxBatch,
         programs_modified_by_tx: &mut LoadedProgramsForTxBatch,
-        programs_updated_only_for_global_cache: &mut LoadedProgramsForTxBatch,
         feature_set: Arc<FeatureSet>,
         compute_budget: ComputeBudget,
         timings: &mut ExecuteTimings,
@@ -73,7 +72,6 @@ impl MessageProcessor {
             compute_budget,
             programs_loaded_for_tx_batch,
             programs_modified_by_tx,
-            programs_updated_only_for_global_cache,
             feature_set,
             blockhash,
             lamports_per_signature,
@@ -302,7 +300,6 @@ mod tests {
             )));
         let sysvar_cache = SysvarCache::default();
         let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
-        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::default();
         let result = MessageProcessor::process_message(
             &message,
             &program_indices,
@@ -310,7 +307,6 @@ mod tests {
             None,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
-            &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
@@ -354,7 +350,6 @@ mod tests {
                 ]),
             )));
         let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
-        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::default();
         let result = MessageProcessor::process_message(
             &message,
             &program_indices,
@@ -362,7 +357,6 @@ mod tests {
             None,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
-            &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
@@ -396,7 +390,6 @@ mod tests {
                 ]),
             )));
         let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
-        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::default();
         let result = MessageProcessor::process_message(
             &message,
             &program_indices,
@@ -404,7 +397,6 @@ mod tests {
             None,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
-            &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
@@ -528,7 +520,6 @@ mod tests {
         )));
         let sysvar_cache = SysvarCache::default();
         let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
-        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::default();
         let result = MessageProcessor::process_message(
             &message,
             &program_indices,
@@ -536,7 +527,6 @@ mod tests {
             None,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
-            &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
@@ -564,7 +554,6 @@ mod tests {
             Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         )));
         let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
-        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::default();
         let result = MessageProcessor::process_message(
             &message,
             &program_indices,
@@ -572,7 +561,6 @@ mod tests {
             None,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
-            &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
@@ -597,7 +585,6 @@ mod tests {
             Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         )));
         let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
-        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::default();
         let result = MessageProcessor::process_message(
             &message,
             &program_indices,
@@ -605,7 +592,6 @@ mod tests {
             None,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
-            &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
@@ -687,7 +673,6 @@ mod tests {
             Arc::new(LoadedProgram::new_builtin(0, 0, MockBuiltin::vm)),
         );
         let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
-        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::default();
         let result = MessageProcessor::process_message(
             &message,
             &[vec![0], vec![1]],
@@ -695,7 +680,6 @@ mod tests {
             None,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
-            &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
