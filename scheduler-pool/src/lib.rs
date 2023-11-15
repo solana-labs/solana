@@ -1175,15 +1175,6 @@ where
     }
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
-        let thread_manager = self.ensure_thread_manager_started();
-        let mut executing_queue_count = 0_usize;
-        let mut provisioning_tracker_count = 0;
-        let mut sequence_time = 0;
-        let mut queue_clock = 0;
-        let mut execute_clock = 0;
-        let mut commit_clock = 0;
-        let mut processed_count = 0_usize;
-        let mut interval_count = 0;
         transaction_with_index.with_transaction_and_index(|transaction, index| {
             let locks = transaction.get_account_locks_unchecked();
             let writable_lock_iter = locks.writable.iter().map(|address| {
@@ -1197,7 +1188,7 @@ where
                 .collect::<Vec<_>>();
             let uw = UniqueWeight::max_value() - index as UniqueWeight;
             let task = Task::new_for_queue(uw, (transaction.clone(), locks));
-            thread_manager.send_task(task.clone());
+            self.ensure_thread_manager_started().send_task(task.clone());
         });
     }
 
