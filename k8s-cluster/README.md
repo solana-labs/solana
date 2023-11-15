@@ -105,4 +105,3 @@ solana -ul validators # should see `--num-validators`+1 current validators (incl
 ### Notes
 - Have tested deployments of up to 1200 validators
 - Once again, we assume you are logged into docker and you are pulling from a public repo (Monogon hosts need to access)
-
