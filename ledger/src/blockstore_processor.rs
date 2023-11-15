@@ -3123,6 +3123,7 @@ pub mod tests {
         let result = process_entries_for_tests_without_scheduler(&bank, vec![entry]);
         bank.freeze();
         let blockhash_ok = bank.last_blockhash();
+        let bankhash_ok = bank.hash();
         assert!(result.is_ok());
 
         declare_process_instruction!(MockBuiltinErr, 1, |invoke_context| {
@@ -3142,7 +3143,6 @@ pub mod tests {
         });
 
         let mut bankhash_err = None;
-        let bankhash_ok = bank.hash();
 
         (0..get_instruction_errors().len()).for_each(|err| {
             let mut bank = Bank::new_for_tests(&genesis_config);
