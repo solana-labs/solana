@@ -27,7 +27,6 @@ use {
         account::AccountSharedData,
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        feature_set,
         pubkey::Pubkey,
         slot_history::Slot,
         transaction_context::{IndexOfAccount, InstructionAccount},
@@ -358,9 +357,6 @@ fn load_program<'a>(
     #[allow(unused_mut)]
     let mut verified_executable = if is_elf {
         let result = load_program_from_bytes(
-            invoke_context
-                .feature_set
-                .is_active(&feature_set::delay_visibility_of_program_deployment::id()),
             log_collector,
             &mut load_program_metrics,
             &contents,
