@@ -1,14 +1,3 @@
-use {
-    crate::transaction_meta::{DynamicMeta, StaticMeta, TransactionMeta},
-    solana_sdk::{
-        hash::Hash,
-        message::{AddressLoader, SanitizedMessage, SanitizedVersionedMessage},
-        signature::Signature,
-        simple_vote_transaction_checker::is_simple_vote_transaction,
-        transaction::{Result, SanitizedVersionedTransaction},
-    },
-};
-
 /// RuntimeTransaction is `runtime` facing representation of transaction, while
 /// solana_sdk::SanitizedTransaction is client facing representation.
 ///
@@ -20,6 +9,16 @@ use {
 /// 2. Dynamically Loaded: after successfully loaded account addresses from onchain
 ///    ALT, RuntimeTransaction transits into Dynamically Loaded state, with
 ///    its dynamic metadata loaded.
+use {
+    crate::transaction_meta::{DynamicMeta, StaticMeta, TransactionMeta},
+    solana_sdk::{
+        hash::Hash,
+        message::{AddressLoader, SanitizedMessage, SanitizedVersionedMessage},
+        signature::Signature,
+        simple_vote_transaction_checker::is_simple_vote_transaction,
+        transaction::{Result, SanitizedVersionedTransaction},
+    },
+};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct RuntimeTransactionStatic {
