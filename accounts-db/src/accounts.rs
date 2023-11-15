@@ -1144,7 +1144,6 @@ impl Accounts {
         entry_accts_lookup: &mut EntryAcctLocks,
     ) -> (Result<()>, bool) {
         let mut self_conflicting_account: bool;
-        let mut self_conflicting_accounts = Vec::new();
         let mut self_conflicting_tx = false;
         for k in writable_keys.iter() {
             if account_locks.is_locked_write(k) || account_locks.is_locked_readonly(k)
@@ -1154,7 +1153,9 @@ impl Accounts {
                     debug!("Writable account in use: {:?}", k);
                     return (Err(TransactionError::AccountInUse),self_conflicting_tx);
                 } else {
-                    self_conflicting_accounts.push(self_conflicting_account);
+                    if !self_conflicting_tx {
+                        self_conflicting_tx = true;
+                    }
                 }
             }
         }
@@ -1165,12 +1166,12 @@ impl Accounts {
                     debug!("Read-only account in use: {:?}", k);
                     return (Err(TransactionError::AccountInUse),self_conflicting_tx);
                 } else {
-                    self_conflicting_accounts.push(self_conflicting_account);
+                    if !self_conflicting_tx {
+                        self_conflicting_tx = true;
+                    }
                 }
             }
         }
-
-        self_conflicting_tx = self_conflicting_accounts.iter().any(|&x| x);
 
         for k in writable_keys {
             account_locks.write_locks.insert(*k);
@@ -1184,6 +1185,7 @@ impl Accounts {
             }
         }
 
+        info!("self_conflicting_tx {}", self_conflicting_tx);
         (Ok(()),self_conflicting_tx)
     }
 
@@ -1299,7 +1301,9 @@ impl Accounts {
                     tx_account_locks.readonly,
                     &mut entry_accts_lookup,
                 );
-                self_conflicting_batch = conflicting_tx;
+                if !self_conflicting_batch {
+                    self_conflicting_batch = conflicting_tx;
+                }
                 res
             },
                 Err(err) => Err(err),

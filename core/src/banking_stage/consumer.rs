@@ -451,12 +451,8 @@ impl Consumer {
         // Only lock accounts for those transactions are selected for the block;
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
-        let (batch, lock_us) = measure_us!(bank.prepare_sanitized_batch_with_results(
-            txs,
-            transaction_qos_cost_results.iter().map(|r| match r {
-                Ok(_cost) => Ok(()),
-                Err(err) => Err(err.clone()),
-            })
+        let ((batch, _), lock_us) = measure_us!(bank.prepare_sanitized_batch_with_conflicting_txs(
+            txs
         ));
 
         // retryable_txs includes AccountInUse, WouldExceedMaxBlockCostLimit
