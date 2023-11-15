@@ -45,7 +45,6 @@ EOF
   exit 1
 }
 
-maybeRequireTower=true
 echo "pre positional args"
 positional_args=()
 while [[ -n $1 ]]; do
@@ -177,8 +176,8 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --accounts-db-skip-shrink ]]; then
       args+=("$1")
       shift
-    elif [[ $1 == --skip-require-tower ]]; then
-      maybeRequireTower=false
+    elif [[ $1 == --require-tower ]]; then
+      args+=("$1")
       shift
     elif [[ $1 = -h ]]; then
       usage "$@"
@@ -245,11 +244,6 @@ default_arg --no-incremental-snapshots
 default_arg --allow-private-addr
 default_arg --gossip-port 8001
 default_arg --rpc-port 8899
-
-if [[ $maybeRequireTower = true ]]; then
-  default_arg --require-tower
-fi
-echo "post default args"
 
 program=
 if [[ -n $SOLANA_CUDA ]]; then

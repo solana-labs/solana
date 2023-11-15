@@ -35,7 +35,7 @@ pub struct ValidatorConfig<'a> {
     pub max_ledger_size: Option<u64>,
     pub skip_poh_verify: bool,
     pub no_snapshot_fetch: bool,
-    pub skip_require_tower: bool,
+    pub require_tower: bool,
     pub enable_full_rpc: bool,
 }
 
@@ -56,7 +56,7 @@ impl<'a> std::fmt::Display for ValidatorConfig<'a> {
              max_ledger_size: {:?}\n\
              skip_poh_verify: {}\n\
              no_snapshot_fetch: {}\n\
-             skip_require_tower: {}\n\
+             require_tower: {}\n\
              enable_full_rpc: {}",
             self.tpu_enable_udp,
             self.tpu_disable_quic,
@@ -70,7 +70,7 @@ impl<'a> std::fmt::Display for ValidatorConfig<'a> {
             self.max_ledger_size,
             self.skip_poh_verify,
             self.no_snapshot_fetch,
-            self.skip_require_tower,
+            self.require_tower,
             self.enable_full_rpc,
         )
     }
@@ -168,8 +168,8 @@ impl<'a> Kubernetes<'a> {
         if self.validator_config.no_snapshot_fetch {
             flags.push("--no-snapshot-fetch".to_string());
         }
-        if self.validator_config.skip_require_tower {
-            flags.push("--skip-require-tower".to_string());
+        if self.validator_config.require_tower {
+            flags.push("--require-tower".to_string());
         }
         if self.validator_config.enable_full_rpc {
             flags.push("--enable-rpc-transaction-history".to_string());
