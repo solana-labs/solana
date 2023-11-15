@@ -115,6 +115,9 @@ impl LoadedProgramType {
             LoadedProgramType::LegacyV0(program)
             | LoadedProgramType::LegacyV1(program)
             | LoadedProgramType::Typed(program) => Some(program.get_loader()),
+            LoadedProgramType::FailedVerification(env) | LoadedProgramType::Unloaded(env) => {
+                Some(env)
+            }
             #[cfg(test)]
             LoadedProgramType::TestLoaded(environment) => Some(environment),
             _ => None,
@@ -679,6 +682,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         for second_level in self.entries.values_mut() {
             // Remove entries un/re/deployed on orphan forks
             let mut first_ancestor_found = false;
+            let mut first_ancestor_env = None;
             *second_level = second_level
                 .iter()
                 .rev()
@@ -686,12 +690,29 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                     let relation = fork_graph.relationship(entry.deployment_slot, new_root_slot);
                     if entry.deployment_slot >= new_root_slot {
                         matches!(relation, BlockRelation::Equal | BlockRelation::Descendant)
-                    } else if !first_ancestor_found
-                        && (matches!(relation, BlockRelation::Ancestor)
-                            || entry.deployment_slot <= self.latest_root_slot)
+                    } else if matches!(relation, BlockRelation::Ancestor)
+                        || entry.deployment_slot <= self.latest_root_slot
                     {
-                        first_ancestor_found = true;
-                        first_ancestor_found
+                        if !first_ancestor_found {
+                            first_ancestor_found = true;
+                            first_ancestor_env = entry.program.get_environment();
+                            return true;
+                        }
+                        // Do not prune the entry if the runtime environment of the entry is different
+                        // than the entry that was previously found (stored in first_ancestor_env).
+                        // Different environment indicates that this entry might belong to an older
+                        // epoch that had a different environment (e.g. different feature set).
+                        // Once the root moves to the new/current epoch, the entry will get pruned.
+                        // But, until then the entry might still be getting used by an older slot.
+                        if let Some(entry_env) = entry.program.get_environment() {
+                            if let Some(env) = first_ancestor_env {
+                                if !Arc::ptr_eq(entry_env, env) {
+                                    return true;
+                                }
+                            }
+                        }
+                        self.stats.prunes_orphan.fetch_add(1, Ordering::Relaxed);
+                        false
                     } else {
                         self.stats.prunes_orphan.fetch_add(1, Ordering::Relaxed);
                         false
@@ -990,7 +1011,7 @@ mod tests {
         crate::loaded_programs::{
             BlockRelation, ExtractedPrograms, ForkGraph, LoadedProgram, LoadedProgramMatchCriteria,
             LoadedProgramType, LoadedPrograms, LoadedProgramsForTxBatch, ProgramRuntimeEnvironment,
-            WorkingSlot, DELAY_VISIBILITY_SLOT_OFFSET,
+            ProgramRuntimeEnvironments, WorkingSlot, DELAY_VISIBILITY_SLOT_OFFSET,
         },
         assert_matches::assert_matches,
         percentage::Percentage,
@@ -1479,6 +1500,76 @@ mod tests {
 
         cache.prune(10, 0);
         assert!(cache.entries.is_empty());
+    }
+
+    #[test]
+    fn test_prune_different_env() {
+        let mut cache = new_mock_cache::<TestForkGraph>();
+
+        let fork_graph = Arc::new(RwLock::new(TestForkGraph {
+            relation: BlockRelation::Ancestor,
+        }));
+
+        cache.set_fork_graph(fork_graph);
+
+        let program1 = Pubkey::new_unique();
+        let loaded_program = new_test_loaded_program(10, 10);
+        let (existing, program) = cache.replenish(program1, loaded_program.clone());
+        assert!(!existing);
+        assert_eq!(program, loaded_program);
+
+        let new_env = Arc::new(BuiltinProgram::new_mock());
+        cache.upcoming_environments = Some(ProgramRuntimeEnvironments {
+            program_runtime_v1: new_env.clone(),
+            program_runtime_v2: new_env.clone(),
+        });
+        let updated_program = Arc::new(LoadedProgram {
+            program: LoadedProgramType::TestLoaded(new_env.clone()),
+            account_size: 0,
+            deployment_slot: 20,
+            effective_slot: 20,
+            maybe_expiration_slot: None,
+            tx_usage_counter: AtomicU64::default(),
+            ix_usage_counter: AtomicU64::default(),
+        });
+        let (existing, program) = cache.replenish(program1, updated_program.clone());
+        assert!(!existing);
+        assert_eq!(program, updated_program);
+
+        // Test that there are 2 entries for the program
+        assert_eq!(
+            cache
+                .entries
+                .get(&program1)
+                .expect("failed to find the program")
+                .len(),
+            2
+        );
+
+        cache.prune(21, cache.latest_root_epoch);
+
+        // Test that prune didn't remove the entry, since environments are different.
+        assert_eq!(
+            cache
+                .entries
+                .get(&program1)
+                .expect("failed to find the program")
+                .len(),
+            2
+        );
+
+        cache.prune(22, cache.latest_root_epoch.saturating_add(1));
+
+        let entries = cache
+            .entries
+            .get(&program1)
+            .expect("failed to find the program");
+        // Test that prune removed 1 entry, since epoch changed
+        assert_eq!(entries.len(), 1);
+
+        let entry = entries.first().expect("Failed to get the program").clone();
+        // Test that the correct entry remains in the cache
+        assert_eq!(entry, updated_program);
     }
 
     #[derive(Default)]
