@@ -5099,16 +5099,19 @@ impl Bank {
             .collect();
 
         // Lock the global cache again to replenish the missing programs
-        let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
-        for (key, program) in missing_programs {
-            let (_was_occupied, entry) = loaded_programs_cache.replenish(key, program);
-            // Use the returned entry as that might have been deduplicated globally
-            loaded_programs_for_txs.replenish(key, entry);
-        }
-        for (key, program) in unloaded_programs {
-            let (_was_occupied, entry) = loaded_programs_cache.replenish(key, program);
-            // Use the returned entry as that might have been deduplicated globally
-            loaded_programs_for_txs.replenish(key, entry);
+        if !missing_programs.is_empty() || !unloaded_programs.is_empty() {
+            let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
+            info!("write lock 1");
+            for (key, program) in missing_programs {
+                let (_was_occupied, entry) = loaded_programs_cache.replenish(key, program);
+                // Use the returned entry as that might have been deduplicated globally
+                loaded_programs_for_txs.replenish(key, entry);
+            }
+            for (key, program) in unloaded_programs {
+                let (_was_occupied, entry) = loaded_programs_cache.replenish(key, program);
+                // Use the returned entry as that might have been deduplicated globally
+                loaded_programs_for_txs.replenish(key, entry);
+            }
         }
 
         loaded_programs_for_txs
@@ -5331,11 +5334,14 @@ impl Bank {
 
         execution_time.stop();
 
-        const SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE: u8 = 90;
-        self.loaded_programs_cache
-            .write()
-            .unwrap()
-            .sort_and_unload(Percentage::from(SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE));
+        if rand::thread_rng().gen_range(0..1000) == 0 {
+            info!("write lock 3");
+            const SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE: u8 = 90;
+            self.loaded_programs_cache
+                .write()
+                .unwrap()
+                .sort_and_unload(Percentage::from(SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE));
+        }
 
         debug!(
             "check: {}us load: {}us execute: {}us txs_len={}",
@@ -5692,8 +5698,11 @@ impl Bank {
             } = execution_result
             {
                 if details.status.is_ok() {
-                    let mut cache = self.loaded_programs_cache.write().unwrap();
-                    cache.merge(programs_modified_by_tx);
+                    if !programs_modified_by_tx.is_empty() {
+                        info!("write lock2");
+                        let mut cache = self.loaded_programs_cache.write().unwrap();
+                        cache.merge(programs_modified_by_tx);
+                    }
                 }
             }
         }
