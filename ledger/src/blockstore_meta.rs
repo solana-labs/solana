@@ -410,13 +410,19 @@ impl ErasureMeta {
 impl MerkleRootMeta {
     pub(crate) fn from_shred(shred: &Shred) -> Self {
         Self {
-            merkle_root: shred.merkle_root().unwrap_or_default(),
+            // An error here after the shred has already sigverified
+            // can only indicate that the leader is sending
+            // legacy or malformed shreds. We should still store
+            // `None` for those cases in blockstore, as a later
+            // shred that contains a proper merkle root would constitute
+            // a valid duplicate shred proof.
+            merkle_root: shred.merkle_root().ok(),
             first_received_shred_index: shred.index(),
             first_received_shred_type: shred.shred_type(),
         }
     }
 
-    pub(crate) fn merkle_root(&self) -> Hash {
+    pub(crate) fn merkle_root(&self) -> Option<Hash> {
         self.merkle_root
     }
 
