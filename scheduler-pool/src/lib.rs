@@ -701,6 +701,69 @@ where
                                 .send(ChainedChannel::Payload(ee))
                                 .unwrap();
                         }
+
+                        loop {
+                            let did_nothing = if let Ok(execution_environment) =
+                                handled_blocked_transaction_receiver.try_recv()
+                            {
+                                Self::update_result_with_timings(
+                                    result_with_timings.as_mut().unwrap(),
+                                    &execution_environment,
+                                );
+                                state_machine.deschedule_task(execution_environment);
+                                false
+                            } else if let Ok(mm) = schedulable_transaction_receiver.try_recv() {
+                                match mm {
+                                    ChainedChannel::Payload(payload) => {
+                                        if let Some(ee) = state_machine.schedule_new_task(payload) {
+                                            blocked_transaction_sessioned_sender
+                                                .send(ChainedChannel::Payload(ee))
+                                                .unwrap();
+                                        }
+                                    }
+                                    ChainedChannel::ChannelWithPayload(new_channel) => {
+                                        let control_frame;
+                                        (schedulable_transaction_receiver, control_frame) =
+                                            new_channel.channel_and_payload();
+                                        match control_frame {
+                                            ControlFrame::StartSession(context) => {
+                                                Self::propagate_context(
+                                                    &mut blocked_transaction_sessioned_sender,
+                                                    context,
+                                                    handler_count,
+                                                );
+                                            }
+                                            ControlFrame::EndSession => {
+                                                debug!(
+                                                    "scheduler_main_loop: will_end_session = true"
+                                                );
+                                                will_end_session = true;
+                                            }
+                                        }
+                                    }
+                                };
+                                false
+                            } else if let Ok(execution_environment) =
+                                handled_idle_transaction_receiver.try_recv()
+                            {
+                                Self::update_result_with_timings(
+                                    result_with_timings.as_mut().unwrap(),
+                                    &execution_environment,
+                                );
+                                state_machine.deschedule_task(execution_environment);
+                                false
+                            } else {
+                                true
+                            };
+
+                            if let Some(ee) = state_machine.schedule_retryable_task() {
+                                blocked_transaction_sessioned_sender
+                                    .send(ChainedChannel::Payload(ee))
+                                    .unwrap();
+                            } else if did_nothing {
+                                break
+                            }
+                        }
                     }
 
                     if !will_end_thread {
