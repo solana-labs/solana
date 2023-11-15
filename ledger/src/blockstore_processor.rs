@@ -415,18 +415,6 @@ fn rebatch_and_execute_batches(
         return Ok(());
     }
 
-    // let mut non_conflicting_batches: Vec<TransactionBatchWithIndexes> = vec![];
-    // let mut conflicting_batches: Vec<TransactionBatchWithIndexes> = vec![];
-    // for batch in batches.into_iter() {
-    //     info!("batch_len outer {} flag {}", batches.len(), batch.conflicting_entry);
-    //     if !batch.conflicting_entry {
-    //         non_conflicting_batches.push(batch.clone());
-    //     } else {
-    //         info!("batch_len {}", batches.len());
-    //         conflicting_batches.push(batch.clone());
-    //     }
-    // }
-
     let ((lock_results, sanitized_txs), transaction_indexes): ((Vec<_>, Vec<_>), Vec<_>) = non_conflicting_batches
         .iter()
         .flat_map(|batch| {
