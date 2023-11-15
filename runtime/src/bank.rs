@@ -4889,14 +4889,7 @@ impl Bank {
             transaction_accounts,
             self.rent_collector.rent,
             compute_budget.max_invoke_stack_height,
-            if self
-                .feature_set
-                .is_active(&feature_set::limit_max_instruction_trace_length::id())
-            {
-                compute_budget.max_instruction_trace_length
-            } else {
-                std::usize::MAX
-            },
+            compute_budget.max_instruction_trace_length,
         );
         #[cfg(debug_assertions)]
         transaction_context.set_signature(tx.signature());

@@ -36,14 +36,13 @@ use {
         feature_set::{
             bpf_account_data_direct_mapping, delay_visibility_of_program_deployment,
             enable_bpf_loader_extend_program_ix, enable_bpf_loader_set_authority_checked_ix,
-            enable_program_redeployment_cooldown, limit_max_instruction_trace_length,
-            native_programs_consume_cu, remove_bpf_loader_incorrect_program_id,
+            enable_program_redeployment_cooldown, native_programs_consume_cu,
+            remove_bpf_loader_incorrect_program_id,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
         loader_upgradeable_instruction::UpgradeableLoaderInstruction,
         native_loader,
-        program_error::MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         saturating_add_assign,
@@ -1596,17 +1595,7 @@ fn execute<'a, 'b: 'a>(
         }
         match result {
             ProgramResult::Ok(status) if status != SUCCESS => {
-                let error: InstructionError = if status == MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED
-                    && !invoke_context
-                        .feature_set
-                        .is_active(&limit_max_instruction_trace_length::id())
-                {
-                    // Until the limit_max_instruction_trace_length feature is
-                    // enabled, map the `MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED` error to `InvalidError`.
-                    InstructionError::InvalidError
-                } else {
-                    status.into()
-                };
+                let error: InstructionError = status.into();
                 Err(Box::new(error) as Box<dyn std::error::Error>)
             }
             ProgramResult::Err(mut error) => {
