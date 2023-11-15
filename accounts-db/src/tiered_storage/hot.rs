@@ -544,10 +544,10 @@ pub mod tests {
         // Generate a new temp path that is guaranteed to NOT already have a file.
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().join("test_hot_storage_get_owner_address");
-        const NUM_OWNERS: u32 = 10;
+        const NUM_OWNERS: usize = 10;
 
         let addresses: Vec<_> = std::iter::repeat_with(Pubkey::new_unique)
-            .take(NUM_OWNERS as usize)
+            .take(NUM_OWNERS)
             .collect();
 
         let footer = TieredStorageFooter {
@@ -569,9 +569,9 @@ pub mod tests {
         }
 
         let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
-        for (i, &address) in addresses.iter().enumerate() {
+        for (i, address) in addresses.iter().enumerate() {
             assert_eq!(
-                *hot_storage.get_owner_address(OwnerOffset(i)).unwrap(),
+                hot_storage.get_owner_address(OwnerOffset(i)).unwrap(),
                 address,
             );
         }
