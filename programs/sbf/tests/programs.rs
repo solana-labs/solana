@@ -4420,12 +4420,18 @@ fn test_cpi_change_account_data_memory_allocation() {
 
         // Test changing the account data both in place and by changing the
         // underlying vector. CPI will have to detect the vector change and
-        // update the corresponding memory region. In both cases CPI will have
+        // update the corresponding memory region. In all cases CPI will have
         // to zero the spare bytes correctly.
-        if instruction_data[0] == 0xFE {
-            account.set_data(instruction_data.to_vec());
-        } else {
-            account.set_data_from_slice(instruction_data);
+        match instruction_data[0] {
+            0xFE => account.set_data(instruction_data.to_vec()),
+            0xFD => account.set_data_from_slice(instruction_data),
+            0xFC => {
+                // Exercise the update_caller_account capacity check where account len != capacity.
+                let mut data = instruction_data.to_vec();
+                data.reserve_exact(1);
+                account.set_data(data)
+            }
+            _ => panic!(),
         }
 
         Ok(())
