@@ -507,7 +507,7 @@ impl Consumer {
         self.qos_service.accumulate_actual_execute_cu(cu);
         self.qos_service.accumulate_actual_execute_time(us);
 
-        let (committed_cu, adjust_cu, committed_us) =
+        let (committed_cu, committed_us, adjust_cu) =
             Self::accumulate_commit_transactions_result(commit_transactions_result.as_ref().ok());
         self.qos_service
             .accumulate_committed_execute_cu(committed_cu);
