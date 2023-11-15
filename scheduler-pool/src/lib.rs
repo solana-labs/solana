@@ -644,7 +644,7 @@ where
                 .or(Some((Ok(()), Default::default())));
 
             move || {
-                info!(
+                trace!(
                     "solScheduler thread is started at: {:?}",
                     std::thread::current()
                 );
@@ -716,7 +716,7 @@ where
                 }
 
                 let res = result_with_timings.take().unwrap();
-                info!(
+                trace!(
                     "solScheduler thread is ended at: {:?}",
                     std::thread::current()
                 );
@@ -735,7 +735,7 @@ where
             let handled_idle_transaction_sender = handled_idle_transaction_sender.clone();
 
             move || {
-                info!(
+                trace!(
                     "solScHandler{:02} thread is started at: {:?}",
                     thx,
                     std::thread::current()
@@ -780,7 +780,7 @@ where
                         handled_idle_transaction_sender.send(m).unwrap();
                     }
                 }
-                info!(
+                trace!(
                     "solScHandler{:02} thread is ended at: {:?}",
                     thx,
                     std::thread::current()
