@@ -67,6 +67,7 @@ use {
         slice::ParallelSlice,
         ThreadPool, ThreadPoolBuilder,
     },
+    solana_accounts_db::rent_collector::RENT_EXEMPT_RENT_EPOCH,
     solana_accounts_db::{
         account_overrides::AccountOverrides,
         accounts::{
@@ -120,6 +121,7 @@ use {
         sysvar_cache::SysvarCache,
         timings::{ExecuteDetailsTimings, ExecuteTimingType, ExecuteTimings},
     },
+    solana_sdk::rent::RentDue,
     solana_sdk::{
         account::{
             create_account_shared_data_with_fields as create_account, from_account, Account,
@@ -5935,6 +5937,16 @@ impl Bank {
                 time_collecting_rent_us += measure.as_us();
                 rent_collected_info
             } else {
+                // When rent fee collection is disabled, we won't collect rent for any account. If there
+                // are any rent paying accounts, their `rent_epoch` won't change either. However, if the
+                // account itself is rent-exempted but its `rent_epoch` is not u64::MAX, we will set its
+                // `rent_epoch` to u64::MAX. In such case, the behavior stays the same as before.
+                if set_exempt_rent_epoch_max
+                    && (account.rent_epoch() != RENT_EXEMPT_RENT_EPOCH
+                        && self.rent_collector.get_rent_due(account) == RentDue::Exempt)
+                {
+                    account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
+                }
                 CollectedInfo::default()
             };
             // only store accounts where we collected rent
