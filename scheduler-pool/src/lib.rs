@@ -714,9 +714,7 @@ where
                                 match mm {
                                     ChainedChannel::Payload(payload) => {
                                         if let Some(ee) = state_machine.schedule_new_task(payload) {
-                                            idle_transaction_sender
-                                                .send(ee)
-                                                .unwrap();
+                                            idle_transaction_sender.send(ee).unwrap();
                                         }
                                     }
                                     ChainedChannel::ChannelWithPayload(new_channel) => {
