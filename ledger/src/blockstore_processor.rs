@@ -1,5 +1,3 @@
-
-
 use {
     crate::{
         block_error::BlockError, blockstore::Blockstore, blockstore_db::BlockstoreError,
@@ -87,7 +85,7 @@ lazy_static! {
 
 fn first_err<T: Clone + Default>(results: &[Result<T>]) -> Result<T> {
     for r in results {
-        if let Err(e) = r{
+        if let Err(e) = r {
             return Err(e.clone());
         }
     }
@@ -98,13 +96,13 @@ fn first_err<T: Clone + Default>(results: &[Result<T>]) -> Result<T> {
 fn get_first_error(
     batch: &TransactionBatch,
     fee_collection_results: Vec<Result<()>>,
-    receipts: Vec<(Hash,Hash)>
-) -> Option<(Result<Vec<(Hash,Hash)>>, Signature)> {
+    receipts: Vec<(Hash, Hash)>,
+) -> Option<(Result<Vec<(Hash, Hash)>>, Signature)> {
     let mut first_err = None;
     for (result, transaction) in fee_collection_results
         .iter()
         .zip(batch.sanitized_transactions())
-        // .map(|(res,t| Ok());
+    // .map(|(res,t| Ok());
     {
         if let Err(ref err) = result {
             if first_err.is_none() {
@@ -134,7 +132,7 @@ fn execute_batch(
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
     log_messages_bytes_limit: Option<usize>,
-) -> Result<Vec<(Hash,Hash)>> {
+) -> Result<Vec<(Hash, Hash)>> {
     // info!("chk1 enters execute_batch");
     let TransactionBatchWithIndexes {
         batch,
@@ -199,13 +197,12 @@ fn execute_batch(
         );
     }
 
-    let first_err = get_first_error(batch, fee_collection_results,receipts.clone());
+    let first_err = get_first_error(batch, fee_collection_results, receipts.clone());
     // ExecuteBatchResult{
-        // result: 
-        first_err.map(|(result, _)| result).unwrap_or(Ok(receipts))
+    // result:
+    first_err.map(|(result, _)| result).unwrap_or(Ok(receipts))
     //     ,receipts,
     // }
-    
 }
 
 // #[derive(Default)]
@@ -235,14 +232,14 @@ fn execute_batches_internal(
 
     let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
     info!("chk1 enters execute_batches_internal");
-    let results: Vec<Result<Vec<(Hash,Hash)>>> = PAR_THREAD_POOL.install(|| {
+    let results: Vec<Result<Vec<(Hash, Hash)>>> = PAR_THREAD_POOL.install(|| {
         batches
             .into_par_iter()
             .map(|transaction_batch| {
                 let transaction_count =
                     transaction_batch.batch.sanitized_transactions().len() as u64;
                 let mut timings = ExecuteTimings::default();
-                let (result, execute_batches_time): (Result<Vec<(Hash,Hash)>>, Measure) = measure!(
+                let (result, execute_batches_time): (Result<Vec<(Hash, Hash)>>, Measure) = measure!(
                     {
                         let result = execute_batch(
                             transaction_batch,
@@ -288,11 +285,16 @@ fn execute_batches_internal(
     });
     execute_batches_elapsed.stop();
 
-    let receipts: Vec<Vec<(Hash,Hash)>> = results.clone().into_iter().filter(|res| res.is_ok()).map(|res| res.unwrap()).collect();
-    info!("chk1 done_executing batches {:?}", batches.len());
-    info!("chk1 append_receipts: {:?} results {:?}",receipts, results);
+    let receipts: Vec<Vec<(Hash, Hash)>> = results
+        .clone()
+        .into_iter()
+        .filter(|res| res.is_ok())
+        .map(|res| res.unwrap())
+        .collect();
+    info!("#64 done_executing batches {:?}", batches.len());
+    info!("#64 append_receipts: {:?} results {:?}", receipts, results);
     bank.append_receipts(receipts.clone());
-   
+
     first_err(&results)?;
     // let first_err = {for r in results{
     //     if r.is_err(){
@@ -300,7 +302,7 @@ fn execute_batches_internal(
     //     }
     // Ok(())
     // }
-// };
+    // };
 
     Ok(ExecuteBatchesInternalMetrics {
         execution_timings_per_thread: execution_timings_per_thread.into_inner().unwrap(),
@@ -406,7 +408,7 @@ fn execute_batches(
     } else {
         batches
     };
-  
+
     let execute_batches_internal_metrics = execute_batches_internal(
         bank,
         rebatched_txs,
@@ -501,12 +503,15 @@ fn process_entries_with_callback(
     // .map(|tx| *tx.signature())
     // .collect::<Vec<Signature>>();
     info!("chk1 starts replay");
-    let transaction_message_hashes: Vec<Hash> = entries.iter().filter_map(|e| match &e.entry {
-        EntryType::Transactions(txns) => Some(txns),
-        _ => None
-    })
-    .flatten()
-    .map(|txn| *txn.message_hash()).collect();
+    let transaction_message_hashes: Vec<Hash> = entries
+        .iter()
+        .filter_map(|e| match &e.entry {
+            EntryType::Transactions(txns) => Some(txns),
+            _ => None,
+        })
+        .flatten()
+        .map(|txn| *txn.message_hash())
+        .collect();
     bank.set_transaction_message_hashes(transaction_message_hashes);
     for ReplayEntry {
         entry,
@@ -531,7 +536,6 @@ fn process_entries_with_callback(
                         confirmation_timing,
                         &cost_model,
                         log_messages_bytes_limit,
-                       
                     )?;
                     // info!("chk1 batches after: {:?}",batches.len());
                     batches.clear();
@@ -601,7 +605,6 @@ fn process_entries_with_callback(
                             confirmation_timing,
                             &cost_model,
                             log_messages_bytes_limit,
-                          
                         )?;
                         batches.clear();
                     }
@@ -618,7 +621,6 @@ fn process_entries_with_callback(
         confirmation_timing,
         &cost_model,
         log_messages_bytes_limit,
-       
     )?;
     for hash in tick_hashes {
         bank.register_tick(hash);
@@ -3727,7 +3729,7 @@ pub mod tests {
             &mut ExecuteTimings::default(),
             None,
         );
-        let (err, signature) = get_first_error(&batch, fee_collection_results,receipts).unwrap();
+        let (err, signature) = get_first_error(&batch, fee_collection_results, receipts).unwrap();
         assert_eq!(err.unwrap_err(), TransactionError::AccountNotFound);
         assert_eq!(signature, account_not_found_sig);
     }

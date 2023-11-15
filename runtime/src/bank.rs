@@ -33,9 +33,6 @@
 //! It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
-use std::{borrow::BorrowMut, ops::DerefMut};
-
-use rayon::slice::ParallelSliceMut;
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
 pub use solana_sdk::reward_type::RewardType;
@@ -83,6 +80,7 @@ use {
         ThreadPool, ThreadPoolBuilder,
     },
     solana_measure::{measure, measure::Measure},
+    solana_merkle_tree::MerkleTree,
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
@@ -148,7 +146,6 @@ use {
             TransactionReturnData,
         },
     },
-    solana_merkle_tree::MerkleTree,
     solana_stake_program::stake_state::{
         self, InflationPointCalculationEvent, PointValue, StakeState,
     },
@@ -172,6 +169,10 @@ use {
         thread::Builder,
         time::{Duration, Instant},
     },
+};
+use {
+    rayon::slice::ParallelSliceMut,
+    std::{borrow::BorrowMut, ops::DerefMut},
 };
 
 /// params to `verify_bank_hash`
@@ -359,12 +360,12 @@ impl BankRc {
 }
 
 pub type TransactionCheckResult = (Result<()>, Option<NoncePartial>);
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct TransactionResults {
     pub fee_collection_results: Vec<Result<()>>,
     pub execution_results: Vec<TransactionExecutionResult>,
     pub rent_debits: Vec<RentDebits>,
-    pub receipts: Vec<(Hash, Hash)>
+    pub receipts: Vec<(Hash, Hash)>,
 }
 
 #[derive(Debug, Clone)]
@@ -1101,12 +1102,11 @@ pub struct Bank {
     pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
 
     // pub receipt_tree: Arc<RwLock<im::HashMap<usize, Hash>>>,
-
     /// message_hashs
     pub transaction_message_hashes: Arc<RwLock<Vec<Hash>>>,
 
     /// message_hash, receipt
-    pub receipt_queue: Arc<RwLock<Vec<(Hash, Hash)>>>
+    pub receipt_queue: Arc<RwLock<Vec<(Hash, Hash)>>>,
 }
 
 struct VoteWithStakeDelegations {
@@ -1297,7 +1297,7 @@ impl Bank {
             fee_structure: FeeStructure::default(),
             // receipt_tree: Arc::new(RwLock::new(im::HashMap::new())),
             receipt_queue: Arc::new(RwLock::new(Vec::new())),
-            transaction_message_hashes:  Arc::new(RwLock::new(Vec::new())),
+            transaction_message_hashes: Arc::new(RwLock::new(Vec::new())),
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1626,7 +1626,7 @@ impl Bank {
             fee_structure: parent.fee_structure.clone(),
             // receipt_tree: Arc::new(RwLock::new(im::HashMap::new())),
             receipt_queue: Arc::new(RwLock::new(Vec::new())),
-            transaction_message_hashes:  Arc::new(RwLock::new(Vec::new())),
+            transaction_message_hashes: Arc::new(RwLock::new(Vec::new())),
         };
 
         let (_, ancestors_time) = measure!(
@@ -1972,7 +1972,7 @@ impl Bank {
             fee_structure: FeeStructure::default(),
             // receipt_tree: Arc::new(RwLock::new(im::HashMap::new())),
             receipt_queue: Arc::new(RwLock::new(Vec::new())),
-            transaction_message_hashes:  Arc::new(RwLock::new(Vec::new())),
+            transaction_message_hashes: Arc::new(RwLock::new(Vec::new())),
         };
         bank.finish_init(
             genesis_config,
@@ -4291,8 +4291,8 @@ impl Bank {
         //         info!("lock poisoned");
         //     };
         // }
-// let mesdsagh_hash = tx.message_hash()
-                        // let receipt_hash = hashv(message_hash,status)
+        // let mesdsagh_hash = tx.message_hash()
+        // let receipt_hash = hashv(message_hash,status)
         TransactionExecutionResult::Executed {
             details: TransactionExecutionDetails {
                 status,
@@ -4435,7 +4435,7 @@ impl Bank {
                         }
                         compute_budget
                     };
-                        
+
                     self.execute_loaded_transaction(
                         tx,
                         loaded_transaction,
@@ -4825,7 +4825,7 @@ impl Bank {
         sanitized_txs: &[SanitizedTransaction],
         loaded_txs: &mut [TransactionLoadResult],
         execution_results: Vec<TransactionExecutionResult>,
-        receipts: Vec<(Hash,Hash)>,
+        receipts: Vec<(Hash, Hash)>,
         last_blockhash: Hash,
         lamports_per_signature: u64,
         counts: CommitTransactionCounts,
@@ -4942,7 +4942,7 @@ impl Bank {
             fee_collection_results,
             execution_results,
             rent_debits,
-            receipts
+            receipts,
         }
     }
 
@@ -6066,7 +6066,11 @@ impl Bank {
         } else {
             vec![]
         };
-        let msg_hashes: Vec<Hash> = batch.sanitized_transactions().iter().map(|txn| *txn.message_hash()).collect();
+        let msg_hashes: Vec<Hash> = batch
+            .sanitized_transactions()
+            .iter()
+            .map(|txn| *txn.message_hash())
+            .collect();
         let LoadAndExecuteTransactionsOutput {
             mut loaded_transactions,
             execution_results,
@@ -6084,12 +6088,19 @@ impl Bank {
             None,
             log_messages_bytes_limit,
         );
-        let statuses: Vec<bool> = execution_results.iter().map(|result| result.was_executed_successfully()).collect();
-        let receipts: Vec<(Hash,Hash)> = msg_hashes.into_iter().zip(statuses).map(|rec_data| {
-            let status_code: u8 = if rec_data.1 {1}else {0};
-            let hashed = hashv(&[rec_data.0.as_ref(),status_code.to_be_bytes().as_ref()]);
-            (rec_data.0,hashed)
-        }).collect();
+        let statuses: Vec<bool> = execution_results
+            .iter()
+            .map(|result| result.was_executed_successfully())
+            .collect();
+        let receipts: Vec<(Hash, Hash)> = msg_hashes
+            .into_iter()
+            .zip(statuses)
+            .map(|rec_data| {
+                let status_code: u8 = if rec_data.1 { 1 } else { 0 };
+                let hashed = hashv(&[rec_data.0.as_ref(), status_code.to_be_bytes().as_ref()]);
+                (rec_data.0, hashed)
+            })
+            .collect();
         let (last_blockhash, lamports_per_signature) =
             self.last_blockhash_and_lamports_per_signature();
         let results = self.commit_transactions(
@@ -6674,26 +6685,31 @@ impl Bank {
             .bank_hash_info_at(self.slot(), &self.rewrites_skipped_this_slot);
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
-        let mut receipt_root = [0u8; 32];
+        let mut receipt_root = hashv(&[
+            (0x80 as u8).to_le_bytes().as_slice(),
+            &[0u8; 32],
+            u64::to_le_bytes(0).as_slice(),
+        ])
+        .to_bytes();
 
-        if let Ok(mut r) = self.receipt_queue.try_read() {
-            let mut hashes= r.deref().clone();
-            hashes.par_sort_unstable_by(|a,b| a.0.as_ref().cmp(b.0.as_ref()));
+        if let Ok(mut r) = self.receipt_queue.read() {
+            let mut hashes = r.deref().clone();
+            hashes.par_sort_unstable_by(|a, b| a.0.as_ref().cmp(b.0.as_ref()));
             let receipt_hashes: Vec<Hash> = hashes.par_iter().map(|item| item.1).collect();
-           let mt = MerkleTree::new_with_leaves(receipt_hashes.clone());
-           info!("chk1 merkle_tree_leaves: {:?} {:?} {:?} {:?}", receipt_hashes,signature_count_buf,self.signature_count(),hashes);
-           if let Some(root) = mt.get_root(){
-            receipt_root = root.to_bytes();
-           }
-           if hashes.len() > 0 {
-            hashes.clear();
-           
-           }
+            let mt = MerkleTree::new_with_leaves(receipt_hashes.clone());
+            if let Some(root) = mt.get_root() {
+                receipt_root = root.to_bytes();
+            }
+            info!("#64 parent_bank_hash: {:?} accounts_delta_hash: {:?} signature_count_buf: {:?} last_blockhash: {:?}",self.parent_hash().as_ref(),accounts_delta_hash.hash.as_ref(),signature_count_buf,self.last_blockhash().as_ref());
+            if hashes.len() > 0 {
+                hashes.clear();
+            }
         }
-        if let Ok(mut write_q) = self.receipt_queue.write(){
+        if let Ok(mut write_q) = self.receipt_queue.write() {
+            info!("#64 has cleared queue: {:?}", write_q.len());
             write_q.clear();
         }
-        info!("change_ receipt root: {:?}", receipt_root);
+        info!("#64 receipt root: {:?}", receipt_root);
         let mut hash = hashv(&[
             self.parent_hash.as_ref(),
             accounts_delta_hash.hash.as_ref(),
@@ -6701,7 +6717,7 @@ impl Bank {
             self.last_blockhash().as_ref(),
             receipt_root.as_ref(),
         ]);
-
+        info!("#64 bankhash: {:?}", hash);
         let buf = self
             .hard_forks
             .read()
@@ -6825,20 +6841,20 @@ impl Bank {
         }
     }
     pub fn set_transaction_message_hashes(&self, transaction_message_hashes: Vec<Hash>) {
-        if let Ok(mut txn_indexes) = self.transaction_message_hashes.write(){
+        if let Ok(mut txn_indexes) = self.transaction_message_hashes.write() {
             *txn_indexes = transaction_message_hashes;
         }
     }
 
-    pub fn append_receipts(&self, multi_batch_receipts: Vec<Vec<(Hash,Hash)>>){
-        if let Ok(mut receipt_queue) = self.receipt_queue.write(){
+    pub fn append_receipts(&self, multi_batch_receipts: Vec<Vec<(Hash, Hash)>>) {
+        if let Ok(mut receipt_queue) = self.receipt_queue.write() {
             // receipt_queue.clear();
             let mut temp_rec_queue = vec![];
-          for mut batch in multi_batch_receipts{
-            temp_rec_queue.append(&mut batch);
-          }
+            for mut batch in multi_batch_receipts {
+                temp_rec_queue.append(&mut batch);
+            }
             // temp_rec_queue.append(&mut receipt_tuples.clone());
-            
+
             receipt_queue.append(&mut temp_rec_queue);
         }
     }
@@ -7910,7 +7926,10 @@ impl Drop for Bank {
 
 /// utility function used for testing and benchmarking.
 pub mod test_utils {
-    use {super::Bank, solana_sdk::hash::hashv};
+    use {
+        super::Bank,
+        solana_sdk::hash::{hash, hashv},
+    };
     pub fn goto_end_of_slot(bank: &mut Bank) {
         let mut tick_hash = bank.last_blockhash();
         loop {
