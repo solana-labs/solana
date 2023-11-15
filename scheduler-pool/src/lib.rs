@@ -714,8 +714,8 @@ where
                                 match mm {
                                     ChainedChannel::Payload(payload) => {
                                         if let Some(ee) = state_machine.schedule_new_task(payload) {
-                                            blocked_transaction_sessioned_sender
-                                                .send(ChainedChannel::Payload(ee))
+                                            idle_transaction_sender
+                                                .send(ee)
                                                 .unwrap();
                                         }
                                     }
