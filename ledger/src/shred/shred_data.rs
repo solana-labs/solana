@@ -7,7 +7,7 @@ use {
         DataShredHeader, Error, ShredCommonHeader, ShredFlags, ShredType, ShredVariant, SignedData,
         MAX_DATA_SHREDS_PER_SLOT,
     },
-    solana_sdk::{clock::Slot, signature::Signature},
+    solana_sdk::{clock::Slot, hash::Hash, signature::Signature},
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -38,6 +38,13 @@ impl ShredData {
         match self {
             Self::Legacy(shred) => Ok(SignedData::Chunk(shred.signed_data()?)),
             Self::Merkle(shred) => Ok(SignedData::MerkleRoot(shred.signed_data()?)),
+        }
+    }
+
+    pub(super) fn merkle_root(&self) -> Result<Hash, Error> {
+        match self {
+            Self::Legacy(_) => Err(Error::InvalidShredType),
+            Self::Merkle(shred) => shred.merkle_root(),
         }
     }
 

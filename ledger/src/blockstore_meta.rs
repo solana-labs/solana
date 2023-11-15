@@ -406,6 +406,35 @@ impl ErasureMeta {
     }
 }
 
+#[allow(dead_code)]
+impl MerkleRootMeta {
+    pub(crate) fn from_shred(shred: &Shred) -> Self {
+        Self {
+            // An error here after the shred has already sigverified
+            // can only indicate that the leader is sending
+            // legacy or malformed shreds. We should still store
+            // `None` for those cases in blockstore, as a later
+            // shred that contains a proper merkle root would constitute
+            // a valid duplicate shred proof.
+            merkle_root: shred.merkle_root().ok(),
+            first_received_shred_index: shred.index(),
+            first_received_shred_type: shred.shred_type(),
+        }
+    }
+
+    pub(crate) fn merkle_root(&self) -> Option<Hash> {
+        self.merkle_root
+    }
+
+    pub(crate) fn first_received_shred_index(&self) -> u32 {
+        self.first_received_shred_index
+    }
+
+    pub(crate) fn first_received_shred_type(&self) -> ShredType {
+        self.first_received_shred_type
+    }
+}
+
 impl DuplicateSlotProof {
     pub(crate) fn new(shred1: Vec<u8>, shred2: Vec<u8>) -> Self {
         DuplicateSlotProof { shred1, shred2 }
