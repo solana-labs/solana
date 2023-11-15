@@ -2,7 +2,7 @@
 title: Connecting to a Cluster
 ---
 
-See [Solana Clusters](../../clusters.md) for general information about the
+See [Solana Clusters](../../clusters/available.md) for general information about the
 available clusters.
 
 ## Configure the command-line tool

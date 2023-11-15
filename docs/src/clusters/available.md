@@ -63,7 +63,7 @@ $ solana-validator \
     --limit-ledger-size
 ```
 
-The [`--known-validator`s](running-validator/validator-start.md#known-validators)
+The [`--known-validator`s](../operations/guides/validator-start.md#known-validators)
 are operated by Solana Labs
 
 ## Testnet
@@ -115,7 +115,7 @@ $ solana-validator \
 ```
 
 The identities of the
-[`--known-validator`s](running-validator/validator-start.md#known-validators) are:
+[`--known-validator`s](../operations/guides/validator-start.md#known-validators) are:
 
 - `5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on` - Solana Labs
 - `dDzy5SR3AXdYWVqbDEkVFdvSPCtS9ihF5kJkHCtXoFs` - MonkeDAO
@@ -168,5 +168,7 @@ $ solana-validator \
     --limit-ledger-size
 ```
 
-All four [`--known-validator`s](running-validator/validator-start.md#known-validators)
-are operated by Solana Labs
+:::info
+The above four [`--known-validator`s](../operations/guides/validator-start.md#known-validators)
+are operated by Solana Labs.
+:::

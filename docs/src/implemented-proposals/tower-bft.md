@@ -14,14 +14,14 @@ For brevity this design assumes that a single voter with a stake is deployed as 
 
 ## Time
 
-The Solana cluster generates a source of time via a Verifiable Delay Function we are calling [Proof of History](../cluster/synchronization.md).
+The Solana cluster generates a source of time via a Verifiable Delay Function we are calling [Proof of History](../consensus/synchronization.md).
 
 The unit of time is called a "slot". Each slot has a designated leader that can
 produce a block `B`. The `slot` of block `B` is designated `slot(B)`. A leader
 does not necessarily need to generate a block for its slot, in which case there
 may not be blocks for some slots.
 
-For more details, see [fork generation](../cluster/fork-generation.md) and [leader rotation](../cluster/leader-rotation.md).
+For more details, see [fork generation](../consensus/fork-generation.md) and [leader rotation](../consensus/leader-rotation.md).
 
 ## Votes
 

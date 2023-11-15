@@ -151,7 +151,7 @@ JSON RPC URL: http://127.0.0.1:8899
 - Session running time, current slot of the three block
   [commitment levels](../api/http#configuring-state-commitment),
   slot height of the last snapshot, transaction count,
-  [voting authority](/running-validator/vote-accounts#vote-authority) balance
+  [voting authority](../../operations/guides/vote-accounts.md#vote-authority) balance
 
 ## Appendix II: Runtime Features
 

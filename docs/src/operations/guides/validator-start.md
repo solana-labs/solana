@@ -12,7 +12,7 @@ solana config set --url http://api.devnet.solana.com
 ```
 
 While this section demonstrates how to connect to the Devnet cluster, the steps
-are similar for the other [Solana Clusters](../clusters.md).
+are similar for the other [Solana Clusters](../../clusters/available.md).
 
 ## Confirm The Cluster Is Reachable
 
@@ -255,7 +255,7 @@ solana create-vote-account ~/vote-account-keypair.json ~/validator-keypair.json 
 Remember to move your authorized withdrawer keypair into a very secure location
 after running the above command.
 
-Read more about [creating and managing a vote account](vote-accounts.md).
+Read more about [creating and managing a vote account](./vote-accounts.md).
 
 ## Known validators
 

@@ -5,7 +5,9 @@ sidebar_label: Setup a Validator
 
 This is a guide for getting your validator setup on the Solana testnet cluster for the first time. Testnet is a Solana cluster that is used for performance testing of the software before the software is used on mainnet. Since testnet is stress tested daily, it is a good cluster to practice validator operations.
 
-Once you have a working validator on testnet, you will want to learn about [operational best practices](../best-practices/operations.md) in the next section. Although the guide is specific to testnet, it can be adapted to mainnet or devnet as well. Refer to the [clusters](../../clusters) section of the Solana docs to see example commands for each cluster.
+Once you have a working validator on testnet, you will want to learn about [operational best practices](./best-practices/general.md) in the next section. Although the guide is specific to testnet, it can be adapted to mainnet or devnet as well. 
+
+> Refer to the [Available Clusters](../clusters/available.md) section of the documentation to see example commands for each cluster.
 
 Now let's get started.
 
@@ -53,9 +55,9 @@ You should see a line that says: `RPC URL: https://api.testnet.solana.com`
 
 ## Create Keys
 
-On your local computer, create the 3 keypairs that you will need to run your validator ([docs for reference](../../running-validator/validator-start#generate-identity)):
+On your local computer, create the 3 keypairs that you will need to run your validator ([docs for reference](./guides/validator-start.md#generate-identity)):
 
-> **NOTE** Some operators choose to make vanity keypairs for their identity and vote account using the `grind` sub command ([docs for reference](../../running-validator/validator-start#vanity-keypair)).
+> **NOTE** Some operators choose to make vanity keypairs for their identity and vote account using the `grind` sub command ([docs for reference](./guides/validator-start.md#vanity-keypair)).
 
 ```
 solana-keygen new -o validator-keypair.json
@@ -69,7 +71,7 @@ solana-keygen new -o vote-account-keypair.json
 solana-keygen new -o authorized-withdrawer-keypair.json
 ```
 
-> **IMPORTANT** the `authorized-withdrawer-keypair.json` should be considered very sensitive information.  Many operators choose to use a multisig, hardware wallet, or paper wallet for the authorized withdrawer keypair.  A keypair is created on disk in this example for simplicity. Additionally, the withdrawer keypair should always be stored safely. The authorized withdrawer keypair should **never** be stored on the remote machine that the validator software runs on.  For more information, see [validator security best practices](../best-practices/security.md#do-not-store-your-withdrawer-key-on-your-validator)
+> **IMPORTANT** the `authorized-withdrawer-keypair.json` should be considered very sensitive information.  Many operators choose to use a multisig, hardware wallet, or paper wallet for the authorized withdrawer keypair.  A keypair is created on disk in this example for simplicity. Additionally, the withdrawer keypair should always be stored safely. The authorized withdrawer keypair should **never** be stored on the remote machine that the validator software runs on.  For more information, see [validator security best practices](./best-practices/security.md#do-not-store-your-withdrawer-key-on-your-validator)
 
 ## Create a Vote Account
 
@@ -358,7 +360,7 @@ exec solana-validator \
     --limit-ledger-size
 ```
 
-Refer to `solana-validator --help` for more information on what each flag is doing in this script. Also refer to the section on [best practices for operating a validator](../best-practices/operations.md).
+Refer to `solana-validator --help` for more information on what each flag is doing in this script. Also refer to the section on [best practices for operating a validator](./best-practices/general.md).
 
 ## Verifying Your Validator Is Working
 
@@ -447,7 +449,7 @@ Once you are happy that the validator can start up without errors, the next step
 
 ## Create a System Service
 
-Follow these instructions for [running the validator as a system service](../../running-validator/validator-start#systemd-unit)
+Follow these instructions for [running the validator as a system service](./guides/validator-start.md#systemd-unit)
 
 Make sure to implement log rotate as well. Once you have the system service configured, start your validator using the newly configured service:
 
@@ -463,7 +465,7 @@ tail -f /home/sol/solana-validator*.log
 
 ## Monitoring
 
-`solana-watchtower` is a command you can run on a separate machine to monitor your server. You can read more about handling [automatic restarts and monitoring](../best-practices/monitoring.md#solana-watchtower) using Solana Watchtower here in the docs.
+`solana-watchtower` is a command you can run on a separate machine to monitor your server. You can read more about handling [automatic restarts and monitoring](./best-practices/monitoring.md#solana-watchtower) using Solana Watchtower here in the docs.
 
 ## Common issues
 

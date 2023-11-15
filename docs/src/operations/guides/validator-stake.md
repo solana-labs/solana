@@ -131,10 +131,10 @@ Helpful JSON-RPC methods:
 - `getVoteAccounts` This will tell you how much active stake your validator
   currently has. A % of the validator's stake is activated on an epoch boundary.
   You can learn more about staking on Solana
-  [here](../cluster/stake-delegation-and-rewards.md).
+  [here](../../consensus/stake-delegation-and-rewards.md).
 - `getLeaderSchedule` At any given moment, the network expects only one
   validator to produce ledger entries. The
-  [validator currently selected to produce ledger entries](../cluster/leader-rotation.md#leader-rotation)
+  [validator currently selected to produce ledger entries](../../consensus/leader-rotation.md#leader-rotation)
   is called the “leader”. This will return the complete leader schedule \(on a
   slot-by-slot basis\) for currently activated stake, the identity pubkey will
   show up 1 or more times here.

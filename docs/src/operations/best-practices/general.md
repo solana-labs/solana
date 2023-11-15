@@ -4,7 +4,7 @@ sidebar_label: General Operations
 ---
 
 After you have successfully setup and started a
-[validator on testnet](../get-started/setup-a-validator.md) (or another cluster
+[validator on testnet](../setup-a-validator.md) (or another cluster
 of your choice), you will want to become familiar with how to operate your
 validator on a day-to-day basis. During daily operations, you will be
 [monitoring your server](./monitoring.md), updating software regularly (both the
@@ -233,4 +233,4 @@ To get more information on the command, use
 
 For a more detailed explanation of the different keypairs and other related
 operations refer to
-[vote account management](../../running-validator/vote-accounts.md).
+[vote account management](../guides/vote-accounts.md).

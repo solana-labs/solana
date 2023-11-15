@@ -2,7 +2,7 @@
 title: Troubleshooting
 ---
 
-There is a **\#validator-support** Discord channel available to reach other
+There is a `#validator-support` Discord channel available to reach other
 testnet participants, [https://solana.com/discord](https://solana.com/discord)
 
 ## Useful Links & Discussion

@@ -14,15 +14,15 @@ export default function HomeCtaLinks() {
         />
 
         <Card
-          to="running-validator"
+          to="operations"
           header={{
-            label: "Validators",
+            label: "Operate a Validator",
             translateId: "cta-validators",
           }}
         />
 
         <Card
-          to="cluster/overview"
+          to="clusters"
           header={{
             label: "Architecture",
             translateId: "cta-architecture",

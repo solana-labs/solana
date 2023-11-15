@@ -4,9 +4,9 @@ sidebar_label: Validator vs RPC Node
 sidebar_position: 0
 ---
 
-Operators who run a [consensus validator](./what-is-a-validator.md) have much
+Operators who run a [consensus validator](../what-is-a-validator.md) have much
 different incentives than operators who run an
-[RPC node](./what-is-an-rpc-node.md). You will have to decide which choice is
+[RPC node](../what-is-an-rpc-node.md). You will have to decide which choice is
 best for you based on your interests, technical background, and goals.
 
 ## Consensus Validators
@@ -74,7 +74,7 @@ An RPC operator is providing a service to users who want to interact with the
 Solana blockchain. Because your primary user is often technical, you will have
 to be able to answer technical questions about performance of RPC calls. This
 option may require more understanding of the
-[core Solana architecture](../../cluster/overview.md).
+[core Solana architecture](../clusters/index.md).
 
 If you are operating an RPC node as a business, your job will also involve
 scaling your system to meet the demands of the users. For example, some RPC
@@ -87,5 +87,5 @@ strong understanding of the Solana architecture and the
 Alternatively, you may be a development team that would like to run their own
 infrastructure. In this case, the RPC infrastructure could be a part of your
 production stack. A development team could use the
-[Geyser plugin](../../developing/plugins/geyser-plugins.md), for example, to get
+[Geyser plugin](../validator/geyser.md), for example, to get
 real time access to information about accounts or blocks in the cluster.

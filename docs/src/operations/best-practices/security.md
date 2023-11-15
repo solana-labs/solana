@@ -26,7 +26,7 @@ To reiterate, the withdrawer keypair should never be stored on your validator at
 
 It may be easier to get started by running your application as root, but it is a bad practice.
 
-If there is an exploit in your system, a hacker could have full access if your Solana application is running as the `root` user. Instead, see the [setup instructions](../get-started/setup-a-validator.md#sol-user) for creating a user called `sol` and running the application as the `sol` user.
+If there is an exploit in your system, a hacker could have full access if your Solana application is running as the `root` user. Instead, see the [setup instructions](../setup-a-validator.md#sol-user) for creating a user called `sol` and running the application as the `sol` user.
 
 ## Close Ports That Are Not In Use
 

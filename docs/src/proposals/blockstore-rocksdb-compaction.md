@@ -22,7 +22,7 @@ required for storing each entry.  In other words, RocksDB uses compactions
 to balance [write, space, and read amplifications](https://smalldatum.blogspot.com/2015/11/read-write-space-amplification-pick-2_23.html).
 
 As different workloads have different requirements, RocksDB makes its options
-highly configerable.  However, it also means its default settings might not
+highly configurable.  However, it also means its default settings might not
 be always suitable.  This document focuses on RocksDB's compaction
 optimization for Solana's Blockstore.
 

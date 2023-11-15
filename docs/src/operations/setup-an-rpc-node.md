@@ -55,7 +55,7 @@ If you are interested in setting up your own bigtable instance, see these docs i
 
 ### Example Known Validators
 
-The identities of the [known validators](../../running-validator/validator-start.md#known-validators) supplied in these example snippets (via the `--known-validator` flag) are:
+The identities of the [known validators](./guides/validator-start.md#known-validators) supplied in these example snippets (via the `--known-validator` flag) are:
 
 - `5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on` - Solana Labs
 - `dDzy5SR3AXdYWVqbDEkVFdvSPCtS9ihF5kJkHCtXoFs` - MonkeDAO
@@ -65,6 +65,6 @@ The identities of the [known validators](../../running-validator/validator-start
 
 ## Examples for other clusters
 
-Additional examples of other Solana cluster specific validator commands can be found on the [Clusters](../../clusters.md) page.
+Additional examples of other Solana cluster specific validator commands can be found on the [Clusters](../clusters/available.md) page.
 
 Keep in mind, you will still need to customize these commands to operate as an RPC node, as well other operator specific configuration settings.
