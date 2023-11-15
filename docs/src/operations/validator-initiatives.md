@@ -1,6 +1,7 @@
 ---
 title: Solana Validator Initiatives
 sidebar_label: Validator Initiatives
+sidebar_position: 4
 ---
 
 There are a number of initiatives that may help operators get started or grow their delegation.  All of these initiatives are completely optional.  All Solana clusters are permissionless and an operator can join at any time.

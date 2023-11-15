@@ -1,0 +1,10 @@
+{
+  "position": 4,
+  "label": "Operating a Validator",
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "doc",
+    "id": "operations/index"
+  }
+}

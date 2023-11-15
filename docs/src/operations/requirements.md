@@ -1,6 +1,7 @@
 ---
 title: Validator Requirements
 sidebar_label: Requirements
+sidebar_position: 3
 ---
 
 ## Minimum SOL requirements

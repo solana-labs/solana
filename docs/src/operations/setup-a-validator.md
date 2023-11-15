@@ -1,6 +1,7 @@
 ---
 title: Setup a Solana Validator
 sidebar_label: Setup a Validator
+sidebar_position: 5
 ---
 
 This is a guide for getting your validator setup on the Solana testnet cluster for the first time. Testnet is a Solana cluster that is used for performance testing of the software before the software is used on mainnet. Since testnet is stress tested daily, it is a good cluster to practice validator operations.

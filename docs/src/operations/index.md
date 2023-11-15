@@ -1,5 +1,6 @@
 ---
 title: Operating a Validator
+sidebar_position: 0
 ---
 
 This section describes how to run a Solana validator node.
