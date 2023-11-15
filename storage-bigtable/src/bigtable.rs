@@ -274,7 +274,8 @@ impl BigTableConnection {
     {
         retry(ExponentialBackoff::default(), || async {
             let mut client = self.client();
-            Ok(client.put_bincode_cells(table, cells).await?)
+            let result = client.put_bincode_cells(table, cells).await;
+            check_table_not_found(result)
         })
         .await
     }
@@ -312,7 +313,8 @@ impl BigTableConnection {
     {
         retry(ExponentialBackoff::default(), || async {
             let mut client = self.client();
-            Ok(client.put_protobuf_cells(table, cells).await?)
+            let result = client.put_protobuf_cells(table, cells).await;
+            check_table_not_found(result)
         })
         .await
     }
