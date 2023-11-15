@@ -4151,6 +4151,7 @@ impl Bank {
         let (blockhash, lamports_per_signature) = self.last_blockhash_and_lamports_per_signature();
 
         let mut executed_units = 0u64;
+        let mut executed_us = timings.execute_accessories.process_instructions.total_us;
         let mut programs_modified_by_tx = LoadedProgramsForTxBatch::new(self.slot);
         let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::new(self.slot);
         let mut process_message_time = Measure::start("process_message_time");
@@ -4173,6 +4174,11 @@ impl Bank {
             &mut executed_units,
         );
         process_message_time.stop();
+        executed_us = timings
+            .execute_accessories
+            .process_instructions
+            .total_us
+            .saturating_sub(executed_us);
 
         saturating_add_assign!(
             timings.execute_accessories.process_message_us,
@@ -4282,7 +4288,7 @@ impl Bank {
                 durable_nonce_fee,
                 return_data,
                 executed_units,
-                executed_us: timings.execute_accessories.process_instructions.total_us,
+                executed_us,
                 accounts_data_len_delta,
             },
             programs_modified_by_tx: Box::new(programs_modified_by_tx),
