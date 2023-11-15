@@ -497,8 +497,6 @@ impl Accounts {
         // accounts.iter().take(message.account_keys.len())
         accounts.append(&mut account_deps);
 
-        let disable_builtin_loader_ownership_chains =
-            feature_set.is_active(&feature_set::disable_builtin_loader_ownership_chains::ID);
         let builtins_start_index = accounts.len();
         let program_indices = message
             .instructions()
@@ -506,7 +504,7 @@ impl Accounts {
             .map(|instruction| {
                 let mut account_indices = Vec::new();
                 let mut program_index = instruction.program_id_index as usize;
-                for _ in 0..5 {
+                {
                     let (program_id, program_account) = accounts
                         .get(program_index)
                         .ok_or(TransactionError::ProgramAccountNotFound)?;
@@ -539,8 +537,7 @@ impl Accounts {
                         if let Some((owner_account, _)) =
                             self.accounts_db.load_with_fixed_root(ancestors, owner_id)
                         {
-                            if disable_builtin_loader_ownership_chains
-                                && !native_loader::check_id(owner_account.owner())
+                            if !native_loader::check_id(owner_account.owner())
                                 || !owner_account.executable()
                             {
                                 error_counters.invalid_program_for_execution += 1;
@@ -559,13 +556,9 @@ impl Accounts {
                         }
                         owner_index
                     };
-                    if disable_builtin_loader_ownership_chains {
-                        account_indices.insert(0, program_index as IndexOfAccount);
-                        return Ok(account_indices);
-                    }
+                    account_indices.insert(0, program_index as IndexOfAccount);
+                    return Ok(account_indices);
                 }
-                error_counters.call_chain_too_deep += 1;
-                Err(TransactionError::CallChainTooDeep)
             })
             .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
 
