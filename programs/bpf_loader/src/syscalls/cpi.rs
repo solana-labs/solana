@@ -239,7 +239,6 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
                     vm_data_addr,
                     data.len() as u64,
                     invoke_context.get_check_aligned(),
-                    invoke_context.get_check_size(),
                 )?
             };
             (
@@ -344,7 +343,6 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
                 account_info.data_addr,
                 account_info.data_len,
                 invoke_context.get_check_aligned(),
-                invoke_context.get_check_size(),
             )?
         };
 
@@ -498,7 +496,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
             ix.accounts.as_ptr() as u64,
             ix.accounts.len() as u64,
             invoke_context.get_check_aligned(),
-            invoke_context.get_check_size(),
         )?;
         let accounts = if invoke_context
             .feature_set
@@ -542,7 +539,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
             ix.data.as_ptr() as u64,
             ix_data_len,
             invoke_context.get_check_aligned(),
-            invoke_context.get_check_size(),
         )?
         .to_vec();
 
@@ -597,7 +593,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
                 signers_seeds_addr,
                 signers_seeds_len,
                 invoke_context.get_check_aligned(),
-                invoke_context.get_check_size(),
             )?;
             if signers_seeds.len() > MAX_SIGNERS {
                 return Err(Box::new(SyscallError::TooManySigners));
@@ -608,7 +603,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
                     signer_seeds.as_ptr() as *const _ as u64,
                     signer_seeds.len() as u64,
                     invoke_context.get_check_aligned(),
-                    invoke_context.get_check_size(),
                 )?;
                 if untranslated_seeds.len() > MAX_SEEDS {
                     return Err(Box::new(InstructionError::MaxSeedLengthExceeded));
@@ -621,7 +615,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
                             untranslated_seed.as_ptr() as *const _ as u64,
                             untranslated_seed.len() as u64,
                             invoke_context.get_check_aligned(),
-                            invoke_context.get_check_size(),
                         )
                     })
                     .collect::<Result<Vec<_>, Error>>()?;
@@ -740,7 +733,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
             ix_c.accounts_addr,
             ix_c.accounts_len,
             invoke_context.get_check_aligned(),
-            invoke_context.get_check_size(),
         )?;
 
         let ix_data_len = ix_c.data_len;
@@ -761,7 +753,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
             ix_c.data_addr,
             ix_data_len,
             invoke_context.get_check_aligned(),
-            invoke_context.get_check_size(),
         )?
         .to_vec();
 
@@ -862,7 +853,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
                 signers_seeds_addr,
                 signers_seeds_len,
                 invoke_context.get_check_aligned(),
-                invoke_context.get_check_size(),
             )?;
             if signers_seeds.len() > MAX_SIGNERS {
                 return Err(Box::new(SyscallError::TooManySigners));
@@ -875,7 +865,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
                         signer_seeds.addr,
                         signer_seeds.len,
                         invoke_context.get_check_aligned(),
-                        invoke_context.get_check_size(),
                     )?;
                     if seeds.len() > MAX_SEEDS {
                         return Err(Box::new(InstructionError::MaxSeedLengthExceeded) as Error);
@@ -888,7 +877,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
                                 seed.addr,
                                 seed.len,
                                 invoke_context.get_check_aligned(),
-                                invoke_context.get_check_size(),
                             )
                         })
                         .collect::<Result<Vec<_>, Error>>()?;
@@ -917,7 +905,6 @@ where
         account_infos_addr,
         account_infos_len,
         invoke_context.get_check_aligned(),
-        invoke_context.get_check_size(),
     )?;
     check_account_infos(account_infos.len(), invoke_context)?;
     let account_info_keys = if invoke_context
@@ -1336,7 +1323,6 @@ fn update_callee_account(
                             .saturating_add(caller_account.original_data_len as u64),
                         realloc_bytes_used as u64,
                         invoke_context.get_check_aligned(),
-                        invoke_context.get_check_size(),
                     )?;
                     callee_account
                         .get_data_mut()?
@@ -1581,7 +1567,6 @@ fn update_caller_account(
                             .saturating_add(dirty_realloc_start as u64),
                         dirty_realloc_len as u64,
                         invoke_context.get_check_aligned(),
-                        invoke_context.get_check_size(),
                     )?;
                     serialized_data.fill(0);
                 }
@@ -1602,7 +1587,6 @@ fn update_caller_account(
                 caller_account.vm_data_addr,
                 post_len as u64,
                 false, // Don't care since it is byte aligned
-                invoke_context.get_check_size(),
             )?;
         }
         // this is the len field in the AccountInfo::data slice
@@ -1666,7 +1650,6 @@ fn update_caller_account(
                     .saturating_add(caller_account.original_data_len as u64),
                 realloc_bytes_used as u64,
                 invoke_context.get_check_aligned(),
-                invoke_context.get_check_size(),
             )?
         };
         let from_slice = callee_account
@@ -2182,15 +2165,9 @@ mod tests {
 
                 // check that the caller account data pointer always matches the callee account data pointer
                 assert_eq!(
-                    translate_slice::<u8>(
-                        &memory_mapping,
-                        caller_account.vm_data_addr,
-                        1,
-                        true,
-                        true
-                    )
-                    .unwrap()
-                    .as_ptr(),
+                    translate_slice::<u8>(&memory_mapping, caller_account.vm_data_addr, 1, true,)
+                        .unwrap()
+                        .as_ptr(),
                     callee_account.get_data().as_ptr()
                 );
 
@@ -2210,7 +2187,6 @@ mod tests {
                         .saturating_add(caller_account.original_data_len as u64),
                     MAX_PERMITTED_DATA_INCREASE as u64,
                     invoke_context.get_check_aligned(),
-                    invoke_context.get_check_size(),
                 )
                 .unwrap();
 
@@ -2359,7 +2335,6 @@ mod tests {
             &memory_mapping,
             caller_account.vm_data_addr,
             callee_account.get_data().len() as u64,
-            true,
             true,
         )
         .unwrap();
@@ -2632,7 +2607,6 @@ mod tests {
                 .saturating_add(caller_account.original_data_len as u64),
             3,
             invoke_context.get_check_aligned(),
-            invoke_context.get_check_size(),
         )
         .unwrap();
         serialized_data.copy_from_slice(b"baz");
