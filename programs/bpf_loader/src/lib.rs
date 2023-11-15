@@ -35,9 +35,9 @@ use {
         entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
             bpf_account_data_direct_mapping, delay_visibility_of_program_deployment,
-            enable_bpf_loader_extend_program_ix, enable_bpf_loader_set_authority_checked_ix,
-            enable_program_redeployment_cooldown, limit_max_instruction_trace_length,
-            native_programs_consume_cu, remove_bpf_loader_incorrect_program_id,
+            enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
+            limit_max_instruction_trace_length, native_programs_consume_cu,
+            remove_bpf_loader_incorrect_program_id,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -1267,13 +1267,6 @@ fn process_loader_upgradeable_instruction(
             }
         }
         UpgradeableLoaderInstruction::ExtendProgram { additional_bytes } => {
-            if !invoke_context
-                .feature_set
-                .is_active(&enable_bpf_loader_extend_program_ix::ID)
-            {
-                return Err(InstructionError::InvalidInstructionData);
-            }
-
             if additional_bytes == 0 {
                 ic_logger_msg!(log_collector, "Additional bytes must be greater than 0");
                 return Err(InstructionError::InvalidInstructionData);
