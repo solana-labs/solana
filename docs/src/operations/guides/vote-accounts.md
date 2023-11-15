@@ -8,7 +8,7 @@ account is needed if you plan to run a validator node on Solana.
 ## Create a Vote Account
 
 A vote account can be created with the
-[create-vote-account](../cli/usage.md#solana-create-vote-account) command. The
+[create-vote-account](../../cli/usage.md#solana-create-vote-account) command. The
 vote account can be configured when first created or after the validator is
 running. All aspects of the vote account can be changed except for the
 [vote account address](#vote-account-address), which is fixed for the lifetime
@@ -17,13 +17,13 @@ of the account.
 ### Configure an Existing Vote Account
 
 - To change the [validator identity](#validator-identity), use
-  [vote-update-validator](../cli/usage.md#solana-vote-update-validator).
+  [vote-update-validator](../../cli/usage.md#solana-vote-update-validator).
 - To change the [vote authority](#vote-authority), use
-  [vote-authorize-voter-checked](../cli/usage.md#solana-vote-authorize-voter-checked).
+  [vote-authorize-voter-checked](../../cli/usage.md#solana-vote-authorize-voter-checked).
 - To change the [authorized withdrawer](#authorized-withdrawer), use
-  [vote-authorize-withdrawer-checked](../cli/usage.md#solana-vote-authorize-withdrawer-checked).
+  [vote-authorize-withdrawer-checked](../../cli/usage.md#solana-vote-authorize-withdrawer-checked).
 - To change the [commission](#commission), use
-  [vote-update-commission](../cli/usage.md#solana-vote-update-commission).
+  [vote-update-commission](../../cli/usage.md#solana-vote-update-commission).
 
 ## Vote Account Structure
 
@@ -63,7 +63,7 @@ or file system becomes compromised or corrupted.
 The validator identity is required to be provided when a vote account is
 created. The validator identity can also be changed after an account is created
 by using the
-[vote-update-validator](../cli/usage.md#solana-vote-update-validator) command.
+[vote-update-validator](../../cli/usage.md#solana-vote-update-validator) command.
 
 ### Vote Authority
 
@@ -84,12 +84,12 @@ setting the vote authority and validator identity to two different accounts.
 The vote authority can be set when the vote account is created. If it is not
 provided, the default behavior is to assign it the same as the validator
 identity. The vote authority can be changed later with the
-[vote-authorize-voter-checked](../cli/usage.md#solana-vote-authorize-voter-checked)
+[vote-authorize-voter-checked](../../cli/usage.md#solana-vote-authorize-voter-checked)
 command.
 
 The vote authority can be changed at most once per epoch. If the authority is
 changed with
-[vote-authorize-voter-checked](../cli/usage.md#solana-vote-authorize-voter-checked),
+[vote-authorize-voter-checked](../../cli/usage.md#solana-vote-authorize-voter-checked),
 this will not take effect until the beginning of the next epoch. To support a
 smooth transition of the vote signing, `solana-validator` allows the
 `--authorized-voter` argument to be specified multiple times. This allows the
@@ -100,7 +100,7 @@ boundary at which the validator's vote authority account changes.
 
 The _authorized withdrawer_ keypair is used to withdraw funds from a vote
 account using the
-[withdraw-from-vote-account](../cli/usage.md#solana-withdraw-from-vote-account)
+[withdraw-from-vote-account](../../cli/usage.md#solana-withdraw-from-vote-account)
 command. Any network rewards a validator earns are deposited into the vote
 account and are only retrievable by signing with the authorized withdrawer
 keypair.
@@ -120,7 +120,7 @@ not be set to a keypair that is the same as either the validator identity
 keypair or the vote authority keypair.
 
 The authorized withdrawer can be changed later with the
-[vote-authorize-withdrawer-checked](../cli/usage.md#solana-vote-authorize-withdrawer-checked)
+[vote-authorize-withdrawer-checked](../../cli/usage.md#solana-vote-authorize-withdrawer-checked)
 command.
 
 ### Commission
@@ -147,7 +147,7 @@ deposited in the vote account, and none passed on to any delegated stake
 accounts.
 
 Commission can also be changed later with the
-[vote-update-commission](../cli/usage.md#solana-vote-update-commission) command.
+[vote-update-commission](../../cli/usage.md#solana-vote-update-commission) command.
 
 When setting the commission, only integer values in the set [0-100] are
 accepted. The integer represents the number of percentage points for the
@@ -243,7 +243,7 @@ No special handling or timing considerations are required. Use the
 
 If the Authorized Voter or Withdrawer is to be transferred to another entity
 then a two-stage signing process using a
-[Durable Nonce](../cli/examples/durable-nonce.md) is recommended.
+[Durable Nonce](../../cli/examples/durable-nonce.md) is recommended.
 
 1. Entity B creates a durable nonce using `solana create-nonce-account`
 2. Entity B then runs a `solana vote-authorize-voter-checked` or
@@ -273,7 +273,7 @@ keypairs to the other even though both entities signed the transaction.
 ## Close a Vote Account
 
 A vote account can be closed with the
-[close-vote-account](../cli/usage.md#solana-close-vote-account) command. Closing
+[close-vote-account](../../cli/usage.md#solana-close-vote-account) command. Closing
 a vote account withdraws all remaining SOL funds to a supplied recipient address
 and renders it invalid as a vote account. It is not possible to close a vote
 account with active stake.
