@@ -104,6 +104,10 @@ cat > "$CONFIG_FILE" <<EOF
     { "source": "/developing/plugins/geyser-plugins", "destination": "/validator/geyser" },
     { "source": "/validator/overview/what-is-an-rpc-node", "destination": "/what-is-an-rpc-node" },
     { "source": "/validator/overview/what-is-a-validator", "destination": "/what-is-a-validator" },
+
+    { "source": "/developing/runtime-facilities/programs", "destination": "/runtime/programs" },
+    { "source": "/developing/runtime-facilities/sysvars", "destination": "/runtime/sysvars" },
+    { "source": "/developing/runtime-facilities/zk-token-proof", "destination": "/runtime/zk-token-proof" },
     
     { "destination": "https://solana.com/docs/terminology", "source": "/terminology" },
     { "destination": "https://solana.com/docs/core/rent", "source": "/developing/intro/rent" },
