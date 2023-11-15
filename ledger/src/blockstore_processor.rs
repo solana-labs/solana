@@ -3142,6 +3142,7 @@ pub mod tests {
         });
 
         let mut bankhash_err = None;
+        let bankhash_ok = bank.hash();
 
         (0..get_instruction_errors().len()).for_each(|err| {
             let mut bank = Bank::new_for_tests(&genesis_config);
@@ -3164,6 +3165,7 @@ pub mod tests {
             bank.freeze();
 
             assert_eq!(blockhash_ok, bank.last_blockhash());
+            assert!(bankhash_ok != bank.hash());
             if let Some(bankhash) = bankhash_err {
                 assert_eq!(bankhash, bank.hash());
             }

@@ -50,6 +50,7 @@ use {
             State as NonceState,
         },
         pubkey::Pubkey,
+        rent::RentDue,
         saturating_add_assign,
         slot_hashes::SlotHashes,
         sysvar::{self, instructions::construct_instructions_data},
@@ -382,19 +383,32 @@ impl Accounts {
                         self.accounts_db
                             .load_with_fixed_root(ancestors, key)
                             .map(|(mut account, _)| {
-                                if should_collect_rent && message.is_writable(i) {
-                                    // When rent fee collection is disabled, we won't collect rent for any account. If there
-                                    // are any rent paying accounts, their `rent_epoch` won't change either.
-                                    let rent_due = rent_collector
-                                        .collect_from_existing_account(
-                                            key,
-                                            &mut account,
-                                            self.accounts_db.filler_account_suffix.as_ref(),
-                                            set_exempt_rent_epoch_max,
-                                        )
-                                        .rent_amount;
+                                if message.is_writable(i) {
+                                    if should_collect_rent {
+                                        let rent_due = rent_collector
+                                            .collect_from_existing_account(
+                                                key,
+                                                &mut account,
+                                                self.accounts_db.filler_account_suffix.as_ref(),
+                                                set_exempt_rent_epoch_max,
+                                            )
+                                            .rent_amount;
 
-                                    (account.data().len(), account, rent_due)
+                                        (account.data().len(), account, rent_due)
+                                    } else {
+                                        // When rent fee collection is disabled, we won't collect rent for any account. If there
+                                        // are any rent paying accounts, their `rent_epoch` won't change either. However, if the
+                                        // account itself is rent-exempted but its `rent_epoch` is not u64::MAX, we will set its
+                                        // `rent_epoch` to u64::MAX. In such case, the behavior stays the same as before.
+                                        if set_exempt_rent_epoch_max
+                                            && (account.rent_epoch() != u64::MAX
+                                                && rent_collector.get_rent_due(&account)
+                                                    == RentDue::Exempt)
+                                        {
+                                            account.set_rent_epoch(u64::MAX);
+                                        }
+                                        (account.data().len(), account, 0)
+                                    }
                                 } else {
                                     (account.data().len(), account, 0)
                                 }
