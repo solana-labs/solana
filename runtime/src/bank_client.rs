@@ -44,7 +44,7 @@ impl AsyncClient for BankClient {
         &self,
         transaction: VersionedTransaction,
     ) -> Result<Signature> {
-        let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
+        let signature = transaction.signatures.first().cloned().unwrap_or_default();
         let transaction_sender = self.transaction_sender.lock().unwrap();
         transaction_sender.send(transaction).unwrap();
         Ok(signature)
@@ -60,7 +60,7 @@ impl SyncClient for BankClient {
         let blockhash = self.bank.last_blockhash();
         let transaction = Transaction::new(keypairs, message, blockhash);
         self.bank.process_transaction(&transaction)?;
-        Ok(transaction.signatures.get(0).cloned().unwrap_or_default())
+        Ok(transaction.signatures.first().cloned().unwrap_or_default())
     }
 
     /// Create and process a transaction from a single instruction.

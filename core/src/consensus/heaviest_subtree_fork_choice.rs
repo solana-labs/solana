@@ -244,7 +244,8 @@ impl HeaviestSubtreeForkChoice {
         heaviest_subtree_fork_choice
     }
 
-    pub fn new_from_bank_forks(bank_forks: &BankForks) -> Self {
+    pub fn new_from_bank_forks(bank_forks: Arc<RwLock<BankForks>>) -> Self {
+        let bank_forks = bank_forks.read().unwrap();
         let mut frozen_banks: Vec<_> = bank_forks.frozen_banks().values().cloned().collect();
 
         frozen_banks.sort_by_key(|bank| bank.slot());

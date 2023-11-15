@@ -60,7 +60,7 @@ mod tests {
     fn test_root_bank_cache() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
 
         let mut root_bank_cache = RootBankCache::new(bank_forks.clone());
 

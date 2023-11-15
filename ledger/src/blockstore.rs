@@ -6,10 +6,11 @@ use {
     crate::{
         ancestor_iterator::AncestorIterator,
         blockstore_db::{
-            columns as cf, Column, Database, IteratorDirection, IteratorMode, LedgerColumn, Result,
-            WriteBatch,
+            columns as cf, Column, ColumnIndexDeprecation, Database, IteratorDirection,
+            IteratorMode, LedgerColumn, Result, WriteBatch,
         },
         blockstore_meta::*,
+        blockstore_metrics::BlockstoreRpcApiMetrics,
         blockstore_options::{
             AccessType, BlockstoreOptions, LedgerColumnOptions, BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
             BLOCKSTORE_DIRECTORY_ROCKS_LEVEL,
@@ -59,7 +60,7 @@ use {
     solana_transaction_status::{
         ConfirmedTransactionStatusWithSignature, ConfirmedTransactionWithStatusMeta, Rewards,
         TransactionStatusMeta, TransactionWithStatusMeta, VersionedConfirmedBlock,
-        VersionedTransactionWithStatusMeta,
+        VersionedConfirmedBlockWithEntries, VersionedTransactionWithStatusMeta,
     },
     std::{
         borrow::Cow,
@@ -73,8 +74,8 @@ use {
         path::{Path, PathBuf},
         rc::Rc,
         sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc, Mutex, RwLock, RwLockWriteGuard,
+            atomic::{AtomicBool, AtomicU64, Ordering},
+            Arc, Mutex, RwLock,
         },
     },
     tempfile::{Builder, TempDir},
@@ -206,7 +207,7 @@ pub struct Blockstore {
     address_signatures_cf: LedgerColumn<cf::AddressSignatures>,
     transaction_memos_cf: LedgerColumn<cf::TransactionMemos>,
     transaction_status_index_cf: LedgerColumn<cf::TransactionStatusIndex>,
-    active_transaction_status_index: RwLock<u64>,
+    highest_primary_index_slot: RwLock<Option<Slot>>,
     rewards_cf: LedgerColumn<cf::Rewards>,
     blocktime_cf: LedgerColumn<cf::Blocktime>,
     perf_samples_cf: LedgerColumn<cf::PerfSamples>,
@@ -214,13 +215,15 @@ pub struct Blockstore {
     program_costs_cf: LedgerColumn<cf::ProgramCosts>,
     bank_hash_cf: LedgerColumn<cf::BankHash>,
     optimistic_slots_cf: LedgerColumn<cf::OptimisticSlots>,
-    last_root: RwLock<Slot>,
+    max_root: AtomicU64,
+    merkle_root_meta_cf: LedgerColumn<cf::MerkleRootMeta>,
     insert_shreds_lock: Mutex<()>,
     new_shreds_signals: Mutex<Vec<Sender<bool>>>,
     completed_slots_senders: Mutex<Vec<CompletedSlotsSender>>,
     pub shred_timing_point_sender: Option<PohTimingSender>,
     pub lowest_cleanup_slot: RwLock<Slot>,
     pub slots_stats: SlotsStats,
+    rpc_api_metrics: BlockstoreRpcApiMetrics,
 }
 
 pub struct IndexMetaWorkingSetEntry {
@@ -315,6 +318,7 @@ impl Blockstore {
         let program_costs_cf = db.column();
         let bank_hash_cf = db.column();
         let optimistic_slots_cf = db.column();
+        let merkle_root_meta_cf = db.column();
 
         let db = Arc::new(db);
 
@@ -324,23 +328,7 @@ impl Blockstore {
             .next()
             .map(|(slot, _)| slot)
             .unwrap_or(0);
-        let last_root = RwLock::new(max_root);
-
-        // Get active transaction-status index or 0
-        let active_transaction_status_index = db
-            .iter::<cf::TransactionStatusIndex>(IteratorMode::Start)?
-            .next();
-        let initialize_transaction_status_index = active_transaction_status_index.is_none();
-        let active_transaction_status_index = active_transaction_status_index
-            .and_then(|(_, data)| {
-                let index0: TransactionStatusIndexMeta = deserialize(&data).unwrap();
-                if index0.frozen {
-                    Some(1)
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(0);
+        let max_root = AtomicU64::new(max_root);
 
         measure.stop();
         info!("{:?} {}", blockstore_path, measure);
@@ -360,7 +348,7 @@ impl Blockstore {
             address_signatures_cf,
             transaction_memos_cf,
             transaction_status_index_cf,
-            active_transaction_status_index: RwLock::new(active_transaction_status_index),
+            highest_primary_index_slot: RwLock::<Option<Slot>>::default(),
             rewards_cf,
             blocktime_cf,
             perf_samples_cf,
@@ -368,17 +356,19 @@ impl Blockstore {
             program_costs_cf,
             bank_hash_cf,
             optimistic_slots_cf,
+            merkle_root_meta_cf,
             new_shreds_signals: Mutex::default(),
             completed_slots_senders: Mutex::default(),
             shred_timing_point_sender: None,
             insert_shreds_lock: Mutex::<()>::default(),
-            last_root,
+            max_root,
             lowest_cleanup_slot: RwLock::<Slot>::default(),
             slots_stats: SlotsStats::default(),
+            rpc_api_metrics: BlockstoreRpcApiMetrics::default(),
         };
-        if initialize_transaction_status_index {
-            blockstore.initialize_transaction_status_index()?;
-        }
+        blockstore.cleanup_old_entries()?;
+        blockstore.update_highest_primary_index_slot()?;
+
         Ok(blockstore)
     }
 
@@ -485,16 +475,6 @@ impl Blockstore {
     /// blockstore or the slot isn't an orphan slot.
     pub fn orphan(&self, slot: Slot) -> Result<Option<bool>> {
         self.orphans_cf.get(slot)
-    }
-
-    /// Returns the max root or 0 if it does not exist.
-    pub fn max_root(&self) -> Slot {
-        self.db
-            .iter::<cf::Root>(IteratorMode::End)
-            .expect("Couldn't get rooted iterator for max_root()")
-            .next()
-            .map(|(slot, _)| slot)
-            .unwrap_or(0)
     }
 
     pub fn slot_meta_iterator(
@@ -737,6 +717,12 @@ impl Blockstore {
         self.program_costs_cf.submit_rocksdb_cf_metrics();
         self.bank_hash_cf.submit_rocksdb_cf_metrics();
         self.optimistic_slots_cf.submit_rocksdb_cf_metrics();
+        self.merkle_root_meta_cf.submit_rocksdb_cf_metrics();
+    }
+
+    /// Report the accumulated RPC API metrics
+    pub(crate) fn report_rpc_api_metrics(&self) {
+        self.rpc_api_metrics.report();
     }
 
     fn try_shred_recovery(
@@ -1125,7 +1111,7 @@ impl Blockstore {
             .expect("Couldn't fetch from SlotMeta column family")
         {
             // Clear all slot related information
-            self.run_purge(slot, slot, PurgeType::PrimaryIndex)
+            self.run_purge(slot, slot, PurgeType::Exact)
                 .expect("Purge database operations failed");
 
             // Clear this slot as a next slot from parent
@@ -1208,7 +1194,7 @@ impl Blockstore {
                 return false;
             }
 
-            if !Blockstore::should_insert_coding_shred(&shred, &self.last_root) {
+            if !Blockstore::should_insert_coding_shred(&shred, self.max_root()) {
                 metrics.num_coding_shreds_invalid += 1;
                 return false;
             }
@@ -1407,7 +1393,7 @@ impl Blockstore {
                 &shred,
                 slot_meta,
                 just_inserted_shreds,
-                &self.last_root,
+                self.max_root(),
                 leader_schedule,
                 shred_source,
                 duplicate_shreds,
@@ -1435,9 +1421,9 @@ impl Blockstore {
         Ok(newly_completed_data_sets)
     }
 
-    fn should_insert_coding_shred(shred: &Shred, last_root: &RwLock<u64>) -> bool {
+    fn should_insert_coding_shred(shred: &Shred, max_root: Slot) -> bool {
         debug_assert_matches!(shred.sanitize(), Ok(()));
-        shred.is_code() && shred.slot() > *last_root.read().unwrap()
+        shred.is_code() && shred.slot() > max_root
     }
 
     fn insert_coding_shred(
@@ -1489,7 +1475,7 @@ impl Blockstore {
         shred: &Shred,
         slot_meta: &SlotMeta,
         just_inserted_shreds: &HashMap<ShredId, Shred>,
-        last_root: &RwLock<u64>,
+        max_root: Slot,
         leader_schedule: Option<&LeaderScheduleCache>,
         shred_source: ShredSource,
         duplicate_shreds: &mut Vec<PossibleDuplicateShred>,
@@ -1584,12 +1570,11 @@ impl Blockstore {
             return false;
         }
 
-        let last_root = *last_root.read().unwrap();
         // TODO Shouldn't this use shred.parent() instead and update
         // slot_meta.parent_slot accordingly?
         slot_meta
             .parent_slot
-            .map(|parent_slot| verify_shred_slots(slot, parent_slot, last_root))
+            .map(|parent_slot| verify_shred_slots(slot, parent_slot, max_root))
             .unwrap_or_default()
     }
 
@@ -1600,7 +1585,7 @@ impl Blockstore {
                 sender,
                 SlotPohTimingInfo::new_slot_full_poh_time_point(
                     slot,
-                    Some(self.last_root()),
+                    Some(self.max_root()),
                     solana_sdk::timing::timestamp(),
                 ),
             );
@@ -1978,10 +1963,24 @@ impl Blockstore {
         }
     }
 
-    pub fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
-        datapoint_info!("blockstore-rpc-api", ("method", "get_block_time", String));
+    fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
         let _lock = self.check_lowest_cleanup_slot(slot)?;
         self.blocktime_cf.get(slot)
+    }
+
+    pub fn get_rooted_block_time(&self, slot: Slot) -> Result<UnixTimestamp> {
+        self.rpc_api_metrics
+            .num_get_rooted_block_time
+            .fetch_add(1, Ordering::Relaxed);
+        let _lock = self.check_lowest_cleanup_slot(slot)?;
+
+        if self.is_root(slot) {
+            return self
+                .blocktime_cf
+                .get(slot)?
+                .ok_or(BlockstoreError::SlotUnavailable);
+        }
+        Err(BlockstoreError::SlotNotRooted)
     }
 
     pub fn cache_block_time(&self, slot: Slot, timestamp: UnixTimestamp) -> Result<()> {
@@ -1989,8 +1988,11 @@ impl Blockstore {
     }
 
     pub fn get_block_height(&self, slot: Slot) -> Result<Option<u64>> {
-        datapoint_info!("blockstore-rpc-api", ("method", "get_block_height", String));
+        self.rpc_api_metrics
+            .num_get_block_height
+            .fetch_add(1, Ordering::Relaxed);
         let _lock = self.check_lowest_cleanup_slot(slot)?;
+
         self.block_height_cf.get(slot)
     }
 
@@ -2018,7 +2020,9 @@ impl Blockstore {
         slot: Slot,
         require_previous_blockhash: bool,
     ) -> Result<VersionedConfirmedBlock> {
-        datapoint_info!("blockstore-rpc-api", ("method", "get_rooted_block", String));
+        self.rpc_api_metrics
+            .num_get_rooted_block
+            .fetch_add(1, Ordering::Relaxed);
         let _lock = self.check_lowest_cleanup_slot(slot)?;
 
         if self.is_root(slot) {
@@ -2032,6 +2036,32 @@ impl Blockstore {
         slot: Slot,
         require_previous_blockhash: bool,
     ) -> Result<VersionedConfirmedBlock> {
+        self.get_complete_block_with_entries(slot, require_previous_blockhash, false)
+            .map(|result| result.block)
+    }
+
+    pub fn get_rooted_block_with_entries(
+        &self,
+        slot: Slot,
+        require_previous_blockhash: bool,
+    ) -> Result<VersionedConfirmedBlockWithEntries> {
+        self.rpc_api_metrics
+            .num_get_rooted_block_with_entries
+            .fetch_add(1, Ordering::Relaxed);
+        let _lock = self.check_lowest_cleanup_slot(slot)?;
+
+        if self.is_root(slot) {
+            return self.get_complete_block_with_entries(slot, require_previous_blockhash, true);
+        }
+        Err(BlockstoreError::SlotNotRooted)
+    }
+
+    fn get_complete_block_with_entries(
+        &self,
+        slot: Slot,
+        require_previous_blockhash: bool,
+        populate_entries: bool,
+    ) -> Result<VersionedConfirmedBlockWithEntries> {
         let Some(slot_meta) = self.meta_cf.get(slot)? else {
             info!("SlotMeta not found for slot {}", slot);
             return Err(BlockstoreError::SlotUnavailable);
@@ -2043,9 +2073,26 @@ impl Blockstore {
                     .last()
                     .map(|entry| entry.hash)
                     .unwrap_or_else(|| panic!("Rooted slot {slot:?} must have blockhash"));
+                let mut starting_transaction_index = 0;
+                let mut entries = if populate_entries {
+                    Vec::with_capacity(slot_entries.len())
+                } else {
+                    Vec::new()
+                };
                 let slot_transaction_iterator = slot_entries
                     .into_iter()
-                    .flat_map(|entry| entry.transactions)
+                    .flat_map(|entry| {
+                        if populate_entries {
+                            entries.push(solana_transaction_status::EntrySummary {
+                                num_hashes: entry.num_hashes,
+                                hash: entry.hash,
+                                num_transactions: entry.transactions.len() as u64,
+                                starting_transaction_index,
+                            });
+                            starting_transaction_index += entry.transactions.len();
+                        }
+                        entry.transactions
+                    })
                     .map(|transaction| {
                         if let Err(err) = transaction.sanitize() {
                             warn!(
@@ -2097,7 +2144,7 @@ impl Blockstore {
                     block_time,
                     block_height,
                 };
-                return Ok(block);
+                return Ok(VersionedConfirmedBlockWithEntries { block, entries });
             }
         }
         Err(BlockstoreError::SlotUnavailable)
@@ -2121,15 +2168,20 @@ impl Blockstore {
             .collect()
     }
 
-    /// Initializes the TransactionStatusIndex column family with two records, `0` and `1`,
-    /// which are used as the primary index for entries in the TransactionStatus and
-    /// AddressSignatures columns. At any given time, one primary index is active (ie. new records
-    /// are stored under this index), the other is frozen.
-    fn initialize_transaction_status_index(&self) -> Result<()> {
-        self.transaction_status_index_cf
-            .put(0, &TransactionStatusIndexMeta::default())?;
-        self.transaction_status_index_cf
-            .put(1, &TransactionStatusIndexMeta::default())?;
+    fn cleanup_old_entries(&self) -> Result<()> {
+        if !self.is_primary_access() {
+            return Ok(());
+        }
+
+        // Initialize TransactionStatusIndexMeta if they are not present already
+        if self.transaction_status_index_cf.get(0)?.is_none() {
+            self.transaction_status_index_cf
+                .put(0, &TransactionStatusIndexMeta::default())?;
+        }
+        if self.transaction_status_index_cf.get(1)?.is_none() {
+            self.transaction_status_index_cf
+                .put(1, &TransactionStatusIndexMeta::default())?;
+        }
 
         // If present, delete dummy entries inserted by old software
         // https://github.com/solana-labs/solana/blob/bc2b372/ledger/src/blockstore.rs#L2130-L2137
@@ -2155,90 +2207,81 @@ impl Blockstore {
         Ok(())
     }
 
-    /// Toggles the active primary index between `0` and `1`, and clears the
-    /// stored max-slot of the frozen index in preparation for pruning.
-    fn toggle_transaction_status_index(
-        &self,
-        batch: &mut WriteBatch,
-        w_active_transaction_status_index: &mut u64,
-        to_slot: Slot,
-    ) -> Result<Option<u64>> {
-        let index0 = self.transaction_status_index_cf.get(0)?;
-        if index0.is_none() {
-            return Ok(None);
-        }
-        let mut index0 = index0.unwrap();
-        let mut index1 = self.transaction_status_index_cf.get(1)?.unwrap();
+    fn get_highest_primary_index_slot(&self) -> Option<Slot> {
+        *self.highest_primary_index_slot.read().unwrap()
+    }
 
-        if !index0.frozen && !index1.frozen {
-            index0.frozen = true;
-            *w_active_transaction_status_index = 1;
-            batch.put::<cf::TransactionStatusIndex>(0, &index0)?;
-            Ok(None)
-        } else {
-            let purge_target_primary_index = if index0.frozen && to_slot > index0.max_slot {
-                info!(
-                    "Pruning expired primary index 0 up to slot {} (max requested: {})",
-                    index0.max_slot, to_slot
-                );
-                Some(0)
-            } else if index1.frozen && to_slot > index1.max_slot {
-                info!(
-                    "Pruning expired primary index 1 up to slot {} (max requested: {})",
-                    index1.max_slot, to_slot
-                );
-                Some(1)
-            } else {
-                None
-            };
+    fn set_highest_primary_index_slot(&self, slot: Option<Slot>) {
+        *self.highest_primary_index_slot.write().unwrap() = slot;
+    }
 
-            if let Some(purge_target_primary_index) = purge_target_primary_index {
-                *w_active_transaction_status_index = purge_target_primary_index;
-                if index0.frozen {
-                    index0.max_slot = 0
-                };
-                index0.frozen = !index0.frozen;
-                batch.put::<cf::TransactionStatusIndex>(0, &index0)?;
-                if index1.frozen {
-                    index1.max_slot = 0
-                };
-                index1.frozen = !index1.frozen;
-                batch.put::<cf::TransactionStatusIndex>(1, &index1)?;
+    fn update_highest_primary_index_slot(&self) -> Result<()> {
+        let iterator = self.transaction_status_index_cf.iter(IteratorMode::Start)?;
+        let mut highest_primary_index_slot = None;
+        for (_, data) in iterator {
+            let meta: TransactionStatusIndexMeta = deserialize(&data).unwrap();
+            if highest_primary_index_slot.is_none()
+                || highest_primary_index_slot.is_some_and(|slot| slot < meta.max_slot)
+            {
+                highest_primary_index_slot = Some(meta.max_slot);
             }
-
-            Ok(purge_target_primary_index)
         }
+        if highest_primary_index_slot.is_some_and(|slot| slot != 0) {
+            self.set_highest_primary_index_slot(highest_primary_index_slot);
+        } else {
+            self.db.set_clean_slot_0(true);
+        }
+        Ok(())
     }
 
-    fn get_primary_index_to_write(
-        &self,
-        slot: Slot,
-        // take WriteGuard to require critical section semantics at call site
-        w_active_transaction_status_index: &RwLockWriteGuard<Slot>,
-    ) -> Result<u64> {
-        let i = **w_active_transaction_status_index;
-        let mut index_meta = self.transaction_status_index_cf.get(i)?.unwrap();
-        if slot > index_meta.max_slot {
-            assert!(!index_meta.frozen);
-            index_meta.max_slot = slot;
-            self.transaction_status_index_cf.put(i, &index_meta)?;
+    fn maybe_cleanup_highest_primary_index_slot(&self, oldest_slot: Slot) -> Result<()> {
+        let mut w_highest_primary_index_slot = self.highest_primary_index_slot.write().unwrap();
+        if let Some(highest_primary_index_slot) = *w_highest_primary_index_slot {
+            if oldest_slot > highest_primary_index_slot {
+                *w_highest_primary_index_slot = None;
+                self.transaction_status_index_cf.delete(0)?;
+                self.transaction_status_index_cf.delete(1)?;
+            }
         }
-        Ok(i)
+        if w_highest_primary_index_slot.is_none() {
+            self.db.set_clean_slot_0(true);
+        }
+        Ok(())
     }
 
-    pub fn read_transaction_status(
+    fn read_deprecated_transaction_status(
         &self,
         index: (Signature, Slot),
     ) -> Result<Option<TransactionStatusMeta>> {
         let (signature, slot) = index;
         let result = self
             .transaction_status_cf
-            .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((0, signature, slot))?;
+            .get_raw_protobuf_or_bincode::<StoredTransactionStatusMeta>(
+                &cf::TransactionStatus::deprecated_key((0, signature, slot)),
+            )?;
         if result.is_none() {
             Ok(self
                 .transaction_status_cf
-                .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((1, signature, slot))?
+                .get_raw_protobuf_or_bincode::<StoredTransactionStatusMeta>(
+                    &cf::TransactionStatus::deprecated_key((1, signature, slot)),
+                )?
                 .and_then(|meta| meta.try_into().ok()))
+        } else {
+            Ok(result.and_then(|meta| meta.try_into().ok()))
+        }
+    }
+
+    pub fn read_transaction_status(
+        &self,
+        index: (Signature, Slot),
+    ) -> Result<Option<TransactionStatusMeta>> {
+        let result = self.transaction_status_cf.get_protobuf(index)?;
+        if result.is_none()
+            && self
+                .get_highest_primary_index_slot()
+                .is_some_and(|highest_slot| highest_slot >= index.1)
+        {
+            self.read_deprecated_transaction_status(index)
         } else {
             Ok(result.and_then(|meta| meta.try_into().ok()))
         }
@@ -2251,37 +2294,53 @@ impl Blockstore {
         writable_keys: Vec<&Pubkey>,
         readonly_keys: Vec<&Pubkey>,
         status: TransactionStatusMeta,
+        transaction_index: usize,
     ) -> Result<()> {
         let status = status.into();
-        // This write lock prevents interleaving issues with the transaction_status_index_cf by gating
-        // writes to that column
-        let w_active_transaction_status_index =
-            self.active_transaction_status_index.write().unwrap();
-        let primary_index =
-            self.get_primary_index_to_write(slot, &w_active_transaction_status_index)?;
+        let transaction_index = u32::try_from(transaction_index)
+            .map_err(|_| BlockstoreError::TransactionIndexOverflow)?;
         self.transaction_status_cf
-            .put_protobuf((primary_index, signature, slot), &status)?;
+            .put_protobuf((signature, slot), &status)?;
         for address in writable_keys {
             self.address_signatures_cf.put(
-                (primary_index, *address, slot, signature),
+                (*address, slot, transaction_index, signature),
                 &AddressSignatureMeta { writeable: true },
             )?;
         }
         for address in readonly_keys {
             self.address_signatures_cf.put(
-                (primary_index, *address, slot, signature),
+                (*address, slot, transaction_index, signature),
                 &AddressSignatureMeta { writeable: false },
             )?;
         }
         Ok(())
     }
 
-    pub fn read_transaction_memos(&self, signature: Signature) -> Result<Option<String>> {
-        self.transaction_memos_cf.get(signature)
+    pub fn read_transaction_memos(
+        &self,
+        signature: Signature,
+        slot: Slot,
+    ) -> Result<Option<String>> {
+        let memos = self.transaction_memos_cf.get((signature, slot))?;
+        if memos.is_none()
+            && self
+                .get_highest_primary_index_slot()
+                .is_some_and(|highest_slot| highest_slot >= slot)
+        {
+            self.transaction_memos_cf
+                .get_raw(&cf::TransactionMemos::deprecated_key(signature))
+        } else {
+            Ok(memos)
+        }
     }
 
-    pub fn write_transaction_memos(&self, signature: &Signature, memos: String) -> Result<()> {
-        self.transaction_memos_cf.put(*signature, &memos)
+    pub fn write_transaction_memos(
+        &self,
+        signature: &Signature,
+        slot: Slot,
+        memos: String,
+    ) -> Result<()> {
+        self.transaction_memos_cf.put((*signature, slot), &memos)
     }
 
     /// Acquires the `lowest_cleanup_slot` lock and returns a tuple of the held lock
@@ -2325,17 +2384,46 @@ impl Blockstore {
         confirmed_unrooted_slots: &HashSet<Slot>,
     ) -> Result<(Option<(Slot, TransactionStatusMeta)>, u64)> {
         let mut counter = 0;
-        let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
+        let (lock, _) = self.ensure_lowest_cleanup_slot();
+        let first_available_block = self.get_first_available_block()?;
 
+        let iterator =
+            self.transaction_status_cf
+                .iter_current_index_filtered(IteratorMode::From(
+                    (signature, first_available_block),
+                    IteratorDirection::Forward,
+                ))?;
+
+        for ((sig, slot), _data) in iterator {
+            counter += 1;
+            if sig != signature {
+                break;
+            }
+            if !self.is_root(slot) && !confirmed_unrooted_slots.contains(&slot) {
+                continue;
+            }
+            let status = self
+                .transaction_status_cf
+                .get_protobuf((signature, slot))?
+                .and_then(|status| status.try_into().ok())
+                .map(|status| (slot, status));
+            return Ok((status, counter));
+        }
+
+        if self.get_highest_primary_index_slot().is_none() {
+            return Ok((None, counter));
+        }
         for transaction_status_cf_primary_index in 0..=1 {
-            let index_iterator = self.transaction_status_cf.iter(IteratorMode::From(
-                (
-                    transaction_status_cf_primary_index,
-                    signature,
-                    lowest_available_slot,
-                ),
-                IteratorDirection::Forward,
-            ))?;
+            let index_iterator =
+                self.transaction_status_cf
+                    .iter_deprecated_index_filtered(IteratorMode::From(
+                        (
+                            transaction_status_cf_primary_index,
+                            signature,
+                            first_available_block,
+                        ),
+                        IteratorDirection::Forward,
+                    ))?;
             for ((i, sig, slot), _data) in index_iterator {
                 counter += 1;
                 if i != transaction_status_cf_primary_index || sig != signature {
@@ -2346,7 +2434,9 @@ impl Blockstore {
                 }
                 let status = self
                     .transaction_status_cf
-                    .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((i, sig, slot))?
+                    .get_raw_protobuf_or_bincode::<StoredTransactionStatusMeta>(
+                        &cf::TransactionStatus::deprecated_key((i, signature, slot)),
+                    )?
                     .and_then(|status| status.try_into().ok())
                     .map(|status| (slot, status));
                 return Ok((status, counter));
@@ -2362,10 +2452,10 @@ impl Blockstore {
         &self,
         signature: Signature,
     ) -> Result<Option<(Slot, TransactionStatusMeta)>> {
-        datapoint_info!(
-            "blockstore-rpc-api",
-            ("method", "get_rooted_transaction_status", String)
-        );
+        self.rpc_api_metrics
+            .num_get_rooted_transaction_status
+            .fetch_add(1, Ordering::Relaxed);
+
         self.get_transaction_status(signature, &HashSet::default())
     }
 
@@ -2375,10 +2465,10 @@ impl Blockstore {
         signature: Signature,
         confirmed_unrooted_slots: &HashSet<Slot>,
     ) -> Result<Option<(Slot, TransactionStatusMeta)>> {
-        datapoint_info!(
-            "blockstore-rpc-api",
-            ("method", "get_transaction_status", String)
-        );
+        self.rpc_api_metrics
+            .num_get_transaction_status
+            .fetch_add(1, Ordering::Relaxed);
+
         self.get_transaction_status_with_counter(signature, confirmed_unrooted_slots)
             .map(|(status, _)| status)
     }
@@ -2388,10 +2478,10 @@ impl Blockstore {
         &self,
         signature: Signature,
     ) -> Result<Option<ConfirmedTransactionWithStatusMeta>> {
-        datapoint_info!(
-            "blockstore-rpc-api",
-            ("method", "get_rooted_transaction", String)
-        );
+        self.rpc_api_metrics
+            .num_get_rooted_transaction
+            .fetch_add(1, Ordering::Relaxed);
+
         self.get_transaction_with_status(signature, &HashSet::default())
     }
 
@@ -2401,14 +2491,14 @@ impl Blockstore {
         signature: Signature,
         highest_confirmed_slot: Slot,
     ) -> Result<Option<ConfirmedTransactionWithStatusMeta>> {
-        datapoint_info!(
-            "blockstore-rpc-api",
-            ("method", "get_complete_transaction", String)
-        );
-        let last_root = self.last_root();
+        self.rpc_api_metrics
+            .num_get_complete_transaction
+            .fetch_add(1, Ordering::Relaxed);
+
+        let max_root = self.max_root();
         let confirmed_unrooted_slots: HashSet<_> =
             AncestorIterator::new_inclusive(highest_confirmed_slot, self)
-                .take_while(|&slot| slot > last_root)
+                .take_while(|&slot| slot > max_root)
                 .collect();
         self.get_transaction_with_status(signature, &confirmed_unrooted_slots)
     }
@@ -2462,50 +2552,19 @@ impl Blockstore {
             .find(|transaction| transaction.signatures[0] == signature))
     }
 
-    // Returns all rooted signatures for an address, ordered by slot that the transaction was
-    // processed in. Within each slot the transactions will be ordered by signature, and NOT by
-    // the order in which the transactions exist in the block
-    //
-    // DEPRECATED
+    // DEPRECATED and decommissioned
+    // This method always returns an empty Vec
     fn find_address_signatures(
         &self,
-        pubkey: Pubkey,
-        start_slot: Slot,
-        end_slot: Slot,
+        _pubkey: Pubkey,
+        _start_slot: Slot,
+        _end_slot: Slot,
     ) -> Result<Vec<(Slot, Signature)>> {
-        let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
-        let mut signatures: Vec<(Slot, Signature)> = vec![];
-        if end_slot < lowest_available_slot {
-            return Ok(signatures);
-        }
-        for transaction_status_cf_primary_index in 0..=1 {
-            let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
-                (
-                    transaction_status_cf_primary_index,
-                    pubkey,
-                    start_slot.max(lowest_available_slot),
-                    Signature::default(),
-                ),
-                IteratorDirection::Forward,
-            ))?;
-            for ((i, address, slot, signature), _) in index_iterator {
-                if i != transaction_status_cf_primary_index || slot > end_slot || address != pubkey
-                {
-                    break;
-                }
-                if self.is_root(slot) {
-                    signatures.push((slot, signature));
-                }
-            }
-        }
-        drop(lock);
-        signatures.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap().then(a.1.cmp(&b.1)));
-        Ok(signatures)
+        Ok(vec![])
     }
 
     // Returns all signatures for an address in a particular slot, regardless of whether that slot
-    // has been rooted. The transactions will be ordered by signature, and NOT by the order in
-    // which the transactions exist in the block
+    // has been rooted. The transactions will be ordered by their occurrence in the block
     fn find_address_signatures_for_slot(
         &self,
         pubkey: Pubkey,
@@ -2516,47 +2575,44 @@ impl Blockstore {
         if slot < lowest_available_slot {
             return Ok(signatures);
         }
-        for transaction_status_cf_primary_index in 0..=1 {
-            let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
-                (
-                    transaction_status_cf_primary_index,
-                    pubkey,
-                    slot,
-                    Signature::default(),
-                ),
-                IteratorDirection::Forward,
-            ))?;
-            for ((i, address, transaction_slot, signature), _) in index_iterator {
-                if i != transaction_status_cf_primary_index
-                    || transaction_slot > slot
-                    || address != pubkey
-                {
-                    break;
-                }
-                signatures.push((slot, signature));
+        let index_iterator =
+            self.address_signatures_cf
+                .iter_current_index_filtered(IteratorMode::From(
+                    (
+                        pubkey,
+                        slot.max(lowest_available_slot),
+                        0,
+                        Signature::default(),
+                    ),
+                    IteratorDirection::Forward,
+                ))?;
+        for ((address, transaction_slot, _transaction_index, signature), _) in index_iterator {
+            if transaction_slot > slot || address != pubkey {
+                break;
             }
+            signatures.push((slot, signature));
         }
         drop(lock);
-        signatures.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap().then(a.1.cmp(&b.1)));
         Ok(signatures)
     }
 
-    // DEPRECATED
+    // DEPRECATED and decommissioned
+    // This method always returns an empty Vec
     pub fn get_confirmed_signatures_for_address(
         &self,
         pubkey: Pubkey,
         start_slot: Slot,
         end_slot: Slot,
     ) -> Result<Vec<Signature>> {
-        datapoint_info!(
-            "blockstore-rpc-api",
-            ("method", "get_confirmed_signatures_for_address", String)
-        );
+        self.rpc_api_metrics
+            .num_get_confirmed_signatures_for_address
+            .fetch_add(1, Ordering::Relaxed);
+
         self.find_address_signatures(pubkey, start_slot, end_slot)
             .map(|signatures| signatures.iter().map(|(_, signature)| *signature).collect())
     }
 
-    fn get_sorted_block_signatures(&self, slot: Slot) -> Result<Vec<Signature>> {
+    fn get_block_signatures_rev(&self, slot: Slot) -> Result<Vec<Signature>> {
         let block = self.get_complete_block(slot, false).map_err(|err| {
             BlockstoreError::Io(IoError::new(
                 ErrorKind::Other,
@@ -2564,10 +2620,10 @@ impl Blockstore {
             ))
         })?;
 
-        // Load all signatures for the block
-        let mut slot_signatures: Vec<_> = block
+        Ok(block
             .transactions
             .into_iter()
+            .rev()
             .filter_map(|transaction_with_meta| {
                 transaction_with_meta
                     .transaction
@@ -2575,14 +2631,7 @@ impl Blockstore {
                     .into_iter()
                     .next()
             })
-            .collect();
-
-        // Reverse sort signatures as a way to entire a stable ordering within a slot, as
-        // the AddressSignatures column is ordered by signatures within a slot,
-        // not by block ordering
-        slot_signatures.sort_unstable_by(|a, b| b.cmp(a));
-
-        Ok(slot_signatures)
+            .collect())
     }
 
     pub fn get_confirmed_signatures_for_address2(
@@ -2593,14 +2642,14 @@ impl Blockstore {
         until: Option<Signature>,
         limit: usize,
     ) -> Result<SignatureInfosForAddress> {
-        datapoint_info!(
-            "blockstore-rpc-api",
-            ("method", "get_confirmed_signatures_for_address2", String)
-        );
-        let last_root = self.last_root();
+        self.rpc_api_metrics
+            .num_get_confirmed_signatures_for_address2
+            .fetch_add(1, Ordering::Relaxed);
+
+        let max_root = self.max_root();
         let confirmed_unrooted_slots: HashSet<_> =
             AncestorIterator::new_inclusive(highest_slot, self)
-                .take_while(|&slot| slot > last_root)
+                .take_while(|&slot| slot > max_root)
                 .collect();
 
         // Figure the `slot` to start listing signatures at, based on the ledger location of the
@@ -2615,7 +2664,7 @@ impl Blockstore {
                 match transaction_status {
                     None => return Ok(SignatureInfosForAddress::default()),
                     Some((slot, _)) => {
-                        let mut slot_signatures = self.get_sorted_block_signatures(slot)?;
+                        let mut slot_signatures = self.get_block_signatures_rev(slot)?;
                         if let Some(pos) = slot_signatures.iter().position(|&x| x == before) {
                             slot_signatures.truncate(pos + 1);
                         }
@@ -2630,18 +2679,19 @@ impl Blockstore {
         };
         get_before_slot_timer.stop();
 
+        let first_available_block = self.get_first_available_block()?;
         // Generate a HashSet of signatures that should be excluded from the results based on
         // `until` signature
         let mut get_until_slot_timer = Measure::start("get_until_slot_timer");
         let (lowest_slot, until_excluded_signatures) = match until {
-            None => (0, HashSet::new()),
+            None => (first_available_block, HashSet::new()),
             Some(until) => {
                 let transaction_status =
                     self.get_transaction_status(until, &confirmed_unrooted_slots)?;
                 match transaction_status {
-                    None => (0, HashSet::new()),
+                    None => (first_available_block, HashSet::new()),
                     Some((slot, _)) => {
-                        let mut slot_signatures = self.get_sorted_block_signatures(slot)?;
+                        let mut slot_signatures = self.get_block_signatures_rev(slot)?;
                         if let Some(pos) = slot_signatures.iter().position(|&x| x == until) {
                             slot_signatures = slot_signatures.split_off(pos);
                         }
@@ -2654,7 +2704,6 @@ impl Blockstore {
         get_until_slot_timer.stop();
 
         // Fetch the list of signatures that affect the given address
-        let first_available_block = self.get_first_available_block()?;
         let mut address_signatures = vec![];
 
         // Get signatures in `slot`
@@ -2672,71 +2721,26 @@ impl Blockstore {
         }
         get_initial_slot_timer.stop();
 
-        // Check the active_transaction_status_index to see if it contains slot. If so, start with
-        // that index, as it will contain higher slots
-        let starting_primary_index = *self.active_transaction_status_index.read().unwrap();
-        let next_primary_index = u64::from(starting_primary_index == 0);
-        let next_max_slot = self
-            .transaction_status_index_cf
-            .get(next_primary_index)?
-            .unwrap()
-            .max_slot;
+        let mut address_signatures_iter_timer = Measure::start("iter_timer");
+        let mut iterator =
+            self.address_signatures_cf
+                .iter_current_index_filtered(IteratorMode::From(
+                    // Regardless of whether a `before` signature is provided, the latest relevant
+                    // `slot` is queried directly with the `find_address_signatures_for_slot()`
+                    // call above. Thus, this iterator starts at the lowest entry of `address,
+                    // slot` and iterates backwards to continue reporting the next earliest
+                    // signatures.
+                    (address, slot, 0, Signature::default()),
+                    IteratorDirection::Reverse,
+                ))?;
 
-        let mut starting_primary_index_iter_timer = Measure::start("starting_primary_index_iter");
-        if slot > next_max_slot {
-            let mut starting_iterator = self.address_signatures_cf.iter(IteratorMode::From(
-                (starting_primary_index, address, slot, Signature::default()),
-                IteratorDirection::Reverse,
-            ))?;
-
-            // Iterate through starting_iterator until limit is reached
-            while address_signatures.len() < limit {
-                if let Some(((i, key_address, slot, signature), _)) = starting_iterator.next() {
-                    if slot == next_max_slot || slot < lowest_slot {
-                        break;
-                    }
-                    if i == starting_primary_index
-                        && key_address == address
-                        && slot >= first_available_block
-                    {
-                        if self.is_root(slot) || confirmed_unrooted_slots.contains(&slot) {
-                            address_signatures.push((slot, signature));
-                        }
-                        continue;
-                    }
-                }
-                break;
-            }
-
-            // Handle slots that cross primary indexes
-            if next_max_slot >= lowest_slot {
-                let mut signatures =
-                    self.find_address_signatures_for_slot(address, next_max_slot)?;
-                signatures.reverse();
-                address_signatures.append(&mut signatures);
-            }
-        }
-        starting_primary_index_iter_timer.stop();
-
-        // Iterate through next_iterator until limit is reached
-        let mut next_primary_index_iter_timer = Measure::start("next_primary_index_iter_timer");
-        let mut next_iterator = self.address_signatures_cf.iter(IteratorMode::From(
-            (next_primary_index, address, slot, Signature::default()),
-            IteratorDirection::Reverse,
-        ))?;
+        // Iterate until limit is reached
         while address_signatures.len() < limit {
-            if let Some(((i, key_address, slot, signature), _)) = next_iterator.next() {
-                // Skip next_max_slot, which is already included
-                if slot == next_max_slot {
-                    continue;
-                }
+            if let Some(((key_address, slot, _transaction_index, signature), _)) = iterator.next() {
                 if slot < lowest_slot {
                     break;
                 }
-                if i == next_primary_index
-                    && key_address == address
-                    && slot >= first_available_block
-                {
+                if key_address == address {
                     if self.is_root(slot) || confirmed_unrooted_slots.contains(&slot) {
                         address_signatures.push((slot, signature));
                     }
@@ -2745,7 +2749,8 @@ impl Blockstore {
             }
             break;
         }
-        next_primary_index_iter_timer.stop();
+        address_signatures_iter_timer.stop();
+
         let mut address_signatures: Vec<(Slot, Signature)> = address_signatures
             .into_iter()
             .filter(|(_, signature)| !until_excluded_signatures.contains(signature))
@@ -2759,7 +2764,7 @@ impl Blockstore {
             let transaction_status =
                 self.get_transaction_status(signature, &confirmed_unrooted_slots)?;
             let err = transaction_status.and_then(|(_slot, status)| status.status.err());
-            let memo = self.read_transaction_memos(signature)?;
+            let memo = self.read_transaction_memos(signature, slot)?;
             let block_time = self.get_block_time(slot)?;
             infos.push(ConfirmedTransactionStatusWithSignature {
                 signature,
@@ -2784,13 +2789,8 @@ impl Blockstore {
                 i64
             ),
             (
-                "starting_primary_index_iter_us",
-                starting_primary_index_iter_timer.as_us() as i64,
-                i64
-            ),
-            (
-                "next_primary_index_iter_us",
-                next_primary_index_iter_timer.as_us() as i64,
+                "address_signatures_iter_us",
+                address_signatures_iter_timer.as_us() as i64,
                 i64
             ),
             (
@@ -3251,18 +3251,9 @@ impl Blockstore {
         }
 
         self.db.write(write_batch)?;
-
-        let mut last_root = self.last_root.write().unwrap();
-        if *last_root == std::u64::MAX {
-            *last_root = 0;
-        }
-        *last_root = cmp::max(max_new_rooted_slot, *last_root);
+        self.max_root
+            .fetch_max(max_new_rooted_slot, Ordering::Relaxed);
         Ok(())
-    }
-
-    /// For tests
-    pub fn set_last_root(&mut self, root: Slot) {
-        *self.last_root.write().unwrap() = root;
     }
 
     pub fn mark_slots_as_if_rooted_normally_at_startup(
@@ -3364,8 +3355,17 @@ impl Blockstore {
         Ok(duplicate_slots_iterator.map(|(slot, _)| slot))
     }
 
+    /// Returns the max root or 0 if it does not exist
+    pub fn max_root(&self) -> Slot {
+        self.max_root.load(Ordering::Relaxed)
+    }
+
+    #[deprecated(
+        since = "1.18.0",
+        note = "Please use `solana_ledger::blockstore::Blockstore::max_root()` instead"
+    )]
     pub fn last_root(&self) -> Slot {
-        *self.last_root.read().unwrap()
+        self.max_root()
     }
 
     // find the first available slot in blockstore that has some data in it
@@ -3379,7 +3379,7 @@ impl Blockstore {
             }
         }
         // This means blockstore is empty, should never get here aside from right at boot.
-        self.last_root()
+        self.max_root()
     }
 
     fn lowest_slot_with_genesis(&self) -> Slot {
@@ -3392,7 +3392,7 @@ impl Blockstore {
             }
         }
         // This means blockstore is empty, should never get here aside from right at boot.
-        self.last_root()
+        self.max_root()
     }
 
     /// Returns the highest available slot in the blockstore
@@ -3467,7 +3467,7 @@ impl Blockstore {
             }
             slot
         } else {
-            self.last_root()
+            self.max_root()
         };
         let end_slot = end_slot.unwrap_or(*lowest_cleanup_slot);
         let ancestor_iterator =
@@ -4484,18 +4484,14 @@ pub fn test_all_empty_or_min(blockstore: &Blockstore, min_slot: Slot) {
             .iter::<cf::TransactionStatus>(IteratorMode::Start)
             .unwrap()
             .next()
-            .map(|((primary_index, _, slot), _)| {
-                slot >= min_slot || (primary_index == 2 && slot == 0)
-            })
+            .map(|((_, slot), _)| slot >= min_slot || slot == 0)
             .unwrap_or(true)
         & blockstore
             .db
             .iter::<cf::AddressSignatures>(IteratorMode::Start)
             .unwrap()
             .next()
-            .map(|((primary_index, _, slot, _), _)| {
-                slot >= min_slot || (primary_index == 2 && slot == 0)
-            })
+            .map(|((_, slot, _, _), _)| slot >= min_slot || slot == 0)
             .unwrap_or(true)
         & blockstore
             .db
@@ -4992,7 +4988,7 @@ pub mod tests {
 
         let max_purge_slot = 1;
         blockstore
-            .run_purge(0, max_purge_slot, PurgeType::PrimaryIndex)
+            .run_purge(0, max_purge_slot, PurgeType::Exact)
             .unwrap();
         *blockstore.lowest_cleanup_slot.write().unwrap() = max_purge_slot;
 
@@ -6603,7 +6599,7 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-        let last_root = RwLock::new(0);
+        let max_root = 0;
 
         // Insert the first 5 shreds, we don't have a "is_last" shred yet
         blockstore
@@ -6633,7 +6629,7 @@ pub mod tests {
             &empty_shred,
             &slot_meta,
             &HashMap::new(),
-            &last_root,
+            max_root,
             None,
             ShredSource::Repaired,
             &mut Vec::new(),
@@ -6658,7 +6654,7 @@ pub mod tests {
             &shred7,
             &slot_meta,
             &HashMap::new(),
-            &last_root,
+            max_root,
             None,
             ShredSource::Repaired,
             &mut duplicate_shreds,
@@ -6689,7 +6685,7 @@ pub mod tests {
             &shred8,
             &slot_meta,
             &HashMap::new(),
-            &last_root,
+            max_root,
             None,
             ShredSource::Repaired,
             &mut duplicate_shreds,
@@ -6797,7 +6793,7 @@ pub mod tests {
     fn test_should_insert_coding_shred() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-        let last_root = RwLock::new(0);
+        let max_root = 0;
 
         let slot = 1;
         let mut coding_shred = Shred::new_from_parity_shard(
@@ -6814,7 +6810,7 @@ pub mod tests {
         // Insert a good coding shred
         assert!(Blockstore::should_insert_coding_shred(
             &coding_shred,
-            &last_root
+            max_root
         ));
 
         // Insertion should succeed
@@ -6827,7 +6823,7 @@ pub mod tests {
         {
             assert!(Blockstore::should_insert_coding_shred(
                 &coding_shred,
-                &last_root
+                max_root
             ));
         }
 
@@ -6835,16 +6831,16 @@ pub mod tests {
         coding_shred.set_index(coding_shred.index() + 1);
         assert!(Blockstore::should_insert_coding_shred(
             &coding_shred,
-            &last_root
+            max_root
         ));
 
         // Trying to insert value into slot <= than last root should fail
         {
             let mut coding_shred = coding_shred.clone();
-            coding_shred.set_slot(*last_root.read().unwrap());
+            coding_shred.set_slot(max_root);
             assert!(!Blockstore::should_insert_coding_shred(
                 &coding_shred,
-                &last_root
+                max_root
             ));
         }
     }
@@ -6909,11 +6905,11 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let chained_slots = vec![0, 2, 4, 7, 12, 15];
-        assert_eq!(blockstore.last_root(), 0);
+        assert_eq!(blockstore.max_root(), 0);
 
         blockstore.set_roots(chained_slots.iter()).unwrap();
 
-        assert_eq!(blockstore.last_root(), 15);
+        assert_eq!(blockstore.max_root(), 15);
 
         for i in chained_slots {
             assert!(blockstore.is_root(i));
@@ -7084,9 +7080,9 @@ pub mod tests {
 
         // Make shred for slot 1
         let (shreds1, _) = make_slot_entries(1, 0, 1, /*merkle_variant:*/ true);
-        let last_root = 100;
+        let max_root = 100;
 
-        blockstore.set_roots(std::iter::once(&last_root)).unwrap();
+        blockstore.set_roots(std::iter::once(&max_root)).unwrap();
 
         // Insert will fail, slot < root
         blockstore
@@ -7209,7 +7205,7 @@ pub mod tests {
                 .into();
                 blockstore
                     .transaction_status_cf
-                    .put_protobuf((0, signature, slot), &status)
+                    .put_protobuf((signature, slot), &status)
                     .unwrap();
                 let status = TransactionStatusMeta {
                     status: Ok(()),
@@ -7228,7 +7224,7 @@ pub mod tests {
                 .into();
                 blockstore
                     .transaction_status_cf
-                    .put_protobuf((0, signature, slot + 1), &status)
+                    .put_protobuf((signature, slot + 1), &status)
                     .unwrap();
                 let status = TransactionStatusMeta {
                     status: Ok(()),
@@ -7247,7 +7243,7 @@ pub mod tests {
                 .into();
                 blockstore
                     .transaction_status_cf
-                    .put_protobuf((0, signature, slot + 2), &status)
+                    .put_protobuf((signature, slot + 2), &status)
                     .unwrap();
                 VersionedTransactionWithStatusMeta {
                     transaction,
@@ -7388,7 +7384,7 @@ pub mod tests {
 
         // result not found
         assert!(transaction_status_cf
-            .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((0, Signature::default(), 0))
+            .get_protobuf((Signature::default(), 0))
             .unwrap()
             .is_none());
 
@@ -7409,7 +7405,7 @@ pub mod tests {
         }
         .into();
         assert!(transaction_status_cf
-            .put_protobuf((0, Signature::default(), 0), &status,)
+            .put_protobuf((Signature::default(), 0), &status)
             .is_ok());
 
         // result found
@@ -7427,7 +7423,7 @@ pub mod tests {
             return_data,
             compute_units_consumed,
         } = transaction_status_cf
-            .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((0, Signature::default(), 0))
+            .get_protobuf((Signature::default(), 0))
             .unwrap()
             .unwrap()
             .try_into()
@@ -7462,7 +7458,7 @@ pub mod tests {
         }
         .into();
         assert!(transaction_status_cf
-            .put_protobuf((0, Signature::from([2u8; 64]), 9), &status,)
+            .put_protobuf((Signature::from([2u8; 64]), 9), &status,)
             .is_ok());
 
         // result found
@@ -7480,11 +7476,7 @@ pub mod tests {
             return_data,
             compute_units_consumed,
         } = transaction_status_cf
-            .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((
-                0,
-                Signature::from([2u8; 64]),
-                9,
-            ))
+            .get_protobuf((Signature::from([2u8; 64]), 9))
             .unwrap()
             .unwrap()
             .try_into()
@@ -7506,208 +7498,73 @@ pub mod tests {
     }
 
     #[test]
-    #[allow(clippy::cognitive_complexity)]
-    fn test_transaction_status_index() {
+    fn test_read_transaction_status_with_old_data() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+        let signature = Signature::from([1; 64]);
 
-        let transaction_status_index_cf = &blockstore.transaction_status_index_cf;
-        let slot0 = 10;
-
-        // Primary index column is initialized on Blockstore::open
-        assert!(transaction_status_index_cf.get(0).unwrap().is_some());
-        assert!(transaction_status_index_cf.get(1).unwrap().is_some());
-
-        for _ in 0..5 {
-            let random_bytes: [u8; 64] = std::array::from_fn(|_| rand::random::<u8>());
-            blockstore
-                .write_transaction_status(
-                    slot0,
-                    Signature::from(random_bytes),
-                    vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
-                    vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
-                    TransactionStatusMeta::default(),
-                )
-                .unwrap();
-        }
-
-        // New statuses bump index 0 max_slot
-        assert_eq!(
-            transaction_status_index_cf.get(0).unwrap().unwrap(),
-            TransactionStatusIndexMeta {
-                max_slot: slot0,
-                frozen: false,
-            }
-        );
-        assert_eq!(
-            transaction_status_index_cf.get(1).unwrap().unwrap(),
-            TransactionStatusIndexMeta::default()
-        );
-
-        let first_status_entry = blockstore
-            .db
-            .iter::<cf::TransactionStatus>(IteratorMode::From(
-                cf::TransactionStatus::as_index(0),
-                IteratorDirection::Forward,
-            ))
-            .unwrap()
-            .next()
-            .unwrap()
-            .0;
-        assert_eq!(first_status_entry.0, 0);
-        assert_eq!(first_status_entry.2, slot0);
-        let first_address_entry = blockstore
-            .db
-            .iter::<cf::AddressSignatures>(IteratorMode::From(
-                cf::AddressSignatures::as_index(0),
-                IteratorDirection::Forward,
-            ))
-            .unwrap()
-            .next()
-            .unwrap()
-            .0;
-        assert_eq!(first_address_entry.0, 0);
-        assert_eq!(first_address_entry.2, slot0);
-
-        blockstore.run_purge(0, 8, PurgeType::PrimaryIndex).unwrap();
-        // First successful prune freezes index 0
-        assert_eq!(
-            transaction_status_index_cf.get(0).unwrap().unwrap(),
-            TransactionStatusIndexMeta {
-                max_slot: slot0,
-                frozen: true,
-            }
-        );
-        assert_eq!(
-            transaction_status_index_cf.get(1).unwrap().unwrap(),
-            TransactionStatusIndexMeta::default()
-        );
-
-        let slot1 = 20;
-        for _ in 0..5 {
-            let random_bytes: [u8; 64] = std::array::from_fn(|_| rand::random::<u8>());
-            blockstore
-                .write_transaction_status(
-                    slot1,
-                    Signature::from(random_bytes),
-                    vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
-                    vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
-                    TransactionStatusMeta::default(),
-                )
-                .unwrap();
-        }
-
-        assert_eq!(
-            transaction_status_index_cf.get(0).unwrap().unwrap(),
-            TransactionStatusIndexMeta {
-                max_slot: slot0,
-                frozen: true,
-            }
-        );
-        // Index 0 is frozen, so new statuses bump index 1 max_slot
-        assert_eq!(
-            transaction_status_index_cf.get(1).unwrap().unwrap(),
-            TransactionStatusIndexMeta {
-                max_slot: slot1,
-                frozen: false,
-            }
-        );
-
-        // Index 0 statuses and address records still exist
-        let first_status_entry = blockstore
-            .db
-            .iter::<cf::TransactionStatus>(IteratorMode::From(
-                cf::TransactionStatus::as_index(0),
-                IteratorDirection::Forward,
-            ))
-            .unwrap()
-            .next()
-            .unwrap()
-            .0;
-        assert_eq!(first_status_entry.0, 0);
-        assert_eq!(first_status_entry.2, 10);
-        let first_address_entry = blockstore
-            .db
-            .iter::<cf::AddressSignatures>(IteratorMode::From(
-                cf::AddressSignatures::as_index(0),
-                IteratorDirection::Forward,
-            ))
-            .unwrap()
-            .next()
-            .unwrap()
-            .0;
-        assert_eq!(first_address_entry.0, 0);
-        assert_eq!(first_address_entry.2, slot0);
-        // New statuses and address records are stored in index 1
-        let index1_first_status_entry = blockstore
-            .db
-            .iter::<cf::TransactionStatus>(IteratorMode::From(
-                cf::TransactionStatus::as_index(1),
-                IteratorDirection::Forward,
-            ))
-            .unwrap()
-            .next()
-            .unwrap()
-            .0;
-        assert_eq!(index1_first_status_entry.0, 1);
-        assert_eq!(index1_first_status_entry.2, slot1);
-        let index1_first_address_entry = blockstore
-            .db
-            .iter::<cf::AddressSignatures>(IteratorMode::From(
-                cf::AddressSignatures::as_index(1),
-                IteratorDirection::Forward,
-            ))
-            .unwrap()
-            .next()
-            .unwrap()
-            .0;
-        assert_eq!(index1_first_address_entry.0, 1);
-        assert_eq!(index1_first_address_entry.2, slot1);
-
+        let index0_slot = 2;
         blockstore
-            .run_purge(0, 18, PurgeType::PrimaryIndex)
+            .write_deprecated_transaction_status(
+                0,
+                index0_slot,
+                signature,
+                vec![&Pubkey::new_unique()],
+                vec![&Pubkey::new_unique()],
+                TransactionStatusMeta {
+                    fee: index0_slot * 1_000,
+                    ..TransactionStatusMeta::default()
+                },
+            )
             .unwrap();
-        // Successful prune toggles TransactionStatusIndex
-        assert_eq!(
-            transaction_status_index_cf.get(0).unwrap().unwrap(),
-            TransactionStatusIndexMeta {
-                max_slot: 0,
-                frozen: false,
-            }
-        );
-        assert_eq!(
-            transaction_status_index_cf.get(1).unwrap().unwrap(),
-            TransactionStatusIndexMeta {
-                max_slot: slot1,
-                frozen: true,
-            }
-        );
 
-        // Index 0 has been pruned, so first status and address entries are now index 1
-        let first_status_entry = blockstore
-            .db
-            .iter::<cf::TransactionStatus>(IteratorMode::From(
-                cf::TransactionStatus::as_index(0),
-                IteratorDirection::Forward,
-            ))
+        let index1_slot = 1;
+        blockstore
+            .write_deprecated_transaction_status(
+                1,
+                index1_slot,
+                signature,
+                vec![&Pubkey::new_unique()],
+                vec![&Pubkey::new_unique()],
+                TransactionStatusMeta {
+                    fee: index1_slot * 1_000,
+                    ..TransactionStatusMeta::default()
+                },
+            )
+            .unwrap();
+
+        let slot = 3;
+        blockstore
+            .write_transaction_status(
+                slot,
+                signature,
+                vec![&Pubkey::new_unique()],
+                vec![&Pubkey::new_unique()],
+                TransactionStatusMeta {
+                    fee: slot * 1_000,
+                    ..TransactionStatusMeta::default()
+                },
+                0,
+            )
+            .unwrap();
+
+        let meta = blockstore
+            .read_transaction_status((signature, slot))
             .unwrap()
-            .next()
+            .unwrap();
+        assert_eq!(meta.fee, slot * 1000);
+
+        let meta = blockstore
+            .read_transaction_status((signature, index0_slot))
             .unwrap()
-            .0;
-        assert_eq!(first_status_entry.0, 1);
-        assert_eq!(first_status_entry.2, slot1);
-        let first_address_entry = blockstore
-            .db
-            .iter::<cf::AddressSignatures>(IteratorMode::From(
-                cf::AddressSignatures::as_index(0),
-                IteratorDirection::Forward,
-            ))
+            .unwrap();
+        assert_eq!(meta.fee, index0_slot * 1000);
+
+        let meta = blockstore
+            .read_transaction_status((signature, index1_slot))
             .unwrap()
-            .next()
-            .unwrap()
-            .0;
-        assert_eq!(first_address_entry.0, 1);
-        assert_eq!(first_address_entry.2, slot1);
+            .unwrap();
+        assert_eq!(meta.fee, index1_slot * 1000);
     }
 
     #[test]
@@ -7760,56 +7617,45 @@ pub mod tests {
 
         blockstore.set_roots([0, 2].iter()).unwrap();
 
-        // Initialize index 0, including:
-        //   signature2 in non-root and root,
-        //   signature4 in non-root,
+        // Initialize statuses:
+        //   signature2 in skipped slot and root,
+        //   signature4 in skipped slot,
         //   signature5 in skipped slot and non-root,
         //   signature6 in skipped slot,
-        transaction_status_cf
-            .put_protobuf((0, signature2, 1), &status)
-            .unwrap();
-
-        transaction_status_cf
-            .put_protobuf((0, signature2, 2), &status)
-            .unwrap();
-
-        transaction_status_cf
-            .put_protobuf((0, signature4, 1), &status)
-            .unwrap();
-
-        transaction_status_cf
-            .put_protobuf((0, signature5, 1), &status)
-            .unwrap();
-
-        transaction_status_cf
-            .put_protobuf((0, signature5, 3), &status)
-            .unwrap();
-
-        transaction_status_cf
-            .put_protobuf((0, signature6, 1), &status)
-            .unwrap();
-
-        // Initialize index 1, including:
-        //   signature4 in root,
-        //   signature6 in non-root,
         //   signature5 extra entries
         transaction_status_cf
-            .put_protobuf((1, signature4, 2), &status)
+            .put_protobuf((signature2, 1), &status)
             .unwrap();
 
         transaction_status_cf
-            .put_protobuf((1, signature5, 4), &status)
+            .put_protobuf((signature2, 2), &status)
             .unwrap();
 
         transaction_status_cf
-            .put_protobuf((1, signature5, 5), &status)
+            .put_protobuf((signature4, 1), &status)
             .unwrap();
 
         transaction_status_cf
-            .put_protobuf((1, signature6, 3), &status)
+            .put_protobuf((signature5, 1), &status)
             .unwrap();
 
-        // Signature exists, root found in index 0
+        transaction_status_cf
+            .put_protobuf((signature5, 3), &status)
+            .unwrap();
+
+        transaction_status_cf
+            .put_protobuf((signature6, 1), &status)
+            .unwrap();
+
+        transaction_status_cf
+            .put_protobuf((signature5, 5), &status)
+            .unwrap();
+
+        transaction_status_cf
+            .put_protobuf((signature6, 3), &status)
+            .unwrap();
+
+        // Signature exists, root found
         if let (Some((slot, _status)), counter) = blockstore
             .get_transaction_status_with_counter(signature2, &[].into())
             .unwrap()
@@ -7827,30 +7673,26 @@ pub mod tests {
             assert_eq!(counter, 2);
         }
 
-        // Signature exists, root found in index 1
-        if let (Some((slot, _status)), counter) = blockstore
+        // Signature exists in skipped slot, no root found
+        let (status, counter) = blockstore
             .get_transaction_status_with_counter(signature4, &[].into())
-            .unwrap()
-        {
-            assert_eq!(slot, 2);
-            assert_eq!(counter, 3);
-        }
+            .unwrap();
+        assert_eq!(status, None);
+        assert_eq!(counter, 2);
 
-        // Signature exists, root found although not required, in index 1
-        if let (Some((slot, _status)), counter) = blockstore
+        // Signature exists in skipped slot, no non-root found
+        let (status, counter) = blockstore
             .get_transaction_status_with_counter(signature4, &[3].into())
-            .unwrap()
-        {
-            assert_eq!(slot, 2);
-            assert_eq!(counter, 3);
-        }
+            .unwrap();
+        assert_eq!(status, None);
+        assert_eq!(counter, 2);
 
         // Signature exists, no root found
         let (status, counter) = blockstore
             .get_transaction_status_with_counter(signature5, &[].into())
             .unwrap();
         assert_eq!(status, None);
-        assert_eq!(counter, 6);
+        assert_eq!(counter, 4);
 
         // Signature exists, root not required
         if let (Some((slot, _status)), counter) = blockstore
@@ -7866,42 +7708,168 @@ pub mod tests {
             .get_transaction_status_with_counter(signature1, &[].into())
             .unwrap();
         assert_eq!(status, None);
-        assert_eq!(counter, 2);
+        assert_eq!(counter, 1);
 
         let (status, counter) = blockstore
             .get_transaction_status_with_counter(signature1, &[3].into())
             .unwrap();
         assert_eq!(status, None);
-        assert_eq!(counter, 2);
+        assert_eq!(counter, 1);
 
         // Signature does not exist, between existing entries
         let (status, counter) = blockstore
             .get_transaction_status_with_counter(signature3, &[].into())
             .unwrap();
         assert_eq!(status, None);
-        assert_eq!(counter, 2);
+        assert_eq!(counter, 1);
 
         let (status, counter) = blockstore
             .get_transaction_status_with_counter(signature3, &[3].into())
             .unwrap();
         assert_eq!(status, None);
-        assert_eq!(counter, 2);
+        assert_eq!(counter, 1);
 
         // Signature does not exist, larger than existing entries
         let (status, counter) = blockstore
             .get_transaction_status_with_counter(signature7, &[].into())
             .unwrap();
         assert_eq!(status, None);
-        assert_eq!(counter, 1);
+        assert_eq!(counter, 0);
 
         let (status, counter) = blockstore
             .get_transaction_status_with_counter(signature7, &[3].into())
             .unwrap();
         assert_eq!(status, None);
+        assert_eq!(counter, 0);
+    }
+
+    #[test]
+    fn test_get_transaction_status_with_old_data() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+        let transaction_status_cf = &blockstore.transaction_status_cf;
+
+        let pre_balances_vec = vec![1, 2, 3];
+        let post_balances_vec = vec![3, 2, 1];
+        let status = TransactionStatusMeta {
+            status: solana_sdk::transaction::Result::<()>::Ok(()),
+            fee: 42u64,
+            pre_balances: pre_balances_vec,
+            post_balances: post_balances_vec,
+            inner_instructions: Some(vec![]),
+            log_messages: Some(vec![]),
+            pre_token_balances: Some(vec![]),
+            post_token_balances: Some(vec![]),
+            rewards: Some(vec![]),
+            loaded_addresses: LoadedAddresses::default(),
+            return_data: Some(TransactionReturnData::default()),
+            compute_units_consumed: Some(42u64),
+        }
+        .into();
+
+        let signature1 = Signature::from([1u8; 64]);
+        let signature2 = Signature::from([2u8; 64]);
+        let signature3 = Signature::from([3u8; 64]);
+        let signature4 = Signature::from([4u8; 64]);
+        let signature5 = Signature::from([5u8; 64]);
+        let signature6 = Signature::from([6u8; 64]);
+
+        // Insert slots with fork
+        //   0 (root)
+        //  / \
+        // 1  |
+        //    2 (root)
+        //  / |
+        // 3  |
+        //    4 (root)
+        //    |
+        //    5
+        let meta0 = SlotMeta::new(0, Some(0));
+        blockstore.meta_cf.put(0, &meta0).unwrap();
+        let meta1 = SlotMeta::new(1, Some(0));
+        blockstore.meta_cf.put(1, &meta1).unwrap();
+        let meta2 = SlotMeta::new(2, Some(0));
+        blockstore.meta_cf.put(2, &meta2).unwrap();
+        let meta3 = SlotMeta::new(3, Some(2));
+        blockstore.meta_cf.put(3, &meta3).unwrap();
+        let meta4 = SlotMeta::new(4, Some(2));
+        blockstore.meta_cf.put(4, &meta4).unwrap();
+        let meta5 = SlotMeta::new(5, Some(4));
+        blockstore.meta_cf.put(5, &meta5).unwrap();
+
+        blockstore.set_roots([0, 2, 4].iter()).unwrap();
+
+        // Initialize statuses:
+        //   signature1 in skipped slot and root (2), both index 1
+        //   signature2 in skipped slot and root (4), both index 0
+        //   signature3 in root
+        //   signature4 in non-root,
+        //   signature5 extra entries
+        transaction_status_cf
+            .put_deprecated_protobuf((1, signature1, 1), &status)
+            .unwrap();
+
+        transaction_status_cf
+            .put_deprecated_protobuf((1, signature1, 2), &status)
+            .unwrap();
+
+        transaction_status_cf
+            .put_deprecated_protobuf((0, signature2, 3), &status)
+            .unwrap();
+
+        transaction_status_cf
+            .put_deprecated_protobuf((0, signature2, 4), &status)
+            .unwrap();
+        blockstore.set_highest_primary_index_slot(Some(4));
+
+        transaction_status_cf
+            .put_protobuf((signature3, 4), &status)
+            .unwrap();
+
+        transaction_status_cf
+            .put_protobuf((signature4, 5), &status)
+            .unwrap();
+
+        transaction_status_cf
+            .put_protobuf((signature5, 5), &status)
+            .unwrap();
+
+        // Signature exists, root found in index 1
+        if let (Some((slot, _status)), counter) = blockstore
+            .get_transaction_status_with_counter(signature1, &[].into())
+            .unwrap()
+        {
+            assert_eq!(slot, 2);
+            assert_eq!(counter, 4);
+        }
+
+        // Signature exists, root found in index 0
+        if let (Some((slot, _status)), counter) = blockstore
+            .get_transaction_status_with_counter(signature2, &[].into())
+            .unwrap()
+        {
+            assert_eq!(slot, 4);
+            assert_eq!(counter, 3);
+        }
+
+        // Signature exists
+        if let (Some((slot, _status)), counter) = blockstore
+            .get_transaction_status_with_counter(signature3, &[].into())
+            .unwrap()
+        {
+            assert_eq!(slot, 4);
+            assert_eq!(counter, 1);
+        }
+
+        // Signature does not exist
+        let (status, counter) = blockstore
+            .get_transaction_status_with_counter(signature6, &[].into())
+            .unwrap();
+        assert_eq!(status, None);
         assert_eq!(counter, 1);
     }
 
-    fn do_test_lowest_cleanup_slot_and_special_cfs(simulate_ledger_cleanup_service: bool) {
+    fn do_test_lowest_cleanup_slot_and_special_cfs(simulate_blockstore_cleanup_service: bool) {
         solana_logger::setup();
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -7945,11 +7913,11 @@ pub mod tests {
         let lowest_available_slot = lowest_cleanup_slot + 1;
 
         transaction_status_cf
-            .put_protobuf((0, signature1, lowest_cleanup_slot), &status)
+            .put_protobuf((signature1, lowest_cleanup_slot), &status)
             .unwrap();
 
         transaction_status_cf
-            .put_protobuf((0, signature2, lowest_available_slot), &status)
+            .put_protobuf((signature2, lowest_available_slot), &status)
             .unwrap();
 
         let address0 = solana_sdk::pubkey::new_rand();
@@ -7961,6 +7929,7 @@ pub mod tests {
                 vec![&address0],
                 vec![],
                 TransactionStatusMeta::default(),
+                0,
             )
             .unwrap();
         blockstore
@@ -7970,6 +7939,7 @@ pub mod tests {
                 vec![&address1],
                 vec![],
                 TransactionStatusMeta::default(),
+                0,
             )
             .unwrap();
 
@@ -7982,10 +7952,6 @@ pub mod tests {
                     .is_none(),
                 blockstore
                     .find_address_signatures_for_slot(address0, lowest_cleanup_slot)
-                    .unwrap()
-                    .is_empty(),
-                blockstore
-                    .find_address_signatures(address0, lowest_cleanup_slot, lowest_cleanup_slot)
                     .unwrap()
                     .is_empty(),
             )
@@ -8002,42 +7968,39 @@ pub mod tests {
                     .find_address_signatures_for_slot(address1, lowest_available_slot)
                     .unwrap()
                     .is_empty(),
-                !blockstore
-                    .find_address_signatures(address1, lowest_available_slot, lowest_available_slot)
-                    .unwrap()
-                    .is_empty(),
             );
-            assert_eq!(are_existing_always, (true, true, true));
+            assert_eq!(are_existing_always, (true, true));
         };
 
         let are_missing = check_for_missing();
         // should never be missing before the conditional compaction & simulation...
-        assert_eq!(are_missing, (false, false, false));
+        assert_eq!(are_missing, (false, false));
         assert_existing_always();
 
-        if simulate_ledger_cleanup_service {
+        if simulate_blockstore_cleanup_service {
             *blockstore.lowest_cleanup_slot.write().unwrap() = lowest_cleanup_slot;
+            blockstore.purge_slots(0, lowest_cleanup_slot, PurgeType::CompactionFilter);
         }
 
         let are_missing = check_for_missing();
-        if simulate_ledger_cleanup_service {
+        if simulate_blockstore_cleanup_service {
             // ... when either simulation (or both) is effective, we should observe to be missing
             // consistently
-            assert_eq!(are_missing, (true, true, true));
+            assert_eq!(are_missing, (true, true));
         } else {
             // ... otherwise, we should observe to be existing...
-            assert_eq!(are_missing, (false, false, false));
+            assert_eq!(are_missing, (false, false));
         }
         assert_existing_always();
     }
 
     #[test]
-    fn test_lowest_cleanup_slot_and_special_cfs_with_ledger_cleanup_service_simulation() {
+    fn test_lowest_cleanup_slot_and_special_cfs_with_blockstore_cleanup_service_simulation() {
         do_test_lowest_cleanup_slot_and_special_cfs(true);
     }
 
     #[test]
-    fn test_lowest_cleanup_slot_and_special_cfs_without_ledger_cleanup_service_simulation() {
+    fn test_lowest_cleanup_slot_and_special_cfs_without_blockstore_cleanup_service_simulation() {
         do_test_lowest_cleanup_slot_and_special_cfs(false);
     }
 
@@ -8103,7 +8066,7 @@ pub mod tests {
                 .into();
                 blockstore
                     .transaction_status_cf
-                    .put_protobuf((0, signature, slot), &status)
+                    .put_protobuf((signature, slot), &status)
                     .unwrap();
                 VersionedTransactionWithStatusMeta {
                     transaction,
@@ -8147,11 +8110,13 @@ pub mod tests {
             );
         }
 
-        blockstore.run_purge(0, 2, PurgeType::PrimaryIndex).unwrap();
+        blockstore
+            .run_purge(0, slot, PurgeType::CompactionFilter)
+            .unwrap();
         *blockstore.lowest_cleanup_slot.write().unwrap() = slot;
         for VersionedTransactionWithStatusMeta { transaction, .. } in expected_transactions {
             let signature = transaction.signatures[0];
-            assert_eq!(blockstore.get_rooted_transaction(signature).unwrap(), None,);
+            assert_eq!(blockstore.get_rooted_transaction(signature).unwrap(), None);
             assert_eq!(
                 blockstore
                     .get_complete_transaction(signature, slot + 1)
@@ -8223,7 +8188,7 @@ pub mod tests {
                 .into();
                 blockstore
                     .transaction_status_cf
-                    .put_protobuf((0, signature, slot), &status)
+                    .put_protobuf((signature, slot), &status)
                     .unwrap();
                 VersionedTransactionWithStatusMeta {
                     transaction,
@@ -8260,7 +8225,9 @@ pub mod tests {
             assert_eq!(blockstore.get_rooted_transaction(signature).unwrap(), None);
         }
 
-        blockstore.run_purge(0, 2, PurgeType::PrimaryIndex).unwrap();
+        blockstore
+            .run_purge(0, slot, PurgeType::CompactionFilter)
+            .unwrap();
         *blockstore.lowest_cleanup_slot.write().unwrap() = slot;
         for VersionedTransactionWithStatusMeta { transaction, .. } in expected_transactions {
             let signature = transaction.signatures[0];
@@ -8288,138 +8255,38 @@ pub mod tests {
         );
     }
 
-    #[test]
-    fn test_get_confirmed_signatures_for_address() {
-        let ledger_path = get_tmp_ledger_path_auto_delete!();
-        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-
-        let address0 = solana_sdk::pubkey::new_rand();
-        let address1 = solana_sdk::pubkey::new_rand();
-
-        let slot0 = 10;
-        for x in 1..5 {
-            let signature = Signature::from([x; 64]);
-            blockstore
-                .write_transaction_status(
-                    slot0,
-                    signature,
-                    vec![&address0],
-                    vec![&address1],
-                    TransactionStatusMeta::default(),
-                )
-                .unwrap();
-        }
-        let slot1 = 20;
-        for x in 5..9 {
-            let signature = Signature::from([x; 64]);
-            blockstore
-                .write_transaction_status(
-                    slot1,
-                    signature,
-                    vec![&address0],
-                    vec![&address1],
-                    TransactionStatusMeta::default(),
-                )
-                .unwrap();
-        }
-        blockstore.set_roots([slot0, slot1].iter()).unwrap();
-
-        let all0 = blockstore
-            .get_confirmed_signatures_for_address(address0, 0, 50)
-            .unwrap();
-        assert_eq!(all0.len(), 8);
-        for x in 1..9 {
-            let expected_signature = Signature::from([x; 64]);
-            assert_eq!(all0[x as usize - 1], expected_signature);
-        }
-        assert_eq!(
-            blockstore
-                .get_confirmed_signatures_for_address(address0, 20, 50)
-                .unwrap()
-                .len(),
-            4
-        );
-        assert_eq!(
-            blockstore
-                .get_confirmed_signatures_for_address(address0, 0, 10)
-                .unwrap()
-                .len(),
-            4
-        );
-        assert!(blockstore
-            .get_confirmed_signatures_for_address(address0, 1, 5)
-            .unwrap()
-            .is_empty());
-        assert_eq!(
-            blockstore
-                .get_confirmed_signatures_for_address(address0, 1, 15)
-                .unwrap()
-                .len(),
-            4
-        );
-
-        let all1 = blockstore
-            .get_confirmed_signatures_for_address(address1, 0, 50)
-            .unwrap();
-        assert_eq!(all1.len(), 8);
-        for x in 1..9 {
-            let expected_signature = Signature::from([x; 64]);
-            assert_eq!(all1[x as usize - 1], expected_signature);
-        }
-
-        // Purge index 0
-        blockstore
-            .run_purge(0, 10, PurgeType::PrimaryIndex)
-            .unwrap();
-        assert_eq!(
-            blockstore
-                .get_confirmed_signatures_for_address(address0, 0, 50)
-                .unwrap()
-                .len(),
-            4
-        );
-        assert_eq!(
-            blockstore
-                .get_confirmed_signatures_for_address(address0, 20, 50)
-                .unwrap()
-                .len(),
-            4
-        );
-        assert!(blockstore
-            .get_confirmed_signatures_for_address(address0, 0, 10)
-            .unwrap()
-            .is_empty());
-        assert!(blockstore
-            .get_confirmed_signatures_for_address(address0, 1, 5)
-            .unwrap()
-            .is_empty());
-        assert_eq!(
-            blockstore
-                .get_confirmed_signatures_for_address(address0, 1, 25)
-                .unwrap()
-                .len(),
-            4
-        );
-
-        // Test sort, regardless of entry order or signature value
-        for slot in (21..25).rev() {
-            let random_bytes: [u8; 64] = std::array::from_fn(|_| rand::random::<u8>());
-            let signature = Signature::from(random_bytes);
-            blockstore
-                .write_transaction_status(
-                    slot,
-                    signature,
-                    vec![&address0],
-                    vec![&address1],
-                    TransactionStatusMeta::default(),
-                )
-                .unwrap();
-        }
-        blockstore.set_roots([21, 22, 23, 24].iter()).unwrap();
-        let mut past_slot = 0;
-        for (slot, _) in blockstore.find_address_signatures(address0, 1, 25).unwrap() {
-            assert!(slot >= past_slot);
-            past_slot = slot;
+    impl Blockstore {
+        pub(crate) fn write_deprecated_transaction_status(
+            &self,
+            primary_index: u64,
+            slot: Slot,
+            signature: Signature,
+            writable_keys: Vec<&Pubkey>,
+            readonly_keys: Vec<&Pubkey>,
+            status: TransactionStatusMeta,
+        ) -> Result<()> {
+            let status = status.into();
+            self.transaction_status_cf
+                .put_deprecated_protobuf((primary_index, signature, slot), &status)?;
+            for address in writable_keys {
+                self.address_signatures_cf.put_deprecated(
+                    (primary_index, *address, slot, signature),
+                    &AddressSignatureMeta { writeable: true },
+                )?;
+            }
+            for address in readonly_keys {
+                self.address_signatures_cf.put_deprecated(
+                    (primary_index, *address, slot, signature),
+                    &AddressSignatureMeta { writeable: false },
+                )?;
+            }
+            let mut w_highest_primary_index_slot = self.highest_primary_index_slot.write().unwrap();
+            if w_highest_primary_index_slot.is_none()
+                || w_highest_primary_index_slot.is_some_and(|highest_slot| highest_slot < slot)
+            {
+                *w_highest_primary_index_slot = Some(slot);
+            }
+            Ok(())
         }
     }
 
@@ -8441,6 +8308,7 @@ pub mod tests {
                     vec![&address0],
                     vec![&address1],
                     TransactionStatusMeta::default(),
+                    x as usize,
                 )
                 .unwrap();
         }
@@ -8454,6 +8322,7 @@ pub mod tests {
                     vec![&address0],
                     vec![&address1],
                     TransactionStatusMeta::default(),
+                    x as usize,
                 )
                 .unwrap();
         }
@@ -8466,6 +8335,7 @@ pub mod tests {
                     vec![&address0],
                     vec![&address1],
                     TransactionStatusMeta::default(),
+                    x as usize,
                 )
                 .unwrap();
         }
@@ -8479,6 +8349,7 @@ pub mod tests {
                     vec![&address0],
                     vec![&address1],
                     TransactionStatusMeta::default(),
+                    x as usize,
                 )
                 .unwrap();
         }
@@ -8551,6 +8422,7 @@ pub mod tests {
             );
             blockstore.insert_shreds(shreds, None, false).unwrap();
 
+            let mut counter = 0;
             for entry in entries.into_iter() {
                 for transaction in entry.transactions {
                     assert_eq!(transaction.signatures.len(), 1);
@@ -8561,8 +8433,10 @@ pub mod tests {
                             transaction.message.static_account_keys().iter().collect(),
                             vec![],
                             TransactionStatusMeta::default(),
+                            counter,
                         )
                         .unwrap();
+                    counter += 1;
                 }
             }
         }
@@ -8576,6 +8450,7 @@ pub mod tests {
                 entries_to_test_shreds(&entries, slot, 8, true, 0, /*merkle_variant:*/ true);
             blockstore.insert_shreds(shreds, None, false).unwrap();
 
+            let mut counter = 0;
             for entry in entries.into_iter() {
                 for transaction in entry.transactions {
                     assert_eq!(transaction.signatures.len(), 1);
@@ -8586,8 +8461,10 @@ pub mod tests {
                             transaction.message.static_account_keys().iter().collect(),
                             vec![],
                             TransactionStatusMeta::default(),
+                            counter,
                         )
                         .unwrap();
+                    counter += 1;
                 }
             }
         }
@@ -8714,8 +8591,7 @@ pub mod tests {
             assert_eq!(results[2], all0[i + 2]);
         }
 
-        // Ensure that the signatures within a slot are reverse ordered by signature
-        // (current limitation of the .get_confirmed_signatures_for_address2())
+        // Ensure that the signatures within a slot are reverse ordered by occurrence in block
         for i in (0..all1.len()).step_by(2) {
             let results = blockstore
                 .get_confirmed_signatures_for_address2(
@@ -8733,7 +8609,6 @@ pub mod tests {
                 .infos;
             assert_eq!(results.len(), 2);
             assert_eq!(results[0].slot, results[1].slot);
-            assert!(results[0].signature >= results[1].signature);
             assert_eq!(results[0], all1[i]);
             assert_eq!(results[1], all1[i + 1]);
         }
@@ -8889,8 +8764,7 @@ pub mod tests {
             assert_eq!(results[1], all0[i + 1]);
         }
 
-        // Ensure that the signatures within a slot are reverse ordered by signature
-        // (current limitation of the .get_confirmed_signatures_for_address2())
+        // Ensure that the signatures within a slot are reverse ordered by occurrence in block
         for i in (0..all1.len()).step_by(2) {
             let results = blockstore
                 .get_confirmed_signatures_for_address2(
@@ -8908,7 +8782,6 @@ pub mod tests {
                 .infos;
             assert_eq!(results.len(), 2);
             assert_eq!(results[0].slot, results[1].slot);
-            assert!(results[0].signature >= results[1].signature);
             assert_eq!(results[0], all1[i]);
             assert_eq!(results[1], all1[i + 1]);
         }
@@ -8943,7 +8816,7 @@ pub mod tests {
         // Remove signature
         blockstore
             .address_signatures_cf
-            .delete((0, address0, 2, all0[0].signature))
+            .delete((address0, 2, 0, all0[0].signature))
             .unwrap();
         let sig_infos = blockstore
             .get_confirmed_signatures_for_address2(
@@ -9009,7 +8882,7 @@ pub mod tests {
             }
             .into();
             transaction_status_cf
-                .put_protobuf((0, transaction.signatures[0], slot), &status)
+                .put_protobuf((transaction.signatures[0], slot), &status)
                 .unwrap();
             transactions.push(transaction.into());
         }
@@ -9196,7 +9069,7 @@ pub mod tests {
             blockstore.insert_shreds(shreds, None, false).unwrap();
         }
         assert_eq!(blockstore.lowest_slot(), 1);
-        blockstore.run_purge(0, 5, PurgeType::PrimaryIndex).unwrap();
+        blockstore.run_purge(0, 5, PurgeType::Exact).unwrap();
         assert_eq!(blockstore.lowest_slot(), 6);
     }
 
@@ -9212,12 +9085,10 @@ pub mod tests {
             blockstore.insert_shreds(shreds, None, false).unwrap();
             assert_eq!(blockstore.highest_slot().unwrap(), Some(slot));
         }
-        blockstore
-            .run_purge(5, 10, PurgeType::PrimaryIndex)
-            .unwrap();
+        blockstore.run_purge(5, 10, PurgeType::Exact).unwrap();
         assert_eq!(blockstore.highest_slot().unwrap(), Some(4));
 
-        blockstore.run_purge(0, 4, PurgeType::PrimaryIndex).unwrap();
+        blockstore.run_purge(0, 4, PurgeType::Exact).unwrap();
         assert_eq!(blockstore.highest_slot().unwrap(), None);
     }
 
@@ -9702,6 +9573,10 @@ pub mod tests {
         }
     }
 
+    // This test is probably superfluous, since it is highly unlikely that bincode-format
+    // TransactionStatus entries exist in any current ledger. They certainly exist in historical
+    // ledger archives, but typically those require contemporaraneous software for other reasons.
+    // However, we are persisting the test since the apis still exist in `blockstore_db`.
     #[test]
     fn test_transaction_status_protobuf_backward_compatability() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -9759,13 +9634,13 @@ pub mod tests {
             let data = serialize(&deprecated_status).unwrap();
             blockstore
                 .transaction_status_cf
-                .put_bytes((0, Signature::default(), slot), &data)
+                .put_bytes((Signature::default(), slot), &data)
                 .unwrap();
         }
         for slot in 2..4 {
             blockstore
                 .transaction_status_cf
-                .put_protobuf((0, Signature::default(), slot), &protobuf_status)
+                .put_protobuf((Signature::default(), slot), &protobuf_status)
                 .unwrap();
         }
         for slot in 0..4 {
@@ -9773,7 +9648,6 @@ pub mod tests {
                 blockstore
                     .transaction_status_cf
                     .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((
-                        0,
                         Signature::default(),
                         slot
                     ))
@@ -9949,7 +9823,7 @@ pub mod tests {
 
                 // Cleanup the slot
                 blockstore
-                    .run_purge(slot, slot, PurgeType::PrimaryIndex)
+                    .run_purge(slot, slot, PurgeType::Exact)
                     .expect("Purge database operations failed");
                 assert!(blockstore.meta(slot).unwrap().is_none());
 

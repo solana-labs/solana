@@ -1,5 +1,10 @@
 use {
-    crate::{append_vec::AppendVecStoredAccountMeta, storable_accounts::StorableAccounts},
+    crate::{
+        accounts_hash::AccountHash,
+        append_vec::AppendVecStoredAccountMeta,
+        storable_accounts::StorableAccounts,
+        tiered_storage::{hot::HotAccountMeta, readable::TieredReadableAccount},
+    },
     solana_sdk::{account::ReadableAccount, hash::Hash, pubkey::Pubkey, stake_history::Epoch},
     std::{borrow::Borrow, marker::PhantomData},
 };
@@ -12,6 +17,10 @@ pub struct StoredAccountInfo {
     pub size: usize,
 }
 
+lazy_static! {
+    static ref DEFAULT_ACCOUNT_HASH: AccountHash = AccountHash(Hash::default());
+}
+
 /// Goal is to eliminate copies and data reshaping given various code paths that store accounts.
 /// This struct contains what is needed to store accounts to a storage
 /// 1. account & pubkey (StorableAccounts)
@@ -22,7 +31,7 @@ pub struct StorableAccountsWithHashesAndWriteVersions<
     'b,
     T: ReadableAccount + Sync + 'b,
     U: StorableAccounts<'a, T>,
-    V: Borrow<Hash>,
+    V: Borrow<AccountHash>,
 > {
     /// accounts to store
     /// always has pubkey and account
@@ -33,8 +42,13 @@ pub struct StorableAccountsWithHashesAndWriteVersions<
     _phantom: PhantomData<&'a T>,
 }
 
-impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: Borrow<Hash>>
-    StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>
+impl<
+        'a: 'b,
+        'b,
+        T: ReadableAccount + Sync + 'b,
+        U: StorableAccounts<'a, T>,
+        V: Borrow<AccountHash>,
+    > StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>
 {
     /// used when accounts contains hash and write version already
     pub fn new(accounts: &'b U) -> Self {
@@ -63,7 +77,7 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
     }
 
     /// get all account fields at 'index'
-    pub fn get(&self, index: usize) -> (Option<&T>, &Pubkey, &Hash, StoredMetaWriteVersion) {
+    pub fn get(&self, index: usize) -> (Option<&T>, &Pubkey, &AccountHash, StoredMetaWriteVersion) {
         let account = self.accounts.account_default_if_zero_lamport(index);
         let pubkey = self.accounts.pubkey(index);
         let (hash, write_version) = if self.accounts.has_hash_and_write_version() {
@@ -100,66 +114,84 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
 #[derive(PartialEq, Eq, Debug)]
 pub enum StoredAccountMeta<'storage> {
     AppendVec(AppendVecStoredAccountMeta<'storage>),
+    Hot(TieredReadableAccount<'storage, HotAccountMeta>),
 }
 
 impl<'storage> StoredAccountMeta<'storage> {
     pub fn pubkey(&self) -> &'storage Pubkey {
         match self {
             Self::AppendVec(av) => av.pubkey(),
+            Self::Hot(hot) => hot.address(),
         }
     }
 
-    pub fn hash(&self) -> &'storage Hash {
+    pub fn hash(&self) -> &'storage AccountHash {
         match self {
             Self::AppendVec(av) => av.hash(),
+            Self::Hot(hot) => hot.hash().unwrap_or(&DEFAULT_ACCOUNT_HASH),
         }
     }
 
     pub fn stored_size(&self) -> usize {
         match self {
             Self::AppendVec(av) => av.stored_size(),
+            Self::Hot(_) => unimplemented!(),
         }
     }
 
     pub fn offset(&self) -> usize {
         match self {
             Self::AppendVec(av) => av.offset(),
+            Self::Hot(hot) => hot.index(),
         }
     }
 
     pub fn data(&self) -> &'storage [u8] {
         match self {
             Self::AppendVec(av) => av.data(),
+            Self::Hot(hot) => hot.data(),
         }
     }
 
     pub fn data_len(&self) -> u64 {
         match self {
             Self::AppendVec(av) => av.data_len(),
+            Self::Hot(hot) => hot.data().len() as u64,
         }
     }
 
     pub fn write_version(&self) -> StoredMetaWriteVersion {
         match self {
             Self::AppendVec(av) => av.write_version(),
+            // Hot account does not support this API as it does not
+            // use a write version.
+            Self::Hot(_) => StoredMetaWriteVersion::default(),
         }
     }
 
     pub fn meta(&self) -> &StoredMeta {
         match self {
             Self::AppendVec(av) => av.meta(),
+            // Hot account does not support this API as it does not
+            // use the same in-memory layout as StoredMeta.
+            Self::Hot(_) => unreachable!(),
         }
     }
 
     pub fn set_meta(&mut self, meta: &'storage StoredMeta) {
         match self {
             Self::AppendVec(av) => av.set_meta(meta),
+            // Hot account does not support this API as it does not
+            // use the same in-memory layout as StoredMeta.
+            Self::Hot(_) => unreachable!(),
         }
     }
 
     pub(crate) fn sanitize(&self) -> bool {
         match self {
             Self::AppendVec(av) => av.sanitize(),
+            // Hot account currently doesn't have the concept of sanitization.
+            Self::Hot(_) => unimplemented!(),
         }
     }
 }
@@ -168,26 +200,31 @@ impl<'storage> ReadableAccount for StoredAccountMeta<'storage> {
     fn lamports(&self) -> u64 {
         match self {
             Self::AppendVec(av) => av.lamports(),
+            Self::Hot(hot) => hot.lamports(),
         }
     }
     fn data(&self) -> &[u8] {
         match self {
             Self::AppendVec(av) => av.data(),
+            Self::Hot(hot) => hot.data(),
         }
     }
     fn owner(&self) -> &Pubkey {
         match self {
             Self::AppendVec(av) => av.owner(),
+            Self::Hot(hot) => hot.owner(),
         }
     }
     fn executable(&self) -> bool {
         match self {
             Self::AppendVec(av) => av.executable(),
+            Self::Hot(hot) => hot.executable(),
         }
     }
     fn rent_epoch(&self) -> Epoch {
         match self {
             Self::AppendVec(av) => av.rent_epoch(),
+            Self::Hot(hot) => hot.rent_epoch(),
         }
     }
 }

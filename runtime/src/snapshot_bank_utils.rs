@@ -271,6 +271,7 @@ pub fn bank_from_snapshot_archives(
     shrink_ratio: AccountShrinkThreshold,
     test_hash_calculation: bool,
     accounts_db_skip_shrink: bool,
+    accounts_db_force_initial_clean: bool,
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
@@ -365,6 +366,7 @@ pub fn bank_from_snapshot_archives(
     if !bank.verify_snapshot_bank(
         test_hash_calculation,
         accounts_db_skip_shrink || !full_snapshot_archive_info.is_remote(),
+        accounts_db_force_initial_clean,
         full_snapshot_archive_info.slot(),
         base,
     ) && limit_load_slot_count_from_snapshot.is_none()
@@ -427,6 +429,7 @@ pub fn bank_from_latest_snapshot_archives(
     shrink_ratio: AccountShrinkThreshold,
     test_hash_calculation: bool,
     accounts_db_skip_shrink: bool,
+    accounts_db_force_initial_clean: bool,
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
@@ -459,6 +462,7 @@ pub fn bank_from_latest_snapshot_archives(
         shrink_ratio,
         test_hash_calculation,
         accounts_db_skip_shrink,
+        accounts_db_force_initial_clean,
         verify_index,
         accounts_db_config,
         accounts_update_notifier,
@@ -1290,7 +1294,7 @@ mod tests {
         let original_bank = Bank::new_for_tests(&genesis_config);
 
         while !original_bank.is_complete() {
-            original_bank.register_tick(&Hash::new_unique());
+            original_bank.register_unique_tick();
         }
 
         let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
@@ -1323,6 +1327,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             None,
             AccountShrinkThreshold::default(),
+            false,
             false,
             false,
             false,
@@ -1359,7 +1364,7 @@ mod tests {
             .transfer(sol_to_lamports(3.), &mint_keypair, &key3.pubkey())
             .unwrap();
         while !bank0.is_complete() {
-            bank0.register_tick(&Hash::new_unique());
+            bank0.register_unique_tick();
         }
 
         let slot = 1;
@@ -1374,7 +1379,7 @@ mod tests {
             .transfer(sol_to_lamports(5.), &mint_keypair, &key5.pubkey())
             .unwrap();
         while !bank1.is_complete() {
-            bank1.register_tick(&Hash::new_unique());
+            bank1.register_unique_tick();
         }
 
         let slot = slot + 1;
@@ -1383,7 +1388,7 @@ mod tests {
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
         while !bank2.is_complete() {
-            bank2.register_tick(&Hash::new_unique());
+            bank2.register_unique_tick();
         }
 
         let slot = slot + 1;
@@ -1392,7 +1397,7 @@ mod tests {
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
         while !bank3.is_complete() {
-            bank3.register_tick(&Hash::new_unique());
+            bank3.register_unique_tick();
         }
 
         let slot = slot + 1;
@@ -1401,7 +1406,7 @@ mod tests {
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
         while !bank4.is_complete() {
-            bank4.register_tick(&Hash::new_unique());
+            bank4.register_unique_tick();
         }
 
         let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
@@ -1434,6 +1439,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             None,
             AccountShrinkThreshold::default(),
+            false,
             false,
             false,
             false,
@@ -1476,7 +1482,7 @@ mod tests {
             .transfer(sol_to_lamports(3.), &mint_keypair, &key3.pubkey())
             .unwrap();
         while !bank0.is_complete() {
-            bank0.register_tick(&Hash::new_unique());
+            bank0.register_unique_tick();
         }
 
         let slot = 1;
@@ -1491,7 +1497,7 @@ mod tests {
             .transfer(sol_to_lamports(5.), &mint_keypair, &key5.pubkey())
             .unwrap();
         while !bank1.is_complete() {
-            bank1.register_tick(&Hash::new_unique());
+            bank1.register_unique_tick();
         }
 
         let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
@@ -1519,7 +1525,7 @@ mod tests {
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
         while !bank2.is_complete() {
-            bank2.register_tick(&Hash::new_unique());
+            bank2.register_unique_tick();
         }
 
         let slot = slot + 1;
@@ -1528,7 +1534,7 @@ mod tests {
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
         while !bank3.is_complete() {
-            bank3.register_tick(&Hash::new_unique());
+            bank3.register_unique_tick();
         }
 
         let slot = slot + 1;
@@ -1537,7 +1543,7 @@ mod tests {
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
         while !bank4.is_complete() {
-            bank4.register_tick(&Hash::new_unique());
+            bank4.register_unique_tick();
         }
 
         let incremental_snapshot_archive_info = bank_to_incremental_snapshot_archive(
@@ -1565,6 +1571,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             None,
             AccountShrinkThreshold::default(),
+            false,
             false,
             false,
             false,
@@ -1597,7 +1604,7 @@ mod tests {
             .transfer(sol_to_lamports(3.), &mint_keypair, &key3.pubkey())
             .unwrap();
         while !bank0.is_complete() {
-            bank0.register_tick(&Hash::new_unique());
+            bank0.register_unique_tick();
         }
 
         let slot = 1;
@@ -1612,7 +1619,7 @@ mod tests {
             .transfer(sol_to_lamports(3.), &mint_keypair, &key3.pubkey())
             .unwrap();
         while !bank1.is_complete() {
-            bank1.register_tick(&Hash::new_unique());
+            bank1.register_unique_tick();
         }
 
         let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
@@ -1640,7 +1647,7 @@ mod tests {
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
         while !bank2.is_complete() {
-            bank2.register_tick(&Hash::new_unique());
+            bank2.register_unique_tick();
         }
 
         let slot = slot + 1;
@@ -1649,7 +1656,7 @@ mod tests {
             .transfer(sol_to_lamports(2.), &mint_keypair, &key2.pubkey())
             .unwrap();
         while !bank3.is_complete() {
-            bank3.register_tick(&Hash::new_unique());
+            bank3.register_unique_tick();
         }
 
         let slot = slot + 1;
@@ -1658,7 +1665,7 @@ mod tests {
             .transfer(sol_to_lamports(3.), &mint_keypair, &key3.pubkey())
             .unwrap();
         while !bank4.is_complete() {
-            bank4.register_tick(&Hash::new_unique());
+            bank4.register_unique_tick();
         }
 
         bank_to_incremental_snapshot_archive(
@@ -1686,6 +1693,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             None,
             AccountShrinkThreshold::default(),
+            false,
             false,
             false,
             false,
@@ -1746,7 +1754,7 @@ mod tests {
             .transfer(lamports_to_transfer, &mint_keypair, &key2.pubkey())
             .unwrap();
         while !bank0.is_complete() {
-            bank0.register_tick(&Hash::new_unique());
+            bank0.register_unique_tick();
         }
 
         let slot = 1;
@@ -1755,7 +1763,7 @@ mod tests {
             .transfer(lamports_to_transfer, &key2, &key1.pubkey())
             .unwrap();
         while !bank1.is_complete() {
-            bank1.register_tick(&Hash::new_unique());
+            bank1.register_unique_tick();
         }
 
         let full_snapshot_slot = slot;
@@ -1794,7 +1802,7 @@ mod tests {
             "Ensure Account1's balance is zero"
         );
         while !bank2.is_complete() {
-            bank2.register_tick(&Hash::new_unique());
+            bank2.register_unique_tick();
         }
 
         // Take an incremental snapshot and then do a roundtrip on the bank and ensure it
@@ -1826,6 +1834,7 @@ mod tests {
             false,
             false,
             false,
+            false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
             Arc::default(),
@@ -1844,13 +1853,13 @@ mod tests {
             .transfer(lamports_to_transfer, &mint_keypair, &key2.pubkey())
             .unwrap();
         while !bank3.is_complete() {
-            bank3.register_tick(&Hash::new_unique());
+            bank3.register_unique_tick();
         }
 
         let slot = slot + 1;
         let bank4 = Arc::new(Bank::new_from_parent(bank3, &collector, slot));
         while !bank4.is_complete() {
-            bank4.register_tick(&Hash::new_unique());
+            bank4.register_unique_tick();
         }
 
         // Ensure account1 has been cleaned/purged from everywhere
@@ -1891,6 +1900,7 @@ mod tests {
             false,
             false,
             false,
+            false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
             Arc::default(),
@@ -1917,13 +1927,13 @@ mod tests {
         let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000_000.));
         let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
         while !bank0.is_complete() {
-            bank0.register_tick(&Hash::new_unique());
+            bank0.register_unique_tick();
         }
 
         let slot = 1;
         let bank1 = Arc::new(Bank::new_from_parent(bank0, &collector, slot));
         while !bank1.is_complete() {
-            bank1.register_tick(&Hash::new_unique());
+            bank1.register_unique_tick();
         }
 
         let all_snapshots_dir = tempfile::TempDir::new().unwrap();
@@ -1948,7 +1958,7 @@ mod tests {
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
         while !bank2.is_complete() {
-            bank2.register_tick(&Hash::new_unique());
+            bank2.register_unique_tick();
         }
 
         bank_to_incremental_snapshot_archive(
@@ -2255,6 +2265,7 @@ mod tests {
             false,
             false,
             false,
+            false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
             Arc::default(),
@@ -2299,7 +2310,6 @@ mod tests {
                     epoch_schedule: deserialized_bank.epoch_schedule(),
                     rent_collector: deserialized_bank.rent_collector(),
                     store_detailed_debug_info_on_failure: false,
-                    include_slot_in_hash: bank.include_slot_in_hash(),
                 },
                 &SortedStorages::new(&other_incremental_snapshot_storages),
                 HashStats::default(),

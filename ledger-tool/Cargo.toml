@@ -39,7 +39,7 @@ solana-logger = { workspace = true }
 solana-measure = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-rpc = { workspace = true }
-solana-runtime = { workspace = true }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 solana-sdk = { workspace = true }
 solana-stake-program = { workspace = true }
 solana-storage-bigtable = { workspace = true }
@@ -56,6 +56,9 @@ jemallocator = { workspace = true }
 [dev-dependencies]
 assert_cmd = { workspace = true }
 bytecount = { workspace = true }
+
+[features]
+dev-context-only-utils = []
 
 [target."cfg(unix)".dependencies]
 signal-hook = { workspace = true }

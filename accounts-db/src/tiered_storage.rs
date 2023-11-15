@@ -8,19 +8,21 @@ pub mod hot;
 pub mod index;
 pub mod meta;
 pub mod mmap_utils;
+pub mod owners;
 pub mod readable;
 pub mod writer;
 
 use {
     crate::{
         account_storage::meta::{StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo},
+        accounts_hash::AccountHash,
         storable_accounts::StorableAccounts,
     },
     error::TieredStorageError,
     footer::{AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat},
-    index::AccountIndexFormat,
+    index::IndexBlockFormat,
     readable::TieredStorageReader,
-    solana_sdk::{account::ReadableAccount, hash::Hash},
+    solana_sdk::account::ReadableAccount,
     std::{
         borrow::Borrow,
         fs::OpenOptions,
@@ -39,7 +41,7 @@ pub struct TieredStorageFormat {
     pub meta_entry_size: usize,
     pub account_meta_format: AccountMetaFormat,
     pub owners_block_format: OwnersBlockFormat,
-    pub account_index_format: AccountIndexFormat,
+    pub index_block_format: IndexBlockFormat,
     pub account_block_format: AccountBlockFormat,
 }
 
@@ -96,7 +98,7 @@ impl TieredStorage {
         'b,
         T: ReadableAccount + Sync,
         U: StorableAccounts<'a, T>,
-        V: Borrow<Hash>,
+        V: Borrow<AccountHash>,
     >(
         &self,
         accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
@@ -157,6 +159,7 @@ mod tests {
         solana_sdk::{
             account::{Account, AccountSharedData},
             clock::Slot,
+            hash::Hash,
             pubkey::Pubkey,
             system_instruction::MAX_PERMITTED_DATA_LENGTH,
         },
@@ -182,7 +185,7 @@ mod tests {
         let storable_accounts =
             StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
                 &account_data,
-                Vec::<&Hash>::new(),
+                Vec::<AccountHash>::new(),
                 Vec::<StoredMetaWriteVersion>::new(),
             );
 
@@ -234,7 +237,7 @@ mod tests {
         assert_eq!(tiered_storage_readonly.reader().unwrap().num_accounts(), 0);
         assert_eq!(footer.account_meta_format, HOT_FORMAT.account_meta_format);
         assert_eq!(footer.owners_block_format, HOT_FORMAT.owners_block_format);
-        assert_eq!(footer.account_index_format, HOT_FORMAT.account_index_format);
+        assert_eq!(footer.index_block_format, HOT_FORMAT.index_block_format);
         assert_eq!(footer.account_block_format, HOT_FORMAT.account_block_format);
         assert_eq!(
             tiered_storage_readonly.file_size().unwrap() as usize,
@@ -300,8 +303,6 @@ mod tests {
     }
 
     /// Create a test account based on the specified seed.
-    /// The created test account might have default rent_epoch
-    /// and write_version.
     fn create_account(seed: u64) -> (StoredMeta, AccountSharedData) {
         let data_byte = seed as u8;
         let account = Account {
@@ -317,7 +318,7 @@ mod tests {
         };
 
         let stored_meta = StoredMeta {
-            write_version_obsolete: u64::MAX,
+            write_version_obsolete: StoredMetaWriteVersion::default(),
             pubkey: Pubkey::new_unique(),
             data_len: seed,
         };
@@ -343,7 +344,7 @@ mod tests {
 
         // Slot information is not used here
         let account_data = (Slot::MAX, &account_refs[..]);
-        let hashes: Vec<_> = std::iter::repeat_with(Hash::new_unique)
+        let hashes: Vec<_> = std::iter::repeat_with(|| AccountHash(Hash::new_unique()))
             .take(account_data_sizes.len())
             .collect();
         let write_versions: Vec<_> = accounts
@@ -379,7 +380,7 @@ mod tests {
         let expected_footer = TieredStorageFooter {
             account_meta_format: expected_format.account_meta_format,
             owners_block_format: expected_format.owners_block_format,
-            account_index_format: expected_format.account_index_format,
+            index_block_format: expected_format.index_block_format,
             account_block_format: expected_format.account_block_format,
             account_entry_count: expected_accounts.len() as u32,
             // Hash is not yet implemented, so we bypass the check

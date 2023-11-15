@@ -51,6 +51,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         warp_slot: config.warp_slot,
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
         accounts_db_skip_shrink: config.accounts_db_skip_shrink,
+        accounts_db_force_initial_clean: config.accounts_db_force_initial_clean,
         tpu_coalesce: config.tpu_coalesce,
         staked_nodes_overrides: config.staked_nodes_overrides.clone(),
         validator_exit: Arc::new(RwLock::new(Exit::default())),
@@ -68,6 +69,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         block_production_method: config.block_production_method.clone(),
         generator_config: config.generator_config.clone(),
         use_snapshot_archives_at_startup: config.use_snapshot_archives_at_startup,
+        wen_restart_proto_path: config.wen_restart_proto_path.clone(),
     }
 }
 

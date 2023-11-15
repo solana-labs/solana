@@ -16,7 +16,7 @@ fn main() {
             s.replace("--bpf", "--sbf")
         })
         .collect::<Vec<_>>();
-    let program = if let Some(arg0) = args.get(0) {
+    let program = if let Some(arg0) = args.first() {
         let arg0 = arg0.replace("build-bpf", "build-sbf");
         args.remove(0);
         PathBuf::from(arg0)
@@ -25,7 +25,7 @@ fn main() {
     };
     // When run as a cargo subcommand, the first program argument is the subcommand name.
     // Remove it
-    if let Some(arg0) = args.get(0) {
+    if let Some(arg0) = args.first() {
         if arg0 == "build-bpf" {
             args.remove(0);
         }

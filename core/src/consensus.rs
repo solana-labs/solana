@@ -1452,7 +1452,7 @@ impl ExternalRootSource {
 pub fn reconcile_blockstore_roots_with_external_source(
     external_source: ExternalRootSource,
     blockstore: &Blockstore,
-    // blockstore.last_root() might have been updated already.
+    // blockstore.max_root() might have been updated already.
     // so take a &mut param both to input (and output iff we update root)
     last_blockstore_root: &mut Slot,
 ) -> blockstore_db::Result<()> {
@@ -1489,7 +1489,7 @@ pub fn reconcile_blockstore_roots_with_external_source(
             // Update the caller-managed state of last root in blockstore.
             // Repeated calls of this function should result in a no-op for
             // the range of `new_roots`.
-            *last_blockstore_root = blockstore.last_root();
+            *last_blockstore_root = blockstore.max_root();
         } else {
             // This indicates we're in bad state; but still don't panic here.
             // That's because we might have a chance of recovering properly with
@@ -1518,7 +1518,7 @@ pub mod test {
             vote_simulator::VoteSimulator,
         },
         itertools::Itertools,
-        solana_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path},
+        solana_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path_auto_delete},
         solana_runtime::bank::Bank,
         solana_sdk::{
             account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -2928,36 +2928,33 @@ pub mod test {
     #[test]
     fn test_reconcile_blockstore_roots_with_tower_normal() {
         solana_logger::setup();
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-            let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            let (shreds, _) = make_slot_entries(3, 1, 42, /*merkle_variant:*/ true);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            let (shreds, _) = make_slot_entries(4, 1, 42, /*merkle_variant:*/ true);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            assert!(!blockstore.is_root(0));
-            assert!(!blockstore.is_root(1));
-            assert!(!blockstore.is_root(3));
-            assert!(!blockstore.is_root(4));
+        let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        let (shreds, _) = make_slot_entries(3, 1, 42, /*merkle_variant:*/ true);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        let (shreds, _) = make_slot_entries(4, 1, 42, /*merkle_variant:*/ true);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        assert!(!blockstore.is_root(0));
+        assert!(!blockstore.is_root(1));
+        assert!(!blockstore.is_root(3));
+        assert!(!blockstore.is_root(4));
 
-            let mut tower = Tower::default();
-            tower.vote_state.root_slot = Some(4);
-            reconcile_blockstore_roots_with_external_source(
-                ExternalRootSource::Tower(tower.root()),
-                &blockstore,
-                &mut blockstore.last_root(),
-            )
-            .unwrap();
+        let mut tower = Tower::default();
+        tower.vote_state.root_slot = Some(4);
+        reconcile_blockstore_roots_with_external_source(
+            ExternalRootSource::Tower(tower.root()),
+            &blockstore,
+            &mut blockstore.max_root(),
+        )
+        .unwrap();
 
-            assert!(!blockstore.is_root(0));
-            assert!(blockstore.is_root(1));
-            assert!(!blockstore.is_root(3));
-            assert!(blockstore.is_root(4));
-        }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+        assert!(!blockstore.is_root(0));
+        assert!(blockstore.is_root(1));
+        assert!(!blockstore.is_root(3));
+        assert!(blockstore.is_root(4));
     }
 
     #[test]
@@ -2966,61 +2963,55 @@ pub mod test {
                                external root (Tower(4))!?")]
     fn test_reconcile_blockstore_roots_with_tower_panic_no_common_root() {
         solana_logger::setup();
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-            let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            let (shreds, _) = make_slot_entries(3, 1, 42, /*merkle_variant:*/ true);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            let (shreds, _) = make_slot_entries(4, 1, 42, /*merkle_variant:*/ true);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            blockstore.set_roots(std::iter::once(&3)).unwrap();
-            assert!(!blockstore.is_root(0));
-            assert!(!blockstore.is_root(1));
-            assert!(blockstore.is_root(3));
-            assert!(!blockstore.is_root(4));
+        let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        let (shreds, _) = make_slot_entries(3, 1, 42, /*merkle_variant:*/ true);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        let (shreds, _) = make_slot_entries(4, 1, 42, /*merkle_variant:*/ true);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore.set_roots(std::iter::once(&3)).unwrap();
+        assert!(!blockstore.is_root(0));
+        assert!(!blockstore.is_root(1));
+        assert!(blockstore.is_root(3));
+        assert!(!blockstore.is_root(4));
 
-            let mut tower = Tower::default();
-            tower.vote_state.root_slot = Some(4);
-            reconcile_blockstore_roots_with_external_source(
-                ExternalRootSource::Tower(tower.root()),
-                &blockstore,
-                &mut blockstore.last_root(),
-            )
-            .unwrap();
-        }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+        let mut tower = Tower::default();
+        tower.vote_state.root_slot = Some(4);
+        reconcile_blockstore_roots_with_external_source(
+            ExternalRootSource::Tower(tower.root()),
+            &blockstore,
+            &mut blockstore.max_root(),
+        )
+        .unwrap();
     }
 
     #[test]
     fn test_reconcile_blockstore_roots_with_tower_nop_no_parent() {
         solana_logger::setup();
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-            let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            let (shreds, _) = make_slot_entries(3, 1, 42, /*merkle_variant:*/ true);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            assert!(!blockstore.is_root(0));
-            assert!(!blockstore.is_root(1));
-            assert!(!blockstore.is_root(3));
+        let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        let (shreds, _) = make_slot_entries(3, 1, 42, /*merkle_variant:*/ true);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        assert!(!blockstore.is_root(0));
+        assert!(!blockstore.is_root(1));
+        assert!(!blockstore.is_root(3));
 
-            let mut tower = Tower::default();
-            tower.vote_state.root_slot = Some(4);
-            assert_eq!(blockstore.last_root(), 0);
-            reconcile_blockstore_roots_with_external_source(
-                ExternalRootSource::Tower(tower.root()),
-                &blockstore,
-                &mut blockstore.last_root(),
-            )
-            .unwrap();
-            assert_eq!(blockstore.last_root(), 0);
-        }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+        let mut tower = Tower::default();
+        tower.vote_state.root_slot = Some(4);
+        assert_eq!(blockstore.max_root(), 0);
+        reconcile_blockstore_roots_with_external_source(
+            ExternalRootSource::Tower(tower.root()),
+            &blockstore,
+            &mut blockstore.max_root(),
+        )
+        .unwrap();
+        assert_eq!(blockstore.max_root(), 0);
     }
 
     #[test]

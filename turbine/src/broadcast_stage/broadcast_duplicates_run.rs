@@ -376,8 +376,11 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             .flatten()
             .collect();
 
-        if let Err(SendPktsError::IoError(ioerr, _)) = batch_send(sock, &packets) {
-            return Err(Error::Io(ioerr));
+        match batch_send(sock, &packets) {
+            Ok(()) => (),
+            Err(SendPktsError::IoError(ioerr, _)) => {
+                return Err(Error::Io(ioerr));
+            }
         }
         Ok(())
     }

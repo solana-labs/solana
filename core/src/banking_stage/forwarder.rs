@@ -307,7 +307,7 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = &genesis_config_info;
 
         let bank: Bank = Bank::new_no_wallclock_throttle_for_tests(genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let bank = bank_forks.read().unwrap().working_bank();
 
         let ledger_path = TempDir::new().unwrap();

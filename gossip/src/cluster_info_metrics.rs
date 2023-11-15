@@ -628,6 +628,16 @@ pub(crate) fn submit_gossip_stats(
         ("ContactInfo-push", crds_stats.push.counts[11], i64),
         ("ContactInfo-pull", crds_stats.pull.counts[11], i64),
         (
+            "RestartLastVotedForkSlots-push",
+            crds_stats.push.counts[12],
+            i64
+        ),
+        (
+            "RestartLastVotedForkSlots-pull",
+            crds_stats.pull.counts[12],
+            i64
+        ),
+        (
             "all-push",
             crds_stats.push.counts.iter().sum::<usize>(),
             i64
@@ -664,6 +674,16 @@ pub(crate) fn submit_gossip_stats(
         ("SnapshotHashes-pull", crds_stats.pull.fails[10], i64),
         ("ContactInfo-push", crds_stats.push.fails[11], i64),
         ("ContactInfo-pull", crds_stats.pull.fails[11], i64),
+        (
+            "RestartLastVotedForkSlots-push",
+            crds_stats.push.fails[12],
+            i64
+        ),
+        (
+            "RestartLastVotedForkSlots-pull",
+            crds_stats.pull.fails[12],
+            i64
+        ),
         ("all-push", crds_stats.push.fails.iter().sum::<usize>(), i64),
         ("all-pull", crds_stats.pull.fails.iter().sum::<usize>(), i64),
     );

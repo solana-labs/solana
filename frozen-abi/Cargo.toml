@@ -30,6 +30,7 @@ memmap2 = { workspace = true }
 subtle = { workspace = true }
 
 [target.'cfg(not(target_os = "solana"))'.dev-dependencies]
+bitflags = { workspace = true }
 solana-logger = { workspace = true }
 
 [build-dependencies]

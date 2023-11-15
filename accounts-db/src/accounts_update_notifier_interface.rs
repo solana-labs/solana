@@ -3,7 +3,7 @@ use {
     solana_sdk::{
         account::AccountSharedData, clock::Slot, pubkey::Pubkey, transaction::SanitizedTransaction,
     },
-    std::sync::{Arc, RwLock},
+    std::sync::Arc,
 };
 
 pub trait AccountsUpdateNotifierInterface: std::fmt::Debug {
@@ -25,4 +25,4 @@ pub trait AccountsUpdateNotifierInterface: std::fmt::Debug {
     fn notify_end_of_restore_from_snapshot(&self);
 }
 
-pub type AccountsUpdateNotifier = Arc<RwLock<dyn AccountsUpdateNotifierInterface + Sync + Send>>;
+pub type AccountsUpdateNotifier = Arc<dyn AccountsUpdateNotifierInterface + Sync + Send>;

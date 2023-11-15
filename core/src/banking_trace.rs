@@ -62,16 +62,17 @@ pub struct BankingTracer {
     active_tracer: Option<ActiveTracer>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[frozen_abi(digest = "Eq6YrAFtTbtPrCEvh6Et1mZZDCARUg1gcK2qiZdqyjUz")]
+#[derive(Serialize, Deserialize, Debug, AbiExample)]
 pub struct TimedTracedEvent(pub std::time::SystemTime, pub TracedEvent);
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, AbiExample, AbiEnumVisitor)]
 pub enum TracedEvent {
     PacketBatch(ChannelLabel, BankingPacketBatch),
     BlockAndBankHash(Slot, Hash, Hash),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, AbiExample, AbiEnumVisitor)]
 pub enum ChannelLabel {
     NonVote,
     TpuVote,

@@ -7,8 +7,8 @@ use {
         banking_stage::BankingStage,
         banking_trace::{BankingTracer, TracerThread},
         cluster_info_vote_listener::{
-            ClusterInfoVoteListener, GossipDuplicateConfirmedSlotsSender,
-            GossipVerifiedVoteHashSender, VerifiedVoteSender, VoteTracker,
+            ClusterInfoVoteListener, DuplicateConfirmedSlotsSender, GossipVerifiedVoteHashSender,
+            VerifiedVoteSender, VoteTracker,
         },
         fetch_stage::FetchStage,
         sigverify::TransactionSigVerifier,
@@ -98,7 +98,7 @@ impl Tpu {
         replay_vote_sender: ReplayVoteSender,
         bank_notification_sender: Option<BankNotificationSender>,
         tpu_coalesce: Duration,
-        cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
+        duplicate_confirmed_slot_sender: DuplicateConfirmedSlotsSender,
         connection_cache: &Arc<ConnectionCache>,
         turbine_quic_endpoint_sender: AsyncSender<(SocketAddr, Bytes)>,
         keypair: &Keypair,
@@ -215,7 +215,7 @@ impl Tpu {
             replay_vote_receiver,
             blockstore.clone(),
             bank_notification_sender,
-            cluster_confirmed_slot_sender,
+            duplicate_confirmed_slot_sender,
         );
 
         let banking_stage = BankingStage::new(

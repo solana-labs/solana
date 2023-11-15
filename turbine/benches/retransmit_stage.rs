@@ -32,7 +32,7 @@ use {
         net::{Ipv4Addr, UdpSocket},
         sync::{
             atomic::{AtomicUsize, Ordering},
-            Arc, RwLock,
+            Arc,
         },
         thread::{sleep, Builder},
         time::Duration,
@@ -74,9 +74,8 @@ fn bench_retransmitter(bencher: &mut Bencher) {
 
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
     let bank0 = Bank::new_for_benches(&genesis_config);
-    let bank_forks = BankForks::new(bank0);
-    let bank = bank_forks.working_bank();
-    let bank_forks = Arc::new(RwLock::new(bank_forks));
+    let bank_forks = BankForks::new_rw_arc(bank0);
+    let bank = bank_forks.read().unwrap().working_bank();
     let (shreds_sender, shreds_receiver) = unbounded();
     const NUM_THREADS: usize = 2;
     let sockets = (0..NUM_THREADS)

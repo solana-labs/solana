@@ -1,12 +1,12 @@
 use {
     crate::{
         accounts_index::{DiskIndexValue, IndexValue},
-        bucket_map_holder::BucketMapHolder,
+        bucket_map_holder::{Age, AtomicAge, BucketMapHolder},
     },
     solana_sdk::timing::AtomicInterval,
     std::{
         fmt::Debug,
-        sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering},
+        sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     },
 };
 
@@ -52,7 +52,7 @@ pub struct BucketMapHolderStats {
     pub flush_entries_evicted_from_mem: AtomicU64,
     pub active_threads: AtomicU64,
     pub get_range_us: AtomicU64,
-    last_age: AtomicU8,
+    last_age: AtomicAge,
     last_ages_flushed: AtomicU64,
     pub flush_scan_us: AtomicU64,
     pub flush_update_us: AtomicU64,
@@ -120,7 +120,7 @@ impl BucketMapHolderStats {
         let mut age_now = age_now as u64;
         if last_age > age_now {
             // age wrapped
-            age_now += u8::MAX as u64 + 1;
+            age_now += Age::MAX as u64 + 1;
         }
         let age_delta = age_now.saturating_sub(last_age);
         if age_delta > 0 {

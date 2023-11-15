@@ -78,9 +78,6 @@ impl ByteBlockWriter {
         if let Some(hash) = opt_fields.account_hash {
             size += self.write_type(&hash)?;
         }
-        if let Some(write_version) = opt_fields.write_version {
-            size += self.write_type(&write_version)?;
-        }
 
         debug_assert_eq!(size, opt_fields.size());
 
@@ -154,7 +151,7 @@ impl ByteBlockReader {
 mod tests {
     use {
         super::*,
-        crate::account_storage::meta::StoredMetaWriteVersion,
+        crate::accounts_hash::AccountHash,
         solana_sdk::{hash::Hash, stake_history::Epoch},
     };
 
@@ -307,7 +304,6 @@ mod tests {
 
     fn write_optional_fields(format: AccountBlockFormat) {
         let mut test_epoch = 5432312;
-        let mut test_write_version = 231;
 
         let mut writer = ByteBlockWriter::new(format);
         let mut opt_fields_vec = vec![];
@@ -316,19 +312,13 @@ mod tests {
         // prepare a vector of optional fields that contains all combinations
         // of Some and None.
         for rent_epoch in [None, Some(test_epoch)] {
-            for account_hash in [None, Some(Hash::new_unique())] {
-                for write_version in [None, Some(test_write_version)] {
-                    some_count += rent_epoch.map_or(0, |_| 1)
-                        + account_hash.map_or(0, |_| 1)
-                        + write_version.map_or(0, |_| 1);
+            for account_hash in [None, Some(AccountHash(Hash::new_unique()))] {
+                some_count += rent_epoch.iter().count() + account_hash.iter().count();
 
-                    opt_fields_vec.push(AccountMetaOptionalFields {
-                        rent_epoch,
-                        account_hash,
-                        write_version,
-                    });
-                    test_write_version += 1;
-                }
+                opt_fields_vec.push(AccountMetaOptionalFields {
+                    rent_epoch,
+                    account_hash,
+                });
             }
             test_epoch += 1;
         }
@@ -362,17 +352,10 @@ mod tests {
                 offset += std::mem::size_of::<Epoch>();
             }
             if let Some(expected_hash) = opt_fields.account_hash {
-                let hash = read_type::<Hash>(&decoded_buffer, offset).unwrap();
+                let hash = read_type::<AccountHash>(&decoded_buffer, offset).unwrap();
                 assert_eq!(hash, &expected_hash);
                 verified_count += 1;
-                offset += std::mem::size_of::<Hash>();
-            }
-            if let Some(expected_write_version) = opt_fields.write_version {
-                let write_version =
-                    read_type::<StoredMetaWriteVersion>(&decoded_buffer, offset).unwrap();
-                assert_eq!(*write_version, expected_write_version);
-                verified_count += 1;
-                offset += std::mem::size_of::<StoredMetaWriteVersion>();
+                offset += std::mem::size_of::<AccountHash>();
             }
         }
 
