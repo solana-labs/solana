@@ -384,7 +384,7 @@ impl Accounts {
                             .map(|(mut account, _)| {
                                 if should_collect_rent && message.is_writable(i) {
                                     // When rent fee collection is disabled, we won't collect rent for any account. If there
-                                    // are any rent paying accounts, their `rent_epoch` won't change too.
+                                    // are any rent paying accounts, their `rent_epoch` won't change either.
                                     let rent_due = rent_collector
                                         .collect_from_existing_account(
                                             key,
