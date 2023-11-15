@@ -150,6 +150,7 @@ use {
         hash::{extend_and_hash, hashv, Hash},
         incinerator,
         inflation::Inflation,
+        instruction::InstructionError,
         loader_v4::{self, LoaderV4State, LoaderV4Status},
         message::{AccountKeys, SanitizedMessage},
         native_loader,
@@ -4790,7 +4791,7 @@ impl Bank {
             ) => programdata_account
                 .data()
                 .get(UpgradeableLoaderState::size_of_programdata_metadata()..)
-                .ok_or("Invalid account data".into())
+                .ok_or(Box::new(InstructionError::InvalidAccountData).into())
                 .and_then(|programdata| {
                     Self::load_program_from_bytes(
                         &mut load_program_metrics,
@@ -4810,7 +4811,7 @@ impl Bank {
             ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, slot) => program_account
                 .data()
                 .get(LoaderV4State::program_data_offset()..)
-                .ok_or("Invalid account data".into())
+                .ok_or(Box::new(InstructionError::InvalidAccountData).into())
                 .and_then(|elf_bytes| {
                     Self::load_program_from_bytes(
                         &mut load_program_metrics,
