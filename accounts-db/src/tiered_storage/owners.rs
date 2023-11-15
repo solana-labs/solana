@@ -88,9 +88,9 @@ mod tests {
         let file = OpenOptions::new().read(true).open(path).unwrap();
         let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
 
-        for (i, &address) in addresses.iter().enumerate() {
+        for (i, address) in addresses.iter().enumerate() {
             assert_eq!(
-                *OwnersBlock::get_owner_address(&mmap, &footer, OwnerOffset(i)).unwrap(),
+                OwnersBlock::get_owner_address(&mmap, &footer, OwnerOffset(i)).unwrap(),
                 address
             );
         }
