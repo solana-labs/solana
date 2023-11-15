@@ -276,9 +276,10 @@ fn parse_matches() -> ArgMatches<'static> {
                 .help("Validator config. If set, disables booting validators from a snapshot"),
         )
         .arg(
-            Arg::with_name("skip_require_tower")
-                .long("skip-require-tower")
-                .help("Validator config. Disable require tower"),
+            Arg::with_name("require_tower")
+                .long("require-tower")
+                .help("Validator config. Refuse to start if saved tower state is not found.
+                Off by default since validator won't restart if the pod restarts"),
         )
         .arg(
             Arg::with_name("full_rpc")
@@ -573,7 +574,7 @@ async fn main() {
         },
         skip_poh_verify: matches.is_present("skip_poh_verify"),
         no_snapshot_fetch: matches.is_present("no_snapshot_fetch"),
-        skip_require_tower: matches.is_present("skip_require_tower"),
+        require_tower: matches.is_present("require_tower"),
         enable_full_rpc: matches.is_present("enable_full_rpc"),
     };
 

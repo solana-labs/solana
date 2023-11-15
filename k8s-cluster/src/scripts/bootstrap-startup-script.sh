@@ -22,7 +22,6 @@ else
 fi
 
 no_restart=0
-maybeRequireTower=true
 
 echo "PROGRAM: $program"
 
@@ -101,8 +100,8 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --accounts-db-skip-shrink ]]; then
       args+=("$1")
       shift
-    elif [[ $1 == --skip-require-tower ]]; then # Done
-      maybeRequireTower=false
+    elif [[ $1 == --require-tower ]]; then # Done
+      args+=("$1")
       shift
     elif [[ $1 = --log-messages-bytes-limit ]]; then # not enabled in net.sh
       args+=("$1" "$2")
@@ -128,10 +127,6 @@ ledger_dir=/home/solana/ledger
   echo "$ledger_dir does not exist"
   exit 1
 }
-
-if [[ $maybeRequireTower = true ]]; then
-  args+=(--require-tower)
-fi
 
 args+=(
   --no-os-network-limits-test \

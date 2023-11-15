@@ -82,6 +82,7 @@ cd k8s-cluster/src/scripts
 --metrics-password <metrics-password>   # from (1)
 ```
 
+## Verifying Deployment
 Verify validators have deployed:
 ```
 kubectl get pods -n <namespace>
@@ -98,10 +99,10 @@ solana -ul validators # should see `--num-validators`+1 current validators (incl
 ```
 ^ if you ran the tar deployment, you should see the Stake by Version as well read `<release-channel>` in the `solana -ul validators` output.
 
-TODO:
-- we currently write binary to file for genesis, then read it back to verify it. and then read it again to convert into a base64 string and then converted into binrary and then converted into a GenesisConfig lol. So need to fix
+## Trouble Shooting
+1) The default `solana-validator` command includes `--require-tower`, as a result if your pods restart for whatever reason after the validator was running for some time, the validator will not properly boot. Deploy your experiment with `--skip-require-tower`
 
 ### Notes
-- Have tested deployments of up to 500 validators
-- Additional validator commandline flags are coming....stay tuned
+- Have tested deployments of up to 1200 validators
 - Once again, we assume you are logged into docker and you are pulling from a public repo (Monogon hosts need to access)
+
