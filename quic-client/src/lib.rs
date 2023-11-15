@@ -93,13 +93,13 @@ pub struct QuicConfig {
     // The optional specified endpoint for the quic based client connections
     // If not specified, the connection cache will create as needed.
     client_endpoint: Option<Endpoint>,
-    ip: IpAddr,
+    addr: IpAddr,
 }
 
 impl NewConnectionConfig for QuicConfig {
     fn new() -> Result<Self, ClientError> {
-        let ip = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
-        let (cert, priv_key) = new_self_signed_tls_certificate(&Keypair::new(), ip)?;
+        let addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
+        let (cert, priv_key) = new_self_signed_tls_certificate(&Keypair::new(), addr)?;
         Ok(Self {
             client_certificate: Arc::new(QuicClientCertificate {
                 certificate: cert,
@@ -108,7 +108,7 @@ impl NewConnectionConfig for QuicConfig {
             maybe_staked_nodes: None,
             maybe_client_pubkey: None,
             client_endpoint: None,
-            ip,
+            addr,
         })
     }
 }
@@ -144,13 +144,12 @@ impl QuicConfig {
         keypair: &Keypair,
         ipaddr: Option<IpAddr>,
     ) -> Result<(), RcgenError> {
-        let (cert, priv_key) = if let Some(ip) = ipaddr {
-            let res = new_self_signed_tls_certificate(keypair, ip)?;
-            self.ip = ip;
-            res
-        } else {
-            new_self_signed_tls_certificate(keypair, self.ip)?
-        };
+        let addr = ipaddr.unwrap_or(self.addr);
+        // Ensure we don't update self.ip but fail to update self.client_certificate
+        // due to new_self_signed_tls_certificate returning an error
+        let (cert, priv_key) = new_self_signed_tls_certificate(keypair, addr)?;
+        self.addr = addr;
+
         self.client_certificate = Arc::new(QuicClientCertificate {
             certificate: cert,
             key: priv_key,

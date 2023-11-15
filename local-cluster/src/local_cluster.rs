@@ -279,7 +279,7 @@ impl LocalCluster {
         let leader_keypair = Arc::new(leader_keypair.insecure_clone());
         let leader_vote_keypair = Arc::new(leader_vote_keypair.insecure_clone());
 
-        let leader_server = Validator::new(
+        let (leader_server, _) = Validator::new(
             leader_node,
             leader_keypair.clone(),
             &leader_ledger_path,
@@ -308,7 +308,7 @@ impl LocalCluster {
         let cluster_leader = ClusterValidatorInfo::new(
             leader_info,
             safe_clone_config(&config.validator_configs[0]),
-            leader_server.0,
+            leader_server,
         );
 
         validators.insert(leader_pubkey, cluster_leader);
@@ -494,7 +494,7 @@ impl LocalCluster {
         ));
         Self::sync_ledger_path_across_nested_config_fields(&mut config, &ledger_path);
         let voting_keypair = voting_keypair.unwrap();
-        let validator_server = Validator::new(
+        let (validator_server, _) = Validator::new(
             validator_node,
             validator_keypair.clone(),
             &ledger_path,
@@ -522,7 +522,7 @@ impl LocalCluster {
                 contact_info,
             },
             safe_clone_config(validator_config),
-            validator_server.0,
+            validator_server,
         );
 
         self.validators.insert(validator_pubkey, validator_info);
@@ -887,7 +887,7 @@ impl Cluster for LocalCluster {
             &mut cluster_validator_info.config,
             &validator_info.ledger_path,
         );
-        let restarted_node = Validator::new(
+        let (restarted_node, _) = Validator::new(
             node,
             validator_info.keypair.clone(),
             &validator_info.ledger_path,
@@ -909,7 +909,7 @@ impl Cluster for LocalCluster {
             Arc::new(RwLock::new(None)),
         )
         .expect("assume successful validator start");
-        cluster_validator_info.validator = Some(restarted_node.0);
+        cluster_validator_info.validator = Some(restarted_node);
         cluster_validator_info
     }
 

@@ -38,9 +38,7 @@ pub trait ConnectionManager: Send + Sync + 'static {
 
     fn new_connection_pool(&self) -> Self::ConnectionPool;
     fn new_connection_config(&self) -> Self::NewConnectionConfig;
-    fn update_key(&mut self, _key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
-        Ok(())
-    }
+    fn update_key(&mut self, _key: &Keypair) -> Result<(), Box<dyn std::error::Error>>;
 }
 
 pub struct ConnectionCache<
@@ -102,8 +100,8 @@ where
         Self {
             name,
             map,
-            connection_manager,
             stats,
+            connection_manager,
             last_stats: AtomicInterval::default(),
             connection_pool_size,
             connection_config: config,

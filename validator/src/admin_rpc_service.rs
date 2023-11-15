@@ -67,10 +67,10 @@ impl AdminRpcRequestMetadata {
         }
     }
 
-    pub fn update_keypair(&self, key: &Keypair) {
+    fn update_keypair(&self, key: &Keypair) {
         for n in self.notifies.iter() {
             if let Err(err) = n.update_key(key) {
-                warn!("Error updating network layer keypair: {}", err);
+                error!("Error updating network layer keypair: {err}");
             }
         }
     }
