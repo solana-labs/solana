@@ -5334,6 +5334,7 @@ impl Bank {
 
         execution_time.stop();
 
+        use rand::Rng;
         if rand::thread_rng().gen_range(0..1000) == 0 {
             info!("write lock 3");
             const SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE: u8 = 90;
