@@ -17,7 +17,7 @@ use {
     },
     memmap2::{Mmap, MmapOptions},
     modular_bitfield::prelude::*,
-    solana_sdk::stake_history::Epoch,
+    solana_sdk::{pubkey::Pubkey, stake_history::Epoch},
     std::{fs::OpenOptions, option::Option, path::Path},
 };
 
@@ -236,6 +236,13 @@ impl HotStorageReader {
         self.footer
             .index_block_format
             .get_account_offset(&self.mmap, &self.footer, index_offset)
+    }
+
+    /// Returns the address of the account associated with the specified index.
+    fn get_account_address(&self, index: IndexOffset) -> TieredStorageResult<&Pubkey> {
+        self.footer
+            .index_block_format
+            .get_account_address(&self.mmap, &self.footer, index)
     }
 }
 
@@ -472,10 +479,12 @@ pub mod tests {
     }
 
     #[test]
-    fn test_hot_storage_get_account_offset() {
+    fn test_hot_storage_get_account_offset_and_address() {
         // Generate a new temp path that is guaranteed to NOT already have a file.
         let temp_dir = TempDir::new().unwrap();
-        let path = temp_dir.path().join("test_hot_storage_get_account_offset");
+        let path = temp_dir
+            .path()
+            .join("test_hot_storage_get_account_offset_and_address");
         const NUM_ACCOUNTS: u32 = 10;
         let mut rng = rand::thread_rng();
 
@@ -517,6 +526,9 @@ pub mod tests {
         for (i, index_writer_entry) in index_writer_entries.iter().enumerate() {
             let account_offset = hot_storage.get_account_offset(IndexOffset(i)).unwrap();
             assert_eq!(account_offset.block as u64, index_writer_entry.block_offset);
+            let account_address = hot_storage.get_account_address(IndexOffset(i)).unwrap();
+
+            assert_eq!(account_address, index_writer_entry.address);
         }
     }
 }
