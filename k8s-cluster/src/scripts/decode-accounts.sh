@@ -29,7 +29,7 @@ DECODED_FILES=(
     "/home/solana/stake.json"
 )
 
-if [ "$validator_type" == "bootstrap" ]; then
+if [[ "$validator_type" == "bootstrap" || "$validator_type" == "faucet" ]]; then
     echo "Validator type is equal to 'bootstrap'"
     SECRET_FILES+=(
       "/home/solana/${validator_type}-accounts/faucet.base64"

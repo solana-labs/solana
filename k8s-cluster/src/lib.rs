@@ -37,6 +37,7 @@ pub mod release;
 pub enum ValidatorType {
     Bootstrap,
     Standard,
+    NonVoting,
 }
 
 impl std::fmt::Display for ValidatorType {
@@ -44,6 +45,7 @@ impl std::fmt::Display for ValidatorType {
         match *self {
             ValidatorType::Bootstrap => write!(f, "bootstrap"),
             ValidatorType::Standard => write!(f, "validator"),
+            ValidatorType::NonVoting => write!(f, "non_voting"),
         }
     }
 }

@@ -127,6 +127,7 @@ pub struct Kubernetes<'a> {
     validator_config: &'a mut ValidatorConfig<'a>,
     client_config: ClientConfig,
     pub metrics: Option<Metrics>,
+    num_faucets: i32,
 }
 
 impl<'a> Kubernetes<'a> {
@@ -135,6 +136,7 @@ impl<'a> Kubernetes<'a> {
         validator_config: &'a mut ValidatorConfig<'a>,
         client_config: ClientConfig,
         metrics: Option<Metrics>,
+        num_faucets: i32,
     ) -> Kubernetes<'a> {
         Kubernetes {
             client: Client::try_default().await.unwrap(),
@@ -142,6 +144,7 @@ impl<'a> Kubernetes<'a> {
             validator_config,
             client_config,
             metrics,
+            num_faucets
         }
     }
 
@@ -207,6 +210,16 @@ impl<'a> Kubernetes<'a> {
         flags.push("--internal-node-sol".to_string());
         flags.push(self.validator_config.internal_node_sol.to_string());
 
+        if let Some(shred_version) = self.validator_config.shred_version {
+            flags.push("--expected-shred-version".to_string());
+            flags.push(shred_version.to_string());
+        }
+
+        flags
+    }
+
+    fn generate_faucet_command_flags(&mut self) -> Vec<String> {
+        let mut flags = self.generate_command_flags();
         if let Some(shred_version) = self.validator_config.shred_version {
             flags.push("--expected-shred-version".to_string());
             flags.push(shred_version.to_string());
@@ -566,6 +579,57 @@ impl<'a> Kubernetes<'a> {
         Ok(secret)
     }
 
+    pub fn create_faucet_secret(&self, faucet_index: i32) -> Result<Secret, Box<dyn Error>> {
+        let secret_name = format!("faucet-accounts-secret-{}", faucet_index);
+        let faucet_key_path = SOLANA_ROOT.join("config-k8s");
+        let faucet_keypair =
+            std::fs::read(faucet_key_path.join("faucet.json")).unwrap_or_else(|_| {
+                panic!("Failed to read faucet.json file! at: {:?}", faucet_key_path)
+            });
+
+        let mut data = BTreeMap::new();
+        let accounts = vec!["identity", "stake"];
+        for account in accounts {
+            let file_name: String = if account == "identity" {
+                format!("non_voting-validator-{}-{}.json", account, faucet_index)
+            } else {
+                format!("non_voting-validator-{}-account-{}.json", account, faucet_index)
+            };
+            let keypair = std::fs::read(faucet_key_path.join(file_name.clone())).unwrap_or_else(|_| {
+                panic!("Failed to read {} file! at: {:?}", file_name, faucet_key_path)
+            });
+            data.insert(
+                format!("{}.base64", account),
+                ByteString(
+                    general_purpose::STANDARD
+                        .encode(keypair)
+                        .as_bytes()
+                        .to_vec(),
+                ),
+            );
+        }
+        data.insert(
+            "faucet.base64".to_string(),
+            ByteString(
+                general_purpose::STANDARD
+                    .encode(faucet_keypair)
+                    .as_bytes()
+                    .to_vec(),
+            ),
+        );
+
+        let secret = Secret {
+            metadata: ObjectMeta {
+                name: Some(secret_name.to_string()),
+                ..Default::default()
+            },
+            data: Some(data),
+            ..Default::default()
+        };
+
+        Ok(secret)
+    }
+
     pub async fn deploy_replicas_set(
         &self,
         replica_set: &ReplicaSet,
@@ -679,6 +743,25 @@ impl<'a> Kubernetes<'a> {
         ]
     }
 
+    fn set_environment_variables_to_find_faucet(&self) -> Vec<EnvVar> {
+        vec![
+            EnvVar {
+                name: "FAUCET_RPC_ADDRESS".to_string(),
+                value: Some(
+                    "faucet-lb-service.$(NAMESPACE).svc.cluster.local:8899".to_string(),
+                ),
+                ..Default::default()
+            },
+            EnvVar {
+                name: "FAUCET_FAUCET_ADDRESS".to_string(),
+                value: Some(
+                    "faucet-lb-service.$(NAMESPACE).svc.cluster.local:9900".to_string(),
+                ),
+                ..Default::default()
+            },
+        ]
+    }
+
     pub async fn create_validator_replica_set(
         &mut self,
         container_name: &str,
@@ -691,6 +774,9 @@ impl<'a> Kubernetes<'a> {
         let mut env_vars = self.set_non_bootstrap_environment_variables();
         if self.metrics.is_some() {
             env_vars.push(self.get_metrics_env_var_secret())
+        }
+        if self.num_faucets > 0 {
+            env_vars.append(&mut self.set_environment_variables_to_find_faucet());
         }
 
         let accounts_volume = Some(vec![Volume {
@@ -730,6 +816,69 @@ impl<'a> Kubernetes<'a> {
         .await
     }
 
+    pub async fn create_faucet_replica_set(
+        &mut self,
+        container_name: &str,
+        faucet_index: i32,
+        image_name: &str,
+        num_validators: i32,
+        secret_name: Option<String>,
+        label_selector: &BTreeMap<String, String>,
+    ) -> Result<ReplicaSet, Box<dyn Error>> {
+        let mut env_vars = vec![EnvVar {
+            name: "MY_POD_IP".to_string(),
+            value_from: Some(EnvVarSource {
+                field_ref: Some(ObjectFieldSelector {
+                    field_path: "status.podIP".to_string(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }];
+        env_vars.append(&mut self.set_non_bootstrap_environment_variables());
+
+        if self.metrics.is_some() {
+            env_vars.push(self.get_metrics_env_var_secret())
+        }
+
+        let accounts_volume = Some(vec![Volume {
+            name: format!("faucet-accounts-volume-{}", faucet_index),
+            secret: Some(SecretVolumeSource {
+                secret_name,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }]);
+
+        let accounts_volume_mount = Some(vec![VolumeMount {
+            name: format!("faucet-accounts-volume-{}", faucet_index),
+            mount_path: "/home/solana/faucet-accounts".to_string(),
+            ..Default::default()
+        }]);
+
+        let mut command =
+        vec!["/home/solana/k8s-cluster-scripts/faucet-startup-script.sh".to_string()];
+        command.extend(self.generate_faucet_command_flags());
+
+    for c in command.iter() {
+        debug!("validator command: {}", c);
+    }
+
+        self.create_replicas_set(
+            format!("faucet-{}", faucet_index).as_str(),
+            label_selector,
+            container_name,
+            image_name,
+            num_validators,
+            env_vars,
+            &command,
+            accounts_volume,
+            accounts_volume_mount,
+        )
+        .await
+    }
+
     pub async fn create_client_replica_set(
         &mut self,
         container_name: &str,
@@ -742,6 +891,9 @@ impl<'a> Kubernetes<'a> {
         let mut env_vars = self.set_non_bootstrap_environment_variables();
         if self.metrics.is_some() {
             env_vars.push(self.get_metrics_env_var_secret())
+        }
+        if self.num_faucets > 0 {
+            env_vars.append(&mut self.set_environment_variables_to_find_faucet());
         }
 
         let accounts_volume = Some(vec![Volume {
@@ -787,6 +939,38 @@ impl<'a> Kubernetes<'a> {
         label_selector: &BTreeMap<String, String>,
     ) -> Service {
         self.create_service(service_name, label_selector)
+    }
+
+    pub fn create_faucet_load_balancer(
+        &self,
+        service_name: &str,
+        label_selector: &BTreeMap<String, String>
+    ) -> Service {
+        Service {
+            metadata: ObjectMeta {
+                name: Some(service_name.to_string()),
+                namespace: Some(self.namespace.to_string()),
+                ..Default::default()
+            },
+            spec: Some(ServiceSpec {
+                selector: Some(label_selector.clone()),
+                type_: Some("LoadBalancer".to_string()),
+                ports: Some(vec![
+                    ServicePort {
+                        port: 8899, // RPC Port
+                        name: Some("rpc-port".to_string()),
+                        ..Default::default()
+                    },
+                    ServicePort {
+                        port: 9900, //Faucet Port
+                        name: Some("faucet-port".to_string()),
+                        ..Default::default()
+                    },
+                ]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
     }
 
     pub async fn check_service_matching_replica_set(

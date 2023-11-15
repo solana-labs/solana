@@ -223,6 +223,7 @@ impl Genesis {
         let filename_prefix = match validator_type {
             ValidatorType::Bootstrap => format!("{}-validator", validator_type),
             ValidatorType::Standard => "validator".to_string(),
+            ValidatorType::NonVoting => format!("{}-validator", validator_type),
         };
 
         for i in 0..number_of_accounts {
@@ -289,14 +290,20 @@ impl Genesis {
         let log_msg = match validator_type {
             ValidatorType::Bootstrap => format!("generating {} account", validator_type),
             ValidatorType::Standard => format!("generating {} account: {}", validator_type, i),
+            ValidatorType::NonVoting => format!("generating {} account: {}", validator_type, i),
         };
         info!("{}", log_msg);
 
         let account_types = vec!["identity", "vote-account", "stake-account"];
         for account in account_types {
+            if validator_type == ValidatorType::NonVoting && account == "vote-account" {
+                continue;
+            }
+
             let filename = match validator_type {
                 ValidatorType::Bootstrap => format!("{}/{}.json", filename_prefix, account),
                 ValidatorType::Standard => format!("{}-{}-{}.json", filename_prefix, account, i),
+                ValidatorType::NonVoting => format!("{}-{}-{}.json", filename_prefix, account, i),
             };
 
             let outfile = self.config_dir.join(&filename);

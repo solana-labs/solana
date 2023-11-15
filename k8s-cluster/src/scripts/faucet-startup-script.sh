@@ -1,6 +1,15 @@
 #!/bin/bash
+set -e
+echo "in faucet startup script!"
 
-/home/solana/k8s-cluster-scripts/decode-accounts.sh -t "validator"
+/home/solana/k8s-cluster-scripts/decode-accounts.sh -t "faucet"
+
+echo "done decoding accounts. running faucet next..."
+# sleep 3600
+
+nohup solana-faucet --keypair faucet.json >logs/faucet.log 2>&1 &
+
+echo "faucet running"
 
 # Start Validator
 # shellcheck disable=SC1091
@@ -10,12 +19,12 @@ args=(
   --max-genesis-archive-unpacked-size 1073741824
   --no-poh-speed-test
   --no-os-network-limits-test
+  --no-voting
 )
 airdrops_enabled=1
 node_sol=500 # 500 SOL: number of SOL to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
 stake_sol=10
 identity=identity.json
-vote_account=vote.json
 no_restart=0
 gossip_entrypoint=$BOOTSTRAP_GOSSIP_ADDRESS
 ledger_dir=/home/solana/ledger
@@ -72,15 +81,8 @@ while [[ -n $1 ]]; do
       identity=$2
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --authorized-voter ]]; then
-      args+=("$1" "$2")
-      shift 2
     elif [[ $1 = --authorized-withdrawer ]]; then
       authorized_withdrawer=$2
-      shift 2
-    elif [[ $1 = --vote-account ]]; then
-      vote_account=$2
-      args+=("$1" "$2")
       shift 2
     elif [[ $1 = --init-complete-file ]]; then
       args+=("$1" "$2")
@@ -190,6 +192,7 @@ while [[ -n $1 ]]; do
     shift
   fi
 done
+
 echo "post positional args"
 if [[ "$SOLANA_GPU_MISSING" -eq 1 ]]; then
   echo "Testnet requires GPUs, but none were found!  Aborting..."
@@ -203,9 +206,6 @@ fi
 if [[ -n $REQUIRE_KEYPAIRS ]]; then
   if [[ -z $identity ]]; then
     usage "Error: --identity not specified"
-  fi
-  if [[ -z $vote_account ]]; then
-    usage "Error: --vote-account not specified"
   fi
   if [[ -z $authorized_withdrawer ]]; then
     usage "Error: --authorized_withdrawer not specified"
@@ -236,7 +236,6 @@ fi
 echo "post entrypoint arg"
 
 default_arg --identity "$identity"
-default_arg --vote-account "$vote_account"
 default_arg --ledger "$ledger_dir"
 default_arg --log logs/solana-validator.log
 default_arg --full-rpc-api
@@ -278,69 +277,6 @@ kill_node_and_exit() {
 
 trap 'kill_node_and_exit' INT TERM ERR
 
-# Maximum number of retries
-MAX_RETRIES=5
-
-# Delay between retries (in seconds)
-RETRY_DELAY=1
-
-# Bootstrap validator RPC URL
-BOOTSTRAP_RPC_URL="http://$BOOTSTRAP_RPC_ADDRESS"
-
-# Faucet non-voting validator RPC URL
-FAUCET_RPC_URL="http://$FAUCET_RPC_ADDRESS"
-
-# Identity file
-IDENTITY_FILE=$identity
-
-# Function to run a Solana command with retries. need reties because sometimes dns resolver fails
-# if pod dies and starts up again it may try to create a vote account or something that already exists
-run_solana_command() {
-    local command="$1"
-    local description="$2"
-
-    for ((retry_count = 1; retry_count <= MAX_RETRIES; retry_count++)); do
-      echo "Attempt $retry_count for: $description"
-
-      if $command; then
-        echo "Command succeeded: $description"
-        return 0
-      else
-        echo "Command failed for: $description (Exit status $?)"
-        if [ "$retry_count" -lt $MAX_RETRIES ]; then
-          echo "Retrying in $RETRY_DELAY seconds..."
-          sleep $RETRY_DELAY
-        fi
-      fi
-    done
-
-    echo "Max retry limit reached. Command still failed for: $description"
-    return 1
-}
-
-# sleep 3600
-
-# Run Solana commands with retries
-if ! run_solana_command "solana -u $FAUCET_RPC_URL airdrop $node_sol $IDENTITY_FILE" "Airdrop"; then
-  echo "Aidrop command failed."
-  exit 1
-fi
-
-if ! run_solana_command "solana -u $FAUCET_RPC_URL create-vote-account --allow-unsafe-authorized-withdrawer vote.json $IDENTITY_FILE $IDENTITY_FILE -k $IDENTITY_FILE" "Create Vote Account"; then
-  echo "Create vote account failed."
-  exit 1
-fi
-
-if ! run_solana_command "solana -u $FAUCET_RPC_URL create-stake-account stake.json $stake_sol -k $IDENTITY_FILE" "Create Stake Account"; then
-  echo "Create stake account failed."
-  exit 1
-fi
-
-if ! run_solana_command "solana -u $FAUCET_RPC_URL delegate-stake stake.json vote.json --force -k $IDENTITY_FILE" "Delegate Stake"; then
-  echo "Delegate stake command failed."
-  exit 1
-fi
-
 echo "All commands succeeded. Running solana-validator next..."
 
 echo "Validator Args"
@@ -362,7 +298,7 @@ while true; do
 
   while true; do
     if [[ -z $pid ]] || ! kill -0 "$pid"; then
-      echo "############## validator exited, restarting ##############"
+      echo "############## non voting validator exited, restarting ##############"
       break
     fi
     sleep 1
