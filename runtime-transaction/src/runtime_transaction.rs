@@ -49,31 +49,21 @@ impl RuntimeTransactionStatic {
         message_hash: Option<Hash>,
         is_simple_vote_tx: Option<bool>,
     ) -> Result<Self> {
-        let meta =
-            Self::load_static_metadata(&sanitized_versioned_tx, message_hash, is_simple_vote_tx)?;
-
-        Ok(Self {
-            signatures: sanitized_versioned_tx.signatures,
-            message: sanitized_versioned_tx.message,
-            meta,
-        })
-    }
-
-    // private helpers
-    fn load_static_metadata(
-        sanitized_versioned_tx: &SanitizedVersionedTransaction,
-        message_hash: Option<Hash>,
-        is_simple_vote_tx: Option<bool>,
-    ) -> Result<TransactionMeta> {
         let mut meta = TransactionMeta::default();
         meta.set_is_simple_vote_tx(
-            is_simple_vote_tx.unwrap_or_else(|| is_simple_vote_transaction(sanitized_versioned_tx)),
-        );
-        meta.set_message_hash(
-            message_hash.unwrap_or_else(|| sanitized_versioned_tx.message.message.hash()),
+            is_simple_vote_tx
+                .unwrap_or_else(|| is_simple_vote_transaction(&sanitized_versioned_tx)),
         );
 
-        Ok(meta)
+        let (signatures, message) = sanitized_versioned_tx.destruct();
+
+        meta.set_message_hash(message_hash.unwrap_or_else(|| message.message.hash()));
+
+        Ok(Self {
+            signatures,
+            message,
+            meta,
+        })
     }
 }
 
