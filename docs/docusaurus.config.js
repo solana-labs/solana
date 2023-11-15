@@ -70,11 +70,11 @@ module.exports = {
           label: "Operating a Validator",
           position: "left",
         },
-        { label: "Proposals", to: "proposals" },
         {
           label: "More",
           position: "left",
           items: [
+            { label: "Proposals", to: "proposals" },
             {
               href: "https://spl.solana.com",
               label: "Solana Program Library",
