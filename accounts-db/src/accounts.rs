@@ -401,11 +401,11 @@ impl Accounts {
                                         // account itself is rent-exempted but its `rent_epoch` is not u64::MAX, we will set its
                                         // `rent_epoch` to u64::MAX. In such case, the behavior stays the same as before.
                                         if set_exempt_rent_epoch_max
-                                            && (account.rent_epoch() != u64::MAX
+                                            && (account.rent_epoch() != RENT_EXEMPT_RENT_EPOCH
                                                 && rent_collector.get_rent_due(&account)
                                                     == RentDue::Exempt)
                                         {
-                                            account.set_rent_epoch(u64::MAX);
+                                            account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
                                         }
                                         (account.data().len(), account, 0)
                                     }
