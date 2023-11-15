@@ -109,7 +109,7 @@ impl GeyserPluginManager {
 
         // Call on_load and push plugin
         new_plugin
-            .on_load(new_config_file)
+            .on_load(new_config_file, false)
             .map_err(|on_load_err| jsonrpc_core::Error {
                 code: ErrorCode::InvalidRequest,
                 message: format!(
@@ -194,7 +194,7 @@ impl GeyserPluginManager {
         }
 
         // Attempt to on_load with new plugin
-        match new_plugin.on_load(new_parsed_config_file) {
+        match new_plugin.on_load(new_parsed_config_file, true) {
             // On success, push plugin and library
             Ok(()) => {
                 self.plugins.push(new_plugin);
@@ -430,7 +430,7 @@ mod tests {
 
         // Mock having loaded plugin (TestPlugin)
         let (mut plugin, lib, config) = dummy_plugin_and_library(TestPlugin, DUMMY_CONFIG);
-        plugin.on_load(config).unwrap();
+        plugin.on_load(config, false).unwrap();
         plugin_manager_lock.plugins.push(plugin);
         plugin_manager_lock.libs.push(lib);
         // plugin_manager_lock.libs.push(lib);
@@ -465,12 +465,12 @@ mod tests {
         // Load two plugins
         // First
         let (mut plugin, lib, config) = dummy_plugin_and_library(TestPlugin, TESTPLUGIN_CONFIG);
-        plugin.on_load(config).unwrap();
+        plugin.on_load(config, false).unwrap();
         plugin_manager_lock.plugins.push(plugin);
         plugin_manager_lock.libs.push(lib);
         // Second
         let (mut plugin, lib, config) = dummy_plugin_and_library(TestPlugin2, TESTPLUGIN2_CONFIG);
-        plugin.on_load(config).unwrap();
+        plugin.on_load(config, false).unwrap();
         plugin_manager_lock.plugins.push(plugin);
         plugin_manager_lock.libs.push(lib);
 
