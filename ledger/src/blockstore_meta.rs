@@ -140,8 +140,8 @@ pub(crate) struct ErasureConfig {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MerkleRootMeta {
-    /// The merkle root
-    merkle_root: Hash,
+    /// The merkle root, `None` for legacy shreds
+    merkle_root: Option<Hash>,
     /// The first received shred index
     first_received_shred_index: u32,
     /// The shred type of the first received shred
