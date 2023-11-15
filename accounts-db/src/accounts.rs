@@ -14,7 +14,7 @@ use {
         ancestors::Ancestors,
         blockhash_queue::BlockhashQueue,
         nonce_info::{NonceFull, NonceInfo},
-        rent_collector::RentCollector,
+        rent_collector::{RentCollector, RENT_EXEMPT_RENT_EPOCH},
         rent_debits::RentDebits,
         storable_accounts::StorableAccounts,
         transaction_error_metrics::TransactionErrorMetrics,
@@ -402,7 +402,7 @@ impl Accounts {
                                     // All new accounts must be rent-exempt (enforced in Bank::execute_loaded_transaction).
                                     // Currently, rent collection sets rent_epoch to u64::MAX, but initializing the account
                                     // with this field already set would allow us to skip rent collection for these accounts.
-                                    default_account.set_rent_epoch(u64::MAX);
+                                    default_account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
                                 }
                                 (default_account.data().len(), default_account, 0)
                             })
