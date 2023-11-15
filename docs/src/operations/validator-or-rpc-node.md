@@ -1,6 +1,7 @@
 ---
 title: Consensus Validator or RPC Node?
 sidebar_label: Validator vs RPC Node
+sidebar_position: 0
 ---
 
 Operators who run a [consensus validator](./what-is-a-validator.md) have much
