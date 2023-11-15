@@ -47,7 +47,7 @@ day.
 A voting validator can earn SOL through 2 methods:
 
 1. Inflationary rewards paid at the end of an epoch. See
-   [staking rewards](./../../implemented-proposals/staking-rewards.md)
+   [staking rewards](../implemented-proposals/staking-rewards.md)
 2. Earning 50% of transaction fees for the blocks produced by the validator. See
    [transaction fee basic economic design](https://solana.com/docs/intro/transaction_fees#basic-economic-design)
 
@@ -82,7 +82,7 @@ providers create dedicated servers for projects that require a high volume of
 requests to the node. Someone with a background in development operations or
 software engineering will be a very important part of your team. You will need a
 strong understanding of the Solana architecture and the
-[RPC API](../../api/http.md).
+[RPC API](/api/http).
 
 Alternatively, you may be a development team that would like to run their own
 infrastructure. In this case, the RPC infrastructure could be a part of your

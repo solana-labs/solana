@@ -119,8 +119,8 @@ module.exports = {
               href: "https://solana.com/developers",
             },
             {
-              label: "Validators",
-              to: "running-validator",
+              label: "Running a Validator",
+              to: "operations",
             },
             {
               label: "Command Line",

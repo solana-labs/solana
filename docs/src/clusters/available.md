@@ -5,7 +5,7 @@ title: Solana Clusters
 Solana maintains several different clusters with different purposes.
 
 Before you begin make sure you have first
-[installed the Solana command line tools](./cli/install.md)
+[installed the Solana command line tools](../cli/install.md)
 
 Explorers:
 

@@ -10,13 +10,13 @@ fall back to the external data store.
 
 The affected RPC endpoints are:
 
-- [getFirstAvailableBlock](../api/http#getfirstavailableblock)
-- [getConfirmedBlock](../api/http#getconfirmedblock)
-- [getConfirmedBlocks](../api/http#getconfirmedblocks)
-- [getConfirmedSignaturesForAddress](../api/http#getconfirmedsignaturesforaddress)
-- [getConfirmedTransaction](../api/http#getconfirmedtransaction)
-- [getSignatureStatuses](../api/http#getsignaturestatuses)
-- [getBlockTime](../api/http#getblocktime)
+- [getFirstAvailableBlock](/api/http#getfirstavailableblock)
+- [getConfirmedBlock](/api/http#getconfirmedblock)
+- [getConfirmedBlocks](/api/http#getconfirmedblocks)
+- [getConfirmedSignaturesForAddress](/api/http#getconfirmedsignaturesforaddress)
+- [getConfirmedTransaction](/api/http#getconfirmedtransaction)
+- [getSignatureStatuses](/api/http#getsignaturestatuses)
+- [getBlockTime](/api/http#getblocktime)
 
 Some system design constraints:
 

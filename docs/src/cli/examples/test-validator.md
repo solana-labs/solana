@@ -126,7 +126,7 @@ Log: test-ledger/validator.log
 Identity: EPhgPANa5Rh2wa4V2jxt7YbtWa3Uyw4sTeZ13cQjDDB8
 ```
 
-- The validator's identity in the [gossip network](/validator/gossip#gossip-overview)
+- The validator's identity in the [gossip network](../../validator/gossip.md#gossip-overview)
 
 ```
 Version: 1.6.7
@@ -140,8 +140,8 @@ TPU Address: 127.0.0.1:1027
 JSON RPC URL: http://127.0.0.1:8899
 ```
 
-- The network address of the [Gossip](/validator/gossip#gossip-overview),
-  [Transaction Processing Unit](/validator/tpu) and [JSON RPC](../api/http#json-rpc-api-reference)
+- The network address of the [Gossip](../../validator/gossip.md#gossip-overview),
+  [Transaction Processing Unit](../../validator/tpu.md) and [JSON RPC](/api/http#json-rpc-api-reference)
   service, respectively
 
 ```
@@ -149,7 +149,7 @@ JSON RPC URL: http://127.0.0.1:8899
 ```
 
 - Session running time, current slot of the three block
-  [commitment levels](../api/http#configuring-state-commitment),
+  [commitment levels](/api/http#configuring-state-commitment),
   slot height of the last snapshot, transaction count,
   [voting authority](../../operations/guides/vote-accounts.md#vote-authority) balance
 

@@ -59,7 +59,7 @@ solana delegate-stake ~/validator-stake-keypair.json ~/some-other-vote-account-k
 ## Validator Stake Warm-up
 
 To combat various attacks on consensus, new stake delegations are subject to a
-[warm-up](/staking/stake-accounts#delegation-warmup-and-cooldown) period.
+[warm-up](https://solana.com/docs/economics/staking/stake-accounts#delegation-warmup-and-cooldown) period.
 
 Monitor a validator's stake during warmup by:
 
@@ -96,11 +96,11 @@ account.
 This is a normal transaction so the standard transaction fee will apply. The
 transaction fee range is defined by the genesis block. The actual fee will
 fluctuate based on transaction load. You can determine the current fee via the
-[RPC API “getRecentBlockhash”](../api/http#getrecentblockhash) before submitting
+[RPC API “getRecentBlockhash”](/api/http#getrecentblockhash) before submitting
 a transaction.
 
 Learn more about
-[transaction fees here](../implemented-proposals/transaction-fees.md).
+[transaction fees here](../../implemented-proposals/transaction-fees.md).
 
 ## Monitor Your Staked Validator
 

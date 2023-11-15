@@ -12,7 +12,7 @@ solana config set --url http://api.devnet.solana.com
 ```
 
 While this section demonstrates how to connect to the Devnet cluster, the steps
-are similar for the other [Solana Clusters](../clusters.md).
+are similar for the other [Solana Clusters](../../clusters/available.md).
 
 ## Confirm The Cluster Is Reachable
 
@@ -97,7 +97,7 @@ EOF"
 
 #### System Clock
 
-Large system clock drift can prevent a node from properly participating in Solana's [gossip protocol](../validator/gossip.md).  Ensure that your system clock is accurate.  To check the current system clock, use:
+Large system clock drift can prevent a node from properly participating in Solana's [gossip protocol](../../validator/gossip.md).  Ensure that your system clock is accurate.  To check the current system clock, use:
 
 ```bash
 timedatectl
@@ -138,7 +138,7 @@ solana-keygen pubkey ASK
 
 and then entering your seed phrase.
 
-See [Paper Wallet Usage](../wallet-guide/paper-wallet.md) for more info.
+See [Paper Wallet Usage](../../cli/wallets/paper.md) for more info.
 
 ---
 
@@ -215,7 +215,7 @@ Or to see in finer detail:
 solana balance --lamports
 ```
 
-Read more about the [difference between SOL and lamports here](../introduction.md#what-are-sols).
+Read more about the [difference between SOL and lamports here](https://solana.com/docs/intro#what-are-sols).
 
 ## Create Authorized Withdrawer Account
 
@@ -253,7 +253,7 @@ solana create-vote-account ~/vote-account-keypair.json ~/validator-keypair.json 
 
 Remember to move your authorized withdrawer keypair into a very secure location after running the above command.
 
-Read more about [creating and managing a vote account](vote-accounts.md).
+Read more about [creating and managing a vote account](./vote-accounts.md).
 
 ## Known validators
 
@@ -290,7 +290,7 @@ The ledger will be placed in the `ledger/` directory by default, use the
 `--ledger` argument to specify a different location.
 
 > Note: You can use a
-> [paper wallet seed phrase](../wallet-guide/paper-wallet.md)
+> [paper wallet seed phrase](../../cli/wallets/paper.md)
 > for your `--identity` and/or
 > `--authorized-voter` keypairs. To use these, pass the respective argument as
 > `solana-validator --identity ASK ... --authorized-voter ASK ...`
@@ -315,7 +315,7 @@ the validator to ports 11000-11020.
 ### Limiting ledger size to conserve disk space
 
 The `--limit-ledger-size` parameter allows you to specify how many ledger
-[shreds](../terminology.md#shred) your node retains on disk. If you do not
+[shreds](https://solana.com/docs/terminology#shred) your node retains on disk. If you do not
 include this parameter, the validator will keep all received ledger data
 until it runs out of disk space. Otherwise, the validator will continually
 purge the oldest data once to stay under the specified `--limit-ledger-size`
@@ -469,13 +469,13 @@ command-line arguments and restart the validator.
 
 As the number of populated accounts on the cluster grows, account-data RPC
 requests that scan the entire account set -- like
-[`getProgramAccounts`](../api/http#getprogramaccounts) and
-[SPL-token-specific requests](../api/http#gettokenaccountsbydelegate) --
+[`getProgramAccounts`](/api/http#getprogramaccounts) and
+[SPL-token-specific requests](/api/http#gettokenaccountsbydelegate) --
 may perform poorly. If your validator needs to support any of these requests,
 you can use the `--account-index` parameter to activate one or more in-memory
 account indexes that significantly improve RPC performance by indexing accounts
 by the key field. Currently supports the following parameter values:
 
-- `program-id`: each account indexed by its owning program; used by [getProgramAccounts](../api/http#getprogramaccounts)
-- `spl-token-mint`: each SPL token account indexed by its token Mint; used by [getTokenAccountsByDelegate](../api/http#gettokenaccountsbydelegate), and [getTokenLargestAccounts](../api/http#gettokenlargestaccounts)
-- `spl-token-owner`: each SPL token account indexed by the token-owner address; used by [getTokenAccountsByOwner](../api/http#gettokenaccountsbyowner), and [getProgramAccounts](../api/http#getprogramaccounts) requests that include an spl-token-owner filter.
+- `program-id`: each account indexed by its owning program; used by [getProgramAccounts](/api/http#getprogramaccounts)
+- `spl-token-mint`: each SPL token account indexed by its token Mint; used by [getTokenAccountsByDelegate](/api/http#gettokenaccountsbydelegate), and [getTokenLargestAccounts](/api/http#gettokenlargestaccounts)
+- `spl-token-owner`: each SPL token account indexed by the token-owner address; used by [getTokenAccountsByOwner](/api/http#gettokenaccountsbyowner), and [getProgramAccounts](/api/http#getprogramaccounts) requests that include an spl-token-owner filter.
