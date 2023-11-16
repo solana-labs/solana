@@ -1,7 +1,7 @@
 use {
     crate::tiered_storage::{
         error::TieredStorageError, file::TieredStorageFile, index::IndexBlockFormat,
-        mmap_utils::get_type, TieredStorageResult as TsResult,
+        mmap_utils::get_type, TieredStorageResult,
     },
     memmap2::Mmap,
     solana_sdk::{hash::Hash, pubkey::Pubkey},
@@ -168,19 +168,19 @@ impl Default for TieredStorageFooter {
 }
 
 impl TieredStorageFooter {
-    pub fn new_from_path(path: impl AsRef<Path>) -> TsResult<Self> {
+    pub fn new_from_path(path: impl AsRef<Path>) -> TieredStorageResult<Self> {
         let file = TieredStorageFile::new_readonly(path);
         Self::new_from_footer_block(&file)
     }
 
-    pub fn write_footer_block(&self, file: &TieredStorageFile) -> TsResult<()> {
+    pub fn write_footer_block(&self, file: &TieredStorageFile) -> TieredStorageResult<()> {
         file.write_type(self)?;
         file.write_type(&TieredStorageMagicNumber::default())?;
 
         Ok(())
     }
 
-    pub fn new_from_footer_block(file: &TieredStorageFile) -> TsResult<Self> {
+    pub fn new_from_footer_block(file: &TieredStorageFile) -> TieredStorageResult<Self> {
         let mut footer_size: u64 = 0;
         let mut footer_version: u64 = 0;
         let mut magic_number = TieredStorageMagicNumber(0);
@@ -204,7 +204,7 @@ impl TieredStorageFooter {
         Ok(footer)
     }
 
-    pub fn new_from_mmap(map: &Mmap) -> TsResult<&TieredStorageFooter> {
+    pub fn new_from_mmap(map: &Mmap) -> TieredStorageResult<&TieredStorageFooter> {
         let offset = map.len().saturating_sub(FOOTER_TAIL_SIZE);
         let (footer_size, offset) = get_type::<u64>(map, offset)?;
         let (_footer_version, offset) = get_type::<u64>(map, offset)?;
