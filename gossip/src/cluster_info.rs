@@ -33,7 +33,8 @@ use {
         },
         crds_value::{
             self, AccountsHashes, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot,
-            NodeInstance, RestartLastVotedForkSlots, SnapshotHashes, Version, Vote, MAX_WALLCLOCK,
+            NodeInstance, RestartLastVotedForkSlots, RestartLastVotedForkSlotsError,
+            SnapshotHashes, Version, Vote, MAX_WALLCLOCK,
         },
         duplicate_shred::DuplicateShred,
         epoch_slots::EpochSlots,
@@ -267,7 +268,7 @@ pub fn make_accounts_hashes_message(
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "2TAkSNRXHKFkD51cDsGas4HBxMM2fFDzdKfnfXexJgMs")]
+#[frozen_abi(digest = "HvA9JnnQrJnmkcGxrp8SmTB1b4iSyQ4VK2p6LpSBaoWR")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
@@ -962,21 +963,24 @@ impl ClusterInfo {
         }
     }
 
-    pub fn push_restart_last_voted_fork_slots(&self, update: &[Slot], last_vote_bankhash: Hash) {
+    pub fn push_restart_last_voted_fork_slots(
+        &self,
+        fork: &[Slot],
+        last_vote_bankhash: Hash,
+    ) -> Result<(), RestartLastVotedForkSlotsError> {
         let now = timestamp();
-        match RestartLastVotedForkSlots::new(
+        let last_voted_fork_slots = RestartLastVotedForkSlots::new(
             self.id(),
             now,
-            update,
+            fork,
             last_vote_bankhash,
             self.my_shred_version(),
-        ) {
-            Ok(last_voted_fork_slots) => self.push_message(CrdsValue::new_signed(
-                CrdsData::RestartLastVotedForkSlots(last_voted_fork_slots),
-                &self.keypair(),
-            )),
-            Err(e) => error!("failed to create RestartLastVotedForkSlots {:?}", e),
-        }
+        )?;
+        self.push_message(CrdsValue::new_signed(
+            CrdsData::RestartLastVotedForkSlots(last_voted_fork_slots),
+            &self.keypair(),
+        ));
+        Ok(())
     }
 
     fn time_gossip_read_lock<'a>(
@@ -4536,7 +4540,9 @@ mod tests {
                 update.push(i * 1050 + j);
             }
         }
-        cluster_info.push_restart_last_voted_fork_slots(&update, Hash::default());
+        assert!(cluster_info
+            .push_restart_last_voted_fork_slots(&update, Hash::default())
+            .is_ok());
         cluster_info.flush_push_queue();
 
         let mut cursor = Cursor::default();
@@ -4579,7 +4585,9 @@ mod tests {
             let mut node = cluster_info.my_contact_info.write().unwrap();
             node.set_shred_version(42);
         }
-        cluster_info.push_restart_last_voted_fork_slots(&update, Hash::default());
+        assert!(cluster_info
+            .push_restart_last_voted_fork_slots(&update, Hash::default())
+            .is_ok());
         cluster_info.flush_push_queue();
         // Should now include both slots.
         let slots = cluster_info.get_restart_last_voted_fork_slots(&mut Cursor::default());

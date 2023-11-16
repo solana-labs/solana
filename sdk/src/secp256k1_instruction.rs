@@ -790,8 +790,7 @@
 use {
     crate::{
         feature_set::{
-            libsecp256k1_0_5_upgrade_enabled, libsecp256k1_fail_on_bad_count,
-            libsecp256k1_fail_on_bad_count2, FeatureSet,
+            libsecp256k1_fail_on_bad_count, libsecp256k1_fail_on_bad_count2, FeatureSet,
         },
         instruction::Instruction,
         precompiles::PrecompileError,
@@ -973,17 +972,10 @@ pub fn verify(
             return Err(PrecompileError::InvalidSignature);
         }
 
-        let sig_parse_result = if feature_set.is_active(&libsecp256k1_0_5_upgrade_enabled::id()) {
-            libsecp256k1::Signature::parse_standard_slice(
-                &signature_instruction[sig_start..sig_end],
-            )
-        } else {
-            libsecp256k1::Signature::parse_overflowing_slice(
-                &signature_instruction[sig_start..sig_end],
-            )
-        };
-
-        let signature = sig_parse_result.map_err(|_| PrecompileError::InvalidSignature)?;
+        let signature = libsecp256k1::Signature::parse_standard_slice(
+            &signature_instruction[sig_start..sig_end],
+        )
+        .map_err(|_| PrecompileError::InvalidSignature)?;
 
         let recovery_id = libsecp256k1::RecoveryId::parse(signature_instruction[sig_end])
             .map_err(|_| PrecompileError::InvalidRecoveryId)?;
@@ -1068,14 +1060,7 @@ pub mod test {
         instruction_data[0] = num_signatures;
         let writer = std::io::Cursor::new(&mut instruction_data[1..]);
         bincode::serialize_into(writer, &offsets).unwrap();
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set
-            .active
-            .remove(&libsecp256k1_0_5_upgrade_enabled::id());
-        feature_set
-            .inactive
-            .insert(libsecp256k1_0_5_upgrade_enabled::id());
-
+        let feature_set = FeatureSet::all_enabled();
         verify(&instruction_data, &[&[0u8; 100]], &feature_set)
     }
 
@@ -1089,13 +1074,7 @@ pub mod test {
         let writer = std::io::Cursor::new(&mut instruction_data[1..]);
         bincode::serialize_into(writer, &offsets).unwrap();
         instruction_data.truncate(instruction_data.len() - 1);
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set
-            .active
-            .remove(&libsecp256k1_0_5_upgrade_enabled::id());
-        feature_set
-            .inactive
-            .insert(libsecp256k1_0_5_upgrade_enabled::id());
+        let feature_set = FeatureSet::all_enabled();
 
         assert_eq!(
             verify(&instruction_data, &[&[0u8; 100]], &feature_set),
@@ -1224,13 +1203,7 @@ pub mod test {
         instruction_data[0] = 0;
         let writer = std::io::Cursor::new(&mut instruction_data[1..]);
         bincode::serialize_into(writer, &offsets).unwrap();
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set
-            .active
-            .remove(&libsecp256k1_0_5_upgrade_enabled::id());
-        feature_set
-            .inactive
-            .insert(libsecp256k1_0_5_upgrade_enabled::id());
+        let feature_set = FeatureSet::all_enabled();
 
         assert_eq!(
             verify(&instruction_data, &[&[0u8; 100]], &feature_set),
@@ -1251,14 +1224,7 @@ pub mod test {
         let message_arr = b"hello";
         let mut secp_instruction = new_secp256k1_instruction(&secp_privkey, message_arr);
         let mint_keypair = Keypair::new();
-        let mut feature_set = feature_set::FeatureSet::all_enabled();
-        feature_set
-            .active
-            .remove(&feature_set::libsecp256k1_0_5_upgrade_enabled::id());
-        feature_set
-            .inactive
-            .insert(feature_set::libsecp256k1_0_5_upgrade_enabled::id());
-        let feature_set = feature_set;
+        let feature_set = feature_set::FeatureSet::all_enabled();
 
         let tx = Transaction::new_signed_with_payer(
             &[secp_instruction.clone()],

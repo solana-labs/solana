@@ -506,7 +506,6 @@ pub fn authorize(
     signers: &HashSet<Pubkey>,
     new_authority: &Pubkey,
     stake_authorize: StakeAuthorize,
-    require_custodian_for_locked_stake_authorize: bool,
     clock: &Clock,
     custodian: Option<&Pubkey>,
 ) -> Result<(), InstructionError> {
@@ -516,11 +515,7 @@ pub fn authorize(
                 signers,
                 new_authority,
                 stake_authorize,
-                if require_custodian_for_locked_stake_authorize {
-                    Some((&meta.lockup, clock, custodian))
-                } else {
-                    None
-                },
+                Some((&meta.lockup, clock, custodian)),
             )?;
             stake_account.set_state(&StakeStateV2::Stake(meta, stake, stake_flags))
         }
@@ -529,11 +524,7 @@ pub fn authorize(
                 signers,
                 new_authority,
                 stake_authorize,
-                if require_custodian_for_locked_stake_authorize {
-                    Some((&meta.lockup, clock, custodian))
-                } else {
-                    None
-                },
+                Some((&meta.lockup, clock, custodian)),
             )?;
             stake_account.set_state(&StakeStateV2::Initialized(meta))
         }
@@ -551,7 +542,6 @@ pub fn authorize_with_seed(
     authority_owner: &Pubkey,
     new_authority: &Pubkey,
     stake_authorize: StakeAuthorize,
-    require_custodian_for_locked_stake_authorize: bool,
     clock: &Clock,
     custodian: Option<&Pubkey>,
 ) -> Result<(), InstructionError> {
@@ -572,7 +562,6 @@ pub fn authorize_with_seed(
         &signers,
         new_authority,
         stake_authorize,
-        require_custodian_for_locked_stake_authorize,
         clock,
         custodian,
     )
@@ -1864,13 +1853,6 @@ mod tests {
             unix_timestamp: 0,
             ..Clock::default()
         };
-
-        // Legacy behaviour when the `require_custodian_for_locked_stake_authorize` feature is
-        // inactive
-        assert_eq!(
-            authorized.authorize(&signers, &staker, StakeAuthorize::Withdrawer, None),
-            Ok(())
-        );
 
         // No lockup, no custodian
         assert_eq!(
