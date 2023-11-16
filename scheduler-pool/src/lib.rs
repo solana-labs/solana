@@ -654,7 +654,7 @@ where
                 let mut log_interval_counter = 0;
                 let mut current_slot = 0;
                 macro_rules! interval_log {
-                    ($a::tt) => {
+                    ($a:tt) => {
                         if log_interval_counter % 1000 == 0 {
                             info!("slot: {} processed: {} retryable: {}, active: {}", current_slot, state_machine.handled_task_count(), state_machine.retryable_task_count(), state_machine.active_task_count());
                         }
