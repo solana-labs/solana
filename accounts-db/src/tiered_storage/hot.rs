@@ -12,6 +12,7 @@ use {
             index::{AccountOffset, IndexBlockFormat, IndexOffset},
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
             mmap_utils::get_type,
+            owners::{OwnerOffset, OwnersBlock},
             TieredStorageFormat, TieredStorageResult,
         },
     },
@@ -243,6 +244,12 @@ impl HotStorageReader {
         self.footer
             .index_block_format
             .get_account_address(&self.mmap, &self.footer, index)
+    }
+
+    /// Returns the address of the account owner given the specified
+    /// owner_offset.
+    fn get_owner_address(&self, owner_offset: OwnerOffset) -> TieredStorageResult<&Pubkey> {
+        OwnersBlock::get_owner_address(&self.mmap, &self.footer, owner_offset)
     }
 }
 
@@ -529,6 +536,44 @@ pub mod tests {
 
             let account_address = hot_storage.get_account_address(IndexOffset(i)).unwrap();
             assert_eq!(account_address, index_writer_entry.address);
+        }
+    }
+
+    #[test]
+    fn test_hot_storage_get_owner_address() {
+        // Generate a new temp path that is guaranteed to NOT already have a file.
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("test_hot_storage_get_owner_address");
+        const NUM_OWNERS: usize = 10;
+
+        let addresses: Vec<_> = std::iter::repeat_with(Pubkey::new_unique)
+            .take(NUM_OWNERS)
+            .collect();
+
+        let footer = TieredStorageFooter {
+            account_meta_format: AccountMetaFormat::Hot,
+            // Set owners_block_offset to 0 as we didn't write any account
+            // meta/data nor index block in this test
+            owners_block_offset: 0,
+            ..TieredStorageFooter::default()
+        };
+
+        {
+            let file = TieredStorageFile::new_writable(&path).unwrap();
+
+            OwnersBlock::write_owners_block(&file, &addresses).unwrap();
+
+            // while the test only focuses on account metas, writing a footer
+            // here is necessary to make it a valid tiered-storage file.
+            footer.write_footer_block(&file).unwrap();
+        }
+
+        let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
+        for (i, address) in addresses.iter().enumerate() {
+            assert_eq!(
+                hot_storage.get_owner_address(OwnerOffset(i)).unwrap(),
+                address,
+            );
         }
     }
 }

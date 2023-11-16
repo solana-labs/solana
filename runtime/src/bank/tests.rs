@@ -1578,13 +1578,17 @@ impl Bank {
     }
 }
 
-#[test]
-fn test_rent_eager_collect_rent_in_partition() {
+#[test_case(true; "enable rent fees collection")]
+#[test_case(false; "disable rent fees collection")]
+fn test_rent_eager_collect_rent_in_partition(should_collect_rent: bool) {
     solana_logger::setup();
 
     let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000);
     for feature_id in FeatureSet::default().inactive {
-        if feature_id != solana_sdk::feature_set::set_exempt_rent_epoch_max::id() {
+        if feature_id != solana_sdk::feature_set::set_exempt_rent_epoch_max::id()
+            && (should_collect_rent
+                || feature_id != solana_sdk::feature_set::disable_rent_fees_collection::id())
+        {
             activate_feature(&mut genesis_config, feature_id);
         }
     }
@@ -1598,7 +1602,11 @@ fn test_rent_eager_collect_rent_in_partition() {
     let large_lamports = 123_456_789;
     // genesis_config.epoch_schedule.slots_per_epoch == 432_000 and is unsuitable for this test
     let some_slot = MINIMUM_SLOTS_PER_EPOCH; // chosen to cause epoch to be +1
-    let rent_collected = 1; // this is a function of 'some_slot'
+    let rent_collected = if bank.should_collect_rent() {
+        1 /* this is a function of 'some_slot' */
+    } else {
+        0
+    };
 
     bank.store_account(
         &zero_lamport_pubkey,
@@ -1648,9 +1656,9 @@ fn test_rent_eager_collect_rent_in_partition() {
         bank.get_account(&rent_due_pubkey).unwrap().lamports(),
         little_lamports - rent_collected
     );
-    assert_eq!(
-        bank.get_account(&rent_due_pubkey).unwrap().rent_epoch(),
-        current_epoch + 1
+    assert!(
+        bank.get_account(&rent_due_pubkey).unwrap().rent_epoch() == current_epoch + 1
+            || !bank.should_collect_rent()
     );
     assert_eq!(
         bank.get_account(&rent_exempt_pubkey).unwrap().lamports(),
@@ -10877,6 +10885,7 @@ fn test_rent_state_list_len() {
         RewardInterval::OutsideInterval,
         &HashMap::new(),
         &LoadedProgramsForTxBatch::default(),
+        true,
     );
 
     let compute_budget = bank.runtime_config.compute_budget.unwrap_or_else(|| {
@@ -11462,14 +11471,22 @@ fn test_get_rent_paying_pubkeys() {
 }
 
 /// Ensure that accounts data size is updated correctly by rent collection
-#[test]
-fn test_accounts_data_size_and_rent_collection() {
+#[test_case(true; "enable rent fees collection")]
+#[test_case(false; "disable rent fees collection")]
+fn test_accounts_data_size_and_rent_collection(should_collect_rent: bool) {
     for set_exempt_rent_epoch_max in [false, true] {
         let GenesisConfigInfo {
             mut genesis_config, ..
         } = genesis_utils::create_genesis_config(100 * LAMPORTS_PER_SOL);
         genesis_config.rent = Rent::default();
-        activate_all_features(&mut genesis_config);
+        for feature_id in FeatureSet::default().inactive {
+            if should_collect_rent
+                || feature_id != solana_sdk::feature_set::disable_rent_fees_collection::id()
+            {
+                activate_feature(&mut genesis_config, feature_id);
+            }
+        }
+
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let slot = bank.slot() + bank.slot_count_per_normal_epoch();
         let bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
@@ -11497,17 +11514,18 @@ fn test_accounts_data_size_and_rent_collection() {
         }
 
         // Collect rent for real
+        let should_collect_rent = bank.should_collect_rent();
         let accounts_data_size_delta_before_collecting_rent = bank.load_accounts_data_size_delta();
         bank.collect_rent_eagerly();
         let accounts_data_size_delta_after_collecting_rent = bank.load_accounts_data_size_delta();
 
         let accounts_data_size_delta_delta = accounts_data_size_delta_after_collecting_rent
             - accounts_data_size_delta_before_collecting_rent;
-        assert!(accounts_data_size_delta_delta < 0);
+        assert!(!should_collect_rent || accounts_data_size_delta_delta < 0);
         let reclaimed_data_size = accounts_data_size_delta_delta.saturating_neg() as usize;
 
         // Ensure the account is reclaimed by rent collection
-        assert_eq!(reclaimed_data_size, data_size,);
+        assert!(!should_collect_rent || reclaimed_data_size == data_size);
     }
 }
 
