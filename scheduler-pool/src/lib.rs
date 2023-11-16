@@ -652,7 +652,7 @@ where
                 let mut will_end_thread = false;
                 let mut state_machine = SchedulingStateMachine::default();
                 let mut log_count = 0;
-                macro_rules! log {
+                macro_rules! interval_log {
                     () => {
                         log_count += 1;
                         if log_count % 1000 == 0 {
