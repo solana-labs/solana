@@ -1020,7 +1020,7 @@ async fn main() {
         }
         info!("faucet replica set: {} Ready!", bootstrap_replica_set_name);
 
-        thread::sleep(Duration::from_secs(120));
+        // thread::sleep(Duration::from_secs(60));
     }
 
 

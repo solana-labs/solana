@@ -759,6 +759,13 @@ impl<'a> Kubernetes<'a> {
                 ),
                 ..Default::default()
             },
+            EnvVar {
+                name: "FAUCET_GOSSIP_ADDRESS".to_string(),
+                value: Some(
+                    "faucet-lb-service.$(NAMESPACE).svc.cluster.local:8001".to_string(),
+                ),
+                ..Default::default()
+            },
         ]
     }
 
@@ -959,6 +966,11 @@ impl<'a> Kubernetes<'a> {
                     ServicePort {
                         port: 8899, // RPC Port
                         name: Some("rpc-port".to_string()),
+                        ..Default::default()
+                    },
+                    ServicePort {
+                        port: 8001, // Gossip Port
+                        name: Some("gossip-port".to_string()),
                         ..Default::default()
                     },
                     ServicePort {

@@ -279,10 +279,12 @@ kill_node_and_exit() {
 trap 'kill_node_and_exit' INT TERM ERR
 
 # Maximum number of retries
-MAX_RETRIES=5
+MAX_RETRIES=7
 
 # Delay between retries (in seconds)
-RETRY_DELAY=1
+INITIAL_RETRY_DELAY=1
+EXPONENTIAL_BACKOFF_MULTIPLIER=2
+MAX_DELAY=30
 
 # Bootstrap validator RPC URL
 BOOTSTRAP_RPC_URL="http://$BOOTSTRAP_RPC_ADDRESS"
@@ -298,6 +300,7 @@ IDENTITY_FILE=$identity
 run_solana_command() {
     local command="$1"
     local description="$2"
+    local retry_delay=$INITIAL_RETRY_DELAY
 
     for ((retry_count = 1; retry_count <= MAX_RETRIES; retry_count++)); do
       echo "Attempt $retry_count for: $description"
@@ -308,8 +311,17 @@ run_solana_command() {
       else
         echo "Command failed for: $description (Exit status $?)"
         if [ "$retry_count" -lt $MAX_RETRIES ]; then
-          echo "Retrying in $RETRY_DELAY seconds..."
-          sleep $RETRY_DELAY
+          echo "Retrying in $retry_delay seconds..."
+          sleep $retry_delay
+
+          # Update the retry delay for exponential backoff
+          retry_delay=$(($retry_delay * $EXPONENTIAL_BACKOFF_MULTIPLIER))
+
+          # Cap the retry delay to a maximum value (e.g., 60 seconds)
+          if [ "$retry_delay" -gt "$MAX_DELAY" ]; then
+            retry_delay="$MAX_DELAY"
+          fi
+          echo "retry delay now set to: $retry_delay"
         fi
       fi
     done

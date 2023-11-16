@@ -7,7 +7,7 @@ echo "in faucet startup script!"
 echo "done decoding accounts. running faucet next..."
 # sleep 3600
 
-nohup solana-faucet --keypair faucet.json >logs/faucet.log 2>&1 &
+# nohup solana-faucet --keypair faucet.json >logs/faucet.log 2>&1 &
 
 echo "faucet running"
 
