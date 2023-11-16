@@ -633,7 +633,6 @@ where
         let handler_count = self.handler_count;
 
         let scheduler_main_loop = || {
-            let mut log_interval_counter = 0;
             let result_sender = self.result_sender.clone();
             let mut schedulable_transaction_receiver =
                 self.schedulable_transaction_receiver.clone();
@@ -652,12 +651,14 @@ where
                 let mut will_end_session = false;
                 let mut will_end_thread = false;
                 let mut state_machine = SchedulingStateMachine::default();
+                let mut log_interval_counter = 0;
+                let mut current_slot = 0;
                 macro_rules! interval_log {
                     () => {
-                        log_interval_counter += 1;
                         if log_interval_counter % 1000 == 0 {
-                            info!("processed: {} retryable: {}, active: {}", state_machine.handled_task_count(), state_machine.retryable_task_count(), state_machine.active_task_count());
+                            info!("slto: {} processed: {} retryable: {}, active: {}", slot, state_machine.handled_task_count(), state_machine.retryable_task_count(), state_machine.active_task_count());
                         }
+                        log_interval_counter += 1;
                     }
                 };
 
@@ -733,6 +734,7 @@ where
                                             new_channel.channel_and_payload();
                                         match control_frame {
                                             ControlFrame::StartSession(context) => {
+                                                current_slot = context.bank.slot();
                                                 Self::propagate_context(
                                                     &mut blocked_transaction_sessioned_sender,
                                                     context,
@@ -767,6 +769,7 @@ where
                     }
 
                     if !will_end_thread {
+                        (state_machine, log_interval_counter) = (SchedulingStateMachine::default(), 0);
                         result_sender
                             .send(
                                 result_with_timings
