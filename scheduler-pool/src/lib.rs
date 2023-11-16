@@ -652,7 +652,7 @@ where
                 let mut will_end_thread = false;
                 let mut state_machine = SchedulingStateMachine::default();
                 let log = || {
-                    info!("scheduler: ", state_machine.retryable_task_count());
+                    info!("retryable: {}", state_machine.retryable_task_count());
                 };
 
                 while !will_end_thread {
@@ -1280,6 +1280,10 @@ impl SchedulingStateMachine {
 
     fn retryable_task_count(&self) -> usize {
         self.retryable_task_queue.len()
+    }
+
+    fn active_task_count(&self) -> usize {
+        self.active_task_count
     }
 
     fn schedule_new_task(&mut self, task: Arc<Task>) -> Option<Box<ExecutionEnvironment>> {
