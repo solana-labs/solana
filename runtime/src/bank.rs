@@ -5935,13 +5935,9 @@ impl Bank {
         let mut skipped_rewrites = Vec::default();
         for (pubkey, account, _loaded_slot) in accounts.iter_mut() {
             let rent_collected_info = if self.should_collect_rent() {
-                let (rent_collected_info, measure) =
-                    measure!(self.rent_collector.collect_from_existing_account(
-                        pubkey,
-                        account,
-                        self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
-                        set_exempt_rent_epoch_max,
-                    ));
+                let (rent_collected_info, measure) = measure!(self
+                    .rent_collector
+                    .collect_from_existing_account(pubkey, account, set_exempt_rent_epoch_max,));
                 time_collecting_rent_us += measure.as_us();
                 rent_collected_info
             } else {

@@ -218,7 +218,6 @@ fn load_transaction_accounts(
                                         .collect_from_existing_account(
                                             key,
                                             &mut account,
-                                            accounts_db.filler_account_suffix.as_ref(),
                                             set_exempt_rent_epoch_max,
                                         )
                                         .rent_amount;

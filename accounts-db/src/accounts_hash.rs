@@ -469,7 +469,6 @@ impl CumulativeOffsets {
 
 #[derive(Debug)]
 pub struct AccountsHasher<'a> {
-    pub filler_account_suffix: Option<Pubkey>,
     pub zero_lamport_accounts: ZeroLamportAccounts,
     /// The directory where temporary cache files are put
     pub dir_for_temp_cache_files: PathBuf,
@@ -495,11 +494,6 @@ struct ItemLocation<'a> {
 }
 
 impl<'a> AccountsHasher<'a> {
-    /// true if it is possible that there are filler accounts present
-    pub fn filler_accounts_enabled(&self) -> bool {
-        self.filler_account_suffix.is_some()
-    }
-
     pub fn calculate_hash(hashes: Vec<Vec<Hash>>) -> (Hash, usize) {
         let cumulative_offsets = CumulativeOffsets::from_raw(&hashes);
 
@@ -1151,7 +1145,6 @@ impl<'a> AccountsHasher<'a> {
         };
 
         let mut overall_sum = 0;
-        let filler_accounts_enabled = self.filler_accounts_enabled();
 
         while let Some(pointer) = working_set.pop() {
             let key = &sorted_data_by_pubkey[pointer.slot_group_index][pointer.offset].pubkey;
@@ -1166,13 +1159,10 @@ impl<'a> AccountsHasher<'a> {
 
             // add lamports and get hash
             if item.lamports != 0 {
-                // do not include filler accounts in the hash
-                if !(filler_accounts_enabled && self.is_filler_account(&item.pubkey)) {
-                    overall_sum = Self::checked_cast_for_capitalization(
-                        item.lamports as u128 + overall_sum as u128,
-                    );
-                    hashes.write(&item.hash.0);
-                }
+                overall_sum = Self::checked_cast_for_capitalization(
+                    item.lamports as u128 + overall_sum as u128,
+                );
+                hashes.write(&item.hash.0);
             } else {
                 // if lamports == 0, check if they should be included
                 if self.zero_lamport_accounts == ZeroLamportAccounts::Included {
@@ -1194,13 +1184,6 @@ impl<'a> AccountsHasher<'a> {
         }
 
         (hashes, overall_sum)
-    }
-
-    fn is_filler_account(&self, pubkey: &Pubkey) -> bool {
-        crate::accounts_db::AccountsDb::is_filler_account_helper(
-            pubkey,
-            self.filler_account_suffix.as_ref(),
-        )
     }
 
     /// input:
@@ -1343,7 +1326,6 @@ mod tests {
     impl<'a> AccountsHasher<'a> {
         fn new(dir_for_temp_cache_files: PathBuf) -> Self {
             Self {
-                filler_account_suffix: None,
                 zero_lamport_accounts: ZeroLamportAccounts::Excluded,
                 dir_for_temp_cache_files,
                 active_stats: &ACTIVE_STATS,
