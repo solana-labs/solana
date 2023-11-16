@@ -1278,6 +1278,10 @@ impl SchedulingStateMachine {
         self.active_task_count == 0
     }
 
+    fn retryable_task_count() -> usize {
+        self.retryable_task_queue.len()
+    }
+
     fn schedule_new_task(&mut self, task: Arc<Task>) -> Option<Box<ExecutionEnvironment>> {
         self.active_task_count += 1;
         ScheduleStage::try_lock_for_task(
