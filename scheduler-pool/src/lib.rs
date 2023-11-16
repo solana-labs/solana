@@ -769,7 +769,7 @@ where
                     }
 
                     if !will_end_thread {
-                        (state_machine, log_interval_counter) = <(_, _)>::default();
+                        (state_machine, log_interval_counter) = <_>::default();
                         result_sender
                             .send(
                                 result_with_timings
