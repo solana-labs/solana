@@ -1,6 +1,8 @@
 use {
-    crate::bank::Bank,
-    solana_accounts_db::account_rent_state::{check_rent_state, RentState},
+    crate::{
+        accounts::account_rent_state::{check_rent_state, RentState},
+        bank::Bank,
+    },
     solana_sdk::{
         account::ReadableAccount,
         message::SanitizedMessage,

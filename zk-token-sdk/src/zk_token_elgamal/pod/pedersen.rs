@@ -2,7 +2,7 @@
 
 #[cfg(not(target_os = "solana"))]
 use {
-    crate::{encryption::pedersen as decoded, errors::ProofError},
+    crate::encryption::{elgamal::ElGamalError, pedersen as decoded},
     curve25519_dalek::ristretto::CompressedRistretto,
 };
 use {
@@ -44,9 +44,9 @@ impl From<PedersenCommitment> for CompressedRistretto {
 
 #[cfg(not(target_os = "solana"))]
 impl TryFrom<PedersenCommitment> for decoded::PedersenCommitment {
-    type Error = ProofError;
+    type Error = ElGamalError;
 
     fn try_from(pod_commitment: PedersenCommitment) -> Result<Self, Self::Error> {
-        Self::from_bytes(&pod_commitment.0).ok_or(ProofError::CiphertextDeserialization)
+        Self::from_bytes(&pod_commitment.0).ok_or(ElGamalError::CiphertextDeserialization)
     }
 }
