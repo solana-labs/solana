@@ -598,7 +598,7 @@ impl RestartLastVotedForkSlots {
     const MAX_BYTES: usize = 824;
 
     // Per design doc, we should start wen_restart within 7 hours.
-    pub const MAX_SLOTS: usize = 65535;
+    pub const MAX_SLOTS: usize = u16::MAX as usize;
 
     pub fn new(
         from: Pubkey,
