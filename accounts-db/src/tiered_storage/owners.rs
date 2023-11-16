@@ -15,8 +15,11 @@ pub struct OwnersBlock;
 
 /// The offset to an owner entry in the owners block.
 /// This is used to obtain the address of the account owner.
+///
+/// Note that as its internal type is u32, it means the maximum number of
+/// unique owners in one TieredStorageFile is 2^32.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct OwnerOffset(pub usize);
+pub struct OwnerOffset(pub u32);
 
 /// OwnersBlock is persisted as a consecutive bytes of pubkeys without any
 /// meta-data.  For each account meta, it has a owner_offset field to
@@ -42,8 +45,8 @@ impl OwnersBlock {
         footer: &TieredStorageFooter,
         owner_offset: OwnerOffset,
     ) -> TieredStorageResult<&'a Pubkey> {
-        let offset =
-            footer.owners_block_offset as usize + (std::mem::size_of::<Pubkey>() * owner_offset.0);
+        let offset = footer.owners_block_offset as usize
+            + (std::mem::size_of::<Pubkey>() * owner_offset.0 as usize);
         let (pubkey, _) = get_type::<Pubkey>(mmap, offset)?;
 
         Ok(pubkey)
@@ -90,7 +93,7 @@ mod tests {
 
         for (i, address) in addresses.iter().enumerate() {
             assert_eq!(
-                OwnersBlock::get_owner_address(&mmap, &footer, OwnerOffset(i)).unwrap(),
+                OwnersBlock::get_owner_address(&mmap, &footer, OwnerOffset(i as u32)).unwrap(),
                 address
             );
         }

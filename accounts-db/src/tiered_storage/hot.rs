@@ -571,7 +571,9 @@ pub mod tests {
         let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
         for (i, address) in addresses.iter().enumerate() {
             assert_eq!(
-                hot_storage.get_owner_address(OwnerOffset(i)).unwrap(),
+                hot_storage
+                    .get_owner_address(OwnerOffset(i as u32))
+                    .unwrap(),
                 address,
             );
         }
