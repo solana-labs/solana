@@ -8047,13 +8047,10 @@ impl Bank {
 
     /// Compute the active feature set based on the current bank state,
     /// and return it together with the set of newly activated features.
-    fn compute_active_feature_set(
-        &self,
-        allow_new_activations: bool,
-    ) -> (FeatureSet, HashSet<Pubkey>) {
+    fn compute_active_feature_set(&self, include_pending: bool) -> (FeatureSet, HashSet<Pubkey>) {
         let mut active = self.feature_set.active.clone();
         let mut inactive = HashSet::new();
-        let mut newly_activated = HashSet::new();
+        let mut pending = HashSet::new();
         let slot = self.slot();
 
         for feature_id in &self.feature_set.inactive {
@@ -8061,9 +8058,9 @@ impl Bank {
             if let Some(account) = self.get_account_with_fixed_root(feature_id) {
                 if let Some(feature) = feature::from_account(&account) {
                     match feature.activated_at {
-                        None if allow_new_activations => {
+                        None if include_pending => {
                             // Feature activation is pending
-                            newly_activated.insert(*feature_id);
+                            pending.insert(*feature_id);
                             activated = Some(slot);
                         }
                         Some(activation_slot) if slot >= activation_slot => {
@@ -8081,7 +8078,7 @@ impl Bank {
             }
         }
 
-        (FeatureSet { active, inactive }, newly_activated)
+        (FeatureSet { active, inactive }, pending)
     }
 
     fn apply_builtin_program_feature_transitions(
