@@ -653,7 +653,7 @@ where
                 let mut state_machine = SchedulingStateMachine::default();
                 let log = || {
                     info!("scheduler: ", state_machine.retryable_task_count());
-                }
+                };
 
                 while !will_end_thread {
                     while !(state_machine.is_empty() && (will_end_session || will_end_thread)) {
