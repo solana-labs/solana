@@ -633,6 +633,7 @@ where
         let handler_count = self.handler_count;
 
         let scheduler_main_loop = || {
+            let mut log_interval_counter = 0;
             let result_sender = self.result_sender.clone();
             let mut schedulable_transaction_receiver =
                 self.schedulable_transaction_receiver.clone();
@@ -651,12 +652,11 @@ where
                 let mut will_end_session = false;
                 let mut will_end_thread = false;
                 let mut state_machine = SchedulingStateMachine::default();
-                let mut log_count = 0;
                 macro_rules! interval_log {
                     () => {
-                        log_count += 1;
-                        if log_count % 1000 == 0 {
-                            info!("retryable: {}", state_machine.retryable_task_count());
+                        log_interval_counter += 1;
+                        if log_interval_counter % 1000 == 0 {
+                            info!("processed: {} retryable: {}, active: {}", state_machine.handled_task_count(), state_machine.retryable_task_count(), state_machine.active_task_count());
                         }
                     }
                 };
@@ -1278,6 +1278,7 @@ where
 struct SchedulingStateMachine {
     retryable_task_queue: WeightedTaskQueue,
     active_task_count: usize,
+    handled_task_count: usize,
 }
 
 impl SchedulingStateMachine {
@@ -1291,6 +1292,10 @@ impl SchedulingStateMachine {
 
     fn active_task_count(&self) -> usize {
         self.active_task_count
+    }
+
+    fn handled_task_count(&self) -> usize {
+        self.handled_task_count
     }
 
     fn schedule_new_task(&mut self, task: Arc<Task>) -> Option<Box<ExecutionEnvironment>> {
@@ -1318,6 +1323,7 @@ impl SchedulingStateMachine {
 
     fn deschedule_task(&mut self, mut ee: Box<ExecutionEnvironment>) {
         self.active_task_count -= 1;
+        self.handled_task_count += 1;
         let should_remove = ee
             .task
             .contention_count
