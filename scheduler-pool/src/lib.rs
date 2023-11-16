@@ -653,13 +653,13 @@ where
                 let mut state_machine = SchedulingStateMachine::default();
                 let mut log_interval_counter = 0;
                 let mut current_slot = 0;
-                macro_rules! interval_log {
+                macro_rules! log_scheduler {
                     ($a:tt) => {
                             info!("{}: slot: {} processed: {} retryable: {}, active: {}", $a, current_slot, state_machine.handled_task_count(), state_machine.retryable_task_count(), state_machine.active_task_count());
                     };
                     () => { 
                         if log_interval_counter % 1000 == 0 {
-                            interval_log!("interval");
+                            log_scheduler!("interval");
                         }
                         log_interval_counter += 1;
                     };
@@ -667,7 +667,6 @@ where
 
                 while !will_end_thread {
                     while !(state_machine.is_empty() && (will_end_session || will_end_thread)) {
-                        interval_log!();
                         select_biased! {
                             recv(handled_blocked_transaction_receiver) -> execution_environment => {
                                 let execution_environment = execution_environment.unwrap();
@@ -708,6 +707,7 @@ where
                                 state_machine.deschedule_task(execution_environment);
                             },
                         };
+                        log_scheduler!();
 
                         if let Some(ee) = state_machine.schedule_retryable_task() {
                             blocked_transaction_sessioned_sender
@@ -766,8 +766,10 @@ where
                                 );
                                 state_machine.deschedule_task(execution_environment);
                             } else {
+                                log_scheduler!();
                                 break;
                             }
+                            log_scheduler!();
                         }
                     }
 
