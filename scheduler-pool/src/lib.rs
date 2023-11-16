@@ -655,17 +655,19 @@ where
                 let mut current_slot = 0;
                 macro_rules! interval_log {
                     ($a:tt) => {
-                        if log_interval_counter % 1000 == 0 {
                             info!("slot: {} processed: {} retryable: {}, active: {}", current_slot, state_machine.handled_task_count(), state_machine.retryable_task_count(), state_machine.active_task_count());
+                    };
+                    () => { 
+                        if log_interval_counter % 1000 == 0 {
+                            interval_log!("interval");
                         }
                         log_interval_counter += 1;
                     };
-                    () => { interval_log!("interval"); };
                 };
 
                 while !will_end_thread {
                     while !(state_machine.is_empty() && (will_end_session || will_end_thread)) {
-                        interval_log!("interval");
+                        interval_log!();
                         select_biased! {
                             recv(handled_blocked_transaction_receiver) -> execution_environment => {
                                 let execution_environment = execution_environment.unwrap();
