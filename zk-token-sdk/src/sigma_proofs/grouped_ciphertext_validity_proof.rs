@@ -15,7 +15,6 @@ use {
             elgamal::{DecryptHandle, ElGamalPubkey},
             pedersen::{PedersenCommitment, PedersenOpening, G, H},
         },
-        errors::ProofVerificationError,
         sigma_proofs::{canonical_scalar_from_optional_slice, ristretto_point_from_optional_slice},
         UNIT_LEN,
     },
@@ -24,7 +23,10 @@ use {
     zeroize::Zeroize,
 };
 use {
-    crate::{sigma_proofs::errors::ValidityProofError, transcript::TranscriptProtocol},
+    crate::{
+        sigma_proofs::errors::{SigmaProofVerificationError, ValidityProofVerificationError},
+        transcript::TranscriptProtocol,
+    },
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
@@ -128,7 +130,7 @@ impl GroupedCiphertext2HandlesValidityProof {
         (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
         (destination_handle, auditor_handle): (&DecryptHandle, &DecryptHandle),
         transcript: &mut Transcript,
-    ) -> Result<(), ValidityProofError> {
+    ) -> Result<(), ValidityProofVerificationError> {
         transcript.grouped_ciphertext_validity_proof_domain_separator();
 
         // include Y_0, Y_1, Y_2 to transcript and extract challenges
@@ -148,15 +150,15 @@ impl GroupedCiphertext2HandlesValidityProof {
         let Y_0 = self
             .Y_0
             .decompress()
-            .ok_or(ProofVerificationError::Deserialization)?;
+            .ok_or(SigmaProofVerificationError::Deserialization)?;
         let Y_1 = self
             .Y_1
             .decompress()
-            .ok_or(ProofVerificationError::Deserialization)?;
+            .ok_or(SigmaProofVerificationError::Deserialization)?;
         let Y_2 = self
             .Y_2
             .decompress()
-            .ok_or(ProofVerificationError::Deserialization)?;
+            .ok_or(SigmaProofVerificationError::Deserialization)?;
 
         let P_dest = destination_pubkey.get_point();
         let P_auditor = auditor_pubkey.get_point();
@@ -195,7 +197,7 @@ impl GroupedCiphertext2HandlesValidityProof {
         if check.is_identity() {
             Ok(())
         } else {
-            Err(ProofVerificationError::AlgebraicRelation.into())
+            Err(SigmaProofVerificationError::AlgebraicRelation.into())
         }
     }
 
@@ -210,7 +212,7 @@ impl GroupedCiphertext2HandlesValidityProof {
         buf
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ValidityProofError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ValidityProofVerificationError> {
         let mut chunks = bytes.chunks(UNIT_LEN);
         let Y_0 = ristretto_point_from_optional_slice(chunks.next())?;
         let Y_1 = ristretto_point_from_optional_slice(chunks.next())?;

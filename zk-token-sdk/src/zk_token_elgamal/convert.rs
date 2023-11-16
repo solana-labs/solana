@@ -49,7 +49,7 @@ impl From<PodRistrettoPoint> for pod::DecryptHandle {
 mod target_arch {
     use {
         super::pod,
-        crate::{curve25519::scalar::PodScalar, errors::ProofError},
+        crate::{curve25519::scalar::PodScalar, encryption::elgamal::ElGamalError},
         curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar},
         std::convert::TryFrom,
     };
@@ -61,10 +61,10 @@ mod target_arch {
     }
 
     impl TryFrom<PodScalar> for Scalar {
-        type Error = ProofError;
+        type Error = ElGamalError;
 
         fn try_from(pod: PodScalar) -> Result<Self, Self::Error> {
-            Scalar::from_canonical_bytes(pod.0).ok_or(ProofError::CiphertextDeserialization)
+            Scalar::from_canonical_bytes(pod.0).ok_or(ElGamalError::CiphertextDeserialization)
         }
     }
 
@@ -101,7 +101,8 @@ mod tests {
         let mut transcript_create = Transcript::new(b"Test");
         let mut transcript_verify = Transcript::new(b"Test");
 
-        let proof = RangeProof::new(vec![55], vec![64], vec![&open], &mut transcript_create);
+        let proof =
+            RangeProof::new(vec![55], vec![64], vec![&open], &mut transcript_create).unwrap();
 
         let proof_serialized: pod::RangeProofU64 = proof.try_into().unwrap();
         let proof_deserialized: RangeProof = proof_serialized.try_into().unwrap();
@@ -111,7 +112,8 @@ mod tests {
             .is_ok());
 
         // should fail to serialize to pod::RangeProof128
-        let proof = RangeProof::new(vec![55], vec![64], vec![&open], &mut transcript_create);
+        let proof =
+            RangeProof::new(vec![55], vec![64], vec![&open], &mut transcript_create).unwrap();
 
         assert!(TryInto::<pod::RangeProofU128>::try_into(proof).is_err());
     }
@@ -130,7 +132,8 @@ mod tests {
             vec![64, 32, 32],
             vec![&open_1, &open_2, &open_3],
             &mut transcript_create,
-        );
+        )
+        .unwrap();
 
         let proof_serialized: pod::RangeProofU128 = proof.try_into().unwrap();
         let proof_deserialized: RangeProof = proof_serialized.try_into().unwrap();
@@ -149,7 +152,8 @@ mod tests {
             vec![64, 32, 32],
             vec![&open_1, &open_2, &open_3],
             &mut transcript_create,
-        );
+        )
+        .unwrap();
 
         assert!(TryInto::<pod::RangeProofU64>::try_into(proof).is_err());
     }
