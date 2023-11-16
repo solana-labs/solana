@@ -273,6 +273,13 @@ impl Bank {
     pub(super) fn distribute_rent_fees(&self) {
         let total_rent_collected = self.collected_rent.load(Relaxed);
 
+        if !self.should_collect_rent() {
+            if total_rent_collected != 0 {
+                warn!("Rent fees collection is disabled, yet total rent collect was non zero! Total rent collected: {total_rent_collected}");
+            }
+            return;
+        }
+
         let (burned_portion, rent_to_be_distributed) = self
             .rent_collector
             .rent
