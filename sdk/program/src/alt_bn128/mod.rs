@@ -181,9 +181,7 @@ mod target_arch {
         let result_point = p + q;
 
         let mut result_point_data = [0u8; ALT_BN128_ADDITION_OUTPUT_LEN];
-        let result_point_affine: G1 = result_point
-            .try_into()
-            .map_err(|_| AltBn128Error::ProjectiveToG1Failed)?;
+        let result_point_affine: G1 = result_point.into();
         result_point_affine
             .x
             .serialize_with_mode(&mut result_point_data[..32], Compress::No)
