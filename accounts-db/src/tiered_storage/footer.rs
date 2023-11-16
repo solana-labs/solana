@@ -204,11 +204,11 @@ impl TieredStorageFooter {
         Ok(footer)
     }
 
-    pub fn new_from_mmap(map: &Mmap) -> TieredStorageResult<&TieredStorageFooter> {
-        let offset = map.len().saturating_sub(FOOTER_TAIL_SIZE);
-        let (footer_size, offset) = get_type::<u64>(map, offset)?;
-        let (_footer_version, offset) = get_type::<u64>(map, offset)?;
-        let (magic_number, _offset) = get_type::<TieredStorageMagicNumber>(map, offset)?;
+    pub fn new_from_mmap(mmap: &Mmap) -> TieredStorageResult<&TieredStorageFooter> {
+        let offset = mmap.len().saturating_sub(FOOTER_TAIL_SIZE);
+        let (footer_size, offset) = get_type::<u64>(mmap, offset)?;
+        let (_footer_version, offset) = get_type::<u64>(mmap, offset)?;
+        let (magic_number, _offset) = get_type::<TieredStorageMagicNumber>(mmap, offset)?;
 
         if *magic_number != TieredStorageMagicNumber::default() {
             return Err(TieredStorageError::MagicNumberMismatch(
@@ -217,8 +217,10 @@ impl TieredStorageFooter {
             ));
         }
 
-        let (footer, _offset) =
-            get_type::<TieredStorageFooter>(map, map.len().saturating_sub(*footer_size as usize))?;
+        let (footer, _offset) = get_type::<TieredStorageFooter>(
+            mmap,
+            mmap.len().saturating_sub(*footer_size as usize),
+        )?;
 
         Ok(footer)
     }
