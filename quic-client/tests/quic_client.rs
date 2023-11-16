@@ -337,7 +337,7 @@ mod tests {
         };
         solana_logger::setup();
 
-        let addr = IpAddr::V4(Ipv4Addr::new(35, 233, 177, 221));
+        let addr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
         let port = 8009;
         let tpu_addr = SocketAddr::new(addr, port);
         let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
@@ -414,7 +414,7 @@ mod tests {
     async fn test_connection_cache_memory_usage_2() {
         solana_logger::setup();
 
-        let addr = IpAddr::V4(Ipv4Addr::new(35, 233, 177, 221));
+        let addr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
         let port = 8009;
         let tpu_addr = SocketAddr::new(addr, port);
         let mut clients = Vec::default();
