@@ -5,8 +5,8 @@ use {
     bincode::deserialize,
     solana_program_runtime::{declare_process_instruction, ic_msg},
     solana_sdk::{
-        feature_set, instruction::InstructionError, program_utils::limited_deserialize,
-        pubkey::Pubkey, transaction_context::IndexOfAccount,
+        instruction::InstructionError, program_utils::limited_deserialize, pubkey::Pubkey,
+        transaction_context::IndexOfAccount,
     },
     std::collections::BTreeSet,
 };
@@ -102,16 +102,12 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
         }
     }
 
-    if invoke_context
-        .feature_set
-        .is_active(&feature_set::dedupe_config_program_signers::id())
-    {
-        let total_new_keys = key_list.keys.len();
-        let unique_new_keys = key_list.keys.into_iter().collect::<BTreeSet<_>>();
-        if unique_new_keys.len() != total_new_keys {
-            ic_msg!(invoke_context, "new config contains duplicate keys");
-            return Err(InstructionError::InvalidArgument);
-        }
+    // dedupe signers
+    let total_new_keys = key_list.keys.len();
+    let unique_new_keys = key_list.keys.into_iter().collect::<BTreeSet<_>>();
+    if unique_new_keys.len() != total_new_keys {
+        ic_msg!(invoke_context, "new config contains duplicate keys");
+        return Err(InstructionError::InvalidArgument);
     }
 
     // Check for Config data signers not present in incoming account update
