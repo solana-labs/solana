@@ -1140,7 +1140,8 @@ fn main() {
         .validator(is_parsable::<usize>)
         .takes_value(true)
         .default_value("0")
-        .help("How many accounts to add to stress the system. Accounts are ignored in operations related to correctness.");
+        .help("How many accounts to add to stress the system. Accounts are ignored in operations related to correctness.")
+        .hidden(hidden_unless_forced());
     let accounts_filler_size = Arg::with_name("accounts_filler_size")
         .long("accounts-filler-size")
         .value_name("BYTES")
@@ -1148,7 +1149,8 @@ fn main() {
         .takes_value(true)
         .default_value("0")
         .requires("accounts_filler_count")
-        .help("Size per filler account in bytes.");
+        .help("Size per filler account in bytes.")
+        .hidden(hidden_unless_forced());
     let account_paths_arg = Arg::with_name("account_paths")
         .long("accounts")
         .value_name("PATHS")
