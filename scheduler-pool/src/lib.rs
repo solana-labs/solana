@@ -652,7 +652,7 @@ where
                 let mut will_end_thread = false;
                 let mut state_machine = SchedulingStateMachine::default();
                 let mut log_count = 0;
-                let log = || {
+                let mut log = || {
                     log_count += 1;
                     if log_count % 1000 == 0 {
                         info!("retryable: {}", state_machine.retryable_task_count());
