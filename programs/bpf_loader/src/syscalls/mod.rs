@@ -40,9 +40,9 @@ use {
             disable_fees_sysvar, enable_alt_bn128_compression_syscall, enable_alt_bn128_syscall,
             enable_big_mod_exp_syscall, enable_partitioned_epoch_reward, enable_poseidon_syscall,
             error_on_syscall_bpf_function_hash_collisions, last_restart_slot_sysvar,
-            libsecp256k1_0_5_upgrade_enabled, reject_callx_r10,
-            remaining_compute_units_syscall_enabled, stop_sibling_instruction_search_at_parent,
-            stop_truncating_strings_in_syscalls, switch_to_new_elf_parser,
+            reject_callx_r10, remaining_compute_units_syscall_enabled,
+            stop_sibling_instruction_search_at_parent, stop_truncating_strings_in_syscalls,
+            switch_to_new_elf_parser,
         },
         hash::{Hash, Hasher},
         instruction::{
@@ -849,16 +849,7 @@ declare_builtin_function!(
         let Ok(recovery_id) = libsecp256k1::RecoveryId::parse(adjusted_recover_id_val) else {
             return Ok(Secp256k1RecoverError::InvalidRecoveryId.into());
         };
-        let sig_parse_result = if invoke_context
-            .feature_set
-            .is_active(&libsecp256k1_0_5_upgrade_enabled::id())
-        {
-            libsecp256k1::Signature::parse_standard_slice(signature)
-        } else {
-            libsecp256k1::Signature::parse_overflowing_slice(signature)
-        };
-
-        let Ok(signature) = sig_parse_result else {
+        let Ok(signature) = libsecp256k1::Signature::parse_standard_slice(signature) else {
             return Ok(Secp256k1RecoverError::InvalidSignature.into());
         };
 
