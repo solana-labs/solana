@@ -66,8 +66,6 @@ pub enum Error {
     InvalidErasureMetaConflict,
     #[error("invalid last index conflict")]
     InvalidLastIndexConflict,
-    #[error("invalid merkle root conflict")]
-    InvalidMerkleRootConflict,
     #[error("invalid signature")]
     InvalidSignature,
     #[error("invalid size limit")]
@@ -80,6 +78,8 @@ pub enum Error {
     MissingDataChunk,
     #[error("(de)serialization error")]
     SerializationError(#[from] bincode::Error),
+    #[error("shred type mismatch")]
+    ShredTypeMismatch,
     #[error("slot mismatch")]
     SlotMismatch,
     #[error("type conversion error")]
@@ -115,28 +115,17 @@ where
     }
 
     // Merkle root conflict check
-    if shred1.fec_set_index() == shred2.fec_set_index() {
-        let mr1 = shred1.merkle_root().ok();
-        let mr2 = shred2.merkle_root().ok();
-
-        if (mr1.is_some() && mr2.is_none()) || (mr2.is_some() && mr1.is_none()) {
-            // A mixture of legacy and merkle shreds in the same fec set
-            // constitutes a valid duplicate proof
-            return Ok(());
-        }
-
-        if let Some((mr1, mr2)) = mr1.zip(mr2) {
-            if mr1 != mr2 {
-                // Conflicting merkle roots for the same fec set is a
-                // valid duplicate proof
-                return Ok(());
-            }
-        }
+    if shred1.fec_set_index() == shred2.fec_set_index()
+        && shred1.merkle_root().ok() != shred2.merkle_root().ok()
+    {
+        // This catches a mixture of legacy and merkle shreds
+        // as well as merkle shreds with different roots in the
+        // same fec set
+        return Ok(());
     }
 
     if shred1.shred_type() != shred2.shred_type() {
-        // Only valid proof here is a merkle conflict which was checked above
-        return Err(Error::InvalidMerkleRootConflict);
+        return Err(Error::ShredTypeMismatch);
     }
 
     if shred1.index() == shred2.index() {
@@ -1123,7 +1112,7 @@ pub(crate) mod tests {
                 )
                 .err()
                 .unwrap(),
-                Error::InvalidMerkleRootConflict
+                Error::ShredTypeMismatch
             );
 
             let chunks: Vec<_> = from_shred_bypass_checks(
@@ -1139,7 +1128,7 @@ pub(crate) mod tests {
 
             assert_matches!(
                 into_shreds(&leader.pubkey(), chunks).err().unwrap(),
-                Error::InvalidMerkleRootConflict
+                Error::ShredTypeMismatch
             );
         }
     }
