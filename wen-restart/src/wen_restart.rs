@@ -76,7 +76,7 @@ fn aggregate_restart_last_voted_fork_slots(
     wait_for_supermajority_threshold_percent: u64,
     cluster_info: Arc<ClusterInfo>,
     bank_forks: Arc<RwLock<BankForks>>,
-    slots_to_repair_for_wen_restart: Arc<RwLock<Vec<Slot>>>,
+    wen_restart_repair_slots: Arc<RwLock<Vec<Slot>>>,
     progress: &mut WenRestartProgress,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let root_bank;
@@ -135,11 +135,11 @@ fn aggregate_restart_last_voted_fork_slots(
         if filtered_slots.is_empty()
             && result.active_percent > wait_for_supermajority_threshold_percent as f64
         {
-            *slots_to_repair_for_wen_restart.write().unwrap() = vec![];
+            *wen_restart_repair_slots.write().unwrap() = vec![];
             break;
         }
         {
-            *slots_to_repair_for_wen_restart.write().unwrap() = filtered_slots;
+            *wen_restart_repair_slots.write().unwrap() = filtered_slots;
         }
         write_wen_restart_records(wen_restart_path, progress)?;
         let elapsed = timestamp().saturating_sub(start);
@@ -157,7 +157,7 @@ pub fn wait_for_wen_restart(
     blockstore: Arc<Blockstore>,
     cluster_info: Arc<ClusterInfo>,
     bank_forks: Arc<RwLock<BankForks>>,
-    slots_to_repair_for_wen_restart: Option<Arc<RwLock<Vec<Slot>>>>,
+    wen_restart_repair_slots: Option<Arc<RwLock<Vec<Slot>>>>,
     wait_for_supermajority_threshold_percent: u64,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut progress = read_wen_restart_records(wen_restart_path)?;
@@ -176,7 +176,7 @@ pub fn wait_for_wen_restart(
             wait_for_supermajority_threshold_percent,
             cluster_info.clone(),
             bank_forks.clone(),
-            slots_to_repair_for_wen_restart.clone().unwrap(),
+            wen_restart_repair_slots.clone().unwrap(),
             &mut progress,
         )?;
         increment_and_write_wen_restart_records(wen_restart_path, &mut progress)?
@@ -281,7 +281,7 @@ mod tests {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let mut wen_restart_proto_path = ledger_path.path().to_path_buf();
         wen_restart_proto_path.push("wen_restart_status.proto");
-        let slots_to_repair_for_wen_restart = Some(Arc::new(RwLock::new(Vec::new())));
+        let wen_restart_repair_slots = Some(Arc::new(RwLock::new(Vec::new())));
         let blockstore = Arc::new(blockstore::Blockstore::open(ledger_path.path()).unwrap());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config_with_vote_accounts(
             10_000,
@@ -346,7 +346,7 @@ mod tests {
                     blockstore,
                     cluster_info_clone,
                     bank_forks_clone,
-                    slots_to_repair_for_wen_restart.clone(),
+                    wen_restart_repair_slots.clone(),
                     80,
                 )
                 .is_ok());

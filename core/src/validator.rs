@@ -1217,7 +1217,7 @@ impl Validator {
             .unwrap();
 
         let in_wen_restart = config.wen_restart_proto_path.is_some() && !waited_for_supermajority;
-        let slots_to_repair_for_wen_restart = if in_wen_restart {
+        let wen_restart_repair_slots = if in_wen_restart {
             Some(Arc::new(RwLock::new(Vec::new())))
         } else {
             None
@@ -1289,7 +1289,7 @@ impl Validator {
             turbine_quic_endpoint_sender.clone(),
             turbine_quic_endpoint_receiver,
             repair_quic_endpoint_sender,
-            slots_to_repair_for_wen_restart.clone(),
+            wen_restart_repair_slots.clone(),
         )?;
 
         if in_wen_restart {
@@ -1300,7 +1300,7 @@ impl Validator {
                 blockstore.clone(),
                 cluster_info.clone(),
                 bank_forks.clone(),
-                slots_to_repair_for_wen_restart.clone(),
+                wen_restart_repair_slots.clone(),
                 WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT,
             ) {
                 Ok(()) => {

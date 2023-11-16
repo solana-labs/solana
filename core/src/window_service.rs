@@ -353,7 +353,7 @@ impl WindowService {
 
         let cluster_info = repair_info.cluster_info.clone();
 
-        let in_wen_restart = repair_info.slots_to_repair_for_wen_restart.is_some();
+        let in_wen_restart = repair_info.wen_restart_repair_slots.is_some();
 
         let repair_service = RepairService::new(
             blockstore.clone(),

@@ -214,7 +214,7 @@ pub struct RepairInfo {
     // Validators which should be given priority when serving
     pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
     // A given list of slots to repair when in wen_restart
-    pub slots_to_repair_for_wen_restart: Option<Arc<RwLock<Vec<Slot>>>>,
+    pub wen_restart_repair_slots: Option<Arc<RwLock<Vec<Slot>>>>,
 }
 
 pub struct RepairSlotRange {
@@ -388,7 +388,7 @@ impl RepairService {
                 );
                 add_votes_elapsed.stop();
 
-                let repairs = match repair_info.slots_to_repair_for_wen_restart.clone() {
+                let repairs = match repair_info.wen_restart_repair_slots.clone() {
                     Some(slots_to_repair) => Self::generate_repairs_for_wen_restart(
                         blockstore,
                         MAX_REPAIR_LENGTH,
@@ -622,10 +622,10 @@ impl RepairService {
         slot: Slot,
         slot_meta: &SlotMeta,
         max_repairs: usize,
-        add_delay_after_first_shred: bool,
+        throttle_requests_by_shred_tick: bool,
     ) -> Vec<ShredRepairType> {
         // When in wen_restart, turbine not running, no need to wait after first shred.
-        let defer_repair_threshold_ticks = if add_delay_after_first_shred {
+        let defer_repair_threshold_ticks = if throttle_requests_by_shred_tick {
             DEFER_REPAIR_THRESHOLD_TICKS
         } else {
             0
@@ -633,22 +633,24 @@ impl RepairService {
         if max_repairs == 0 || slot_meta.is_full() {
             vec![]
         } else if slot_meta.consumed == slot_meta.received {
-            // check delay time of last shred
-            if let Some(reference_tick) = slot_meta
-                .received
-                .checked_sub(1)
-                .and_then(|index| blockstore.get_data_shred(slot, index).ok()?)
-                .and_then(|shred| shred::layout::get_reference_tick(&shred).ok())
-                .map(u64::from)
-            {
-                // System time is not monotonic
-                let ticks_since_first_insert = DEFAULT_TICKS_PER_SECOND
-                    * timestamp().saturating_sub(slot_meta.first_shred_timestamp)
-                    / 1_000;
-                if ticks_since_first_insert
-                    < reference_tick.saturating_add(defer_repair_threshold_ticks)
+            if throttle_requests_by_shred_tick {
+                // check delay time of last shred
+                if let Some(reference_tick) = slot_meta
+                    .received
+                    .checked_sub(1)
+                    .and_then(|index| blockstore.get_data_shred(slot, index).ok()?)
+                    .and_then(|shred| shred::layout::get_reference_tick(&shred).ok())
+                    .map(u64::from)
                 {
-                    return vec![];
+                    // System time is not monotonic
+                    let ticks_since_first_insert = DEFAULT_TICKS_PER_SECOND
+                        * timestamp().saturating_sub(slot_meta.first_shred_timestamp)
+                        / 1_000;
+                    if ticks_since_first_insert
+                        < reference_tick.saturating_add(defer_repair_threshold_ticks)
+                    {
+                        return vec![];
+                    }
                 }
             }
             vec![ShredRepairType::HighestShred(slot, slot_meta.received)]
@@ -684,7 +686,7 @@ impl RepairService {
                     slot,
                     &slot_meta,
                     max_repairs - repairs.len(),
-                    true,
+                    /* throttle_requests_by_shred_tick */ true,
                 );
                 repairs.extend(new_repairs);
                 let next_slots = slot_meta.next_slots;
@@ -700,25 +702,25 @@ impl RepairService {
         max_repairs: usize,
         slots: &Vec<Slot>,
     ) -> Vec<ShredRepairType> {
-        let mut result: Vec<ShredRepairType> = Vec::new();
+        let mut repairs: Vec<ShredRepairType> = Vec::new();
         for slot in slots {
             if let Some(slot_meta) = blockstore.meta(*slot).unwrap() {
                 let new_repairs = Self::generate_repairs_for_slot(
                     blockstore,
                     *slot,
                     &slot_meta,
-                    max_repairs - result.len(),
+                    max_repairs - repairs.len(),
                     false,
                 );
-                result.extend(new_repairs);
+                repairs.extend(new_repairs);
             } else {
-                result.push(ShredRepairType::HighestShred(*slot, 0));
+                repairs.push(ShredRepairType::HighestShred(*slot, 0));
             }
-            if result.len() >= max_repairs {
+            if repairs.len() >= max_repairs {
                 break;
             }
         }
-        result
+        repairs
     }
 
     /// Generate repairs for all slots `x` in the repair_range.start <= x <= repair_range.end
