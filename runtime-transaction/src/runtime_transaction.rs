@@ -1,14 +1,14 @@
-/// RuntimeTransaction is `runtime` facing representation of transaction, while
-/// solana_sdk::SanitizedTransaction is client facing representation.
-///
-/// It has two states:
-/// 1. Statically Loaded: after receiving `packet` from sigverify and deserializing
-///    it into `solana_sdk::VersionedTransaction`, then sanitizing into
-///    `solana_sdk::SanitizedVersionedTransaction`, `RuntimeTransactionStatic`
-///    can be created from it with static transaction metadata extracted.
-/// 2. Dynamically Loaded: after successfully loaded account addresses from onchain
-///    ALT, RuntimeTransaction transits into Dynamically Loaded state, with
-///    its dynamic metadata loaded.
+//! RuntimeTransaction is `runtime` facing representation of transaction, while
+//! solana_sdk::SanitizedTransaction is client facing representation.
+//!
+//! It has two states:
+//! 1. Statically Loaded: after receiving `packet` from sigverify and deserializing
+//!    it into `solana_sdk::VersionedTransaction`, then sanitizing into
+//!    `solana_sdk::SanitizedVersionedTransaction`, `RuntimeTransactionStatic`
+//!    can be created from it with static transaction metadata extracted.
+//! 2. Dynamically Loaded: after successfully loaded account addresses from onchain
+//!    ALT, RuntimeTransaction transits into Dynamically Loaded state, with
+//!    its dynamic metadata loaded.
 use {
     crate::transaction_meta::{DynamicMeta, StaticMeta, TransactionMeta},
     solana_sdk::{
@@ -22,12 +22,8 @@ use {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct RuntimeTransactionStatic {
-    // sanitized signatures
     signatures: Vec<Signature>,
-
-    // sanitized message
     message: SanitizedVersionedMessage,
-
     // transaction meta is a collection of fields, it is updated
     // during message state transition
     meta: TransactionMeta,
@@ -70,12 +66,8 @@ impl RuntimeTransactionStatic {
 /// address_loader, to load accounts from on-chain ALT, then resolve dynamic metadata
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct RuntimeTransactionDynamic {
-    // sanitized signatures
     signatures: Vec<Signature>,
-
-    // sanitized message
     message: SanitizedMessage,
-
     // transaction meta is a collection of fields, it is updated
     // during message state transition
     meta: TransactionMeta,
@@ -110,7 +102,6 @@ impl RuntimeTransactionDynamic {
         Ok(tx)
     }
 
-    // private helpers
     fn load_dynamic_metadata(&mut self) -> Result<()> {
         Ok(())
     }
