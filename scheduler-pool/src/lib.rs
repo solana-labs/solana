@@ -1278,7 +1278,7 @@ impl SchedulingStateMachine {
         self.active_task_count == 0
     }
 
-    fn retryable_task_count() -> usize {
+    fn retryable_task_count(&self) -> usize {
         self.retryable_task_queue.len()
     }
 
