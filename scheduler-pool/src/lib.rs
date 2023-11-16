@@ -663,7 +663,7 @@ where
 
                 while !will_end_thread {
                     while !(state_machine.is_empty() && (will_end_session || will_end_thread)) {
-                        log();
+                        interval_log!();
                         select_biased! {
                             recv(handled_blocked_transaction_receiver) -> execution_environment => {
                                 let execution_environment = execution_environment.unwrap();
