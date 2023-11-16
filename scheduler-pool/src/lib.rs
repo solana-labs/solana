@@ -660,6 +660,7 @@ where
                         }
                         log_interval_counter += 1;
                     }
+                    () => { interval_log!("interval"); }
                 };
 
                 while !will_end_thread {
