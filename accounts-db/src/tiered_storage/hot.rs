@@ -449,7 +449,7 @@ pub mod tests {
             .map(|_| {
                 HotAccountMeta::new()
                     .with_lamports(rng.gen_range(0..u64::MAX))
-                    .with_owner_offset(OwnerOffset(rng.gen_range(2..NUM_ACCOUNTS)))
+                    .with_owner_offset(OwnerOffset(rng.gen_range(0..NUM_ACCOUNTS)))
             })
             .collect();
 
