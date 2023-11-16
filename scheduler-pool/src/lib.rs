@@ -656,7 +656,7 @@ where
                 macro_rules! interval_log {
                     () => {
                         if log_interval_counter % 1000 == 0 {
-                            info!("slto: {} processed: {} retryable: {}, active: {}", slot, state_machine.handled_task_count(), state_machine.retryable_task_count(), state_machine.active_task_count());
+                            info!("slto: {} processed: {} retryable: {}, active: {}", current_slot, state_machine.handled_task_count(), state_machine.retryable_task_count(), state_machine.active_task_count());
                         }
                         log_interval_counter += 1;
                     }
@@ -734,7 +734,7 @@ where
                                             new_channel.channel_and_payload();
                                         match control_frame {
                                             ControlFrame::StartSession(context) => {
-                                                current_slot = context.bank.slot();
+                                                current_slot = context.bank().slot();
                                                 Self::propagate_context(
                                                     &mut blocked_transaction_sessioned_sender,
                                                     context,
