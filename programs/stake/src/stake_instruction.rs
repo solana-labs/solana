@@ -12,7 +12,6 @@ use {
         declare_process_instruction, sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
-        clock::Clock,
         feature_set,
         instruction::InstructionError,
         program_utils::limited_deserialize,
@@ -78,78 +77,41 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
         }
         Ok(StakeInstruction::Authorize(authorized_pubkey, stake_authorize)) => {
             let mut me = get_stake_account()?;
-            let require_custodian_for_locked_stake_authorize = invoke_context
-                .feature_set
-                .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
+            let clock =
+                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
+            instruction_context.check_number_of_instruction_accounts(3)?;
+            let custodian_pubkey =
+                get_optional_pubkey(transaction_context, instruction_context, 3, false)?;
 
-            if require_custodian_for_locked_stake_authorize {
-                let clock =
-                    get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
-                instruction_context.check_number_of_instruction_accounts(3)?;
-                let custodian_pubkey =
-                    get_optional_pubkey(transaction_context, instruction_context, 3, false)?;
-
-                authorize(
-                    &mut me,
-                    &signers,
-                    &authorized_pubkey,
-                    stake_authorize,
-                    require_custodian_for_locked_stake_authorize,
-                    &clock,
-                    custodian_pubkey,
-                )
-            } else {
-                authorize(
-                    &mut me,
-                    &signers,
-                    &authorized_pubkey,
-                    stake_authorize,
-                    require_custodian_for_locked_stake_authorize,
-                    &Clock::default(),
-                    None,
-                )
-            }
+            authorize(
+                &mut me,
+                &signers,
+                &authorized_pubkey,
+                stake_authorize,
+                &clock,
+                custodian_pubkey,
+            )
         }
         Ok(StakeInstruction::AuthorizeWithSeed(args)) => {
             let mut me = get_stake_account()?;
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let require_custodian_for_locked_stake_authorize = invoke_context
-                .feature_set
-                .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
-            if require_custodian_for_locked_stake_authorize {
-                let clock =
-                    get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
-                let custodian_pubkey =
-                    get_optional_pubkey(transaction_context, instruction_context, 3, false)?;
+            let clock =
+                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
+            let custodian_pubkey =
+                get_optional_pubkey(transaction_context, instruction_context, 3, false)?;
 
-                authorize_with_seed(
-                    transaction_context,
-                    instruction_context,
-                    &mut me,
-                    1,
-                    &args.authority_seed,
-                    &args.authority_owner,
-                    &args.new_authorized_pubkey,
-                    args.stake_authorize,
-                    require_custodian_for_locked_stake_authorize,
-                    &clock,
-                    custodian_pubkey,
-                )
-            } else {
-                authorize_with_seed(
-                    transaction_context,
-                    instruction_context,
-                    &mut me,
-                    1,
-                    &args.authority_seed,
-                    &args.authority_owner,
-                    &args.new_authorized_pubkey,
-                    args.stake_authorize,
-                    require_custodian_for_locked_stake_authorize,
-                    &Clock::default(),
-                    None,
-                )
-            }
+            authorize_with_seed(
+                transaction_context,
+                instruction_context,
+                &mut me,
+                1,
+                &args.authority_seed,
+                &args.authority_owner,
+                &args.new_authorized_pubkey,
+                args.stake_authorize,
+                &clock,
+                custodian_pubkey,
+            )
         }
         Ok(StakeInstruction::DelegateStake) => {
             let me = get_stake_account()?;
@@ -316,7 +278,6 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                     &signers,
                     authorized_pubkey,
                     stake_authorize,
-                    true,
                     &clock,
                     custodian_pubkey,
                 )
@@ -352,7 +313,6 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                     &args.authority_owner,
                     authorized_pubkey,
                     args.stake_authorize,
-                    true,
                     &clock,
                     custodian_pubkey,
                 )
@@ -460,7 +420,7 @@ mod tests {
                 WritableAccount,
             },
             account_utils::StateMut,
-            clock::{Epoch, UnixTimestamp},
+            clock::{Clock, Epoch, UnixTimestamp},
             epoch_schedule::EpochSchedule,
             feature_set::FeatureSet,
             instruction::{AccountMeta, Instruction},
