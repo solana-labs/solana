@@ -16,7 +16,7 @@ use {
     tonic::{codegen::InterceptedService, transport::ClientTlsConfig, Request, Status},
 };
 
-#[allow(clippy::derive_partial_eq_without_eq)]
+#[allow(clippy::derive_partial_eq_without_eq, clippy::enum_variant_names)]
 mod google {
     mod rpc {
         include!(concat!(
