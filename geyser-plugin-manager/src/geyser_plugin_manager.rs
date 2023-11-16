@@ -110,10 +110,10 @@ impl GeyserPluginManager {
         // Initialize logging for the plugin
         new_plugin
             .setup_logger(log::logger(), log::max_level())
-            .map_err(|on_load_err| jsonrpc_core::Error {
+            .map_err(|setup_logger_err| jsonrpc_core::Error {
                 code: ErrorCode::InvalidRequest,
                 message: format!(
-                    "setup_logger method of plugin {} failed: {on_load_err}",
+                    "setup_logger method of plugin {} failed: {setup_logger_err}",
                     new_plugin.name()
                 ),
                 data: None,
@@ -208,10 +208,10 @@ impl GeyserPluginManager {
         // Initialize logging for the plugin
         new_plugin
             .setup_logger(log::logger(), log::max_level())
-            .map_err(|on_load_err| jsonrpc_core::Error {
+            .map_err(|setup_logger_err| jsonrpc_core::Error {
                 code: ErrorCode::InvalidRequest,
                 message: format!(
-                    "setup_logger method of plugin {} failed: {on_load_err}",
+                    "setup_logger method of plugin {} failed: {setup_logger_err}",
                     new_plugin.name()
                 ),
                 data: None,
