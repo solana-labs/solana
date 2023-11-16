@@ -1185,7 +1185,6 @@ impl Accounts {
             }
         }
 
-        info!("self_conflicting_tx {}", self_conflicting_tx);
         (Ok(()),self_conflicting_tx)
     }
 
