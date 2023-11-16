@@ -501,22 +501,22 @@ enum SlotsOffsets {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, AbiExample)]
-struct U32(#[serde(with = "serde_varint")] u32);
+struct U16(#[serde(with = "serde_varint")] u16);
 
 // The vector always starts with 1. Encode number of 1's and 0's consecutively.
 // For example, 110000111 is [2, 4, 3].
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, AbiExample)]
-struct RunLengthEncoding(Vec<U32>);
+struct RunLengthEncoding(Vec<U16>);
 
 impl RunLengthEncoding {
     fn new(bits: &BitVec<u8>) -> Self {
         let encoded = (0..bits.len())
             .map(|i| bits.get(i))
             .dedup_with_count()
-            .map_while(|(count, _)| u32::try_from(count).ok())
+            .map_while(|(count, _)| u16::try_from(count).ok())
             .scan(0, |current_bytes, count| {
-                *current_bytes += ((u32::BITS - count.leading_zeros() + 6) / 7).max(1) as usize;
-                (*current_bytes <= RestartLastVotedForkSlots::MAX_BYTES).then_some(U32(count))
+                *current_bytes += ((u16::BITS - count.leading_zeros() + 6) / 7).max(1) as usize;
+                (*current_bytes <= RestartLastVotedForkSlots::MAX_BYTES).then_some(U16(count))
             })
             .collect();
         Self(encoded)
@@ -542,7 +542,7 @@ impl RunLengthEncoding {
                 let offset = Slot::try_from(offset).ok()?;
                 last_slot.checked_sub(offset)
             })
-            .take(MAX_SLOTS_RESTART_LAST_VOTED_FORK_SLOTS)
+            .take(RestartLastVotedForkSlots::MAX_SLOTS)
             .take_while(|slot| *slot >= min_slot)
             .collect();
         slots.reverse();
@@ -571,9 +571,6 @@ impl RawOffsets {
     }
 }
 
-// Per design doc, we should start wen_restart within 9 hours.
-pub const MAX_SLOTS_RESTART_LAST_VOTED_FORK_SLOTS: usize = 81000;
-
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, AbiExample, Debug)]
 pub struct RestartLastVotedForkSlots {
     pub from: Pubkey,
@@ -599,6 +596,9 @@ pub enum RestartLastVotedForkSlotsError {
 impl RestartLastVotedForkSlots {
     // This number is MAX_CRDS_OBJECT_SIZE - empty serialized RestartLastVotedForkSlots.
     const MAX_BYTES: usize = 824;
+
+    // Per design doc, we should start wen_restart within 7 hours.
+    pub const MAX_SLOTS: usize = 65535;
 
     pub fn new(
         from: Pubkey,
@@ -1377,7 +1377,7 @@ mod test {
         check_run_length_encoding(
             [
                 1000 as Slot,
-                MAX_SLOTS_RESTART_LAST_VOTED_FORK_SLOTS as Slot + 999,
+                RestartLastVotedForkSlots::MAX_SLOTS as Slot + 999,
             ]
             .into(),
         );
