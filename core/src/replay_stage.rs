@@ -67,6 +67,7 @@ use {
     },
     solana_sdk::{
         clock::{BankId, Slot, MAX_PROCESSING_AGE, NUM_CONSECUTIVE_LEADER_SLOTS},
+        feature_set::FeatureSet,
         genesis_config::ClusterType,
         hash::Hash,
         pubkey::Pubkey,
@@ -114,6 +115,7 @@ pub enum HeaviestForkFailures {
     LockedOut(u64),
     FailedThreshold(
         Slot,
+        /* vote depth */ u64,
         /* Observed stake */ u64,
         /* Total stake */ u64,
     ),
@@ -3226,7 +3228,13 @@ impl ReplayStage {
                                 // Since we are updating our tower we need to update associated caches for previously computed
                                 // slots as well.
                                 for slot in frozen_banks.iter().map(|b| b.slot()) {
-                                    Self::cache_tower_stats(progress, tower, slot, ancestors);
+                                    Self::cache_tower_stats(
+                                        progress,
+                                        tower,
+                                        slot,
+                                        ancestors,
+                                        &bank.feature_set,
+                                    );
                                 }
                             }
                         }
@@ -3288,7 +3296,7 @@ impl ReplayStage {
                 cluster_slots,
             );
 
-            Self::cache_tower_stats(progress, tower, bank_slot, ancestors);
+            Self::cache_tower_stats(progress, tower, bank_slot, ancestors, &bank.feature_set);
         }
         new_stats
     }
@@ -3298,13 +3306,18 @@ impl ReplayStage {
         tower: &Tower,
         slot: Slot,
         ancestors: &HashMap<u64, HashSet<u64>>,
+        feature_set: &Arc<FeatureSet>,
     ) {
         let stats = progress
             .get_fork_stats_mut(slot)
             .expect("All frozen banks must exist in the Progress map");
 
-        stats.vote_threshold =
-            tower.check_vote_stake_threshold(slot, &stats.voted_stakes, stats.total_stake);
+        stats.vote_threshold = tower.check_vote_stake_thresholds(
+            slot,
+            &stats.voted_stakes,
+            stats.total_stake,
+            Some(feature_set),
+        );
         stats.is_locked_out = tower.is_locked_out(
             slot,
             ancestors
@@ -3645,9 +3658,10 @@ impl ReplayStage {
             if is_locked_out {
                 failure_reasons.push(HeaviestForkFailures::LockedOut(candidate_vote_bank.slot()));
             }
-            if let ThresholdDecision::FailedThreshold(fork_stake) = vote_threshold {
+            if let ThresholdDecision::FailedThreshold(vote_depth, fork_stake) = vote_threshold {
                 failure_reasons.push(HeaviestForkFailures::FailedThreshold(
                     candidate_vote_bank.slot(),
+                    vote_depth,
                     fork_stake,
                     total_threshold_stake,
                 ));
