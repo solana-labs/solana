@@ -11,7 +11,7 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::Ancestors,
         nonce_info::{NonceFull, NonceInfo},
-        rent_collector::{RentCollector, RENT_EXEMPT_RENT_EPOCH},
+        rent_collector::RentCollector,
         rent_debits::RentDebits,
         storable_accounts::StorableAccounts,
         transaction_results::TransactionExecutionResult,
