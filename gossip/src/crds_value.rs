@@ -4,7 +4,7 @@ use {
         contact_info::ContactInfo,
         deprecated,
         duplicate_shred::{DuplicateShred, DuplicateShredIndex, MAX_DUPLICATE_SHREDS},
-        epoch_slots::{EpochSlots, MAX_SLOTS_PER_ENTRY},
+        epoch_slots::EpochSlots,
         legacy_contact_info::LegacyContactInfo,
     },
     bincode::{serialize, serialized_size},
@@ -538,7 +538,6 @@ impl RunLengthEncoding {
                 let offset = Slot::try_from(offset).ok()?;
                 last_slot.checked_sub(offset)
             })
-            .take(MAX_SLOTS_PER_ENTRY)
             .take_while(|slot| *slot >= min_slot)
             .collect();
         slots.reverse();
@@ -561,7 +560,6 @@ impl RawOffsets {
             .filter(|index| self.0.get(*index))
             .map_while(|offset| last_slot.checked_sub(offset))
             .take_while(|slot| *slot >= min_slot)
-            .take(MAX_SLOTS_PER_ENTRY)
             .collect();
         slots.reverse();
         slots
@@ -1366,13 +1364,9 @@ mod test {
 
     #[test]
     fn test_run_length_encoding() {
-        check_run_length_encoding(
-            (1000..MAX_SLOTS_PER_ENTRY + 1000)
-                .map(|x| x as Slot)
-                .collect_vec(),
-        );
+        check_run_length_encoding((1000..16384 + 1000).map(|x| x as Slot).collect_vec());
         check_run_length_encoding([1000 as Slot].into());
-        check_run_length_encoding([1000 as Slot, (MAX_SLOTS_PER_ENTRY * 2 + 1000) as Slot].into());
+        check_run_length_encoding([1000 as Slot, 32968 as Slot].into());
         check_run_length_encoding((1000..1800).step_by(2).map(|x| x as Slot).collect_vec());
 
         let mut rng = rand::thread_rng();
