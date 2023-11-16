@@ -33,8 +33,7 @@ use {
         },
         crds_value::{
             self, AccountsHashes, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot,
-            NodeInstance, RestartLastVotedForkSlots, RestartLastVotedForkSlotsError,
-            SnapshotHashes, Version, Vote, MAX_WALLCLOCK,
+            NodeInstance, SnapshotHashes, Version, Vote, MAX_WALLCLOCK,
         },
         duplicate_shred::DuplicateShred,
         epoch_slots::EpochSlots,
@@ -42,6 +41,7 @@ use {
         ping_pong::{self, PingCache, Pong},
         socketaddr, socketaddr_any,
         weighted_shuffle::WeightedShuffle,
+        wen_restart_values::{RestartLastVotedForkSlots, RestartLastVotedForkSlotsError},
     },
     bincode::{serialize, serialized_size},
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
@@ -268,7 +268,7 @@ pub fn make_accounts_hashes_message(
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "HvA9JnnQrJnmkcGxrp8SmTB1b4iSyQ4VK2p6LpSBaoWR")]
+#[frozen_abi(digest = "ABmh5Ws5sr2wm3egFmUxTcijWFhAF36aNo8qo6v9j67R")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
