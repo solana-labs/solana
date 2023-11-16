@@ -24,9 +24,7 @@ use {
         address_lookup_table::{self, error::AddressLookupError, state::AddressLookupTable},
         clock::{BankId, Slot},
         genesis_config::ClusterType,
-        message::{
-            v0::{LoadedAddresses, MessageAddressTableLookup},
-        },
+        message::v0::{LoadedAddresses, MessageAddressTableLookup},
         nonce::{
             state::{DurableNonce, Versions as NonceVersions},
             State as NonceState,

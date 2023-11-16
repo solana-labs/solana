@@ -6,9 +6,7 @@ use {
     log::warn,
     solana_accounts_db::{
         account_overrides::AccountOverrides,
-        accounts::{
-            LoadedTransaction, RewardInterval, TransactionLoadResult, TransactionRent,
-        },
+        accounts::{LoadedTransaction, RewardInterval, TransactionLoadResult, TransactionRent},
         accounts_db::AccountsDb,
         ancestors::Ancestors,
         blockhash_queue::BlockhashQueue,
@@ -548,9 +546,8 @@ mod tests {
         super::*,
         nonce::state::Versions as NonceVersions,
         solana_accounts_db::{
-            accounts_db::AccountShrinkThreshold, accounts_index::AccountSecondaryIndexes,
-            rent_collector::RentCollector,
-            accounts::Accounts,
+            accounts::Accounts, accounts_db::AccountShrinkThreshold,
+            accounts_index::AccountSecondaryIndexes, rent_collector::RentCollector,
         },
         solana_program_runtime::{
             compute_budget_processor,
