@@ -84,13 +84,13 @@ pub enum Error {
     Timeout,
 }
 
-fn check_table_not_found<T>(result: Result<T>) -> std::result::Result<T, BackoffError<Error>> {
-    if let Err(Error::Rpc(ref err)) = result {
-        if err.code() == tonic::Code::NotFound && err.message().starts_with("table") {
-            return Err(BackoffError::Permanent(Error::Rpc(err.clone())));
+fn to_backoff_err(err: Error) -> BackoffError<Error> {
+    if let Error::Rpc(ref status) = err {
+        if status.code() == tonic::Code::NotFound && status.message().starts_with("table") {
+            return BackoffError::Permanent(err);
         }
     }
-    Ok(result?)
+    err.into()
 }
 
 impl std::convert::From<std::io::Error> for Error {
@@ -275,7 +275,7 @@ impl BigTableConnection {
         retry(ExponentialBackoff::default(), || async {
             let mut client = self.client();
             let result = client.put_bincode_cells(table, cells).await;
-            check_table_not_found(result)
+            result.map_err(to_backoff_err)
         })
         .await
     }
@@ -314,7 +314,7 @@ impl BigTableConnection {
         retry(ExponentialBackoff::default(), || async {
             let mut client = self.client();
             let result = client.put_protobuf_cells(table, cells).await;
-            check_table_not_found(result)
+            result.map_err(to_backoff_err)
         })
         .await
     }
