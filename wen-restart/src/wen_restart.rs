@@ -12,7 +12,7 @@ use {
     prost::Message,
     solana_gossip::{
         cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
-        epoch_slots::MAX_SLOTS_PER_ENTRY,
+        crds_value::RestartLastVotedForkSlots,
     },
     solana_ledger::{ancestor_iterator::AncestorIterator, blockstore::Blockstore},
     solana_program::{clock::Slot, hash::Hash},
@@ -54,7 +54,7 @@ fn send_restart_last_voted_fork_slots(
                 .expect("wen_restart doesn't work if local tower is wiped");
             last_vote_hash = last_vote.hash();
             last_vote_fork_slots = AncestorIterator::new_inclusive(last_vote_slot, &blockstore)
-                .take(MAX_SLOTS_PER_ENTRY)
+                .take(RestartLastVotedForkSlots::MAX_SLOTS)
                 .collect();
         }
     }
@@ -62,7 +62,7 @@ fn send_restart_last_voted_fork_slots(
         "wen_restart last voted fork {} {:?}",
         last_vote_hash, last_vote_fork_slots
     );
-    cluster_info.push_restart_last_voted_fork_slots(&last_vote_fork_slots, last_vote_hash);
+    cluster_info.push_restart_last_voted_fork_slots(&last_vote_fork_slots, last_vote_hash)?;
     progress.my_last_voted_fork_slots = Some(LastVotedForkSlotsRecord {
         last_vote_fork_slots,
         last_vote_bankhash: last_vote.hash().to_string(),
@@ -291,17 +291,23 @@ mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = BankForks::new_rw_arc(bank);
         let expected_slots = 400;
-        let last_vote_slot = (MAX_SLOTS_PER_ENTRY + expected_slots).try_into().unwrap();
-        let last_parent = (MAX_SLOTS_PER_ENTRY >> 1).try_into().unwrap();
+        let last_vote_slot = (RestartLastVotedForkSlots::MAX_SLOTS + expected_slots)
+            .try_into()
+            .unwrap();
+        let last_parent = (RestartLastVotedForkSlots::MAX_SLOTS >> 1)
+            .try_into()
+            .unwrap();
         let mut last_vote_fork_slots = Vec::new();
         for i in 0..expected_slots {
             let entries = entry::create_ticks(1, 0, Hash::default());
             let parent_slot = if i > 0 {
-                (MAX_SLOTS_PER_ENTRY + i).try_into().unwrap()
+                (RestartLastVotedForkSlots::MAX_SLOTS + i)
+                    .try_into()
+                    .unwrap()
             } else {
                 last_parent
             };
-            let slot = (MAX_SLOTS_PER_ENTRY + i + 1) as Slot;
+            let slot = (RestartLastVotedForkSlots::MAX_SLOTS + i + 1) as Slot;
             let shreds = blockstore::entries_to_test_shreds(
                 &entries,
                 slot,
@@ -313,7 +319,7 @@ mod tests {
             blockstore.insert_shreds(shreds, None, false).unwrap();
             last_vote_fork_slots.push(slot);
         }
-        // link directly to slot 1 whose distance to last_vote > MAX_SLOTS_PER_ENTRY so it will not be included.
+        // link directly to slot 1 whose distance to last_vote > RestartLastVotedForkSlots::MAX_SLOTS so it will not be included.
         let entries = entry::create_ticks(1, 0, Hash::default());
         let shreds = blockstore::entries_to_test_shreds(
             &entries,
