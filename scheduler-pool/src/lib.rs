@@ -769,7 +769,7 @@ where
                     }
 
                     if !will_end_thread {
-                        (state_machine, log_interval_counter) = (SchedulingStateMachine::default(), 0);
+                        (state_machine, log_interval_counter) = Default::default();
                         result_sender
                             .send(
                                 result_with_timings
