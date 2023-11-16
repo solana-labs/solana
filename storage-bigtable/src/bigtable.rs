@@ -6,7 +6,7 @@ use {
         compression::{compress_best, decompress},
         root_ca_certificate, CredentialType,
     },
-    backoff::{future::retry, ExponentialBackoff},
+    backoff::{future::retry, Error as BackoffError, ExponentialBackoff},
     log::*,
     std::{
         str::FromStr,
@@ -82,6 +82,15 @@ pub enum Error {
 
     #[error("Timeout")]
     Timeout,
+}
+
+fn to_backoff_err(err: Error) -> BackoffError<Error> {
+    if let Error::Rpc(ref status) = err {
+        if status.code() == tonic::Code::NotFound && status.message().starts_with("table") {
+            return BackoffError::Permanent(err);
+        }
+    }
+    err.into()
 }
 
 impl std::convert::From<std::io::Error> for Error {
@@ -265,7 +274,8 @@ impl BigTableConnection {
     {
         retry(ExponentialBackoff::default(), || async {
             let mut client = self.client();
-            Ok(client.put_bincode_cells(table, cells).await?)
+            let result = client.put_bincode_cells(table, cells).await;
+            result.map_err(to_backoff_err)
         })
         .await
     }
@@ -303,7 +313,8 @@ impl BigTableConnection {
     {
         retry(ExponentialBackoff::default(), || async {
             let mut client = self.client();
-            Ok(client.put_protobuf_cells(table, cells).await?)
+            let result = client.put_protobuf_cells(table, cells).await;
+            result.map_err(to_backoff_err)
         })
         .await
     }
