@@ -774,6 +774,7 @@ where
                     }
 
                     if !will_end_thread {
+                        log_scheduler!("final");
                         (state_machine, log_interval_counter) = <_>::default();
                         result_sender
                             .send(
