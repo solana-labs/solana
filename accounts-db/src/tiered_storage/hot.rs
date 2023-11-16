@@ -34,7 +34,7 @@ pub const HOT_FORMAT: TieredStorageFormat = TieredStorageFormat {
 const MAX_HOT_PADDING: u8 = 7;
 
 /// The maximum allowed value for the owner index of a hot account.
-const MAX_HOT_OWNER_OFFSET: u32 = (1 << 29) - 1;
+const MAX_HOT_OWNER_OFFSET: OwnerOffset = OwnerOffset((1 << 29) - 1);
 
 #[bitfield(bits = 32)]
 #[repr(C)]
@@ -95,7 +95,7 @@ impl TieredAccountMeta for HotAccountMeta {
 
     /// A builder function that initializes the owner's index.
     fn with_owner_offset(mut self, owner_offset: OwnerOffset) -> Self {
-        if owner_offset.0 > MAX_HOT_OWNER_OFFSET {
+        if owner_offset.0 > MAX_HOT_OWNER_OFFSET.0 {
             panic!("owner_offset exceeds MAX_HOT_OWNER_OFFSET");
         }
         self.packed_fields.set_owner_offset(owner_offset.0);
@@ -297,19 +297,19 @@ pub mod tests {
     fn test_packed_fields_max_values() {
         let mut packed_fields = HotMetaPackedFields::default();
         packed_fields.set_padding(MAX_HOT_PADDING);
-        packed_fields.set_owner_offset(MAX_HOT_OWNER_OFFSET);
+        packed_fields.set_owner_offset(MAX_HOT_OWNER_OFFSET.0);
         assert_eq!(packed_fields.padding(), MAX_HOT_PADDING);
-        assert_eq!(packed_fields.owner_offset(), MAX_HOT_OWNER_OFFSET);
+        assert_eq!(packed_fields.owner_offset(), MAX_HOT_OWNER_OFFSET.0);
     }
 
     #[test]
     fn test_hot_meta_max_values() {
         let meta = HotAccountMeta::new()
             .with_account_data_padding(MAX_HOT_PADDING)
-            .with_owner_offset(OwnerOffset(MAX_HOT_OWNER_OFFSET));
+            .with_owner_offset(MAX_HOT_OWNER_OFFSET);
 
         assert_eq!(meta.account_data_padding(), MAX_HOT_PADDING);
-        assert_eq!(meta.owner_offset(), OwnerOffset(MAX_HOT_OWNER_OFFSET));
+        assert_eq!(meta.owner_offset(), MAX_HOT_OWNER_OFFSET);
     }
 
     #[test]
@@ -321,7 +321,7 @@ pub mod tests {
     #[test]
     #[should_panic(expected = "owner_offset exceeds MAX_HOT_OWNER_OFFSET")]
     fn test_hot_meta_owner_offset_exceeds_limit() {
-        HotAccountMeta::new().with_owner_offset(OwnerOffset(MAX_HOT_OWNER_OFFSET + 1));
+        HotAccountMeta::new().with_owner_offset(OwnerOffset(MAX_HOT_OWNER_OFFSET.0 + 1));
     }
 
     #[test]
