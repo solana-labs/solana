@@ -201,7 +201,6 @@ impl Accounts {
         }
     }
 
-
     pub fn load_lookup_table_addresses(
         &self,
         ancestors: &Ancestors,

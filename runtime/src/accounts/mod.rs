@@ -34,6 +34,7 @@ use {
         native_loader,
         nonce::State as NonceState,
         pubkey::Pubkey,
+        rent::RentDue,
         saturating_add_assign,
         sysvar::{self, instructions::construct_instructions_data},
         transaction::{Result, SanitizedTransaction, TransactionError},
@@ -58,6 +59,7 @@ pub(super) fn load_accounts(
     in_reward_interval: RewardInterval,
     program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
     loaded_programs: &LoadedProgramsForTxBatch,
+    should_collect_rent: bool,
 ) -> Vec<TransactionLoadResult> {
     txs.iter()
         .zip(lock_results)
@@ -101,6 +103,7 @@ pub(super) fn load_accounts(
                     in_reward_interval,
                     program_accounts,
                     loaded_programs,
+                    should_collect_rent,
                 ) {
                     Ok(loaded_transaction) => loaded_transaction,
                     Err(e) => return (Err(e), None),
@@ -141,6 +144,7 @@ fn load_transaction_accounts(
     reward_interval: RewardInterval,
     program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
     loaded_programs: &LoadedProgramsForTxBatch,
+    should_collect_rent: bool,
 ) -> Result<LoadedTransaction> {
     let in_reward_interval = reward_interval == RewardInterval::InsideInterval;
 
@@ -209,15 +213,31 @@ fn load_transaction_accounts(
                         .load_with_fixed_root(ancestors, key)
                         .map(|(mut account, _)| {
                             if message.is_writable(i) {
-                                let rent_due = rent_collector
-                                    .collect_from_existing_account(
-                                        key,
-                                        &mut account,
-                                        accounts_db.filler_account_suffix.as_ref(),
-                                        set_exempt_rent_epoch_max,
-                                    )
-                                    .rent_amount;
-                                (account.data().len(), account, rent_due)
+                                if should_collect_rent {
+                                    let rent_due = rent_collector
+                                        .collect_from_existing_account(
+                                            key,
+                                            &mut account,
+                                            accounts_db.filler_account_suffix.as_ref(),
+                                            set_exempt_rent_epoch_max,
+                                        )
+                                        .rent_amount;
+
+                                    (account.data().len(), account, rent_due)
+                                } else {
+                                    // When rent fee collection is disabled, we won't collect rent for any account. If there
+                                    // are any rent paying accounts, their `rent_epoch` won't change either. However, if the
+                                    // account itself is rent-exempted but its `rent_epoch` is not u64::MAX, we will set its
+                                    // `rent_epoch` to u64::MAX. In such case, the behavior stays the same as before.
+                                    if set_exempt_rent_epoch_max
+                                        && (account.rent_epoch() != RENT_EXEMPT_RENT_EPOCH
+                                            && rent_collector.get_rent_due(&account)
+                                                == RentDue::Exempt)
+                                    {
+                                        account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
+                                    }
+                                    (account.data().len(), account, 0)
+                                }
                             } else {
                                 (account.data().len(), account, 0)
                             }
@@ -598,6 +618,7 @@ mod tests {
             RewardInterval::OutsideInterval,
             &HashMap::new(),
             &LoadedProgramsForTxBatch::default(),
+            true,
         )
     }
 
@@ -1377,6 +1398,7 @@ mod tests {
             RewardInterval::OutsideInterval,
             &HashMap::new(),
             &LoadedProgramsForTxBatch::default(),
+            true,
         )
     }
 
