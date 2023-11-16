@@ -85,8 +85,11 @@ impl SchedulerController {
                 break;
             }
 
-            self.count_metrics.maybe_report_and_reset();
-            self.timing_metrics.maybe_report_and_reset();
+            // Report metrics only if there is data.
+            // Reset intervals when appropriate, regardless of report.
+            let should_report = self.count_metrics.has_data();
+            self.count_metrics.maybe_report_and_reset(should_report);
+            self.timing_metrics.maybe_report_and_reset(should_report);
         }
 
         Ok(())
@@ -243,10 +246,12 @@ struct SchedulerCountMetrics {
 }
 
 impl SchedulerCountMetrics {
-    fn maybe_report_and_reset(&mut self) {
+    fn maybe_report_and_reset(&mut self, should_report: bool) {
         const REPORT_INTERVAL_MS: u64 = 1000;
         if self.interval.should_update(REPORT_INTERVAL_MS) {
-            self.report();
+            if should_report {
+                self.report();
+            }
             self.reset();
         }
     }
@@ -268,6 +273,18 @@ impl SchedulerCountMetrics {
             ("num_dropped_on_clear", self.num_dropped_on_clear, i64),
             ("num_dropped_on_capacity", self.num_dropped_on_capacity, i64)
         );
+    }
+
+    fn has_data(&self) -> bool {
+        self.num_received != 0
+            || self.num_buffered != 0
+            || self.num_scheduled != 0
+            || self.num_finished != 0
+            || self.num_retryable != 0
+            || self.num_dropped_on_receive != 0
+            || self.num_dropped_on_sanitization != 0
+            || self.num_dropped_on_clear != 0
+            || self.num_dropped_on_capacity != 0
     }
 
     fn reset(&mut self) {
@@ -301,10 +318,12 @@ struct SchedulerTimingMetrics {
 }
 
 impl SchedulerTimingMetrics {
-    fn maybe_report_and_reset(&mut self) {
+    fn maybe_report_and_reset(&mut self, should_report: bool) {
         const REPORT_INTERVAL_MS: u64 = 1000;
         if self.interval.should_update(REPORT_INTERVAL_MS) {
-            self.report();
+            if should_report {
+                self.report();
+            }
             self.reset();
         }
     }
