@@ -926,6 +926,11 @@ pub const fn get_ancient_append_vec_capacity() -> u64 {
     // 128MB for the ancient append vec size.
     const RESULT: u64 = 128 * 1024 * 1024;
 
+    use crate::append_vec::MAXIMUM_APPEND_VEC_FILE_SIZE;
+    const _: () = assert!(
+        RESULT < MAXIMUM_APPEND_VEC_FILE_SIZE,
+        "ancient append vec size should be less than the maximum append vec size"
+    );
     const PAGE_SIZE: u64 = 4 * 1024;
     const _: () = assert!(
         RESULT % PAGE_SIZE == 0,
