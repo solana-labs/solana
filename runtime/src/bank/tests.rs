@@ -7749,25 +7749,26 @@ fn test_compute_active_feature_set() {
     let feature = Feature::default();
     assert_eq!(feature.activated_at, None);
     bank.store_account(&test_feature, &feature::create_account(&feature, 42));
-
-    // Run `compute_active_feature_set` disallowing new activations
-    let (feature_set, new_activations) = bank.compute_active_feature_set(false);
-    assert!(new_activations.is_empty());
-    assert!(!feature_set.is_active(&test_feature));
     let feature = feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
         .expect("from_account");
     assert_eq!(feature.activated_at, None);
 
-    // Run `compute_active_feature_set` allowing new activations
-    let (feature_set, new_activations) = bank.compute_active_feature_set(true);
+    // Run `compute_active_feature_set` excluding pending activation
+    let (feature_set, new_activations) = bank.compute_active_feature_set(false);
+    assert!(new_activations.is_empty());
+    assert!(!feature_set.is_active(&test_feature));
+
+    // Run `compute_active_feature_set` including pending activation
+    let (_feature_set, new_activations) = bank.compute_active_feature_set(true);
     assert_eq!(new_activations.len(), 1);
-    assert!(feature_set.is_active(&test_feature));
+    assert!(new_activations.contains(&test_feature));
+
+    // Actually activate the pending activation
+    bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, true);
     let feature = feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
         .expect("from_account");
     assert_eq!(feature.activated_at, Some(1));
 
-    // Running `compute_active_feature_set` will not cause new activations, but
-    // `test_feature` is now be active
     let (feature_set, new_activations) = bank.compute_active_feature_set(true);
     assert!(new_activations.is_empty());
     assert!(feature_set.is_active(&test_feature));
