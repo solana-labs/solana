@@ -664,7 +664,7 @@ where
                     () => { 
                         if log_interval_counter == 0 {
                             log_scheduler!("started ");
-                        else if log_interval_counter % 1000 == 0 {
+                        } else if log_interval_counter % 1000 == 0 {
                             log_scheduler!("interval");
                         }
                         log_interval_counter += 1;
