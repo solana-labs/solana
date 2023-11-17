@@ -5,18 +5,21 @@ use {
     },
     solana_program_runtime::loaded_programs::LoadedProgramsForTxBatch,
     solana_sdk::{
+        hash::Hash,
         instruction::{CompiledInstruction, TRANSACTION_LEVEL_STACK_HEIGHT},
         transaction::{self, TransactionError},
         transaction_context::{TransactionContext, TransactionReturnData},
     },
+    solana_transaction_receipt::TransactionReceiptData,
 };
 
 pub type TransactionCheckResult = (transaction::Result<()>, Option<NoncePartial>);
-
+pub type TransactionReceiptQueueEntry = (Hash, TransactionReceiptData);
 pub struct TransactionResults {
     pub fee_collection_results: Vec<transaction::Result<()>>,
     pub execution_results: Vec<TransactionExecutionResult>,
     pub rent_debits: Vec<RentDebits>,
+    pub transaction_receipts: Vec<TransactionReceiptQueueEntry>,
 }
 
 /// Type safe representation of a transaction execution attempt which

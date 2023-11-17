@@ -57,6 +57,7 @@ solana-sdk = { workspace = true }
 solana-stake-program = { workspace = true }
 solana-system-program = { workspace = true }
 solana-vote-program = { workspace = true }
+solana-transaction-receipt = { workspace = true }
 static_assertions = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 strum_macros = { workspace = true }

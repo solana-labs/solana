@@ -1,3 +1,5 @@
+use solana_accounts_db::transaction_results::TransactionReceiptQueueEntry;
+
 use {
     crate::{
         block_error::BlockError,
@@ -94,20 +96,21 @@ lazy_static! {
         .unwrap();
 }
 
-fn first_err(results: &[Result<()>]) -> Result<()> {
+fn first_err<T: Clone + Default>(results: &[Result<T>]) -> Result<T> {
     for r in results {
-        if r.is_err() {
-            return r.clone();
+        if let Err(e) = r {
+            return Err(e.clone());
         }
     }
-    Ok(())
+    Ok(T::default())
 }
 
 // Includes transaction signature for unit-testing
 fn get_first_error(
     batch: &TransactionBatch,
     fee_collection_results: Vec<Result<()>>,
-) -> Option<(Result<()>, Signature)> {
+    transaction_receipts: Vec<TransactionReceiptQueueEntry>,
+) -> Option<(Result<Vec<TransactionReceiptQueueEntry>>, Signature)> {
     let mut first_err = None;
     for (result, transaction) in fee_collection_results
         .iter()
@@ -115,7 +118,7 @@ fn get_first_error(
     {
         if let Err(ref err) = result {
             if first_err.is_none() {
-                first_err = Some((result.clone(), *transaction.signature()));
+                first_err = Some((Ok(transaction_receipts.clone()), *transaction.signature()));
             }
             warn!(
                 "Unexpected validator error: {:?}, transaction: {:?}",
@@ -142,7 +145,7 @@ fn execute_batch(
     timings: &mut ExecuteTimings,
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
-) -> Result<()> {
+) -> Result<Vec<TransactionReceiptQueueEntry>> {
     let TransactionBatchWithIndexes {
         batch,
         transaction_indexes,
@@ -178,6 +181,7 @@ fn execute_batch(
         fee_collection_results,
         execution_results,
         rent_debits,
+        transaction_receipts,
         ..
     } = tx_results;
 
@@ -211,8 +215,10 @@ fn execute_batch(
 
     prioritization_fee_cache.update(bank, executed_transactions.into_iter());
 
-    let first_err = get_first_error(batch, fee_collection_results);
-    first_err.map(|(result, _)| result).unwrap_or(Ok(()))
+    let first_err = get_first_error(batch, fee_collection_results, transaction_receipts.clone());
+    first_err
+        .map(|(result, _)| result)
+        .unwrap_or(Ok(transaction_receipts))
 }
 
 #[derive(Default)]
@@ -250,14 +256,17 @@ fn execute_batches_internal(
         Mutex::new(HashMap::new());
 
     let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
-    let results: Vec<Result<()>> = PAR_THREAD_POOL.install(|| {
+    let results: Vec<Result<Vec<TransactionReceiptQueueEntry>>> = PAR_THREAD_POOL.install(|| {
         batches
             .into_par_iter()
             .map(|transaction_batch| {
                 let transaction_count =
                     transaction_batch.batch.sanitized_transactions().len() as u64;
                 let mut timings = ExecuteTimings::default();
-                let (result, execute_batches_time): (Result<()>, Measure) = measure!(
+                let (result, execute_batches_time): (
+                    Result<Vec<TransactionReceiptQueueEntry>>,
+                    Measure,
+                ) = measure!(
                     {
                         execute_batch(
                             transaction_batch,
@@ -300,6 +309,13 @@ fn execute_batches_internal(
     });
     execute_batches_elapsed.stop();
 
+    let transaction_receipt_queue_entry: Vec<Vec<TransactionReceiptQueueEntry>> = results
+        .clone()
+        .into_iter()
+        .filter(|res| res.is_ok())
+        .map(|res| res.unwrap())
+        .collect();
+    bank.append_transaction_receipts(transaction_receipt_queue_entry);
     first_err(&results)?;
 
     Ok(ExecuteBatchesInternalMetrics {

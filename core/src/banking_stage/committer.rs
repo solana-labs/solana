@@ -1,3 +1,5 @@
+use solana_accounts_db::transaction_results::TransactionReceiptQueueEntry;
+
 use {
     super::leader_slot_timing_metrics::LeaderExecuteAndCommitTimings,
     itertools::Itertools,
@@ -66,6 +68,7 @@ impl Committer {
         batch: &TransactionBatch,
         loaded_transactions: &mut [TransactionLoadResult],
         execution_results: Vec<TransactionExecutionResult>,
+        transaction_receipts: Vec<TransactionReceiptQueueEntry>,
         starting_transaction_index: Option<usize>,
         bank: &Arc<Bank>,
         pre_balance_info: &mut PreBalanceInfo,
@@ -88,6 +91,7 @@ impl Committer {
             batch.sanitized_transactions(),
             loaded_transactions,
             execution_results,
+            transaction_receipts,
             last_blockhash,
             lamports_per_signature,
             CommitTransactionCounts {

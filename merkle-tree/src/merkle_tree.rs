@@ -135,6 +135,41 @@ impl MerkleTree {
         mt
     }
 
+    pub fn new_from_leaves(leaves: Vec<Hash>) -> Self {
+        let leaf_count = leaves.len();
+
+        let mut mt = MerkleTree {
+            leaf_count,
+            nodes: leaves,
+        };
+
+        let mut level_len = MerkleTree::next_level_len(leaf_count);
+        let mut level_start = leaf_count;
+        let mut prev_level_len = leaf_count;
+        let mut prev_level_start = 0;
+        while level_len > 0 {
+            for i in 0..level_len {
+                let prev_level_idx = 2 * i;
+                let lsib = &mt.nodes[prev_level_start + prev_level_idx];
+                let rsib = if prev_level_idx + 1 < prev_level_len {
+                    &mt.nodes[prev_level_start + prev_level_idx + 1]
+                } else {
+                    // Duplicate last entry if the level length is odd
+                    &mt.nodes[prev_level_start + prev_level_idx]
+                };
+
+                let hash = hash_intermediate!(lsib, rsib);
+                mt.nodes.push(hash);
+            }
+            prev_level_start = level_start;
+            prev_level_len = level_len;
+            level_start += level_len;
+            level_len = MerkleTree::next_level_len(level_len);
+        }
+
+        mt
+    }
+
     pub fn get_root(&self) -> Option<&Hash> {
         self.nodes.iter().last()
     }

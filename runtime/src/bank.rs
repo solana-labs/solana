@@ -33,9 +33,16 @@
 //! It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
+use std::ops::Deref;
+
+use rayon::slice::ParallelSliceMut;
+use solana_accounts_db::transaction_results::TransactionReceiptQueueEntry;
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
 pub use solana_sdk::reward_type::RewardType;
+use solana_transaction_receipt::{
+    hash_leaf, ReceiptStatus, TransactionReceiptData, TransactionReceiptTree,
+};
 use {
     crate::{
         bank::metrics::*,
@@ -570,6 +577,7 @@ impl PartialEq for Bank {
             loaded_programs_cache: _,
             check_program_modification_slot: _,
             epoch_reward_status: _,
+            transaction_receipt_queue: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this PartialEq is accordingly updated.
@@ -832,6 +840,10 @@ pub struct Bank {
     pub check_program_modification_slot: bool,
 
     epoch_reward_status: EpochRewardStatus,
+
+    /// A queue that stores all TransactionReceiptQueueEntry structs for a transactions in a poh
+    /// entry
+    transaction_receipt_queue: Arc<RwLock<Vec<TransactionReceiptQueueEntry>>>,
 }
 
 struct VoteWithStakeDelegations {
@@ -1080,6 +1092,7 @@ impl Bank {
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms<BankForks>>>::default(),
             check_program_modification_slot: false,
             epoch_reward_status: EpochRewardStatus::default(),
+            transaction_receipt_queue: Arc::new(RwLock::new(Vec::new())),
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1432,6 +1445,7 @@ impl Bank {
             loaded_programs_cache: parent.loaded_programs_cache.clone(),
             check_program_modification_slot: false,
             epoch_reward_status: parent.epoch_reward_status.clone(),
+            transaction_receipt_queue: Arc::new(RwLock::new(Vec::new())),
         };
 
         let (_, ancestors_time_us) = measure_us!({
@@ -1928,6 +1942,7 @@ impl Bank {
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms<BankForks>>>::default(),
             check_program_modification_slot: false,
             epoch_reward_status: EpochRewardStatus::default(),
+            transaction_receipt_queue: Arc::new(RwLock::new(Vec::new())),
         };
         bank.finish_init(
             genesis_config,
@@ -5618,6 +5633,7 @@ impl Bank {
         sanitized_txs: &[SanitizedTransaction],
         loaded_txs: &mut [TransactionLoadResult],
         execution_results: Vec<TransactionExecutionResult>,
+        transaction_receipts: Vec<TransactionReceiptQueueEntry>,
         last_blockhash: Hash,
         lamports_per_signature: u64,
         counts: CommitTransactionCounts,
@@ -5731,6 +5747,7 @@ impl Bank {
             fee_collection_results,
             execution_results,
             rent_debits,
+            transaction_receipts,
         }
     }
 
@@ -6341,6 +6358,12 @@ impl Bank {
             vec![]
         };
 
+        let message_hashes: Vec<Hash> = batch
+            .sanitized_transactions()
+            .iter()
+            .map(|txn| *txn.message_hash())
+            .collect();
+
         let LoadAndExecuteTransactionsOutput {
             mut loaded_transactions,
             execution_results,
@@ -6360,12 +6383,35 @@ impl Bank {
             log_messages_bytes_limit,
         );
 
+        let statuses: Vec<bool> = execution_results
+            .iter()
+            .map(|result| result.was_executed_successfully())
+            .collect();
+
+        let transaction_receipts: Vec<TransactionReceiptQueueEntry> = message_hashes
+            .into_iter()
+            .zip(statuses.into_iter())
+            .map(|(message_hash, status_code)| {
+                let status = if status_code {
+                    ReceiptStatus::ReceiptStatusSuccess
+                } else {
+                    ReceiptStatus::ReceiptStatusFailure
+                };
+                let transaction_receipt_data =
+                    TransactionReceiptData::new(message_hash.to_bytes(), status);
+                let leaf = transaction_receipt_data.get_leaf();
+
+                (leaf, transaction_receipt_data)
+            })
+            .collect();
+
         let (last_blockhash, lamports_per_signature) =
             self.last_blockhash_and_lamports_per_signature();
         let results = self.commit_transactions(
             batch.sanitized_transactions(),
             &mut loaded_transactions,
             execution_results,
+            transaction_receipts,
             last_blockhash,
             lamports_per_signature,
             CommitTransactionCounts {
@@ -7028,12 +7074,28 @@ impl Bank {
 
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count());
+        let mut transaction_receipt_tree = TransactionReceiptTree::default();
+        let mut transaction_receipt_tree_root = transaction_receipt_tree.get_root(); // default
+                                                                                     // root
+
+        if let Ok(mut transaction_receipt_queue_entry) = self.transaction_receipt_queue.read() {
+            let mut transaction_receipts = transaction_receipt_queue_entry.deref().clone();
+            transaction_receipts.par_sort_unstable_by(|a, b| {
+                a.1.message_hash.as_ref().cmp(b.1.message_hash.as_ref())
+            });
+            let leaves: Vec<Hash> = transaction_receipts.par_iter().map(|item| item.0).collect();
+
+            transaction_receipt_tree = TransactionReceiptTree::new(leaves);
+
+            transaction_receipt_tree_root = transaction_receipt_tree.get_root()
+        }
 
         let mut hash = hashv(&[
             self.parent_hash.as_ref(),
             accounts_delta_hash.0.as_ref(),
             &signature_count_buf,
             self.last_blockhash().as_ref(),
+            transaction_receipt_tree_root.to_bytes().as_ref(),
         ]);
 
         let epoch_accounts_hash = self.should_include_epoch_accounts_hash().then(|| {
@@ -8262,6 +8324,21 @@ impl Bank {
             }
         }
         false
+    }
+
+    pub fn append_transaction_receipts(
+        &self,
+        receipt_batches: Vec<Vec<TransactionReceiptQueueEntry>>,
+    ) {
+        if let Ok(mut transaction_receipt_queue) = self.transaction_receipt_queue.write() {
+            transaction_receipt_queue.clear();
+            let mut temp_receipt_queue = vec![];
+            for mut batch in receipt_batches {
+                temp_receipt_queue.append(&mut batch);
+            }
+
+            transaction_receipt_queue.append(&mut temp_receipt_queue);
+        }
     }
 }
 

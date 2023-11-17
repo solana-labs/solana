@@ -5327,6 +5327,7 @@ dependencies = [
  "solana-sdk",
  "solana-stake-program",
  "solana-system-program",
+ "solana-transaction-receipt",
  "solana-vote-program",
  "static_assertions",
  "strum",
@@ -5929,6 +5930,7 @@ dependencies = [
  "solana-stake-program",
  "solana-streamer",
  "solana-tpu-client",
+ "solana-transaction-receipt",
  "solana-transaction-status",
  "solana-turbine",
  "solana-version",
@@ -7049,6 +7051,7 @@ dependencies = [
  "solana-sdk",
  "solana-stake-program",
  "solana-system-program",
+ "solana-transaction-receipt",
  "solana-version",
  "solana-vote",
  "solana-vote-program",
@@ -7425,6 +7428,14 @@ dependencies = [
  "solana-streamer",
  "solana-transaction-status",
  "solana-version",
+]
+
+[[package]]
+name = "solana-transaction-receipt"
+version = "1.18.0"
+dependencies = [
+ "solana-merkle-tree",
+ "solana-program",
 ]
 
 [[package]]

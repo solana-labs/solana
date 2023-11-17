@@ -67,6 +67,7 @@ solana-sdk = { workspace = true }
 solana-send-transaction-service = { workspace = true }
 solana-streamer = { workspace = true }
 solana-tpu-client = { workspace = true }
+solana-transaction-receipt = { workspace = true }
 solana-transaction-status = { workspace = true }
 solana-turbine = { workspace = true }
 solana-version = { workspace = true }

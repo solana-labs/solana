@@ -1,0 +1,14 @@
+[package]
+name = "solana-transaction-receipt"
+version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
+edition.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+solana-merkle-tree = { workspace = true }
+solana-program = { workspace = true }

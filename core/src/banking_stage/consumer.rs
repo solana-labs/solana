@@ -11,7 +11,7 @@ use {
     itertools::Itertools,
     solana_accounts_db::{
         transaction_error_metrics::TransactionErrorMetrics,
-        transaction_results::TransactionCheckResult,
+        transaction_results::{TransactionCheckResult, TransactionReceiptQueueEntry},
     },
     solana_ledger::token_balances::collect_token_balances,
     solana_measure::{measure::Measure, measure_us},
@@ -26,10 +26,13 @@ use {
     },
     solana_sdk::{
         clock::{Slot, FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, MAX_PROCESSING_AGE},
-        feature_set, saturating_add_assign,
+        feature_set,
+        hash::Hash,
+        saturating_add_assign,
         timing::timestamp,
         transaction::{self, AddressLoader, SanitizedTransaction, TransactionError},
     },
+    solana_transaction_receipt::{ReceiptStatus, TransactionReceiptData},
     std::{
         sync::{atomic::Ordering, Arc},
         time::Instant,
@@ -545,6 +548,12 @@ impl Consumer {
         });
         execute_and_commit_timings.collect_balances_us = collect_balances_us;
 
+        let message_hashes: Vec<Hash> = batch
+            .sanitized_transactions()
+            .iter()
+            .map(|txn| *txn.message_hash())
+            .collect();
+
         let (load_and_execute_transactions_output, load_execute_us) = measure_us!(bank
             .load_and_execute_transactions(
                 batch,
@@ -618,11 +627,34 @@ impl Consumer {
             };
         }
 
+        let statuses: Vec<bool> = execution_results
+            .iter()
+            .map(|result| result.was_executed_successfully())
+            .collect();
+
+        let transaction_receipts: Vec<TransactionReceiptQueueEntry> = message_hashes
+            .into_iter()
+            .zip(statuses.into_iter())
+            .map(|(message_hash, status_code)| {
+                let status = if status_code {
+                    ReceiptStatus::ReceiptStatusSuccess
+                } else {
+                    ReceiptStatus::ReceiptStatusFailure
+                };
+                let transaction_receipt_data =
+                    TransactionReceiptData::new(message_hash.to_bytes(), status);
+                let leaf = transaction_receipt_data.get_leaf();
+
+                (leaf, transaction_receipt_data)
+            })
+            .collect();
+
         let (commit_time_us, commit_transaction_statuses) = if executed_transactions_count != 0 {
             self.committer.commit_transactions(
                 batch,
                 &mut loaded_transactions,
                 execution_results,
+                transaction_receipts,
                 starting_transaction_index,
                 bank,
                 &mut pre_balance_info,
