@@ -126,7 +126,7 @@ COPY --chown=solana:solana ./config-k8s/client-accounts.yml /home/solana
             r#"
 FROM {}
 RUN apt-get update
-RUN apt-get install -y iputils-ping curl vim bzip2 tmux
+RUN apt-get install -y iputils-ping curl vim bzip2
 
 RUN useradd -ms /bin/bash solana
 RUN adduser solana sudo

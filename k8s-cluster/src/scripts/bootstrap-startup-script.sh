@@ -10,6 +10,8 @@ nohup solana-faucet --keypair faucet.json >logs/faucet.log 2>&1 &
 # shellcheck disable=SC1091
 source /home/solana/k8s-cluster-scripts/common.sh
 
+# solana-ledger-tool -l ledger/ create-snapshot 0 -l ledger/
+
 if [[ "$SOLANA_GPU_MISSING" -eq 1 ]]; then
   echo "Testnet requires GPUs, but none were found!  Aborting..."
   exit 1

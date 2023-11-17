@@ -7,7 +7,7 @@ use {
             core::v1::{
                 Container, EnvVar, EnvVarSource, Namespace, ObjectFieldSelector,
                 PodSecurityContext, PodSpec, PodTemplateSpec, Secret, SecretVolumeSource, Service,
-                ServicePort, ServiceSpec, Volume, VolumeMount,
+                ServicePort, ServiceSpec, Volume, VolumeMount, Probe, ExecAction,
             },
         },
         apimachinery::pkg::apis::meta::v1::LabelSelector,
@@ -37,6 +37,7 @@ pub struct ValidatorConfig<'a> {
     pub no_snapshot_fetch: bool,
     pub require_tower: bool,
     pub enable_full_rpc: bool,
+    pub entrypoints: Vec<String>,
 }
 
 impl<'a> std::fmt::Display for ValidatorConfig<'a> {
@@ -57,7 +58,8 @@ impl<'a> std::fmt::Display for ValidatorConfig<'a> {
              skip_poh_verify: {}\n\
              no_snapshot_fetch: {}\n\
              require_tower: {}\n\
-             enable_full_rpc: {}",
+             enable_full_rpc: {}\n\
+             entrypoints: {:?}",
             self.tpu_enable_udp,
             self.tpu_disable_quic,
             self.gpu_mode,
@@ -72,6 +74,7 @@ impl<'a> std::fmt::Display for ValidatorConfig<'a> {
             self.no_snapshot_fetch,
             self.require_tower,
             self.enable_full_rpc,
+            self.entrypoints.join(", "),
         )
     }
 }
@@ -127,7 +130,7 @@ pub struct Kubernetes<'a> {
     validator_config: &'a mut ValidatorConfig<'a>,
     client_config: ClientConfig,
     pub metrics: Option<Metrics>,
-    num_faucets: i32,
+    num_non_voting_validators: i32,
 }
 
 impl<'a> Kubernetes<'a> {
@@ -144,7 +147,7 @@ impl<'a> Kubernetes<'a> {
             validator_config,
             client_config,
             metrics,
-            num_faucets
+            num_non_voting_validators: num_faucets
         }
     }
 
@@ -214,6 +217,11 @@ impl<'a> Kubernetes<'a> {
             flags.push("--expected-shred-version".to_string());
             flags.push(shred_version.to_string());
         }
+
+        // for nvv_index in 0..self.num_non_voting_validators {
+        //     flags.push("--entrypoint".to_string());
+        //     flags.push(format!("non-voting-{}-service.{}.svc.cluster.local:8001", nvv_index, self.namespace));
+        // }
 
         flags
     }
@@ -331,6 +339,7 @@ impl<'a> Kubernetes<'a> {
             &command,
             accounts_volume,
             accounts_volume_mount,
+            None,
         )
         .await
     }
@@ -349,6 +358,7 @@ impl<'a> Kubernetes<'a> {
         command: &[String],
         volumes: Option<Vec<Volume>>,
         volume_mounts: Option<Vec<VolumeMount>>,
+        readiness_probe: Option<Probe>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
         // Define the pod spec
         let pod_spec = PodTemplateSpec {
@@ -364,6 +374,7 @@ impl<'a> Kubernetes<'a> {
                     env: Some(env_vars),
                     command: Some(command.to_owned()),
                     volume_mounts,
+                    readiness_probe: readiness_probe,
                     ..Default::default()
                 }],
                 volumes,
@@ -579,7 +590,7 @@ impl<'a> Kubernetes<'a> {
         Ok(secret)
     }
 
-    pub fn create_faucet_secret(&self, faucet_index: i32) -> Result<Secret, Box<dyn Error>> {
+    pub fn create_non_voting_secret(&self, faucet_index: i32) -> Result<Secret, Box<dyn Error>> {
         let secret_name = format!("faucet-accounts-secret-{}", faucet_index);
         let faucet_key_path = SOLANA_ROOT.join("config-k8s");
         let faucet_keypair =
@@ -743,26 +754,26 @@ impl<'a> Kubernetes<'a> {
         ]
     }
 
-    fn set_environment_variables_to_find_faucet(&self) -> Vec<EnvVar> {
+    fn set_environment_variables_to_find_load_balancer(&self) -> Vec<EnvVar> {
         vec![
             EnvVar {
-                name: "FAUCET_RPC_ADDRESS".to_string(),
+                name: "LOAD_BALANCER_RPC_ADDRESS".to_string(),
                 value: Some(
                     "faucet-lb-service.$(NAMESPACE).svc.cluster.local:8899".to_string(),
                 ),
                 ..Default::default()
             },
             EnvVar {
-                name: "FAUCET_FAUCET_ADDRESS".to_string(),
+                name: "LOAD_BALANCER_GOSSIP_ADDRESS".to_string(),
                 value: Some(
-                    "faucet-lb-service.$(NAMESPACE).svc.cluster.local:9900".to_string(),
+                    "faucet-lb-service.$(NAMESPACE).svc.cluster.local:8001".to_string(),
                 ),
                 ..Default::default()
             },
             EnvVar {
-                name: "FAUCET_GOSSIP_ADDRESS".to_string(),
+                name: "LOAD_BALANCER_FAUCET_ADDRESS".to_string(),
                 value: Some(
-                    "faucet-lb-service.$(NAMESPACE).svc.cluster.local:8001".to_string(),
+                    "faucet-lb-service.$(NAMESPACE).svc.cluster.local:9900".to_string(),
                 ),
                 ..Default::default()
             },
@@ -782,8 +793,8 @@ impl<'a> Kubernetes<'a> {
         if self.metrics.is_some() {
             env_vars.push(self.get_metrics_env_var_secret())
         }
-        if self.num_faucets > 0 {
-            env_vars.append(&mut self.set_environment_variables_to_find_faucet());
+        if self.num_non_voting_validators > 0 {
+            env_vars.append(&mut self.set_environment_variables_to_find_load_balancer());
         }
 
         let accounts_volume = Some(vec![Volume {
@@ -819,6 +830,7 @@ impl<'a> Kubernetes<'a> {
             &command,
             accounts_volume,
             accounts_volume_mount,
+            None,
         )
         .await
     }
@@ -844,6 +856,7 @@ impl<'a> Kubernetes<'a> {
             ..Default::default()
         }];
         env_vars.append(&mut self.set_non_bootstrap_environment_variables());
+        env_vars.append(&mut self.set_environment_variables_to_find_load_balancer());
 
         if self.metrics.is_some() {
             env_vars.push(self.get_metrics_env_var_secret())
@@ -868,9 +881,24 @@ impl<'a> Kubernetes<'a> {
         vec!["/home/solana/k8s-cluster-scripts/faucet-startup-script.sh".to_string()];
         command.extend(self.generate_faucet_command_flags());
 
-    for c in command.iter() {
-        debug!("validator command: {}", c);
-    }
+        for c in command.iter() {
+            debug!("validator command: {}", c);
+        }
+
+        let exec_action = ExecAction {
+            command: Some(vec![
+                String::from("/bin/bash"),
+                String::from("-c"),
+                String::from("solana -u http://$MY_POD_IP:8899 balance -k identity.json"),
+            ]),
+        };
+
+        let readiness_probe = Probe {
+            exec: Some(exec_action),
+            initial_delay_seconds: Some(20),
+            period_seconds: Some(20),
+            ..Default::default()
+        };
 
         self.create_replicas_set(
             format!("faucet-{}", faucet_index).as_str(),
@@ -882,6 +910,7 @@ impl<'a> Kubernetes<'a> {
             &command,
             accounts_volume,
             accounts_volume_mount,
+            Some(readiness_probe),
         )
         .await
     }
@@ -899,8 +928,8 @@ impl<'a> Kubernetes<'a> {
         if self.metrics.is_some() {
             env_vars.push(self.get_metrics_env_var_secret())
         }
-        if self.num_faucets > 0 {
-            env_vars.append(&mut self.set_environment_variables_to_find_faucet());
+        if self.num_non_voting_validators > 0 {
+            env_vars.append(&mut self.set_environment_variables_to_find_load_balancer());
         }
 
         let accounts_volume = Some(vec![Volume {
@@ -936,6 +965,7 @@ impl<'a> Kubernetes<'a> {
             &command,
             accounts_volume,
             accounts_volume_mount,
+            None,
         )
         .await
     }
@@ -983,57 +1013,5 @@ impl<'a> Kubernetes<'a> {
             }),
             ..Default::default()
         }
-    }
-
-    pub async fn check_service_matching_replica_set(
-        &self,
-        app_name: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        // Get the replica_set
-        let replica_set_api: Api<ReplicaSet> = Api::namespaced(self.client.clone(), self.namespace);
-        let replica_set = replica_set_api
-            .get(format!("{}-replicaset", app_name).as_str())
-            .await?;
-
-        // Get the Service
-        let service_api: Api<Service> = Api::namespaced(self.client.clone(), self.namespace);
-        let service = service_api
-            .get(format!("{}-service", app_name).as_str())
-            .await?;
-
-        let replica_set_labels = replica_set
-            .spec
-            .and_then(|spec| {
-                Some(spec.selector).and_then(|selector| {
-                    selector
-                        .match_labels
-                        .and_then(|val| val.get("app.kubernetes.io/name").cloned())
-                })
-            })
-            .clone();
-
-        let service_labels = service
-            .spec
-            .and_then(|spec| {
-                spec.selector
-                    .and_then(|val| val.get("app.kubernetes.io/name").cloned())
-            })
-            .clone();
-
-        info!(
-            "ReplicaSet, Service labels: {:?}, {:?}",
-            replica_set_labels, service_labels
-        );
-
-        let are_equal = match (replica_set_labels, service_labels) {
-            (Some(rs_label), Some(serv_label)) => rs_label == serv_label,
-            _ => false,
-        };
-
-        if !are_equal {
-            error!("ReplicaSet and Service labels are not the same!");
-        }
-
-        Ok(())
     }
 }

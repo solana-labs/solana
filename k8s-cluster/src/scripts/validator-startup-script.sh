@@ -18,8 +18,12 @@ identity=identity.json
 vote_account=vote.json
 no_restart=0
 gossip_entrypoint=$BOOTSTRAP_GOSSIP_ADDRESS
+# gossip_entrypoint=$LOAD_BALANCER_GOSSIP_ADDRESS
 ledger_dir=/home/solana/ledger
-faucet_address=$BOOTSTRAP_FAUCET_ADDRESS
+# faucet_address=$BOOTSTRAP_FAUCET_ADDRESS
+faucet_address=$LOAD_BALANCER_FAUCET_ADDRESS
+
+args+=("--entrypoint" "$gossip_entrypoint") # add in bootstrap entrypoint
 
 usage() {
   if [[ -n $1 ]]; then
@@ -228,6 +232,8 @@ else
   fi
 fi
 
+echo "gossip entrypoint: $gossip_entrypoint"
+
 echo "pre default args"
 default_arg --entrypoint "$gossip_entrypoint"
 if ((airdrops_enabled)); then
@@ -279,18 +285,16 @@ kill_node_and_exit() {
 trap 'kill_node_and_exit' INT TERM ERR
 
 # Maximum number of retries
-MAX_RETRIES=7
+MAX_RETRIES=30
 
 # Delay between retries (in seconds)
-INITIAL_RETRY_DELAY=1
-EXPONENTIAL_BACKOFF_MULTIPLIER=2
-MAX_DELAY=30
+RETRY_DELAY=5
 
 # Bootstrap validator RPC URL
 BOOTSTRAP_RPC_URL="http://$BOOTSTRAP_RPC_ADDRESS"
 
-# Faucet non-voting validator RPC URL
-FAUCET_RPC_URL="http://$FAUCET_RPC_ADDRESS"
+# Load balancer RPC URL
+LOAD_BALANCER_RPC_URL="http://$LOAD_BALANCER_RPC_ADDRESS"
 
 # Identity file
 IDENTITY_FILE=$identity
@@ -300,7 +304,6 @@ IDENTITY_FILE=$identity
 run_solana_command() {
     local command="$1"
     local description="$2"
-    local retry_delay=$INITIAL_RETRY_DELAY
 
     for ((retry_count = 1; retry_count <= MAX_RETRIES; retry_count++)); do
       echo "Attempt $retry_count for: $description"
@@ -311,17 +314,8 @@ run_solana_command() {
       else
         echo "Command failed for: $description (Exit status $?)"
         if [ "$retry_count" -lt $MAX_RETRIES ]; then
-          echo "Retrying in $retry_delay seconds..."
-          sleep $retry_delay
-
-          # Update the retry delay for exponential backoff
-          retry_delay=$(($retry_delay * $EXPONENTIAL_BACKOFF_MULTIPLIER))
-
-          # Cap the retry delay to a maximum value (e.g., 60 seconds)
-          if [ "$retry_delay" -gt "$MAX_DELAY" ]; then
-            retry_delay="$MAX_DELAY"
-          fi
-          echo "retry delay now set to: $retry_delay"
+          echo "Retrying in $RETRY_DELAY seconds..."
+          sleep $RETRY_DELAY
         fi
       fi
     done
@@ -330,28 +324,33 @@ run_solana_command() {
     return 1
 }
 
-# sleep 3600
 
 # Run Solana commands with retries
-if ! run_solana_command "solana -u $FAUCET_RPC_URL airdrop $node_sol $IDENTITY_FILE" "Airdrop"; then
+if ! run_solana_command "solana -u $LOAD_BALANCER_RPC_URL airdrop $node_sol $IDENTITY_FILE" "Airdrop"; then
   echo "Aidrop command failed."
   exit 1
 fi
 
-if ! run_solana_command "solana -u $FAUCET_RPC_URL create-vote-account --allow-unsafe-authorized-withdrawer vote.json $IDENTITY_FILE $IDENTITY_FILE -k $IDENTITY_FILE" "Create Vote Account"; then
+if ! run_solana_command "solana -u $LOAD_BALANCER_RPC_URL create-vote-account --allow-unsafe-authorized-withdrawer vote.json $IDENTITY_FILE $IDENTITY_FILE -k $IDENTITY_FILE" "Create Vote Account"; then
   echo "Create vote account failed."
   exit 1
 fi
 
-if ! run_solana_command "solana -u $FAUCET_RPC_URL create-stake-account stake.json $stake_sol -k $IDENTITY_FILE" "Create Stake Account"; then
+if ! run_solana_command "solana -u $LOAD_BALANCER_RPC_URL create-stake-account stake.json $stake_sol -k $IDENTITY_FILE" "Create Stake Account"; then
   echo "Create stake account failed."
   exit 1
 fi
 
-if ! run_solana_command "solana -u $FAUCET_RPC_URL delegate-stake stake.json vote.json --force -k $IDENTITY_FILE" "Delegate Stake"; then
+if ! run_solana_command "solana -u $LOAD_BALANCER_RPC_URL delegate-stake stake.json vote.json --force -k $IDENTITY_FILE" "Delegate Stake"; then
   echo "Delegate stake command failed."
   exit 1
 fi
+
+# sleep 3600
+
+# $program "${args[@]}" &
+
+# sleep 3600
 
 echo "All commands succeeded. Running solana-validator next..."
 
