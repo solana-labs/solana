@@ -89,7 +89,7 @@ fn async_bencher(bank: &Bank, bank_client: &BankClient, transactions: &[Transact
     }
     for _ in 0..1_000_000_000_u64 {
         if bank
-            .get_signature_status(transactions.last().unwrap().signatures.get(0).unwrap())
+            .get_signature_status(transactions.last().unwrap().signatures.first().unwrap())
             .is_some()
         {
             break;
@@ -97,13 +97,13 @@ fn async_bencher(bank: &Bank, bank_client: &BankClient, transactions: &[Transact
         sleep(Duration::from_nanos(1));
     }
     if bank
-        .get_signature_status(transactions.last().unwrap().signatures.get(0).unwrap())
+        .get_signature_status(transactions.last().unwrap().signatures.first().unwrap())
         .unwrap()
         .is_err()
     {
         error!(
             "transaction failed: {:?}",
-            bank.get_signature_status(transactions.last().unwrap().signatures.get(0).unwrap())
+            bank.get_signature_status(transactions.last().unwrap().signatures.first().unwrap())
                 .unwrap()
         );
         panic!();

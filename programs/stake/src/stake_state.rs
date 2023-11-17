@@ -14,7 +14,7 @@ use {
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
         clock::{Clock, Epoch},
-        feature_set::{self, stake_merge_with_unmatched_credits_observed, FeatureSet},
+        feature_set::{self, FeatureSet},
         instruction::{checked_add, InstructionError},
         pubkey::Pubkey,
         rent::Rent,
@@ -1417,29 +1417,6 @@ impl MergeKind {
         }
     }
 
-    // Remove this when the `stake_merge_with_unmatched_credits_observed` feature is removed
-    fn active_stakes_can_merge(
-        invoke_context: &InvokeContext,
-        stake: &Stake,
-        source: &Stake,
-    ) -> Result<(), InstructionError> {
-        Self::active_delegations_can_merge(invoke_context, &stake.delegation, &source.delegation)?;
-        // `credits_observed` MUST match to prevent earning multiple rewards
-        // from a stake account by merging it into another stake account that
-        // is small enough to not be paid out every epoch. This would effectively
-        // reset the larger stake accounts `credits_observed` to that of the
-        // smaller account.
-        if stake.credits_observed == source.credits_observed {
-            Ok(())
-        } else {
-            ic_msg!(
-                invoke_context,
-                "Unable to merge due to credits observed mismatch"
-            );
-            Err(StakeError::MergeMismatch.into())
-        }
-    }
-
     fn merge(
         self,
         invoke_context: &InvokeContext,
@@ -1450,18 +1427,11 @@ impl MergeKind {
         self.active_stake()
             .zip(source.active_stake())
             .map(|(stake, source)| {
-                if invoke_context
-                    .feature_set
-                    .is_active(&stake_merge_with_unmatched_credits_observed::id())
-                {
-                    Self::active_delegations_can_merge(
-                        invoke_context,
-                        &stake.delegation,
-                        &source.delegation,
-                    )
-                } else {
-                    Self::active_stakes_can_merge(invoke_context, stake, source)
-                }
+                Self::active_delegations_can_merge(
+                    invoke_context,
+                    &stake.delegation,
+                    &source.delegation,
+                )
             })
             .unwrap_or(Ok(()))?;
         let merged_state = match (self, source) {
@@ -1487,7 +1457,6 @@ impl MergeKind {
                     source_stake.delegation.stake,
                 )?;
                 merge_delegation_stake_and_credits_observed(
-                    invoke_context,
                     &mut stake,
                     source_lamports,
                     source_stake.credits_observed,
@@ -1504,7 +1473,6 @@ impl MergeKind {
                 // instead be moved into the destination account as extra,
                 // withdrawable `lamports`
                 merge_delegation_stake_and_credits_observed(
-                    invoke_context,
                     &mut stake,
                     source_stake.delegation.stake,
                     source_stake.credits_observed,
@@ -1518,19 +1486,13 @@ impl MergeKind {
 }
 
 fn merge_delegation_stake_and_credits_observed(
-    invoke_context: &InvokeContext,
     stake: &mut Stake,
     absorbed_lamports: u64,
     absorbed_credits_observed: u64,
 ) -> Result<(), InstructionError> {
-    if invoke_context
-        .feature_set
-        .is_active(&stake_merge_with_unmatched_credits_observed::id())
-    {
-        stake.credits_observed =
-            stake_weighted_credits_observed(stake, absorbed_lamports, absorbed_credits_observed)
-                .ok_or(InstructionError::ArithmeticOverflow)?;
-    }
+    stake.credits_observed =
+        stake_weighted_credits_observed(stake, absorbed_lamports, absorbed_credits_observed)
+            .ok_or(InstructionError::ArithmeticOverflow)?;
     stake.delegation.stake = checked_add(stake.delegation.stake, absorbed_lamports)?;
     Ok(())
 }
@@ -3033,20 +2995,12 @@ mod tests {
         };
 
         let identical = good_stake;
-        assert!(
-            MergeKind::active_stakes_can_merge(&invoke_context, &good_stake, &identical).is_ok()
-        );
-
-        let bad_credits_observed = Stake {
-            credits_observed: good_stake.credits_observed + 1,
-            ..good_stake
-        };
-        assert!(MergeKind::active_stakes_can_merge(
+        assert!(MergeKind::active_delegations_can_merge(
             &invoke_context,
-            &good_stake,
-            &bad_credits_observed
+            &good_stake.delegation,
+            &identical.delegation
         )
-        .is_err());
+        .is_ok());
 
         let good_delegation = good_stake.delegation;
         let different_stake_ok = Delegation {

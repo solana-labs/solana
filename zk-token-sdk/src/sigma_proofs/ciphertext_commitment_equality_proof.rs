@@ -15,7 +15,6 @@ use {
             elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
             pedersen::{PedersenCommitment, PedersenOpening, G, H},
         },
-        errors::ProofVerificationError,
         sigma_proofs::{canonical_scalar_from_optional_slice, ristretto_point_from_optional_slice},
         UNIT_LEN,
     },
@@ -24,7 +23,10 @@ use {
     zeroize::Zeroize,
 };
 use {
-    crate::{sigma_proofs::errors::EqualityProofError, transcript::TranscriptProtocol},
+    crate::{
+        sigma_proofs::errors::{EqualityProofVerificationError, SigmaProofVerificationError},
+        transcript::TranscriptProtocol,
+    },
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
@@ -136,7 +138,7 @@ impl CiphertextCommitmentEqualityProof {
         source_ciphertext: &ElGamalCiphertext,
         destination_commitment: &PedersenCommitment,
         transcript: &mut Transcript,
-    ) -> Result<(), EqualityProofError> {
+    ) -> Result<(), EqualityProofVerificationError> {
         transcript.equality_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the inputs
@@ -161,15 +163,15 @@ impl CiphertextCommitmentEqualityProof {
         let Y_0 = self
             .Y_0
             .decompress()
-            .ok_or(ProofVerificationError::Deserialization)?;
+            .ok_or(SigmaProofVerificationError::Deserialization)?;
         let Y_1 = self
             .Y_1
             .decompress()
-            .ok_or(ProofVerificationError::Deserialization)?;
+            .ok_or(SigmaProofVerificationError::Deserialization)?;
         let Y_2 = self
             .Y_2
             .decompress()
-            .ok_or(ProofVerificationError::Deserialization)?;
+            .ok_or(SigmaProofVerificationError::Deserialization)?;
 
         let check = RistrettoPoint::vartime_multiscalar_mul(
             vec![
@@ -203,7 +205,7 @@ impl CiphertextCommitmentEqualityProof {
         if check.is_identity() {
             Ok(())
         } else {
-            Err(ProofVerificationError::AlgebraicRelation.into())
+            Err(SigmaProofVerificationError::AlgebraicRelation.into())
         }
     }
 
@@ -219,7 +221,7 @@ impl CiphertextCommitmentEqualityProof {
         buf
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, EqualityProofError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, EqualityProofVerificationError> {
         let mut chunks = bytes.chunks(UNIT_LEN);
         let Y_0 = ristretto_point_from_optional_slice(chunks.next())?;
         let Y_1 = ristretto_point_from_optional_slice(chunks.next())?;

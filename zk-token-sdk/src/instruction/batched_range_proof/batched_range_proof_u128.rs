@@ -4,7 +4,7 @@
 use {
     crate::{
         encryption::pedersen::{PedersenCommitment, PedersenOpening},
-        errors::ProofError,
+        errors::{ProofGenerationError, ProofVerificationError},
         range_proof::RangeProof,
     },
     std::convert::TryInto,
@@ -39,26 +39,29 @@ impl BatchedRangeProofU128Data {
         amounts: Vec<u64>,
         bit_lengths: Vec<usize>,
         openings: Vec<&PedersenOpening>,
-    ) -> Result<Self, ProofError> {
+    ) -> Result<Self, ProofGenerationError> {
         // the sum of the bit lengths must be 64
         let batched_bit_length = bit_lengths
             .iter()
             .try_fold(0_usize, |acc, &x| acc.checked_add(x))
-            .ok_or(ProofError::Generation)?;
+            .ok_or(ProofGenerationError::IllegalAmountBitLength)?;
 
         // `u64::BITS` is 128, which fits in a single byte and should not overflow to `usize` for
         // an overwhelming number of platforms. However, to be extra cautious, use `try_from` and
         // `unwrap` here. A simple case `u128::BITS as usize` can silently overflow.
         let expected_bit_length = usize::try_from(u128::BITS).unwrap();
         if batched_bit_length != expected_bit_length {
-            return Err(ProofError::Generation);
+            return Err(ProofGenerationError::IllegalAmountBitLength);
         }
 
         let context =
             BatchedRangeProofContext::new(&commitments, &amounts, &bit_lengths, &openings)?;
 
         let mut transcript = context.new_transcript();
-        let proof = RangeProof::new(amounts, bit_lengths, openings, &mut transcript).try_into()?;
+        let proof: pod::RangeProofU128 =
+            RangeProof::new(amounts, bit_lengths, openings, &mut transcript)?
+                .try_into()
+                .map_err(|_| ProofGenerationError::ProofLength)?;
 
         Ok(Self { context, proof })
     }
@@ -72,7 +75,7 @@ impl ZkProofData<BatchedRangeProofContext> for BatchedRangeProofU128Data {
     }
 
     #[cfg(not(target_os = "solana"))]
-    fn verify_proof(&self) -> Result<(), ProofError> {
+    fn verify_proof(&self) -> Result<(), ProofVerificationError> {
         let (commitments, bit_lengths) = self.context.try_into()?;
         let mut transcript = self.context_data().new_transcript();
         let proof: RangeProof = self.proof.try_into()?;
@@ -88,8 +91,8 @@ mod test {
     use {
         super::*,
         crate::{
-            encryption::pedersen::Pedersen,
-            errors::{ProofType, ProofVerificationError},
+            encryption::pedersen::Pedersen, errors::ProofVerificationError,
+            range_proof::errors::RangeProofVerificationError,
         },
     };
 
@@ -179,10 +182,7 @@ mod test {
 
         assert_eq!(
             proof_data.verify_proof().unwrap_err(),
-            ProofError::VerificationError(
-                ProofType::RangeProof,
-                ProofVerificationError::AlgebraicRelation
-            ),
+            ProofVerificationError::RangeProof(RangeProofVerificationError::AlgebraicRelation),
         );
     }
 }

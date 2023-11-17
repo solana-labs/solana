@@ -1,7 +1,6 @@
 use {
     crate::{
-        errors::ProofVerificationError,
-        range_proof::{errors::RangeProofError, util},
+        range_proof::{errors::RangeProofVerificationError, util},
         transcript::TranscriptProtocol,
     },
     core::iter,
@@ -204,15 +203,15 @@ impl InnerProductProof {
         &self,
         n: usize,
         transcript: &mut Transcript,
-    ) -> Result<(Vec<Scalar>, Vec<Scalar>, Vec<Scalar>), RangeProofError> {
+    ) -> Result<(Vec<Scalar>, Vec<Scalar>, Vec<Scalar>), RangeProofVerificationError> {
         let lg_n = self.L_vec.len();
         if lg_n >= 32 {
             // 4 billion multiplications should be enough for anyone
             // and this check prevents overflow in 1<<lg_n below.
-            return Err(ProofVerificationError::InvalidBitSize.into());
+            return Err(RangeProofVerificationError::InvalidBitSize);
         }
         if n != (1 << lg_n) {
-            return Err(ProofVerificationError::InvalidBitSize.into());
+            return Err(RangeProofVerificationError::InvalidBitSize);
         }
 
         transcript.innerproduct_domain_separator(n as u64);
@@ -270,7 +269,7 @@ impl InnerProductProof {
         G: &[RistrettoPoint],
         H: &[RistrettoPoint],
         transcript: &mut Transcript,
-    ) -> Result<(), RangeProofError>
+    ) -> Result<(), RangeProofVerificationError>
     where
         IG: IntoIterator,
         IG::Item: Borrow<Scalar>,
@@ -301,7 +300,7 @@ impl InnerProductProof {
             .iter()
             .map(|p| {
                 p.decompress()
-                    .ok_or(ProofVerificationError::Deserialization)
+                    .ok_or(RangeProofVerificationError::Deserialization)
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -310,7 +309,7 @@ impl InnerProductProof {
             .iter()
             .map(|p| {
                 p.decompress()
-                    .ok_or(ProofVerificationError::Deserialization)
+                    .ok_or(RangeProofVerificationError::Deserialization)
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -330,7 +329,7 @@ impl InnerProductProof {
         if expect_P == *P {
             Ok(())
         } else {
-            Err(ProofVerificationError::AlgebraicRelation.into())
+            Err(RangeProofVerificationError::AlgebraicRelation)
         }
     }
 
@@ -364,21 +363,21 @@ impl InnerProductProof {
     /// * \\(n\\) is larger or equal to 32 (proof is too big),
     /// * any of \\(2n\\) points are not valid compressed Ristretto points,
     /// * any of 2 scalars are not canonical scalars modulo Ristretto group order.
-    pub fn from_bytes(slice: &[u8]) -> Result<InnerProductProof, RangeProofError> {
+    pub fn from_bytes(slice: &[u8]) -> Result<InnerProductProof, RangeProofVerificationError> {
         let b = slice.len();
         if b % 32 != 0 {
-            return Err(ProofVerificationError::Deserialization.into());
+            return Err(RangeProofVerificationError::Deserialization);
         }
         let num_elements = b / 32;
         if num_elements < 2 {
-            return Err(ProofVerificationError::Deserialization.into());
+            return Err(RangeProofVerificationError::Deserialization);
         }
         if (num_elements - 2) % 2 != 0 {
-            return Err(ProofVerificationError::Deserialization.into());
+            return Err(RangeProofVerificationError::Deserialization);
         }
         let lg_n = (num_elements - 2) / 2;
         if lg_n >= 32 {
-            return Err(ProofVerificationError::Deserialization.into());
+            return Err(RangeProofVerificationError::Deserialization);
         }
 
         let mut L_vec: Vec<CompressedRistretto> = Vec::with_capacity(lg_n);
@@ -391,9 +390,9 @@ impl InnerProductProof {
 
         let pos = 2 * lg_n * 32;
         let a = Scalar::from_canonical_bytes(util::read32(&slice[pos..]))
-            .ok_or(ProofVerificationError::Deserialization)?;
+            .ok_or(RangeProofVerificationError::Deserialization)?;
         let b = Scalar::from_canonical_bytes(util::read32(&slice[pos + 32..]))
-            .ok_or(ProofVerificationError::Deserialization)?;
+            .ok_or(RangeProofVerificationError::Deserialization)?;
 
         Ok(InnerProductProof { L_vec, R_vec, a, b })
     }
