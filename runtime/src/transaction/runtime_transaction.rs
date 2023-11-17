@@ -10,7 +10,7 @@
 //!    ALT, RuntimeTransaction transits into Dynamically Loaded state, with
 //!    its dynamic metadata loaded.
 use {
-    crate::transaction_meta::{DynamicMeta, StaticMeta, TransactionMeta},
+    crate::transaction::transaction_meta::{DynamicMeta, StaticMeta, TransactionMeta},
     solana_sdk::{
         hash::Hash,
         message::{AddressLoader, SanitizedMessage, SanitizedVersionedMessage},
@@ -39,6 +39,7 @@ impl StaticMeta for RuntimeTransactionStatic {
 }
 
 impl RuntimeTransactionStatic {
+    #[allow(dead_code)]
     pub fn try_from(
         sanitized_versioned_tx: SanitizedVersionedTransaction,
         message_hash: Option<Hash>,
@@ -85,6 +86,7 @@ impl StaticMeta for RuntimeTransactionDynamic {
 }
 
 impl RuntimeTransactionDynamic {
+    #[allow(dead_code)]
     pub fn try_from(
         statically_loaded_runtime_tx: RuntimeTransactionStatic,
         address_loader: impl AddressLoader,
@@ -102,6 +104,7 @@ impl RuntimeTransactionDynamic {
         Ok(tx)
     }
 
+    #[allow(dead_code)]
     fn load_dynamic_metadata(&mut self) -> Result<()> {
         Ok(())
     }

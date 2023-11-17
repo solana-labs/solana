@@ -34,10 +34,12 @@ pub struct TransactionMeta {
 }
 
 impl TransactionMeta {
+    #[allow(dead_code)]
     pub(crate) fn set_message_hash(&mut self, message_hash: Hash) {
         self.message_hash = message_hash;
     }
 
+    #[allow(dead_code)]
     pub(crate) fn set_is_simple_vote_tx(&mut self, is_simple_vote_tx: bool) {
         self.is_simple_vote_tx = is_simple_vote_tx;
     }
