@@ -95,7 +95,7 @@ impl TieredAccountMeta for HotAccountMeta {
 
     /// A builder function that initializes the owner's index.
     fn with_owner_offset(mut self, owner_offset: OwnerOffset) -> Self {
-        if owner_offset.0 > MAX_HOT_OWNER_OFFSET.0 {
+        if owner_offset > MAX_HOT_OWNER_OFFSET {
             panic!("owner_offset exceeds MAX_HOT_OWNER_OFFSET");
         }
         self.packed_fields.set_owner_offset(owner_offset.0);
