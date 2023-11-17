@@ -1586,7 +1586,7 @@ fn test_rent_eager_collect_rent_in_partition(should_collect_rent: bool) {
     let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000);
     for feature_id in FeatureSet::default().inactive {
         if feature_id != solana_sdk::feature_set::set_exempt_rent_epoch_max::id()
-            && (should_collect_rent
+            && (!should_collect_rent
                 || feature_id != solana_sdk::feature_set::disable_rent_fees_collection::id())
         {
             activate_feature(&mut genesis_config, feature_id);
@@ -1597,6 +1597,9 @@ fn test_rent_eager_collect_rent_in_partition(should_collect_rent: bool) {
     let rent_due_pubkey = solana_sdk::pubkey::new_rand();
     let rent_exempt_pubkey = solana_sdk::pubkey::new_rand();
     let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+    assert_eq!(should_collect_rent, bank.should_collect_rent());
+
     let zero_lamports = 0;
     let little_lamports = 1234;
     let large_lamports = 123_456_789;
@@ -11475,15 +11478,14 @@ fn test_accounts_data_size_and_rent_collection(should_collect_rent: bool) {
             mut genesis_config, ..
         } = genesis_utils::create_genesis_config(100 * LAMPORTS_PER_SOL);
         genesis_config.rent = Rent::default();
-        for feature_id in FeatureSet::default().inactive {
-            if should_collect_rent
-                || feature_id != solana_sdk::feature_set::disable_rent_fees_collection::id()
-            {
-                activate_feature(&mut genesis_config, feature_id);
-            }
+        if should_collect_rent {
+            genesis_config
+                .accounts
+                .remove(&solana_sdk::feature_set::disable_rent_fees_collection::id());
         }
 
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
         let slot = bank.slot() + bank.slot_count_per_normal_epoch();
         let bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
 
@@ -11510,7 +11512,7 @@ fn test_accounts_data_size_and_rent_collection(should_collect_rent: bool) {
         }
 
         // Collect rent for real
-        let should_collect_rent = bank.should_collect_rent();
+        assert_eq!(should_collect_rent, bank.should_collect_rent());
         let accounts_data_size_delta_before_collecting_rent = bank.load_accounts_data_size_delta();
         bank.collect_rent_eagerly();
         let accounts_data_size_delta_after_collecting_rent = bank.load_accounts_data_size_delta();
