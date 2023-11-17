@@ -660,7 +660,7 @@ where
                 macro_rules! log_scheduler {
                     ($a:tt) => {
                         info!(
-                            "slot: {}: [{}]({}/{}): state_machine((A:{}(+R:{})=>P:{})/{}) channels(<{} >{}+{} <{}+{})",
+                            "slot: {}: [{}]({}/{}): state_machine(({}(+{})=>{})/{}) channels(<{} >{}+{} <{}+{})",
                             slot, ($a), (if will_end_thread {"T"} else {"-"}), (if will_end_session {"S"} else {"-"}),
                             state_machine.active_task_count(), state_machine.retryable_task_count(), state_machine.handled_task_count(),
                             state_machine.total_task_count(),
