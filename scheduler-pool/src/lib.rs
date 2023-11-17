@@ -655,7 +655,7 @@ where
                 let mut current_slot = 0;
                 macro_rules! log_scheduler {
                     ($a:tt) => {
-                            info!("{}({}/{}): slot: {} processed: {} retryable: {}, active: {} {} {} {} {} {}", $a, will_end_thread, will_end_session, current_slot, state_machine.handled_task_count(), state_machine.retryable_task_count(), state_machine.active_task_count(), handled_blocked_transaction_receiver.len(), schedulable_transaction_receiver.len(), handled_idle_transaction_receiver.len(), blocked_transaction_sessioned_sender.len(), idle_transaction_sender.len());
+                            info!("{}({}/{}): slot: {} state_machine(P:{} R:{} A:{}) channels(<{} >{}+{} <{}+{})", $a, will_end_thread, will_end_session, current_slot, state_machine.handled_task_count(), state_machine.retryable_task_count(), state_machine.active_task_count(), schedulable_transaction_receiver.len(), blocked_transaction_sessioned_sender.len(), idle_transaction_sender.len(), handled_blocked_transaction_receiver.len(), handled_idle_transaction_receiver.len());
                     };
                     () => { 
                         if log_interval_counter % 1000 == 0 {
@@ -688,6 +688,7 @@ where
                                             (schedulable_transaction_receiver, control_frame) = new_channel.channel_and_payload();
                                             match control_frame {
                                                 ControlFrame::StartSession(context) => {
+                                                    current_slot = context.bank().slot();
                                                     Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count);
                                                 }
                                                 ControlFrame::EndSession => {
