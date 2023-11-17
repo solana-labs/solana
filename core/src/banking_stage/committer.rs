@@ -30,7 +30,7 @@ pub enum CommitTransactionDetails {
         executed_units: u64,
         // actual micro-second elapsed for executing the committed transaction
         executed_us: u64,
-        // compute units to add to executed_units to compensate under priced CUs
+        // compute units to add to executed_units to compensate for under priced CUs
         adjust_units: u64,
     },
     NotCommitted,
@@ -199,7 +199,7 @@ impl Committer {
         executed_units: u64,
         executed_us: u64,
     ) -> u64 {
-        // "actual executed units" is consistent cross cluster, but "adjustment" are only based
+        // "actual executed units" is consistent across cluster, but "adjustment" is only based
         // on current leader node. Add a 50% taper to reduce local variance.
         const TAPER: u64 = 2;
         solana_runtime::block_cost_limits::COMPUTE_UNIT_TO_US_RATIO
