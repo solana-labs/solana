@@ -724,6 +724,10 @@ pub mod validate_fee_collector_account {
     solana_sdk::declare_id!("prpFrMtgNmzaNzkPJg9o753fVvbHKqNrNTm76foJ2wm");
 }
 
+pub mod enable_zk_transfer_with_fee {
+    solana_sdk::declare_id!("zkNLP7EQALfC1TYeB3biDU7akDckj8iPkvh9y2Mt2K3");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -900,6 +904,7 @@ lazy_static! {
         (update_hashes_per_tick5::id(), "Update desired hashes per tick to 9.2M"),
         (update_hashes_per_tick6::id(), "Update desired hashes per tick to 10M"),
         (validate_fee_collector_account::id(), "validate fee collector account #33888"),
+        (enable_zk_transfer_with_fee::id(), "enable Zk Token proof program transfer with fee"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
