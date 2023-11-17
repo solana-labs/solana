@@ -34,7 +34,7 @@ pub const HOT_FORMAT: TieredStorageFormat = TieredStorageFormat {
 const MAX_HOT_PADDING: u8 = 7;
 
 /// The maximum allowed value for the owner index of a hot account.
-const MAX_HOT_OWNER_INDEX: u32 = (1 << 29) - 1;
+const MAX_HOT_OWNER_OFFSET: OwnerOffset = OwnerOffset((1 << 29) - 1);
 
 #[bitfield(bits = 32)]
 #[repr(C)]
@@ -51,7 +51,7 @@ struct HotMetaPackedFields {
     /// in its hot account entry.
     padding: B3,
     /// The index to the owner of a hot account inside an AccountsFile.
-    owner_index: B29,
+    owner_offset: B29,
 }
 
 /// The storage and in-memory representation of the metadata entry for a
@@ -94,11 +94,11 @@ impl TieredAccountMeta for HotAccountMeta {
     }
 
     /// A builder function that initializes the owner's index.
-    fn with_owner_index(mut self, owner_index: u32) -> Self {
-        if owner_index > MAX_HOT_OWNER_INDEX {
-            panic!("owner_index exceeds MAX_HOT_OWNER_INDEX");
+    fn with_owner_offset(mut self, owner_offset: OwnerOffset) -> Self {
+        if owner_offset > MAX_HOT_OWNER_OFFSET {
+            panic!("owner_offset exceeds MAX_HOT_OWNER_OFFSET");
         }
-        self.packed_fields.set_owner_index(owner_index);
+        self.packed_fields.set_owner_offset(owner_offset.0);
         self
     }
 
@@ -127,8 +127,8 @@ impl TieredAccountMeta for HotAccountMeta {
     }
 
     /// Returns the index to the accounts' owner in the current AccountsFile.
-    fn owner_index(&self) -> u32 {
-        self.packed_fields.owner_index()
+    fn owner_offset(&self) -> OwnerOffset {
+        OwnerOffset(self.packed_fields.owner_offset())
     }
 
     /// Returns the AccountMetaFlags of the current meta.
@@ -285,31 +285,31 @@ pub mod tests {
     #[test]
     fn test_packed_fields() {
         const TEST_PADDING: u8 = 7;
-        const TEST_OWNER_INDEX: u32 = 0x1fff_ef98;
+        const TEST_OWNER_OFFSET: u32 = 0x1fff_ef98;
         let mut packed_fields = HotMetaPackedFields::default();
         packed_fields.set_padding(TEST_PADDING);
-        packed_fields.set_owner_index(TEST_OWNER_INDEX);
+        packed_fields.set_owner_offset(TEST_OWNER_OFFSET);
         assert_eq!(packed_fields.padding(), TEST_PADDING);
-        assert_eq!(packed_fields.owner_index(), TEST_OWNER_INDEX);
+        assert_eq!(packed_fields.owner_offset(), TEST_OWNER_OFFSET);
     }
 
     #[test]
     fn test_packed_fields_max_values() {
         let mut packed_fields = HotMetaPackedFields::default();
         packed_fields.set_padding(MAX_HOT_PADDING);
-        packed_fields.set_owner_index(MAX_HOT_OWNER_INDEX);
+        packed_fields.set_owner_offset(MAX_HOT_OWNER_OFFSET.0);
         assert_eq!(packed_fields.padding(), MAX_HOT_PADDING);
-        assert_eq!(packed_fields.owner_index(), MAX_HOT_OWNER_INDEX);
+        assert_eq!(packed_fields.owner_offset(), MAX_HOT_OWNER_OFFSET.0);
     }
 
     #[test]
     fn test_hot_meta_max_values() {
         let meta = HotAccountMeta::new()
             .with_account_data_padding(MAX_HOT_PADDING)
-            .with_owner_index(MAX_HOT_OWNER_INDEX);
+            .with_owner_offset(MAX_HOT_OWNER_OFFSET);
 
         assert_eq!(meta.account_data_padding(), MAX_HOT_PADDING);
-        assert_eq!(meta.owner_index(), MAX_HOT_OWNER_INDEX);
+        assert_eq!(meta.owner_offset(), MAX_HOT_OWNER_OFFSET);
     }
 
     #[test]
@@ -319,16 +319,16 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "owner_index exceeds MAX_HOT_OWNER_INDEX")]
-    fn test_hot_meta_owner_index_exceeds_limit() {
-        HotAccountMeta::new().with_owner_index(MAX_HOT_OWNER_INDEX + 1);
+    #[should_panic(expected = "owner_offset exceeds MAX_HOT_OWNER_OFFSET")]
+    fn test_hot_meta_owner_offset_exceeds_limit() {
+        HotAccountMeta::new().with_owner_offset(OwnerOffset(MAX_HOT_OWNER_OFFSET.0 + 1));
     }
 
     #[test]
     fn test_hot_account_meta() {
         const TEST_LAMPORTS: u64 = 2314232137;
         const TEST_PADDING: u8 = 5;
-        const TEST_OWNER_INDEX: u32 = 0x1fef_1234;
+        const TEST_OWNER_OFFSET: OwnerOffset = OwnerOffset(0x1fef_1234);
         const TEST_RENT_EPOCH: Epoch = 7;
 
         let optional_fields = AccountMetaOptionalFields {
@@ -340,12 +340,12 @@ pub mod tests {
         let meta = HotAccountMeta::new()
             .with_lamports(TEST_LAMPORTS)
             .with_account_data_padding(TEST_PADDING)
-            .with_owner_index(TEST_OWNER_INDEX)
+            .with_owner_offset(TEST_OWNER_OFFSET)
             .with_flags(&flags);
 
         assert_eq!(meta.lamports(), TEST_LAMPORTS);
         assert_eq!(meta.account_data_padding(), TEST_PADDING);
-        assert_eq!(meta.owner_index(), TEST_OWNER_INDEX);
+        assert_eq!(meta.owner_offset(), TEST_OWNER_OFFSET);
         assert_eq!(*meta.flags(), flags);
     }
 
@@ -355,7 +355,7 @@ pub mod tests {
         let padding = [0u8; 5];
 
         const TEST_LAMPORT: u64 = 2314232137;
-        const OWNER_INDEX: u32 = 0x1fef_1234;
+        const OWNER_OFFSET: u32 = 0x1fef_1234;
         const TEST_RENT_EPOCH: Epoch = 7;
 
         let optional_fields = AccountMetaOptionalFields {
@@ -367,7 +367,7 @@ pub mod tests {
         let expected_meta = HotAccountMeta::new()
             .with_lamports(TEST_LAMPORT)
             .with_account_data_padding(padding.len().try_into().unwrap())
-            .with_owner_index(OWNER_INDEX)
+            .with_owner_offset(OwnerOffset(OWNER_OFFSET))
             .with_flags(&flags);
 
         let mut writer = ByteBlockWriter::new(AccountBlockFormat::AlignedRaw);
@@ -449,7 +449,7 @@ pub mod tests {
             .map(|_| {
                 HotAccountMeta::new()
                     .with_lamports(rng.gen_range(0..u64::MAX))
-                    .with_owner_index(rng.gen_range(0..NUM_ACCOUNTS))
+                    .with_owner_offset(OwnerOffset(rng.gen_range(0..NUM_ACCOUNTS)))
             })
             .collect();
 
