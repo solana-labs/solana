@@ -9669,11 +9669,8 @@ fn test_verify_and_hash_transaction_sig_len() {
         mut genesis_config, ..
     } = create_genesis_config_with_leader(42, &solana_sdk::pubkey::new_rand(), 42);
 
-    // activate all features but verify_tx_signatures_len
+    // activate all features
     activate_all_features(&mut genesis_config);
-    genesis_config
-        .accounts
-        .remove(&feature_set::verify_tx_signatures_len::id());
     let bank = Bank::new_for_tests(&genesis_config);
 
     let recent_blockhash = Hash::new_unique();
