@@ -4,7 +4,6 @@ use {
         TieredStorageResult,
     },
     memmap2::Mmap,
-    modular_bitfield::prelude::*,
     solana_sdk::pubkey::Pubkey,
 };
 
@@ -16,15 +15,6 @@ pub struct AccountIndexWriterEntry<'a> {
     pub address: &'a Pubkey,
     pub block_offset: u32,
     pub intra_block_offset: u32,
-}
-
-/// A struct that stores two u32 offset pair.
-#[bitfield(bits = 64)]
-#[repr(C)]
-#[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
-struct PackedOffsetPair {
-    first_offset: u32,
-    second_offset: u32,
 }
 
 /// The offset to an account stored inside its accounts block.
@@ -57,10 +47,10 @@ pub struct IndexOffset(pub usize);
 )]
 pub enum IndexBlockFormat {
     /// This format optimizes the storage size by storing only account addresses
-    /// and offsets.  It skips storing the size of account data by storing account
-    /// block entries and index block entries in the same order.
+    /// and block offsets.  It skips storing the size of account data by storing
+    /// account block entries and index block entries in the same order.
     #[default]
-    AddressAndOffset = 0,
+    AddressAndBlockOffsetOnly = 0,
 }
 
 impl IndexBlockFormat {
@@ -72,7 +62,7 @@ impl IndexBlockFormat {
         index_entries: &[AccountIndexWriterEntry],
     ) -> TieredStorageResult<usize> {
         match self {
-            Self::AddressAndOffset => {
+            Self::AddressAndBlockOffsetOnly => {
                 let mut bytes_written = 0;
                 for index_entry in index_entries {
                     bytes_written += file.write_type(index_entry.address)?;
@@ -93,7 +83,7 @@ impl IndexBlockFormat {
         index_offset: IndexOffset,
     ) -> TieredStorageResult<&'a Pubkey> {
         let account_offset = match self {
-            Self::AddressAndOffset => {
+            Self::AddressAndBlockOffsetOnly => {
                 footer.index_block_offset as usize + std::mem::size_of::<Pubkey>() * index_offset.0
             }
         };
@@ -109,18 +99,14 @@ impl IndexBlockFormat {
         index_offset: IndexOffset,
     ) -> TieredStorageResult<AccountOffset> {
         match self {
-            Self::AddressAndOffset => {
+            Self::AddressAndBlockOffsetOnly => {
                 let account_offset = footer.index_block_offset as usize
                     + std::mem::size_of::<Pubkey>() * footer.account_entry_count as usize
-                    + (index_offset.0 >> 1) * std::mem::size_of::<PackedOffsetPair>();
-                let (packed_offset, _) = get_type::<PackedOffsetPair>(mmap, account_offset)?;
+                    + index_offset.0 * std::mem::size_of::<u32>();
+                let (block_offset, _) = get_type::<u32>(mmap, account_offset)?;
 
                 Ok(AccountOffset {
-                    block: if index_offset.0 & 1 == 0 {
-                        packed_offset.first_offset()
-                    } else {
-                        packed_offset.second_offset()
-                    } as usize,
+                    block: *block_offset as usize,
                 })
             }
         }
@@ -129,7 +115,9 @@ impl IndexBlockFormat {
     /// Returns the size of one index entry.
     pub fn entry_size(&self) -> usize {
         match self {
-            Self::AddressAndOffset => std::mem::size_of::<Pubkey>() + std::mem::size_of::<u32>(),
+            Self::AddressAndBlockOffsetOnly => {
+                std::mem::size_of::<Pubkey>() + std::mem::size_of::<u32>()
+            }
         }
     }
 }
@@ -165,11 +153,11 @@ mod tests {
 
         {
             let file = TieredStorageFile::new_writable(&path).unwrap();
-            let indexer = IndexBlockFormat::AddressAndOffset;
+            let indexer = IndexBlockFormat::AddressAndBlockOffsetOnly;
             indexer.write_index_block(&file, &index_entries).unwrap();
         }
 
-        let indexer = IndexBlockFormat::AddressAndOffset;
+        let indexer = IndexBlockFormat::AddressAndBlockOffsetOnly;
         let file = OpenOptions::new()
             .read(true)
             .create(false)

@@ -26,7 +26,7 @@ pub const HOT_FORMAT: TieredStorageFormat = TieredStorageFormat {
     meta_entry_size: std::mem::size_of::<HotAccountMeta>(),
     account_meta_format: AccountMetaFormat::Hot,
     owners_block_format: OwnersBlockFormat::LocalIndex,
-    index_block_format: IndexBlockFormat::AddressAndOffset,
+    index_block_format: IndexBlockFormat::AddressAndBlockOffsetOnly,
     account_block_format: AccountBlockFormat::AlignedRaw,
 };
 
@@ -407,7 +407,7 @@ pub mod tests {
         let expected_footer = TieredStorageFooter {
             account_meta_format: AccountMetaFormat::Hot,
             owners_block_format: OwnersBlockFormat::LocalIndex,
-            index_block_format: IndexBlockFormat::AddressAndOffset,
+            index_block_format: IndexBlockFormat::AddressAndBlockOffsetOnly,
             account_block_format: AccountBlockFormat::AlignedRaw,
             account_entry_count: 300,
             account_meta_entry_size: 16,
