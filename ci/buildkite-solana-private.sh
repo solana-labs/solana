@@ -146,7 +146,7 @@ all_test_steps() {
              ^ci/rust-version.sh \
              ^ci/test-docs.sh \
       ; then
-    command_step doctest "ci/test-docs.sh" 15
+    command_step doctest ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-docs.sh" 15
   else
     annotate --style info --context test-docs \
       "Docs skipped as no .rs files were modified"
