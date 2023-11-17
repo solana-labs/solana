@@ -3,7 +3,7 @@ use {
         LastVotedForkSlotsAggregateRecord, LastVotedForkSlotsRecord,
     },
     log::*,
-    solana_gossip::crds_value::RestartLastVotedForkSlots,
+    solana_gossip::restart_crds_values::RestartLastVotedForkSlots,
     solana_runtime::epoch_stakes::EpochStakes,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::collections::{HashMap, HashSet},
@@ -129,7 +129,7 @@ mod tests {
                 LastVotedForkSlotsAggregateRecord, LastVotedForkSlotsRecord,
             },
         },
-        solana_gossip::crds_value::RestartLastVotedForkSlots,
+        solana_gossip::restart_crds_values::RestartLastVotedForkSlots,
         solana_runtime::{
             bank::Bank,
             bank_forks::BankForks,
