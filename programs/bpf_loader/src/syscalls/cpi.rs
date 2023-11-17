@@ -95,8 +95,6 @@ struct CallerAccount<'a, 'b> {
     // the pointer field and ref_to_len_in_vm points to the length field.
     vm_data_addr: u64,
     ref_to_len_in_vm: VmValue<'b, 'a, u64>,
-    executable: bool,
-    rent_epoch: u64,
 }
 
 impl<'a, 'b> CallerAccount<'a, 'b> {
@@ -104,7 +102,6 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
     fn from_account_info(
         invoke_context: &InvokeContext,
         memory_mapping: &'b MemoryMapping<'a>,
-        is_disable_cpi_setting_executable_and_rent_epoch_active: bool,
         _vm_addr: u64,
         account_info: &AccountInfo,
         account_metadata: &SerializedAccountMetadata,
@@ -235,16 +232,6 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
             serialized_data,
             vm_data_addr,
             ref_to_len_in_vm,
-            executable: if is_disable_cpi_setting_executable_and_rent_epoch_active {
-                false
-            } else {
-                account_info.executable
-            },
-            rent_epoch: if is_disable_cpi_setting_executable_and_rent_epoch_active {
-                0
-            } else {
-                account_info.rent_epoch
-            },
         })
     }
 
@@ -252,7 +239,6 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
     fn from_sol_account_info(
         invoke_context: &InvokeContext,
         memory_mapping: &'b MemoryMapping<'a>,
-        is_disable_cpi_setting_executable_and_rent_epoch_active: bool,
         vm_addr: u64,
         account_info: &SolAccountInfo,
         account_metadata: &SerializedAccountMetadata,
@@ -361,16 +347,6 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
             serialized_data,
             vm_data_addr: account_info.data_addr,
             ref_to_len_in_vm,
-            executable: if is_disable_cpi_setting_executable_and_rent_epoch_active {
-                false
-            } else {
-                account_info.executable
-            },
-            rent_epoch: if is_disable_cpi_setting_executable_and_rent_epoch_active {
-                0
-            } else {
-                account_info.rent_epoch
-            },
         })
     }
 
@@ -459,29 +435,20 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
             ix.accounts.len() as u64,
             invoke_context.get_check_aligned(),
         )?;
-        let accounts = if invoke_context
-            .feature_set
-            .is_active(&feature_set::disable_cpi_setting_executable_and_rent_epoch::id())
-        {
-            let mut accounts = Vec::with_capacity(ix.accounts.len());
-            #[allow(clippy::needless_range_loop)]
-            for account_index in 0..ix.accounts.len() {
-                #[allow(clippy::indexing_slicing)]
-                let account_meta = &account_metas[account_index];
-                if unsafe {
-                    std::ptr::read_volatile(&account_meta.is_signer as *const _ as *const u8) > 1
-                        || std::ptr::read_volatile(
-                            &account_meta.is_writable as *const _ as *const u8,
-                        ) > 1
-                } {
-                    return Err(Box::new(InstructionError::InvalidArgument));
-                }
-                accounts.push(account_meta.clone());
+        let mut accounts = Vec::with_capacity(ix.accounts.len());
+        #[allow(clippy::needless_range_loop)]
+        for account_index in 0..ix.accounts.len() {
+            #[allow(clippy::indexing_slicing)]
+            let account_meta = &account_metas[account_index];
+            if unsafe {
+                std::ptr::read_volatile(&account_meta.is_signer as *const _ as *const u8) > 1
+                    || std::ptr::read_volatile(&account_meta.is_writable as *const _ as *const u8)
+                        > 1
+            } {
+                return Err(Box::new(InstructionError::InvalidArgument));
             }
-            accounts
-        } else {
-            account_metas.to_vec()
-        };
+            accounts.push(account_meta.clone());
+        }
 
         let ix_data_len = ix.data.len() as u64;
         if invoke_context
@@ -718,52 +685,29 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
         )?
         .to_vec();
 
-        let accounts = if invoke_context
-            .feature_set
-            .is_active(&feature_set::disable_cpi_setting_executable_and_rent_epoch::id())
-        {
-            let mut accounts = Vec::with_capacity(ix_c.accounts_len as usize);
-            #[allow(clippy::needless_range_loop)]
-            for account_index in 0..ix_c.accounts_len as usize {
-                #[allow(clippy::indexing_slicing)]
-                let account_meta = &account_metas[account_index];
-                if unsafe {
-                    std::ptr::read_volatile(&account_meta.is_signer as *const _ as *const u8) > 1
-                        || std::ptr::read_volatile(
-                            &account_meta.is_writable as *const _ as *const u8,
-                        ) > 1
-                } {
-                    return Err(Box::new(InstructionError::InvalidArgument));
-                }
-                let pubkey = translate_type::<Pubkey>(
-                    memory_mapping,
-                    account_meta.pubkey_addr,
-                    invoke_context.get_check_aligned(),
-                )?;
-                accounts.push(AccountMeta {
-                    pubkey: *pubkey,
-                    is_signer: account_meta.is_signer,
-                    is_writable: account_meta.is_writable,
-                });
+        let mut accounts = Vec::with_capacity(ix_c.accounts_len as usize);
+        #[allow(clippy::needless_range_loop)]
+        for account_index in 0..ix_c.accounts_len as usize {
+            #[allow(clippy::indexing_slicing)]
+            let account_meta = &account_metas[account_index];
+            if unsafe {
+                std::ptr::read_volatile(&account_meta.is_signer as *const _ as *const u8) > 1
+                    || std::ptr::read_volatile(&account_meta.is_writable as *const _ as *const u8)
+                        > 1
+            } {
+                return Err(Box::new(InstructionError::InvalidArgument));
             }
-            accounts
-        } else {
-            account_metas
-                .iter()
-                .map(|account_meta| {
-                    let pubkey = translate_type::<Pubkey>(
-                        memory_mapping,
-                        account_meta.pubkey_addr,
-                        invoke_context.get_check_aligned(),
-                    )?;
-                    Ok(AccountMeta {
-                        pubkey: *pubkey,
-                        is_signer: account_meta.is_signer,
-                        is_writable: account_meta.is_writable,
-                    })
-                })
-                .collect::<Result<Vec<AccountMeta>, Error>>()?
-        };
+            let pubkey = translate_type::<Pubkey>(
+                memory_mapping,
+                account_meta.pubkey_addr,
+                invoke_context.get_check_aligned(),
+            )?;
+            accounts.push(AccountMeta {
+                pubkey: *pubkey,
+                is_signer: account_meta.is_signer,
+                is_writable: account_meta.is_writable,
+            });
+        }
 
         Ok(StableInstruction {
             accounts: accounts.into(),
@@ -869,34 +813,17 @@ where
         invoke_context.get_check_aligned(),
     )?;
     check_account_infos(account_infos.len(), invoke_context)?;
-    let account_info_keys = if invoke_context
-        .feature_set
-        .is_active(&feature_set::disable_cpi_setting_executable_and_rent_epoch::id())
-    {
-        let mut account_info_keys = Vec::with_capacity(account_infos_len as usize);
-        #[allow(clippy::needless_range_loop)]
-        for account_index in 0..account_infos_len as usize {
-            #[allow(clippy::indexing_slicing)]
-            let account_info = &account_infos[account_index];
-            account_info_keys.push(translate_type::<Pubkey>(
-                memory_mapping,
-                key_addr(account_info),
-                invoke_context.get_check_aligned(),
-            )?);
-        }
-        account_info_keys
-    } else {
-        account_infos
-            .iter()
-            .map(|account_info| {
-                translate_type::<Pubkey>(
-                    memory_mapping,
-                    key_addr(account_info),
-                    invoke_context.get_check_aligned(),
-                )
-            })
-            .collect::<Result<Vec<_>, Error>>()?
-    };
+    let mut account_info_keys = Vec::with_capacity(account_infos_len as usize);
+    #[allow(clippy::needless_range_loop)]
+    for account_index in 0..account_infos_len as usize {
+        #[allow(clippy::indexing_slicing)]
+        let account_info = &account_infos[account_index];
+        account_info_keys.push(translate_type::<Pubkey>(
+            memory_mapping,
+            key_addr(account_info),
+            invoke_context.get_check_aligned(),
+        )?);
+    }
     Ok((account_infos, account_info_keys))
 }
 
@@ -917,7 +844,6 @@ where
     F: Fn(
         &InvokeContext,
         &'b MemoryMapping<'a>,
-        bool,
         u64,
         &T,
         &SerializedAccountMetadata,
@@ -926,9 +852,6 @@ where
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let mut accounts = Vec::with_capacity(instruction_accounts.len().saturating_add(1));
-    let is_disable_cpi_setting_executable_and_rent_epoch_active = invoke_context
-        .feature_set
-        .is_active(&disable_cpi_setting_executable_and_rent_epoch::id());
 
     let program_account_index = program_indices
         .last()
@@ -993,7 +916,6 @@ where
                 do_translate(
                     invoke_context,
                     memory_mapping,
-                    is_disable_cpi_setting_executable_and_rent_epoch_active,
                     account_infos_addr.saturating_add(
                         caller_account_index.saturating_mul(mem::size_of::<T>()) as u64,
                     ),
@@ -1256,9 +1178,6 @@ fn update_callee_account(
     mut callee_account: BorrowedAccount<'_>,
     direct_mapping: bool,
 ) -> Result<(), Error> {
-    let is_disable_cpi_setting_executable_and_rent_epoch_active = invoke_context
-        .feature_set
-        .is_active(&disable_cpi_setting_executable_and_rent_epoch::id());
     if callee_account.get_lamports() != *caller_account.lamports {
         callee_account.set_lamports(*caller_account.lamports)?;
     }
@@ -1312,28 +1231,9 @@ fn update_callee_account(
         }
     }
 
-    if !is_disable_cpi_setting_executable_and_rent_epoch_active
-        && callee_account.is_executable() != caller_account.executable
-    {
-        callee_account.set_executable(caller_account.executable)?;
-    }
-
     // Change the owner at the end so that we are allowed to change the lamports and data before
     if callee_account.get_owner() != caller_account.owner {
         callee_account.set_owner(caller_account.owner.as_ref())?;
-    }
-
-    // BorrowedAccount doesn't allow changing the rent epoch. Drop it and use
-    // AccountSharedData directly.
-    let index_in_transaction = callee_account.get_index_in_transaction();
-    drop(callee_account);
-    let callee_account = invoke_context
-        .transaction_context
-        .get_account_at_index(index_in_transaction)?;
-    if !is_disable_cpi_setting_executable_and_rent_epoch_active
-        && callee_account.borrow().rent_epoch() != caller_account.rent_epoch
-    {
-        return Err(Box::new(InstructionError::RentEpochModified));
     }
 
     Ok(())
@@ -1670,7 +1570,7 @@ mod tests {
             ebpf::MM_INPUT_START, memory_region::MemoryRegion, program::SBPFVersion, vm::Config,
         },
         solana_sdk::{
-            account::{Account, AccountSharedData},
+            account::{Account, AccountSharedData, ReadableAccount},
             clock::Epoch,
             feature_set::bpf_account_data_direct_mapping,
             instruction::Instruction,
@@ -1846,7 +1746,6 @@ mod tests {
         let caller_account = CallerAccount::from_account_info(
             &invoke_context,
             &memory_mapping,
-            false,
             vm_addr,
             account_info,
             &account_metadata,
@@ -1860,8 +1759,6 @@ mod tests {
             account.data().len()
         );
         assert_eq!(caller_account.serialized_data, account.data());
-        assert_eq!(caller_account.executable, account.executable());
-        assert_eq!(caller_account.rent_epoch, account.rent_epoch());
     }
 
     #[test]
@@ -2758,8 +2655,6 @@ mod tests {
                 serialized_data: data,
                 vm_data_addr: self.vm_addr + mem::size_of::<u64>() as u64,
                 ref_to_len_in_vm: VmValue::Translated(&mut self.len),
-                executable: false,
-                rent_epoch: 0,
             }
         }
     }

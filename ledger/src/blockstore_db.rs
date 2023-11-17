@@ -419,46 +419,39 @@ impl Rocks {
         }
         let oldest_slot = OldestSlot::default();
         let column_options = options.column_options.clone();
+        let cf_descriptors = Self::cf_descriptors(&options, &oldest_slot);
 
         // Open the database
         let db = match access_type {
-            AccessType::Primary | AccessType::PrimaryForMaintenance => Rocks {
-                db: DB::open_cf_descriptors(
-                    &db_options,
-                    path,
-                    Self::cf_descriptors(&options, &oldest_slot),
-                )?,
-                access_type,
-                oldest_slot,
-                column_options,
-                write_batch_perf_status: PerfSamplingStatus::default(),
-            },
+            AccessType::Primary | AccessType::PrimaryForMaintenance => {
+                DB::open_cf_descriptors(&db_options, path, cf_descriptors)?
+            }
             AccessType::Secondary => {
                 let secondary_path = path.join("solana-secondary");
-
                 info!(
-                    "Opening Rocks with secondary (read only) access at: {:?}",
-                    secondary_path
+                    "Opening Rocks with secondary (read only) access at: {secondary_path:?}. \
+                    This secondary access could temporarily degrade other accesses, such as \
+                    by solana-validator"
                 );
-                info!("This secondary access could temporarily degrade other accesses, such as by solana-validator");
-
-                Rocks {
-                    db: DB::open_cf_descriptors_as_secondary(
-                        &db_options,
-                        path,
-                        &secondary_path,
-                        Self::cf_descriptors(&options, &oldest_slot),
-                    )?,
-                    access_type,
-                    oldest_slot,
-                    column_options,
-                    write_batch_perf_status: PerfSamplingStatus::default(),
-                }
+                DB::open_cf_descriptors_as_secondary(
+                    &db_options,
+                    path,
+                    &secondary_path,
+                    cf_descriptors,
+                )?
             }
         };
-        db.configure_compaction();
+        let rocks = Rocks {
+            db,
+            access_type,
+            oldest_slot,
+            column_options,
+            write_batch_perf_status: PerfSamplingStatus::default(),
+        };
 
-        Ok(db)
+        rocks.configure_compaction();
+
+        Ok(rocks)
     }
 
     fn cf_descriptors(

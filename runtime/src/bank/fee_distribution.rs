@@ -1,7 +1,8 @@
 use {
     super::Bank,
+    crate::accounts::account_rent_state::RentState,
     log::{debug, warn},
-    solana_accounts_db::{account_rent_state::RentState, stake_rewards::RewardInfo},
+    solana_accounts_db::stake_rewards::RewardInfo,
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
         pubkey::Pubkey,
@@ -272,6 +273,13 @@ impl Bank {
 
     pub(super) fn distribute_rent_fees(&self) {
         let total_rent_collected = self.collected_rent.load(Relaxed);
+
+        if !self.should_collect_rent() {
+            if total_rent_collected != 0 {
+                warn!("Rent fees collection is disabled, yet total rent collected was non zero! Total rent collected: {total_rent_collected}");
+            }
+            return;
+        }
 
         let (burned_portion, rent_to_be_distributed) = self
             .rent_collector

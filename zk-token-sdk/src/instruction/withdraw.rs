@@ -5,7 +5,7 @@ use {
             elgamal::{ElGamal, ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
             pedersen::{Pedersen, PedersenCommitment},
         },
-        errors::ProofError,
+        errors::{ProofGenerationError, ProofVerificationError},
         range_proof::RangeProof,
         sigma_proofs::ciphertext_commitment_equality_proof::CiphertextCommitmentEqualityProof,
         transcript::TranscriptProtocol,
@@ -57,13 +57,13 @@ impl WithdrawData {
         keypair: &ElGamalKeypair,
         current_balance: u64,
         current_ciphertext: &ElGamalCiphertext,
-    ) -> Result<Self, ProofError> {
+    ) -> Result<Self, ProofGenerationError> {
         // subtract withdraw amount from current balance
         //
         // errors if current_balance < amount
         let final_balance = current_balance
             .checked_sub(amount)
-            .ok_or(ProofError::Generation)?;
+            .ok_or(ProofGenerationError::NotEnoughFunds)?;
 
         // encode withdraw amount as an ElGamal ciphertext and subtract it from
         // current source balance
@@ -78,7 +78,7 @@ impl WithdrawData {
         };
 
         let mut transcript = context.new_transcript();
-        let proof = WithdrawProof::new(keypair, final_balance, &final_ciphertext, &mut transcript);
+        let proof = WithdrawProof::new(keypair, final_balance, &final_ciphertext, &mut transcript)?;
 
         Ok(Self { context, proof })
     }
@@ -92,7 +92,7 @@ impl ZkProofData<WithdrawProofContext> for WithdrawData {
     }
 
     #[cfg(not(target_os = "solana"))]
-    fn verify_proof(&self) -> Result<(), ProofError> {
+    fn verify_proof(&self) -> Result<(), ProofVerificationError> {
         let mut transcript = self.context.new_transcript();
 
         let elgamal_pubkey = self.context.pubkey.try_into()?;
@@ -140,7 +140,7 @@ impl WithdrawProof {
         final_balance: u64,
         final_ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
-    ) -> Self {
+    ) -> Result<Self, ProofGenerationError> {
         // generate a Pedersen commitment for `final_balance`
         let (commitment, opening) = Pedersen::new(final_balance);
         let pod_commitment: pod::PedersenCommitment = commitment.into();
@@ -157,13 +157,15 @@ impl WithdrawProof {
         );
 
         let range_proof =
-            RangeProof::new(vec![final_balance], vec![64], vec![&opening], transcript);
+            RangeProof::new(vec![final_balance], vec![64], vec![&opening], transcript)?;
 
-        Self {
+        Ok(Self {
             commitment: pod_commitment,
             equality_proof: equality_proof.into(),
-            range_proof: range_proof.try_into().expect("range proof"),
-        }
+            range_proof: range_proof
+                .try_into()
+                .map_err(|_| ProofGenerationError::ProofLength)?,
+        })
     }
 
     pub fn verify(
@@ -171,7 +173,7 @@ impl WithdrawProof {
         pubkey: &ElGamalPubkey,
         final_ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
-    ) -> Result<(), ProofError> {
+    ) -> Result<(), ProofVerificationError> {
         transcript.append_commitment(b"commitment", &self.commitment);
 
         let commitment: PedersenCommitment = self.commitment.try_into()?;

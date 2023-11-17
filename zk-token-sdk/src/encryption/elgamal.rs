@@ -78,6 +78,10 @@ pub enum ElGamalError {
     SeedLengthTooShort,
     #[error("seed length too long for derivation")]
     SeedLengthTooLong,
+    #[error("failed to deserialize ciphertext")]
+    CiphertextDeserialization,
+    #[error("failed to deserialize public key")]
+    PubkeyDeserialization,
 }
 
 /// Algorithm handle for the twisted ElGamal encryption scheme
