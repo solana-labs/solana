@@ -6,7 +6,7 @@ use {
         duplicate_shred::{DuplicateShred, DuplicateShredIndex, MAX_DUPLICATE_SHREDS},
         epoch_slots::EpochSlots,
         legacy_contact_info::LegacyContactInfo,
-        wen_restart_values::RestartLastVotedForkSlots,
+        restart_crds_values::RestartLastVotedForkSlots,
     },
     bincode::{serialize, serialized_size},
     rand::{CryptoRng, Rng},
