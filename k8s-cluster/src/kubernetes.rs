@@ -1,6 +1,5 @@
 use {
     crate::{boxed_error, SOLANA_ROOT},
-    base64::{engine::general_purpose, Engine as _},
     k8s_openapi::{
         api::{
             apps::v1::{ReplicaSet, ReplicaSetSpec},
@@ -473,40 +472,20 @@ impl<'a> Kubernetes<'a> {
 
         let mut data = BTreeMap::new();
         data.insert(
-            "identity.base64".to_string(),
-            ByteString(
-                general_purpose::STANDARD
-                    .encode(identity_keypair)
-                    .as_bytes()
-                    .to_vec(),
-            ),
+            "identity.json".to_string(),
+            ByteString(identity_keypair),
         );
         data.insert(
-            "vote.base64".to_string(),
-            ByteString(
-                general_purpose::STANDARD
-                    .encode(vote_keypair)
-                    .as_bytes()
-                    .to_vec(),
-            ),
+            "vote.json".to_string(),
+            ByteString(vote_keypair),
         );
         data.insert(
-            "stake.base64".to_string(),
-            ByteString(
-                general_purpose::STANDARD
-                    .encode(stake_keypair)
-                    .as_bytes()
-                    .to_vec(),
-            ),
+            "stake.json".to_string(),
+            ByteString(stake_keypair),
         );
         data.insert(
-            "faucet.base64".to_string(),
-            ByteString(
-                general_purpose::STANDARD
-                    .encode(faucet_keypair)
-                    .as_bytes()
-                    .to_vec(),
-            ),
+            "faucet.json".to_string(),
+            ByteString(faucet_keypair),
         );
 
         let secret = Secret {
@@ -537,13 +516,8 @@ impl<'a> Kubernetes<'a> {
                 panic!("Failed to read {} file! at: {:?}", file_name, key_path)
             });
             data.insert(
-                format!("{}.base64", account),
-                ByteString(
-                    general_purpose::STANDARD
-                        .encode(keypair)
-                        .as_bytes()
-                        .to_vec(),
-                ),
+                format!("{}.json", account),
+                ByteString(keypair),
             );
         }
         let secret = Secret {
@@ -568,13 +542,8 @@ impl<'a> Kubernetes<'a> {
 
         let mut data = BTreeMap::new();
         data.insert(
-            "faucet.base64".to_string(),
-            ByteString(
-                general_purpose::STANDARD
-                    .encode(faucet_keypair)
-                    .as_bytes()
-                    .to_vec(),
-            ),
+            "faucet.json".to_string(),
+            ByteString(faucet_keypair),
         );
 
         let secret = Secret {
@@ -609,23 +578,13 @@ impl<'a> Kubernetes<'a> {
                 panic!("Failed to read {} file! at: {:?}", file_name, faucet_key_path)
             });
             data.insert(
-                format!("{}.base64", account),
-                ByteString(
-                    general_purpose::STANDARD
-                        .encode(keypair)
-                        .as_bytes()
-                        .to_vec(),
-                ),
+                format!("{}.json", account),
+                ByteString(keypair),
             );
         }
         data.insert(
-            "faucet.base64".to_string(),
-            ByteString(
-                general_purpose::STANDARD
-                    .encode(faucet_keypair)
-                    .as_bytes()
-                    .to_vec(),
-            ),
+            "faucet.json".to_string(),
+            ByteString(faucet_keypair),
         );
 
         let secret = Secret {

@@ -1,6 +1,7 @@
 #!/bin/bash
 
-/home/solana/k8s-cluster-scripts/decode-accounts.sh -t "validator"
+# /home/solana/k8s-cluster-scripts/decode-accounts.sh -t "validator"
+mkdir -p /home/solana/logs
 
 # Start Validator
 # shellcheck disable=SC1091
@@ -14,8 +15,8 @@ args=(
 airdrops_enabled=1
 node_sol=500 # 500 SOL: number of SOL to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
 stake_sol=10
-identity=identity.json
-vote_account=vote.json
+identity=validator-accounts/identity.json
+vote_account=validator-accounts/vote.json
 no_restart=0
 gossip_entrypoint=$BOOTSTRAP_GOSSIP_ADDRESS
 # gossip_entrypoint=$LOAD_BALANCER_GOSSIP_ADDRESS
@@ -331,17 +332,17 @@ if ! run_solana_command "solana -u $LOAD_BALANCER_RPC_URL airdrop $node_sol $IDE
   exit 1
 fi
 
-if ! run_solana_command "solana -u $LOAD_BALANCER_RPC_URL create-vote-account --allow-unsafe-authorized-withdrawer vote.json $IDENTITY_FILE $IDENTITY_FILE -k $IDENTITY_FILE" "Create Vote Account"; then
+if ! run_solana_command "solana -u $LOAD_BALANCER_RPC_URL create-vote-account --allow-unsafe-authorized-withdrawer validator-accounts/vote.json $IDENTITY_FILE $IDENTITY_FILE -k $IDENTITY_FILE" "Create Vote Account"; then
   echo "Create vote account failed."
   exit 1
 fi
 
-if ! run_solana_command "solana -u $LOAD_BALANCER_RPC_URL create-stake-account stake.json $stake_sol -k $IDENTITY_FILE" "Create Stake Account"; then
+if ! run_solana_command "solana -u $LOAD_BALANCER_RPC_URL create-stake-account validator-accounts/stake.json $stake_sol -k $IDENTITY_FILE" "Create Stake Account"; then
   echo "Create stake account failed."
   exit 1
 fi
 
-if ! run_solana_command "solana -u $LOAD_BALANCER_RPC_URL delegate-stake stake.json vote.json --force -k $IDENTITY_FILE" "Delegate Stake"; then
+if ! run_solana_command "solana -u $LOAD_BALANCER_RPC_URL delegate-stake validator-accounts/stake.json validator-accounts/vote.json --force -k $IDENTITY_FILE" "Delegate Stake"; then
   echo "Delegate stake command failed."
   exit 1
 fi
