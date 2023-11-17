@@ -659,7 +659,7 @@ where
                 let mut log_interval_counter = 0;
                 macro_rules! log_scheduler {
                     ($a:tt) => {
-                            info!("slot: {}: [{}]({}/{}): state_machine(P:{} R:{} A:{}) channels(<{} >{}+{} <{}+{})", slot, $a, if will_end_thread {"T"} else {"-"}, if will_end_session {"S"} else {"-"}, state_machine.handled_task_count(), state_machine.retryable_task_count(), state_machine.active_task_count(), schedulable_transaction_receiver.len(), blocked_transaction_sessioned_sender.len(), idle_transaction_sender.len(), handled_blocked_transaction_receiver.len(), handled_idle_transaction_receiver.len());
+                            info!("slot: {}: [{}]({}/{}): state_machine(P:{} R:{} A:{}) channels(<{} >{}+{} <{}+{})", slot, $a, (if will_end_thread {"T"} else {"-"}), (if will_end_session {"S"} else {"-"}), state_machine.handled_task_count(), state_machine.retryable_task_count(), state_machine.active_task_count(), schedulable_transaction_receiver.len(), blocked_transaction_sessioned_sender.len(), idle_transaction_sender.len(), handled_blocked_transaction_receiver.len(), handled_idle_transaction_receiver.len());
                     };
                     () => { 
                         if log_interval_counter == 0 {
