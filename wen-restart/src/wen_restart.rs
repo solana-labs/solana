@@ -25,7 +25,10 @@ use {
         io::{Cursor, Error, Write},
         path::PathBuf,
         str::FromStr,
-        sync::{Arc, RwLock},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
         thread::sleep,
         time::Duration,
     },
@@ -77,6 +80,7 @@ fn aggregate_restart_last_voted_fork_slots(
     cluster_info: Arc<ClusterInfo>,
     bank_forks: Arc<RwLock<BankForks>>,
     wen_restart_repair_slots: Arc<RwLock<Vec<Slot>>>,
+    exit: Arc<AtomicBool>,
     progress: &mut WenRestartProgress,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let root_bank;
@@ -101,6 +105,9 @@ fn aggregate_restart_last_voted_fork_slots(
         received: HashMap::new(),
     });
     loop {
+        if exit.load(Ordering::Relaxed) {
+            return Err("Exiting".into());
+        }
         let start = timestamp();
         let new_last_voted_fork_slots = cluster_info.get_restart_last_voted_fork_slots(&mut cursor);
         let result = last_voted_fork_slots_aggregate.aggregate(
@@ -159,6 +166,7 @@ pub fn wait_for_wen_restart(
     bank_forks: Arc<RwLock<BankForks>>,
     wen_restart_repair_slots: Option<Arc<RwLock<Vec<Slot>>>>,
     wait_for_supermajority_threshold_percent: u64,
+    exit: Arc<AtomicBool>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut progress = read_wen_restart_records(wen_restart_path)?;
     if progress.state() == RestartState::Init {
@@ -177,6 +185,7 @@ pub fn wait_for_wen_restart(
             cluster_info.clone(),
             bank_forks.clone(),
             wen_restart_repair_slots.clone().unwrap(),
+            exit,
             &mut progress,
         )?;
         increment_and_write_wen_restart_records(wen_restart_path, &mut progress)?
@@ -353,6 +362,7 @@ mod tests {
                     bank_forks_clone,
                     wen_restart_repair_slots.clone(),
                     80,
+                    Arc::new(AtomicBool::new(false)),
                 )
                 .is_ok());
             })
