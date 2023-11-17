@@ -9707,18 +9707,16 @@ fn test_verify_and_hash_transaction_sig_len() {
     {
         let tx = make_transaction(TestCase::RemoveSignature);
         assert_eq!(
-            bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification)
-                .err(),
-            Some(TransactionError::SanitizeFailure),
+            bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification),
+            Err(TransactionError::SanitizeFailure),
         );
     }
     // Too many signatures: Sanitization failure
     {
         let tx = make_transaction(TestCase::AddSignature);
         assert_eq!(
-            bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification)
-                .err(),
-            Some(TransactionError::SanitizeFailure),
+            bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification),
+            Err(TransactionError::SanitizeFailure),
         );
     }
 }
@@ -9754,9 +9752,8 @@ fn test_verify_transactions_packet_data_size() {
         let tx = make_transaction(25);
         assert!(bincode::serialized_size(&tx).unwrap() > PACKET_DATA_SIZE as u64);
         assert_eq!(
-            bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification)
-                .err(),
-            Some(TransactionError::SanitizeFailure),
+            bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification),
+            Err(TransactionError::SanitizeFailure),
         );
     }
     // Assert that verify fails as soon as serialized
