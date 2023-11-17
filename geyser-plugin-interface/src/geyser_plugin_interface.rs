@@ -322,8 +322,8 @@ pub type Result<T> = std::result::Result<T, GeyserPluginError>;
 /// as well as how they will handle streamed data.
 pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
     /// The callback to allow the plugin to setup the logging configuration using the logger
-    /// and log level specified by the validator. Will be called the first before all other
-    /// callback and only once.
+    /// and log level specified by the validator. Will be called first on load/reload, before any other
+    /// callback, and only called once.
     #[allow(unused_variables)]
     fn setup_logger(&self, logger: &'static dyn log::Log, level: log::LevelFilter) -> Result<()> {
         Ok(())
