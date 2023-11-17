@@ -282,7 +282,7 @@ impl<'a> Kubernetes<'a> {
         btree
     }
 
-    pub async fn create_bootstrap_validator_replicas_set(
+    pub fn create_bootstrap_validator_replica_set(
         &mut self,
         container_name: &str,
         image_name: &str,
@@ -341,13 +341,12 @@ impl<'a> Kubernetes<'a> {
             accounts_volume_mount,
             None,
         )
-        .await
     }
 
     // mount genesis in bootstrap. validators will pull
     // genesis from bootstrap
     #[allow(clippy::too_many_arguments)]
-    async fn create_replicas_set(
+    fn create_replicas_set(
         &self,
         app_name: &str,
         label_selector: &BTreeMap<String, String>,
@@ -780,7 +779,7 @@ impl<'a> Kubernetes<'a> {
         ]
     }
 
-    pub async fn create_validator_replica_set(
+    pub fn create_validator_replica_set(
         &mut self,
         container_name: &str,
         validator_index: i32,
@@ -832,10 +831,9 @@ impl<'a> Kubernetes<'a> {
             accounts_volume_mount,
             None,
         )
-        .await
     }
 
-    pub async fn create_faucet_replica_set(
+    pub fn create_faucet_replica_set(
         &mut self,
         container_name: &str,
         faucet_index: i32,
@@ -912,10 +910,9 @@ impl<'a> Kubernetes<'a> {
             accounts_volume_mount,
             Some(readiness_probe),
         )
-        .await
     }
 
-    pub async fn create_client_replica_set(
+    pub fn create_client_replica_set(
         &mut self,
         container_name: &str,
         client_index: i32,
@@ -967,7 +964,6 @@ impl<'a> Kubernetes<'a> {
             accounts_volume_mount,
             None,
         )
-        .await
     }
 
     pub fn create_validator_service(

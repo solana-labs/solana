@@ -863,14 +863,13 @@ async fn main() {
     bootstrap_rs_labels.insert("app.kubernetes.io/name".to_string(), "bootstrap-validator-selector".to_string());
 
     let bootstrap_replica_set = match kub_controller
-        .create_bootstrap_validator_replicas_set(
+        .create_bootstrap_validator_replica_set(
             bootstrap_container_name,
             bootstrap_image_name,
             BOOTSTRAP_VALIDATOR_REPLICAS,
             bootstrap_secret.metadata.name.clone(),
             &bootstrap_rs_labels,
         )
-        .await
     {
         Ok(replica_set) => replica_set,
         Err(err) => {
@@ -972,7 +971,6 @@ async fn main() {
                     nvv_secret.metadata.name.clone(),
                     &nvv_rs_labels,
                 )
-                .await
             {
                 Ok(replica_set) => replica_set,
                 Err(err) => {
@@ -1084,7 +1082,6 @@ async fn main() {
                 validator_secret.metadata.name.clone(),
                 &label_selector,
             )
-            .await
         {
             Ok(replica_set) => replica_set,
             Err(err) => {
@@ -1173,7 +1170,6 @@ async fn main() {
                 client_secret.metadata.name.clone(),
                 &label_selector,
             )
-            .await
         {
             Ok(replica_set) => replica_set,
             Err(err) => {
