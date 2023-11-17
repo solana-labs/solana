@@ -78,7 +78,7 @@ impl IndexBlockFormat {
     /// Returns the address of the account given the specified index.
     pub fn get_account_address<'a>(
         &self,
-        map: &'a Mmap,
+        mmap: &'a Mmap,
         footer: &TieredStorageFooter,
         index_offset: IndexOffset,
     ) -> TieredStorageResult<&'a Pubkey> {
@@ -87,14 +87,14 @@ impl IndexBlockFormat {
                 footer.index_block_offset as usize + std::mem::size_of::<Pubkey>() * index_offset.0
             }
         };
-        let (address, _) = get_type::<Pubkey>(map, account_offset)?;
+        let (address, _) = get_type::<Pubkey>(mmap, account_offset)?;
         Ok(address)
     }
 
     /// Returns the offset to the account given the specified index.
     pub fn get_account_offset(
         &self,
-        map: &Mmap,
+        mmap: &Mmap,
         footer: &TieredStorageFooter,
         index_offset: IndexOffset,
     ) -> TieredStorageResult<AccountOffset> {
@@ -103,7 +103,7 @@ impl IndexBlockFormat {
                 let account_offset = footer.index_block_offset as usize
                     + std::mem::size_of::<Pubkey>() * footer.account_entry_count as usize
                     + index_offset.0 * std::mem::size_of::<u64>();
-                let (account_block_offset, _) = get_type(map, account_offset)?;
+                let (account_block_offset, _) = get_type(mmap, account_offset)?;
                 Ok(AccountOffset {
                     block: *account_block_offset,
                 })
@@ -160,14 +160,14 @@ mod tests {
             .create(false)
             .open(&path)
             .unwrap();
-        let map = unsafe { MmapOptions::new().map(&file).unwrap() };
+        let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
         for (i, index_entry) in index_entries.iter().enumerate() {
             let account_offset = indexer
-                .get_account_offset(&map, &footer, IndexOffset(i))
+                .get_account_offset(&mmap, &footer, IndexOffset(i))
                 .unwrap();
             assert_eq!(index_entry.block_offset, account_offset.block as u64);
             let address = indexer
-                .get_account_address(&map, &footer, IndexOffset(i))
+                .get_account_address(&mmap, &footer, IndexOffset(i))
                 .unwrap();
             assert_eq!(index_entry.address, address);
         }

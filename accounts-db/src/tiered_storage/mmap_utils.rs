@@ -16,21 +16,21 @@ pub fn get_type<T>(map: &Mmap, offset: usize) -> IoResult<(&T, usize)> {
 /// doesn't overrun the internal buffer. Otherwise return an Error.
 /// Also return the offset of the first byte after the requested data that
 /// falls on a 64-byte boundary.
-pub fn get_slice(map: &Mmap, offset: usize, size: usize) -> IoResult<(&[u8], usize)> {
+pub fn get_slice(mmap: &Mmap, offset: usize, size: usize) -> IoResult<(&[u8], usize)> {
     let (next, overflow) = offset.overflowing_add(size);
-    if overflow || next > map.len() {
+    if overflow || next > mmap.len() {
         error!(
             "Requested offset {} and size {} while mmap only has length {}",
             offset,
             size,
-            map.len()
+            mmap.len()
         );
         return Err(std::io::Error::new(
             std::io::ErrorKind::AddrNotAvailable,
             "Requested offset and data length exceeds the mmap slice",
         ));
     }
-    let data = &map[offset..next];
+    let data = &mmap[offset..next];
     let next = u64_align!(next);
     let ptr = data.as_ptr();
 

@@ -1586,7 +1586,7 @@ fn test_rent_eager_collect_rent_in_partition(should_collect_rent: bool) {
     let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000);
     for feature_id in FeatureSet::default().inactive {
         if feature_id != solana_sdk::feature_set::set_exempt_rent_epoch_max::id()
-            && (should_collect_rent
+            && (!should_collect_rent
                 || feature_id != solana_sdk::feature_set::disable_rent_fees_collection::id())
         {
             activate_feature(&mut genesis_config, feature_id);
@@ -1597,6 +1597,9 @@ fn test_rent_eager_collect_rent_in_partition(should_collect_rent: bool) {
     let rent_due_pubkey = solana_sdk::pubkey::new_rand();
     let rent_exempt_pubkey = solana_sdk::pubkey::new_rand();
     let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+    assert_eq!(should_collect_rent, bank.should_collect_rent());
+
     let zero_lamports = 0;
     let little_lamports = 1234;
     let large_lamports = 123_456_789;
@@ -7749,25 +7752,26 @@ fn test_compute_active_feature_set() {
     let feature = Feature::default();
     assert_eq!(feature.activated_at, None);
     bank.store_account(&test_feature, &feature::create_account(&feature, 42));
-
-    // Run `compute_active_feature_set` disallowing new activations
-    let (feature_set, new_activations) = bank.compute_active_feature_set(false);
-    assert!(new_activations.is_empty());
-    assert!(!feature_set.is_active(&test_feature));
     let feature = feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
         .expect("from_account");
     assert_eq!(feature.activated_at, None);
 
-    // Run `compute_active_feature_set` allowing new activations
-    let (feature_set, new_activations) = bank.compute_active_feature_set(true);
+    // Run `compute_active_feature_set` excluding pending activation
+    let (feature_set, new_activations) = bank.compute_active_feature_set(false);
+    assert!(new_activations.is_empty());
+    assert!(!feature_set.is_active(&test_feature));
+
+    // Run `compute_active_feature_set` including pending activation
+    let (_feature_set, new_activations) = bank.compute_active_feature_set(true);
     assert_eq!(new_activations.len(), 1);
-    assert!(feature_set.is_active(&test_feature));
+    assert!(new_activations.contains(&test_feature));
+
+    // Actually activate the pending activation
+    bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, true);
     let feature = feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
         .expect("from_account");
     assert_eq!(feature.activated_at, Some(1));
 
-    // Running `compute_active_feature_set` will not cause new activations, but
-    // `test_feature` is now be active
     let (feature_set, new_activations) = bank.compute_active_feature_set(true);
     assert!(new_activations.is_empty());
     assert!(feature_set.is_active(&test_feature));
@@ -9669,11 +9673,8 @@ fn test_verify_and_hash_transaction_sig_len() {
         mut genesis_config, ..
     } = create_genesis_config_with_leader(42, &solana_sdk::pubkey::new_rand(), 42);
 
-    // activate all features but verify_tx_signatures_len
+    // activate all features
     activate_all_features(&mut genesis_config);
-    genesis_config
-        .accounts
-        .remove(&feature_set::verify_tx_signatures_len::id());
     let bank = Bank::new_for_tests(&genesis_config);
 
     let recent_blockhash = Hash::new_unique();
@@ -9710,18 +9711,16 @@ fn test_verify_and_hash_transaction_sig_len() {
     {
         let tx = make_transaction(TestCase::RemoveSignature);
         assert_eq!(
-            bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification)
-                .err(),
-            Some(TransactionError::SanitizeFailure),
+            bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification),
+            Err(TransactionError::SanitizeFailure),
         );
     }
     // Too many signatures: Sanitization failure
     {
         let tx = make_transaction(TestCase::AddSignature);
         assert_eq!(
-            bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification)
-                .err(),
-            Some(TransactionError::SanitizeFailure),
+            bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification),
+            Err(TransactionError::SanitizeFailure),
         );
     }
 }
@@ -9757,9 +9756,8 @@ fn test_verify_transactions_packet_data_size() {
         let tx = make_transaction(25);
         assert!(bincode::serialized_size(&tx).unwrap() > PACKET_DATA_SIZE as u64);
         assert_eq!(
-            bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification)
-                .err(),
-            Some(TransactionError::SanitizeFailure),
+            bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification),
+            Err(TransactionError::SanitizeFailure),
         );
     }
     // Assert that verify fails as soon as serialized
@@ -11480,15 +11478,14 @@ fn test_accounts_data_size_and_rent_collection(should_collect_rent: bool) {
             mut genesis_config, ..
         } = genesis_utils::create_genesis_config(100 * LAMPORTS_PER_SOL);
         genesis_config.rent = Rent::default();
-        for feature_id in FeatureSet::default().inactive {
-            if should_collect_rent
-                || feature_id != solana_sdk::feature_set::disable_rent_fees_collection::id()
-            {
-                activate_feature(&mut genesis_config, feature_id);
-            }
+        if should_collect_rent {
+            genesis_config
+                .accounts
+                .remove(&solana_sdk::feature_set::disable_rent_fees_collection::id());
         }
 
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
         let slot = bank.slot() + bank.slot_count_per_normal_epoch();
         let bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
 
@@ -11515,7 +11512,7 @@ fn test_accounts_data_size_and_rent_collection(should_collect_rent: bool) {
         }
 
         // Collect rent for real
-        let should_collect_rent = bank.should_collect_rent();
+        assert_eq!(should_collect_rent, bank.should_collect_rent());
         let accounts_data_size_delta_before_collecting_rent = bank.load_accounts_data_size_delta();
         bank.collect_rent_eagerly();
         let accounts_data_size_delta_after_collecting_rent = bank.load_accounts_data_size_delta();
