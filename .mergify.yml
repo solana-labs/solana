@@ -98,6 +98,17 @@ pull_request_rules:
         ignore_conflicts: true
         branches:
           - v1.16
+  - name: v1.16 backport warning comment
+    conditions:
+      - label=v1.16
+    actions:
+      comment:
+        message: >
+          Backports to the stable branch are to be avoided unless absolutely
+          necessary for fixing bugs, security issues, and perf regressions.
+          Backported changes should be reduced to the smallest viable change,
+          refactoring should be done in a separate change that is not
+          backported.
   - name: v1.17 feature-gate backport
     conditions:
       - label=v1.17
@@ -122,6 +133,18 @@ pull_request_rules:
         ignore_conflicts: true
         branches:
           - v1.17
+  - name: v1.17 backport warning comment
+    conditions:
+      - label=v1.17
+    actions:
+      comment:
+        message: >
+          Backports to the beta branch are to be avoided unless absolutely
+          necessary for fixing bugs, security issues, and perf regressions.
+          Backported changes should be reduced to the smallest viable change,
+          refactoring should be done in a separate change that is not
+          backported. Exceptions include CI/metrics changes, CLI improvements,
+          and documentation updates.
 
 commands_restrictions:
   # The author of copied PRs is the Mergify user.
