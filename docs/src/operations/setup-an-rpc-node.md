@@ -74,13 +74,13 @@ Keep in mind, you will still need to customize these commands to operate as an R
 
 As the number of populated accounts on the cluster grows, account-data RPC
 requests that scan the entire account set -- like
-[`getProgramAccounts`](/api/http#getprogramaccounts) and
-[SPL-token-specific requests](/api/http#gettokenaccountsbydelegate) --
+[`getProgramAccounts`](https://solana.com/docs/rpc/http/getprogramaccounts) and
+[SPL-token-specific requests](https://solana.com/docs/rpc/http/gettokenaccountsbydelegate) --
 may perform poorly. If your validator needs to support any of these requests,
 you can use the `--account-index` parameter to activate one or more in-memory
 account indexes that significantly improve RPC performance by indexing accounts
 by the key field. Currently supports the following parameter values:
 
-- `program-id`: each account indexed by its owning program; used by [getProgramAccounts](/api/http#getprogramaccounts)
-- `spl-token-mint`: each SPL token account indexed by its token Mint; used by [getTokenAccountsByDelegate](/api/http#gettokenaccountsbydelegate), and [getTokenLargestAccounts](/api/http#gettokenlargestaccounts)
-- `spl-token-owner`: each SPL token account indexed by the token-owner address; used by [getTokenAccountsByOwner](/api/http#gettokenaccountsbyowner), and [getProgramAccounts](/api/http#getprogramaccounts) requests that include an spl-token-owner filter.
+- `program-id`: each account indexed by its owning program; used by [getProgramAccounts](https://solana.com/docs/rpc/http/getprogramaccounts)
+- `spl-token-mint`: each SPL token account indexed by its token Mint; used by [getTokenAccountsByDelegate](https://solana.com/docs/rpc/http/gettokenaccountsbydelegate), and [getTokenLargestAccounts](https://solana.com/docs/rpc/http/gettokenlargestaccounts)
+- `spl-token-owner`: each SPL token account indexed by the token-owner address; used by [getTokenAccountsByOwner](https://solana.com/docs/rpc/http/gettokenaccountsbyowner), and [getProgramAccounts](https://solana.com/docs/rpc/http/getprogramaccounts) requests that include an spl-token-owner filter.

@@ -82,7 +82,7 @@ providers create dedicated servers for projects that require a high volume of
 requests to the node. Someone with a background in development operations or
 software engineering will be a very important part of your team. You will need a
 strong understanding of the Solana architecture and the
-[RPC API](/api/http).
+[JSON RPC API](https://solana.com/docs/rpc/http).
 
 Alternatively, you may be a development team that would like to run their own
 infrastructure. In this case, the RPC infrastructure could be a part of your

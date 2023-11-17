@@ -141,7 +141,7 @@ JSON RPC URL: http://127.0.0.1:8899
 ```
 
 - The network address of the [Gossip](../../validator/gossip.md#gossip-overview),
-  [Transaction Processing Unit](../../validator/tpu.md) and [JSON RPC](/api/http#json-rpc-api-reference)
+  [Transaction Processing Unit](../../validator/tpu.md) and [JSON RPC](https://solana.com/docs/rpc)
   service, respectively
 
 ```
@@ -149,7 +149,7 @@ JSON RPC URL: http://127.0.0.1:8899
 ```
 
 - Session running time, current slot of the three block
-  [commitment levels](/api/http#configuring-state-commitment),
+  [commitment levels](https://solana.com/docs/rpc#configuring-state-commitment),
   slot height of the last snapshot, transaction count,
   [voting authority](../../operations/guides/vote-accounts.md#vote-authority) balance
 
