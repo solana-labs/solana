@@ -335,12 +335,17 @@ impl CurrentAncientAppendVec {
     }
 
     #[must_use]
+    /// min_bytes: the new append vec needs to have at last this capacity
     fn create_ancient_append_vec<'a>(
         &mut self,
         slot: Slot,
         db: &'a AccountsDb,
+        min_bytes: usize,
     ) -> ShrinkInProgress<'a> {
-        let shrink_in_progress = db.get_store_for_shrink(slot, get_ancient_append_vec_capacity());
+        let shrink_in_progress = db.get_store_for_shrink(
+            slot,
+            get_ancient_append_vec_capacity().max(min_bytes as u64),
+        );
         *self = Self::new(slot, Arc::clone(shrink_in_progress.new_storage()));
         shrink_in_progress
     }
@@ -349,9 +354,10 @@ impl CurrentAncientAppendVec {
         &mut self,
         slot: Slot,
         db: &'a AccountsDb,
+        min_bytes: usize,
     ) -> Option<ShrinkInProgress<'a>> {
         if self.slot_and_append_vec.is_none() {
-            Some(self.create_ancient_append_vec(slot, db))
+            Some(self.create_ancient_append_vec(slot, db, min_bytes))
         } else {
             None
         }
@@ -4587,8 +4593,9 @@ impl AccountsDb {
         }
 
         let mut stats_sub = ShrinkStatsSub::default();
-        let (mut shrink_in_progress, create_and_insert_store_elapsed_us) =
-            measure_us!(current_ancient.create_if_necessary(slot, self));
+        let (mut shrink_in_progress, create_and_insert_store_elapsed_us) = measure_us!(
+            current_ancient.create_if_necessary(slot, self, shrink_collect.alive_total_bytes)
+        );
         stats_sub.create_and_insert_store_elapsed_us = create_and_insert_store_elapsed_us;
         let available_bytes = current_ancient.append_vec().accounts.remaining_bytes();
         // split accounts in 'slot' into:
@@ -4619,8 +4626,12 @@ impl AccountsDb {
             // Assert: it cannot be the case that we already had an ancient append vec at this slot and
             // yet that ancient append vec does not have room for the accounts stored at this slot currently
             assert_ne!(slot, current_ancient.slot());
-            let (shrink_in_progress_overflow, time_us) =
-                measure_us!(current_ancient.create_ancient_append_vec(slot, self));
+            let (shrink_in_progress_overflow, time_us) = measure_us!(current_ancient
+                .create_ancient_append_vec(
+                    slot,
+                    self,
+                    to_store.get_bytes(StorageSelector::Overflow)
+                ));
             stats_sub.create_and_insert_store_elapsed_us += time_us;
             // We cannot possibly be shrinking the original slot that created an ancient append vec
             // AND not have enough room in the ancient append vec at that slot
