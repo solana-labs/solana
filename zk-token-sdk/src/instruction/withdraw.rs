@@ -161,17 +161,11 @@ impl WithdrawProof {
 
         Ok(Self {
             commitment: pod_commitment,
-<<<<<<< HEAD
             equality_proof: equality_proof.try_into().expect("equality proof"),
-            range_proof: range_proof.try_into().expect("range proof"),
-        }
-=======
-            equality_proof: equality_proof.into(),
             range_proof: range_proof
                 .try_into()
                 .map_err(|_| ProofGenerationError::ProofLength)?,
         })
->>>>>>> 0fd4762399 ([zk-token-sdk] Re-organize error types (#34034))
     }
 
     pub fn verify(
