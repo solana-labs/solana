@@ -206,7 +206,7 @@ impl Tvu {
                 repair_whitelist: tvu_config.repair_whitelist,
                 cluster_info: cluster_info.clone(),
                 cluster_slots: cluster_slots.clone(),
-                wen_restart_repair_slots: wen_restart_repair_slots.clone(),
+                wen_restart_repair_slots,
             };
             WindowService::new(
                 blockstore.clone(),

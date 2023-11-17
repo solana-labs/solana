@@ -200,7 +200,12 @@ fn increment_and_write_wen_restart_records(
         RestartState::Init => RestartState::LastVotedForkSlots,
         RestartState::LastVotedForkSlots => RestartState::HeaviestFork,
         RestartState::HeaviestFork => RestartState::Done,
-        _ => panic!("Unexpected state {:?}", new_progress.state()),
+        RestartState::Done
+        | RestartState::FinishedSnapshot
+        | RestartState::GeneratingSnapshot
+        | RestartState::WaitingForSupermajority => {
+            panic!("Unexpected state {:?}", new_progress.state())
+        }
     };
     new_progress.set_state(new_state);
     write_wen_restart_records(records_path, new_progress)
