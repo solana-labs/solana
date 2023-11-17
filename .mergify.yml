@@ -106,9 +106,11 @@ pull_request_rules:
         message: >
           Backports to the stable branch are to be avoided unless absolutely
           necessary for fixing bugs, security issues, and perf regressions.
-          Backported changes should be reduced to the smallest viable change,
-          refactoring should be done in a separate change that is not
-          backported.
+          Changes intended for backport should be structured such that a
+          minimum effective diff can be committed separately from any
+          refactoring, plumbing, cleanup, etc that are not strictly
+          necessary to achieve the goal. Any of the latter should go only
+          into master and ride the normal stabilization schedule.
   - name: v1.17 feature-gate backport
     conditions:
       - label=v1.17
