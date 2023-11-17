@@ -200,6 +200,12 @@ impl Committer {
         executed_units: u64,
         executed_us: u64,
     ) -> u64 {
+        // Some transactions that only have builtin instructions, or vote transactions, do not
+        // consume compute units yet. Let's not to adjust for these type transactions.
+        if executed_units == 0 {
+            return 0;
+        }
+
         // "actual executed units" is consistent across cluster, but "adjustment" is only based
         // on current leader node. Add a 50% taper to reduce local variance.
         const TAPER: u64 = 2;
@@ -249,10 +255,16 @@ mod tests {
             Committer::adjust_executed_units_for_potential_underpricing(0, 0)
         );
 
+        // no adjustment for those consumed 0 CU (builtins, votes etc)
+        assert_eq!(
+            0,
+            Committer::adjust_executed_units_for_potential_underpricing(0, u64::MAX)
+        );
+
         // the case of extreme underpricing
         assert_eq!(
             u64::MAX / 2, // tapered in half
-            Committer::adjust_executed_units_for_potential_underpricing(0, u64::MAX)
+            Committer::adjust_executed_units_for_potential_underpricing(1, u64::MAX)
         );
 
         // No adjustment if executed_units is already MAX
