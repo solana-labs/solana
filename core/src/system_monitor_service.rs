@@ -393,6 +393,28 @@ pub struct SystemMonitorStatsReportConfig {
     pub report_os_disk_stats: bool,
 }
 
+enum InterestingLimit {
+    Recommend(i64),
+    QueryOnly,
+}
+
+#[cfg(target_os = "linux")]
+const INTERESTING_LIMITS: &[(&str, InterestingLimit)] = &[
+    ("net.core.rmem_max", InterestingLimit::Recommend(134217728)),
+    (
+        "net.core.rmem_default",
+        InterestingLimit::Recommend(134217728),
+    ),
+    ("net.core.wmem_max", InterestingLimit::Recommend(134217728)),
+    (
+        "net.core.wmem_default",
+        InterestingLimit::Recommend(134217728),
+    ),
+    ("vm.max_map_count", InterestingLimit::Recommend(1000000)),
+    ("net.core.optmem_max", InterestingLimit::QueryOnly),
+    ("net.core.netdev_max_backlog", InterestingLimit::QueryOnly),
+];
+
 impl SystemMonitorService {
     pub fn new(exit: Arc<AtomicBool>, config: SystemMonitorStatsReportConfig) -> Self {
         info!("Starting SystemMonitorService");
@@ -406,27 +428,8 @@ impl SystemMonitorService {
         Self { thread_hdl }
     }
 
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-    fn linux_get_recommended_network_limits() -> HashMap<&'static str, i64> {
-        // Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
-        let mut recommended_limits: HashMap<&str, i64> = HashMap::default();
-        recommended_limits.insert("net.core.rmem_max", 134217728);
-        recommended_limits.insert("net.core.rmem_default", 134217728);
-        recommended_limits.insert("net.core.wmem_max", 134217728);
-        recommended_limits.insert("net.core.wmem_default", 134217728);
-        recommended_limits.insert("vm.max_map_count", 1000000);
-
-        // Additionally collect the following limits
-        recommended_limits.insert("net.core.optmem_max", 0);
-        recommended_limits.insert("net.core.netdev_max_backlog", 0);
-
-        recommended_limits
-    }
-
     #[cfg(target_os = "linux")]
-    fn linux_get_current_network_limits(
-        recommended_limits: &HashMap<&'static str, i64>,
-    ) -> HashMap<&'static str, i64> {
+    fn linux_get_current_network_limits() -> Vec<(&'static str, &'static InterestingLimit, i64)> {
         use sysctl::Sysctl;
 
         fn sysctl_read(name: &str) -> Result<String, sysctl::SysctlError> {
@@ -435,47 +438,48 @@ impl SystemMonitorService {
             Ok(val)
         }
 
-        let mut current_limits: HashMap<&str, i64> = HashMap::default();
-        for (key, _) in recommended_limits.iter() {
-            let current_val = match sysctl_read(key) {
-                Ok(val) => val.parse::<i64>().unwrap(),
-                Err(e) => {
-                    error!("Failed to query value for {}: {}", key, e);
-                    -1
-                }
-            };
-            current_limits.insert(key, current_val);
+        fn normalize_err<E: std::fmt::Display>(key: &str, error: E) -> String {
+            format!("Failed to query value for {}: {}", key, error)
         }
-        current_limits
+        INTERESTING_LIMITS
+            .iter()
+            .map(|(key, interesting_limit)| {
+                let current_value = sysctl_read(key)
+                    .map_err(|e| normalize_err(key, e))
+                    .and_then(|val| val.parse::<i64>().map_err(|e| normalize_err(key, e)))
+                    .unwrap_or_else(|e| {
+                        error!("{}", e);
+                        -1
+                    });
+                (*key, interesting_limit, current_value)
+            })
+            .collect::<Vec<_>>()
     }
 
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     fn linux_report_network_limits(
-        current_limits: &HashMap<&str, i64>,
-        recommended_limits: &HashMap<&'static str, i64>,
+        current_limits: &[(&'static str, &'static InterestingLimit, i64)],
     ) -> bool {
-        let mut check_failed = false;
-        for (key, recommended_val) in recommended_limits.iter() {
-            let current_val = *current_limits.get(key).unwrap_or(&-1);
-            if current_val < *recommended_val {
-                datapoint_warn!("os-config", (key, current_val, i64));
-                warn!(
-                    "  {}: recommended={} current={}, too small",
-                    key, recommended_val, current_val
-                );
-                check_failed = true;
-            } else {
-                datapoint_info!("os-config", (key, current_val, i64));
-                info!(
-                    "  {}: recommended={} current={}",
-                    key, recommended_val, current_val
-                );
-            }
-        }
-        if check_failed {
-            datapoint_warn!("os-config", ("network_limit_test_failed", 1, i64));
-        }
-        !check_failed
+        !current_limits
+            .iter()
+            .map(|(key, interesting_limit, current_value)| {
+                datapoint_warn!("os-config", (key, *current_value, i64));
+                match interesting_limit {
+                    InterestingLimit::Recommend(recommended_value) if current_value < recommended_value => {
+                        warn!("  {key}: recommended={recommended_value} current={current_value}, too small");
+                        false
+                    }
+                    InterestingLimit::Recommend(recommended_value) => {
+                        info!("  {key}: recommended={recommended_value} current={current_value}");
+                        true
+                    }
+                    InterestingLimit::QueryOnly => {
+                        info!("  {key}: report-only --  current={current_value}");
+                        true
+                    }
+                }
+            })
+            .all(|good| good)
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -487,9 +491,8 @@ impl SystemMonitorService {
     #[cfg(target_os = "linux")]
     pub fn check_os_network_limits() -> bool {
         datapoint_info!("os-config", ("platform", platform_id(), String));
-        let recommended_limits = Self::linux_get_recommended_network_limits();
-        let current_limits = Self::linux_get_current_network_limits(&recommended_limits);
-        Self::linux_report_network_limits(&current_limits, &recommended_limits)
+        let current_limits = Self::linux_get_current_network_limits();
+        Self::linux_report_network_limits(&current_limits)
     }
 
     #[cfg(target_os = "linux")]
