@@ -460,6 +460,10 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
         initial_context: SchedulingContext,
         handler: TH,
     ) -> Self {
+        let handler_count = std::env::var("SOLANA_UNIFIED_SCHEDULER_HANDLER_COUNT")
+            .unwrap_or(format!("{}", 8))
+            .parse::<usize>()
+            .unwrap();
         Self {
             id: thread_rng().gen::<SchedulerId>(),
             completed_result_with_timings: None,
@@ -467,7 +471,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
                 initial_context,
                 handler,
                 pool,
-                10,
+                handler_count,
             )),
             address_book: AddressBook::default(),
         }
