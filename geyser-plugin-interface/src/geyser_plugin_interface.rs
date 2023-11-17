@@ -327,12 +327,22 @@ pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
     /// # Examples
     ///
     /// ```
-    /// fn setup_logger(&self, logger: &'static dyn log::Log, level: log::LevelFilter) -> Result<()> {
-    ///    log::set_max_level(level);
-    ///    if let Err(err) = log::set_logger(logger) {
-    ///        return Err(GeyserPluginError::Custom(Box::new(err)));
-    ///    }
-    ///    Ok(())
+    /// use solana_geyser_plugin_interface::geyser_plugin_interface::{GeyserPlugin,
+    /// GeyserPluginError, Result};
+    ///
+    /// #[derive(Debug)]
+    /// struct SamplePlugin;
+    /// impl GeyserPlugin for SamplePlugin {
+    ///     fn setup_logger(&self, logger: &'static dyn log::Log, level: log::LevelFilter) -> Result<()> {
+    ///        log::set_max_level(level);
+    ///        if let Err(err) = log::set_logger(logger) {
+    ///            return Err(GeyserPluginError::Custom(Box::new(err)));
+    ///        }
+    ///        Ok(())
+    ///     }
+    ///     fn name(&self) -> &'static str {
+    ///         &"sample"
+    ///     }
     /// }
     /// ```
     #[allow(unused_variables)]
