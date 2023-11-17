@@ -182,7 +182,7 @@ all_test_steps() {
              cargo-test-sbf$ \
       ; then
     cat >> "$output_file" <<"EOF"
-  - command: "ci/test-stable-sbf.sh"
+  - command: ". ci/rust-version.sh; ci/docker-run.sh $$rust_stable_docker_image ci/test-stable-sbf.sh"
     name: "stable-sbf"
     timeout_in_minutes: 35
     artifact_paths: "sbf-dumps.tar.bz2"
