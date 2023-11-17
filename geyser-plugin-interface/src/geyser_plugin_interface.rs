@@ -324,6 +324,17 @@ pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
     /// The callback to allow the plugin to setup the logging configuration using the logger
     /// and log level specified by the validator. Will be called first on load/reload, before any other
     /// callback, and only called once.
+    /// # Examples
+    ///
+    /// ```
+    /// fn setup_logger(&self, logger: &'static dyn log::Log, level: log::LevelFilter) -> Result<()> {
+    ///    log::set_max_level(level);
+    ///    if let Err(err) = log::set_logger(logger) {
+    ///        return Err(GeyserPluginError::Custom(Box::new(err)));
+    ///    }
+    ///    Ok(())
+    /// }
+    /// ```
     #[allow(unused_variables)]
     fn setup_logger(&self, logger: &'static dyn log::Log, level: log::LevelFilter) -> Result<()> {
         Ok(())
