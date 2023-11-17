@@ -523,17 +523,14 @@ impl RunLengthEncoding {
     }
 
     fn num_encoded_slots(&self) -> usize {
-        self.0
-            .iter()
-            .map(|x| usize::try_from(x.0).unwrap())
-            .sum::<usize>()
+        self.0.iter().map(|x| usize::from(x.0)).sum()
     }
 
     fn to_slots(&self, last_slot: Slot, min_slot: Slot) -> Vec<Slot> {
         let mut slots: Vec<Slot> = self
             .0
             .iter()
-            .map_while(|bit_count| usize::try_from(bit_count.0).ok())
+            .map(|bit_count| usize::from(bit_count.0))
             .zip([1, 0].iter().cycle())
             .flat_map(|(bit_count, bit)| std::iter::repeat(bit).take(bit_count))
             .enumerate()
