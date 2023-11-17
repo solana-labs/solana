@@ -503,7 +503,7 @@ pub mod tests {
             .iter()
             .map(|address| AccountIndexWriterEntry {
                 address,
-                block_offset: rng.gen_range(0..u64::MAX),
+                block_offset: rng.gen_range(0..u32::MAX),
                 intra_block_offset: rng.gen_range(0..4096),
             })
             .collect();
@@ -532,7 +532,7 @@ pub mod tests {
         let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
         for (i, index_writer_entry) in index_writer_entries.iter().enumerate() {
             let account_offset = hot_storage.get_account_offset(IndexOffset(i)).unwrap();
-            assert_eq!(account_offset.block as u64, index_writer_entry.block_offset);
+            assert_eq!(account_offset.block as u32, index_writer_entry.block_offset);
 
             let account_address = hot_storage.get_account_address(IndexOffset(i)).unwrap();
             assert_eq!(account_address, index_writer_entry.address);

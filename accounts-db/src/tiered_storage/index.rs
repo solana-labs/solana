@@ -4,6 +4,7 @@ use {
         TieredStorageResult,
     },
     memmap2::Mmap,
+    modular_bitfield::prelude::*,
     solana_sdk::pubkey::Pubkey,
 };
 
@@ -13,8 +14,17 @@ use {
 #[derive(Debug)]
 pub struct AccountIndexWriterEntry<'a> {
     pub address: &'a Pubkey,
-    pub block_offset: u64,
-    pub intra_block_offset: u64,
+    pub block_offset: u32,
+    pub intra_block_offset: u32,
+}
+
+/// A struct that stores two u32 offset pair.
+#[bitfield(bits = 64)]
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
+struct PackedOffsetPair {
+    first_offset: u32,
+    second_offset: u32,
 }
 
 /// The offset to an account stored inside its accounts block.
@@ -102,10 +112,15 @@ impl IndexBlockFormat {
             Self::AddressAndOffset => {
                 let account_offset = footer.index_block_offset as usize
                     + std::mem::size_of::<Pubkey>() * footer.account_entry_count as usize
-                    + index_offset.0 * std::mem::size_of::<u64>();
-                let (account_block_offset, _) = get_type(mmap, account_offset)?;
+                    + (index_offset.0 >> 1) * std::mem::size_of::<PackedOffsetPair>();
+                let (packed_offset, _) = get_type::<PackedOffsetPair>(mmap, account_offset)?;
+
                 Ok(AccountOffset {
-                    block: *account_block_offset,
+                    block: if index_offset.0 & 1 == 0 {
+                        packed_offset.first_offset()
+                    } else {
+                        packed_offset.second_offset()
+                    } as usize,
                 })
             }
         }
@@ -114,7 +129,7 @@ impl IndexBlockFormat {
     /// Returns the size of one index entry.
     pub fn entry_size(&self) -> usize {
         match self {
-            Self::AddressAndOffset => std::mem::size_of::<Pubkey>() + std::mem::size_of::<u64>(),
+            Self::AddressAndOffset => std::mem::size_of::<Pubkey>() + std::mem::size_of::<u32>(),
         }
     }
 }
@@ -165,7 +180,7 @@ mod tests {
             let account_offset = indexer
                 .get_account_offset(&mmap, &footer, IndexOffset(i))
                 .unwrap();
-            assert_eq!(index_entry.block_offset, account_offset.block as u64);
+            assert_eq!(index_entry.block_offset, account_offset.block as u32);
             let address = indexer
                 .get_account_address(&mmap, &footer, IndexOffset(i))
                 .unwrap();
