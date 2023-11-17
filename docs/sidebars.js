@@ -1,6 +1,4 @@
 module.exports = {
-  // load the API specific sidebars file
-  ...require("./sidebars/api.js"),
   masterSidebar: [
     "home",
     {

@@ -41,8 +41,6 @@ cat > "$CONFIG_FILE" <<EOF
     { "source": "/apps/webwallet", "destination": "https://solana.com/docs/intro/wallets" },
     { "source": "/implemented-proposals/cross-program-invocation", "destination": "https://solana.com/docs/core/cpi" },
     { "source": "/implemented-proposals/program-derived-addresses", "destination": "https://solana.com/docs/core/cpi#program-derived-addresses" },
-    { "source": "/apps/jsonrpc-api", "destination": "/api/http" },
-    { "source": "/developing/clients/jsonrpc-api", "destination": "/api/http" },
     { "source": "/apps/sysvars", "destination": "/developing/runtime-facilities/sysvars" },
     { "source": "/apps/builtins", "destination": "/developing/runtime-facilities/programs" },
     { "source": "/apps/backwards-compatibility", "destination": "/developing/backwards-compatibility" },
@@ -107,6 +105,9 @@ cat > "$CONFIG_FILE" <<EOF
 
     { "source": "/developing/runtime-facilities/:path*", "destination": "/runtime/:path*" },
     
+    { "destination": "https://solana.com/docs/rpc/:path*", "source": "/api/:path*" },
+    { "destination": "https://solana.com/docs/rpc/:path*", "source": "/developing/clients/jsonrpc-api" },
+    { "destination": "https://solana.com/docs/rpc/:path*", "source": "/apps/jsonrpc-api" },
     { "destination": "https://solana.com/docs/terminology", "source": "/terminology" },
     { "destination": "https://solana.com/docs/core/rent", "source": "/developing/intro/rent" },
     { "destination": "https://solana.com/docs/core/programs", "source": "/developing/intro/programs" },
