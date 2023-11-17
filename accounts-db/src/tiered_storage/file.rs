@@ -15,11 +15,10 @@ impl TieredStorageFile {
                 .read(true)
                 .create(false)
                 .open(&file_path)
-                .unwrap_or_else(|e| {
+                .unwrap_or_else(|err| {
                     panic!(
-                        "[TieredStorageError] Unable to open {:?} as read-only: {:?}",
+                        "[TieredStorageError] Unable to open {} as read-only: {err}",
                         file_path.as_ref().display(),
-                        e
                     );
                 }),
         )
