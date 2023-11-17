@@ -143,10 +143,13 @@ pull_request_rules:
         message: >
           Backports to the beta branch are to be avoided unless absolutely
           necessary for fixing bugs, security issues, and perf regressions.
-          Backported changes should be reduced to the smallest viable change,
-          refactoring should be done in a separate change that is not
-          backported. Exceptions include CI/metrics changes, CLI improvements,
-          and documentation updates.
+          Changes intended for backport should be structured such that a
+          minimum effective diff can be committed separately from any
+          refactoring, plumbing, cleanup, etc that are not strictly
+          necessary to achieve the goal. Any of the latter should go only
+          into master and ride the normal stabilization schedule. Exceptions
+          include CI/metrics changes, CLI improvements and documentation
+          updates on a case by case basis.
 
 commands_restrictions:
   # The author of copied PRs is the Mergify user.
