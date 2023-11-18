@@ -592,6 +592,7 @@ where
         ee: &mut Box<ExecutionEnvironment>,
         pool: &Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
     ) {
+        use solana_measure::measure::Measure;
         let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
         debug!("handling task at {:?}", std::thread::current());
         TH::handle(
