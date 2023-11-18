@@ -1229,7 +1229,7 @@ impl ScheduleStage {
 
     fn unlock_after_execution(
         should_remove: bool,
-        uq: UniqueWeight,
+        uq: &UniqueWeight,
         retryable_task_queue: &mut WeightedTaskQueue,
         lock_attempts: &mut [LockAttempt],
     ) {
@@ -1237,13 +1237,13 @@ impl ScheduleStage {
             let heaviest_uncontended = unlock_attempt
                 .target_page_mut()
                 .blocked_task_queue
-                .reindex(should_remove, &uq);
+                .reindex(should_remove, uq);
 
             if should_remove && unlock_attempt.requested_usage == RequestedUsage::Writable {
                 unlock_attempt
                     .target_page_mut()
                     .blocked_write_requesting_task_ids
-                    .remove(&uq);
+                    .remove(uq);
             }
 
             let is_unused_now = Self::reset_lock(unlock_attempt);
@@ -1390,10 +1390,9 @@ impl SchedulingStateMachine {
             .contention_count
             .load(std::sync::atomic::Ordering::SeqCst)
             > 0;
-        let uq = ee.task.unique_weight;
         ScheduleStage::unlock_after_execution(
             should_remove,
-            uq,
+            &ee.task.unique_weight;
             &mut self.retryable_task_queue,
             &mut ee.finalized_lock_attempts,
         );
