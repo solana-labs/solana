@@ -879,6 +879,7 @@ where
                     Self::receive_scheduled_transaction(&handler, &bank, &mut m, &pool);
 
                     m.slot = bank.slot();
+                    m.thx = thx;
                     if was_blocked {
                         handled_blocked_transaction_sender.send(m).unwrap();
                     } else {
