@@ -7638,10 +7638,12 @@ impl AccountsDb {
         config: &CalcAccountsHashConfig<'_>,
         filler_account_suffix: Option<&Pubkey>,
     ) -> Result<Vec<CacheHashDataFileReference>, AccountsHashVerificationError> {
+        assert!(bin_range.start < bins);
+        assert!(bin_range.end <= bins);
+        assert!(bin_range.start < bin_range.end);
         let _guard = self.active_stats.activate(ActiveStatItem::HashScan);
 
         let bin_calculator = PubkeyBinCalculator24::new(bins);
-        assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
         let mut time = Measure::start("scan all accounts");
         stats.num_snapshot_storage = storages.storage_count();
         stats.num_slots = storages.slot_count();
@@ -10431,9 +10433,7 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic(
-        expected = "bin_range.start < bins && bin_range.end <= bins &&\\n    bin_range.start < bin_range.end"
-    )]
+    #[should_panic(expected = "bin_range.start < bins")]
     fn test_accountsdb_scan_snapshot_stores_illegal_range_start() {
         let mut stats = HashStats::default();
         let bounds = Range { start: 2, end: 2 };
@@ -10444,9 +10444,7 @@ pub mod tests {
             .unwrap();
     }
     #[test]
-    #[should_panic(
-        expected = "bin_range.start < bins && bin_range.end <= bins &&\\n    bin_range.start < bin_range.end"
-    )]
+    #[should_panic(expected = "bin_range.end <= bins")]
     fn test_accountsdb_scan_snapshot_stores_illegal_range_end() {
         let mut stats = HashStats::default();
         let bounds = Range { start: 1, end: 3 };
@@ -10458,9 +10456,7 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic(
-        expected = "bin_range.start < bins && bin_range.end <= bins &&\\n    bin_range.start < bin_range.end"
-    )]
+    #[should_panic(expected = "bin_range.start < bin_range.end")]
     fn test_accountsdb_scan_snapshot_stores_illegal_range_inverse() {
         let mut stats = HashStats::default();
         let bounds = Range { start: 1, end: 0 };
