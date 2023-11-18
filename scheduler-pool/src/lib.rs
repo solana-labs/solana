@@ -1384,7 +1384,7 @@ impl SchedulingStateMachine {
                 )
             })
             .map(|(task, lock_attemps)| {
-                self.rescheduled_task_count += 1
+                self.rescheduled_task_count += 1;
                 ScheduleStage::prepare_scheduled_execution(task, lock_attemps)
             })
     }
