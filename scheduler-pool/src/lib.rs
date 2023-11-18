@@ -1328,7 +1328,6 @@ impl ScheduleStage {
         Box::new(ExecutionEnvironment {
             task,
             finalized_lock_attempts,
-            execution_result: Default::default(),
             result_with_timings: (Ok(()), Default::default()),
             finish_time: None,
             slot: 0,
