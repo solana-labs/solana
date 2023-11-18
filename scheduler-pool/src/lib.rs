@@ -605,7 +605,6 @@ where
             pool,
         );
         ee.slot = bank.slot();
-        ee.thx = thx;
         ee.execution_cpu_us = cpu_time.elapsed().as_micros();
         // make wall time is longer than cpu time, always
         wall_time.stop();
@@ -885,6 +884,7 @@ where
                     };
 
                     Self::receive_scheduled_transaction(&handler, &bank, &mut m, &pool);
+                    m.thx = thx;
 
                     if was_blocked {
                         handled_blocked_transaction_sender.send(m).unwrap();
