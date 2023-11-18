@@ -437,7 +437,7 @@ mod test {
             ),
             Err(RestartHeaviestForkError::ReceivedHeaviestForkStakeLargerThanTotalStake)
         );
-        let fork = RestartHeaviestFork::new(
+        let mut fork = RestartHeaviestFork::new(
             keypair.pubkey(),
             timestamp(),
             slot,
@@ -449,5 +449,8 @@ mod test {
         .unwrap();
         assert_eq!(fork.sanitize(), Ok(()));
         assert!(abs(fork.get_ratio() - 0.8) < 0.0001);
+
+        fork.received_heaviest_fork_ratio = 0;
+        assert_eq!(fork.sanitize(), Err(SanitizeError::ValueOutOfBounds));
     }
 }
