@@ -7113,6 +7113,7 @@ dependencies = [
  "serde_json",
  "solana-ledger",
  "solana-logger",
+ "solana-measure",
  "solana-metrics",
  "solana-nohash-hasher",
  "solana-program-runtime",

@@ -589,18 +589,18 @@ where
     fn receive_scheduled_transaction(
         handler: &TH,
         bank: &Arc<Bank>,
-        msg: &mut Box<ExecutionEnvironment>,
+        ee: &mut Box<ExecutionEnvironment>,
         pool: &Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
     ) {
         let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
         debug!("handling task at {:?}", std::thread::current());
         TH::handle(
             handler,
-            &mut msg.result_with_timings.0,
-            &mut msg.result_with_timings.1,
+            &mut ee.result_with_timings.0,
+            &mut ee.result_with_timings.1,
             bank,
-            &msg.task.tx.0,
-            msg.task.task_index(),
+            &ee.task.tx.0,
+            ee.task.task_index(),
             pool,
         );
         ee.slot = bank.slot();
