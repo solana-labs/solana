@@ -721,7 +721,7 @@ where
                                 };
                             },
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
-                                let execution_environment = execution_environment.unwrap();
+                                let mut execution_environment = execution_environment.unwrap();
                                 Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
                                 state_machine.deschedule_task(&mut execution_environment);
                                 drop_sender.send(execution_environment).unwrap();
@@ -736,7 +736,7 @@ where
                         }
 
                         while !(state_machine.is_empty() && (will_end_session || will_end_thread)) {
-                            if let Ok(execution_environment) =
+                            if let Ok(mut execution_environment) =
                                 handled_blocked_transaction_receiver.try_recv()
                             {
                                 Self::update_result_with_timings(
