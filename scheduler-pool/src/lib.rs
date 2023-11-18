@@ -426,14 +426,16 @@ impl AddressBook {
 
 #[derive(Debug)]
 pub struct ExecutionEnvironment {
-    pub task: TaskInQueue,
-    pub finalized_lock_attempts: Vec<LockAttempt>,
-    pub execution_result:
+    task: TaskInQueue,
+    finalized_lock_attempts: Vec<LockAttempt>,
+    execution_result:
         Option<std::result::Result<(), solana_sdk::transaction::TransactionError>>,
-    pub result_with_timings: ResultWithTimings,
+    result_with_timings: ResultWithTimings,
     finish_time: Option<std::time::SystemTime>,
     slot: Slot,
     thx: usize,
+    execution_us: u64,
+    execution_cpu_us: u128,
 }
 
 // Currently, simplest possible implementation (i.e. single-threaded)
