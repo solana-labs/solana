@@ -735,6 +735,7 @@ where
                                                 ControlFrame::EndSession => {
                                                     debug!("scheduler_main_loop: will_end_session = true");
                                                     will_end_session = true;
+                                                    log_scheduler!("eof     ");
                                                 }
                                             }
                                         }
@@ -793,6 +794,7 @@ where
                                                     "scheduler_main_loop: will_end_session = true"
                                                 );
                                                 will_end_session = true;
+                                                log_scheduler!("eof     ");
                                             }
                                         }
                                     }

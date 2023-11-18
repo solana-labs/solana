@@ -46,6 +46,7 @@ pub struct TransactionAccountLocks<'a> {
     #[serde_as(as = "Vec<DisplayFromStr>")]
     pub readonly: Vec<&'a Pubkey>,
     /// List of writable account key locks
+    #[serde_as(as = "Vec<DisplayFromStr>")]
     pub writable: Vec<&'a Pubkey>,
 }
 
