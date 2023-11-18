@@ -16,6 +16,7 @@ dashmap = { workspace = true }
 rand = { workspace = true }
 log = { workspace = true }
 solana-ledger = { workspace = true }
+solana-metrics = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-runtime = { workspace = true }
 solana-scheduler = { workspace = true }
