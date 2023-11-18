@@ -554,6 +554,7 @@ where
             result_receiver,
             context: initial_context,
             scheduler_thread: None,
+            drop_thread: None,
             handler_threads: Vec::with_capacity(handler_count),
             handler_count,
             handler,
