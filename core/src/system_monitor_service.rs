@@ -460,7 +460,7 @@ impl SystemMonitorService {
     fn linux_report_network_limits(
         current_limits: &[(&'static str, &'static InterestingLimit, i64)],
     ) -> bool {
-        !current_limits
+        current_limits
             .iter()
             .map(|(key, interesting_limit, current_value)| {
                 datapoint_warn!("os-config", (key, *current_value, i64));
