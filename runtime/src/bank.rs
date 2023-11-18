@@ -5101,7 +5101,6 @@ impl Bank {
         // Lock the global cache again to replenish the missing programs
         if !missing_programs.is_empty() || !unloaded_programs.is_empty() {
             let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
-            info!("write lock 1");
             for (key, program) in missing_programs {
                 let (_was_occupied, entry) = loaded_programs_cache.replenish(key, program);
                 // Use the returned entry as that might have been deduplicated globally
@@ -5336,7 +5335,6 @@ impl Bank {
 
         use rand::Rng;
         if rand::thread_rng().gen_range(0..1000) == 0 {
-            info!("write lock 3");
             const SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE: u8 = 90;
             self.loaded_programs_cache
                 .write()
@@ -5700,7 +5698,6 @@ impl Bank {
             {
                 if details.status.is_ok() {
                     if !programs_modified_by_tx.is_empty() {
-                        info!("write lock2");
                         let mut cache = self.loaded_programs_cache.write().unwrap();
                         cache.merge(programs_modified_by_tx);
                     }
