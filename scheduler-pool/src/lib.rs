@@ -929,11 +929,7 @@ where
                                     .unwrap(),
                                 String
                             ),
-                            (
-                                "status",
-                                format!("{:?}", ee.result_with_timings.0),
-                                String
-                            ),
+                            ("status", format!("{:?}", ee.result_with_timings.0), String),
                             ("duration", ee.execution_us, i64),
                             ("cpu_duration", ee.execution_cpu_us, i64),
                             ("compute_units", 0 /*ee.cu*/, i64),
