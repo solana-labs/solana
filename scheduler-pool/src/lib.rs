@@ -1303,6 +1303,7 @@ impl ScheduleStage {
             result_with_timings: (Ok(()), Default::default()),
             finish_time: None,
             slot: 0,
+            thx: 0,
         })
     }
 }
