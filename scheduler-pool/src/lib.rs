@@ -428,7 +428,6 @@ impl AddressBook {
 pub struct ExecutionEnvironment {
     task: TaskInQueue,
     finalized_lock_attempts: Vec<LockAttempt>,
-    execution_result: Option<std::result::Result<(), solana_sdk::transaction::TransactionError>>,
     result_with_timings: ResultWithTimings,
     finish_time: Option<std::time::SystemTime>,
     slot: Slot,
@@ -930,7 +929,7 @@ where
                             ),
                             (
                                 "status",
-                                format!("{:?}", ee.execution_result.as_ref().unwrap()),
+                                format!("{:?}", ee.execution_result.0),
                                 String
                             ),
                             ("duration", ee.execution_us, i64),
