@@ -929,7 +929,7 @@ where
                             ),
                             (
                                 "status",
-                                format!("{:?}", ee.execution_result.0),
+                                format!("{:?}", ee.result_with_timings.0),
                                 String
                             ),
                             ("duration", ee.execution_us, i64),
