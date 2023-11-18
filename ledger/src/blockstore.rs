@@ -2962,18 +2962,18 @@ impl Blockstore {
                 if let Ok(entries) = self.get_slot_entries(slot, 0) {
                     entries.into_par_iter().for_each(|entry| {
                         entry.transactions.into_iter().for_each(|tx| {
+                            if let Some(lookups) = tx.message.address_table_lookups() {
+                                add_to_set(
+                                    &lookup_tables,
+                                    lookups.iter().map(|lookup| &lookup.account_key),
+                                );
+                            }
                             // Attempt to verify transaction and load addresses from the current bank,
                             // or manually scan the transaction for addresses if the transaction.
                             if let Ok(tx) = bank.fully_verify_transaction(tx.clone()) {
                                 add_to_set(&result, tx.message().account_keys().iter());
                             } else {
                                 add_to_set(&result, tx.message.static_account_keys());
-                                if let Some(lookups) = tx.message.address_table_lookups() {
-                                    add_to_set(
-                                        &lookup_tables,
-                                        lookups.iter().map(|lookup| &lookup.account_key),
-                                    );
-                                }
 
                                 let tx = SanitizedVersionedTransaction::try_from(tx)
                                     .expect("transaction failed to sanitize");
@@ -2993,6 +2993,7 @@ impl Blockstore {
         lookup_tables.into_par_iter().for_each(|lookup_table_key| {
             bank.get_account(&lookup_table_key)
                 .map(|lookup_table_account| {
+                    add_to_set(&result, &[lookup_table_key]);
                     AddressLookupTable::deserialize(lookup_table_account.data()).map(|t| {
                         add_to_set(&result, &t.addresses[..]);
                     })
