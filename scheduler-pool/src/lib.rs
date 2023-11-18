@@ -902,7 +902,7 @@ where
                     solana_metrics::datapoint_info!(
                         //ee.finish_time.unwrap(),
                         "transaction_timings",
-                        ("slot", ee.task.slot, i64),
+                        ("slot", ee.slot, i64),
                         ("index", ee.task.task_index(), i64),
                         ("thread", format!("solScExLane{:02}", ee.thx), String),
                         ("signature", &sig, String),
