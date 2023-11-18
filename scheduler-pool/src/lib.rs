@@ -609,6 +609,7 @@ where
             pool,
         );
         ee.slot = bank.slot();
+        ee.finish_time = Some(std::time::SystemTime::now());
         ee.execution_cpu_us = cpu_time.elapsed().as_micros();
         // make wall time is longer than cpu time, always
         wall_time.stop();
