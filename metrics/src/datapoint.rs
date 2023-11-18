@@ -60,6 +60,15 @@ impl DataPoint {
         }
     }
 
+    pub fn at(timestamp: SystemTime, name: &'static str) -> Self {
+        DataPoint {
+            name,
+            timestamp,
+            tags: vec![],
+            fields: vec![],
+        }
+    }
+
     pub fn add_tag(&mut self, name: &'static str, value: &str) -> &mut Self {
         self.tags.push((name, value.to_string()));
         self
