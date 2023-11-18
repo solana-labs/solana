@@ -592,6 +592,7 @@ where
         msg: &mut Box<ExecutionEnvironment>,
         pool: &Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
     ) {
+        let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
         debug!("handling task at {:?}", std::thread::current());
         TH::handle(
             handler,
@@ -602,6 +603,12 @@ where
             msg.task.task_index(),
             pool,
         );
+        ee.slot = bank.slot();
+        ee.thx = thx;
+        ee.execution_cpu_us = cpu_time.elapsed().as_micros();
+        // make wall time is longer than cpu time, always
+        wall_time.stop();
+        ee.execution_us = wall_time.as_us();
     }
 
     fn propagate_context(
@@ -878,8 +885,6 @@ where
 
                     Self::receive_scheduled_transaction(&handler, &bank, &mut m, &pool);
 
-                    m.slot = bank.slot();
-                    m.thx = thx;
                     if was_blocked {
                         handled_blocked_transaction_sender.send(m).unwrap();
                     } else {
