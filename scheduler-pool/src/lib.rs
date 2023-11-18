@@ -445,6 +445,7 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     context: SchedulingContext,
     scheduler_thread: Option<JoinHandle<ResultWithTimings>>,
     handler_threads: Vec<JoinHandle<()>>,
+    drop_thread: Option<JoinHandle<()>>,
     handler: TH,
     schedulrable_transaction_sender: Sender<ChainedChannel<Arc<Task>, ControlFrame>>,
     schedulable_transaction_receiver: Receiver<ChainedChannel<Arc<Task>, ControlFrame>>,
@@ -897,7 +898,7 @@ where
                 .unwrap(),
         );
 
-        Some(
+        self.drop_thread = Some(
             std::thread::Builder::new()
                 .name("solScheduler".to_owned())
                 .spawn(drop_main_loop())
@@ -931,6 +932,7 @@ where
             self.schedulable_transaction_receiver,
         ) = unbounded();
         let result_with_timings = self.scheduler_thread.take().unwrap().join().unwrap();
+        let () = self.drop_thread.take().unwrap().join().unwrap();
         self.session_result_with_timings = Some(result_with_timings);
 
         for j in self.handler_threads.drain(..) {
