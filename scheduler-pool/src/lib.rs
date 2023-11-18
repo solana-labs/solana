@@ -1392,7 +1392,7 @@ impl SchedulingStateMachine {
             > 0;
         ScheduleStage::unlock_after_execution(
             should_remove,
-            &ee.task.unique_weight;
+            &ee.task.unique_weight,
             &mut self.retryable_task_queue,
             &mut ee.finalized_lock_attempts,
         );
