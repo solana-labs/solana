@@ -6,7 +6,7 @@ use {
         duplicate_shred::{DuplicateShred, DuplicateShredIndex, MAX_DUPLICATE_SHREDS},
         epoch_slots::EpochSlots,
         legacy_contact_info::LegacyContactInfo,
-        restart_crds_values::RestartLastVotedForkSlots,
+        restart_crds_values::{RestartHeaviestFork, RestartLastVotedForkSlots},
     },
     bincode::{serialize, serialized_size},
     rand::{CryptoRng, Rng},
@@ -96,6 +96,7 @@ pub enum CrdsData {
     SnapshotHashes(SnapshotHashes),
     ContactInfo(ContactInfo),
     RestartLastVotedForkSlots(RestartLastVotedForkSlots),
+    RestartHeaviestFork(RestartHeaviestFork),
 }
 
 impl Sanitize for CrdsData {
@@ -135,6 +136,7 @@ impl Sanitize for CrdsData {
             CrdsData::SnapshotHashes(val) => val.sanitize(),
             CrdsData::ContactInfo(node) => node.sanitize(),
             CrdsData::RestartLastVotedForkSlots(slots) => slots.sanitize(),
+            CrdsData::RestartHeaviestFork(fork) => fork.sanitize(),
         }
     }
 }
@@ -148,7 +150,7 @@ pub(crate) fn new_rand_timestamp<R: Rng>(rng: &mut R) -> u64 {
 impl CrdsData {
     /// New random CrdsData for tests and benchmarks.
     fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> CrdsData {
-        let kind = rng.gen_range(0..8);
+        let kind = rng.gen_range(0..9);
         // TODO: Implement other kinds of CrdsData here.
         // TODO: Assign ranges to each arm proportional to their frequency in
         // the mainnet crds table.
@@ -163,6 +165,7 @@ impl CrdsData {
             6 => CrdsData::RestartLastVotedForkSlots(RestartLastVotedForkSlots::new_rand(
                 rng, pubkey,
             )),
+            7 => CrdsData::RestartHeaviestFork(RestartHeaviestFork::new_rand(rng, pubkey)),
             _ => CrdsData::EpochSlots(
                 rng.gen_range(0..MAX_EPOCH_SLOTS),
                 EpochSlots::new_rand(rng, pubkey),
@@ -508,6 +511,7 @@ pub enum CrdsValueLabel {
     SnapshotHashes(Pubkey),
     ContactInfo(Pubkey),
     RestartLastVotedForkSlots(Pubkey),
+    RestartHeaviestFork(Pubkey),
 }
 
 impl fmt::Display for CrdsValueLabel {
@@ -534,6 +538,9 @@ impl fmt::Display for CrdsValueLabel {
             CrdsValueLabel::RestartLastVotedForkSlots(_) => {
                 write!(f, "RestartLastVotedForkSlots({})", self.pubkey())
             }
+            CrdsValueLabel::RestartHeaviestFork(_) => {
+                write!(f, "RestartHeaviestFork({})", self.pubkey())
+            }
         }
     }
 }
@@ -554,6 +561,7 @@ impl CrdsValueLabel {
             CrdsValueLabel::SnapshotHashes(p) => *p,
             CrdsValueLabel::ContactInfo(pubkey) => *pubkey,
             CrdsValueLabel::RestartLastVotedForkSlots(p) => *p,
+            CrdsValueLabel::RestartHeaviestFork(p) => *p,
         }
     }
 }
@@ -605,6 +613,7 @@ impl CrdsValue {
             CrdsData::SnapshotHashes(hash) => hash.wallclock,
             CrdsData::ContactInfo(node) => node.wallclock(),
             CrdsData::RestartLastVotedForkSlots(slots) => slots.wallclock,
+            CrdsData::RestartHeaviestFork(fork) => fork.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
@@ -622,6 +631,7 @@ impl CrdsValue {
             CrdsData::SnapshotHashes(hash) => hash.from,
             CrdsData::ContactInfo(node) => *node.pubkey(),
             CrdsData::RestartLastVotedForkSlots(slots) => slots.from,
+            CrdsData::RestartHeaviestFork(fork) => fork.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -643,6 +653,7 @@ impl CrdsValue {
             CrdsData::RestartLastVotedForkSlots(_) => {
                 CrdsValueLabel::RestartLastVotedForkSlots(self.pubkey())
             }
+            CrdsData::RestartHeaviestFork(_) => CrdsValueLabel::RestartHeaviestFork(self.pubkey()),
         }
     }
     pub fn contact_info(&self) -> Option<&LegacyContactInfo> {

@@ -29,6 +29,25 @@ pub enum RestartLastVotedForkSlotsError {
     LastVotedForkEmpty,
 }
 
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, AbiExample, Debug)]
+pub struct RestartHeaviestFork {
+    pub from: Pubkey,
+    pub wallclock: u64,
+    pub last_slot: Slot,
+    pub last_slot_hash: Hash,
+    // Sum of received heaviest fork validator stake / total stake * u16::MAX.
+    received_heaviest_fork_ratio: u16,
+    pub shred_version: u16,
+}
+
+#[derive(Debug, Error, PartialEq)]
+pub enum RestartHeaviestForkError {
+    #[error("Received stake larger than total stake")]
+    ReceivedHeaviestForkStakeLargerThanTotalStake,
+    #[error("Total stake of received heaviest fork cannot be zero")]
+    ReceivedHeaviestForkStakeZero,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample, AbiEnumVisitor)]
 enum SlotsOffsets {
     RunLengthEncoding(RunLengthEncoding),
@@ -122,6 +141,64 @@ impl RestartLastVotedForkSlots {
     }
 }
 
+impl Sanitize for RestartHeaviestFork {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        if self.received_heaviest_fork_ratio == 0 {
+            // this should at least include its own stake.
+            return Err(SanitizeError::ValueOutOfBounds);
+        }
+        self.last_slot_hash.sanitize()
+    }
+}
+
+impl RestartHeaviestFork {
+    pub fn new(
+        from: Pubkey,
+        now: u64,
+        last_slot: Slot,
+        last_slot_hash: Hash,
+        received_heaviest_fork_stake: u64,
+        total_stake: u64,
+        shred_version: u16,
+    ) -> Result<Self, RestartHeaviestForkError> {
+        if received_heaviest_fork_stake == 0 {
+            return Err(RestartHeaviestForkError::ReceivedHeaviestForkStakeZero);
+        }
+        if received_heaviest_fork_stake > total_stake {
+            return Err(RestartHeaviestForkError::ReceivedHeaviestForkStakeLargerThanTotalStake);
+        }
+        let received_heaviest_fork_ratio =
+            ((received_heaviest_fork_stake as f64) / (total_stake as f64) * (u16::MAX as f64))
+                .round() as u16;
+        Ok(Self {
+            from,
+            wallclock: now,
+            last_slot,
+            last_slot_hash,
+            received_heaviest_fork_ratio,
+            shred_version,
+        })
+    }
+
+    pub fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
+        let pubkey = pubkey.unwrap_or_else(solana_sdk::pubkey::new_rand);
+        Self::new(
+            pubkey,
+            new_rand_timestamp(rng),
+            rng.gen_range(0..1000),
+            Hash::new_unique(),
+            rng.gen_range(1..u64::MAX),
+            u64::MAX,
+            1,
+        )
+        .unwrap()
+    }
+
+    pub fn get_ratio(&self) -> f64 {
+        self.received_heaviest_fork_ratio as f64 / u16::MAX as f64
+    }
+}
+
 impl RunLengthEncoding {
     fn new(bits: &BitVec<u8>) -> Self {
         let encoded = (0..bits.len())
@@ -188,6 +265,7 @@ mod test {
             crds_value::{CrdsData, CrdsValue, CrdsValueLabel},
         },
         bincode::serialized_size,
+        num_traits::abs,
         solana_sdk::{signature::Signer, signer::keypair::Keypair, timing::timestamp},
         std::iter::repeat_with,
     };
@@ -316,5 +394,60 @@ mod test {
         let large_length = 500;
         let range: Vec<Slot> = make_rand_slots(&mut rng).take(large_length).collect();
         check_run_length_encoding(range);
+    }
+
+    #[test]
+    fn test_restart_heaviest_fork() {
+        let keypair = Keypair::new();
+        let slot = 53;
+        // received_heaviest_fork_percent can never be 0.
+        assert_eq!(
+            RestartHeaviestFork::new(
+                keypair.pubkey(),
+                timestamp(),
+                slot,
+                Hash::default(),
+                0,
+                1_000_000,
+                1,
+            ),
+            Err(RestartHeaviestForkError::ReceivedHeaviestForkStakeZero)
+        );
+        assert_eq!(
+            RestartHeaviestFork::new(
+                keypair.pubkey(),
+                timestamp(),
+                slot,
+                Hash::default(),
+                1_000_000,
+                0,
+                1,
+            ),
+            Err(RestartHeaviestForkError::ReceivedHeaviestForkStakeLargerThanTotalStake)
+        );
+        assert_eq!(
+            RestartHeaviestFork::new(
+                keypair.pubkey(),
+                timestamp(),
+                slot,
+                Hash::default(),
+                1_000_001,
+                1_000_000,
+                1,
+            ),
+            Err(RestartHeaviestForkError::ReceivedHeaviestForkStakeLargerThanTotalStake)
+        );
+        let fork = RestartHeaviestFork::new(
+            keypair.pubkey(),
+            timestamp(),
+            slot,
+            Hash::default(),
+            800_000,
+            1_000_000,
+            1,
+        )
+        .unwrap();
+        assert_eq!(fork.sanitize(), Ok(()));
+        assert!(abs(fork.get_ratio() - 0.8) < 0.0001);
     }
 }
