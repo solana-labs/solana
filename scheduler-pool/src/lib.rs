@@ -888,6 +888,8 @@ where
         let drop_main_loop = || {
             move || loop {
                 while let Ok(ee) = drop_receiver.try_recv() {
+                    use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
+
                     let sig = ee.task.tx.0.signature().to_string();
 
                     solana_metrics::datapoint_info!(
