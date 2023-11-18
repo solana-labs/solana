@@ -10,6 +10,7 @@ use {
         get_solana_root, initialize_globals,
         kubernetes::{ClientConfig, Kubernetes, Metrics, ValidatorConfig},
         ledger_helper::LedgerHelper,
+        k8s_helpers,
         release::{BuildConfig, Deploy},
         ValidatorType,
     },
@@ -19,8 +20,6 @@ use {
     solana_sdk::pubkey::Pubkey,
     std::{thread, time::Duration},
 };
-
-const BOOTSTRAP_VALIDATOR_REPLICAS: i32 = 1;
 
 fn parse_matches() -> ArgMatches<'static> {
     App::new(crate_name!())
@@ -859,14 +858,13 @@ async fn main() {
 
     // Bootstrap needs two labels. Because it is going to have two services. One via LB, one direct
     let mut bootstrap_rs_labels =
-        kub_controller.create_selector("app.kubernetes.io/lb", "load-balancer-selector");
+        k8s_helpers::create_selector("app.kubernetes.io/lb", "load-balancer-selector");
     bootstrap_rs_labels.insert("app.kubernetes.io/name".to_string(), "bootstrap-validator-selector".to_string());
 
     let bootstrap_replica_set = match kub_controller
         .create_bootstrap_validator_replica_set(
             bootstrap_container_name,
             bootstrap_image_name,
-            BOOTSTRAP_VALIDATOR_REPLICAS,
             bootstrap_secret.metadata.name.clone(),
             &bootstrap_rs_labels,
         )
@@ -894,7 +892,7 @@ async fn main() {
         }
     };
 
-    let bootstrap_service_label = kub_controller.create_selector("app.kubernetes.io/name", "bootstrap-validator-selector");
+    let bootstrap_service_label = k8s_helpers::create_selector("app.kubernetes.io/name", "bootstrap-validator-selector");
     let bootstrap_service =
         kub_controller.create_validator_service("bootstrap-validator", &bootstrap_service_label);
     match kub_controller.deploy_service(&bootstrap_service).await {
@@ -906,7 +904,7 @@ async fn main() {
     }
 
     //load balancer service
-    let load_balancer_label = kub_controller.create_selector("app.kubernetes.io/lb", "load-balancer-selector");
+    let load_balancer_label = k8s_helpers::create_selector("app.kubernetes.io/lb", "load-balancer-selector");
     //create load balancer
     let load_balancer = kub_controller.create_load_balancer(
         "bootstrap-and-non-voting-lb-service",
@@ -941,7 +939,7 @@ async fn main() {
         // we need one load balancer for all of these nv validators...
         let mut non_voting_validators = vec![];
         for nvv_index in 0..num_non_voting_validators {
-            let mut nvv_rs_labels = kub_controller.create_selector(
+            let mut nvv_rs_labels = k8s_helpers::create_selector(
                 "app.kubernetes.io/name",
                 format!("non-voting-selector-{}", nvv_index).as_str(),
             );
@@ -967,7 +965,6 @@ async fn main() {
                     nvv_container_name,
                     nvv_index,
                     nvv_image_name,
-                    1,
                     nvv_secret.metadata.name.clone(),
                     &nvv_rs_labels,
                 )
@@ -1001,7 +998,7 @@ async fn main() {
             non_voting_validators.push(nvv_replica_set_name);
 
             //create nvv service
-            let non_voting_label = kub_controller.create_selector(
+            let non_voting_label = k8s_helpers::create_selector(
                 "app.kubernetes.io/name",
                 format!("non-voting-selector-{}", nvv_index).as_str(),
             );
@@ -1068,7 +1065,7 @@ async fn main() {
             }
         }
 
-        let label_selector = kub_controller.create_selector(
+        let label_selector = k8s_helpers::create_selector(
             "app.kubernetes.io/name",
             format!("validator-{}", validator_index).as_str(),
         );
@@ -1078,7 +1075,6 @@ async fn main() {
                 validator_container_name,
                 validator_index,
                 validator_image_name,
-                1,
                 validator_secret.metadata.name.clone(),
                 &label_selector,
             )
@@ -1156,7 +1152,7 @@ async fn main() {
             }
         }
 
-        let label_selector = kub_controller.create_selector(
+        let label_selector = k8s_helpers::create_selector(
             "app.kubernetes.io/name",
             format!("client-{}", client_index).as_str(),
         );
@@ -1166,7 +1162,6 @@ async fn main() {
                 client_container_name,
                 client_index,
                 client_image_name,
-                1,
                 client_secret.metadata.name.clone(),
                 &label_selector,
             )

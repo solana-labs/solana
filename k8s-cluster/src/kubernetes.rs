@@ -1,15 +1,16 @@
 use {
-    crate::{boxed_error, SOLANA_ROOT},
+    crate::{
+        boxed_error, SOLANA_ROOT, k8s_helpers,
+    },
     k8s_openapi::{
         api::{
-            apps::v1::{ReplicaSet, ReplicaSetSpec},
+            apps::v1::ReplicaSet,
             core::v1::{
-                Container, EnvVar, EnvVarSource, Namespace, ObjectFieldSelector,
-                PodSecurityContext, PodSpec, PodTemplateSpec, Secret, SecretVolumeSource, Service,
+                EnvVar, EnvVarSource, Namespace, ObjectFieldSelector,
+                Secret, SecretVolumeSource, Service,
                 ServicePort, ServiceSpec, Volume, VolumeMount, Probe, ExecAction,
             },
         },
-        apimachinery::pkg::apis::meta::v1::LabelSelector,
         ByteString,
     },
     kube::{
@@ -122,7 +123,6 @@ impl Metrics {
         )
     }
 }
-
 pub struct Kubernetes<'a> {
     client: Client,
     namespace: &'a str,
@@ -217,10 +217,10 @@ impl<'a> Kubernetes<'a> {
             flags.push(shred_version.to_string());
         }
 
-        // for nvv_index in 0..self.num_non_voting_validators {
-        //     flags.push("--entrypoint".to_string());
-        //     flags.push(format!("non-voting-{}-service.{}.svc.cluster.local:8001", nvv_index, self.namespace));
-        // }
+        for nvv_index in 0..self.num_non_voting_validators {
+            flags.push("--entrypoint".to_string());
+            flags.push(format!("non-voting-{}-service.{}.svc.cluster.local:8001", nvv_index, self.namespace));
+        }
 
         flags
     }
@@ -275,21 +275,14 @@ impl<'a> Kubernetes<'a> {
         Ok(false)
     }
 
-    pub fn create_selector(&mut self, key: &str, value: &str) -> BTreeMap<String, String> {
-        let mut btree = BTreeMap::new();
-        btree.insert(key.to_string(), value.to_string());
-        btree
-    }
-
     pub fn create_bootstrap_validator_replica_set(
         &mut self,
         container_name: &str,
         image_name: &str,
-        num_bootstrap_validators: i32,
         secret_name: Option<String>,
         label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
-        let mut env_var = vec![EnvVar {
+        let mut env_vars = vec![EnvVar {
             name: "MY_POD_IP".to_string(),
             value_from: Some(EnvVarSource {
                 field_ref: Some(ObjectFieldSelector {
@@ -302,7 +295,7 @@ impl<'a> Kubernetes<'a> {
         }];
 
         if self.metrics.is_some() {
-            env_var.push(self.get_metrics_env_var_secret())
+            env_vars.push(self.get_metrics_env_var_secret())
         }
 
         let accounts_volume = Some(vec![Volume {
@@ -328,82 +321,18 @@ impl<'a> Kubernetes<'a> {
             debug!("bootstrap command: {}", c);
         }
 
-        self.create_replicas_set(
+        k8s_helpers::create_replica_set(
             "bootstrap-validator",
+            self.namespace,
             label_selector,
             container_name,
             image_name,
-            num_bootstrap_validators,
-            env_var,
+            env_vars,
             &command,
             accounts_volume,
             accounts_volume_mount,
             None,
         )
-    }
-
-    // mount genesis in bootstrap. validators will pull
-    // genesis from bootstrap
-    #[allow(clippy::too_many_arguments)]
-    fn create_replicas_set(
-        &self,
-        app_name: &str,
-        label_selector: &BTreeMap<String, String>,
-        container_name: &str,
-        image_name: &str,
-        num_validators: i32,
-        env_vars: Vec<EnvVar>,
-        command: &[String],
-        volumes: Option<Vec<Volume>>,
-        volume_mounts: Option<Vec<VolumeMount>>,
-        readiness_probe: Option<Probe>,
-    ) -> Result<ReplicaSet, Box<dyn Error>> {
-        // Define the pod spec
-        let pod_spec = PodTemplateSpec {
-            metadata: Some(ObjectMeta {
-                labels: Some(label_selector.clone()),
-                ..Default::default()
-            }),
-            spec: Some(PodSpec {
-                containers: vec![Container {
-                    name: container_name.to_string(),
-                    image: Some(image_name.to_string()),
-                    image_pull_policy: Some("Always".to_string()),
-                    env: Some(env_vars),
-                    command: Some(command.to_owned()),
-                    volume_mounts,
-                    readiness_probe: readiness_probe,
-                    ..Default::default()
-                }],
-                volumes,
-                security_context: Some(PodSecurityContext {
-                    run_as_user: Some(1000),
-                    run_as_group: Some(1000),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            }),
-        };
-
-        let replicas_set_spec = ReplicaSetSpec {
-            replicas: Some(num_validators),
-            selector: LabelSelector {
-                match_labels: Some(label_selector.clone()),
-                ..Default::default()
-            },
-            template: Some(pod_spec),
-            ..Default::default()
-        };
-
-        Ok(ReplicaSet {
-            metadata: ObjectMeta {
-                name: Some(format!("{}-replicaset", app_name)),
-                namespace: Some(self.namespace.to_string()),
-                ..Default::default()
-            },
-            spec: Some(replicas_set_spec),
-            ..Default::default()
-        })
     }
 
     pub async fn deploy_secret(&self, secret: &Secret) -> Result<Secret, kube::Error> {
@@ -424,16 +353,7 @@ impl<'a> Kubernetes<'a> {
             )));
         }
 
-        let secret = Secret {
-            metadata: ObjectMeta {
-                name: Some("solana-metrics-secret".to_string()),
-                ..Default::default()
-            },
-            data: Some(data),
-            ..Default::default()
-        };
-
-        Ok(secret)
+        Ok(k8s_helpers::create_secret("solana-metrics-secret", data))
     }
 
     pub fn get_metrics_env_var_secret(&self) -> EnvVar {
@@ -488,16 +408,7 @@ impl<'a> Kubernetes<'a> {
             ByteString(faucet_keypair),
         );
 
-        let secret = Secret {
-            metadata: ObjectMeta {
-                name: Some(secret_name.to_string()),
-                ..Default::default()
-            },
-            data: Some(data),
-            ..Default::default()
-        };
-
-        Ok(secret)
+        Ok(k8s_helpers::create_secret(secret_name, data))
     }
 
     pub fn create_validator_secret(&self, validator_index: i32) -> Result<Secret, Box<dyn Error>> {
@@ -520,16 +431,8 @@ impl<'a> Kubernetes<'a> {
                 ByteString(keypair),
             );
         }
-        let secret = Secret {
-            metadata: ObjectMeta {
-                name: Some(secret_name.to_string()),
-                ..Default::default()
-            },
-            data: Some(data),
-            ..Default::default()
-        };
 
-        Ok(secret)
+        Ok(k8s_helpers::create_secret(secret_name.as_str(), data))
     }
 
     pub fn create_client_secret(&self, client_index: i32) -> Result<Secret, Box<dyn Error>> {
@@ -546,16 +449,7 @@ impl<'a> Kubernetes<'a> {
             ByteString(faucet_keypair),
         );
 
-        let secret = Secret {
-            metadata: ObjectMeta {
-                name: Some(secret_name.to_string()),
-                ..Default::default()
-            },
-            data: Some(data),
-            ..Default::default()
-        };
-
-        Ok(secret)
+        Ok(k8s_helpers::create_secret(secret_name.as_str(), data))
     }
 
     pub fn create_non_voting_secret(&self, nvv_index: i32) -> Result<Secret, Box<dyn Error>> {
@@ -587,16 +481,7 @@ impl<'a> Kubernetes<'a> {
             ByteString(faucet_keypair),
         );
 
-        let secret = Secret {
-            metadata: ObjectMeta {
-                name: Some(secret_name.to_string()),
-                ..Default::default()
-            },
-            data: Some(data),
-            ..Default::default()
-        };
-
-        Ok(secret)
+        Ok(k8s_helpers::create_secret(secret_name.as_str(), data))
     }
 
     pub async fn deploy_replicas_set(
@@ -743,7 +628,6 @@ impl<'a> Kubernetes<'a> {
         container_name: &str,
         validator_index: i32,
         image_name: &str,
-        num_validators: i32,
         secret_name: Option<String>,
         label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
@@ -778,12 +662,12 @@ impl<'a> Kubernetes<'a> {
             debug!("validator command: {}", c);
         }
 
-        self.create_replicas_set(
+        k8s_helpers::create_replica_set(
             format!("validator-{}", validator_index).as_str(),
+            self.namespace,
             label_selector,
             container_name,
             image_name,
-            num_validators,
             env_vars,
             &command,
             accounts_volume,
@@ -797,7 +681,6 @@ impl<'a> Kubernetes<'a> {
         container_name: &str,
         nvv_index: i32,
         image_name: &str,
-        num_validators: i32,
         secret_name: Option<String>,
         label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
@@ -857,12 +740,12 @@ impl<'a> Kubernetes<'a> {
             ..Default::default()
         };
 
-        self.create_replicas_set(
+        k8s_helpers::create_replica_set(
             format!("non-voting-{}", nvv_index).as_str(),
+            self.namespace,
             label_selector,
             container_name,
             image_name,
-            num_validators,
             env_vars,
             &command,
             accounts_volume,
@@ -876,7 +759,6 @@ impl<'a> Kubernetes<'a> {
         container_name: &str,
         client_index: i32,
         image_name: &str,
-        num_clients: i32,
         secret_name: Option<String>,
         label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
@@ -911,12 +793,12 @@ impl<'a> Kubernetes<'a> {
             debug!("client command: {}", c);
         }
 
-        self.create_replicas_set(
+        k8s_helpers::create_replica_set(
             format!("client-{}", client_index).as_str(),
+            self.namespace,
             label_selector,
             container_name,
             image_name,
-            num_clients,
             env_vars,
             &command,
             accounts_volume,
