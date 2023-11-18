@@ -35,11 +35,11 @@ pub struct SanitizedTransaction {
     signatures: Vec<Signature>,
 }
 
-use serde_with::serde_as;
+use serde_with::*;
 
 /// Set of accounts that must be locked for safe transaction processing
 #[serde_as]
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize)]
 pub struct TransactionAccountLocks<'a> {
     /// List of readonly account key locks
     #[serde_as(as = "Vec<DisplayFromStr>")]
