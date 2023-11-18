@@ -887,6 +887,24 @@ where
         let drop_main_loop = || {
             move || loop {
                 while let Ok(ee) = drop_receiver.try_recv() {
+                    datapoint_info!(
+                        ee.finish_time.unwrap(),
+                        "transaction_timings",
+                        ("slot", ee.task.slot, i64),
+                        ("index", ee.task.transaction_index(), i64),
+                        ("thread", format!("solScExLane{:02}", ee.thx), String),
+                        ("signature", &sig, String),
+                        ("account_locks_in_json", serde_json::to_string(&ee.task.tx.0.get_account_locks_unchecked()).unwrap(), String),
+                        (
+                            "status",
+                            format!("{:?}", ee.execution_result.as_ref().unwrap()),
+                            String
+                        ),
+                        ("duration", ee.execution_us, i64),
+                        ("cpu_duration", ee.execution_cpu_us, i64),
+                        ("compute_units", ee.cu, i64),
+                        ("priority", ee.task.tx.0.get_transaction_priority_details().map(|d| d.priority).unwrap_or_default(), i64),
+                    );
                     drop(ee);
                 }
                 std::thread::sleep(std::time::Duration::from_millis(40));
