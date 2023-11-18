@@ -934,7 +934,7 @@ where
                             ),
                             ("duration", ee.execution_us, i64),
                             ("cpu_duration", ee.execution_cpu_us, i64),
-                            //("compute_units", ee.cu, i64),
+                            ("compute_units", 0 /*ee.cu*/, i64),
                             (
                                 "priority",
                                 ee.task
