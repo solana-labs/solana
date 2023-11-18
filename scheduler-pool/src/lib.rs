@@ -283,6 +283,10 @@ impl Task {
         self.uncontended
             .store(2, std::sync::atomic::Ordering::SeqCst)
     }
+
+    fn task_index(&self) -> usize {
+        (UniqueWeight::max_value() - self.unique_weight) as usize,
+    }
 }
 
 #[derive(Debug)]
@@ -592,7 +596,7 @@ where
             &mut msg.result_with_timings.1,
             bank,
             &msg.task.tx.0,
-            (UniqueWeight::max_value() - msg.task.unique_weight) as usize,
+            msg.task.task_index(),
             pool,
         );
     }
@@ -896,10 +900,10 @@ where
                         //ee.finish_time.unwrap(),
                         "transaction_timings",
                         ("slot", ee.task.slot, i64),
-                        ("index", ee.task.transaction_index(), i64),
+                        ("index", ee.task.task_index(), i64),
                         ("thread", format!("solScExLane{:02}", ee.thx), String),
                         ("signature", &sig, String),
-                        ("account_locks_in_json", serde_json::to_string(&ee.task.tx.0.get_account_locks_unchecked()).unwrap(), String),
+                        //("account_locks_in_json", serde_json::to_string(&ee.task.tx.0.get_account_locks_unchecked()).unwrap(), String),
                         (
                             "status",
                             format!("{:?}", ee.execution_result.as_ref().unwrap()),
