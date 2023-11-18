@@ -919,7 +919,7 @@ where
                             ("index", ee.task.task_index(), i64),
                             ("thread", format!("solScExLane{:02}", ee.thx), String),
                             ("signature", &sig, String),
-                            //("account_locks_in_json", serde_json::to_string(&ee.task.tx.0.get_account_locks_unchecked()).unwrap(), String),
+                            ("account_locks_in_json", serde_json::to_string(&ee.task.tx.0.get_account_locks_unchecked()).unwrap(), String),
                             (
                                 "status",
                                 format!("{:?}", ee.execution_result.as_ref().unwrap()),
