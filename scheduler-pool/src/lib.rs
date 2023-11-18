@@ -688,7 +688,7 @@ where
                             recv(handled_blocked_transaction_receiver) -> execution_environment => {
                                 let execution_environment = execution_environment.unwrap();
                                 Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
-                                state_machine.deschedule_task(&execution_environment);
+                                state_machine.deschedule_task(&mut execution_environment);
                                 drop_sender.send(execution_environment).unwrap();
                             },
                             recv(schedulable_transaction_receiver) -> m => {
@@ -723,7 +723,7 @@ where
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
                                 let execution_environment = execution_environment.unwrap();
                                 Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
-                                state_machine.deschedule_task(&execution_environment);
+                                state_machine.deschedule_task(&mut execution_environment);
                                 drop_sender.send(execution_environment).unwrap();
                             },
                         };
@@ -1227,7 +1227,7 @@ impl ScheduleStage {
         should_remove: bool,
         uq: UniqueWeight,
         retryable_task_queue: &mut WeightedTaskQueue,
-        lock_attempts: &[LockAttempt],
+        lock_attempts: &mut [LockAttempt],
     ) {
         for unlock_attempt in lock_attempts {
             let heaviest_uncontended = unlock_attempt
@@ -1378,7 +1378,7 @@ impl SchedulingStateMachine {
             })
     }
 
-    fn deschedule_task(&mut self, ee: &Box<ExecutionEnvironment>) {
+    fn deschedule_task(&mut self, ee: &mut Box<ExecutionEnvironment>) {
         self.active_task_count -= 1;
         self.handled_task_count += 1;
         let should_remove = ee
@@ -1391,7 +1391,7 @@ impl SchedulingStateMachine {
             should_remove,
             uq,
             &mut self.retryable_task_queue,
-            &ee.finalized_lock_attempts,
+            &mut ee.finalized_lock_attempts,
         );
     }
 }
