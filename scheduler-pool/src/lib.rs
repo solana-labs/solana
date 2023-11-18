@@ -1313,6 +1313,8 @@ impl ScheduleStage {
             finish_time: None,
             slot: 0,
             thx: 0,
+            execution_us: 0,
+            execution_cpu_us: 0,
         })
     }
 }
