@@ -35,6 +35,8 @@ pub struct SanitizedTransaction {
     signatures: Vec<Signature>,
 }
 
+use serde_with::serde_as;
+
 /// Set of accounts that must be locked for safe transaction processing
 #[serde_as]
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
