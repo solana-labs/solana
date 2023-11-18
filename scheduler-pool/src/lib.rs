@@ -887,7 +887,7 @@ where
         let drop_main_loop = || {
             move || loop {
                 while let Ok(ee) = drop_receiver.try_recv() {
-                    datapoint_info!(
+                    solana_metrics::datapoint_info!(
                         ee.finish_time.unwrap(),
                         "transaction_timings",
                         ("slot", ee.task.slot, i64),

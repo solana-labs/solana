@@ -7112,6 +7112,7 @@ dependencies = [
  "rand 0.8.5",
  "solana-ledger",
  "solana-logger",
+ "solana-metrics",
  "solana-nohash-hasher",
  "solana-program-runtime",
  "solana-runtime",
