@@ -743,7 +743,8 @@ where
                                     result_with_timings.as_mut().unwrap(),
                                     &execution_environment,
                                 );
-                                state_machine.deschedule_task(execution_environment);
+                                state_machine.deschedule_task(&mut execution_environment);
+                                drop_sender.send(execution_environment).unwrap();
                             } else if let Ok(mm) = schedulable_transaction_receiver.try_recv() {
                                 match mm {
                                     ChainedChannel::Payload(payload) => {
@@ -784,7 +785,8 @@ where
                                     result_with_timings.as_mut().unwrap(),
                                     &execution_environment,
                                 );
-                                state_machine.deschedule_task(execution_environment);
+                                state_machine.deschedule_task(&mut execution_environment);
+                                drop_sender.send(execution_environment).unwrap();
                             } else {
                                 log_scheduler!();
                                 break;
