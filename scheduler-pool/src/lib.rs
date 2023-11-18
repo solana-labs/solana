@@ -634,8 +634,7 @@ where
             unbounded::<Box<ExecutionEnvironment>>();
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
             unbounded::<Box<ExecutionEnvironment>>();
-        let (drop_sender, drop_receiver) =
-            unbounded::<Box<ExecutionEnvironment>>();
+        let (drop_sender, drop_receiver) = unbounded::<Box<ExecutionEnvironment>>();
         let handler_count = self.handler_count;
         let mut slot = self.context.bank().slot();
 
@@ -883,13 +882,11 @@ where
         };
 
         let drop_main_loop = || {
-            move || {
-                loop {
-                    while let Ok(ee) = drop_receiver.try_recv() {
-                        drop(ee);
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(100));
+            move || loop {
+                while let Ok(ee) = drop_receiver.try_recv() {
+                    drop(ee);
                 }
+                std::thread::sleep(std::time::Duration::from_millis(100));
             }
         };
 
