@@ -645,6 +645,8 @@ where
         }
         debug!("start_threads(): doing now");
 
+        let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
+
         let (blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) =
             unbounded::<ChainedChannel<Box<ExecutionEnvironment>, ControlFrame>>();
         let (idle_transaction_sender, idle_transaction_receiver) =
@@ -905,28 +907,30 @@ where
         let drop_main_loop = || {
             move || loop {
                 while let Ok(ee) = drop_receiver.try_recv() {
-                    use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
+                    if send_metrics {
+                        use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
 
-                    let sig = ee.task.tx.0.signature().to_string();
+                        let sig = ee.task.tx.0.signature().to_string();
 
-                    solana_metrics::datapoint_info!(
-                        //ee.finish_time.unwrap(),
-                        "transaction_timings",
-                        ("slot", ee.slot, i64),
-                        ("index", ee.task.task_index(), i64),
-                        ("thread", format!("solScExLane{:02}", ee.thx), String),
-                        ("signature", &sig, String),
-                        //("account_locks_in_json", serde_json::to_string(&ee.task.tx.0.get_account_locks_unchecked()).unwrap(), String),
-                        (
-                            "status",
-                            format!("{:?}", ee.execution_result.as_ref().unwrap()),
-                            String
-                        ),
-                        ("duration", ee.execution_us, i64),
-                        ("cpu_duration", ee.execution_cpu_us, i64),
-                        //("compute_units", ee.cu, i64),
-                        ("priority", ee.task.tx.0.get_transaction_priority_details(false).map(|d| d.priority).unwrap_or_default(), i64),
-                    );
+                        solana_metrics::datapoint_info!(
+                            //ee.finish_time.unwrap(),
+                            "transaction_timings",
+                            ("slot", ee.slot, i64),
+                            ("index", ee.task.task_index(), i64),
+                            ("thread", format!("solScExLane{:02}", ee.thx), String),
+                            ("signature", &sig, String),
+                            //("account_locks_in_json", serde_json::to_string(&ee.task.tx.0.get_account_locks_unchecked()).unwrap(), String),
+                            (
+                                "status",
+                                format!("{:?}", ee.execution_result.as_ref().unwrap()),
+                                String
+                            ),
+                            ("duration", ee.execution_us, i64),
+                            ("cpu_duration", ee.execution_cpu_us, i64),
+                            //("compute_units", ee.cu, i64),
+                            ("priority", ee.task.tx.0.get_transaction_priority_details(false).map(|d| d.priority).unwrap_or_default(), i64),
+                        );
+                    }
                     drop(ee);
                 }
                 std::thread::sleep(std::time::Duration::from_millis(40));
