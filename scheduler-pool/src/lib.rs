@@ -38,6 +38,7 @@ use {
         thread::JoinHandle,
     },
 };
+use solana_sdk::slot_history::Slot;
 
 type UniqueWeight = u64;
 
@@ -285,7 +286,7 @@ impl Task {
     }
 
     fn task_index(&self) -> usize {
-        (UniqueWeight::max_value() - self.unique_weight) as usize,
+        (UniqueWeight::max_value() - self.unique_weight) as usize
     }
 }
 
