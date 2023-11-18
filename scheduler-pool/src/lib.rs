@@ -912,7 +912,7 @@ where
 
                         let sig = ee.task.tx.0.signature().to_string();
 
-                        solana_metrics::datapoint_info!(
+                        solana_metrics::datapoint_info_at!(
                             //ee.finish_time.unwrap(),
                             "transaction_timings",
                             ("slot", ee.slot, i64),
