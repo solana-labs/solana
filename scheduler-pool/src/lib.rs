@@ -634,6 +634,8 @@ where
             unbounded::<Box<ExecutionEnvironment>>();
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
             unbounded::<Box<ExecutionEnvironment>>();
+        let (drop_sender, drop_receiver) =
+            unbounded::<Box<ExecutionEnvironment>>();
         let handler_count = self.handler_count;
         let mut slot = self.context.bank().slot();
 
@@ -686,7 +688,8 @@ where
                             recv(handled_blocked_transaction_receiver) -> execution_environment => {
                                 let execution_environment = execution_environment.unwrap();
                                 Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
-                                state_machine.deschedule_task(execution_environment);
+                                state_machine.deschedule_task(&execution_environment);
+                                drop_sender.send(execution_environment).unwrap();
                             },
                             recv(schedulable_transaction_receiver) -> m => {
                                 if let Ok(mm) = m {
@@ -720,7 +723,8 @@ where
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
                                 let execution_environment = execution_environment.unwrap();
                                 Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
-                                state_machine.deschedule_task(execution_environment);
+                                state_machine.deschedule_task(&execution_environment);
+                                drop_sender.send(execution_environment).unwrap();
                             },
                         };
                         log_scheduler!();
@@ -876,10 +880,26 @@ where
             }
         };
 
+        let drop_main_loop = || {
+            loop {
+                while Ok(ee) = drop_receiver.try_recv() {
+                    drop(ee);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        }
+
         self.scheduler_thread = Some(
             std::thread::Builder::new()
                 .name("solScheduler".to_owned())
                 .spawn(scheduler_main_loop())
+                .unwrap(),
+        );
+
+        Some(
+            std::thread::Builder::new()
+                .name("solScheduler".to_owned())
+                .spawn(drop_main_loop())
                 .unwrap(),
         );
 
@@ -1207,7 +1227,7 @@ impl ScheduleStage {
         should_remove: bool,
         uq: UniqueWeight,
         retryable_task_queue: &mut WeightedTaskQueue,
-        lock_attempts: &mut [LockAttempt],
+        lock_attempts: &[LockAttempt],
     ) {
         for unlock_attempt in lock_attempts {
             let heaviest_uncontended = unlock_attempt
@@ -1358,7 +1378,7 @@ impl SchedulingStateMachine {
             })
     }
 
-    fn deschedule_task(&mut self, mut ee: Box<ExecutionEnvironment>) {
+    fn deschedule_task(&mut self, ee: &Box<ExecutionEnvironment>) {
         self.active_task_count -= 1;
         self.handled_task_count += 1;
         let should_remove = ee
@@ -1371,7 +1391,7 @@ impl SchedulingStateMachine {
             should_remove,
             uq,
             &mut self.retryable_task_queue,
-            &mut ee.finalized_lock_attempts,
+            &ee.finalized_lock_attempts,
         );
     }
 }
