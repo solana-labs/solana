@@ -431,6 +431,7 @@ pub struct ExecutionEnvironment {
         Option<std::result::Result<(), solana_sdk::transaction::TransactionError>>,
     pub result_with_timings: ResultWithTimings,
     finish_time: Option<std::time::SystemTime>,
+    slot: Slot,
 }
 
 // Currently, simplest possible implementation (i.e. single-threaded)
