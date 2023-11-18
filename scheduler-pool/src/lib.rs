@@ -888,7 +888,7 @@ where
                 while let Ok(ee) = drop_receiver.try_recv() {
                     drop(ee);
                 }
-                std::thread::sleep(std::time::Duration::from_millis(100));
+                std::thread::sleep(std::time::Duration::from_millis(40));
             }
         };
 
