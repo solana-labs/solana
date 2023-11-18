@@ -36,6 +36,7 @@ pub struct SanitizedTransaction {
 }
 
 /// Set of accounts that must be locked for safe transaction processing
+use serde_with::serde_as;
 #[serde_as]
 #[derive(Debug, Clone, Default, Eq, PartialEq, Serialize)]
 pub struct TransactionAccountLocks<'a> {
