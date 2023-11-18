@@ -433,6 +433,7 @@ pub struct ExecutionEnvironment {
     pub result_with_timings: ResultWithTimings,
     finish_time: Option<std::time::SystemTime>,
     slot: Slot,
+    thx: usize,
 }
 
 // Currently, simplest possible implementation (i.e. single-threaded)
