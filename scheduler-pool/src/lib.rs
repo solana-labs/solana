@@ -877,6 +877,7 @@ where
 
                     Self::receive_scheduled_transaction(&handler, &bank, &mut m, &pool);
 
+                    m.slot = bank.slot();
                     if was_blocked {
                         handled_blocked_transaction_sender.send(m).unwrap();
                     } else {
@@ -1293,6 +1294,7 @@ impl ScheduleStage {
     fn prepare_scheduled_execution(
         task: TaskInQueue,
         finalized_lock_attempts: Vec<LockAttempt>,
+        slot: Slot,
     ) -> Box<ExecutionEnvironment> {
         Box::new(ExecutionEnvironment {
             task,
@@ -1300,6 +1302,7 @@ impl ScheduleStage {
             execution_result: Default::default(),
             result_with_timings: (Ok(()), Default::default()),
             finish_time: None,
+            slot: 0,
         })
     }
 }
