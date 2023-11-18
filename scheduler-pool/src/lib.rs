@@ -660,10 +660,11 @@ where
                 macro_rules! log_scheduler {
                     ($a:tt) => {
                         info!(
-                            "slot: {}: [{}]({}/{}): state_machine(({}(+{})=>{})/{}) channels(<{} >{}+{} <{}+{})",
+                            "slot: {}: [{}]({}/{}): state_machine(({}(+{})=>{})/{}|{}) channels(<{} >{}+{} <{}+{})",
                             slot, ($a), (if will_end_thread {"T"} else {"-"}), (if will_end_session {"S"} else {"-"}),
                             state_machine.active_task_count(), state_machine.retryable_task_count(), state_machine.handled_task_count(),
                             state_machine.total_task_count(),
+                            state_machine.rescheduled_task_count(),
                             schedulable_transaction_receiver.len(),
                             blocked_transaction_sessioned_sender.len(), idle_transaction_sender.len(),
                             handled_blocked_transaction_receiver.len(), handled_idle_transaction_receiver.len(),
@@ -1303,6 +1304,7 @@ struct SchedulingStateMachine {
     retryable_task_queue: WeightedTaskQueue,
     active_task_count: usize,
     handled_task_count: usize,
+    rescheduled_task_count: usize,
     total_task_count: usize,
 }
 
@@ -1323,6 +1325,10 @@ impl SchedulingStateMachine {
         self.handled_task_count
     }
 
+    fn rescheduled_task_count(&self) -> usize {
+        self.rescheduled_task_count
+    }
+
     fn total_task_count(&self) -> usize {
         self.total_task_count
     }
@@ -1338,6 +1344,7 @@ impl SchedulingStateMachine {
     }
 
     fn schedule_retryable_task(&mut self) -> Option<Box<ExecutionEnvironment>> {
+        self.rescheduled_task_count += 1;
         self.retryable_task_queue
             .pop_last()
             .and_then(|(_, task)| {
