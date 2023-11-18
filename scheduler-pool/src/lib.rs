@@ -28,6 +28,7 @@ use {
     solana_scheduler::{SchedulingMode, WithSchedulingMode},
     solana_sdk::{
         pubkey::Pubkey,
+        slot_history::Slot,
         transaction::{Result, SanitizedTransaction},
     },
     solana_vote::vote_sender_types::ReplayVoteSender,
@@ -38,7 +39,6 @@ use {
         thread::JoinHandle,
     },
 };
-use solana_sdk::slot_history::Slot;
 
 type UniqueWeight = u64;
 
@@ -428,8 +428,7 @@ impl AddressBook {
 pub struct ExecutionEnvironment {
     task: TaskInQueue,
     finalized_lock_attempts: Vec<LockAttempt>,
-    execution_result:
-        Option<std::result::Result<(), solana_sdk::transaction::TransactionError>>,
+    execution_result: Option<std::result::Result<(), solana_sdk::transaction::TransactionError>>,
     result_with_timings: ResultWithTimings,
     finish_time: Option<std::time::SystemTime>,
     slot: Slot,
@@ -595,7 +594,10 @@ where
         pool: &Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
     ) {
         use solana_measure::measure::Measure;
-        let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
+        let (mut wall_time, cpu_time) = (
+            Measure::start("process_message_time"),
+            cpu_time::ThreadTime::now(),
+        );
         debug!("handling task at {:?}", std::thread::current());
         TH::handle(
             handler,
@@ -919,7 +921,12 @@ where
                             ("index", ee.task.task_index(), i64),
                             ("thread", format!("solScExLane{:02}", ee.thx), String),
                             ("signature", &sig, String),
-                            ("account_locks_in_json", serde_json::to_string(&ee.task.tx.0.get_account_locks_unchecked()).unwrap(), String),
+                            (
+                                "account_locks_in_json",
+                                serde_json::to_string(&ee.task.tx.0.get_account_locks_unchecked())
+                                    .unwrap(),
+                                String
+                            ),
                             (
                                 "status",
                                 format!("{:?}", ee.execution_result.as_ref().unwrap()),
@@ -928,7 +935,16 @@ where
                             ("duration", ee.execution_us, i64),
                             ("cpu_duration", ee.execution_cpu_us, i64),
                             //("compute_units", ee.cu, i64),
-                            ("priority", ee.task.tx.0.get_transaction_priority_details(false).map(|d| d.priority).unwrap_or_default(), i64),
+                            (
+                                "priority",
+                                ee.task
+                                    .tx
+                                    .0
+                                    .get_transaction_priority_details(false)
+                                    .map(|d| d.priority)
+                                    .unwrap_or_default(),
+                                i64
+                            ),
                         );
                     }
                     drop(ee);
