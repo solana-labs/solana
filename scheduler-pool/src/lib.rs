@@ -884,7 +884,7 @@ where
 
         let drop_main_loop = || {
             loop {
-                while Ok(ee) = drop_receiver.try_recv() {
+                while let Ok(ee) = drop_receiver.try_recv() {
                     drop(ee);
                 }
                 std::thread::sleep(std::time::Duration::from_millis(100));
