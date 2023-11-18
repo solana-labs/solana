@@ -1294,7 +1294,6 @@ impl ScheduleStage {
     fn prepare_scheduled_execution(
         task: TaskInQueue,
         finalized_lock_attempts: Vec<LockAttempt>,
-        slot: Slot,
     ) -> Box<ExecutionEnvironment> {
         Box::new(ExecutionEnvironment {
             task,
