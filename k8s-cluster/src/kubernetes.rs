@@ -138,7 +138,7 @@ impl<'a> Kubernetes<'a> {
         validator_config: &'a mut ValidatorConfig<'a>,
         client_config: ClientConfig,
         metrics: Option<Metrics>,
-        num_faucets: i32,
+        num_non_voting_validators: i32,
     ) -> Kubernetes<'a> {
         Kubernetes {
             client: Client::try_default().await.unwrap(),
@@ -146,7 +146,7 @@ impl<'a> Kubernetes<'a> {
             validator_config,
             client_config,
             metrics,
-            num_non_voting_validators: num_faucets
+            num_non_voting_validators,
         }
     }
 
@@ -225,7 +225,7 @@ impl<'a> Kubernetes<'a> {
         flags
     }
 
-    fn generate_faucet_command_flags(&mut self) -> Vec<String> {
+    fn generate_non_voting_command_flags(&mut self) -> Vec<String> {
         let mut flags = self.generate_command_flags();
         if let Some(shred_version) = self.validator_config.shred_version {
             flags.push("--expected-shred-version".to_string());
@@ -558,8 +558,8 @@ impl<'a> Kubernetes<'a> {
         Ok(secret)
     }
 
-    pub fn create_non_voting_secret(&self, faucet_index: i32) -> Result<Secret, Box<dyn Error>> {
-        let secret_name = format!("faucet-accounts-secret-{}", faucet_index);
+    pub fn create_non_voting_secret(&self, nvv_index: i32) -> Result<Secret, Box<dyn Error>> {
+        let secret_name = format!("non-voting-validator-accounts-secret-{}", nvv_index);
         let faucet_key_path = SOLANA_ROOT.join("config-k8s");
         let faucet_keypair =
             std::fs::read(faucet_key_path.join("faucet.json")).unwrap_or_else(|_| {
@@ -570,9 +570,9 @@ impl<'a> Kubernetes<'a> {
         let accounts = vec!["identity", "stake"];
         for account in accounts {
             let file_name: String = if account == "identity" {
-                format!("non_voting-validator-{}-{}.json", account, faucet_index)
+                format!("non-voting-validator-{}-{}.json", account, nvv_index)
             } else {
-                format!("non_voting-validator-{}-account-{}.json", account, faucet_index)
+                format!("non-voting-validator-{}-account-{}.json", account, nvv_index)
             };
             let keypair = std::fs::read(faucet_key_path.join(file_name.clone())).unwrap_or_else(|_| {
                 panic!("Failed to read {} file! at: {:?}", file_name, faucet_key_path)
@@ -717,21 +717,21 @@ impl<'a> Kubernetes<'a> {
             EnvVar {
                 name: "LOAD_BALANCER_RPC_ADDRESS".to_string(),
                 value: Some(
-                    "faucet-lb-service.$(NAMESPACE).svc.cluster.local:8899".to_string(),
+                    "bootstrap-and-non-voting-lb-service.$(NAMESPACE).svc.cluster.local:8899".to_string(),
                 ),
                 ..Default::default()
             },
             EnvVar {
                 name: "LOAD_BALANCER_GOSSIP_ADDRESS".to_string(),
                 value: Some(
-                    "faucet-lb-service.$(NAMESPACE).svc.cluster.local:8001".to_string(),
+                    "bootstrap-and-non-voting-lb-service.$(NAMESPACE).svc.cluster.local:8001".to_string(),
                 ),
                 ..Default::default()
             },
             EnvVar {
                 name: "LOAD_BALANCER_FAUCET_ADDRESS".to_string(),
                 value: Some(
-                    "faucet-lb-service.$(NAMESPACE).svc.cluster.local:9900".to_string(),
+                    "bootstrap-and-non-voting-lb-service.$(NAMESPACE).svc.cluster.local:9900".to_string(),
                 ),
                 ..Default::default()
             },
@@ -792,10 +792,10 @@ impl<'a> Kubernetes<'a> {
         )
     }
 
-    pub fn create_faucet_replica_set(
+    pub fn create_non_voting_validator_replica_set(
         &mut self,
         container_name: &str,
-        faucet_index: i32,
+        nvv_index: i32,
         image_name: &str,
         num_validators: i32,
         secret_name: Option<String>,
@@ -820,7 +820,7 @@ impl<'a> Kubernetes<'a> {
         }
 
         let accounts_volume = Some(vec![Volume {
-            name: format!("faucet-accounts-volume-{}", faucet_index),
+            name: format!("non-voting-validator-accounts-volume-{}", nvv_index),
             secret: Some(SecretVolumeSource {
                 secret_name,
                 ..Default::default()
@@ -829,14 +829,14 @@ impl<'a> Kubernetes<'a> {
         }]);
 
         let accounts_volume_mount = Some(vec![VolumeMount {
-            name: format!("faucet-accounts-volume-{}", faucet_index),
-            mount_path: "/home/solana/faucet-accounts".to_string(),
+            name: format!("non-voting-validator-accounts-volume-{}", nvv_index),
+            mount_path: "/home/solana/non-voting-validator-accounts".to_string(),
             ..Default::default()
         }]);
 
         let mut command =
-        vec!["/home/solana/k8s-cluster-scripts/faucet-startup-script.sh".to_string()];
-        command.extend(self.generate_faucet_command_flags());
+        vec!["/home/solana/k8s-cluster-scripts/non-voting-validator-startup-script.sh".to_string()];
+        command.extend(self.generate_non_voting_command_flags());
 
         for c in command.iter() {
             debug!("validator command: {}", c);
@@ -846,7 +846,7 @@ impl<'a> Kubernetes<'a> {
             command: Some(vec![
                 String::from("/bin/bash"),
                 String::from("-c"),
-                String::from("solana -u http://$MY_POD_IP:8899 balance -k identity.json"),
+                String::from("solana -u http://$MY_POD_IP:8899 balance -k non-voting-validator-accounts/identity.json"),
             ]),
         };
 
@@ -858,7 +858,7 @@ impl<'a> Kubernetes<'a> {
         };
 
         self.create_replicas_set(
-            format!("faucet-{}", faucet_index).as_str(),
+            format!("non-voting-{}", nvv_index).as_str(),
             label_selector,
             container_name,
             image_name,
@@ -933,7 +933,7 @@ impl<'a> Kubernetes<'a> {
         self.create_service(service_name, label_selector)
     }
 
-    pub fn create_faucet_load_balancer(
+    pub fn create_load_balancer(
         &self,
         service_name: &str,
         label_selector: &BTreeMap<String, String>

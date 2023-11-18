@@ -679,7 +679,7 @@ async fn main() {
         match genesis.generate_accounts(ValidatorType::NonVoting, num_non_voting_validators) {
             Ok(_) => (),
             Err(err) => {
-                error!("generate non voting accounts for faucet error! {}", err);
+                error!("generate non voting accounts error! {}", err);
                 return;
             }
         }
@@ -816,7 +816,7 @@ async fn main() {
         .value_of("validator_image_name")
         .expect("Validator image name is required");
 
-    // Just using validator container for faucet right now. they're all the same image
+    // Just using validator container for nvv right now. they're all the same image
     let nvv_container_name = matches
         .value_of("validator_container_name")
         .unwrap_or_default();
@@ -908,8 +908,8 @@ async fn main() {
     //load balancer service
     let load_balancer_label = kub_controller.create_selector("app.kubernetes.io/lb", "load-balancer-selector");
     //create load balancer
-    let load_balancer = kub_controller.create_faucet_load_balancer(
-        "faucet-lb-service",
+    let load_balancer = kub_controller.create_load_balancer(
+        "bootstrap-and-non-voting-lb-service",
         &load_balancer_label,
     );
 
@@ -963,7 +963,7 @@ async fn main() {
             }
 
             let nvv_replica_set = match kub_controller
-                .create_faucet_replica_set(
+                .create_non_voting_validator_replica_set(
                     nvv_container_name,
                     nvv_index,
                     nvv_image_name,
@@ -974,7 +974,7 @@ async fn main() {
             {
                 Ok(replica_set) => replica_set,
                 Err(err) => {
-                    error!("Error creating faucet replicas_set: {}", err);
+                    error!("Error creating non voting validator replicas_set: {}", err);
                     return;
                 }
             };
@@ -985,14 +985,14 @@ async fn main() {
                 .await {
                     Ok(rs) => {
                         info!(
-                            "faucet replica set ({}) deployed successfully",
+                            "non voting validator replica set ({}) deployed successfully",
                             nvv_index
                         );
                         rs.metadata.name.unwrap()
                     }
                     Err(err) => {
                         error!(
-                            "Error! Failed to deploy faucet replica set: {}. err: {:?}",
+                            "Error! Failed to deploy non voting validator replica set: {}. err: {:?}",
                             nvv_index, err
                         );
                         return;
@@ -1010,10 +1010,10 @@ async fn main() {
                 &non_voting_label,
             );
 
-            //deploy faucet service
+            //deploy nvv service
             match kub_controller.deploy_service(&nvv_service).await {
-                Ok(_) => info!("faucet service deployed successfully"),
-                Err(err) => error!("Error! Failed to deploy faucet service. err: {:?}", err),
+                Ok(_) => info!("nvv service deployed successfully"),
+                Err(err) => error!("Error! Failed to deploy non voting validator service. err: {:?}", err),
             }
 
         }

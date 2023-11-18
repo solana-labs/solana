@@ -1,14 +1,13 @@
 #!/bin/bash
 set -e
-echo "in faucet startup script!"
+echo "in non-voting-validator startup script!"
 
-# /home/solana/k8s-cluster-scripts/decode-accounts.sh -t "faucet"
 mkdir -p /home/solana/logs
 
 echo "done decoding accounts. running faucet next..."
 # sleep 3600
 
-nohup solana-faucet --keypair faucet-accounts/faucet.json >logs/faucet.log 2>&1 &
+nohup solana-faucet --keypair non-voting-validator-accounts/faucet.json >logs/faucet.log 2>&1 &
 
 echo "faucet running"
 
@@ -25,7 +24,7 @@ args=(
 airdrops_enabled=1
 node_sol=500 # 500 SOL: number of SOL to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
 stake_sol=10
-identity=faucet-accounts/identity.json
+identity=non-voting-validator-accounts/identity.json
 no_restart=0
 gossip_entrypoint=$BOOTSTRAP_GOSSIP_ADDRESS
 ledger_dir=/home/solana/ledger

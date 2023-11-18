@@ -45,7 +45,7 @@ impl std::fmt::Display for ValidatorType {
         match *self {
             ValidatorType::Bootstrap => write!(f, "bootstrap"),
             ValidatorType::Standard => write!(f, "validator"),
-            ValidatorType::NonVoting => write!(f, "non_voting"),
+            ValidatorType::NonVoting => write!(f, "non-voting"),
         }
     }
 }
