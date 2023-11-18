@@ -7110,6 +7110,7 @@ dependencies = [
  "dashmap",
  "log",
  "rand 0.8.5",
+ "serde_json",
  "solana-ledger",
  "solana-logger",
  "solana-metrics",
