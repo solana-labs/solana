@@ -908,7 +908,7 @@ where
                         ("duration", ee.execution_us, i64),
                         ("cpu_duration", ee.execution_cpu_us, i64),
                         //("compute_units", ee.cu, i64),
-                        ("priority", ee.task.tx.0.get_transaction_priority_details().map(|d| d.priority).unwrap_or_default(), i64),
+                        ("priority", ee.task.tx.0.get_transaction_priority_details(false).map(|d| d.priority).unwrap_or_default(), i64),
                     );
                     drop(ee);
                 }
