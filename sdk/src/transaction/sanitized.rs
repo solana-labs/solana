@@ -41,6 +41,7 @@ use serde_with::serde_as;
 #[derive(Debug, Clone, Default, Eq, PartialEq, Serialize)]
 pub struct TransactionAccountLocks<'a> {
     /// List of readonly account key locks
+    #[serde_as(as = "Vec<DisplayFromStr>")]
     pub readonly: Vec<&'a Pubkey>,
     /// List of writable account key locks
     pub writable: Vec<&'a Pubkey>,
