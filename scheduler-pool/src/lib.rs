@@ -901,7 +901,7 @@ where
 
         self.drop_thread = Some(
             std::thread::Builder::new()
-                .name("solScheduler".to_owned())
+                .name("solScDrop".to_owned())
                 .spawn(drop_main_loop())
                 .unwrap(),
         );
