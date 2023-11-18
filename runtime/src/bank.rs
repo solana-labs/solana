@@ -7074,10 +7074,11 @@ impl Bank {
 
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count());
-        let mut transaction_receipt_tree = TransactionReceiptTree::default();
-        let mut transaction_receipt_tree_root = transaction_receipt_tree.get_root(); // default
-                                                                                     // root
 
+        let mut transaction_receipt_tree = TransactionReceiptTree::default();
+        let mut transaction_receipt_tree_root = transaction_receipt_tree.get_root(); // default root
+
+        let mut measure_receipt_tree = Measure::start("transaction_receipt_tree_measure red");
         if let Ok(mut transaction_receipt_queue_entry) = self.transaction_receipt_queue.read() {
             let mut transaction_receipts = transaction_receipt_queue_entry.deref().clone();
             transaction_receipts.par_sort_unstable_by(|a, b| {
@@ -7087,9 +7088,10 @@ impl Bank {
 
             transaction_receipt_tree = TransactionReceiptTree::new(leaves);
 
-            transaction_receipt_tree_root = transaction_receipt_tree.get_root()
+            transaction_receipt_tree_root = transaction_receipt_tree.get_root();
+            measure_receipt_tree.stop();
         }
-
+        info!("{}", measure_receipt_tree);
         let mut hash = hashv(&[
             self.parent_hash.as_ref(),
             accounts_delta_hash.0.as_ref(),
