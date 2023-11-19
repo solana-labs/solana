@@ -119,6 +119,7 @@ where
             self.tick = current_tick;
             self.updated_at = std::time::SystemTime::now();
         } else if self.updated_at.elapsed().unwrap() > std::time::Duration::from_secs(10) {
+            info!("stopping...");
             thread_manager.write().unwrap().stop_threads();
         }
 
@@ -145,8 +146,8 @@ where
                 let mut weak_thread_managers: Vec<WatchedThreadManager<TH, SEA>> = vec![];
 
                 loop {
-                    if let Ok(thread_manager) = watchdog_receiver.try_recv() {
-                        weak_thread_managers.push(WatchedThreadManager::new(thread_manager));
+                    match watchdog_receiver.try_recv() {
+                        Ok(thread_manager) => weak_thread_managers.push(WatchedThreadManager::new(thread_manager)),
                     }
                     weak_thread_managers.retain_mut(|thread_manager| thread_manager.update_to_retain());
                     std::thread::sleep(std::time::Duration::from_secs(1));
