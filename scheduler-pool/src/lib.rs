@@ -643,6 +643,7 @@ where
             result_receiver,
             context: WeakSchedulingContext::new(initial_context),
             scheduler_thread: None,
+            scheduler_thread_tid: None,
             drop_thread: None,
             handler_threads: Vec::with_capacity(handler_count),
             handler_count,
