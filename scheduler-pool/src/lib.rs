@@ -1095,7 +1095,7 @@ where
 
 pub trait InstallableScheduler<SEA: ScheduleExecutionArg>: InstalledScheduler<SEA> {
     fn has_context(&self) -> bool;
-    fn replace_context(self, context: SchedulingContext);
+    fn replace_context(&self, context: SchedulingContext);
 }
 
 pub trait SpawnableScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg>:
