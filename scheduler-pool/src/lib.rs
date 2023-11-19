@@ -173,7 +173,6 @@ where
                                 weak_thread_managers.push(WatchedThreadManager::new(thread_manager))
                             }
                             Err(RecvTimeoutError::Disconnected) => break 'outer,
-                            Err(RecvTimeoutError::Empty) => break 'inner,
                         }
                     }
                 }
