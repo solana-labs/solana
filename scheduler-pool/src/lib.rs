@@ -159,7 +159,7 @@ where
             }
         };
 
-        std::thread::Builder::new()
+        let watchdog_thread = std::thread::Builder::new()
             .name("solScWatchdog".to_owned())
             .spawn(watchdog_main_loop())
             .unwrap();
@@ -171,6 +171,7 @@ where
             replay_vote_sender,
             prioritization_fee_cache,
             weak_self: weak_self.clone(),
+            watchdog_thread,
             watchdog_sender,
             _phantom: PhantomData,
         })
