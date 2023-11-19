@@ -75,7 +75,7 @@ pub struct SchedulerPool<
     weak_self: Weak<Self>,
     // prune schedulers, stop idling scheduler's threads, sanity check on the
     // address book after scheduler is returned.
-    watchdog_sender: Sender<Weak<RwLock<ThreadManager<TH, SEA>>>,
+    watchdog_sender: Sender<Weak<RwLock<ThreadManager<TH, SEA>>>>,
     _phantom: PhantomData<(T, TH, SEA)>,
 }
 
