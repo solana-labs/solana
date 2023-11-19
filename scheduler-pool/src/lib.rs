@@ -1405,7 +1405,9 @@ where
         });
     }
 
-    fn wait_for_termination(&mut self, wait_reason: &WaitReason) -> Option<ResultWithTimings> {
+    fn wait_for_termination(&self, wait_reason: &WaitReason) -> Option<ResultWithTimings> {
+        todo!();
+        /*
         if self.completed_result_with_timings.is_none() {
             self.completed_result_with_timings =
                 Some(self.thread_manager.write().unwrap().end_session());
@@ -1416,6 +1418,7 @@ where
         } else {
             self.completed_result_with_timings.take()
         }
+        */
     }
 
     fn return_to_pool(self: Arc<Self>) {
@@ -1831,7 +1834,7 @@ mod tests {
             */
         }
 
-        fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings> {
+        fn wait_for_termination(&self, reason: &WaitReason) -> Option<ResultWithTimings> {
             todo!();
             /*
             if TRIGGER_RACE_CONDITION && matches!(reason, WaitReason::PausedForRecentBlockhash) {

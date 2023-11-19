@@ -123,7 +123,7 @@ pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + '
     /// finalized `ResultWithTimings` until it's `wait_for_termination()`-ed with one of the other
     /// two reasons later.
     #[must_use]
-    fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings>;
+    fn wait_for_termination(&self, reason: &WaitReason) -> Option<ResultWithTimings>;
 
     fn return_to_pool(self: Arc<Self>);
 }
