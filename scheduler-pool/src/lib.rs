@@ -96,6 +96,15 @@ where
         replay_vote_sender: Option<ReplayVoteSender>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Arc<Self> {
+        let watchdog_main_loop = || {
+            || {
+            }
+        };
+        std::thread::Builder::new()
+            .name("solScWatchdog".to_owned())
+            .spawn(watchdog_main_loop())
+            .unwrap();
+
         Arc::new_cyclic(|weak_self| Self {
             schedulers: Arc::new(Mutex::new(vec![])),
             log_messages_bytes_limit,
