@@ -494,7 +494,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             .unwrap_or(format!("{}", 8))
             .parse::<usize>()
             .unwrap();
-        Self {
+        let scheduler = Self {
             id: thread_rng().gen::<SchedulerId>(),
             completed_result_with_timings: None,
             thread_manager: Arc::new(RwLock::new(ThreadManager::<TH, SEA>::new(
@@ -505,6 +505,9 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             ))),
             address_book: AddressBook::default(),
         }
+        pool.register_to_watchdog(self.thread_manager.clone());
+
+        scheduler
     }
 
     #[must_use]
