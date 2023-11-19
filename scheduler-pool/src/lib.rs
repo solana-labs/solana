@@ -1085,7 +1085,7 @@ where
                 self.schedulable_transaction_receiver,
             ) = next_sender_and_receiver;
         } else {
-            self.context = WeakSchedulingContext::new(context.clone());
+            self.context = WeakSchedulingContext::new(context);
             self.start_threads();
         }
     }
