@@ -85,7 +85,7 @@ pub type DefaultSchedulerPool = SchedulerPool<
     DefaultScheduleExecutionArg,
 >;
 
-struct WatchedThradManager<TH, SEA>
+struct WatchedThreadManager<TH, SEA>
 where
     TH: Handler<SEA>,
     SEA: ScheduleExecutionArg,
@@ -93,7 +93,7 @@ where
     thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>
 }
 
-impl<TH, SEA> WatchedThradManager<TH, SEA>
+impl<TH, SEA> WatchedThreadManager<TH, SEA>
 where
     TH: Handler<SEA>,
     SEA: ScheduleExecutionArg,
@@ -119,11 +119,11 @@ where
 
         let watchdog_main_loop = || {
             move || {
-                let mut weak_thread_managers: Vec<Weak<RwLock<ThreadManager<TH, SEA>>>> = vec![];
+                let mut weak_thread_managers: Vec<WatchedThreadManager<TH, SEA>>>> = vec![];
 
                 loop {
                     if let Ok(thread_manager) = watchdog_receiver.try_recv() {
-                        weak_thread_managers.push(thread_manager);
+                        weak_thread_managers.push(WatchedThreadManager::new(thread_manager));
                     }
                     weak_thread_managers.retain(|thread_manager| {
                         let Some(thread_manager) = thread_manager.upgrade() else {
