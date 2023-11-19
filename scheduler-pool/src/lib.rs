@@ -148,7 +148,7 @@ where
         }
     }
 
-    fn register_to_watchdog(a: usize) {
+    fn register_to_watchdog(&self, a: usize) {
     }
 }
 
