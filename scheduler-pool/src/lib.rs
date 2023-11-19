@@ -447,7 +447,8 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     address_book: AddressBook,
 }
 
-struct WeakSchedulingContext {
+#[derive(Debug)]
+satruct WeakSchedulingContext {
     mode: SchedulingMode,
     bank: Weak<Bank>,
 }
