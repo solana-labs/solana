@@ -105,13 +105,14 @@ where
         Self { thread_manager, updated_at: std::time::SystemTime::now(), tick: 0 }
     }
 
-    fn update_to_retain(&mut self) -> bool {
+    fn update_tick_to_retain(&mut self) -> bool {
         let Some(thread_manager) = self.thread_manager.upgrade() else {
             return false;
         };
         let Some(tid) = thread_manager.read().unwrap().scheduler_thread_tid else {
             return false;
         };
+
         let pid = dbg!(std::process::id());
         let task = (procfs::process::Process::new(pid.try_into().unwrap()).unwrap().task_from_tid(tid).unwrap());
         let stat = task.stat().unwrap();
@@ -122,6 +123,8 @@ where
         } else if self.updated_at.elapsed().unwrap() > std::time::Duration::from_secs(10) {
             info!("stopping...");
             thread_manager.write().unwrap().stop_threads();
+            self.tick = 0;
+            self.updated_at = std::time::SystemTime::now();
         }
 
         true
@@ -147,7 +150,7 @@ where
                 let mut weak_thread_managers: Vec<WatchedThreadManager<TH, SEA>> = vec![];
 
                 'outer: loop {
-                    weak_thread_managers.retain_mut(|thread_manager| thread_manager.update_to_retain());
+                    weak_thread_managers.retain_mut(|thread_manager| thread_manager.update_tick_to_retain());
 
                     std::thread::sleep(std::time::Duration::from_secs(1));
 
