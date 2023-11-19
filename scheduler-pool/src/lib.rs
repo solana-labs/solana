@@ -452,6 +452,15 @@ struct WeakSchedulingContext {
     bank: Weak<Bank>,
 }
 
+impl WeakSchedulingContext {
+    fn new(SchedulingContext {mode, bank}: SchedulingContext) -> Self {
+        Self {
+            mode,
+            bank: Arc::downgrade(&bank),
+        }
+    }
+}
+
 #[derive(Debug)]
 struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
