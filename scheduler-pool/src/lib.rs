@@ -1347,7 +1347,7 @@ where
     }
 
     fn context(&self) -> SchedulingContext {
-        Arc::upgrade(self.thread_manager.read().unwrap().context).unrap().borrow().clone()
+        self.thread_manager.read().unwrap().context.upgrade().unrap().borrow().clone()
     }
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
