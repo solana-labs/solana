@@ -409,7 +409,7 @@ unsafe impl Sync for LockAttemptsInCell {}
 type WeightedTaskQueue = std::collections::BTreeMap<UniqueWeight, TaskInQueue>;
 
 type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug)]
 pub struct AddressBook {
     book: AddressMap,
 }
