@@ -42,7 +42,7 @@ use {
 use {mockall::automock, qualifier_attr::qualifiers};
 
 pub trait InstalledSchedulerPool<SEA: ScheduleExecutionArg>: Send + Sync + Debug {
-    fn take_scheduler(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler<SEA>>;
+    fn take_scheduler(&self, context: SchedulingContext) -> Arc<dyn InstalledScheduler<SEA>>;
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
