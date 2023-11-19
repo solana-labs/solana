@@ -447,10 +447,15 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     address_book: AddressBook,
 }
 
+struct WeakSchedulingContext {
+    mode: SchedulingMode,
+    bank: Weak<Bank>,
+}
+
 #[derive(Debug)]
 struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
-    context: Weak<SchedulingContext>,
+    context: WeakSchedulingContext,
     scheduler_thread: Option<JoinHandle<ResultWithTimings>>,
     handler_threads: Vec<JoinHandle<()>>,
     drop_thread: Option<JoinHandle<()>>,
@@ -477,7 +482,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             id: thread_rng().gen::<SchedulerId>(),
             completed_result_with_timings: None,
             thread_manager: RwLock::new(ThreadManager::<TH, SEA>::new(
-                Arc::new(initial_context),
+                initial_context,
                 handler,
                 pool,
                 handler_count,
@@ -547,7 +552,7 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn new(
-        initial_context: Arc<SchedulingContext>,
+        initial_context: SchedulingContext,
         handler: TH,
         pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
         handler_count: usize,
@@ -560,7 +565,7 @@ where
             schedulable_transaction_receiver,
             result_sender,
             result_receiver,
-            context: Arc::downgrade(&initial_context),
+            context: WeakSchedulingContext::new(initial_context),
             scheduler_thread: None,
             drop_thread: None,
             handler_threads: Vec::with_capacity(handler_count),
