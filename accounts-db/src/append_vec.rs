@@ -327,7 +327,8 @@ impl AppendVec {
 
     /// how many more bytes can be stored in this append vec
     pub fn remaining_bytes(&self) -> u64 {
-        (self.capacity()).saturating_sub(self.len() as u64)
+        self.capacity()
+            .saturating_sub(u64_align!(self.len()) as u64)
     }
 
     pub fn len(&self) -> usize {
