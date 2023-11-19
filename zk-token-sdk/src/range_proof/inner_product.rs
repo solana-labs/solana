@@ -410,7 +410,7 @@ mod tests {
     fn test_basic_correctness() {
         let n = 32;
 
-        let bp_gens = BulletproofGens::new(n);
+        let bp_gens = BulletproofGens::new(n).unwrap();
         let G: Vec<RistrettoPoint> = bp_gens.G(n).cloned().collect();
         let H: Vec<RistrettoPoint> = bp_gens.H(n).cloned().collect();
 

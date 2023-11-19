@@ -2,7 +2,10 @@
 use {crate::errors::TranscriptError, thiserror::Error};
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
-pub enum RangeProofGenerationError {}
+pub enum RangeProofGenerationError {
+    #[error("maximum generator length exceeded")]
+    MaximumGeneratorLengthExceeded,
+}
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum RangeProofVerificationError {
@@ -20,4 +23,12 @@ pub enum RangeProofVerificationError {
     InvalidBitSize,
     #[error("insufficient generators for the proof")]
     InvalidGeneratorsLength,
+    #[error("maximum generator length exceeded")]
+    MaximumGeneratorLengthExceeded,
+}
+
+#[derive(Error, Clone, Debug, Eq, PartialEq)]
+pub enum RangeProofGeneratorError {
+    #[error("maximum generator length exceeded")]
+    MaximumGeneratorLengthExceeded,
 }
