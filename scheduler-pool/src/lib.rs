@@ -1347,7 +1347,7 @@ where
     }
 
     fn context(&self) -> SchedulingContext {
-        self.thread_manager.read().unwrap().context.upgrade().unwrap().borrow().clone()
+        self.thread_manager.read().unwrap().context.upgrade().unwrap().deref().clone()
     }
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
