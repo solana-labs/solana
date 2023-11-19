@@ -111,6 +111,7 @@ where
                 }
             }
         };
+
         std::thread::Builder::new()
             .name("solScWatchdog".to_owned())
             .spawn(watchdog_main_loop())
