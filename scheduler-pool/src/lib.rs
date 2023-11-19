@@ -1025,43 +1025,49 @@ where
         };
 
         let drop_main_loop = || {
-            move || loop {
-                while let Ok(ee) = drop_receiver.try_recv() {
-                    if send_metrics {
-                        use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
+            move || 'outer: loop {
+                loop {
+                    match drop_receiver.try_recv() {
+                        Ok(ee) => {
+                            if send_metrics {
+                                use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
 
-                        let sig = ee.task.tx.0.signature().to_string();
+                                let sig = ee.task.tx.0.signature().to_string();
 
-                        solana_metrics::datapoint_info_at!(
-                            ee.finish_time.unwrap(),
-                            "transaction_timings",
-                            ("slot", ee.slot, i64),
-                            ("index", ee.task.task_index(), i64),
-                            ("thread", format!("solScExLane{:02}", ee.thx), String),
-                            ("signature", &sig, String),
-                            (
-                                "account_locks_in_json",
-                                serde_json::to_string(&ee.task.tx.0.get_account_locks_unchecked())
-                                    .unwrap(),
-                                String
-                            ),
-                            ("status", format!("{:?}", ee.result_with_timings.0), String),
-                            ("duration", ee.execution_us, i64),
-                            ("cpu_duration", ee.execution_cpu_us, i64),
-                            ("compute_units", 0 /*ee.cu*/, i64),
-                            (
-                                "priority",
-                                ee.task
-                                    .tx
-                                    .0
-                                    .get_transaction_priority_details(false)
-                                    .map(|d| d.priority)
-                                    .unwrap_or_default(),
-                                i64
-                            ),
-                        );
+                                solana_metrics::datapoint_info_at!(
+                                    ee.finish_time.unwrap(),
+                                    "transaction_timings",
+                                    ("slot", ee.slot, i64),
+                                    ("index", ee.task.task_index(), i64),
+                                    ("thread", format!("solScExLane{:02}", ee.thx), String),
+                                    ("signature", &sig, String),
+                                    (
+                                        "account_locks_in_json",
+                                        serde_json::to_string(&ee.task.tx.0.get_account_locks_unchecked())
+                                            .unwrap(),
+                                        String
+                                    ),
+                                    ("status", format!("{:?}", ee.result_with_timings.0), String),
+                                    ("duration", ee.execution_us, i64),
+                                    ("cpu_duration", ee.execution_cpu_us, i64),
+                                    ("compute_units", 0 /*ee.cu*/, i64),
+                                    (
+                                        "priority",
+                                        ee.task
+                                            .tx
+                                            .0
+                                            .get_transaction_priority_details(false)
+                                            .map(|d| d.priority)
+                                            .unwrap_or_default(),
+                                        i64
+                                    ),
+                                );
+                            }
+                            drop(ee);
+                        },
+                        Err(crossbeam_channel::TryRecvError::Disconnected) => break 'outer,
+                        Err(crossbeam_channel::TryRecvError::Empty) => break 'inner,
                     }
-                    drop(ee);
                 }
                 std::thread::sleep(std::time::Duration::from_millis(40));
             }
