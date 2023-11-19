@@ -119,7 +119,7 @@ where
 
         let watchdog_main_loop = || {
             move || {
-                let mut weak_thread_managers: Vec<WatchedThreadManager<TH, SEA>>>> = vec![];
+                let mut weak_thread_managers: Vec<WatchedThreadManager<TH, SEA>> = vec![];
 
                 loop {
                     if let Ok(thread_manager) = watchdog_receiver.try_recv() {
