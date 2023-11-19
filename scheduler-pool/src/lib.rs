@@ -1090,6 +1090,7 @@ where
             self.schedulable_transaction_receiver,
         ) = unbounded();
         let result_with_timings = self.scheduler_thread.take().unwrap().join().unwrap();
+        self.scheduler_thread_tid = None;
         let () = self.drop_thread.take().unwrap().join().unwrap();
         self.session_result_with_timings = Some(result_with_timings);
 
