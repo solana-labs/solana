@@ -101,6 +101,14 @@ where
     fn new(thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>) -> Self {
         Self { thread_manager }
     }
+
+    fn update_to_retain(&mut self) -> bool {
+        let Some(thread_manager) = thread_manager.thread_manager.upgrade() else {
+            return false;
+        };
+
+        true
+    }
 }
 
 impl<T, TH, SEA> SchedulerPool<T, TH, SEA>
@@ -125,13 +133,7 @@ where
                     if let Ok(thread_manager) = watchdog_receiver.try_recv() {
                         weak_thread_managers.push(WatchedThreadManager::new(thread_manager));
                     }
-                    weak_thread_managers.retain(|thread_manager| {
-                        let Some(thread_manager) = thread_manager.thread_manager.upgrade() else {
-                            return false;
-                        };
-
-                        true
-                    });
+                    weak_thread_managers.retain_mut(|thread_manager| thread_manager.update_to_retain());
                     std::thread::sleep(std::time::Duration::from_secs(1));
                 }
             }
