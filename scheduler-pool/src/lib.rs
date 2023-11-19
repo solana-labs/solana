@@ -563,7 +563,7 @@ impl WeakSchedulingContext {
 struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
     context: WeakSchedulingContext,
-    scheduler_thread_and_tid: Option<(JoinHandle<ResultWithTimings, u32)>>,
+    scheduler_thread_and_tid: Option<(JoinHandle<ResultWithTimings, u32>)>,
     handler_threads: Vec<JoinHandle<()>>,
     drop_thread: Option<JoinHandle<()>>,
     handler: TH,
