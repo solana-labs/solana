@@ -1071,7 +1071,7 @@ where
     }
 
     fn start_session(&mut self, context: SchedulingContext) {
-        self.context = WeakSchedulingContext::new(context);
+        self.context = WeakSchedulingContext::new(context.clone());
         if !self.is_active() {
             self.start_threads();
         }
