@@ -9,7 +9,7 @@
 //! helper fun called `execute_batch()`.
 
 use {
-    crossbeam_channel::{bounded, never, select_biased, unbounded, Receiver, Sender, TryRecvError},
+    crossbeam_channel::{bounded, never, select_biased, unbounded, Receiver, RecvTimeoutError, Sender, TryRecvError},
     log::*,
     rand::{thread_rng, Rng},
     solana_ledger::blockstore_processor::{
@@ -172,8 +172,8 @@ where
                             Ok(thread_manager) => {
                                 weak_thread_managers.push(WatchedThreadManager::new(thread_manager))
                             }
-                            Err(TryRecvError::Disconnected) => break 'outer,
-                            Err(TryRecvError::Empty) => break 'inner,
+                            Err(RecvTimeoutError::Disconnected) => break 'outer,
+                            Err(RecvTimeoutError::Empty) => break 'inner,
                         }
                     }
                 }
