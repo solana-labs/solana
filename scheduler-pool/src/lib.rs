@@ -146,15 +146,17 @@ where
             move || {
                 let mut weak_thread_managers: Vec<WatchedThreadManager<TH, SEA>> = vec![];
 
-                loop {
+                'outer: loop {
                     weak_thread_managers.retain_mut(|thread_manager| thread_manager.update_to_retain());
 
                     std::thread::sleep(std::time::Duration::from_secs(1));
 
-                    match watchdog_receiver.try_recv() {
-                        Ok(thread_manager) => weak_thread_managers.push(WatchedThreadManager::new(thread_manager)),
-                        Err(crossbeam_channel::TryRecvError::Empty) => continue,
-                        Err(crossbeam_channel::TryRecvError::Disconnected) => break,
+                    'inner: loop {
+                        match watchdog_receiver.try_recv() {
+                            Ok(thread_manager) => weak_thread_managers.push(WatchedThreadManager::new(thread_manager)),
+                            Err(crossbeam_channel::TryRecvError::Disconnected) => break 'outer,
+                            Err(crossbeam_channel::TryRecvError::Empty) => break 'inner,
+                        }
                     }
                 }
             }
