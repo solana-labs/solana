@@ -103,7 +103,7 @@ where
     }
 
     fn update_to_retain(&mut self) -> bool {
-        let Some(thread_manager) = thread_manager.thread_manager.upgrade() else {
+        let Some(thread_manager) = self.thread_manager.upgrade() else {
             return false;
         };
 
