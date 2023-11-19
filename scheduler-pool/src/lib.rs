@@ -108,7 +108,9 @@ where
         let Some(thread_manager) = self.thread_manager.upgrade() else {
             return false;
         };
-        let tid = thread_manager.read().unwrap().scheduler_thread_tid;
+        let Some(tid) = thread_manager.read().unwrap().scheduler_thread_tid else {
+            return false;
+        };
         let pid = dbg!(std::process::id());
         let task = (procfs::process::Process::new(pid.try_into().unwrap()).unwrap().task_from_tid(tid).unwrap());
 
