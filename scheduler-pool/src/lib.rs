@@ -454,7 +454,7 @@ struct WeakSchedulingContext {
 }
 
 impl WeakSchedulingContext {
-    fn new(context : SchedulingContext) -> Self {
+    fn new(context: SchedulingContext) -> Self {
         Self {
             mode: context.mode(),
             bank: Arc::downgrade(context.bank()),
@@ -462,9 +462,9 @@ impl WeakSchedulingContext {
     }
 
     fn upgrade(&self) -> Option<SchedulingContext> {
-        self.bank.upgrade().map(|bank| 
-            SchedulingContext::new(self.mode, bank)
-        )
+        self.bank
+            .upgrade()
+            .map(|bank| SchedulingContext::new(self.mode, bank))
     }
 }
 
@@ -674,7 +674,9 @@ where
             warn!("start_threads(): already started");
             return;
         }
-        let context = self.active_context().expect("start_threads(): stale scheduler....");
+        let context = self
+            .active_context()
+            .expect("start_threads(): stale scheduler....");
         debug!("start_threads(): doing now");
 
         let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
@@ -1377,7 +1379,11 @@ where
     }
 
     fn context(&self) -> SchedulingContext {
-        self.thread_manager.read().unwrap().active_context().unwrap()
+        self.thread_manager
+            .read()
+            .unwrap()
+            .active_context()
+            .unwrap()
     }
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
