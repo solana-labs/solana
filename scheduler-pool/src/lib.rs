@@ -101,8 +101,12 @@ where
 
         let watchdog_main_loop = || {
             move || {
+                let weak_thread_managers = vec![];
+
                 loop {
-                    let a = watchdog_receiver.try_recv();
+                    if let Ok(thread_manager) = watchdog_receiver.try_recv() {
+                        weak_thread_managers.push(thread_manager);
+                    }
                     std::thread::sleep(std::time::Duration::from_secs(1));
                 }
             }
