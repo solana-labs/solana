@@ -137,7 +137,7 @@ where
             .push(scheduler);
     }
 
-    pub fn do_take_scheduler(&self, context: SchedulingContext) -> Box<T> {
+    pub fn do_take_scheduler(&self, context: SchedulingContext) -> Arc<T> {
         // pop is intentional for filo, expecting relatively warmed-up scheduler due to having been
         // returned recently
         if let Some(mut scheduler) = self.schedulers.lock().expect("not poisoned").pop() {
