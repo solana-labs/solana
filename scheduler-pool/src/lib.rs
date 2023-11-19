@@ -1347,6 +1347,7 @@ where
     }
 
     fn context(&self) -> SchedulingContext {
+        use std::ops::Deref;
         self.thread_manager.read().unwrap().context.upgrade().unwrap().deref().clone()
     }
 
