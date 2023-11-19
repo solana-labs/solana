@@ -148,7 +148,7 @@ where
         }
     }
 
-    fn register_to_watchdog(&self, a: Arc<RwLock<ThreadManager<TH, SEA>>>) {
+    fn register_to_watchdog(&self, thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>) {
     }
 }
 
@@ -508,7 +508,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             ))),
             address_book: AddressBook::default(),
         };
-        pool.register_to_watchdog(scheduler.thread_manager.clone());
+        pool.register_to_watchdog(Arc::downgrade(&scheduler.thread_manager));
 
         scheduler
     }
