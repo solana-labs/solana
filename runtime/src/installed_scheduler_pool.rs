@@ -42,7 +42,7 @@ use {
 use {mockall::automock, qualifier_attr::qualifiers};
 
 pub trait InstalledSchedulerPool<SEA: ScheduleExecutionArg>: Send + Sync + Debug {
-    fn take_scheduler(&self, context: SchedulingContext) -> Arc<dyn InstalledScheduler<SEA>>;
+    fn take_scheduler(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler<SEA>>;
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -123,12 +123,12 @@ pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + '
     /// finalized `ResultWithTimings` until it's `wait_for_termination()`-ed with one of the other
     /// two reasons later.
     #[must_use]
-    fn wait_for_termination(&self, reason: &WaitReason) -> Option<ResultWithTimings>;
+    fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings>;
 
-    fn return_to_pool(self: Arc<Self>);
+    fn return_to_pool(self: Box<Self>);
 }
 
-pub type DefaultInstalledSchedulerBox = Arc<dyn InstalledScheduler<DefaultScheduleExecutionArg>>;
+pub type DefaultInstalledSchedulerBox = Box<dyn InstalledScheduler<DefaultScheduleExecutionArg>>;
 
 pub type InstalledSchedulerPoolArc<SEA> = Arc<dyn InstalledSchedulerPool<SEA>>;
 

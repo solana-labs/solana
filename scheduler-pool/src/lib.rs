@@ -57,7 +57,7 @@ pub struct SchedulerPool<
     TH: Handler<SEA>,
     SEA: ScheduleExecutionArg,
 > {
-    schedulers: Mutex<Vec<Arc<T>>>,
+    schedulers: Mutex<Vec<Box<T>>>,
     log_messages_bytes_limit: Option<usize>,
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<ReplayVoteSender>,
@@ -128,7 +128,7 @@ where
             .expect("self-referencing Arc-ed pool")
     }
 
-    pub fn return_scheduler(&self, scheduler: Arc<T>) {
+    pub fn return_scheduler(&self, scheduler: Box<T>) {
         //assert!(!scheduler.has_context());
 
         self.schedulers
@@ -137,14 +137,14 @@ where
             .push(scheduler);
     }
 
-    pub fn do_take_scheduler(&self, context: SchedulingContext) -> Arc<T> {
+    pub fn do_take_scheduler(&self, context: SchedulingContext) -> Box<T> {
         // pop is intentional for filo, expecting relatively warmed-up scheduler due to having been
         // returned recently
         if let Some(mut scheduler) = self.schedulers.lock().expect("not poisoned").pop() {
             scheduler.replace_context(context);
             scheduler
         } else {
-            Arc::new(T::spawn(self.self_arc(), context, TH::create(self)))
+            Box::new(T::spawn(self.self_arc(), context, TH::create(self)))
         }
     }
 }
@@ -155,7 +155,7 @@ where
     TH: Handler<SEA>,
     SEA: ScheduleExecutionArg,
 {
-    fn take_scheduler(&self, context: SchedulingContext) -> Arc<dyn InstalledScheduler<SEA>> {
+    fn take_scheduler(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler<SEA>> {
         self.do_take_scheduler(context)
     }
 }
@@ -1095,7 +1095,7 @@ where
 
 pub trait InstallableScheduler<SEA: ScheduleExecutionArg>: InstalledScheduler<SEA> {
     fn has_context(&self) -> bool;
-    fn replace_context(&self, context: SchedulingContext);
+    fn replace_context(&mut self, context: SchedulingContext);
 }
 
 pub trait SpawnableScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg>:
@@ -1405,9 +1405,7 @@ where
         });
     }
 
-    fn wait_for_termination(&self, wait_reason: &WaitReason) -> Option<ResultWithTimings> {
-        todo!();
-        /*
+    fn wait_for_termination(&mut self, wait_reason: &WaitReason) -> Option<ResultWithTimings> {
         if self.completed_result_with_timings.is_none() {
             self.completed_result_with_timings =
                 Some(self.thread_manager.write().unwrap().end_session());
@@ -1418,10 +1416,9 @@ where
         } else {
             self.completed_result_with_timings.take()
         }
-        */
     }
 
-    fn return_to_pool(self: Arc<Self>) {
+    fn return_to_pool(self: Box<Self>) {
         let pool = self.thread_manager.read().unwrap().pool.clone();
         pool.return_scheduler(self);
     }
@@ -1518,7 +1515,7 @@ where
         true // consider to remove this method entirely???
     }
 
-    fn replace_context(&self, context: SchedulingContext) {
+    fn replace_context(&mut self, context: SchedulingContext) {
         self.thread_manager.write().unwrap().start_session(context);
     }
 }
@@ -1834,7 +1831,7 @@ mod tests {
             */
         }
 
-        fn wait_for_termination(&self, reason: &WaitReason) -> Option<ResultWithTimings> {
+        fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings> {
             todo!();
             /*
             if TRIGGER_RACE_CONDITION && matches!(reason, WaitReason::PausedForRecentBlockhash) {
@@ -1859,7 +1856,7 @@ mod tests {
             */
         }
 
-        fn return_to_pool(self: Arc<Self>) {
+        fn return_to_pool(self: Box<Self>) {
             Box::new(self.0).return_to_pool()
         }
     }
@@ -1902,8 +1899,8 @@ mod tests {
             self.0.has_context()
         }
 
-        fn replace_context(&self, context: SchedulingContext) {
-            todo!();//self.0.replace_context(context)
+        fn replace_context(&mut self, context: SchedulingContext) {
+            self.0.replace_context(context)
         }
     }
 
