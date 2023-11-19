@@ -569,7 +569,7 @@ where
             pool,
             session_result_with_timings: None,
         };
-
+        new.start_threads();
         new
     }
 
