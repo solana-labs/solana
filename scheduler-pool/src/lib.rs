@@ -1095,7 +1095,7 @@ where
 
 pub trait InstallableScheduler<SEA: ScheduleExecutionArg>: InstalledScheduler<SEA> {
     fn has_context(&self) -> bool;
-    fn replace_context(&mut self, context: SchedulingContext);
+    fn replace_context(self, context: SchedulingContext);
 }
 
 pub trait SpawnableScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg>:
@@ -1518,7 +1518,7 @@ where
         true // consider to remove this method entirely???
     }
 
-    fn replace_context(&mut self, context: SchedulingContext) {
+    fn replace_context(&self, context: SchedulingContext) {
         self.thread_manager.write().unwrap().start_session(context);
     }
 }
@@ -1902,8 +1902,8 @@ mod tests {
             self.0.has_context()
         }
 
-        fn replace_context(&mut self, context: SchedulingContext) {
-            self.0.replace_context(context)
+        fn replace_context(&self, context: SchedulingContext) {
+            todo!();//self.0.replace_context(context)
         }
     }
 
