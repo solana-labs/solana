@@ -113,6 +113,12 @@ where
         };
         let pid = dbg!(std::process::id());
         let task = (procfs::process::Process::new(pid.try_into().unwrap()).unwrap().task_from_tid(tid).unwrap());
+        let stat = task.stat().unwrap();
+        let current_tick = stat.utime + stat.stime;
+        if current_tick > self.tick {
+            self.tick = current_tick;
+            self.updated_at = std::time::SystemTime::now();
+        }
 
         thread_manager.write().unwrap().stop_threads();
 
