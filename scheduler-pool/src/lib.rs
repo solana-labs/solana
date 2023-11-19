@@ -114,7 +114,13 @@ where
         let Some(thread_manager) = self.thread_manager.upgrade() else {
             return false;
         };
-        let Some(&tid) = thread_manager.read().unwrap().scheduler_thread_and_tid.as_ref().map(|(_, tid)| tid) else {
+        let Some(&tid) = thread_manager
+            .read()
+            .unwrap()
+            .scheduler_thread_and_tid
+            .as_ref()
+            .map(|(_, tid)| tid)
+        else {
             return false;
         };
 
@@ -1089,15 +1095,13 @@ where
             }
         };
 
-        self.scheduler_thread_and_tid = Some(
-            (
+        self.scheduler_thread_and_tid = Some((
             std::thread::Builder::new()
                 .name("solScheduler".to_owned())
                 .spawn(scheduler_main_loop())
                 .unwrap(),
             tid_receiver.recv().unwrap(),
-            )
-        );
+        ));
 
         self.drop_thread = Some(
             std::thread::Builder::new()
@@ -1132,7 +1136,13 @@ where
             self.schedulrable_transaction_sender,
             self.schedulable_transaction_receiver,
         ) = unbounded();
-        let result_with_timings = self.scheduler_thread_and_tid.take().unwrap().0.join().unwrap();
+        let result_with_timings = self
+            .scheduler_thread_and_tid
+            .take()
+            .unwrap()
+            .0
+            .join()
+            .unwrap();
         let () = self.drop_thread.take().unwrap().join().unwrap();
         self.session_result_with_timings = Some(result_with_timings);
 
