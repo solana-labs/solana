@@ -155,7 +155,7 @@ where
     TH: Handler<SEA>,
     SEA: ScheduleExecutionArg,
 {
-    fn take_scheduler(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler<SEA>> {
+    fn take_scheduler(&self, context: SchedulingContext) -> Arc<dyn InstalledScheduler<SEA>> {
         self.do_take_scheduler(context)
     }
 }
