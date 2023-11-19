@@ -1052,6 +1052,7 @@ where
                 .spawn(scheduler_main_loop())
                 .unwrap(),
         );
+        self.scheduler_thread_tid = tid_receiver.recv().unwrap();
 
         self.drop_thread = Some(
             std::thread::Builder::new()
