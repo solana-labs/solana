@@ -555,7 +555,7 @@ enum ChainedChannel<T1, T2> {
 }
 
 enum ControlFrame {
-    StartSession(Arc<SchedulingContext>),
+    StartSession(SchedulingContext),
     EndSession,
 }
 
