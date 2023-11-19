@@ -96,8 +96,14 @@ where
         replay_vote_sender: Option<ReplayVoteSender>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Arc<Self> {
+        let (watchdog_sender, watchdog_receiver) = unbounded();
+
         let watchdog_main_loop = || {
             || {
+                loop {
+                    let a = watchdog_receiver.try_recv();
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                }
             }
         };
         std::thread::Builder::new()
