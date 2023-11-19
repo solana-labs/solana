@@ -1026,7 +1026,7 @@ where
 
         let drop_main_loop = || {
             move || 'outer: loop {
-                loop {
+                'inner loop {
                     match drop_receiver.try_recv() {
                         Ok(ee) => {
                             if send_metrics {
