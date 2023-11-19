@@ -9,7 +9,9 @@
 //! helper fun called `execute_batch()`.
 
 use {
-    crossbeam_channel::{bounded, never, select_biased, unbounded, Receiver, RecvTimeoutError, Sender, TryRecvError},
+    crossbeam_channel::{
+        bounded, never, select_biased, unbounded, Receiver, RecvTimeoutError, Sender, TryRecvError,
+    },
     log::*,
     rand::{thread_rng, Rng},
     solana_ledger::blockstore_processor::{
