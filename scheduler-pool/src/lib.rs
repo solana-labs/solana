@@ -147,6 +147,9 @@ where
             Box::new(T::spawn(self.self_arc(), context, TH::create(self)))
         }
     }
+
+    fn register_to_watchdog(&self, a: Arc<RwLock<ThreadManager<TH, SEA>>>) {
+    }
 }
 
 impl<T, TH, SEA> InstalledSchedulerPool<SEA> for SchedulerPool<T, TH, SEA>
@@ -443,7 +446,7 @@ pub struct ExecutionEnvironment {
 pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     id: SchedulerId,
     completed_result_with_timings: Option<ResultWithTimings>,
-    thread_manager: RwLock<ThreadManager<TH, SEA>>,
+    thread_manager: Arc<RwLock<ThreadManager<TH, SEA>>>,
     address_book: AddressBook,
 }
 
@@ -494,17 +497,20 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             .unwrap_or(format!("{}", 8))
             .parse::<usize>()
             .unwrap();
-        Self {
+        let scheduler = Self {
             id: thread_rng().gen::<SchedulerId>(),
             completed_result_with_timings: None,
-            thread_manager: RwLock::new(ThreadManager::<TH, SEA>::new(
+            thread_manager: Arc::new(RwLock::new(ThreadManager::<TH, SEA>::new(
                 initial_context,
                 handler,
-                pool,
+                pool.clone(),
                 handler_count,
-            )),
+            ))),
             address_book: AddressBook::default(),
-        }
+        };
+        pool.register_to_watchdog(scheduler.thread_manager.clone());
+
+        scheduler
     }
 
     #[must_use]
