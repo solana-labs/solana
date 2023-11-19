@@ -473,6 +473,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             .unwrap_or(format!("{}", 8))
             .parse::<usize>()
             .unwrap();
+        let initial_context = Arc::new(initial_context);
         Self {
             id: thread_rng().gen::<SchedulerId>(),
             completed_result_with_timings: None,
@@ -547,7 +548,7 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn new(
-        initial_context: Arc<SchedulingContext>,
+        initial_context: &Arc<SchedulingContext>,
         handler: TH,
         pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
         handler_count: usize,
