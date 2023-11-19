@@ -167,10 +167,8 @@ where
                     weak_thread_managers
                         .retain_mut(|thread_manager| thread_manager.update_tick_to_retain());
 
-                    sleep(Duration::from_secs(1));
-
                     'inner: loop {
-                        match watchdog_receiver.try_recv() {
+                        match watchdog_receiver.try_recv_timeout(Duration::from_secs(1)) {
                             Ok(thread_manager) => {
                                 weak_thread_managers.push(WatchedThreadManager::new(thread_manager))
                             }
