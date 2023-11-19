@@ -638,6 +638,11 @@ where
         ));
     }
 
+    fn active_context(&self) -> Option<SchedulingContext> {
+        use std::ops::Deref;
+        self.context.upgrade().map(|context| context.deref().clone())
+    }
+
     fn start_threads(&mut self) {
         if self.is_active() {
             // this can't be promoted to panic! as read => write upgrade isn't completely
