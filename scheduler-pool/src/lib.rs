@@ -37,7 +37,7 @@ use {
         marker::PhantomData,
         sync::{atomic::AtomicUsize, Arc, Mutex, RwLock, RwLockReadGuard, Weak},
         thread::{sleep, JoinHandle},
-        time::SystemTime,
+        time::{Duration, SystemTime},
     },
 };
 
