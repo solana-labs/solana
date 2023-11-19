@@ -676,8 +676,7 @@ where
             result_sender,
             result_receiver,
             context: WeakSchedulingContext::new(initial_context),
-            scheduler_thread: None,
-            scheduler_thread_tid: None,
+            scheduler_thread_and_tid: None,
             drop_thread: None,
             handler_threads: Vec::with_capacity(handler_count),
             handler_count,
@@ -692,7 +691,7 @@ where
     }
 
     fn is_active(&self) -> bool {
-        self.scheduler_thread.is_some()
+        self.scheduler_thread_and_tid.is_some()
     }
 
     fn update_result_with_timings(
@@ -1091,12 +1090,14 @@ where
         };
 
         self.scheduler_thread = Some(
+            (
             std::thread::Builder::new()
                 .name("solScheduler".to_owned())
                 .spawn(scheduler_main_loop())
                 .unwrap(),
+            tid_receiver.recv().unwrap(),
+            )
         );
-        self.scheduler_thread_tid = Some(tid_receiver.recv().unwrap());
 
         self.drop_thread = Some(
             std::thread::Builder::new()
@@ -1131,8 +1132,7 @@ where
             self.schedulrable_transaction_sender,
             self.schedulable_transaction_receiver,
         ) = unbounded();
-        let result_with_timings = self.scheduler_thread.take().unwrap().join().unwrap();
-        self.scheduler_thread_tid = None;
+        let result_with_timings = self.scheduler_thread.take().unwrap().0.join().unwrap();
         let () = self.drop_thread.take().unwrap().join().unwrap();
         self.session_result_with_timings = Some(result_with_timings);
 
