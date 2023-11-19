@@ -1089,7 +1089,7 @@ where
             }
         };
 
-        self.scheduler_thread = Some(
+        self.scheduler_thread_and_tid = Some(
             (
             std::thread::Builder::new()
                 .name("solScheduler".to_owned())
