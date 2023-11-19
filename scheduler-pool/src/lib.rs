@@ -477,7 +477,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             id: thread_rng().gen::<SchedulerId>(),
             completed_result_with_timings: None,
             thread_manager: RwLock::new(ThreadManager::<TH, SEA>::new(
-                initial_context: Arc::new(initial_context),
+                Arc::new(initial_context),
                 handler,
                 pool,
                 handler_count,
@@ -569,6 +569,8 @@ where
             pool,
             session_result_with_timings: None,
         };
+        // needs to start threads immediately. because given SchedulingContext can be dropped
+        // anytime.
         new.start_threads();
         new
     }
