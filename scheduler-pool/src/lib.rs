@@ -126,7 +126,7 @@ where
                         weak_thread_managers.push(WatchedThreadManager::new(thread_manager));
                     }
                     weak_thread_managers.retain(|thread_manager| {
-                        let Some(thread_manager) = thread_manager.upgrade() else {
+                        let Some(thread_manager) = thread_manager.thread_manager.upgrade() else {
                             return false;
                         };
 
