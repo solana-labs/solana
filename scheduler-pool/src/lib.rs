@@ -90,7 +90,8 @@ where
     TH: Handler<SEA>,
     SEA: ScheduleExecutionArg,
 {
-    thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>
+    thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>,
+    updated_at: std:time::SystemTime,
 }
 
 impl<TH, SEA> WatchedThreadManager<TH, SEA>
