@@ -638,9 +638,8 @@ where
         ));
     }
 
-    fn active_context(&self) -> Option<SchedulingContext> {
-        use std::ops::Deref;
-        self.context.upgrade().map(|context| context.deref().clone())
+    fn active_context(&self) -> Option<Arc<SchedulingContext>> {
+        self.context.upgrade()
     }
 
     fn start_threads(&mut self) {
