@@ -5075,7 +5075,13 @@ impl Bank {
         } = {
             // Lock the global cache to figure out which programs need to be loaded
             let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
-            loaded_programs_cache.extract(self, programs_and_slots.into_iter())
+            Mutex::into_inner(
+                Arc::into_inner(
+                    loaded_programs_cache.extract(self, programs_and_slots.into_iter()),
+                )
+                .unwrap(),
+            )
+            .unwrap()
         };
 
         // Load missing programs while global cache is unlocked
