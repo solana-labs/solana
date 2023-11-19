@@ -57,7 +57,7 @@ pub struct SchedulerPool<
     TH: Handler<SEA>,
     SEA: ScheduleExecutionArg,
 > {
-    schedulers: Mutex<Vec<Box<T>>>,
+    schedulers: Arc<Mutex<Vec<Box<T>>>>,
     log_messages_bytes_limit: Option<usize>,
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<ReplayVoteSender>,
@@ -97,7 +97,7 @@ where
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Arc<Self> {
         Arc::new_cyclic(|weak_self| Self {
-            schedulers: Mutex::default(),
+            schedulers: Arc::new(Mutex::new(vec![])),
             log_messages_bytes_limit,
             transaction_status_sender,
             replay_vote_sender,
