@@ -560,7 +560,7 @@ where
             schedulable_transaction_receiver,
             result_sender,
             result_receiver,
-            context: Arc::downgrade(initial_context),
+            context: Arc::downgrade(&initial_context),
             scheduler_thread: None,
             drop_thread: None,
             handler_threads: Vec::with_capacity(handler_count),
