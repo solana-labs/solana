@@ -108,7 +108,7 @@ where
         let Some(thread_manager) = self.thread_manager.upgrade() else {
             return false;
         };
-        thread_manager.write().unwrap().stop_thread();
+        thread_manager.write().unwrap().stop_threads();
 
         true
     }
