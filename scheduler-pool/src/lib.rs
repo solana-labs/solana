@@ -92,6 +92,7 @@ where
 {
     thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>,
     updated_at: std::time::SystemTime,
+    tick: usize,
 }
 
 impl<TH, SEA> WatchedThreadManager<TH, SEA>
@@ -100,7 +101,7 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn new(thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>) -> Self {
-        Self { thread_manager }
+        Self { thread_manager, updated_at: SystemTime::now() }
     }
 
     fn update_to_retain(&mut self) -> bool {
