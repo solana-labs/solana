@@ -619,7 +619,7 @@ where
         blocked_transaction_sessioned_sender: &mut Sender<
             ChainedChannel<Box<ExecutionEnvironment>, ControlFrame>,
         >,
-        context: SchedulingContext,
+        context: Arc<SchedulingContext>,
         handler_count: usize,
     ) {
         let (next_blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) =
