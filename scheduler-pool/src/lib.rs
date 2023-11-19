@@ -505,7 +505,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             ))),
             address_book: AddressBook::default(),
         }
-        pool.register_to_watchdog(self.thread_manager.clone());
+        pool.register_to_watchdog(scheduler.thread_manager.clone());
 
         scheduler
     }
