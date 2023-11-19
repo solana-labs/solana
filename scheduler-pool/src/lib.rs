@@ -460,6 +460,15 @@ impl WeakSchedulingContext {
             bank: Arc::downgrade(&bank),
         }
     }
+
+    fn upgrade(&self) -> Option<SchedulingContext> {
+        self.bank.upgrade().map(|bank| 
+            SchedulingContext {
+                mode: self.mode,
+                bank: bank
+            }
+        )
+    }
 }
 
 #[derive(Debug)]
