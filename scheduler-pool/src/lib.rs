@@ -452,6 +452,7 @@ pub enum RequestedUsage {
 pub struct Page {
     current_usage: Usage,
     blocked_task_queue: Tasks,
+    // unify into blocked_task_queue
     blocked_write_requesting_task_ids: std::collections::BTreeSet<UniqueWeight>,
 }
 
@@ -495,6 +496,7 @@ impl BTreeMapTaskIds {
     }
 }
 
+// use UnsafeCell
 type PageRcInner = Arc<std::cell::RefCell<Page>>;
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
