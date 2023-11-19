@@ -1068,10 +1068,7 @@ where
     }
 
     fn start_session(&mut self, context: SchedulingContext) {
-        if !self.is_active() {
-            self.context = WeakSchedulingContext::new(context.clone());
-            self.start_threads();
-        } else {
+        if self.is_active() {
             let next_sender_and_receiver = unbounded();
             let (_next_sender, next_receiver) = &next_sender_and_receiver;
 
@@ -1087,6 +1084,9 @@ where
                 self.schedulrable_transaction_sender,
                 self.schedulable_transaction_receiver,
             ) = next_sender_and_receiver;
+        } else {
+            self.context = WeakSchedulingContext::new(context.clone());
+            self.start_threads();
         }
     }
 }
