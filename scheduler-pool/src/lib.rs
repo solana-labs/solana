@@ -108,6 +108,7 @@ where
         let Some(thread_manager) = self.thread_manager.upgrade() else {
             return false;
         };
+        let tid = thread_manager.read().unwrap().scheduler_thread_tid;
         thread_manager.write().unwrap().stop_threads();
 
         true
