@@ -14,6 +14,7 @@ by_address = { workspace = true }
 cpu-time = "1.0.0"
 crossbeam-channel = { workspace = true }
 dashmap = { workspace = true }
+procfs = { workspace = true }
 rand = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
