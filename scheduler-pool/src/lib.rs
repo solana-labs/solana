@@ -568,7 +568,7 @@ where
             handler,
             pool,
             session_result_with_timings: None,
-        }
+        };
 
         new
     }
