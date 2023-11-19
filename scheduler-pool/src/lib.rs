@@ -450,7 +450,7 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
 #[derive(Debug)]
 struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
-    context: SchedulingContext,
+    context: Weak<SchedulingContext>,
     scheduler_thread: Option<JoinHandle<ResultWithTimings>>,
     handler_threads: Vec<JoinHandle<()>>,
     drop_thread: Option<JoinHandle<()>>,
@@ -547,7 +547,7 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn new(
-        initial_context: SchedulingContext,
+        initial_context: Arc<SchedulingContext>,
         handler: TH,
         pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
         handler_count: usize,
@@ -560,7 +560,7 @@ where
             schedulable_transaction_receiver,
             result_sender,
             result_receiver,
-            context: initial_context,
+            context: Arc::downgrade(initial_context),
             scheduler_thread: None,
             drop_thread: None,
             handler_threads: Vec::with_capacity(handler_count),
