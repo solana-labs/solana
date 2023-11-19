@@ -128,7 +128,7 @@ pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + '
     fn return_to_pool(self: Arc<Self>);
 }
 
-pub type DefaultInstalledSchedulerBox = Box<dyn InstalledScheduler<DefaultScheduleExecutionArg>>;
+pub type DefaultInstalledSchedulerBox = Arc<dyn InstalledScheduler<DefaultScheduleExecutionArg>>;
 
 pub type InstalledSchedulerPoolArc<SEA> = Arc<dyn InstalledSchedulerPool<SEA>>;
 
