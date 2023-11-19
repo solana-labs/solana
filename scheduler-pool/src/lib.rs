@@ -36,7 +36,7 @@ use {
         fmt::Debug,
         marker::PhantomData,
         sync::{atomic::AtomicUsize, Arc, Mutex, RwLock, RwLockReadGuard, Weak},
-        thread::JoinHandle,
+        thread::{sleep, JoinHandle},
         time::SystemTime,
     },
 };
@@ -124,7 +124,7 @@ where
             return false;
         };
 
-        let pid = dbg!(std::process::id());
+        let pid = std::process::id();
         let task = (procfs::process::Process::new(pid.try_into().unwrap())
             .unwrap()
             .task_from_tid(tid)
@@ -134,7 +134,7 @@ where
         if current_tick > self.tick {
             self.tick = current_tick;
             self.updated_at = SystemTime::now();
-        } else if self.updated_at.elapsed().unwrap() > std::time::Duration::from_secs(10) {
+        } else if self.updated_at.elapsed().unwrap() > Duration::from_secs(10) {
             info!("stopping...");
             thread_manager.write().unwrap().stop_threads();
             self.tick = 0;
@@ -167,7 +167,7 @@ where
                     weak_thread_managers
                         .retain_mut(|thread_manager| thread_manager.update_tick_to_retain());
 
-                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    sleep(Duration::from_secs(1));
 
                     'inner: loop {
                         match watchdog_receiver.try_recv() {
@@ -1090,7 +1090,7 @@ where
                         Err(TryRecvError::Empty) => break 'inner,
                     }
                 }
-                std::thread::sleep(std::time::Duration::from_millis(40));
+                sleep(Duration::from_millis(40));
             }
         };
 
