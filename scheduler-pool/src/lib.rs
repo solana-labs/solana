@@ -529,6 +529,7 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
     context: WeakSchedulingContext,
     scheduler_thread: Option<JoinHandle<ResultWithTimings>>,
+    scheduler_thread_tid: Option<usize>,
     handler_threads: Vec<JoinHandle<()>>,
     drop_thread: Option<JoinHandle<()>>,
     handler: TH,
@@ -1052,7 +1053,7 @@ where
                 .spawn(scheduler_main_loop())
                 .unwrap(),
         );
-        self.scheduler_thread_tid = tid_receiver.recv().unwrap();
+        self.scheduler_thread_tid = Some(tid_receiver.recv().unwrap());
 
         self.drop_thread = Some(
             std::thread::Builder::new()
