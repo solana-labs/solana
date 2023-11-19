@@ -1068,24 +1068,26 @@ where
     }
 
     fn start_session(&mut self, context: SchedulingContext) {
-        self.context = WeakSchedulingContext::new(context.clone());
         if !self.is_active() {
+            self.context = WeakSchedulingContext::new(context.clone());
             self.start_threads();
+        } else {
+            let next_sender_and_receiver = unbounded();
+            let (_next_sender, next_receiver) = &next_sender_and_receiver;
+
+            self.schedulrable_transaction_sender
+                .send(ChainedChannel::new_channel(
+                    next_receiver.clone(),
+                    ControlFrame::StartSession(context.clone()),
+                ))
+                .unwrap();
+
+            self.context = WeakSchedulingContext::new(context);
+            (
+                self.schedulrable_transaction_sender,
+                self.schedulable_transaction_receiver,
+            ) = next_sender_and_receiver;
         }
-        let next_sender_and_receiver = unbounded();
-        let (_next_sender, next_receiver) = &next_sender_and_receiver;
-
-        self.schedulrable_transaction_sender
-            .send(ChainedChannel::new_channel(
-                next_receiver.clone(),
-                ControlFrame::StartSession(context.clone()),
-            ))
-            .unwrap();
-
-        (
-            self.schedulrable_transaction_sender,
-            self.schedulable_transaction_receiver,
-        ) = next_sender_and_receiver;
     }
 }
 
