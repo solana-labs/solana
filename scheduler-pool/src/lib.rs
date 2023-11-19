@@ -1379,8 +1379,7 @@ where
     }
 
     fn context(&self) -> SchedulingContext {
-        use std::ops::Deref;
-        self.thread_manager.read().unwrap().active_context().unwrap().deref().clone()
+        self.thread_manager.read().unwrap().active_context().unwrap()
     }
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
