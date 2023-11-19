@@ -590,7 +590,7 @@ where
             pool,
             session_result_with_timings: None,
         };
-        // needs to start threads immediately. because given SchedulingContext can be dropped
+        // needs to start threads immediately, because the bank in initial_context can be dropped
         // anytime.
         thread_manager.start_threads();
         thread_manager
