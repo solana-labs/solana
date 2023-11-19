@@ -100,7 +100,7 @@ where
         let (watchdog_sender, watchdog_receiver) = unbounded();
 
         let watchdog_main_loop = || {
-            || {
+            move || {
                 loop {
                     let a = watchdog_receiver.try_recv();
                     std::thread::sleep(std::time::Duration::from_secs(1));
