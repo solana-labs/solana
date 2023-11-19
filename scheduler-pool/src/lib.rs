@@ -147,6 +147,9 @@ where
             Box::new(T::spawn(self.self_arc(), context, TH::create(self)))
         }
     }
+
+    fn register_to_watchdog(a: usize) {
+    }
 }
 
 impl<T, TH, SEA> InstalledSchedulerPool<SEA> for SchedulerPool<T, TH, SEA>
