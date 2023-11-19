@@ -148,6 +148,7 @@ where
                 loop {
                     match watchdog_receiver.try_recv() {
                         Ok(thread_manager) => weak_thread_managers.push(WatchedThreadManager::new(thread_manager)),
+                        Err(Disconnected) => break,
                     }
                     weak_thread_managers.retain_mut(|thread_manager| thread_manager.update_to_retain());
                     std::thread::sleep(std::time::Duration::from_secs(1));
