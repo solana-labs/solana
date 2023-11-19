@@ -497,12 +497,12 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
         Self {
             id: thread_rng().gen::<SchedulerId>(),
             completed_result_with_timings: None,
-            thread_manager: RwLock::new(ThreadManager::<TH, SEA>::new(
+            thread_manager: Arc::new(RwLock::new(ThreadManager::<TH, SEA>::new(
                 initial_context,
                 handler,
                 pool,
                 handler_count,
-            )),
+            ))),
             address_book: AddressBook::default(),
         }
     }
