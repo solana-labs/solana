@@ -1071,8 +1071,7 @@ where
     }
 
     fn start_session(&mut self, context: SchedulingContext) {
-        let context = Arc::new(context);
-        self.context = Arc::downgrade(&context);
+        self.context = WeakSchedulingContext::new(context);
         if !self.is_active() {
             self.start_threads();
         }
