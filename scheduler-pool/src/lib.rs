@@ -57,7 +57,7 @@ pub struct SchedulerPool<
     TH: Handler<SEA>,
     SEA: ScheduleExecutionArg,
 > {
-    schedulers: Mutex<Vec<Box<T>>>,
+    schedulers: Mutex<Vec<Arc<T>>>,
     log_messages_bytes_limit: Option<usize>,
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<ReplayVoteSender>,
@@ -1326,6 +1326,7 @@ impl ScheduleStage {
         lock_attempts: &mut [LockAttempt],
     ) {
         for unlock_attempt in lock_attempts {
+            // skip reindex() and blocked_write_requesting_task_ids bookkeeping unless contended?
             let heaviest_uncontended = unlock_attempt
                 .target_page_mut()
                 .blocked_task_queue
