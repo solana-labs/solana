@@ -128,7 +128,7 @@ where
             .expect("self-referencing Arc-ed pool")
     }
 
-    pub fn return_scheduler(&self, scheduler: Box<T>) {
+    pub fn return_scheduler(&self, scheduler: Arc<T>) {
         //assert!(!scheduler.has_context());
 
         self.schedulers
@@ -1418,7 +1418,7 @@ where
         }
     }
 
-    fn return_to_pool(self: Box<Self>) {
+    fn return_to_pool(self: Arc<Self>) {
         let pool = self.thread_manager.read().unwrap().pool.clone();
         pool.return_scheduler(self);
     }
@@ -1856,7 +1856,7 @@ mod tests {
             */
         }
 
-        fn return_to_pool(self: Box<Self>) {
+        fn return_to_pool(self: Arc<Self>) {
             Box::new(self.0).return_to_pool()
         }
     }

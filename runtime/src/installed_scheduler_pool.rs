@@ -125,7 +125,7 @@ pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + '
     #[must_use]
     fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings>;
 
-    fn return_to_pool(self: Box<Self>);
+    fn return_to_pool(self: Arc<Self>);
 }
 
 pub type DefaultInstalledSchedulerBox = Box<dyn InstalledScheduler<DefaultScheduleExecutionArg>>;
