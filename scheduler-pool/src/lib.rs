@@ -93,7 +93,7 @@ where
     thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>
 }
 
-impl WatchedThradManager<TH, SEA>
+impl<TH, SEA> WatchedThradManager<TH, SEA>
 where
     TH: Handler<SEA>,
     SEA: ScheduleExecutionArg,
