@@ -92,7 +92,7 @@ where
 {
     thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>,
     updated_at: std::time::SystemTime,
-    tick: usize,
+    tick: u64,
 }
 
 impl<TH, SEA> WatchedThreadManager<TH, SEA>
