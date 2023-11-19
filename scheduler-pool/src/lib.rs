@@ -110,7 +110,7 @@ where
                     weak_thread_managers.retain(|thread_manager| {
                         let Some(thread_manager) = thread_manager.upgrade() else {
                             return false;
-                        }
+                        };
                         true
                     });
                     std::thread::sleep(std::time::Duration::from_secs(1));
