@@ -102,7 +102,11 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn new(thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>) -> Self {
-        Self { thread_manager, updated_at: std::time::SystemTime::now(), tick: 0 }
+        Self {
+            thread_manager,
+            updated_at: std::time::SystemTime::now(),
+            tick: 0,
+        }
     }
 
     fn update_tick_to_retain(&mut self) -> bool {
@@ -114,7 +118,10 @@ where
         };
 
         let pid = dbg!(std::process::id());
-        let task = (procfs::process::Process::new(pid.try_into().unwrap()).unwrap().task_from_tid(tid).unwrap());
+        let task = (procfs::process::Process::new(pid.try_into().unwrap())
+            .unwrap()
+            .task_from_tid(tid)
+            .unwrap());
         let stat = task.stat().unwrap();
         let current_tick = stat.utime + stat.stime;
         if current_tick > self.tick {
@@ -150,13 +157,16 @@ where
                 let mut weak_thread_managers: Vec<WatchedThreadManager<TH, SEA>> = vec![];
 
                 'outer: loop {
-                    weak_thread_managers.retain_mut(|thread_manager| thread_manager.update_tick_to_retain());
+                    weak_thread_managers
+                        .retain_mut(|thread_manager| thread_manager.update_tick_to_retain());
 
                     std::thread::sleep(std::time::Duration::from_secs(1));
 
                     'inner: loop {
                         match watchdog_receiver.try_recv() {
-                            Ok(thread_manager) => weak_thread_managers.push(WatchedThreadManager::new(thread_manager)),
+                            Ok(thread_manager) => {
+                                weak_thread_managers.push(WatchedThreadManager::new(thread_manager))
+                            }
                             Err(TryRecvError::Disconnected) => break 'outer,
                             Err(TryRecvError::Empty) => break 'inner,
                         }
@@ -1048,8 +1058,10 @@ where
                                     ("signature", &sig, String),
                                     (
                                         "account_locks_in_json",
-                                        serde_json::to_string(&ee.task.tx.0.get_account_locks_unchecked())
-                                            .unwrap(),
+                                        serde_json::to_string(
+                                            &ee.task.tx.0.get_account_locks_unchecked()
+                                        )
+                                        .unwrap(),
                                         String
                                     ),
                                     ("status", format!("{:?}", ee.result_with_timings.0), String),
@@ -1069,7 +1081,7 @@ where
                                 );
                             }
                             drop(ee);
-                        },
+                        }
                         Err(TryRecvError::Disconnected) => break 'outer,
                         Err(TryRecvError::Empty) => break 'inner,
                     }
