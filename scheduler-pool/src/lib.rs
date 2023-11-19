@@ -107,7 +107,12 @@ where
                     if let Ok(thread_manager) = watchdog_receiver.try_recv() {
                         weak_thread_managers.push(thread_manager);
                     }
-                    weak_thread_managers.retain(|thread_manager| thread_manager.upgrade().is_some());
+                    weak_thread_managers.retain(|thread_manager| {
+                        let Some(thread_manager) = thread_manager.upgrade() else {
+                            return false;
+                        }
+                        true
+                    });
                     std::thread::sleep(std::time::Duration::from_secs(1));
                 }
             }
