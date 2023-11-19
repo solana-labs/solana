@@ -119,7 +119,6 @@ where
             self.tick = current_tick;
             self.updated_at = std::time::SystemTime::now();
         } else if self.updated_at.elapsed().unwrap() > std::time::Duration::from_secs(1) {
-            drop(thread_manager);
             thread_manager.write().unwrap().stop_threads();
         }
 
