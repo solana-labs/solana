@@ -751,6 +751,7 @@ where
         let (drop_sender, drop_receiver) = unbounded::<Box<ExecutionEnvironment>>();
         let handler_count = self.handler_count;
         let mut slot = context.bank().slot();
+        let (tid_sender, tid_receiver) = bounded(1);
 
         let scheduler_main_loop = || {
             let result_sender = self.result_sender.clone();
@@ -768,6 +769,9 @@ where
                     "solScheduler thread is started at: {:?}",
                     std::thread::current()
                 );
+                let tid = unsafe { libc::gettid() };
+                tid_sender.send(tid).unwrap();
+
                 let mut will_end_session = false;
                 let mut will_end_thread = false;
                 let mut state_machine = SchedulingStateMachine::default();
