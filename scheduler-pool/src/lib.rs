@@ -463,10 +463,7 @@ impl WeakSchedulingContext {
 
     fn upgrade(&self) -> Option<SchedulingContext> {
         self.bank.upgrade().map(|bank| 
-            SchedulingContext {
-                mode: self.mode,
-                bank: bank
-            }
+            SchedulingContext::new(self.mode, bank)
         )
     }
 }
