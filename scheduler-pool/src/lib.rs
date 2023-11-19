@@ -473,12 +473,11 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             .unwrap_or(format!("{}", 8))
             .parse::<usize>()
             .unwrap();
-        let initial_context = Arc::new(initial_context);
         Self {
             id: thread_rng().gen::<SchedulerId>(),
             completed_result_with_timings: None,
             thread_manager: RwLock::new(ThreadManager::<TH, SEA>::new(
-                initial_context,
+                initial_context: Arc::new(initial_context),
                 handler,
                 pool,
                 handler_count,
@@ -548,7 +547,7 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn new(
-        initial_context: &Arc<SchedulingContext>,
+        initial_context: Arc<SchedulingContext>,
         handler: TH,
         pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
         handler_count: usize,
@@ -556,7 +555,7 @@ where
         let (schedulrable_transaction_sender, schedulable_transaction_receiver) = unbounded();
         let (result_sender, result_receiver) = unbounded();
 
-        Self {
+        let new = Self {
             schedulrable_transaction_sender,
             schedulable_transaction_receiver,
             result_sender,
@@ -570,6 +569,8 @@ where
             pool,
             session_result_with_timings: None,
         }
+
+        new
     }
 
     fn is_active(&self) -> bool {
@@ -1044,12 +1045,11 @@ where
     }
 
     fn start_session(&mut self, context: SchedulingContext) {
+        let context = Arc::new(context);
+        self.context = Arc::downgrade(&context);
         if !self.is_active() {
             self.start_threads();
         }
-
-        let context = Arc::new(context);
-        self.context = Arc::downgrade(&context);
         let next_sender_and_receiver = unbounded();
         let (_next_sender, next_receiver) = &next_sender_and_receiver;
 
