@@ -1043,7 +1043,7 @@ where
         }
 
         let context = Arc::new(context);
-        self.context = Arc::downgrade(context);
+        self.context = Arc::downgrade(&context);
         let next_sender_and_receiver = unbounded();
         let (_next_sender, next_receiver) = &next_sender_and_receiver;
 
