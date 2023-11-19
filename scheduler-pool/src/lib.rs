@@ -645,6 +645,9 @@ where
             warn!("start_threads(): already started");
             return;
         }
+        let Some(context) = self.active_context() else {
+            panic!("start threads is called on stale scheduler....");
+        };
         debug!("start_threads(): doing now");
 
         let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
