@@ -810,8 +810,7 @@ where
                     "solScheduler thread is started at: {:?}",
                     std::thread::current()
                 );
-                let tid = unsafe { libc::gettid() };
-                tid_sender.send(tid).unwrap();
+                tid_sender.send(unsafe { libc::gettid() }).unwrap();
 
                 let mut will_end_session = false;
                 let mut will_end_thread = false;
