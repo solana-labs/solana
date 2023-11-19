@@ -443,7 +443,7 @@ pub struct ExecutionEnvironment {
 pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     id: SchedulerId,
     completed_result_with_timings: Option<ResultWithTimings>,
-    thread_manager: RwLock<ThreadManager<TH, SEA>>,
+    thread_manager: Arc<RwLock<ThreadManager<TH, SEA>>>,
     address_book: AddressBook,
 }
 
