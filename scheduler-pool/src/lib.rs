@@ -666,7 +666,7 @@ where
         ));
     }
 
-    fn active_context(&self) -> Option<Arc<SchedulingContext>> {
+    fn active_context(&self) -> Option<SchedulingContext> {
         self.context.upgrade()
     }
 
