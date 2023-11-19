@@ -144,7 +144,7 @@ where
             scheduler.replace_context(context);
             scheduler
         } else {
-            Box::new(T::spawn(self.self_arc(), context, TH::create(self)))
+            Arc::new(T::spawn(self.self_arc(), context, TH::create(self)))
         }
     }
 }
