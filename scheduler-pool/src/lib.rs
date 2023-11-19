@@ -163,16 +163,16 @@ where
 
         let watchdog_main_loop = || {
             move || {
-                let mut weak_thread_managers: Vec<WatchedThreadManager<TH, SEA>> = vec![];
+                let mut watched_thread_managers: Vec<WatchedThreadManager<TH, SEA>> = vec![];
 
                 'outer: loop {
-                    weak_thread_managers
+                    watched_thread_managers
                         .retain_mut(|thread_manager| thread_manager.update_tick_to_retain());
 
                     'inner: loop {
                         match watchdog_receiver.recv_timeout(Duration::from_secs(1)) {
                             Ok(thread_manager) => {
-                                weak_thread_managers.push(WatchedThreadManager::new(thread_manager))
+                                watched_thread_managers.push(WatchedThreadManager::new(thread_manager))
                             }
                             Err(RecvTimeoutError::Disconnected) => break 'outer,
                             Err(RecvTimeoutError::Timeout) => break 'inner,
