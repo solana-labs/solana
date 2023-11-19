@@ -454,10 +454,10 @@ struct WeakSchedulingContext {
 }
 
 impl WeakSchedulingContext {
-    fn new(SchedulingContext {mode, bank}: SchedulingContext) -> Self {
+    fn new(context : SchedulingContext) -> Self {
         Self {
-            mode,
-            bank: Arc::downgrade(&bank),
+            mode: context.mode(),
+            bank: Arc::downgrade(context.bank()),
         }
     }
 
