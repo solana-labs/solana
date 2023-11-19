@@ -9,7 +9,7 @@
 //! helper fun called `execute_batch()`.
 
 use {
-    crossbeam_channel::{bounded, never, select_biased, unbounded, Receiver, Sender},
+    crossbeam_channel::{bounded, never, select_biased, unbounded, Receiver, Sender, TryRecvError},
     log::*,
     rand::{thread_rng, Rng},
     solana_ledger::blockstore_processor::{
@@ -154,8 +154,8 @@ where
                     'inner: loop {
                         match watchdog_receiver.try_recv() {
                             Ok(thread_manager) => weak_thread_managers.push(WatchedThreadManager::new(thread_manager)),
-                            Err(crossbeam_channel::TryRecvError::Disconnected) => break 'outer,
-                            Err(crossbeam_channel::TryRecvError::Empty) => break 'inner,
+                            Err(TryRecvError::Disconnected) => break 'outer,
+                            Err(TryRecvError::Empty) => break 'inner,
                         }
                     }
                 }
@@ -1067,8 +1067,8 @@ where
                             }
                             drop(ee);
                         },
-                        Err(crossbeam_channel::TryRecvError::Disconnected) => break 'outer,
-                        Err(crossbeam_channel::TryRecvError::Empty) => break 'inner,
+                        Err(TryRecvError::Disconnected) => break 'outer,
+                        Err(TryRecvError::Empty) => break 'inner,
                     }
                 }
                 std::thread::sleep(std::time::Duration::from_millis(40));
