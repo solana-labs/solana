@@ -666,7 +666,7 @@ where
             unbounded::<Box<ExecutionEnvironment>>();
         let (drop_sender, drop_receiver) = unbounded::<Box<ExecutionEnvironment>>();
         let handler_count = self.handler_count;
-        let mut slot = self.context.bank().slot();
+        let mut slot = context.bank().slot();
 
         let scheduler_main_loop = || {
             let result_sender = self.result_sender.clone();
@@ -853,7 +853,7 @@ where
         let handler_main_loop = |thx| {
             let pool = self.pool.clone();
             let handler = self.handler.clone();
-            let mut bank = self.context.bank().clone();
+            let mut bank = context.bank().clone();
             let mut blocked_transaction_sessioned_receiver =
                 blocked_transaction_sessioned_receiver.clone();
             let mut idle_transaction_receiver = idle_transaction_receiver.clone();
