@@ -73,8 +73,9 @@ pub struct SchedulerPool<
     // After these considerations, this weak_self approach is chosen at the cost of some additional
     // memory increase.
     weak_self: Weak<Self>,
-    // watchdog_thread // prune schedulers, stop idling scheduler's threads, sanity check on the
+    // prune schedulers, stop idling scheduler's threads, sanity check on the
     // address book after scheduler is returned.
+    watchdog_sender: Sender<Weak<RwLock<ThreadManager<TH, SEA>>>,
     _phantom: PhantomData<(T, TH, SEA)>,
 }
 
@@ -118,6 +119,7 @@ where
             replay_vote_sender,
             prioritization_fee_cache,
             weak_self: weak_self.clone(),
+            watchdog_sender,
             _phantom: PhantomData,
         })
     }
@@ -164,6 +166,7 @@ where
     }
 
     fn register_to_watchdog(&self, thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>) {
+        self.watchdog_sender.send(thread_manager).unwrap();
     }
 }
 
