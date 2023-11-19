@@ -503,7 +503,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             thread_manager: Arc::new(RwLock::new(ThreadManager::<TH, SEA>::new(
                 initial_context,
                 handler,
-                pool,
+                pool.clone(),
                 handler_count,
             ))),
             address_book: AddressBook::default(),
