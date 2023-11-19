@@ -101,7 +101,7 @@ where
 
         let watchdog_main_loop = || {
             move || {
-                let weak_thread_managers = vec![];
+                let mut weak_thread_managers = vec![];
 
                 loop {
                     if let Ok(thread_manager) = watchdog_receiver.try_recv() {
