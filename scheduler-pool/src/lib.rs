@@ -85,6 +85,24 @@ pub type DefaultSchedulerPool = SchedulerPool<
     DefaultScheduleExecutionArg,
 >;
 
+struct WatchedThradManager<TH, SEA>
+where
+    TH: Handler<SEA>,
+    SEA: ScheduleExecutionArg,
+{
+    thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>
+}
+
+impl WatchedThradManager<TH, SEA>
+where
+    TH: Handler<SEA>,
+    SEA: ScheduleExecutionArg,
+{
+    fn new() -> Self {
+        todo!()
+    }
+}
+
 impl<T, TH, SEA> SchedulerPool<T, TH, SEA>
 where
     T: SpawnableScheduler<TH, SEA>,
