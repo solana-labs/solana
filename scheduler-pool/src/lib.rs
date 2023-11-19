@@ -625,11 +625,6 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             }
         }
     }
-
-    fn stop_thread_manager(&self) {
-        debug!("stop_thread_manager()");
-        self.thread_manager.write().unwrap().stop_threads();
-    }
 }
 
 type ChannelAndPayload<T1, T2> = (Receiver<ChainedChannel<T1, T2>>, T2);
