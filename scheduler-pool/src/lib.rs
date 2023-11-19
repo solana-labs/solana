@@ -37,6 +37,7 @@ use {
         marker::PhantomData,
         sync::{atomic::AtomicUsize, Arc, Mutex, RwLock, RwLockReadGuard, Weak},
         thread::JoinHandle,
+        time::SystemTime,
     },
 };
 
@@ -92,7 +93,7 @@ where
     SEA: ScheduleExecutionArg,
 {
     thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>,
-    updated_at: std::time::SystemTime,
+    updated_at: SystemTime,
     tick: u64,
 }
 
@@ -104,7 +105,7 @@ where
     fn new(thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>) -> Self {
         Self {
             thread_manager,
-            updated_at: std::time::SystemTime::now(),
+            updated_at: SystemTime::now(),
             tick: 0,
         }
     }
@@ -126,12 +127,12 @@ where
         let current_tick = stat.utime + stat.stime;
         if current_tick > self.tick {
             self.tick = current_tick;
-            self.updated_at = std::time::SystemTime::now();
+            self.updated_at = SystemTime::now();
         } else if self.updated_at.elapsed().unwrap() > std::time::Duration::from_secs(10) {
             info!("stopping...");
             thread_manager.write().unwrap().stop_threads();
             self.tick = 0;
-            self.updated_at = std::time::SystemTime::now();
+            self.updated_at = SystemTime::now();
         }
 
         true
@@ -519,7 +520,7 @@ pub struct ExecutionEnvironment {
     task: TaskInQueue,
     finalized_lock_attempts: Vec<LockAttempt>,
     result_with_timings: ResultWithTimings,
-    finish_time: Option<std::time::SystemTime>,
+    finish_time: Option<SystemTime>,
     slot: Slot,
     thx: usize,
     execution_us: u64,
@@ -728,7 +729,7 @@ where
             pool,
         );
         ee.slot = bank.slot();
-        ee.finish_time = Some(std::time::SystemTime::now());
+        ee.finish_time = Some(SystemTime::now());
         ee.execution_cpu_us = cpu_time.elapsed().as_micros();
         // make wall time is longer than cpu time, always
         wall_time.stop();
