@@ -98,8 +98,8 @@ where
     TH: Handler<SEA>,
     SEA: ScheduleExecutionArg,
 {
-    fn new() -> Self {
-        todo!()
+    fn new(thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>) -> Self {
+        Self { thread_manager }
     }
 }
 
