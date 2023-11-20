@@ -565,7 +565,7 @@ impl WeakSchedulingContext {
 
 #[derive(Debug)]
 struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
-    id: SchedulerId,
+    shceduler_id: SchedulerId,
     pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
     context: WeakSchedulingContext,
     scheduler_thread_and_tid: Option<(JoinHandle<ResultWithTimings>, i32)>,
@@ -670,7 +670,7 @@ where
         let (result_sender, result_receiver) = unbounded();
 
         let mut thread_manager = Self {
-            id: thread_rng().gen::<SchedulerId>(),
+            shceduler_id: thread_rng().gen::<SchedulerId>(),
             schedulrable_transaction_sender,
             schedulable_transaction_receiver,
             result_sender,
@@ -785,6 +785,7 @@ where
             unbounded::<Box<ExecutionEnvironment>>();
         let (drop_sender, drop_receiver) = unbounded::<Box<ExecutionEnvironment>>();
         let handler_count = self.handler_count;
+        let scheduler_id = self.id;
         let mut slot = context.bank().slot();
         let (tid_sender, tid_receiver) = bounded(1);
 
@@ -812,9 +813,10 @@ where
                 let mut log_interval_counter = 0;
                 macro_rules! log_scheduler {
                     ($a:tt) => {
+                        const BITS_PER_HEX_DIGIT: usize = 4;
                         info!(
-                            "slot: {}: [{}]({}/{}): state_machine(({}(+{})=>{})/{}|{}/{}) channels(<{} >{}+{} <{}+{})",
-                            slot, ($a), (if will_end_thread {"T"} else {"-"}), (if will_end_session {"S"} else {"-"}),
+                            "slot: {}[sch_{:0width$x}]: [{}]({}/{}): state_machine(({}(+{})=>{})/{}|{}/{}) channels(<{} >{}+{} <{}+{})",
+                            slot, scheduler_id, ($a), (if will_end_thread {"T"} else {"-"}), (if will_end_session {"S"} else {"-"}),
                             state_machine.active_task_count(), state_machine.retryable_task_count(), state_machine.handled_task_count(),
                             state_machine.total_task_count(),
                             state_machine.reschedule_count(),
@@ -822,6 +824,7 @@ where
                             schedulable_transaction_receiver.len(),
                             blocked_transaction_sessioned_sender.len(), idle_transaction_sender.len(),
                             handled_blocked_transaction_receiver.len(), handled_idle_transaction_receiver.len(),
+                            width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
                         );
                     };
                     () => {
@@ -1488,7 +1491,7 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn id(&self) -> SchedulerId {
-        self.thread_manager.read().unwrap().id
+        self.thread_manager.read().unwrap().shceduler_id
     }
 
     fn context(&self) -> SchedulingContext {
