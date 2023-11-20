@@ -2090,6 +2090,10 @@ mod tests {
         fn pooled_since(&self) -> Option<Duration> {
             todo!();
         }
+
+        fn stop_thread_manager(&mut self) {
+            todo!();
+        }
     }
 
     impl<const TRIGGER_RACE_CONDITION: bool> InstallableScheduler<DefaultScheduleExecutionArg>
