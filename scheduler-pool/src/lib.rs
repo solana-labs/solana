@@ -1272,7 +1272,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
     }
 
     fn pooled_since(&self) -> Option<Duration> {
-        self.pooled_since.and_then(|t| t.epalsed().ok())
+        self.pooled_since.and_then(|t| t.eplased().ok())
     }
 }
 
