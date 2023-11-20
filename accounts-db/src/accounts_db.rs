@@ -344,8 +344,7 @@ impl CurrentAncientAppendVec {
         min_bytes: usize,
     ) -> ShrinkInProgress<'a> {
         let size = get_ancient_append_vec_capacity().max(min_bytes as u64);
-        let aligned_size: u64 = u64_align!(size as usize).try_into().unwrap();
-        let shrink_in_progress = db.get_store_for_shrink(slot, aligned_size);
+        let shrink_in_progress = db.get_store_for_shrink(slot, size);
         *self = Self::new(slot, Arc::clone(shrink_in_progress.new_storage()));
         shrink_in_progress
     }
@@ -10036,12 +10035,10 @@ pub mod tests {
             // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
             let _existing_append_vec = db.create_and_insert_store(slot0, 1000, "test");
             let _ = current_ancient.create_ancient_append_vec(slot0, &db, 0);
-
-            let expected_size: u64 = u64_align!(ancient_append_vec_size as usize)
-                .try_into()
-                .unwrap();
-
-            assert_eq!(current_ancient.append_vec().capacity(), expected_size);
+            assert_eq!(
+                current_ancient.append_vec().capacity(),
+                ancient_append_vec_size
+            );
         }
 
         {
@@ -10057,11 +10054,10 @@ pub mod tests {
                 &db,
                 2 * ancient_append_vec_size as usize,
             );
-            let expected_size: u64 = u64_align!(2 * ancient_append_vec_size as usize)
-                .try_into()
-                .unwrap();
-
-            assert_eq!(current_ancient.append_vec().capacity(), expected_size);
+            assert_eq!(
+                current_ancient.append_vec().capacity(),
+                2 * ancient_append_vec_size
+            );
         }
     }
 
