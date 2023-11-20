@@ -124,7 +124,7 @@ where
             .as_ref()
             .map(|(_, tid)| tid)
         else {
-            return false;
+            return true;
         };
 
         let pid = std::process::id();
