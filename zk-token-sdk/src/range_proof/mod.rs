@@ -69,9 +69,14 @@ impl RangeProof {
         let nm: usize = bit_lengths.iter().sum();
         assert!(nm.is_power_of_two());
 
+<<<<<<< HEAD
         // TODO: precompute generators
         // TODO: double check Pedersen generators and range proof generators does not interfere
         let bp_gens = BulletproofGens::new(nm);
+=======
+        let bp_gens = BulletproofGens::new(nm)
+            .map_err(|_| RangeProofGenerationError::MaximumGeneratorLengthExceeded)?;
+>>>>>>> 0e6dd54f81 ([zk-token-sdk] Restrict range proof generator length and prevent 0-bit range proof (#34166))
 
         // bit-decompose values and generate their Pedersen vector commitment
         let a_blinding = Scalar::random(&mut OsRng);
@@ -230,7 +235,8 @@ impl RangeProof {
 
         let m = bit_lengths.len();
         let nm: usize = bit_lengths.iter().sum();
-        let bp_gens = BulletproofGens::new(nm);
+        let bp_gens = BulletproofGens::new(nm)
+            .map_err(|_| RangeProofVerificationError::MaximumGeneratorLengthExceeded)?;
 
         if !nm.is_power_of_two() {
             return Err(ProofVerificationError::InvalidBitSize.into());
