@@ -140,7 +140,7 @@ where
             const BITS_PER_HEX_DIGIT: usize = 4;
             let mut thread_manager = thread_manager.write().unwrap();
             info!(
-                "[sch_{:0width$x}]: update_tick_to_retain(): stopping thread manager ({tid}/{}/{:?})...",
+                "[sch_{:0width$x}]: watchdog: update_tick_to_retain(): stopping thread manager ({tid}/{}/{:?})...",
                 thread_manager.scheduler_id,
                 self.tick,
                 self.updated_at,
@@ -883,13 +883,14 @@ where
                                                 ControlFrame::EndSession => {
                                                     debug!("scheduler_main_loop: will_end_session = true");
                                                     will_end_session = true;
-                                                    log_scheduler!("eof     ");
+                                                    log_scheduler!("end_sess");
                                                 }
                                             }
                                         }
                                     };
                                 } else {
                                     will_end_thread = true;
+                                    log_scheduler!("end_thrd");
                                 };
                             },
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
@@ -942,7 +943,7 @@ where
                                                     "scheduler_main_loop: will_end_session = true"
                                                 );
                                                 will_end_session = true;
-                                                log_scheduler!("eof     ");
+                                                log_scheduler!("end_sess");
                                             }
                                         }
                                     }
@@ -968,7 +969,7 @@ where
                         }
                     }
 
-                    if !will_end_thread {
+                    if will_end_session { // or should also consider will_end_thread?
                         log_scheduler!("ended   ");
                         (state_machine, log_interval_counter) = <_>::default();
                         result_sender
@@ -981,6 +982,7 @@ where
                         will_end_session = false;
                     }
                 }
+                log_scheduler!("stopped ");
 
                 let res = result_with_timings.take().unwrap();
                 trace!(
