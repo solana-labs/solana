@@ -180,7 +180,7 @@ where
                 watched_thread_managers
                     .retain_mut(|thread_manager| thread_manager.update_tick_to_retain());
 
-                for scheduler in schedulers.lock().unwrap() {
+                for scheduler in schedulers.lock().unwrap().iter() {
                 }
 
                 let pre_push_len = watched_thread_managers.len();
