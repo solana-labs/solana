@@ -244,7 +244,7 @@ where
     pub fn return_scheduler(&self, mut scheduler: Box<T>) {
         //assert!(!scheduler.has_context());
 
-        scheduler.returned_at = SystemTime::now();
+        scheduler.pooled_now();
         self.schedulers
             .lock()
             .expect("not poisoned")
@@ -564,7 +564,7 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     completed_result_with_timings: Option<ResultWithTimings>,
     thread_manager: Arc<RwLock<ThreadManager<TH, SEA>>>,
     address_book: AddressBook,
-    returned_at: SystemTime,
+    pooled_since: SystemTime,
 }
 
 #[derive(Debug)]
@@ -624,6 +624,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
                 handler_count,
             ))),
             address_book: AddressBook::default(),
+            pooled_since: SystemTime::now(),
         };
         pool.register_to_watchdog(Arc::downgrade(&scheduler.thread_manager));
 
@@ -1255,6 +1256,10 @@ pub trait SpawnableScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg>:
     ) -> Self
     where
         Self: Sized;
+
+    fn pooled_now(&mut self)
+    where
+        Self: Sized;
 }
 
 impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
@@ -1266,6 +1271,10 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
         handler: TH,
     ) -> Self {
         Self::do_spawn(pool, initial_context, handler)
+    }
+
+    fn pooled_now(&mut self) {
+        self.pooled_since = SystemTime::now();
     }
 }
 
