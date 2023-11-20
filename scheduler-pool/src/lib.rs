@@ -573,7 +573,7 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     completed_result_with_timings: Option<ResultWithTimings>,
     thread_manager: Arc<RwLock<ThreadManager<TH, SEA>>>,
     address_book: AddressBook,
-    pooled_at: Option<SystemTime>,
+    pooled_at: SystemTime,
 }
 
 #[derive(Debug)]
@@ -633,7 +633,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
                 handler_count,
             ))),
             address_book: AddressBook::default(),
-            pooled_at: None,
+            pooled_at: SystemTime::now(),
         };
         pool.register_to_watchdog(Arc::downgrade(&scheduler.thread_manager));
 
@@ -658,7 +658,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
     }
 
     fn pooled_now(&mut self) {
-        self.pooled_at = Some(SystemTime::now());
+        self.pooled_at = SystemTime::now();
     }
 }
 
@@ -1287,7 +1287,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
     }
 
     fn pooled_since(&self) -> Option<Duration> {
-        self.pooled_at.and_then(|t| t.elapsed().ok())
+        self.pooled_at.elapsed().ok()
     }
 }
 
@@ -1688,7 +1688,6 @@ where
     }
 
     fn replace_context(&mut self, context: SchedulingContext) {
-        self.pooled_at.take();
         self.thread_manager.write().unwrap().start_session(context);
     }
 }
