@@ -213,7 +213,7 @@ where
                     }
                 }
                 info!(
-                    "watchdog: thread managers: {} => {} => {}, schedulers: {} => {}",
+                    "watchdog: watched thread managers: {} => {} => {}, pooled schedulers: {} => {}",
                     pre_retain_len,
                     pre_push_len,
                     watched_thread_managers.len(),
