@@ -1255,7 +1255,7 @@ pub trait SpawnableScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg>:
     where
         Self: Sized;
 
-    fn pooled_now(&mut self)
+    fn pooled_since(&self) -> Option<Duration>
     where
         Self: Sized;
 }
@@ -1271,8 +1271,8 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
         Self::do_spawn(pool, initial_context, handler)
     }
 
-    fn pooled_now(&mut self) {
-        self.pooled_since = Some(SystemTime::now());
+    fn pooled_since(&self) -> Option<Duration> {
+        self.pooled_since.and_then(|t| t.epalsed().ok())
     }
 }
 
@@ -1576,6 +1576,10 @@ where
         let pool = self.thread_manager.read().unwrap().pool.clone();
         self.pooled_now();
         pool.return_scheduler(self);
+    }
+
+    fn pooled_now(&mut self) {
+        self.pooled_since = Some(SystemTime::now());
     }
 }
 
@@ -2046,7 +2050,7 @@ mod tests {
             */
         }
 
-        fn pooled_now(&mut self) {
+        fn pooled_since(&self) -> Option<Duration> {
             todo!();
         }
     }
