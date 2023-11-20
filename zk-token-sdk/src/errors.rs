@@ -5,6 +5,7 @@ use {
 };
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
+<<<<<<< HEAD
 pub enum ProofError {
     #[error("invalid transfer amount range")]
     TransferAmount,
@@ -20,6 +21,37 @@ pub enum ProofError {
     PubkeyDeserialization,
     #[error("ciphertext does not exist in instruction data")]
     MissingCiphertext,
+=======
+pub enum ProofGenerationError {
+    #[error("not enough funds in account")]
+    NotEnoughFunds,
+    #[error("transfer fee calculation error")]
+    FeeCalculation,
+    #[error("illegal number of commitments")]
+    IllegalCommitmentLength,
+    #[error("illegal amount bit length")]
+    IllegalAmountBitLength,
+    #[error("invalid commitment")]
+    InvalidCommitment,
+    #[error("range proof generation failed")]
+    RangeProof(#[from] RangeProofGenerationError),
+    #[error("unexpected proof length")]
+    ProofLength,
+}
+
+#[derive(Error, Clone, Debug, Eq, PartialEq)]
+pub enum ProofVerificationError {
+    #[error("range proof verification failed")]
+    RangeProof(#[from] RangeProofVerificationError),
+    #[error("sigma proof verification failed")]
+    SigmaProof(SigmaProofType, SigmaProofVerificationError),
+    #[error("ElGamal ciphertext or public key error")]
+    ElGamal(#[from] ElGamalError),
+    #[error("Invalid proof context")]
+    ProofContext,
+    #[error("illegal commitment length")]
+    IllegalCommitmentLength,
+>>>>>>> e251b8607c ([zk-token-sdk] Add a length check on range proof commitment length (#34165))
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
