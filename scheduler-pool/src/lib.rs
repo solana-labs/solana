@@ -894,6 +894,7 @@ where
 
                 while !will_end_thread {
                     while !(state_machine.is_empty() && (will_end_session || will_end_thread)) {
+                        log_scheduler!();
                         select_biased! {
                             recv(handled_blocked_transaction_receiver) -> execution_environment => {
                                 let mut execution_environment = execution_environment.unwrap();
@@ -942,7 +943,6 @@ where
                                 drop_sender.send(execution_environment).unwrap();
                             },
                         };
-                        log_scheduler!();
 
                         if let Some(ee) = state_machine.schedule_retryable_task() {
                             blocked_transaction_sessioned_sender
