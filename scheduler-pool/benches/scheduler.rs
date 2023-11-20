@@ -248,6 +248,10 @@ mod nonblocking {
         ) -> Self {
             unimplemented!();
         }
+
+        fn pooled_now(&mut self) {
+            unimplemented!();
+        }
     }
 
     impl<H: Handler<ScheduleExecutionArgForBench> + Clone> NonblockingScheduler<H> {
