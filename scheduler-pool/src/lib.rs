@@ -61,7 +61,7 @@ pub struct SchedulerPool<
     TH: Handler<SEA>,
     SEA: ScheduleExecutionArg,
 > {
-    schedulers: Arc<Mutex<Vec<Box<T>>>>,
+    schedulers: Mutex<Vec<Box<T>>>,
     log_messages_bytes_limit: Option<usize>,
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<ReplayVoteSender>,
