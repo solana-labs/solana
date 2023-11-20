@@ -645,6 +645,10 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             }
         }
     }
+
+    fn pooled_now(&mut self) {
+        self.pooled_since = Some(SystemTime::now());
+    }
 }
 
 type ChannelAndPayload<T1, T2> = (Receiver<ChainedChannel<T1, T2>>, T2);
@@ -1578,10 +1582,6 @@ where
         let pool = self.thread_manager.read().unwrap().pool.clone();
         self.deref_mut().pooled_now();
         pool.return_scheduler(self);
-    }
-
-    fn pooled_now(&mut self) {
-        self.pooled_since = Some(SystemTime::now());
     }
 }
 
