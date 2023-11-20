@@ -1573,10 +1573,10 @@ where
     }
 
     fn return_to_pool(mut self: Box<Self>) {
-        use std::borrow::BorrowMut;
+        use std::opds::DerefMut;
 
         let pool = self.thread_manager.read().unwrap().pool.clone();
-         <Box<PooledScheduler<TH, SEA>> as BorrowMut<_>>::borrow_mut(&mut self).pooled_now();
+        self.deref_mut().pooled_now();
         pool.return_scheduler(self);
     }
 
