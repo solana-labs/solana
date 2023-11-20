@@ -249,7 +249,7 @@ mod nonblocking {
             unimplemented!();
         }
 
-        fn pooled_now(&mut self) {
+        fn pooled_since(&self) -> Option<Duration> {
             unimplemented!();
         }
     }
