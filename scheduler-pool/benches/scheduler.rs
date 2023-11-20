@@ -33,10 +33,10 @@ use {
         marker::{PhantomData, Send, Sync},
         mem,
         sync::Arc,
+        time::Duration,
     },
     test::Bencher,
 };
-use std::time::Duration;
 
 const TX_COUNT: usize = 10_000;
 
