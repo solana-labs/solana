@@ -186,7 +186,12 @@ where
                         Err(RecvTimeoutError::Timeout) => break 'inner,
                     }
                 }
-                info!("watchdog: {} => {} => {}", pre_retain_len, pre_push_len, watched_thread_managers.len());
+                info!(
+                    "watchdog: {} => {} => {}",
+                    pre_retain_len,
+                    pre_push_len,
+                    watched_thread_managers.len()
+                );
             }
         };
 
