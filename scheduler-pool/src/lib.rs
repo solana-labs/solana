@@ -1488,7 +1488,7 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn id(&self) -> SchedulerId {
-        self.id
+        self.thread_manager.read().unwrap().id
     }
 
     fn context(&self) -> SchedulingContext {
