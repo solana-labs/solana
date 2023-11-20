@@ -552,7 +552,7 @@ impl AddressBook {
         }))
     }
 
-    pub fn page_count() -> usize {
+    pub fn page_count(&self) -> usize {
         self.book.len()
     }
 }
