@@ -195,7 +195,7 @@ where
                             scheduler.id(),
                             width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
                         );
-                        thread_manager.stop_thread_manager();
+                        scheduler.stop_thread_manager();
                         false
                     }
                 });
