@@ -10,7 +10,7 @@ kubectl create ns <namespace>
 
 Clone the repo
 ```
-git clone -b solana-k8s-cluster git@github.com:gregcusack/solana.git
+git clone -b k8s-cluster-official git@github.com:gregcusack/solana.git
 cd solana
 ```
 
