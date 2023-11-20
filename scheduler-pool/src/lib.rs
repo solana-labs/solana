@@ -42,6 +42,7 @@ use {
         time::{Duration, SystemTime},
     },
 };
+use std::collections::HashMap;
 
 type UniqueWeight = u64;
 
