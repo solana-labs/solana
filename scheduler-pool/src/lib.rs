@@ -1576,7 +1576,7 @@ where
         use std::borrow::BorrowMut;
 
         let pool = self.thread_manager.read().unwrap().pool.clone();
-        self.borrow_mut().pooled_now();
+         <Box<PooledScheduler<TH, SEA>> as BorrowMut<Borrowed>>::borrow_mut(&mut self).pooled_now();
         pool.return_scheduler(self);
     }
 
