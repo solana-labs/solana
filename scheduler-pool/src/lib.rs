@@ -672,12 +672,6 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
         }
     }
 
-
-    fn stop_thread_manager(&self) {
-        debug!("stop_thread_manager()");
-        self.thread_manager.write().unwrap().stop_threads();
-    }
-
     fn pooled_now(&mut self) {
         self.pooled_at = SystemTime::now();
     }
@@ -1294,6 +1288,10 @@ pub trait SpawnableScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg>:
     fn pooled_since(&self) -> Option<Duration>
     where
         Self: Sized;
+
+    fn stop_thread_manager(&mut self)
+    where
+        Self: Sized;
 }
 
 impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
@@ -1309,6 +1307,11 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
 
     fn pooled_since(&self) -> Option<Duration> {
         self.pooled_at.elapsed().ok()
+    }
+
+    fn stop_thread_manager(&mut self) {
+        debug!("stop_thread_manager()");
+        self.thread_manager.write().unwrap().stop_threads();
     }
 }
 
