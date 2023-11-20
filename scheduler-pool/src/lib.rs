@@ -240,7 +240,7 @@ where
             watchdog_sender,
             _phantom: PhantomData,
         });
-        scheduler_pool_sender.send(scheduler_pool).unwrap();
+        scheduler_pool_sender.send(scheduler_pool.clone()).unwrap();
         scheduler_pool
     }
 
