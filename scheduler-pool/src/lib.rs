@@ -2046,6 +2046,10 @@ mod tests {
             )
             */
         }
+
+        fn pooled_now() {
+            todo!();
+        }
     }
 
     impl<const TRIGGER_RACE_CONDITION: bool> InstallableScheduler<DefaultScheduleExecutionArg>
