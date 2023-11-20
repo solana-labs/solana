@@ -142,13 +142,20 @@ impl QuicConfig {
     pub fn update_client_certificate(
         &mut self,
         keypair: &Keypair,
-        ipaddr: Option<IpAddr>,
+        ipaddr: IpAddr,
     ) -> Result<(), RcgenError> {
-        let addr = ipaddr.unwrap_or(self.addr);
-        // Ensure we don't update self.ip but fail to update self.client_certificate
-        // due to new_self_signed_tls_certificate returning an error
-        let (cert, priv_key) = new_self_signed_tls_certificate(keypair, addr)?;
-        self.addr = addr;
+        let (cert, priv_key) = new_self_signed_tls_certificate(keypair, ipaddr)?;
+        self.addr = ipaddr;
+
+        self.client_certificate = Arc::new(QuicClientCertificate {
+            certificate: cert,
+            key: priv_key,
+        });
+        Ok(())
+    }
+
+    pub fn update_keypair(&mut self, keypair: &Keypair) -> Result<(), RcgenError> {
+        let (cert, priv_key) = new_self_signed_tls_certificate(keypair, self.addr)?;
 
         self.client_certificate = Arc::new(QuicClientCertificate {
             certificate: cert,
@@ -221,8 +228,7 @@ impl ConnectionManager for QuicConnectionManager {
     }
 
     fn update_key(&mut self, key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
-        self.connection_config
-            .update_client_certificate(key, None)?;
+        self.connection_config.update_keypair(key)?;
         Ok(())
     }
 }
@@ -243,7 +249,7 @@ pub fn new_quic_connection_cache(
     connection_pool_size: usize,
 ) -> Result<QuicConnectionCache, ClientError> {
     let mut config = QuicConfig::new()?;
-    config.update_client_certificate(keypair, Some(ipaddr))?;
+    config.update_client_certificate(keypair, ipaddr)?;
     config.set_staked_nodes(staked_nodes, &keypair.pubkey());
     let connection_manager = QuicConnectionManager::new_with_connection_config(config);
     ConnectionCache::new(name, connection_manager, connection_pool_size)

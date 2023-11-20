@@ -92,7 +92,7 @@ impl ConnectionCache {
         }
         if let Some(cert_info) = cert_info {
             config
-                .update_client_certificate(cert_info.0, Some(cert_info.1))
+                .update_client_certificate(cert_info.0, cert_info.1)
                 .unwrap();
         }
         if let Some(stake_info) = stake_info {
