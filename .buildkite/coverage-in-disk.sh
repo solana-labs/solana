@@ -8,7 +8,7 @@
 #
 
 set -e
-cd "$(dirname "$0")"/..
+cd "$(dirname "$0")"/..fff siaf;klfl
 source ci/_
 sudo chmod 0777 ci/buildkite-pipeline-in-disk.sh
 
