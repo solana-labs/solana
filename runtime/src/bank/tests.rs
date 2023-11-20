@@ -448,7 +448,6 @@ fn test_credit_debit_rent_no_side_effect_on_hash() {
             let expected_rent = bank.rent_collector().collect_from_existing_account(
                 &keypairs[4].pubkey(),
                 &mut account_copy,
-                None,
                 set_exempt_rent_epoch_max,
             );
             assert_eq!(expected_rent.rent_amount, too_few_lamports);
@@ -11505,7 +11504,6 @@ fn test_accounts_data_size_and_rent_collection(should_collect_rent: bool) {
             let info = bank.rent_collector.collect_from_existing_account(
                 &keypair.pubkey(),
                 &mut account,
-                None,
                 set_exempt_rent_epoch_max,
             );
             assert_eq!(info.account_data_len_reclaimed, data_size as u64);

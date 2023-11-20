@@ -87,7 +87,6 @@ use {
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
         pubkey::Pubkey,
-        rent::Rent,
         saturating_add_assign,
         timing::AtomicInterval,
         transaction::SanitizedTransaction,
@@ -100,7 +99,6 @@ use {
         io::Result as IoResult,
         ops::{Range, RangeBounds},
         path::{Path, PathBuf},
-        str::FromStr,
         sync::{
             atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering},
             Arc, Condvar, Mutex, RwLock,
@@ -475,7 +473,6 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
     base_working_path: None,
     accounts_hash_cache_path: None,
-    filler_accounts_config: FillerAccountsConfig::const_default(),
     write_cache_limit_bytes: None,
     ancient_append_vec_offset: None,
     skip_initial_hash_calc: false,
@@ -488,7 +485,6 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
     base_working_path: None,
     accounts_hash_cache_path: None,
-    filler_accounts_config: FillerAccountsConfig::const_default(),
     write_cache_limit_bytes: None,
     ancient_append_vec_offset: None,
     skip_initial_hash_calc: false,
@@ -522,26 +518,6 @@ pub struct AccountsAddRootTiming {
     pub store_us: u64,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct FillerAccountsConfig {
-    /// Number of filler accounts
-    pub count: usize,
-    /// Data size per account, in bytes
-    pub size: usize,
-}
-
-impl FillerAccountsConfig {
-    pub const fn const_default() -> Self {
-        Self { count: 0, size: 0 }
-    }
-}
-
-impl Default for FillerAccountsConfig {
-    fn default() -> Self {
-        Self::const_default()
-    }
-}
-
 const ANCIENT_APPEND_VEC_DEFAULT_OFFSET: Option<i64> = Some(-10_000);
 
 #[derive(Debug, Default, Clone)]
@@ -550,7 +526,6 @@ pub struct AccountsDbConfig {
     /// Base directory for various necessary files
     pub base_working_path: Option<PathBuf>,
     pub accounts_hash_cache_path: Option<PathBuf>,
-    pub filler_accounts_config: FillerAccountsConfig,
     pub write_cache_limit_bytes: Option<u64>,
     /// if None, ancient append vecs are set to ANCIENT_APPEND_VEC_DEFAULT_OFFSET
     /// Some(offset) means include slots up to (max_slot - (slots_per_epoch - 'offset'))
@@ -1537,16 +1512,7 @@ pub struct AccountsDb {
     /// GeyserPlugin accounts update notifier
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
 
-    filler_accounts_config: FillerAccountsConfig,
-    pub filler_account_suffix: Option<Pubkey>,
-
     pub(crate) active_stats: ActiveStats,
-
-    /// number of filler accounts to add for each slot
-    pub filler_accounts_per_slot: AtomicU64,
-
-    /// number of slots remaining where filler accounts should be added
-    pub filler_account_slots_remaining: AtomicU64,
 
     pub verify_accounts_hash_in_bg: VerifyAccountsHashInBackground,
 
@@ -2385,7 +2351,6 @@ struct ScanState<'a> {
     bin_range: &'a Range<usize>,
     config: &'a CalcAccountsHashConfig<'a>,
     mismatch_found: Arc<AtomicU64>,
-    filler_account_suffix: Option<&'a Pubkey>,
     range: usize,
     sort_time: Arc<AtomicU64>,
     pubkey_to_bin_index: usize,
@@ -2415,9 +2380,7 @@ impl<'a> AppendVecScan for ScanState<'a> {
         let mut loaded_hash = loaded_account.loaded_hash();
 
         let hash_is_missing = loaded_hash == AccountHash(Hash::default());
-        if (self.config.check_hash || hash_is_missing)
-            && !AccountsDb::is_filler_account_helper(pubkey, self.filler_account_suffix)
-        {
+        if self.config.check_hash || hash_is_missing {
             let computed_hash = loaded_account.compute_hash(pubkey);
             if hash_is_missing {
                 loaded_hash = computed_hash;
@@ -2498,8 +2461,6 @@ impl AccountsDb {
         AccountsDb {
             create_ancient_storage: CreateAncientStorage::Pack,
             verify_accounts_hash_in_bg: VerifyAccountsHashInBackground::default(),
-            filler_accounts_per_slot: AtomicU64::default(),
-            filler_account_slots_remaining: AtomicU64::default(),
             active_stats: ActiveStats::default(),
             skip_initial_hash_calc: false,
             ancient_append_vec_offset: None,
@@ -2552,8 +2513,6 @@ impl AccountsDb {
             dirty_stores: DashMap::default(),
             zero_lamport_accounts_to_purge_after_full_snapshot: DashSet::default(),
             accounts_update_notifier: None,
-            filler_accounts_config: FillerAccountsConfig::default(),
-            filler_account_suffix: None,
             log_dead_slots: AtomicBool::new(true),
             exhaustively_verify_refcounts: false,
             partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig::default(),
@@ -2605,10 +2564,6 @@ impl AccountsDb {
         let accounts_hash_cache_path = accounts_db_config
             .as_ref()
             .and_then(|config| config.accounts_hash_cache_path.clone());
-        let filler_accounts_config = accounts_db_config
-            .as_ref()
-            .map(|config| config.filler_accounts_config)
-            .unwrap_or_default();
         let skip_initial_hash_calc = accounts_db_config
             .as_ref()
             .map(|config| config.skip_initial_hash_calc)
@@ -2642,11 +2597,6 @@ impl AccountsDb {
         let partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig =
             PartitionedEpochRewardsConfig::new(test_partitioned_epoch_rewards);
 
-        let filler_account_suffix = if filler_accounts_config.count > 0 {
-            Some(solana_sdk::pubkey::new_rand())
-        } else {
-            None
-        };
         let paths_is_empty = paths.is_empty();
         let mut new = Self {
             paths,
@@ -2656,8 +2606,6 @@ impl AccountsDb {
             account_indexes,
             shrink_ratio,
             accounts_update_notifier,
-            filler_accounts_config,
-            filler_account_suffix,
             create_ancient_storage,
             write_cache_limit_bytes: accounts_db_config
                 .as_ref()
@@ -2687,20 +2635,6 @@ impl AccountsDb {
             }
         }
         new
-    }
-
-    /// Gradual means filler accounts will be added over the course of an epoch, during cache flush.
-    /// This is in contrast to adding all the filler accounts immediately before the validator starts.
-    fn init_gradual_filler_accounts(&self, slots_per_epoch: Slot) {
-        let count = self.filler_accounts_config.count;
-        if count > 0 {
-            // filler accounts are a debug only feature. integer division is fine here
-            let accounts_per_slot = (count as u64) / slots_per_epoch;
-            self.filler_accounts_per_slot
-                .store(accounts_per_slot, Ordering::Release);
-            self.filler_account_slots_remaining
-                .store(slots_per_epoch, Ordering::Release);
-        }
     }
 
     pub fn set_shrink_paths(&self, paths: Vec<PathBuf>) {
@@ -4420,15 +4354,6 @@ impl AccountsDb {
             .unwrap()
             .alive_roots
             .get_all_less_than(slot)
-    }
-
-    fn get_prior_root(&self, slot: Slot) -> Option<Slot> {
-        self.accounts_index
-            .roots_tracker
-            .read()
-            .unwrap()
-            .alive_roots
-            .get_prior(slot)
     }
 
     /// return all slots that are more than one epoch old and thus could already be an ancient append vec
@@ -6576,30 +6501,6 @@ impl AccountsDb {
             }
         }
 
-        let mut filler_accounts = 0;
-        if self.filler_accounts_enabled() {
-            let slots_remaining = self.filler_account_slots_remaining.load(Ordering::Acquire);
-            if slots_remaining > 0 {
-                // figure out
-                let pr = self.get_prior_root(slot);
-
-                if let Some(prior_root) = pr {
-                    let filler_account_slots =
-                        std::cmp::min(slot.saturating_sub(prior_root), slots_remaining);
-                    self.filler_account_slots_remaining
-                        .fetch_sub(filler_account_slots, Ordering::Release);
-                    let filler_accounts_per_slot =
-                        self.filler_accounts_per_slot.load(Ordering::Acquire);
-                    filler_accounts = filler_account_slots * filler_accounts_per_slot;
-
-                    // keep space for filler accounts
-                    let addl_size = filler_accounts
-                        * (aligned_stored_size(self.filler_accounts_config.size) as u64);
-                    total_size += addl_size;
-                }
-            }
-        }
-
         let (accounts, hashes): (Vec<(&Pubkey, &AccountSharedData)>, Vec<AccountHash>) = iter_items
             .iter()
             .filter_map(|iter_item| {
@@ -6648,25 +6549,6 @@ impl AccountsDb {
                 None,
                 StoreReclaims::Default,
             );
-
-            if filler_accounts > 0 {
-                // add extra filler accounts at the end of the append vec
-                let (account, hash) = self.get_filler_account(&Rent::default());
-                let mut accounts = Vec::with_capacity(filler_accounts as usize);
-                let mut hashes = Vec::with_capacity(filler_accounts as usize);
-                let pubkeys = self.get_filler_account_pubkeys(filler_accounts as usize);
-                pubkeys.iter().for_each(|key| {
-                    accounts.push((key, &account));
-                    hashes.push(hash);
-                });
-                self.store_accounts_frozen(
-                    (slot, &accounts[..]),
-                    Some(hashes),
-                    &flushed_store,
-                    None,
-                    StoreReclaims::Ignore,
-                );
-            }
 
             // If the above sizing function is correct, just one AppendVec is enough to hold
             // all the data for the slot
@@ -7025,9 +6907,6 @@ impl AccountsDb {
                     let result: Vec<Hash> = pubkeys
                         .iter()
                         .filter_map(|pubkey| {
-                            if self.is_filler_account(pubkey) {
-                                return None;
-                            }
                             if let AccountIndexGetResult::Found(lock, index) =
                                 self.accounts_index.get(pubkey, config.ancestors, Some(max_slot))
                             {
@@ -7053,7 +6932,7 @@ impl AccountsDb {
                                             let mut loaded_hash = loaded_account.loaded_hash();
                                             let balance = loaded_account.lamports();
                                             let hash_is_missing = loaded_hash == AccountHash(Hash::default());
-                                            if (config.check_hash || hash_is_missing) && !self.is_filler_account(pubkey) {
+                                            if config.check_hash || hash_is_missing {
                                                 let computed_hash =
                                                     loaded_account.compute_hash(pubkey);
                                                 if hash_is_missing {
@@ -7644,7 +7523,6 @@ impl AccountsDb {
         bins: usize,
         bin_range: &Range<usize>,
         config: &CalcAccountsHashConfig<'_>,
-        filler_account_suffix: Option<&Pubkey>,
     ) -> Result<Vec<CacheHashDataFileReference>, AccountsHashVerificationError> {
         assert!(bin_range.start < bins);
         assert!(bin_range.end <= bins);
@@ -7665,7 +7543,6 @@ impl AccountsDb {
             bin_calculator: &bin_calculator,
             config,
             mismatch_found: mismatch_found.clone(),
-            filler_account_suffix,
             range,
             bin_range,
             sort_time: sort_time.clone(),
@@ -7808,11 +7685,6 @@ impl AccountsDb {
             };
 
             let accounts_hasher = AccountsHasher {
-                filler_account_suffix: if self.filler_accounts_config.count > 0 {
-                    self.filler_account_suffix
-                } else {
-                    None
-                },
                 zero_lamport_accounts: kind.zero_lamport_accounts(),
                 dir_for_temp_cache_files: transient_accounts_hash_cache_path,
                 active_stats: &self.active_stats,
@@ -7826,7 +7698,6 @@ impl AccountsDb {
                 PUBKEY_BINS_FOR_CALCULATING_HASHES,
                 &bounds,
                 config,
-                accounts_hasher.filler_account_suffix.as_ref(),
             )?;
 
             let cache_hash_data_files = cache_hash_data_file_references
@@ -8053,11 +7924,6 @@ impl AccountsDb {
 
         if let Some(ignore) = ignore {
             hashes.retain(|k| k.0 != ignore);
-        }
-
-        if self.filler_accounts_enabled() {
-            // filler accounts must be added to 'dirty_keys' above but cannot be used to calculate hash
-            hashes.retain(|(pubkey, _hash)| !self.is_filler_account(pubkey));
         }
 
         let accounts_delta_hash =
@@ -9111,91 +8977,6 @@ impl AccountsDb {
         }
     }
 
-    fn filler_unique_id_bytes() -> usize {
-        std::mem::size_of::<u32>()
-    }
-
-    fn filler_rent_partition_prefix_bytes() -> usize {
-        std::mem::size_of::<u64>()
-    }
-
-    fn filler_prefix_bytes() -> usize {
-        Self::filler_unique_id_bytes() + Self::filler_rent_partition_prefix_bytes()
-    }
-
-    pub fn is_filler_account_helper(
-        pubkey: &Pubkey,
-        filler_account_suffix: Option<&Pubkey>,
-    ) -> bool {
-        let offset = Self::filler_prefix_bytes();
-        filler_account_suffix
-            .as_ref()
-            .map(|filler_account_suffix| {
-                pubkey.as_ref()[offset..] == filler_account_suffix.as_ref()[offset..]
-            })
-            .unwrap_or_default()
-    }
-
-    /// true if 'pubkey' is a filler account
-    pub fn is_filler_account(&self, pubkey: &Pubkey) -> bool {
-        Self::is_filler_account_helper(pubkey, self.filler_account_suffix.as_ref())
-    }
-
-    /// true if it is possible that there are filler accounts present
-    pub fn filler_accounts_enabled(&self) -> bool {
-        self.filler_account_suffix.is_some()
-    }
-
-    /// return 'AccountSharedData' and a hash for a filler account
-    fn get_filler_account(&self, rent: &Rent) -> (AccountSharedData, AccountHash) {
-        let string = "FiLLERACCoUNTooooooooooooooooooooooooooooooo";
-        let hash = AccountHash(Hash::from_str(string).unwrap());
-        let owner = Pubkey::from_str(string).unwrap();
-        let space = self.filler_accounts_config.size;
-        let rent_exempt_reserve = rent.minimum_balance(space);
-        let lamports = rent_exempt_reserve;
-        let mut account = AccountSharedData::new(lamports, space, &owner);
-        // just non-zero rent epoch. filler accounts are rent-exempt
-        let dummy_rent_epoch = 2;
-        account.set_rent_epoch(dummy_rent_epoch);
-        (account, hash)
-    }
-
-    fn get_filler_account_pubkeys(&self, count: usize) -> Vec<Pubkey> {
-        (0..count)
-            .map(|_| {
-                let subrange = solana_sdk::pubkey::new_rand();
-                self.get_filler_account_pubkey(&subrange)
-            })
-            .collect()
-    }
-
-    fn get_filler_account_pubkey(&self, subrange: &Pubkey) -> Pubkey {
-        // pubkey begins life as entire filler 'suffix' pubkey
-        let mut key = self.filler_account_suffix.unwrap();
-        let rent_prefix_bytes = Self::filler_rent_partition_prefix_bytes();
-        // first bytes are replaced with rent partition range: filler_rent_partition_prefix_bytes
-        key.as_mut()[0..rent_prefix_bytes]
-            .copy_from_slice(&subrange.as_ref()[0..rent_prefix_bytes]);
-        key
-    }
-
-    /// filler accounts are space-holding accounts which are ignored by hash calculations and rent.
-    /// They are designed to allow a validator to run against a network successfully while simulating having many more accounts present.
-    /// All filler accounts share a common pubkey suffix. The suffix is randomly generated per validator on startup.
-    /// The filler accounts are added to each slot in the snapshot after index generation.
-    /// The accounts added in a slot are setup to have pubkeys such that rent will be collected from them before (or when?) their slot becomes an epoch old.
-    /// Thus, the filler accounts are rewritten by rent and the old slot can be thrown away successfully.
-    pub fn maybe_add_filler_accounts(&self, epoch_schedule: &EpochSchedule, slot: Slot) {
-        if self.filler_accounts_config.count == 0 {
-            return;
-        }
-
-        self.init_gradual_filler_accounts(
-            epoch_schedule.get_slots_in_epoch(epoch_schedule.get_epoch(slot)),
-        );
-    }
-
     pub fn generate_index(
         &self,
         limit_load_slot_count_from_snapshot: Option<usize>,
@@ -10090,7 +9871,6 @@ pub mod tests {
                     check_hash,
                     ..CalcAccountsHashConfig::default()
                 },
-                None,
             )
             .map(|references| {
                 references
