@@ -61,10 +61,6 @@ impl ConsumeWorker {
     pub fn run(self) -> Result<(), ConsumeWorkerError> {
         loop {
             let work = self.consume_receiver.recv()?;
-
-            // If the worker got here, then something happened.
-            // Flip the latch so metrics are reported next interval elapse.
-            self.metrics.latch.store(true, Ordering::Relaxed);
             self.consume_loop(work)?;
         }
     }
@@ -97,6 +93,7 @@ impl ConsumeWorker {
         );
 
         self.metrics.update_for_consume(&output);
+        self.metrics.has_data.store(true, Ordering::Relaxed);
 
         self.consumed_sender.send(FinishedConsumeWork {
             work,
@@ -134,6 +131,7 @@ impl ConsumeWorker {
             .count_metrics
             .retryable_expired_bank_count
             .fetch_add(num_retryable, Ordering::Relaxed);
+        self.metrics.has_data.store(true, Ordering::Relaxed);
         self.consumed_sender.send(FinishedConsumeWork {
             work,
             retryable_indexes,
@@ -155,7 +153,7 @@ fn try_drain_iter<T>(work: T, receiver: &Receiver<T>) -> impl Iterator<Item = T>
 pub(crate) struct ConsumeWorkerMetrics {
     id: u32,
     interval: AtomicInterval,
-    latch: AtomicBool,
+    has_data: AtomicBool,
 
     count_metrics: ConsumeWorkerCountMetrics,
     error_metrics: ConsumeWorkerTransactionErrorMetrics,
@@ -167,7 +165,7 @@ impl ConsumeWorkerMetrics {
     pub fn maybe_report_and_reset(&self) {
         const REPORT_INTERVAL_MS: u64 = 1000;
         if self.interval.should_update(REPORT_INTERVAL_MS)
-            && self.latch.swap(false, Ordering::Relaxed)
+            && self.has_data.swap(false, Ordering::Relaxed)
         {
             self.count_metrics.report_and_reset(self.id);
             self.timing_metrics.report_and_reset(self.id);
@@ -179,7 +177,7 @@ impl ConsumeWorkerMetrics {
         Self {
             id,
             interval: AtomicInterval::default(),
-            latch: AtomicBool::new(false),
+            has_data: AtomicBool::new(false),
             count_metrics: ConsumeWorkerCountMetrics::default(),
             error_metrics: ConsumeWorkerTransactionErrorMetrics::default(),
             timing_metrics: ConsumeWorkerTimingMetrics::default(),
