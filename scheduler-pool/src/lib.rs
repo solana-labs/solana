@@ -785,7 +785,7 @@ where
             unbounded::<Box<ExecutionEnvironment>>();
         let (drop_sender, drop_receiver) = unbounded::<Box<ExecutionEnvironment>>();
         let handler_count = self.handler_count;
-        let scheduler_id = self.id;
+        let scheduler_id = self.shceduler_id;
         let mut slot = context.bank().slot();
         let (tid_sender, tid_receiver) = bounded(1);
 
