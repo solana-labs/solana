@@ -1573,6 +1573,8 @@ where
     }
 
     fn return_to_pool(mut self: Box<Self>) {
+        use std::borrow::BorrowMut;
+
         let pool = self.thread_manager.read().unwrap().pool.clone();
         self.borrow_mut().pooled_now();
         pool.return_scheduler(self);
