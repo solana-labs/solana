@@ -10064,7 +10064,7 @@ pub mod tests {
         // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
         let _existing_append_vec = db.create_and_insert_store(slot0, 1000, "test");
         {
-            let _shrink_in_progress = current_ancient.create_ancient_append_vec(slot0, &db);
+            let _shrink_in_progress = current_ancient.create_ancient_append_vec(slot0, &db, 0);
         }
         let mut ancient_slot_pubkeys = AncientSlotPubkeys::default();
         assert!(ancient_slot_pubkeys.inner.is_none());
@@ -10079,7 +10079,7 @@ pub mod tests {
         // different slot than current_ancient, so update 'ancient_slot_pubkeys'
         // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
         let _existing_append_vec = db.create_and_insert_store(slot1, 1000, "test");
-        let _shrink_in_progress = current_ancient.create_ancient_append_vec(slot1, &db);
+        let _shrink_in_progress = current_ancient.create_ancient_append_vec(slot1, &db, 0);
         let slot2 = 2;
         ancient_slot_pubkeys.maybe_unref_accounts_already_in_ancient(
             slot2,
@@ -16903,7 +16903,7 @@ pub mod tests {
                 append_vec.append_vec_id()
             );
 
-            let _shrink_in_progress = current_ancient.create_if_necessary(slot2, &db);
+            let _shrink_in_progress = current_ancient.create_if_necessary(slot2, &db, 0);
             assert_eq!(current_ancient.slot(), slot);
             assert_eq!(current_ancient.append_vec_id(), append_vec.append_vec_id());
         }
@@ -16915,13 +16915,13 @@ pub mod tests {
             let _existing_append_vec = db.create_and_insert_store(slot2, 1000, "test");
 
             let mut current_ancient = CurrentAncientAppendVec::default();
-            let mut _shrink_in_progress = current_ancient.create_if_necessary(slot2, &db);
+            let mut _shrink_in_progress = current_ancient.create_if_necessary(slot2, &db, 0);
             let id = current_ancient.append_vec_id();
             assert_eq!(current_ancient.slot(), slot2);
             assert!(is_ancient(&current_ancient.append_vec().accounts));
             let slot3 = 3;
             // should do nothing
-            let _shrink_in_progress = current_ancient.create_if_necessary(slot3, &db);
+            let _shrink_in_progress = current_ancient.create_if_necessary(slot3, &db, 0);
             assert_eq!(current_ancient.slot(), slot2);
             assert_eq!(current_ancient.append_vec_id(), id);
             assert!(is_ancient(&current_ancient.append_vec().accounts));
@@ -16935,7 +16935,7 @@ pub mod tests {
             let _existing_append_vec = db.create_and_insert_store(slot2, 1000, "test");
 
             {
-                let _shrink_in_progress = current_ancient.create_ancient_append_vec(slot2, &db);
+                let _shrink_in_progress = current_ancient.create_ancient_append_vec(slot2, &db, 0);
             }
             let id = current_ancient.append_vec_id();
             assert_eq!(current_ancient.slot(), slot2);
@@ -16944,7 +16944,7 @@ pub mod tests {
             // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
             let _existing_append_vec = db.create_and_insert_store(slot3, 1000, "test");
 
-            let mut _shrink_in_progress = current_ancient.create_ancient_append_vec(slot3, &db);
+            let mut _shrink_in_progress = current_ancient.create_ancient_append_vec(slot3, &db, 0);
             assert_eq!(current_ancient.slot(), slot3);
             assert!(is_ancient(&current_ancient.append_vec().accounts));
             assert_ne!(current_ancient.append_vec_id(), id);
