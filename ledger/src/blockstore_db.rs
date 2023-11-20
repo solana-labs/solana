@@ -501,9 +501,13 @@ impl Rocks {
             new_cf_descriptor::<MerkleRootMeta>(options, oldest_slot),
         ];
 
+        // The default column is handled automatically, we don't need to create
+        // a descriptor for it
+        const DEFAULT_COLUMN_NAME: &str = "default";
         let known_cfs: HashSet<_> = cf_descriptors
             .iter()
             .map(|cf_descriptor| cf_descriptor.name().to_string())
+            .chain(std::iter::once(DEFAULT_COLUMN_NAME.to_string()))
             .collect();
         detected_cfs.iter().for_each(|cf_name| {
             if known_cfs.get(cf_name.as_str()).is_none() {
