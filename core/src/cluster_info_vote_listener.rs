@@ -540,9 +540,9 @@ impl ClusterInfoVoteListener {
                 &replay_votes_receiver,
                 &bank_notification_sender,
                 &duplicate_confirmed_slot_sender,
-                &mut vote_processing_time,
-                &mut latest_vote_slot_per_validator,
                 &repair_threshold_slot_sender,
+                &mut latest_vote_slot_per_validator,
+                &mut vote_processing_time,
             );
             match confirmed_slots {
                 Ok(confirmed_slots) => {
@@ -582,9 +582,9 @@ impl ClusterInfoVoteListener {
             replay_votes_receiver,
             &None,
             &None,
-            &mut None,
-            &mut HashMap::new(),
             &None,
+            &mut HashMap::new(),
+            &mut None,
         )
     }
 
@@ -599,9 +599,9 @@ impl ClusterInfoVoteListener {
         replay_votes_receiver: &ReplayVoteReceiver,
         bank_notification_sender: &Option<BankNotificationSender>,
         duplicate_confirmed_slot_sender: &Option<DuplicateConfirmedSlotsSender>,
-        vote_processing_time: &mut Option<VoteProcessingTiming>,
-        latest_vote_slot_per_validator: &mut HashMap<Pubkey, Slot>,
         repair_threshold_slot_sender: &Option<RepairThresholdSlotsSender>,
+        latest_vote_slot_per_validator: &mut HashMap<Pubkey, Slot>,
+        vote_processing_time: &mut Option<VoteProcessingTiming>,
     ) -> Result<ThresholdConfirmedSlots> {
         let mut sel = Select::new();
         sel.recv(gossip_vote_txs_receiver);
@@ -1068,9 +1068,9 @@ mod tests {
             &replay_votes_receiver,
             &None,
             &None,
-            &mut None,
-            &mut latest_vote_slot_per_validator,
             &None,
+            &mut latest_vote_slot_per_validator,
+            &mut None,
         )
         .unwrap();
 
@@ -1102,9 +1102,9 @@ mod tests {
             &replay_votes_receiver,
             &None,
             &None,
-            &mut None,
-            &mut latest_vote_slot_per_validator,
             &None,
+            &mut latest_vote_slot_per_validator,
+            &mut None,
         )
         .unwrap();
 
@@ -1188,9 +1188,9 @@ mod tests {
             &replay_votes_receiver,
             &None,
             &None,
-            &mut None,
-            &mut latest_vote_slot_per_validator,
             &None,
+            &mut latest_vote_slot_per_validator,
+            &mut None,
         )
         .unwrap();
 
@@ -1349,9 +1349,9 @@ mod tests {
             &replay_votes_receiver,
             &None,
             &None,
-            &mut None,
-            &mut latest_vote_slot_per_validator,
             &None,
+            &mut latest_vote_slot_per_validator,
+            &mut None,
         )
         .unwrap();
 
@@ -1453,9 +1453,9 @@ mod tests {
                     &replay_votes_receiver,
                     &None,
                     &None,
-                    &mut None,
-                    &mut latest_vote_slot_per_validator,
                     &None,
+                    &mut latest_vote_slot_per_validator,
+                    &mut None,
                 );
             }
             let slot_vote_tracker = vote_tracker.get_slot_vote_tracker(vote_slot).unwrap();
