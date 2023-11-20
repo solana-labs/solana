@@ -537,7 +537,6 @@ pub struct ExecutionEnvironment {
 // not usable at all, especially for mainnet-beta
 #[derive(Debug)]
 pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
-    id: SchedulerId,
     completed_result_with_timings: Option<ResultWithTimings>,
     thread_manager: Arc<RwLock<ThreadManager<TH, SEA>>>,
     address_book: AddressBook,
@@ -566,6 +565,7 @@ impl WeakSchedulingContext {
 
 #[derive(Debug)]
 struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
+    id: SchedulerId,
     pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
     context: WeakSchedulingContext,
     scheduler_thread_and_tid: Option<(JoinHandle<ResultWithTimings>, i32)>,
@@ -591,7 +591,6 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             .parse::<usize>()
             .unwrap();
         let scheduler = Self {
-            id: thread_rng().gen::<SchedulerId>(),
             completed_result_with_timings: None,
             thread_manager: Arc::new(RwLock::new(ThreadManager::<TH, SEA>::new(
                 initial_context,
@@ -671,6 +670,7 @@ where
         let (result_sender, result_receiver) = unbounded();
 
         let mut thread_manager = Self {
+            id: thread_rng().gen::<SchedulerId>(),
             schedulrable_transaction_sender,
             schedulable_transaction_receiver,
             result_sender,
