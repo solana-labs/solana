@@ -1,4 +1,4 @@
-FROM solanalabs/rust:1.73.0
+FROM solanalabs/rust:1.74.0
 
 ARG date
 ARG GRCOV_VERSION=v0.8.18
