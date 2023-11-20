@@ -9,6 +9,7 @@ use {
         transaction_state_container::TransactionStateContainer,
     },
     crate::banking_stage::{
+        consume_worker::ConsumeWorkerMetrics,
         decision_maker::{BufferedPacketsDecision, DecisionMaker},
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         packet_deserializer::PacketDeserializer,
@@ -42,6 +43,8 @@ pub(crate) struct SchedulerController {
     count_metrics: SchedulerCountMetrics,
     /// Metrics tracking time spent in different code sections.
     timing_metrics: SchedulerTimingMetrics,
+    /// Metric report handles for the worker threads.
+    worker_metrics: Vec<Arc<ConsumeWorkerMetrics>>,
 }
 
 impl SchedulerController {
@@ -50,6 +53,7 @@ impl SchedulerController {
         packet_deserializer: PacketDeserializer,
         bank_forks: Arc<RwLock<BankForks>>,
         scheduler: PrioGraphScheduler,
+        worker_metrics: Vec<Arc<ConsumeWorkerMetrics>>,
     ) -> Self {
         Self {
             decision_maker,
@@ -60,6 +64,7 @@ impl SchedulerController {
             scheduler,
             count_metrics: SchedulerCountMetrics::default(),
             timing_metrics: SchedulerTimingMetrics::default(),
+            worker_metrics,
         }
     }
 
@@ -90,6 +95,9 @@ impl SchedulerController {
             let should_report = self.count_metrics.has_data();
             self.count_metrics.maybe_report_and_reset(should_report);
             self.timing_metrics.maybe_report_and_reset(should_report);
+            self.worker_metrics
+                .iter()
+                .for_each(|metrics| metrics.maybe_report_and_reset());
         }
 
         Ok(())
@@ -449,6 +457,7 @@ mod tests {
             packet_deserializer,
             bank_forks,
             PrioGraphScheduler::new(consume_work_senders, finished_consume_work_receiver),
+            vec![], // no actual workers with metrics to report, this can be empty
         );
 
         (test_frame, scheduler_controller)
