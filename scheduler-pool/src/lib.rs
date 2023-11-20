@@ -170,7 +170,6 @@ where
     ) -> Arc<Self> {
         let (scheduler_pool_sender, scheduler_pool_receiver) = bounded(1);
         let (watchdog_sender, watchdog_receiver) = unbounded();
-        let schedulers: Mutex<Vec<Box<T>>> = Mutex::new(vec![]);
 
         let watchdog_main_loop = || {
             let mut watched_thread_managers: Vec<WatchedThreadManager<TH, SEA>> = vec![];
@@ -230,7 +229,7 @@ where
             .unwrap();
 
         let scheduler_pool = Arc::new_cyclic(|weak_self| Self {
-            schedulers,
+            schedulers: Mutex::new(vec![]),
             log_messages_bytes_limit,
             transaction_status_sender,
             replay_vote_sender,
