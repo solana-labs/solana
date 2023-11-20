@@ -4132,10 +4132,11 @@ pub fn create_new_ledger(
         blockstore_dir,
     ];
     let output = std::process::Command::new("tar")
+        .env("COPYFILE_DISABLE", "1")
         .args(args)
         .output()
         .unwrap();
-    if !output.status.success() {
+    if !output.stderr.is_empty() || !output.status.success() {
         use std::str::from_utf8;
         error!("tar stdout: {}", from_utf8(&output.stdout).unwrap_or("?"));
         error!("tar stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
