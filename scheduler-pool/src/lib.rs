@@ -889,8 +889,10 @@ where
                                         }
                                     };
                                 } else {
-                                    will_end_thread = true;
-                                    log_scheduler!("end_thrd");
+                                    if !will_end_thread {
+                                        will_end_thread = true;
+                                        log_scheduler!("end_thrd");
+                                    }
                                 };
                             },
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
