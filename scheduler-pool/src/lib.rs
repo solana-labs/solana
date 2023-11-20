@@ -168,19 +168,20 @@ where
         replay_vote_sender: Option<ReplayVoteSender>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Arc<Self> {
+        let (scheduler_pool_sender, scheduler_pool_receiver) = bounded(1);
         let (watchdog_sender, watchdog_receiver) = unbounded();
         let schedulers: Arc<Mutex<Vec<Box<T>>>> = Arc::new(Mutex::new(vec![]));
 
         let watchdog_main_loop = || {
-            let mut schedulers = schedulers.clone();
             let mut watched_thread_managers: Vec<WatchedThreadManager<TH, SEA>> = vec![];
 
             move || 'outer: loop {
+                let scheduler_pool = scheduler_pool_receiver.recv().unwrap();
                 let pre_retain_len = watched_thread_managers.len();
                 watched_thread_managers
                     .retain_mut(|thread_manager| thread_manager.update_tick_to_retain());
 
-                let mut schedulers = schedulers.lock().unwrap();
+                let mut schedulers = scheduler_pool.schedulers.lock().unwrap();
                 let pre_schedulers_len = schedulers.len();
                 schedulers.retain_mut(|scheduler| {
                     let Some(pooled_duration) = scheduler.pooled_since() else {
@@ -204,7 +205,7 @@ where
 
                 let pre_push_len = watched_thread_managers.len();
                 'inner: loop {
-                    match watchdog_receiver.recv_timeout(Duration::from_secs(1)) {
+                    match watchdog_receiver.recv_timeout(Duration::from_secs(2)) {
                         Ok(thread_manager) => {
                             watched_thread_managers.push(WatchedThreadManager::new(thread_manager))
                         }
@@ -213,7 +214,7 @@ where
                     }
                 }
                 info!(
-                    "watchdog: watched thread managers: {} => {} => {}, pooled schedulers: {} => {}",
+                    "watchdog: watched thread managers: {} => {} => {}, schedulers in the pool: {} => {}",
                     pre_retain_len,
                     pre_push_len,
                     watched_thread_managers.len(),
@@ -228,7 +229,7 @@ where
             .spawn(watchdog_main_loop())
             .unwrap();
 
-        Arc::new_cyclic(|weak_self| Self {
+        let scheduler_pool = Arc::new_cyclic(|weak_self| Self {
             schedulers,
             log_messages_bytes_limit,
             transaction_status_sender,
@@ -238,7 +239,9 @@ where
             watchdog_thread,
             watchdog_sender,
             _phantom: PhantomData,
-        })
+        });
+        scheduler_pool_sender.send(scheduler_pool).unwrap();
+        scheduler_pool
     }
 
     pub fn new_dyn(
