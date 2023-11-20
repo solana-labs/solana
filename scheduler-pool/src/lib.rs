@@ -35,6 +35,7 @@ use {
     },
     solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
+        collections::HashMap,
         fmt::Debug,
         marker::PhantomData,
         sync::{atomic::AtomicUsize, Arc, Mutex, RwLock, RwLockReadGuard, Weak},
@@ -42,7 +43,6 @@ use {
         time::{Duration, SystemTime},
     },
 };
-use std::collections::HashMap;
 
 type UniqueWeight = u64;
 
@@ -180,8 +180,7 @@ where
                 watched_thread_managers
                     .retain_mut(|thread_manager| thread_manager.update_tick_to_retain());
 
-                for scheduler in schedulers.lock().unwrap().iter() {
-                }
+                for scheduler in schedulers.lock().unwrap().iter() {}
 
                 let pre_push_len = watched_thread_managers.len();
                 'inner: loop {
@@ -244,7 +243,6 @@ where
     pub fn return_scheduler(&self, mut scheduler: Box<T>) {
         //assert!(!scheduler.has_context());
 
-        scheduler.pooled_now();
         self.schedulers
             .lock()
             .expect("not poisoned")
@@ -564,7 +562,7 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     completed_result_with_timings: Option<ResultWithTimings>,
     thread_manager: Arc<RwLock<ThreadManager<TH, SEA>>>,
     address_book: AddressBook,
-    pooled_since: SystemTime,
+    pooled_since: Option<SystemTime>,
 }
 
 #[derive(Debug)]
@@ -624,7 +622,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
                 handler_count,
             ))),
             address_book: AddressBook::default(),
-            pooled_since: SystemTime::now(),
+            pooled_since: None,
         };
         pool.register_to_watchdog(Arc::downgrade(&scheduler.thread_manager));
 
@@ -1274,7 +1272,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
     }
 
     fn pooled_now(&mut self) {
-        self.pooled_since = SystemTime::now();
+        self.pooled_since = Some(SystemTime::now());
     }
 }
 
@@ -1576,6 +1574,7 @@ where
 
     fn return_to_pool(self: Box<Self>) {
         let pool = self.thread_manager.read().unwrap().pool.clone();
+        self.pooled_now();
         pool.return_scheduler(self);
     }
 }
