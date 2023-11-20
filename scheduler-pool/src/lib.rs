@@ -137,8 +137,13 @@ where
             self.tick = current_tick;
             self.updated_at = SystemTime::now();
         } else if self.updated_at.elapsed().unwrap() > Duration::from_secs(10) {
+            const BITS_PER_HEX_DIGIT: usize = 4;
             let mut thread_manager = thread_manager.write().unwrap();
-            info!("update_tick_to_retain(): stopping... {}({tid})", thread_manager.scheduler_id);
+            info!(
+                "[sch_{:0width$x}]: update_tick_to_retain(): stopping thread manager ({tid})...",
+                thread_manager.scheduler_id,
+                width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
+            );
             thread_manager.stop_threads();
             self.tick = 0;
             self.updated_at = SystemTime::now();
@@ -816,8 +821,8 @@ where
                     ($a:tt) => {
                         const BITS_PER_HEX_DIGIT: usize = 4;
                         info!(
-                            "slot: {}[sch_{:0width$x}]: [{}]({}/{}): state_machine(({}(+{})=>{})/{}|{}/{}) channels(<{} >{}+{} <{}+{})",
-                            slot, scheduler_id, ($a), (if will_end_thread {"T"} else {"-"}), (if will_end_session {"S"} else {"-"}),
+                            "[sch_{:0width$x}]: slot: {}[{}]({}/{}): state_machine(({}(+{})=>{})/{}|{}/{}) channels(<{} >{}+{} <{}+{})",
+                            scheduler_id, slot, ($a), (if will_end_thread {"T"} else {"-"}), (if will_end_session {"S"} else {"-"}),
                             state_machine.active_task_count(), state_machine.retryable_task_count(), state_machine.handled_task_count(),
                             state_machine.total_task_count(),
                             state_machine.reschedule_count(),
