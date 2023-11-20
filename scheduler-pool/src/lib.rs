@@ -186,7 +186,18 @@ where
                     let Some(pooled_duration) = scheduler.pooled_since() else {
                         return true;
                     };
-                    pooled_duration <= Duration::from_secs(600)
+                    if pooled_duration <= Duration::from_secs(600) {
+                        true
+                    } else {
+                        const BITS_PER_HEX_DIGIT: usize = 4;
+                        info!(
+                            "[sch_{:0width$x}]: watchdog: retiring unused scheduler...",
+                            scheduler.id(),
+                            width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
+                        );
+                        thread_manager.stop_thread_manager();
+                        false
+                    }
                 });
                 let post_schedulers_len = schedulers.len();
                 drop(schedulers);
@@ -659,6 +670,12 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
                 drop(w);
             }
         }
+    }
+
+
+    fn stop_thread_manager(&self) {
+        debug!("stop_thread_manager()");
+        self.thread_manager.write().unwrap().stop_threads();
     }
 
     fn pooled_now(&mut self) {
