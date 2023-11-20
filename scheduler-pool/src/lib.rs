@@ -1306,6 +1306,13 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
     }
 
     fn pooled_since(&self) -> Option<Duration> {
+        const BITS_PER_HEX_DIGIT: usize = 4;
+        info!(
+            "[sch_{:0width$x}]: watchdog: address book size: {}...",
+            self.id(),
+            self.address_book.page_count(),
+            width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
+        );
         self.pooled_at.elapsed().ok()
     }
 
