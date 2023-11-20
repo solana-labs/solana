@@ -180,9 +180,14 @@ where
                 watched_thread_managers
                     .retain_mut(|thread_manager| thread_manager.update_tick_to_retain());
 
-                schedulers.lock().unwrap().retain(|scheduler| {
-                    true
-                });
+                {
+                    let schedulers = schedulers.lock().unwrap();
+                    let pre_schedulers_len = schedulers.len();
+                    schedulers.retain(|scheduler| {
+                        true
+                    });
+                    let post_schedulers_len = schedulers.len();
+                }
 
                 let pre_push_len = watched_thread_managers.len();
                 'inner: loop {
@@ -195,7 +200,7 @@ where
                     }
                 }
                 info!(
-                    "watchdog: {} => {} => {}",
+                    "watchdog: thread managers: {} => {} => {}, schedulers: {} => {}",
                     pre_retain_len,
                     pre_push_len,
                     watched_thread_managers.len()
