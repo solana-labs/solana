@@ -140,8 +140,10 @@ where
             const BITS_PER_HEX_DIGIT: usize = 4;
             let mut thread_manager = thread_manager.write().unwrap();
             info!(
-                "[sch_{:0width$x}]: update_tick_to_retain(): stopping thread manager ({tid})...",
+                "[sch_{:0width$x}]: update_tick_to_retain(): stopping thread manager ({tid}/{}/{:?})...",
                 thread_manager.scheduler_id,
+                self.tick,
+                self.updated_at,
                 width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
             );
             thread_manager.stop_threads();
