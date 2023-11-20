@@ -253,6 +253,10 @@ mod nonblocking {
         fn pooled_since(&self) -> Option<Duration> {
             unimplemented!();
         }
+
+        fn stop_thread_manager(&mut self) {
+            unimplemented!();
+        }
     }
 
     impl<H: Handler<ScheduleExecutionArgForBench> + Clone> NonblockingScheduler<H> {
