@@ -1573,7 +1573,7 @@ where
     }
 
     fn return_to_pool(mut self: Box<Self>) {
-        use std::opds::DerefMut;
+        use std::ops::DerefMut;
 
         let pool = self.thread_manager.read().unwrap().pool.clone();
         self.deref_mut().pooled_now();
