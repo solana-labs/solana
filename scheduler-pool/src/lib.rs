@@ -969,7 +969,8 @@ where
                         }
                     }
 
-                    if will_end_session { // or should also consider will_end_thread?
+                    if will_end_session {
+                        // or should also consider will_end_thread?
                         log_scheduler!("ended   ");
                         (state_machine, log_interval_counter) = <_>::default();
                         result_sender
