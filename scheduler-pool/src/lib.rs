@@ -176,6 +176,8 @@ where
 
             move || 'outer: loop {
                 let scheduler_pool: Arc<Self> = scheduler_pool_receiver.recv().unwrap();
+                drop(scheduler_pool_receiver);
+
                 let pre_retain_len = watched_thread_managers.len();
                 watched_thread_managers
                     .retain_mut(|thread_manager| thread_manager.update_tick_to_retain());
