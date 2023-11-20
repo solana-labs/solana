@@ -1574,7 +1574,7 @@ where
 
     fn return_to_pool(mut self: Box<Self>) {
         let pool = self.thread_manager.read().unwrap().pool.clone();
-        *self.pooled_now();
+        self.borrow_mut().pooled_now();
         pool.return_scheduler(self);
     }
 
