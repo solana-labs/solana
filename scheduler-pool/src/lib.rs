@@ -137,7 +137,7 @@ where
         if current_tick > self.tick {
             self.tick = current_tick;
             self.updated_at = SystemTime::now();
-        } else if self.updated_at.elapsed().unwrap() > Duration::from_secs(10) {
+        } else if self.updated_at.elapsed().unwrap_or_default() > Duration::from_secs(10) {
             const BITS_PER_HEX_DIGIT: usize = 4;
             let mut thread_manager = thread_manager.write().unwrap();
             info!(
