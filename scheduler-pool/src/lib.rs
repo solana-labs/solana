@@ -180,7 +180,7 @@ where
                 watched_thread_managers
                     .retain_mut(|thread_manager| thread_manager.update_tick_to_retain());
 
-                schedulers.lock().unwrap().retain(|| {
+                schedulers.lock().unwrap().retain(|scheduler| {
                     true
                 });
 
