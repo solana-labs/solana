@@ -173,9 +173,10 @@ where
 
         let watchdog_main_loop = || {
             move || {
-                let mut watched_thread_managers: Vec<WatchedThreadManager<TH, SEA>> = vec![];
                 let scheduler_pool: Arc<Self> = scheduler_pool_receiver.recv().unwrap();
                 drop(scheduler_pool_receiver);
+
+                let mut watched_thread_managers: Vec<WatchedThreadManager<TH, SEA>> = vec![];
 
                 'outer: loop {
                     let pre_retain_len = watched_thread_managers.len();
