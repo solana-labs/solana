@@ -712,10 +712,6 @@ impl Rocks {
 pub trait Column {
     type Index;
 
-    fn key_size() -> usize {
-        std::mem::size_of::<Self::Index>()
-    }
-
     fn key(index: Self::Index) -> Vec<u8>;
     fn index(key: &[u8]) -> Self::Index;
     // This trait method is primarily used by `Database::delete_range_cf()`, and is therefore only
