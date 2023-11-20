@@ -172,50 +172,48 @@ where
         let (watchdog_sender, watchdog_receiver) = unbounded();
 
         let watchdog_main_loop = || {
-            let mut watched_thread_managers: Vec<WatchedThreadManager<TH, SEA>> = vec![];
-
-            move || 'outer: {
+            move || {
+                let mut watched_thread_managers: Vec<WatchedThreadManager<TH, SEA>> = vec![];
                 let scheduler_pool: Arc<Self> = scheduler_pool_receiver.recv().unwrap();
                 drop(scheduler_pool_receiver);
 
-                loop {
-                let pre_retain_len = watched_thread_managers.len();
-                watched_thread_managers
-                    .retain_mut(|thread_manager| thread_manager.update_tick_to_retain());
+                'outer: loop {
+                    let pre_retain_len = watched_thread_managers.len();
+                    watched_thread_managers
+                        .retain_mut(|thread_manager| thread_manager.update_tick_to_retain());
 
-                let mut schedulers = scheduler_pool.schedulers.lock().unwrap();
-                let pre_schedulers_len = schedulers.len();
-                schedulers.retain_mut(|scheduler| {
-                    let Some(pooled_duration) = scheduler.pooled_since() else {
-                        return true;
-                    };
-                    if pooled_duration <= Duration::from_secs(600) {
-                        true
-                    } else {
-                        const BITS_PER_HEX_DIGIT: usize = 4;
-                        info!(
-                            "[sch_{:0width$x}]: watchdog: retiring unused scheduler...",
-                            scheduler.id(),
-                            width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
-                        );
-                        scheduler.stop_thread_manager();
-                        false
-                    }
-                });
-                let post_schedulers_len = schedulers.len();
-                drop(schedulers);
-
-                let pre_push_len = watched_thread_managers.len();
-                'inner: loop {
-                    match watchdog_receiver.recv_timeout(Duration::from_secs(2)) {
-                        Ok(thread_manager) => {
-                            watched_thread_managers.push(WatchedThreadManager::new(thread_manager))
+                    let mut schedulers = scheduler_pool.schedulers.lock().unwrap();
+                    let pre_schedulers_len = schedulers.len();
+                    schedulers.retain_mut(|scheduler| {
+                        let Some(pooled_duration) = scheduler.pooled_since() else {
+                            return true;
+                        };
+                        if pooled_duration <= Duration::from_secs(600) {
+                            true
+                        } else {
+                            const BITS_PER_HEX_DIGIT: usize = 4;
+                            info!(
+                                "[sch_{:0width$x}]: watchdog: retiring unused scheduler...",
+                                scheduler.id(),
+                                width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
+                            );
+                            scheduler.stop_thread_manager();
+                            false
                         }
-                        Err(RecvTimeoutError::Disconnected) => break 'outer,
-                        Err(RecvTimeoutError::Timeout) => break 'inner,
+                    });
+                    let post_schedulers_len = schedulers.len();
+                    drop(schedulers);
+
+                    let pre_push_len = watched_thread_managers.len();
+                    'inner: loop {
+                        match watchdog_receiver.recv_timeout(Duration::from_secs(2)) {
+                            Ok(thread_manager) => watched_thread_managers
+                                .push(WatchedThreadManager::new(thread_manager)),
+                            Err(RecvTimeoutError::Disconnected) => break 'outer,
+                            Err(RecvTimeoutError::Timeout) => break 'inner,
+                        }
                     }
-                }
-                info!(
+                    info!(
                     "watchdog: watched thread managers: {} => {} => {}, schedulers in the pool: {} => {}",
                     pre_retain_len,
                     pre_push_len,
@@ -223,7 +221,8 @@ where
                     pre_schedulers_len,
                     post_schedulers_len,
                 );
-            }}
+                }
+            }
         };
 
         let watchdog_thread = std::thread::Builder::new()
