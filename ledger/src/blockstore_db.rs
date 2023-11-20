@@ -35,7 +35,7 @@ use {
     },
     solana_storage_proto::convert::generated,
     std::{
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         ffi::{CStr, CString},
         fs,
         marker::PhantomData,
@@ -419,7 +419,12 @@ impl Rocks {
         }
         let oldest_slot = OldestSlot::default();
         let column_options = options.column_options.clone();
-        let cf_descriptors = Self::cf_descriptors(&options, &oldest_slot);
+        let detected_cfs = DB::list_cf(&Options::default(), path)
+            .map_err(|err| {
+                warn!("Unable to detect Rocks colums: {err:?}");
+            })
+            .unwrap_or_default();
+        let cf_descriptors = Self::cf_descriptors(&options, &oldest_slot, &detected_cfs);
 
         // Open the database
         let db = match access_type {
@@ -454,15 +459,25 @@ impl Rocks {
         Ok(rocks)
     }
 
+    /// Create the column family (CF) descriptors necessary to open the database.
+    ///
+    /// In order to open a RocksDB database with Primary access, all columns must be opened. So,
+    /// in addition to creating descriptors for all of the expected columns, also create
+    /// descriptors for columns that were discovered but are otherwise unknown to the software.
+    ///
+    /// One case where columns could be unknown is if a RocksDB database is modified with a newer
+    /// software version that adds a new column, and then also opened with an older version that
+    /// did not have knowledge of that new column.
     fn cf_descriptors(
         options: &BlockstoreOptions,
         oldest_slot: &OldestSlot,
+        detected_cfs: &[String],
     ) -> Vec<ColumnFamilyDescriptor> {
         use columns::*;
 
         let (cf_descriptor_shred_data, cf_descriptor_shred_code) =
             new_cf_descriptor_pair_shreds::<ShredData, ShredCode>(options, oldest_slot);
-        vec![
+        let mut cf_descriptors = vec![
             new_cf_descriptor::<SlotMeta>(options, oldest_slot),
             new_cf_descriptor::<DeadSlots>(options, oldest_slot),
             new_cf_descriptor::<DuplicateSlots>(options, oldest_slot),
@@ -484,7 +499,29 @@ impl Rocks {
             new_cf_descriptor::<ProgramCosts>(options, oldest_slot),
             new_cf_descriptor::<OptimisticSlots>(options, oldest_slot),
             new_cf_descriptor::<MerkleRootMeta>(options, oldest_slot),
-        ]
+        ];
+
+        let known_cfs: HashSet<_> = cf_descriptors
+            .iter()
+            .map(|cf_descriptor| cf_descriptor.name().to_string())
+            .collect();
+        detected_cfs.iter().for_each(|cf_name| {
+            if known_cfs.get(cf_name.as_str()).is_none() {
+                info!("Detected unknown column {cf_name}, opening column with basic options");
+                // This version of the software was unaware of the column, so
+                // it fair to assume that we will not attempt to read or write
+                // the column. So, set some bare bones settings to avoid
+                // using extra resources on this unknown column.
+                let mut options = Options::default();
+                // Lower the default to avoid unnecessary allocations
+                options.set_write_buffer_size(1024 * 1024);
+                // Disable compactions to avoid any modifications to the column
+                options.set_disable_auto_compactions(true);
+                cf_descriptors.push(ColumnFamilyDescriptor::new(cf_name, options));
+            }
+        });
+
+        cf_descriptors
     }
 
     fn columns() -> Vec<&'static str> {
@@ -2224,7 +2261,7 @@ pub mod tests {
         // should update both lists.
         assert_eq!(
             Rocks::columns().len(),
-            Rocks::cf_descriptors(&options, &oldest_slot).len()
+            Rocks::cf_descriptors(&options, &oldest_slot, &[]).len()
         );
     }
 
