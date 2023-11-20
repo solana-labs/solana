@@ -344,8 +344,7 @@ impl CurrentAncientAppendVec {
         min_bytes: usize,
     ) -> ShrinkInProgress<'a> {
         let min_page_aligned = AccountsDb::page_align(min_bytes as u64);
-        let size = get_ancient_append_vec_capacity().max(min_page_aligned as u64);
-
+        let size = get_ancient_append_vec_capacity().max(min_page_aligned);
         let shrink_in_progress = db.get_store_for_shrink(slot, size);
         *self = Self::new(slot, Arc::clone(shrink_in_progress.new_storage()));
         shrink_in_progress
