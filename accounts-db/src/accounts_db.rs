@@ -66,6 +66,7 @@ use {
         rent_collector::RentCollector,
         sorted_storages::SortedStorages,
         storable_accounts::StorableAccounts,
+        u64_align,
         verify_accounts_hash_in_background::VerifyAccountsHashInBackground,
     },
     blake3::traits::digest::Digest,
@@ -335,17 +336,17 @@ impl CurrentAncientAppendVec {
     }
 
     #[must_use]
-    /// min_bytes: the new append vec needs to have at last this capacity
+    /// min_bytes: the new append vec needs to have at least this capacity
     fn create_ancient_append_vec<'a>(
         &mut self,
         slot: Slot,
         db: &'a AccountsDb,
         min_bytes: usize,
     ) -> ShrinkInProgress<'a> {
-        let shrink_in_progress = db.get_store_for_shrink(
-            slot,
-            get_ancient_append_vec_capacity().max(min_bytes as u64),
-        );
+        let min_page_aligned = AccountsDb::page_align(min_bytes as u64);
+        let size = get_ancient_append_vec_capacity().max(min_page_aligned as u64);
+
+        let shrink_in_progress = db.get_store_for_shrink(slot, size);
         *self = Self::new(slot, Arc::clone(shrink_in_progress.new_storage()));
         shrink_in_progress
     }
@@ -395,7 +396,7 @@ impl CurrentAncientAppendVec {
             previous_available.saturating_sub(self.append_vec().accounts.remaining_bytes());
         assert_eq!(
             bytes_written,
-            accounts_to_store.get_bytes(storage_selector) as u64
+            u64_align!(accounts_to_store.get_bytes(storage_selector)) as u64
         );
 
         (timing, bytes_written)
@@ -4628,10 +4629,10 @@ impl AccountsDb {
 
         let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
         // write what we can to the current ancient storage
-        let result =
+        let (store_accounts_timing, bytes_written) =
             current_ancient.store_ancient_accounts(self, &to_store, StorageSelector::Primary);
-        stats_sub.store_accounts_timing = result.0;
-        bytes_remaining_to_write = bytes_remaining_to_write.saturating_sub(result.1 as usize);
+        stats_sub.store_accounts_timing = store_accounts_timing;
+        bytes_remaining_to_write = bytes_remaining_to_write.saturating_sub(bytes_written as usize);
 
         // handle accounts from 'slot' which did not fit into the current ancient append vec
         if to_store.has_overflow() {
@@ -4656,12 +4657,14 @@ impl AccountsDb {
             shrink_in_progress = Some(shrink_in_progress_overflow);
 
             // write the overflow accounts to the next ancient storage
-            let (timing, bytes_written) =
+            let (store_accounts_timing, bytes_written) =
                 current_ancient.store_ancient_accounts(self, &to_store, StorageSelector::Overflow);
             bytes_remaining_to_write =
                 bytes_remaining_to_write.saturating_sub(bytes_written as usize);
 
-            stats_sub.store_accounts_timing.accumulate(&timing);
+            stats_sub
+                .store_accounts_timing
+                .accumulate(&store_accounts_timing);
         }
         assert_eq!(bytes_remaining_to_write, 0);
         rewrite_elapsed.stop();
