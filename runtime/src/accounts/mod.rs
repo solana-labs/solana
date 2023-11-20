@@ -1,12 +1,15 @@
 pub mod account_rent_state;
 
 use {
-    crate::accounts::account_rent_state::{check_rent_state_with_account, RentState},
+    crate::{
+        accounts::account_rent_state::{check_rent_state_with_account, RentState},
+        bank::RewardInterval,
+    },
     itertools::Itertools,
     log::warn,
     solana_accounts_db::{
         account_overrides::AccountOverrides,
-        accounts::{LoadedTransaction, RewardInterval, TransactionLoadResult, TransactionRent},
+        accounts::{LoadedTransaction, TransactionLoadResult, TransactionRent},
         accounts_db::AccountsDb,
         ancestors::Ancestors,
         blockhash_queue::BlockhashQueue,

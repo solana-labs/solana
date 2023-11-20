@@ -25,7 +25,7 @@ use {
     rayon::ThreadPoolBuilder,
     serde::{Deserialize, Serialize},
     solana_accounts_db::{
-        accounts::{AccountAddressFilter, RewardInterval},
+        accounts::AccountAddressFilter,
         accounts_db::{AccountShrinkThreshold, DEFAULT_ACCOUNTS_SHRINK_RATIO},
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ITER_BATCH_SIZE,
