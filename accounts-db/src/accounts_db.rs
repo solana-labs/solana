@@ -343,9 +343,9 @@ impl CurrentAncientAppendVec {
         db: &'a AccountsDb,
         min_bytes: usize,
     ) -> ShrinkInProgress<'a> {
-        let min_page_aligned = AccountsDb::page_align(min_bytes as u64);
-        let size = get_ancient_append_vec_capacity().max(min_page_aligned);
-        let shrink_in_progress = db.get_store_for_shrink(slot, size);
+        let size = get_ancient_append_vec_capacity().max(min_bytes as u64);
+        let aligned_size: u64 = u64_align!(size as usize).try_into().unwrap();
+        let shrink_in_progress = db.get_store_for_shrink(slot, aligned_size);
         *self = Self::new(slot, Arc::clone(shrink_in_progress.new_storage()));
         shrink_in_progress
     }
@@ -9844,6 +9844,7 @@ pub mod tests {
             accounts_index::{
                 tests::*, AccountSecondaryIndexesIncludeExclude, ReadAccountMapEntry, RefCount,
             },
+            ancient_append_vecs,
             append_vec::{test_utils::TempFile, AppendVecStoredAccountMeta},
             cache_hash_data::CacheHashDataFile,
             inline_spl_token,
@@ -10017,6 +10018,50 @@ pub mod tests {
                 result.accounts_data_len as usize, expected_accounts_data_len,
                 "reverse: {reverse}"
             );
+        }
+    }
+
+    #[test]
+    fn test_create_ancient_append_vec() {
+        let ancient_append_vec_size = ancient_append_vecs::get_ancient_append_vec_capacity();
+        let db = AccountsDb::new_single_for_tests();
+
+        {
+            // create an ancient appendvec from a small appendvec, the size of
+            // the ancient appendvec should be the size of the ideal ancient
+            // appendvec size.
+            let mut current_ancient = CurrentAncientAppendVec::default();
+            let slot0 = 0;
+
+            // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
+            let _existing_append_vec = db.create_and_insert_store(slot0, 1000, "test");
+            let _ = current_ancient.create_ancient_append_vec(slot0, &db, 0);
+
+            let expected_size: u64 = u64_align!(ancient_append_vec_size as usize)
+                .try_into()
+                .unwrap();
+
+            assert_eq!(current_ancient.append_vec().capacity(), expected_size);
+        }
+
+        {
+            // create an ancient appendvec from a large appendvec (bigger than
+            // current ancient_append_vec_size), the ancient appendvec should be
+            // the size of the bigger ancient appendvec size.
+            let mut current_ancient = CurrentAncientAppendVec::default();
+            let slot1 = 1;
+            // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
+            let _existing_append_vec = db.create_and_insert_store(slot1, 1000, "test");
+            let _ = current_ancient.create_ancient_append_vec(
+                slot1,
+                &db,
+                2 * ancient_append_vec_size as usize,
+            );
+            let expected_size: u64 = u64_align!(2 * ancient_append_vec_size as usize)
+                .try_into()
+                .unwrap();
+
+            assert_eq!(current_ancient.append_vec().capacity(), expected_size);
         }
     }
 
