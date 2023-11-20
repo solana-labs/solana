@@ -117,12 +117,12 @@ where
         let Some(thread_manager) = self.thread_manager.upgrade() else {
             return false;
         };
-        let Some(&tid) = thread_manager
+        let Some(tid) = thread_manager
             .read()
             .unwrap()
             .scheduler_thread_and_tid
             .as_ref()
-            .map(|(_, tid)| tid)
+            .map(|(_, tid)| *tid)
         else {
             return true;
         };
