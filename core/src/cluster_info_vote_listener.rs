@@ -71,7 +71,35 @@ pub type DuplicateConfirmedSlotsReceiver = Receiver<ThresholdConfirmedSlots>;
 pub type RepairThresholdSlotsSender = Sender<ThresholdConfirmedSlots>;
 pub type RepairThresholdSlotsReceiver = Receiver<ThresholdConfirmedSlots>;
 
-const THRESHOLDS_TO_CHECK: [f64; 3] = [REPAIR_THRESHOLD, DUPLICATE_THRESHOLD, VOTE_THRESHOLD_SIZE];
+#[derive(PartialEq, Eq, Copy, Clone, Debug, Hash)]
+pub enum Threshold {
+    ZeroThreshold,       // 0%, used for tests
+    RepairThreshold,     // 34%
+    DuplicateThreshold,  // 52%
+    OptimisticThreshold, // 66.66%
+}
+
+impl Threshold {
+    pub(crate) fn threshold(self) -> f64 {
+        match self {
+            Self::RepairThreshold => REPAIR_THRESHOLD,
+            Self::DuplicateThreshold => DUPLICATE_THRESHOLD,
+            Self::OptimisticThreshold => VOTE_THRESHOLD_SIZE,
+            Self::ZeroThreshold => 0.0,
+        }
+    }
+
+    fn thresholds_to_check() -> impl Iterator<Item = Threshold> {
+        [
+            Self::RepairThreshold,
+            Self::DuplicateThreshold,
+            Self::OptimisticThreshold,
+        ]
+        .iter()
+        .copied()
+    }
+}
+
 const BANK_SEND_VOTES_LOOP_SLEEP_MS: u128 = 10;
 
 #[derive(Default)]
@@ -713,18 +741,18 @@ impl ClusterInfoVoteListener {
                     ));
                 }
 
-                if reached_threshold_results[0] {
+                if reached_threshold_results.contains(&Threshold::RepairThreshold) {
                     if let Some(sender) = repair_threshold_slot_sender {
                         let _ = sender.send(vec![(last_vote_slot, last_vote_hash)]);
                     }
                 }
 
-                if reached_threshold_results[1] {
+                if reached_threshold_results.contains(&Threshold::DuplicateThreshold) {
                     if let Some(sender) = duplicate_confirmed_slot_sender {
                         let _ = sender.send(vec![(last_vote_slot, last_vote_hash)]);
                     }
                 }
-                if reached_threshold_results[2] {
+                if reached_threshold_results.contains(&Threshold::OptimisticThreshold) {
                     new_optimistic_confirmed_slots.push((last_vote_slot, last_vote_hash));
                     // Notify subscribers about new optimistic confirmation
                     if let Some(sender) = bank_notification_sender {
@@ -895,14 +923,19 @@ impl ClusterInfoVoteListener {
         pubkey: Pubkey,
         stake: u64,
         total_epoch_stake: u64,
-    ) -> (Vec<bool>, bool) {
+    ) -> (HashSet<Threshold>, bool) {
         let slot_tracker = vote_tracker.get_or_insert_slot_tracker(slot);
         // Insert vote and check for optimistic confirmation
         let mut w_slot_tracker = slot_tracker.write().unwrap();
 
         w_slot_tracker
             .get_or_insert_optimistic_votes_tracker(hash)
-            .add_vote_pubkey(pubkey, stake, total_epoch_stake, &THRESHOLDS_TO_CHECK)
+            .add_vote_pubkey(
+                pubkey,
+                stake,
+                total_epoch_stake,
+                Threshold::thresholds_to_check(),
+            )
     }
 
     fn sum_stake(sum: &mut u64, epoch_stakes: Option<&EpochStakes>, pubkey: &Pubkey) {
