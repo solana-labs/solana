@@ -1,6 +1,7 @@
 //! Simple nonblocking client that connects to a given UDP port with the QUIC protocol
 //! and provides an interface for sending data which is restricted by the
 //! server's flow control.
+
 use {
     async_mutex::Mutex,
     async_trait::async_trait,
@@ -9,7 +10,7 @@ use {
     log::*,
     quinn::{
         ClientConfig, ConnectError, Connection, ConnectionError, Endpoint, EndpointConfig,
-        IdleTimeout, TokioRuntime, TransportConfig, WriteError,
+        IdleTimeout, SendStream, TokioRuntime, TransportConfig, WriteError,
     },
     solana_connection_cache::{
         client_connection::ClientStats, connection_cache_stats::ConnectionCacheStats,
@@ -252,6 +253,7 @@ pub struct QuicClient {
     addr: SocketAddr,
     stats: Arc<ClientStats>,
     chunk_size: usize,
+    streams: Mutex<Vec<SendStream>>,
 }
 
 impl QuicClient {
@@ -266,10 +268,12 @@ impl QuicClient {
             addr,
             stats: Arc::new(ClientStats::default()),
             chunk_size,
+            streams: Vec::default().into(),
         }
     }
 
     async fn _send_buffer_using_conn(
+        &self,
         data: &[u8],
         connection: &Connection,
     ) -> Result<(), QuicError> {
@@ -278,6 +282,8 @@ impl QuicClient {
         send_stream.write(data).await?;
         // intentionally holding off finalizing the stream
         // send_stream.finish().await?;
+        let mut lock = self.streams.lock().await;
+        lock.push(send_stream);
         Ok(())
     }
 
@@ -396,7 +402,7 @@ impl QuicClient {
             last_connection_id = connection.stable_id();
             measure_prepare_connection.stop();
 
-            match Self::_send_buffer_using_conn(data, &connection).await {
+            match self._send_buffer_using_conn(data, &connection).await {
                 Ok(()) => {
                     measure_send_packet.stop();
                     stats.successful_packets.fetch_add(1, Ordering::Relaxed);
@@ -501,7 +507,7 @@ impl QuicClient {
                 join_all(
                     buffs
                         .into_iter()
-                        .map(|buf| Self::_send_buffer_using_conn(buf.as_ref(), connection_ref)),
+                        .map(|buf| self._send_buffer_using_conn(buf.as_ref(), connection_ref)),
                 )
             })
             .collect();
