@@ -174,7 +174,6 @@ where
         let watchdog_main_loop = || {
             let mut schedulers = schedulers.clone();
             let mut watched_thread_managers: Vec<WatchedThreadManager<TH, SEA>> = vec![];
-            let mut watched_scheduler_inactivities: HashMap<SchedulerId, Duration> = HashMap::new();
 
             move || 'outer: loop {
                 let pre_retain_len = watched_thread_managers.len();
@@ -242,9 +241,10 @@ where
             .expect("self-referencing Arc-ed pool")
     }
 
-    pub fn return_scheduler(&self, scheduler: Box<T>) {
+    pub fn return_scheduler(&self, mut scheduler: Box<T>) {
         //assert!(!scheduler.has_context());
 
+        scheduler.returned_at = SystemTime::now();
         self.schedulers
             .lock()
             .expect("not poisoned")
@@ -564,6 +564,7 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     completed_result_with_timings: Option<ResultWithTimings>,
     thread_manager: Arc<RwLock<ThreadManager<TH, SEA>>>,
     address_book: AddressBook,
+    returned_at: SystemTime,
 }
 
 #[derive(Debug)]
