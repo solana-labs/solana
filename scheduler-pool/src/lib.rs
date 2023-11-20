@@ -566,7 +566,7 @@ impl WeakSchedulingContext {
 
 #[derive(Debug)]
 struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
-    shceduler_id: SchedulerId,
+    scheduler_id: SchedulerId,
     pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
     context: WeakSchedulingContext,
     scheduler_thread_and_tid: Option<(JoinHandle<ResultWithTimings>, i32)>,
@@ -671,7 +671,7 @@ where
         let (result_sender, result_receiver) = unbounded();
 
         let mut thread_manager = Self {
-            shceduler_id: thread_rng().gen::<SchedulerId>(),
+            scheduler_id: thread_rng().gen::<SchedulerId>(),
             schedulrable_transaction_sender,
             schedulable_transaction_receiver,
             result_sender,
@@ -786,7 +786,7 @@ where
             unbounded::<Box<ExecutionEnvironment>>();
         let (drop_sender, drop_receiver) = unbounded::<Box<ExecutionEnvironment>>();
         let handler_count = self.handler_count;
-        let scheduler_id = self.shceduler_id;
+        let scheduler_id = self.scheduler_id;
         let mut slot = context.bank().slot();
         let (tid_sender, tid_receiver) = bounded(1);
 
@@ -1492,7 +1492,7 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn id(&self) -> SchedulerId {
-        self.thread_manager.read().unwrap().shceduler_id
+        self.thread_manager.read().unwrap().scheduler_id
     }
 
     fn context(&self) -> SchedulingContext {
