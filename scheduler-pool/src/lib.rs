@@ -168,13 +168,20 @@ where
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Arc<Self> {
         let (watchdog_sender, watchdog_receiver) = unbounded();
+        let schedulers = Arc::new(Mutex::new(vec![]));
 
         let watchdog_main_loop = || {
+            let mut schedulers = schedulers.clone();
             let mut watched_thread_managers: Vec<WatchedThreadManager<TH, SEA>> = vec![];
+            let mut watched_scheduler_inactivities: HashMap<SchedulerId, Duration> = HashMap::new();
+
             move || 'outer: loop {
                 let pre_retain_len = watched_thread_managers.len();
                 watched_thread_managers
                     .retain_mut(|thread_manager| thread_manager.update_tick_to_retain());
+
+                for scheduler in schedulers.write().unwrap() {
+                }
 
                 let pre_push_len = watched_thread_managers.len();
                 'inner: loop {
@@ -201,7 +208,7 @@ where
             .unwrap();
 
         Arc::new_cyclic(|weak_self| Self {
-            schedulers: Arc::new(Mutex::new(vec![])),
+            schedulers,
             log_messages_bytes_limit,
             transaction_status_sender,
             replay_vote_sender,
