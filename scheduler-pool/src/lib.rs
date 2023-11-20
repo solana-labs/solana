@@ -172,9 +172,11 @@ where
         let watchdog_main_loop = || {
             let mut watched_thread_managers: Vec<WatchedThreadManager<TH, SEA>> = vec![];
             move || 'outer: loop {
+                let pre_retain_len = watched_thread_managers.len();
                 watched_thread_managers
                     .retain_mut(|thread_manager| thread_manager.update_tick_to_retain());
 
+                let pre_push_len = watched_thread_managers.len();
                 'inner: loop {
                     match watchdog_receiver.recv_timeout(Duration::from_secs(1)) {
                         Ok(thread_manager) => {
@@ -184,6 +186,7 @@ where
                         Err(RecvTimeoutError::Timeout) => break 'inner,
                     }
                 }
+                info!("watchdog: {} => {} => {}", pre_retain_len, pre_push_len, watched_thread_managers.len());
             }
         };
 
