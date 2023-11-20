@@ -2047,7 +2047,7 @@ mod tests {
             */
         }
 
-        fn pooled_now() {
+        fn pooled_now(&mut self) {
             todo!();
         }
     }
