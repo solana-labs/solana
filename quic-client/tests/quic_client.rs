@@ -6,7 +6,8 @@ mod tests {
         quinn::Endpoint,
         rayon::iter::{IntoParallelIterator, ParallelIterator},
         solana_connection_cache::{
-            client_connection::ClientConnection, connection_cache::{ConnectionCache, NewConnectionConfig},
+            client_connection::ClientConnection,
+            connection_cache::{ConnectionCache, NewConnectionConfig},
             connection_cache_stats::ConnectionCacheStats,
         },
         solana_perf::packet::PacketBatch,

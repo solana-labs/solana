@@ -386,6 +386,10 @@ fn prune_unstaked_connections_and_add_new_connection(
     params: &NewConnectionHandlerParams,
     wait_for_chunk_timeout: Duration,
 ) -> Result<(), ConnectionHandlerError> {
+    debug!(
+        "prune_unstaked_connections_and_add_new_connection from {:?}",
+        connection.remote_address()
+    );
     let stats = params.stats.clone();
     if max_connections > 0 {
         let connection_table_clone = connection_table.clone();
@@ -467,8 +471,10 @@ async fn setup_connection(
     const PRUNE_RANDOM_SAMPLE_SIZE: usize = 2;
     let from = connecting.remote_address();
     if let Ok(connecting_result) = timeout(QUIC_CONNECTION_HANDSHAKE_TIMEOUT, connecting).await {
+        debug!("Got a connection result: {connecting_result:?} from {from}");
         match connecting_result {
             Ok(new_connection) => {
+                debug!("Got a new connection from {from}");
                 stats.total_new_connections.fetch_add(1, Ordering::Relaxed);
 
                 let params = get_connection_stake(&new_connection, &staked_nodes).map_or(
@@ -490,7 +496,7 @@ async fn setup_connection(
                         }
                     },
                 );
-
+                debug!("Got a new connection from {from} stake {}", params.stake);
                 if params.stake > 0 {
                     let mut connection_table_l = staked_connection_table.lock().unwrap();
                     if connection_table_l.total_size >= max_staked_connections {
