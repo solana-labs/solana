@@ -180,7 +180,8 @@ where
                 watched_thread_managers
                     .retain_mut(|thread_manager| thread_manager.update_tick_to_retain());
 
-                for scheduler in schedulers.lock().unwrap().iter() {}
+                schedulers.lock().unwrap().retain() {
+                }
 
                 let pre_push_len = watched_thread_managers.len();
                 'inner: loop {
@@ -1677,6 +1678,7 @@ where
     }
 
     fn replace_context(&mut self, context: SchedulingContext) {
+        self.pooled_at.take();
         self.thread_manager.write().unwrap().start_session(context);
     }
 }
