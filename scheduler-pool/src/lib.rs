@@ -169,7 +169,7 @@ where
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Arc<Self> {
         let (watchdog_sender, watchdog_receiver) = unbounded();
-        let schedulers = Arc::new(Mutex::new(vec![]));
+        let schedulers: Arc<Mutex<Vec<Box<T>>>> = Arc::new(Mutex::new(vec![]));
 
         let watchdog_main_loop = || {
             let mut schedulers = schedulers.clone();
