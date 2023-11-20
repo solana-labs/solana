@@ -891,6 +891,7 @@ where
                                     };
                                 } else {
                                     if !will_end_thread {
+                                        schedulable_transaction_receiver = never();
                                         will_end_thread = true;
                                         log_scheduler!("end_thrd");
                                     }
@@ -1611,10 +1612,10 @@ impl SchedulingStateMachine {
     }
 
     fn schedule_retryable_task(&mut self) -> Option<Box<ExecutionEnvironment>> {
-        self.reschedule_count += 1;
         self.retryable_task_queue
             .pop_last()
             .and_then(|(_, task)| {
+                self.reschedule_count += 1;
                 ScheduleStage::try_lock_for_task(
                     (TaskSource::Retryable, task),
                     &mut self.retryable_task_queue,
