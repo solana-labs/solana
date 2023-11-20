@@ -531,10 +531,14 @@ pub mod tests {
 
         let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
         for (i, index_writer_entry) in index_writer_entries.iter().enumerate() {
-            let account_offset = hot_storage.get_account_offset(IndexOffset(i)).unwrap();
+            let account_offset = hot_storage
+                .get_account_offset(IndexOffset(i as u32))
+                .unwrap();
             assert_eq!(account_offset.block as u32, index_writer_entry.block_offset);
 
-            let account_address = hot_storage.get_account_address(IndexOffset(i)).unwrap();
+            let account_address = hot_storage
+                .get_account_address(IndexOffset(i as u32))
+                .unwrap();
             assert_eq!(account_address, index_writer_entry.address);
         }
     }
