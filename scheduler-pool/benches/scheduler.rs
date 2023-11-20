@@ -36,6 +36,7 @@ use {
     },
     test::Bencher,
 };
+use std::time::Duration;
 
 const TX_COUNT: usize = 10_000;
 
