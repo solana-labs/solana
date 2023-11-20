@@ -183,7 +183,10 @@ where
                 let mut schedulers = schedulers.lock().unwrap();
                 let pre_schedulers_len = schedulers.len();
                 schedulers.retain(|scheduler| {
-                    true
+                    let Some(pooled_duration) = scheduler.pooled_since() else {
+                        return true;
+                    }
+                    pooled_duration <= Duration::from_secs(600)
                 });
                 let post_schedulers_len = schedulers.len();
                 drop(schedulers);
