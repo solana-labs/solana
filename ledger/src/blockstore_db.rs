@@ -2201,7 +2201,7 @@ fn should_enable_compression<C: 'static + Column + ColumnName>() -> bool {
 
 #[cfg(test)]
 pub mod tests {
-    use {super::*, crate::blockstore_db::columns::ShredData};
+    use {super::*, crate::blockstore_db::columns::ShredData, tempfile::tempdir};
 
     #[test]
     fn test_compaction_filter() {
@@ -2284,6 +2284,49 @@ pub mod tests {
             assert!(should_enable_cf_compaction(cf_name));
         });
         assert!(!should_enable_cf_compaction("something else"));
+    }
+
+    #[test]
+    fn test_open_unknown_columns() {
+        solana_logger::setup();
+
+        let temp_dir = tempdir().unwrap();
+        let db_path = temp_dir.path();
+
+        // Open with Primary to create the new database
+        {
+            let options = BlockstoreOptions {
+                access_type: AccessType::Primary,
+                enforce_ulimit_nofile: false,
+                ..BlockstoreOptions::default()
+            };
+            let mut rocks = Rocks::open(db_path, options).unwrap();
+
+            // Introduce a new column that will not be known
+            rocks
+                .db
+                .create_cf("new_column", &Options::default())
+                .unwrap();
+        }
+
+        // Opening with either Secondary or Primary access should succeed,
+        // even though the Rocks code is unaware of "new_column"
+        {
+            let options = BlockstoreOptions {
+                access_type: AccessType::Secondary,
+                enforce_ulimit_nofile: false,
+                ..BlockstoreOptions::default()
+            };
+            let _ = Rocks::open(db_path, options).unwrap();
+        }
+        {
+            let options = BlockstoreOptions {
+                access_type: AccessType::Primary,
+                enforce_ulimit_nofile: false,
+                ..BlockstoreOptions::default()
+            };
+            let _ = Rocks::open(db_path, options).unwrap();
+        }
     }
 
     impl<C> LedgerColumn<C>
