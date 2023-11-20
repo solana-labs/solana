@@ -137,7 +137,7 @@ where
             self.tick = current_tick;
             self.updated_at = SystemTime::now();
         } else if self.updated_at.elapsed().unwrap() > Duration::from_secs(10) {
-            let thread_manager = thread_manager.write().unwrap();
+            let mut thread_manager = thread_manager.write().unwrap();
             info!("update_tick_to_retain(): stopping... {}({tid})", thread_manager.scheduler_id);
             thread_manager.stop_threads();
             self.tick = 0;
