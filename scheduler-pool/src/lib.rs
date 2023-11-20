@@ -827,6 +827,7 @@ where
                 let mut will_end_thread = false;
                 let mut state_machine = SchedulingStateMachine::default();
                 let mut log_interval_counter = 0;
+                // hint compiler about inline[never] and unlikely?
                 macro_rules! log_scheduler {
                     ($a:tt) => {
                         const BITS_PER_HEX_DIGIT: usize = 4;
