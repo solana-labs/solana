@@ -206,11 +206,11 @@ where
 
                     info!(
                         "watchdog: schedulers in the pool: {} => {}, watched thread managers: {} => {} => {}",
+                        pre_schedulers_len,
+                        post_schedulers_len,
                         pre_retain_len,
                         pre_push_len,
                         watched_thread_managers.len(),
-                        pre_schedulers_len,
-                        post_schedulers_len,
                     );
                 }
             }
