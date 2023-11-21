@@ -65,6 +65,7 @@ impl RangeProofU64Data {
         let bit_size = usize::try_from(u64::BITS).unwrap();
 
         let proof = RangeProof::new(vec![amount], vec![bit_size], vec![opening], &mut transcript)
+            .map_err(|_| ProofError::Generation)?
             .try_into()?;
 
         Ok(Self { context, proof })

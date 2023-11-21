@@ -7,17 +7,12 @@ use {
     sha3::{Sha3XofReader, Shake256},
 };
 
-<<<<<<< HEAD
-/// Generators for Pedersen vector commitments.
-///
-/// The code is copied from https://github.com/dalek-cryptography/bulletproofs for now...
-
-=======
 #[cfg(not(target_os = "solana"))]
 const MAX_GENERATOR_LENGTH: usize = u32::MAX as usize;
 
-/// Generators for Pedersen vector commitments that are used for inner-product proofs.
->>>>>>> 0e6dd54f81 ([zk-token-sdk] Restrict range proof generator length and prevent 0-bit range proof (#34166))
+/// Generators for Pedersen vector commitments.
+///
+/// The code is copied from https://github.com/dalek-cryptography/bulletproofs for now...
 struct GeneratorsChain {
     reader: Sha3XofReader,
 }

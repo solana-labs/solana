@@ -157,7 +157,8 @@ impl WithdrawProof {
         );
 
         let range_proof =
-            RangeProof::new(vec![final_balance], vec![64], vec![&opening], transcript);
+            RangeProof::new(vec![final_balance], vec![64], vec![&opening], transcript)
+                .expect("range proof: generator");
 
         Self {
             commitment: pod_commitment,

@@ -10,7 +10,9 @@ use {
         encryption::pedersen::{G, H},
         errors::ProofVerificationError,
         range_proof::{
-            errors::RangeProofError, generators::BulletproofGens, inner_product::InnerProductProof,
+            errors::{RangeProofError, RangeProofGenerationError},
+            generators::BulletproofGens,
+            inner_product::InnerProductProof,
         },
         transcript::TranscriptProtocol,
     },
@@ -59,7 +61,7 @@ impl RangeProof {
         bit_lengths: Vec<usize>,
         openings: Vec<&PedersenOpening>,
         transcript: &mut Transcript,
-    ) -> Self {
+    ) -> Result<Self, RangeProofGenerationError> {
         // amounts, bit-lengths, openings must be same length vectors
         let m = amounts.len();
         assert_eq!(bit_lengths.len(), m);
@@ -69,14 +71,8 @@ impl RangeProof {
         let nm: usize = bit_lengths.iter().sum();
         assert!(nm.is_power_of_two());
 
-<<<<<<< HEAD
-        // TODO: precompute generators
-        // TODO: double check Pedersen generators and range proof generators does not interfere
-        let bp_gens = BulletproofGens::new(nm);
-=======
         let bp_gens = BulletproofGens::new(nm)
             .map_err(|_| RangeProofGenerationError::MaximumGeneratorLengthExceeded)?;
->>>>>>> 0e6dd54f81 ([zk-token-sdk] Restrict range proof generator length and prevent 0-bit range proof (#34166))
 
         // bit-decompose values and generate their Pedersen vector commitment
         let a_blinding = Scalar::random(&mut OsRng);
@@ -211,7 +207,7 @@ impl RangeProof {
             transcript,
         );
 
-        RangeProof {
+        Ok(RangeProof {
             A,
             S,
             T_1,
@@ -220,7 +216,7 @@ impl RangeProof {
             t_x_blinding,
             e_blinding,
             ipp_proof,
-        }
+        })
     }
 
     #[allow(clippy::many_single_char_names)]
@@ -236,7 +232,7 @@ impl RangeProof {
         let m = bit_lengths.len();
         let nm: usize = bit_lengths.iter().sum();
         let bp_gens = BulletproofGens::new(nm)
-            .map_err(|_| RangeProofVerificationError::MaximumGeneratorLengthExceeded)?;
+            .map_err(|_| ProofVerificationError::InvalidGeneratorsLength)?;
 
         if !nm.is_power_of_two() {
             return Err(ProofVerificationError::InvalidBitSize.into());
@@ -406,7 +402,8 @@ mod tests {
         let mut transcript_create = Transcript::new(b"Test");
         let mut transcript_verify = Transcript::new(b"Test");
 
-        let proof = RangeProof::new(vec![55], vec![32], vec![&open], &mut transcript_create);
+        let proof =
+            RangeProof::new(vec![55], vec![32], vec![&open], &mut transcript_create).unwrap();
 
         assert!(proof
             .verify(vec![&comm], vec![32], &mut transcript_verify)
@@ -427,7 +424,8 @@ mod tests {
             vec![64, 32, 32],
             vec![&open_1, &open_2, &open_3],
             &mut transcript_create,
-        );
+        )
+        .unwrap();
 
         assert!(proof
             .verify(
