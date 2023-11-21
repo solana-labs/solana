@@ -114,7 +114,7 @@ impl ConnectionManager for UdpConnectionManager {
         UdpConfig::new().unwrap()
     }
 
-    fn update_key(&mut self, _key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
+    fn update_key(&self, _key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
 }

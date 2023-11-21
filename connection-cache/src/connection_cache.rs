@@ -38,7 +38,7 @@ pub trait ConnectionManager: Send + Sync + 'static {
 
     fn new_connection_pool(&self) -> Self::ConnectionPool;
     fn new_connection_config(&self) -> Self::NewConnectionConfig;
-    fn update_key(&mut self, _key: &Keypair) -> Result<(), Box<dyn std::error::Error>>;
+    fn update_key(&self, _key: &Keypair) -> Result<(), Box<dyn std::error::Error>>;
 }
 
 pub struct ConnectionCache<
@@ -47,11 +47,8 @@ pub struct ConnectionCache<
     T, // NewConnectionConfig
 > {
     name: &'static str,
-    // CAUTION: When acquiring the locks for both map and connection_manager
-    // the lock for map must always be acquired before the lock for connection_manager
-    // to prevent deadlocks
     map: Arc<RwLock<IndexMap<SocketAddr, /*ConnectionPool:*/ R>>>,
-    connection_manager: Arc<RwLock<S>>,
+    connection_manager: Arc<S>,
     stats: Arc<ConnectionCacheStats>,
     last_stats: AtomicInterval,
     connection_pool_size: usize,
@@ -90,7 +87,7 @@ where
 
         let map = Arc::new(RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)));
         let config = Arc::new(connection_config);
-        let connection_manager = Arc::new(RwLock::new(connection_manager));
+        let connection_manager = Arc::new(connection_manager);
         let connection_pool_size = 1.max(connection_pool_size); // The minimum pool size is 1.
 
         let stats = Arc::new(ConnectionCacheStats::default());
@@ -144,8 +141,7 @@ where
     pub fn update_key(&self, key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
         let mut map = self.map.write().unwrap();
         map.clear();
-        let mut connection_manager = self.connection_manager.write().unwrap();
-        connection_manager.update_key(key)
+        self.connection_manager.update_key(key)
     }
     /// Create a lazy connection object under the exclusive lock of the cache map if there is not
     /// enough used connections in the connection pool for the specified address.
@@ -208,7 +204,7 @@ where
 
     fn create_connection_internal(
         config: &C,
-        connection_manager: &RwLock<M>,
+        connection_manager: &M,
         map: &mut std::sync::RwLockWriteGuard<'_, IndexMap<SocketAddr, P>>,
         addr: &SocketAddr,
         connection_pool_size: usize,
@@ -233,7 +229,6 @@ where
         get_connection_cache_eviction_measure.stop();
 
         let mut hit_cache = false;
-        let conn_man = connection_manager.read().unwrap();
         map.entry(*addr)
             .and_modify(|pool| {
                 if matches!(
@@ -253,7 +248,7 @@ where
                 }
             })
             .or_insert_with(|| {
-                let mut pool = conn_man.new_connection_pool();
+                let mut pool = connection_manager.new_connection_pool();
                 pool.add_connection(config, addr);
                 pool
             });
@@ -648,7 +643,7 @@ mod tests {
             MockUdpConfig::new().unwrap()
         }
 
-        fn update_key(&mut self, _key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
+        fn update_key(&self, _key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
     }
