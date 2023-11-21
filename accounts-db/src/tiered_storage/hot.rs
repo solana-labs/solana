@@ -282,6 +282,15 @@ impl HotStorageReader {
         account_offset: HotAccountOffset,
     ) -> TieredStorageResult<&HotAccountMeta> {
         let internal_account_offset = account_offset.offset();
+        let boundary = (self.footer.index_block_offset as usize)
+            .saturating_sub(std::mem::size_of::<HotAccountMeta>());
+
+        if internal_account_offset > boundary {
+            return Err(TieredStorageError::OffsetOutOfBounds(
+                internal_account_offset,
+                boundary,
+            ));
+        }
 
         let (meta, _) = get_pod::<HotAccountMeta>(&self.mmap, internal_account_offset)?;
         Ok(meta)
@@ -538,7 +547,7 @@ pub mod tests {
             .collect();
 
         let account_offsets: Vec<_>;
-        let footer = TieredStorageFooter {
+        let mut footer = TieredStorageFooter {
             account_meta_format: AccountMetaFormat::Hot,
             account_entry_count: NUM_ACCOUNTS,
             ..TieredStorageFooter::default()
@@ -557,6 +566,7 @@ pub mod tests {
                 .collect();
             // while the test only focuses on account metas, writing a footer
             // here is necessary to make it a valid tiered-storage file.
+            footer.index_block_offset = current_offset as u64;
             footer.write_footer_block(&file).unwrap();
         }
 
@@ -566,7 +576,37 @@ pub mod tests {
             let meta = hot_storage.get_account_meta_from_offset(*offset).unwrap();
             assert_eq!(meta, expected_meta);
         }
+
         assert_eq!(&footer, hot_storage.footer());
+    }
+
+    #[test]
+    fn test_get_acount_meta_from_offset_out_of_bounds() {
+        // Generate a new temp path that is guaranteed to NOT already have a file.
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir
+            .path()
+            .join("test_get_acount_meta_from_offset_out_of_bounds");
+
+        let footer = TieredStorageFooter {
+            account_meta_format: AccountMetaFormat::Hot,
+            index_block_offset: 160,
+            ..TieredStorageFooter::default()
+        };
+
+        {
+            let file = TieredStorageFile::new_writable(&path).unwrap();
+            footer.write_footer_block(&file).unwrap();
+        }
+
+        let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
+        let offset = HotAccountOffset::new(footer.index_block_offset as usize).unwrap();
+        // Read from index_block_offset, which offset doesn't belong to
+        // account blocks.  Expect Err here.
+        assert!(matches!(
+            hot_storage.get_account_meta_from_offset(offset),
+            Err(TieredStorageError::OffsetOutOfBounds(_, _)),
+        ));
     }
 
     #[test]
