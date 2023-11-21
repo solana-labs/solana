@@ -141,7 +141,7 @@ where
             const BITS_PER_HEX_DIGIT: usize = 4;
             let mut thread_manager = thread_manager.write().unwrap();
             info!(
-                "[sch_{:0width$x}]: watchdog: update_tick_to_retain(): stopping thread manager ({tid}/{}/{:?})...",
+                "[sch_{:0width$x}]: watchdog: update_tick_to_retain(): stopping thread manager ({tid}/{}/{})...",
                 thread_manager.scheduler_id,
                 self.tick,
                 self.updated_at,
@@ -899,9 +899,9 @@ where
 
                 while !will_end_thread {
                     while !(state_machine.is_empty() && (will_end_session || will_end_thread)) {
-                        log_scheduler!();
                         select_biased! {
                             recv(handled_blocked_transaction_receiver) -> execution_environment => {
+                                log_scheduler!();
                                 let mut execution_environment = execution_environment.unwrap();
                                 Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
                                 state_machine.deschedule_task(&mut execution_environment);
@@ -911,6 +911,7 @@ where
                                 if let Ok(mm) = m {
                                     match mm {
                                         ChainedChannel::Payload(payload) => {
+                                            log_scheduler!();
                                             if let Some(ee) = state_machine.schedule_new_task(payload) {
                                                 idle_transaction_sender
                                                     .send(ee)
@@ -923,10 +924,11 @@ where
                                             match control_frame {
                                                 ControlFrame::StartSession(context) => {
                                                     slot = context.bank().slot();
+                                                    log_scheduler!();
                                                     Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count);
                                                 }
                                                 ControlFrame::EndSession => {
-                                                    debug!("scheduler_main_loop: will_end_session = true");
+                                                    log_scheduler!();
                                                     will_end_session = true;
                                                     log_scheduler!("end_sess");
                                                 }
@@ -934,14 +936,15 @@ where
                                         }
                                     };
                                 } else {
-                                    if !will_end_thread {
-                                        schedulable_transaction_receiver = never();
-                                        will_end_thread = true;
-                                        log_scheduler!("end_thrd");
-                                    }
+                                    log_scheduler!();
+                                    assert!(!will_end_thread);
+                                    schedulable_transaction_receiver = never();
+                                    will_end_thread = true;
+                                    log_scheduler!("end_thrd");
                                 };
                             },
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
+                                log_scheduler!();
                                 let mut execution_environment = execution_environment.unwrap();
                                 Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
                                 state_machine.deschedule_task(&mut execution_environment);
@@ -956,6 +959,8 @@ where
                         }
 
                         while !(state_machine.is_empty() && (will_end_session || will_end_thread)) {
+                            log_scheduler!();
+
                             if let Ok(mut execution_environment) =
                                 handled_blocked_transaction_receiver.try_recv()
                             {
@@ -1009,10 +1014,8 @@ where
                                 state_machine.deschedule_task(&mut execution_environment);
                                 drop_sender.send(execution_environment).unwrap();
                             } else {
-                                log_scheduler!();
                                 break;
                             }
-                            log_scheduler!();
                         }
                     }
 
@@ -1186,7 +1189,7 @@ where
 
     fn stop_threads(&mut self) {
         if !self.is_active() {
-            warn!("stop_threads(): alrady not active anymore...");
+            warn!("stop_threads(): already not active anymore...");
             return;
         }
         debug!(
