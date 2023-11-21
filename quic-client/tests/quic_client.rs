@@ -444,10 +444,10 @@ mod tests {
                             num_expected_packets
                         ];
                         let rslt = client.send_data_batch(&packets);
+                        println!("Sent data: {rslt:?}");
                         if let Err(rslt) = rslt {
                             info!("Connection {i} error {_i} {rslt:?}");
                         }
-                        println!("Sent data: {rslt:?}");
                     });
             });
 
