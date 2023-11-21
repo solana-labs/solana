@@ -2092,14 +2092,6 @@ mod tests {
             */
         }
 
-        fn pooled_since(&self) -> Option<Duration> {
-            todo!();
-        }
-
-        fn stop_thread_manager(&mut self) {
-            todo!();
-        }
-
         fn should_retain_in_pool(&mut self) -> bool {
             todo!();
         }

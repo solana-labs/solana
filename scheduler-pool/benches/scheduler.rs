@@ -250,14 +250,6 @@ mod nonblocking {
             unimplemented!();
         }
 
-        fn pooled_since(&self) -> Option<Duration> {
-            unimplemented!();
-        }
-
-        fn stop_thread_manager(&mut self) {
-            unimplemented!();
-        }
-
         fn should_retain_in_pool(&mut self) -> bool {
             unimplemented!();
         }
