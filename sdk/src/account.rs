@@ -755,7 +755,8 @@ pub fn create_is_signer_account_infos<'a>(
         })
         .collect()
 }
-+ /// Replacement for the executable flag: An account being owned by one of these contains a program.
+
+/// Replacement for the executable flag: An account being owned by one of these contains a program.
 pub const PROGRAM_OWNERS: &[Pubkey] = &[
     bpf_loader_upgradeable::id(),
     bpf_loader::id(),
