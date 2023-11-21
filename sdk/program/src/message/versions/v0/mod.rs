@@ -257,7 +257,7 @@ impl Message {
         address_lookup_table_accounts: &[AddressLookupTableAccount],
         recent_blockhash: Hash,
     ) -> Result<Self, CompileError> {
-        let mut compiled_keys = CompiledKeys::compile(instructions, Some(*payer));
+        let mut compiled_keys = CompiledKeys::compile(instructions, &[], Some(*payer));
 
         let mut address_table_lookups = Vec::with_capacity(address_lookup_table_accounts.len());
         let mut loaded_addresses_list = Vec::with_capacity(address_lookup_table_accounts.len());

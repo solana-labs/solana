@@ -37,7 +37,11 @@ struct CompiledKeyMeta {
 impl CompiledKeys {
     /// Compiles the pubkeys referenced by a list of instructions and organizes by
     /// signer/non-signer and writable/readonly.
-    pub(crate) fn compile(instructions: &[Instruction], payer: Option<Pubkey>) -> Self {
+    pub(crate) fn compile(
+        instructions: &[Instruction],
+        programs: &[Pubkey],
+        payer: Option<Pubkey>,
+    ) -> Self {
         let mut key_meta_map = BTreeMap::<Pubkey, CompiledKeyMeta>::new();
         for ix in instructions {
             let meta = key_meta_map.entry(ix.program_id).or_default();
@@ -52,6 +56,12 @@ impl CompiledKeys {
             let meta = key_meta_map.entry(*payer).or_default();
             meta.is_signer = true;
             meta.is_writable = true;
+        }
+        for program in programs {
+            let meta = key_meta_map.entry(*program).or_default();
+            meta.is_signer = false;
+            meta.is_writable = false;
+            meta.is_invoked = true;
         }
         Self {
             payer,
@@ -241,6 +251,7 @@ mod tests {
                 Instruction::new_with_bincode(program_id2, &0, vec![]),
                 Instruction::new_with_bincode(program_id3, &0, vec![]),
             ],
+            &[],
             None,
         );
 
@@ -272,6 +283,7 @@ mod tests {
                 &0,
                 vec![AccountMeta::new_readonly(payer, false)],
             )],
+            &[],
             Some(payer),
         );
         assert_eq!(
@@ -296,6 +308,7 @@ mod tests {
                 &0,
                 vec![AccountMeta::new(id0, false), AccountMeta::new(id0, true)],
             )],
+            &[],
             None,
         );
 
@@ -325,6 +338,7 @@ mod tests {
                     AccountMeta::new(id0, true),
                 ],
             )],
+            &[],
             None,
         );
 
@@ -357,6 +371,7 @@ mod tests {
                 ),
                 Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id0, false)]),
             ],
+            &[],
             None,
         );
 

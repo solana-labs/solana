@@ -311,7 +311,7 @@ impl Message {
         payer: Option<&Pubkey>,
         blockhash: &Hash,
     ) -> Self {
-        let compiled_keys = CompiledKeys::compile(instructions, payer.cloned());
+        let compiled_keys = CompiledKeys::compile(instructions, &[], payer.cloned());
         let (header, account_keys) = compiled_keys
             .try_into_message_components()
             .expect("overflow when compiling message keys");
@@ -322,6 +322,30 @@ impl Message {
             header.num_readonly_unsigned_accounts,
             account_keys,
             *blockhash,
+            instructions,
+        )
+    }
+
+    /// Create a message with extra program ids
+    ///
+    /// Program ids for CPI are not always required in the instruction, so construct a message with program
+    /// ids in the message accounts.
+    pub fn new_with_programs(
+        instructions: &[Instruction],
+        programs: &[Pubkey],
+        payer: Option<&Pubkey>,
+    ) -> Self {
+        let compiled_keys = CompiledKeys::compile(instructions, programs, payer.cloned());
+        let (header, account_keys) = compiled_keys
+            .try_into_message_components()
+            .expect("overflow when compiling message keys");
+        let instructions = compile_instructions(instructions, &account_keys);
+        Self::new_with_compiled_instructions(
+            header.num_required_signatures,
+            header.num_readonly_signed_accounts,
+            header.num_readonly_unsigned_accounts,
+            account_keys,
+            Hash::default(),
             instructions,
         )
     }
