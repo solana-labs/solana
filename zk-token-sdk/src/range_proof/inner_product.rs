@@ -84,7 +84,7 @@ impl InnerProductProof {
         // If it's the first iteration, unroll the Hprime = H*y_inv scalar mults
         // into multiscalar muls, for performance.
         if n != 1 {
-            n /= 2;
+            n = n.checked_div(2).unwrap();
             let (a_L, a_R) = a.split_at_mut(n);
             let (b_L, b_R) = b.split_at_mut(n);
             let (G_L, G_R) = G.split_at_mut(n);
@@ -95,7 +95,7 @@ impl InnerProductProof {
 
             let L = RistrettoPoint::multiscalar_mul(
                 a_L.iter()
-                    .zip(G_factors[n..2 * n].iter())
+                    .zip(G_factors[n..n.checked_mul(2).unwrap()].iter())
                     .map(|(a_L_i, g)| a_L_i * g)
                     .chain(
                         b_R.iter()
@@ -113,7 +113,7 @@ impl InnerProductProof {
                     .map(|(a_R_i, g)| a_R_i * g)
                     .chain(
                         b_L.iter()
-                            .zip(H_factors[n..2 * n].iter())
+                            .zip(H_factors[n..n.checked_mul(2).unwrap()].iter())
                             .map(|(b_L_i, h)| b_L_i * h),
                     )
                     .chain(iter::once(c_R)),
@@ -134,11 +134,17 @@ impl InnerProductProof {
                 a_L[i] = a_L[i] * u + u_inv * a_R[i];
                 b_L[i] = b_L[i] * u_inv + u * b_R[i];
                 G_L[i] = RistrettoPoint::multiscalar_mul(
-                    &[u_inv * G_factors[i], u * G_factors[n + i]],
+                    &[
+                        u_inv * G_factors[i],
+                        u * G_factors[n.checked_add(i).unwrap()],
+                    ],
                     &[G_L[i], G_R[i]],
                 );
                 H_L[i] = RistrettoPoint::multiscalar_mul(
-                    &[u * H_factors[i], u_inv * H_factors[n + i]],
+                    &[
+                        u * H_factors[i],
+                        u_inv * H_factors[n.checked_add(i).unwrap()],
+                    ],
                     &[H_L[i], H_R[i]],
                 )
             }
@@ -150,7 +156,7 @@ impl InnerProductProof {
         }
 
         while n != 1 {
-            n /= 2;
+            n = n.checked_div(2).unwrap();
             let (a_L, a_R) = a.split_at_mut(n);
             let (b_L, b_R) = b.split_at_mut(n);
             let (G_L, G_R) = G.split_at_mut(n);
@@ -218,7 +224,7 @@ impl InnerProductProof {
             // and this check prevents overflow in 1<<lg_n below.
             return Err(RangeProofVerificationError::InvalidBitSize);
         }
-        if n != (1 << lg_n) {
+        if n != (1_usize.checked_shl(lg_n as u32).unwrap()) {
             return Err(RangeProofVerificationError::InvalidBitSize);
         }
 
@@ -252,11 +258,14 @@ impl InnerProductProof {
         let mut s = Vec::with_capacity(n);
         s.push(allinv);
         for i in 1..n {
-            let lg_i = (32 - 1 - (i as u32).leading_zeros()) as usize;
-            let k = 1 << lg_i;
+            let lg_i = 31_u32.checked_sub((i as u32).leading_zeros()).unwrap() as usize;
+            let k = 1_usize.checked_shl(lg_i as u32).unwrap();
             // The challenges are stored in "creation order" as [u_k,...,u_1],
             // so u_{lg(i)+1} = is indexed by (lg_n-1) - lg_i
-            let u_lg_i_sq = challenges_sq[(lg_n - 1) - lg_i];
+            let u_lg_i_sq = challenges_sq[lg_n
+                .checked_sub(1)
+                .and_then(|x| x.checked_sub(lg_i))
+                .unwrap()];
             s.push(s[i - k] * u_lg_i_sq);
         }
 

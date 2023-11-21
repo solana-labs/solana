@@ -104,7 +104,10 @@ impl RangeProof {
         for (amount_i, n_i) in amounts.iter().zip(bit_lengths.iter()) {
             for j in 0..(*n_i) {
                 let (G_ij, H_ij) = gens_iter.next().unwrap();
-                let v_ij = Choice::from(((amount_i >> j) & 1) as u8);
+
+                // `j` is guaranteed to be at most `u64::BITS` (a 6-bit number) and therefore,
+                // casting is lossless and right shift can be safely unwrapped
+                let v_ij = Choice::from((amount_i.checked_shr(j as u32).unwrap() & 1) as u8);
                 let mut point = -H_ij;
                 point.conditional_assign(G_ij, v_ij);
                 A += point;
@@ -149,7 +152,9 @@ impl RangeProof {
             let mut exp_2 = Scalar::one();
 
             for j in 0..(*n_i) {
-                let a_L_j = Scalar::from((amount_i >> j) & 1);
+                // `j` is guaranteed to be at most `u64::BITS` (a 6-bit number) and therefore,
+                // casting is lossless and right shift can be safely unwrapped
+                let a_L_j = Scalar::from(amount_i.checked_shr(j as u32).unwrap() & 1);
                 let a_R_j = a_L_j - Scalar::one();
 
                 l_poly.0[i] = a_L_j - z;
@@ -159,7 +164,9 @@ impl RangeProof {
 
                 exp_y *= y;
                 exp_2 = exp_2 + exp_2;
-                i += 1;
+
+                // `i` is capped by the sum of vectors in `bit_lengths`
+                i = i.checked_add(1).unwrap();
             }
             exp_z *= z;
         }
