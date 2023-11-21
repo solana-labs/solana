@@ -75,12 +75,15 @@ impl RangeProof {
     ) -> Result<Self, RangeProofGenerationError> {
         // amounts, bit-lengths, openings must be same length vectors
         let m = amounts.len();
-        assert_eq!(bit_lengths.len(), m);
-        assert_eq!(openings.len(), m);
+        if bit_lengths.len() != m || openings.len() != m {
+            return Err(RangeProofGenerationError::VectorLengthMismatch);
+        }
 
         // total vector dimension to compute the ultimate inner product proof for
         let nm: usize = bit_lengths.iter().sum();
-        assert!(nm.is_power_of_two());
+        if !nm.is_power_of_two() {
+            return Err(RangeProofGenerationError::VectorLengthMismatch);
+        }
 
         let bp_gens = BulletproofGens::new(nm)
             .map_err(|_| RangeProofGenerationError::MaximumGeneratorLengthExceeded)?;
@@ -238,7 +241,9 @@ impl RangeProof {
         transcript: &mut Transcript,
     ) -> Result<(), RangeProofVerificationError> {
         // commitments and bit-lengths must be same length vectors
-        assert_eq!(comms.len(), bit_lengths.len());
+        if comms.len() != bit_lengths.len() {
+            return Err(RangeProofVerificationError::VectorLengthMismatch);
+        }
 
         let m = bit_lengths.len();
         let nm: usize = bit_lengths.iter().sum();
