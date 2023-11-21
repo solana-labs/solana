@@ -1346,7 +1346,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
             const BITS_PER_HEX_DIGIT: usize = 4;
             info!(
                 "[sch_{:0width$x}]: watchdog: retiring unused scheduler...",
-                scheduler.id(),
+                self.id(),
                 width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
             );
             self.stop_thread_manager();
