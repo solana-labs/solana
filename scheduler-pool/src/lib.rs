@@ -184,15 +184,15 @@ where
                 let mut watched_thread_managers: Vec<WatchedThreadManager<TH, SEA>> = vec![];
 
                 'outer: loop {
-                    let pre_retain_len = watched_thread_managers.len();
-                    watched_thread_managers
-                        .retain_mut(|thread_manager| thread_manager.update_tick_to_retain());
-
                     let mut schedulers = scheduler_pool.schedulers.lock().unwrap();
                     let pre_schedulers_len = schedulers.len();
                     schedulers.retain_mut(|scheduler| scheduler.should_retain_in_pool());
                     let post_schedulers_len = schedulers.len();
                     drop(schedulers);
+
+                    let pre_retain_len = watched_thread_managers.len();
+                    watched_thread_managers
+                        .retain_mut(|thread_manager| thread_manager.update_tick_to_retain());
 
                     let pre_push_len = watched_thread_managers.len();
                     'inner: loop {
@@ -203,14 +203,15 @@ where
                             Err(RecvTimeoutError::Timeout) => break 'inner,
                         }
                     }
+
                     info!(
-                    "watchdog: schedulers in the pool: {} => {}, watched thread managers: {} => {} => {}",
-                    pre_retain_len,
-                    pre_push_len,
-                    watched_thread_managers.len(),
-                    pre_schedulers_len,
-                    post_schedulers_len,
-                );
+                        "watchdog: schedulers in the pool: {} => {}, watched thread managers: {} => {} => {}",
+                        pre_retain_len,
+                        pre_push_len,
+                        watched_thread_managers.len(),
+                        pre_schedulers_len,
+                        post_schedulers_len,
+                    );
                 }
             }
         };
@@ -1308,12 +1309,22 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
 
     fn should_retain_in_pool(&mut self) -> bool {
         const BITS_PER_HEX_DIGIT: usize = 4;
-        info!(
-            "[sch_{:0width$x}]: watchdog: address book size: {}...",
-            self.id(),
-            self.address_book.page_count(),
-            width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
-        );
+        let page_count = self.address_book.page_count();
+        if page_count < 200_000 {
+            info!(
+                "[sch_{:0width$x}]: watchdog: address book size: {page_count}...",
+                self.id(),
+                width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
+            );
+            self.stop_thread_manager();
+            return false;
+        } else {
+            info!(
+                "[sch_{:0width$x}]: watchdog: too big address book size: {page_count}...; retiring scheduler",
+                self.id(),
+                width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
+            );
+        }
 
         let Some(pooled_duration) = self.pooled_since() else {
             return true;
