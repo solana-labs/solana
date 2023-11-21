@@ -4912,7 +4912,7 @@ impl Bank {
             transaction_accounts_lamports_sum(&transaction_accounts, tx.message()).unwrap_or(0);
 
         let mut transaction_context = TransactionContext::new(
-            transaction_accounts,
+            transaction_accounts.clone(),
             self.rent_collector.rent,
             compute_budget.max_invoke_stack_height,
             compute_budget.max_instruction_trace_length,
@@ -4962,11 +4962,11 @@ impl Bank {
 
         // update latest value of acct struct in unique_loaded_accounts
         if process_result.is_ok() {
-            let account_keys = transaction_context.account_keys();
-            let accounts: Vec<AccountSharedData> = transaction_context.accounts().accounts
-            .iter()
-            .map(|account| account.clone().into_inner())
-            .collect();
+            let account_keys: Vec<Pubkey> = transaction_accounts
+                .iter() 
+                .map(|(pubkey, _)| *pubkey)
+                .collect();
+            let accounts = transaction_context.accounts().as_ref().clone().into_accounts();
 
             for acct_index in 0..account_keys.len() {
                 let key = account_keys[acct_index];
