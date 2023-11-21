@@ -1303,6 +1303,10 @@ pub trait SpawnableScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg>:
     fn stop_thread_manager(&mut self)
     where
         Self: Sized;
+
+    fn should_retain_in_pool(&mut self) -> bool
+    where
+        Self: Sized;
 }
 
 impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
@@ -1330,6 +1334,24 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
     fn stop_thread_manager(&mut self) {
         debug!("stop_thread_manager()");
         self.thread_manager.write().unwrap().stop_threads();
+    }
+
+    fn should_retain_in_pool(&mut self) -> bool {
+        let Some(pooled_duration) = self.pooled_since() else {
+            return true;
+        };
+        if pooled_duration <= Duration::from_secs(600) {
+            true
+        } else {
+            const BITS_PER_HEX_DIGIT: usize = 4;
+            info!(
+                "[sch_{:0width$x}]: watchdog: retiring unused scheduler...",
+                scheduler.id(),
+                width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
+            );
+            self.stop_thread_manager();
+            false
+        }
     }
 }
 
