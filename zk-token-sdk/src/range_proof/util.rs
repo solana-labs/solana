@@ -98,7 +98,7 @@ pub fn read32(data: &[u8]) -> [u8; 32] {
 /// \\[
 ///    {\langle {\mathbf{a}}, {\mathbf{b}} \rangle} = \sum\_{i=0}^{n-1} a\_i \cdot b\_i.
 /// \\]
-/// Panics if the lengths of \\(\mathbf{a}\\) and \\(\mathbf{b}\\) are not equal.
+/// Errors if the lengths of \\(\mathbf{a}\\) and \\(\mathbf{b}\\) are not equal.
 pub fn inner_product(a: &[Scalar], b: &[Scalar]) -> Option<Scalar> {
     let mut out = Scalar::zero();
     if a.len() != b.len() {
