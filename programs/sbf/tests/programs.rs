@@ -43,7 +43,10 @@ use {
         clock::MAX_PROCESSING_AGE,
         compute_budget::ComputeBudgetInstruction,
         entrypoint::MAX_PERMITTED_DATA_INCREASE,
-        feature_set::{self, remove_deprecated_request_unit_ix, FeatureSet},
+        feature_set::{
+            self, no_need_for_program_key_in_parent_instruction, remove_deprecated_request_unit_ix,
+            FeatureSet,
+        },
         fee::FeeStructure,
         loader_instruction,
         message::{v0::LoadedAddresses, SanitizedMessage},
@@ -1232,6 +1235,7 @@ fn test_program_sbf_caller_has_access_to_cpi_program() {
         ..
     } = create_genesis_config(50);
     let bank = Bank::new_for_tests(&genesis_config);
+
     let bank = Arc::new(bank);
     let mut bank_client = BankClient::new_shared(bank.clone());
 
@@ -1247,6 +1251,86 @@ fn test_program_sbf_caller_has_access_to_cpi_program() {
         &mint_keypair,
         "solana_sbf_rust_caller_access",
     );
+
+    // First try it with all the accounts
+    let account_metas = vec![
+        AccountMeta::new_readonly(caller_pubkey, false),
+        AccountMeta::new_readonly(caller2_pubkey, false),
+    ];
+    let instruction = Instruction::new_with_bytes(caller_pubkey, &[1], account_metas.clone());
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert!(result.is_ok(), "{result:?}");
+
+    // Trying cpi into account that does not exist
+    let random_pubkey = Pubkey::new_unique();
+    let account_metas = vec![
+        AccountMeta::new_readonly(caller_pubkey, false),
+        AccountMeta::new_readonly(random_pubkey, false),
+    ];
+    let instruction = Instruction::new_with_bytes(caller_pubkey, &[1], account_metas);
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        TransactionError::InstructionError(0, InstructionError::AccountNotExecutable)
+    );
+
+    // Trying cpi into account that is not part of the message at all
+    let account_metas = vec![AccountMeta::new_readonly(caller_pubkey, false)];
+
+    let instruction = Instruction::new_with_bytes(
+        caller_pubkey,
+        caller2_pubkey.to_bytes().as_ref(),
+        account_metas.clone(),
+    );
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        TransactionError::InstructionError(0, InstructionError::MissingAccount)
+    );
+
+    // Now add it to the message accounts - CPI without caller2 in the meta
+    let instruction = Instruction::new_with_bytes(
+        caller_pubkey,
+        caller2_pubkey.to_bytes().as_ref(),
+        account_metas,
+    );
+    let message = Message::new_with_programs(
+        &[instruction],
+        &[caller2_pubkey],
+        Some(&mint_keypair.pubkey()),
+    );
+    let result = bank_client.send_and_confirm_message(&[&mint_keypair], message);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+#[cfg(feature = "sbf_rust")]
+fn test_program_sbf_caller_has_access_to_cpi_program_before() {
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    bank.deactivate_feature(&no_need_for_program_key_in_parent_instruction::id());
+
+    let bank = Arc::new(bank);
+    let mut bank_client = BankClient::new_shared(bank.clone());
+
+    let caller_pubkey = load_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_sbf_rust_caller_access",
+    );
+    let (_, caller2_pubkey) = load_program_and_advance_slot(
+        &mut bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_sbf_rust_caller_access",
+    );
+    // caller_access calls itself without passing caller2_pubkey as meta account, not allowed
+    // without no_need_for_program_key_in_parent_instruction feature
     let account_metas = vec![
         AccountMeta::new_readonly(caller_pubkey, false),
         AccountMeta::new_readonly(caller2_pubkey, false),

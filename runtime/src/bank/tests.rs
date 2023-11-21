@@ -7523,7 +7523,72 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
             .unwrap()
     );
 
+    // Test not the rent account
+    bank.clear_signatures();
+    bank.store_account(&buffer_address, &buffer_account);
+    bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+    bank.store_account(&programdata_address, &AccountSharedData::default());
+    let mut instructions = bpf_loader_upgradeable::deploy_with_max_program_len(
+        &mint_keypair.pubkey(),
+        &program_keypair.pubkey(),
+        &buffer_address,
+        &upgrade_authority_keypair.pubkey(),
+        min_program_balance,
+        elf.len(),
+    )
+    .unwrap();
+    *instructions
+        .get_mut(1)
+        .unwrap()
+        .accounts
+        .get_mut(4)
+        .unwrap() = AccountMeta::new_readonly(Pubkey::new_unique(), false);
+    let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
+    assert_eq!(
+        TransactionError::InstructionError(1, InstructionError::InvalidArgument),
+        bank_client
+            .send_and_confirm_message(
+                &[&mint_keypair, &program_keypair, &upgrade_authority_keypair],
+                message
+            )
+            .unwrap_err()
+            .unwrap()
+    );
+
+    // Test not the clock account
+    bank.clear_signatures();
+    bank.store_account(&buffer_address, &buffer_account);
+    bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+    bank.store_account(&programdata_address, &AccountSharedData::default());
+    let mut instructions = bpf_loader_upgradeable::deploy_with_max_program_len(
+        &mint_keypair.pubkey(),
+        &program_keypair.pubkey(),
+        &buffer_address,
+        &upgrade_authority_keypair.pubkey(),
+        min_program_balance,
+        elf.len(),
+    )
+    .unwrap();
+    *instructions
+        .get_mut(1)
+        .unwrap()
+        .accounts
+        .get_mut(5)
+        .unwrap() = AccountMeta::new_readonly(Pubkey::new_unique(), false);
+    let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
+    assert_eq!(
+        TransactionError::InstructionError(1, InstructionError::InvalidArgument),
+        bank_client
+            .send_and_confirm_message(
+                &[&mint_keypair, &program_keypair, &upgrade_authority_keypair],
+                message
+            )
+            .unwrap_err()
+            .unwrap()
+    );
+
     // Test not the system account
+    // NOTE: the system account is not required any more in the instruction accounts
     bank.clear_signatures();
     bank.store_account(&buffer_address, &buffer_account);
     bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
@@ -7544,16 +7609,12 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         .get_mut(6)
         .unwrap() = AccountMeta::new_readonly(Pubkey::new_unique(), false);
     let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
-    assert_eq!(
-        TransactionError::InstructionError(1, InstructionError::MissingAccount),
-        bank_client
-            .send_and_confirm_message(
-                &[&mint_keypair, &program_keypair, &upgrade_authority_keypair],
-                message
-            )
-            .unwrap_err()
-            .unwrap()
-    );
+    assert!(bank_client
+        .send_and_confirm_message(
+            &[&mint_keypair, &program_keypair, &upgrade_authority_keypair],
+            message
+        )
+        .is_ok());
 
     fn truncate_data(account: &mut AccountSharedData, len: usize) {
         let mut data = account.data().to_vec();
