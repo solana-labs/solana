@@ -423,7 +423,7 @@ mod tests {
         let connection_cache = new_quic("test_connection_cache", 8000);
 
         let thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(512)
+            .num_threads(16)
             .thread_name(|i| format!("concame{i:02}"))
             .build()
             .unwrap();
