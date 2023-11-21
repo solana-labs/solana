@@ -1315,14 +1315,14 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
                 self.id(),
                 width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
             );
-            self.stop_thread_manager();
-            return false;
         } else {
             info!(
                 "[sch_{:0width$x}]: watchdog: too big address book size: {page_count}...; retiring scheduler",
                 self.id(),
                 width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
             );
+            self.stop_thread_manager();
+            return false;
         }
 
         let Some(pooled_duration) = self.pooled_since() else {
