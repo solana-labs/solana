@@ -40,7 +40,7 @@
 //! );
 //!
 use {
-    chrono::{DateTime, SecondsFormat, Utc},
+    chrono::{DateTime, Utc},
     std::{fmt, time::SystemTime},
 };
 
