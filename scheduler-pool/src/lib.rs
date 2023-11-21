@@ -139,20 +139,22 @@ where
         if current_tick > self.tick {
             self.tick = current_tick;
             self.updated_at = SystemTime::now();
-        } else if self.updated_at.elapsed().unwrap_or_default() > Duration::from_secs(10) {
-            const BITS_PER_HEX_DIGIT: usize = 4;
-            let mut thread_manager = thread_manager.write().unwrap();
-            info!(
-                "[sch_{:0width$x}]: watchdog: update_tick_to_retain(): stopping thread manager ({tid}/{} <= {}/{:?})...",
-                thread_manager.scheduler_id,
-                current_tick,
-                self.tick,
-                self.updated_at,
-                width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
-            );
-            thread_manager.stop_threads();
-            self.tick = 0;
-            self.updated_at = SystemTime::now();
+        } else if Some(elapsed) = self.updated_at.elapsed() {
+            if elapsed > Duration::from_secs(10) {
+                const BITS_PER_HEX_DIGIT: usize = 4;
+                let mut thread_manager = thread_manager.write().unwrap();
+                info!(
+                    "[sch_{:0width$x}]: watchdog: update_tick_to_retain(): stopping thread manager ({tid}/{} <= {}/{:?})...",
+                    thread_manager.scheduler_id,
+                    current_tick,
+                    self.tick,
+                    elapsed,
+                    width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
+                );
+                thread_manager.stop_threads();
+                self.tick = 0;
+                self.updated_at = SystemTime::now();
+            }
         }
 
         true
