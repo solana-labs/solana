@@ -278,14 +278,15 @@ impl QuicClient {
         connection: &Connection,
     ) -> Result<(), QuicError> {
         let mut send_stream = connection.open_uni().await?;
+        println!("Writing data...");
 
         send_stream.write(data).await?;
         // intentionally holding off finalizing the stream
         // send_stream.finish().await?;
-        debug!("Taking a lock");
+        println!("Taking a lock");
         let mut lock = self.streams.lock().await;
         lock.push(send_stream);
-        debug!("Stored send_stream");
+        println!("Stored send_stream");
         Ok(())
     }
 
