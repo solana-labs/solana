@@ -5677,7 +5677,7 @@ impl AccountsDb {
     fn has_space_available(&self, slot: Slot, size: u64) -> bool {
         let store = self.storage.get_slot_storage_entry(slot).unwrap();
         if store.status() == AccountStorageStatus::Available
-            && (store.accounts.capacity() - store.accounts.len() as u64) > size
+            && store.accounts.remaining_bytes() >= size
         {
             return true;
         }

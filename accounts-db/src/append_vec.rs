@@ -327,7 +327,8 @@ impl AppendVec {
 
     /// how many more bytes can be stored in this append vec
     pub fn remaining_bytes(&self) -> u64 {
-        (self.capacity()).saturating_sub(self.len() as u64)
+        self.capacity()
+            .saturating_sub(u64_align!(self.len()) as u64)
     }
 
     pub fn len(&self) -> usize {
@@ -1002,10 +1003,36 @@ pub mod tests {
         let av = AppendVec::new(&path.path, true, sz);
         assert_eq!(av.capacity(), sz64);
         assert_eq!(av.remaining_bytes(), sz64);
+
+        // append first account, an u64 aligned account (136 bytes)
+        let mut av_len = 0;
         let account = create_test_account(0);
         av.append_account_test(&account).unwrap();
+        av_len += STORE_META_OVERHEAD;
         assert_eq!(av.capacity(), sz64);
         assert_eq!(av.remaining_bytes(), sz64 - (STORE_META_OVERHEAD as u64));
+        assert_eq!(av.len(), av_len);
+
+        // append second account, a *not* u64 aligned account (137 bytes)
+        let account = create_test_account(1);
+        let account_storage_len = STORE_META_OVERHEAD + 1;
+        av_len += account_storage_len;
+        av.append_account_test(&account).unwrap();
+        assert_eq!(av.capacity(), sz64);
+        assert_eq!(av.len(), av_len);
+        let alignment_bytes = u64_align!(av_len) - av_len; // bytes used for alignment (7 bytes)
+        assert_eq!(alignment_bytes, 7);
+        assert_eq!(av.remaining_bytes(), sz64 - u64_align!(av_len) as u64);
+
+        // append third account, a *not* u64 aligned account (137 bytes)
+        let account = create_test_account(1);
+        av.append_account_test(&account).unwrap();
+        let account_storage_len = STORE_META_OVERHEAD + 1;
+        av_len += alignment_bytes; // bytes used for alignment at the end of previous account
+        av_len += account_storage_len;
+        assert_eq!(av.capacity(), sz64);
+        assert_eq!(av.len(), av_len);
+        assert_eq!(av.remaining_bytes(), sz64 - u64_align!(av_len) as u64);
     }
 
     #[test]
