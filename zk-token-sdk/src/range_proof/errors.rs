@@ -7,6 +7,8 @@ pub enum RangeProofGenerationError {
     MaximumGeneratorLengthExceeded,
     #[error("amounts, commitments, openings, or bit lengths vectors have different lengths")]
     VectorLengthMismatch,
+    #[error("invalid bit size")]
+    InvalidBitSize,
 }
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]

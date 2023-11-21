@@ -79,6 +79,14 @@ impl RangeProof {
             return Err(RangeProofGenerationError::VectorLengthMismatch);
         }
 
+        // each bit length must be greater than 0 for the proof to make sense
+        if bit_lengths
+            .iter()
+            .any(|bit_length| *bit_length == 0 || *bit_length > u64::BITS as usize)
+        {
+            return Err(RangeProofGenerationError::InvalidBitSize);
+        }
+
         // total vector dimension to compute the ultimate inner product proof for
         let nm: usize = bit_lengths.iter().sum();
         if !nm.is_power_of_two() {
