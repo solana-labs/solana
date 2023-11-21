@@ -277,6 +277,7 @@ impl QuicClient {
         data: &[u8],
         connection: &Connection,
     ) -> Result<(), QuicError> {
+        println!("Opening stream...");
         let mut send_stream = connection.open_uni().await?;
         println!("Writing data...");
 
