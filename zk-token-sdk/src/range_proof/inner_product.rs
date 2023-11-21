@@ -97,6 +97,7 @@ impl InnerProductProof {
 
             let L = RistrettoPoint::multiscalar_mul(
                 a_L.iter()
+                    // `n` was previously divided in half and therefore, it cannot overflow.
                     .zip(G_factors[n..n.checked_mul(2).unwrap()].iter())
                     .map(|(a_L_i, g)| a_L_i * g)
                     .chain(
