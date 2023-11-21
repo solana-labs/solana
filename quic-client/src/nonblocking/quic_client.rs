@@ -350,11 +350,12 @@ impl QuicClient {
                             Ok(conn) => {
                                 *conn_guard = Some(conn.clone());
                                 println!(
-                                    "Made connection to {} id {} try_count {}, from connection cache warming?: {}",
+                                    "Made connection to {} id {} try_count {}, from connection cache warming?: {} {:?}",
                                     self.addr,
                                     conn.connection.stable_id(),
                                     connection_try_count,
                                     data.is_empty(),
+                                    std::thread::current().id()
                                 );
                                 connection_try_count += 1;
                                 conn.connection.clone()
@@ -405,7 +406,7 @@ impl QuicClient {
             last_connection_id = connection.stable_id();
             measure_prepare_connection.stop();
 
-            println!("To call _send_buffer_using_conn...");
+            println!("To call _send_buffer_using_conn... {:?}", std::thread::current().id());
             match self._send_buffer_using_conn(data, &connection).await {
                 Ok(()) => {
                     measure_send_packet.stop();
