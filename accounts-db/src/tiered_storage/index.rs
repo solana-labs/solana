@@ -30,7 +30,7 @@ pub struct AccountOffset {
 /// This can be used to obtain the AccountOffset and address by looking through
 /// the accounts index block.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct IndexOffset(pub usize);
+pub struct IndexOffset(pub u32);
 
 /// The index format of a tiered accounts file.
 #[repr(u16)]
@@ -84,7 +84,8 @@ impl IndexBlockFormat {
     ) -> TieredStorageResult<&'a Pubkey> {
         let account_offset = match self {
             Self::AddressAndBlockOffsetOnly => {
-                footer.index_block_offset as usize + std::mem::size_of::<Pubkey>() * index_offset.0
+                footer.index_block_offset as usize
+                    + std::mem::size_of::<Pubkey>() * (index_offset.0 as usize)
             }
         };
         let (address, _) = get_type::<Pubkey>(mmap, account_offset)?;
@@ -102,7 +103,7 @@ impl IndexBlockFormat {
             Self::AddressAndBlockOffsetOnly => {
                 let account_offset = footer.index_block_offset as usize
                     + std::mem::size_of::<Pubkey>() * footer.account_entry_count as usize
-                    + index_offset.0 * std::mem::size_of::<u32>();
+                    + std::mem::size_of::<u32>() * index_offset.0 as usize;
                 let (block_offset, _) = get_type::<u32>(mmap, account_offset)?;
 
                 Ok(AccountOffset {
@@ -166,11 +167,11 @@ mod tests {
         let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
         for (i, index_entry) in index_entries.iter().enumerate() {
             let account_offset = indexer
-                .get_account_offset(&mmap, &footer, IndexOffset(i))
+                .get_account_offset(&mmap, &footer, IndexOffset(i as u32))
                 .unwrap();
             assert_eq!(index_entry.block_offset, account_offset.block as u32);
             let address = indexer
-                .get_account_address(&mmap, &footer, IndexOffset(i))
+                .get_account_address(&mmap, &footer, IndexOffset(i as u32))
                 .unwrap();
             assert_eq!(index_entry.address, address);
         }

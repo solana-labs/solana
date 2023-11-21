@@ -70,7 +70,7 @@ use {
     solana_accounts_db::{
         account_overrides::AccountOverrides,
         accounts::{
-            AccountAddressFilter, Accounts, LoadedTransaction, PubkeyAccountSlot, RewardInterval,
+            AccountAddressFilter, Accounts, LoadedTransaction, PubkeyAccountSlot,
             TransactionLoadResult,
         },
         accounts_db::{
@@ -955,6 +955,14 @@ struct StakeRewardCalculation {
     stake_rewards: StakeRewards,
     /// total lamports across all `stake_rewards`
     total_stake_rewards_lamports: u64,
+}
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub(super) enum RewardInterval {
+    /// the slot within the epoch is INSIDE the reward distribution interval
+    InsideInterval,
+    /// the slot within the epoch is OUTSIDE the reward distribution interval
+    OutsideInterval,
 }
 
 impl Bank {
@@ -5935,13 +5943,9 @@ impl Bank {
         let mut skipped_rewrites = Vec::default();
         for (pubkey, account, _loaded_slot) in accounts.iter_mut() {
             let rent_collected_info = if self.should_collect_rent() {
-                let (rent_collected_info, measure) =
-                    measure!(self.rent_collector.collect_from_existing_account(
-                        pubkey,
-                        account,
-                        self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
-                        set_exempt_rent_epoch_max,
-                    ));
+                let (rent_collected_info, measure) = measure!(self
+                    .rent_collector
+                    .collect_from_existing_account(pubkey, account, set_exempt_rent_epoch_max,));
                 time_collecting_rent_us += measure.as_us();
                 rent_collected_info
             } else {
