@@ -934,7 +934,7 @@ where
                                                 }
                                                 ControlFrame::EndSession => {
                                                     will_end_session = true;
-                                                    log_scheduler!("end_sess");
+                                                    log_scheduler!("S:ending");
                                                 }
                                             }
                                         }
@@ -943,7 +943,7 @@ where
                                     assert!(!will_end_thread);
                                     schedulable_transaction_receiver = never();
                                     will_end_thread = true;
-                                    log_scheduler!("end_thrd");
+                                    log_scheduler!("T:ending");
                                 };
                             },
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
@@ -998,7 +998,7 @@ where
                                                     "scheduler_main_loop: will_end_session = true"
                                                 );
                                                 will_end_session = true;
-                                                log_scheduler!("end_sess");
+                                                log_scheduler!("S:ending");
                                             }
                                         }
                                     }
@@ -1024,7 +1024,7 @@ where
 
                     if will_end_session {
                         // or should also consider will_end_thread?
-                        log_scheduler!("ended   ");
+                        log_scheduler!("S:ended ");
                         (state_machine, log_interval_counter) = <_>::default();
                         result_sender
                             .send(
@@ -1036,7 +1036,7 @@ where
                         will_end_session = false;
                     }
                 }
-                log_scheduler!("stopped ");
+                log_scheduler!("T:ended ");
 
                 let res = result_with_timings.take().unwrap();
                 trace!(
