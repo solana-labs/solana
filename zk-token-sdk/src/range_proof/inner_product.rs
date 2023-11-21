@@ -206,7 +206,7 @@ impl InnerProductProof {
         transcript: &mut Transcript,
     ) -> Result<(Vec<Scalar>, Vec<Scalar>, Vec<Scalar>), RangeProofError> {
         let lg_n = self.L_vec.len();
-        if lg_n >= 32 {
+        if lg_n == 0 || lg_n >= 32 {
             // 4 billion multiplications should be enough for anyone
             // and this check prevents overflow in 1<<lg_n below.
             return Err(ProofVerificationError::InvalidBitSize.into());
@@ -411,7 +411,7 @@ mod tests {
     fn test_basic_correctness() {
         let n = 32;
 
-        let bp_gens = BulletproofGens::new(n);
+        let bp_gens = BulletproofGens::new(n).unwrap();
         let G: Vec<RistrettoPoint> = bp_gens.G(n).cloned().collect();
         let H: Vec<RistrettoPoint> = bp_gens.H(n).cloned().collect();
 

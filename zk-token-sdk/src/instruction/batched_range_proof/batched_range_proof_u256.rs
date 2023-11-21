@@ -57,7 +57,9 @@ impl BatchedRangeProofU256Data {
             BatchedRangeProofContext::new(&commitments, &amounts, &bit_lengths, &openings)?;
 
         let mut transcript = context.new_transcript();
-        let proof = RangeProof::new(amounts, bit_lengths, openings, &mut transcript).try_into()?;
+        let proof = RangeProof::new(amounts, bit_lengths, openings, &mut transcript)
+            .map_err(|_| ProofError::Generation)?
+            .try_into()?;
 
         Ok(Self { context, proof })
     }

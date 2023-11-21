@@ -559,7 +559,8 @@ impl TransferWithFeeProof {
                 opening_fee_hi,
             ],
             transcript,
-        );
+        )
+        .expect("range proof: generator");
 
         Self {
             new_source_commitment: pod_new_source_commitment,

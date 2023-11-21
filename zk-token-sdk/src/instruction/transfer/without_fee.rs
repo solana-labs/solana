@@ -333,6 +333,7 @@ impl TransferProof {
                 vec![&source_opening, opening_lo, opening_hi],
                 transcript,
             )
+            .expect("range proof: generator")
         } else {
             let transfer_amount_lo_negated =
                 (1 << TRANSFER_AMOUNT_LO_NEGATED_BITS) - 1 - transfer_amount_lo;
@@ -354,6 +355,7 @@ impl TransferProof {
                 vec![&source_opening, opening_lo, &opening_lo_negated, opening_hi],
                 transcript,
             )
+            .expect("range proof: generator")
         };
 
         Self {
