@@ -9,6 +9,8 @@ pub enum RangeProofGenerationError {
     VectorLengthMismatch,
     #[error("invalid bit size")]
     InvalidBitSize,
+    #[error("insufficient generators for the proof")]
+    GeneratorLengthMismatch,
 }
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]

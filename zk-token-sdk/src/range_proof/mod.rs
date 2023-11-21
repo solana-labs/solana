@@ -227,7 +227,7 @@ impl RangeProof {
             l_vec,
             r_vec,
             transcript,
-        );
+        )?;
 
         Ok(RangeProof {
             A,

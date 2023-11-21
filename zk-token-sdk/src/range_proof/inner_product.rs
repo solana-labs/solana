@@ -1,6 +1,9 @@
 use {
     crate::{
-        range_proof::{errors::RangeProofVerificationError, util},
+        range_proof::{
+            errors::{RangeProofGenerationError, RangeProofVerificationError},
+            util,
+        },
         transcript::TranscriptProtocol,
     },
     core::iter,
@@ -45,7 +48,7 @@ impl InnerProductProof {
         mut a_vec: Vec<Scalar>,
         mut b_vec: Vec<Scalar>,
         transcript: &mut Transcript,
-    ) -> Self {
+    ) -> Result<Self, RangeProofGenerationError> {
         // Create slices G, H, a, b backed by their respective
         // vectors.  This lets us reslice as we compress the lengths
         // of the vectors in the main loop below.
@@ -57,15 +60,20 @@ impl InnerProductProof {
         let mut n = G.len();
 
         // All of the input vectors must have the same length.
-        assert_eq!(G.len(), n);
-        assert_eq!(H.len(), n);
-        assert_eq!(a.len(), n);
-        assert_eq!(b.len(), n);
-        assert_eq!(G_factors.len(), n);
-        assert_eq!(H_factors.len(), n);
+        if G.len() != n
+            || H.len() != n
+            || a.len() != n
+            || b.len() != n
+            || G_factors.len() != n
+            || H_factors.len() != n
+        {
+            return Err(RangeProofGenerationError::GeneratorLengthMismatch);
+        }
 
         // All of the input vectors must have a length that is a power of two.
-        assert!(n.is_power_of_two());
+        if !n.is_power_of_two() {
+            return Err(RangeProofGenerationError::InvalidBitSize);
+        }
 
         transcript.innerproduct_domain_separator(n as u64);
 
@@ -185,12 +193,12 @@ impl InnerProductProof {
             H = H_L;
         }
 
-        InnerProductProof {
+        Ok(InnerProductProof {
             L_vec,
             R_vec,
             a: a[0],
             b: b[0],
-        }
+        })
     }
 
     /// Computes three vectors of verification scalars \\([u\_{i}^{2}]\\), \\([u\_{i}^{-2}]\\) and
@@ -451,7 +459,8 @@ mod tests {
             a.clone(),
             b.clone(),
             &mut prover_transcript,
-        );
+        )
+        .unwrap();
 
         assert!(proof
             .verify(
