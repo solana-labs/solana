@@ -2132,6 +2132,10 @@ mod tests {
         fn stop_thread_manager(&mut self) {
             todo!();
         }
+
+        fn should_retain_in_pool(&mut self) -> bool {
+            todo!();
+        }
     }
 
     impl<const TRIGGER_RACE_CONDITION: bool> InstallableScheduler<DefaultScheduleExecutionArg>
