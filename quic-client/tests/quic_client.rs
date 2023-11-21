@@ -447,6 +447,7 @@ mod tests {
                         if let Err(rslt) = rslt {
                             info!("Connection {i} error {_i} {rslt:?}");
                         }
+                        println!("Sent data: {rslt:?}");
                     });
             });
 
