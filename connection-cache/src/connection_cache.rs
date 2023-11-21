@@ -158,13 +158,14 @@ where
         // Read again, as it is possible that between read lock dropped and the write lock acquired
         // another thread could have setup the connection.
 
+        let no_async = true;
         let pool_status = map
             .get(addr)
             .map(|pool| pool.check_pool_status(self.connection_pool_size))
             .unwrap_or(PoolStatus::Empty);
 
         let (cache_hit, num_evictions, eviction_timing_ms) =
-            if matches!(pool_status, PoolStatus::Empty) {
+            if matches!(pool_status, PoolStatus::Empty) || (no_async && matches!(pool_status, PoolStatus::PartiallyFull)) {
                 Self::create_connection_internal(
                     &self.connection_config,
                     &self.connection_manager,
@@ -177,7 +178,7 @@ where
                 (true, 0, 0)
             };
 
-        if matches!(pool_status, PoolStatus::PartiallyFull) {
+        if !no_async && matches!(pool_status, PoolStatus::PartiallyFull) {
             // trigger an async connection create
             debug!("Triggering async connection for {addr:?}");
             Self::create_connection_internal(
@@ -445,9 +446,9 @@ pub trait ConnectionPool: Send + Sync + 'static {
     /// Get a connection from the pool. It must have at least one connection in the pool.
     /// This randomly picks a connection in the pool.
     fn borrow_connection(&self) -> Arc<Self::BaseClientConnection> {
-        let mut rng = thread_rng();
-        let n = rng.gen_range(0..self.num_connections());
-        self.get(n).expect("index is within num_connections")
+        // let mut rng = thread_rng();
+        // let n = rng.gen_range(0..self.num_connections());
+        self.get(self.num_connections() - 1).expect("index is within num_connections")
     }
 
     /// Check if we need to create a new connection. If the count of the connections
