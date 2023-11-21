@@ -257,6 +257,10 @@ mod nonblocking {
         fn stop_thread_manager(&mut self) {
             unimplemented!();
         }
+
+        fn should_retain_in_pool(&mut self) -> bool {
+            unimplemented!();
+        }
     }
 
     impl<H: Handler<ScheduleExecutionArgForBench> + Clone> NonblockingScheduler<H> {
