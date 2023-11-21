@@ -4,12 +4,8 @@
 use {
     crate::{
         encryption::pedersen::{PedersenCommitment, PedersenOpening},
-<<<<<<< HEAD
         errors::ProofError,
-=======
-        errors::{ProofGenerationError, ProofVerificationError},
         instruction::batched_range_proof::MAX_COMMITMENTS,
->>>>>>> e251b8607c ([zk-token-sdk] Add a length check on range proof commitment length (#34165))
         range_proof::RangeProof,
     },
     std::convert::TryInto,
@@ -80,7 +76,7 @@ impl ZkProofData<BatchedRangeProofContext> for BatchedRangeProofU256Data {
         let num_commitments = commitments.len();
 
         if num_commitments > MAX_COMMITMENTS || num_commitments != bit_lengths.len() {
-            return Err(ProofVerificationError::IllegalCommitmentLength);
+            return Err(ProofError::IllegalCommitmentLength);
         }
 
         let mut transcript = self.context_data().new_transcript();
