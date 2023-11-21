@@ -4,8 +4,10 @@
 use qualifier_attr::qualifiers;
 use {
     crate::{
+        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         clock::{Epoch, INITIAL_RENT_EPOCH},
         lamports::LamportsError,
+        loader_v4,
         pubkey::Pubkey,
     },
     serde::{
@@ -753,6 +755,13 @@ pub fn create_is_signer_account_infos<'a>(
         })
         .collect()
 }
++ /// Replacement for the executable flag: An account being owned by one of these contains a program.
+pub const PROGRAM_OWNERS: &[Pubkey] = &[
+    bpf_loader_upgradeable::id(),
+    bpf_loader::id(),
+    bpf_loader_deprecated::id(),
+    loader_v4::id(),
+];
 
 #[cfg(test)]
 pub mod tests {
