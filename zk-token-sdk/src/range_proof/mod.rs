@@ -172,7 +172,9 @@ impl RangeProof {
         }
 
         // define t(x) = <l(x), r(x)> = t_0 + t_1*x + t_2*x
-        let t_poly = l_poly.inner_product(&r_poly);
+        let t_poly = l_poly
+            .inner_product(&r_poly)
+            .ok_or(RangeProofGenerationError::InnerProductLengthMismatch)?;
 
         // generate Pedersen commitment for the coefficients t_1 and t_2
         let (T_1, t_1_blinding) = Pedersen::new(t_poly.1);

@@ -11,6 +11,8 @@ pub enum RangeProofGenerationError {
     InvalidBitSize,
     #[error("insufficient generators for the proof")]
     GeneratorLengthMismatch,
+    #[error("inner product length mismatch")]
+    InnerProductLengthMismatch,
 }
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]

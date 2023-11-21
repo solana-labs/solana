@@ -90,8 +90,10 @@ impl InnerProductProof {
             let (G_L, G_R) = G.split_at_mut(n);
             let (H_L, H_R) = H.split_at_mut(n);
 
-            let c_L = util::inner_product(a_L, b_R);
-            let c_R = util::inner_product(a_R, b_L);
+            let c_L = util::inner_product(a_L, b_R)
+                .ok_or(RangeProofGenerationError::InnerProductLengthMismatch)?;
+            let c_R = util::inner_product(a_R, b_L)
+                .ok_or(RangeProofGenerationError::InnerProductLengthMismatch)?;
 
             let L = RistrettoPoint::multiscalar_mul(
                 a_L.iter()
@@ -162,8 +164,10 @@ impl InnerProductProof {
             let (G_L, G_R) = G.split_at_mut(n);
             let (H_L, H_R) = H.split_at_mut(n);
 
-            let c_L = util::inner_product(a_L, b_R);
-            let c_R = util::inner_product(a_R, b_L);
+            let c_L = util::inner_product(a_L, b_R)
+                .ok_or(RangeProofGenerationError::InnerProductLengthMismatch)?;
+            let c_R = util::inner_product(a_R, b_L)
+                .ok_or(RangeProofGenerationError::InnerProductLengthMismatch)?;
 
             let L = RistrettoPoint::multiscalar_mul(
                 a_L.iter().chain(b_R.iter()).chain(iter::once(&c_L)),
@@ -435,7 +439,7 @@ mod tests {
 
         let a: Vec<_> = (0..n).map(|_| Scalar::random(&mut OsRng)).collect();
         let b: Vec<_> = (0..n).map(|_| Scalar::random(&mut OsRng)).collect();
-        let c = util::inner_product(&a, &b);
+        let c = util::inner_product(&a, &b).unwrap();
 
         let G_factors: Vec<Scalar> = iter::repeat(Scalar::one()).take(n).collect();
 
