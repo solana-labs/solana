@@ -75,12 +75,23 @@ impl RangeProof {
     ) -> Result<Self, RangeProofGenerationError> {
         // amounts, bit-lengths, openings must be same length vectors
         let m = amounts.len();
-        assert_eq!(bit_lengths.len(), m);
-        assert_eq!(openings.len(), m);
+        if bit_lengths.len() != m || openings.len() != m {
+            return Err(RangeProofGenerationError::VectorLengthMismatch);
+        }
+
+        // each bit length must be greater than 0 for the proof to make sense
+        if bit_lengths
+            .iter()
+            .any(|bit_length| *bit_length == 0 || *bit_length > u64::BITS as usize)
+        {
+            return Err(RangeProofGenerationError::InvalidBitSize);
+        }
 
         // total vector dimension to compute the ultimate inner product proof for
         let nm: usize = bit_lengths.iter().sum();
-        assert!(nm.is_power_of_two());
+        if !nm.is_power_of_two() {
+            return Err(RangeProofGenerationError::VectorLengthMismatch);
+        }
 
         let bp_gens = BulletproofGens::new(nm)
             .map_err(|_| RangeProofGenerationError::MaximumGeneratorLengthExceeded)?;
@@ -93,7 +104,10 @@ impl RangeProof {
         for (amount_i, n_i) in amounts.iter().zip(bit_lengths.iter()) {
             for j in 0..(*n_i) {
                 let (G_ij, H_ij) = gens_iter.next().unwrap();
-                let v_ij = Choice::from(((amount_i >> j) & 1) as u8);
+
+                // `j` is guaranteed to be at most `u64::BITS` (a 6-bit number) and therefore,
+                // casting is lossless and right shift can be safely unwrapped
+                let v_ij = Choice::from((amount_i.checked_shr(j as u32).unwrap() & 1) as u8);
                 let mut point = -H_ij;
                 point.conditional_assign(G_ij, v_ij);
                 A += point;
@@ -138,7 +152,9 @@ impl RangeProof {
             let mut exp_2 = Scalar::one();
 
             for j in 0..(*n_i) {
-                let a_L_j = Scalar::from((amount_i >> j) & 1);
+                // `j` is guaranteed to be at most `u64::BITS` (a 6-bit number) and therefore,
+                // casting is lossless and right shift can be safely unwrapped
+                let a_L_j = Scalar::from(amount_i.checked_shr(j as u32).unwrap() & 1);
                 let a_R_j = a_L_j - Scalar::one();
 
                 l_poly.0[i] = a_L_j - z;
@@ -148,13 +164,17 @@ impl RangeProof {
 
                 exp_y *= y;
                 exp_2 = exp_2 + exp_2;
-                i += 1;
+
+                // `i` is capped by the sum of vectors in `bit_lengths`
+                i = i.checked_add(1).unwrap();
             }
             exp_z *= z;
         }
 
         // define t(x) = <l(x), r(x)> = t_0 + t_1*x + t_2*x
-        let t_poly = l_poly.inner_product(&r_poly);
+        let t_poly = l_poly
+            .inner_product(&r_poly)
+            .ok_or(RangeProofGenerationError::InnerProductLengthMismatch)?;
 
         // generate Pedersen commitment for the coefficients t_1 and t_2
         let (T_1, t_1_blinding) = Pedersen::new(t_poly.1);
@@ -216,7 +236,7 @@ impl RangeProof {
             l_vec,
             r_vec,
             transcript,
-        );
+        )?;
 
         Ok(RangeProof {
             A,
@@ -238,7 +258,9 @@ impl RangeProof {
         transcript: &mut Transcript,
     ) -> Result<(), RangeProofVerificationError> {
         // commitments and bit-lengths must be same length vectors
-        assert_eq!(comms.len(), bit_lengths.len());
+        if comms.len() != bit_lengths.len() {
+            return Err(RangeProofVerificationError::VectorLengthMismatch);
+        }
 
         let m = bit_lengths.len();
         let nm: usize = bit_lengths.iter().sum();
