@@ -214,5 +214,32 @@ pub trait TransactionResultNotifier: Debug {
     );
 }
 
-pub type BankingTransactionResultNotifierLock =
-    Arc<RwLock<dyn TransactionResultNotifier + Sync + Send>>;
+#[derive(Clone, Debug)]
+pub struct BankingTransactionResultNotifier {
+    pub lock: Arc<RwLock<dyn TransactionResultNotifier + Sync + Send>>,
+}
+
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+#[derive(Debug)]
+struct DummyTransactionResultNotifier {}
+
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl TransactionResultNotifier for DummyTransactionResultNotifier {
+    fn notify_banking_transaction_result(
+        &self,
+        _: &SanitizedTransaction,
+        _: Option<TransactionError>,
+        _: Slot,
+    ) {
+    }
+}
+
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl solana_frozen_abi::abi_example::AbiExample for BankingTransactionResultNotifier {
+    fn example() -> Self {
+        // BankingTransactionResultNotifier isn't serializable by definition.
+        BankingTransactionResultNotifier {
+            lock: Arc::new(RwLock::new(DummyTransactionResultNotifier {})),
+        }
+    }
+}

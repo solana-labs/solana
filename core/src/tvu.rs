@@ -46,7 +46,7 @@ use {
     },
     solana_sdk::{
         clock::Slot, pubkey::Pubkey, signature::Keypair,
-        transaction::BankingTransactionResultNotifierLock,
+        transaction::BankingTransactionResultNotifier,
     },
     solana_turbine::retransmit_stage::RetransmitStage,
     solana_vote::vote_sender_types::ReplayVoteSender,
@@ -141,7 +141,7 @@ impl Tvu {
         turbine_quic_endpoint_sender: AsyncSender<(SocketAddr, Bytes)>,
         turbine_quic_endpoint_receiver: Receiver<(Pubkey, SocketAddr, Bytes)>,
         repair_quic_endpoint_sender: AsyncSender<LocalRequest>,
-        banking_transaction_result_notifier: Option<BankingTransactionResultNotifierLock>,
+        banking_transaction_result_notifier: Option<BankingTransactionResultNotifier>,
     ) -> Result<Self, String> {
         let TvuSockets {
             repair: repair_socket,

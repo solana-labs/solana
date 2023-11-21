@@ -73,7 +73,7 @@ use {
         saturating_add_assign,
         signature::{Keypair, Signature, Signer},
         timing::timestamp,
-        transaction::{BankingTransactionResultNotifierLock, Transaction},
+        transaction::{BankingTransactionResultNotifier, Transaction},
     },
     solana_vote::vote_sender_types::ReplayVoteSender,
     solana_vote_program::vote_state::VoteTransaction,
@@ -249,7 +249,7 @@ pub struct ReplayStageConfig {
     // duplicate voting which can lead to slashing.
     pub wait_to_vote_slot: Option<Slot>,
     pub replay_slots_concurrently: bool,
-    pub banking_transaction_result_notifier: Option<BankingTransactionResultNotifierLock>,
+    pub banking_transaction_result_notifier: Option<BankingTransactionResultNotifier>,
 }
 
 #[derive(Default)]
@@ -1856,7 +1856,7 @@ impl ReplayStage {
         banking_tracer: &Arc<BankingTracer>,
         has_new_vote_been_rooted: bool,
         track_transaction_indexes: bool,
-        banking_transaction_result_notifier_lock: Option<BankingTransactionResultNotifierLock>,
+        banking_transaction_result_notifier_lock: Option<BankingTransactionResultNotifier>,
     ) {
         // all the individual calls to poh_recorder.read() are designed to
         // increase granularity, decrease contention

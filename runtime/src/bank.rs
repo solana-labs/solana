@@ -168,7 +168,7 @@ use {
         sysvar::{self, last_restart_slot::LastRestartSlot, Sysvar, SysvarId},
         timing::years_as_slots,
         transaction::{
-            self, BankingTransactionResultNotifierLock, MessageHash, Result, SanitizedTransaction,
+            self, BankingTransactionResultNotifier, MessageHash, Result, SanitizedTransaction,
             Transaction, TransactionError, TransactionVerificationMode, VersionedTransaction,
             MAX_TX_ACCOUNT_LOCKS,
         },
@@ -570,7 +570,7 @@ impl PartialEq for Bank {
             loaded_programs_cache: _,
             check_program_modification_slot: _,
             epoch_reward_status: _,
-            transaction_result_notifier_lock: _,
+            banking_transaction_result_notifier: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this PartialEq is accordingly updated.
@@ -835,7 +835,7 @@ pub struct Bank {
     epoch_reward_status: EpochRewardStatus,
 
     /// geyser plugin to notify transaction results
-    transaction_result_notifier_lock: Option<BankingTransactionResultNotifierLock>,
+    banking_transaction_result_notifier: Option<BankingTransactionResultNotifier>,
 }
 
 struct VoteWithStakeDelegations {
@@ -1084,7 +1084,7 @@ impl Bank {
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms<BankForks>>>::default(),
             check_program_modification_slot: false,
             epoch_reward_status: EpochRewardStatus::default(),
-            transaction_result_notifier_lock: None,
+            banking_transaction_result_notifier: None,
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1437,7 +1437,7 @@ impl Bank {
             loaded_programs_cache: parent.loaded_programs_cache.clone(),
             check_program_modification_slot: false,
             epoch_reward_status: parent.epoch_reward_status.clone(),
-            transaction_result_notifier_lock: None,
+            banking_transaction_result_notifier: None,
         };
 
         let (_, ancestors_time_us) = measure_us!({
@@ -1934,7 +1934,7 @@ impl Bank {
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms<BankForks>>>::default(),
             check_program_modification_slot: false,
             epoch_reward_status: EpochRewardStatus::default(),
-            transaction_result_notifier_lock: None,
+            banking_transaction_result_notifier: None,
         };
         bank.finish_init(
             genesis_config,
@@ -5230,9 +5230,8 @@ impl Bank {
             })
             .collect();
 
-        let transaction_result_notifier_lock = self.transaction_result_notifier_lock.clone();
-        if let Some(transaction_result_notifier_lock) = transaction_result_notifier_lock {
-            let transaction_error_notifier = transaction_result_notifier_lock.read();
+        if let Some(transaction_result_notifier_lock) = &self.banking_transaction_result_notifier {
+            let transaction_error_notifier = transaction_result_notifier_lock.lock.read();
             if let Ok(transaction_error_notifier) = transaction_error_notifier {
                 batch
                     .sanitized_transactions()
@@ -8282,13 +8281,13 @@ impl Bank {
 
     pub fn set_banking_transaction_results_notifier(
         &mut self,
-        banking_transaction_result_notifier: Option<BankingTransactionResultNotifierLock>,
+        banking_transaction_result_notifier: Option<BankingTransactionResultNotifier>,
     ) {
-        self.transaction_result_notifier_lock = banking_transaction_result_notifier;
+        self.banking_transaction_result_notifier = banking_transaction_result_notifier;
     }
 
     pub fn has_banking_transaction_results_notifier(&self) -> bool {
-        self.transaction_result_notifier_lock.is_some()
+        self.banking_transaction_result_notifier.is_some()
     }
 }
 
