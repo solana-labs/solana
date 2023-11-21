@@ -24,6 +24,7 @@ pub mod legacy_contact_info;
 pub mod ping_pong;
 mod push_active_set;
 mod received_cache;
+pub mod restart_crds_values;
 pub mod weighted_shuffle;
 
 #[macro_use]

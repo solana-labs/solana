@@ -20,7 +20,7 @@ use {
     solana_sdk::{
         account::AccountSharedData,
         bpf_loader_deprecated,
-        feature_set::{check_slice_translation_size, native_programs_consume_cu, FeatureSet},
+        feature_set::{native_programs_consume_cu, FeatureSet},
         hash::Hash,
         instruction::{AccountMeta, InstructionError},
         native_loader,
@@ -597,12 +597,6 @@ impl<'a> InvokeContext<'a> {
             })
             .map(|program_account| *program_account.get_owner() != bpf_loader_deprecated::id())
             .unwrap_or(true)
-    }
-
-    // Set should type size be checked during user pointer translation
-    pub fn get_check_size(&self) -> bool {
-        self.feature_set
-            .is_active(&check_slice_translation_size::id())
     }
 
     // Set this instruction syscall context

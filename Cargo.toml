@@ -85,6 +85,7 @@ members = [
     "rpc-client-nonce-utils",
     "rpc-test",
     "runtime",
+    "runtime-transaction",
     "sdk",
     "sdk/cargo-build-bpf",
     "sdk/cargo-build-sbf",
@@ -285,7 +286,7 @@ reqwest = { version = "0.11.22", default-features = false }
 rolling-file = "0.2.0"
 rpassword = "7.3"
 rustc_version = "0.4"
-rustls = { version = "0.21.8", default-features = false, features = ["quic"] }
+rustls = { version = "0.21.9", default-features = false, features = ["quic"] }
 rustversion = "1.0.14"
 scopeguard = "1.2.0"
 semver = "1.0.20"
@@ -361,6 +362,7 @@ solana-rpc-client = { path = "rpc-client", version = "=1.18.0", default-features
 solana-rpc-client-api = { path = "rpc-client-api", version = "=1.18.0" }
 solana-rpc-client-nonce-utils = { path = "rpc-client-nonce-utils", version = "=1.18.0" }
 solana-runtime = { path = "runtime", version = "=1.18.0" }
+solana-runtime-transaction = { path = "runtime-transaction", version = "=1.18.0" }
 solana-sdk = { path = "sdk", version = "=1.18.0" }
 solana-sdk-macro = { path = "sdk/macro", version = "=1.18.0" }
 solana-send-transaction-service = { path = "send-transaction-service", version = "=1.18.0" }
@@ -403,7 +405,7 @@ systemstat = "0.2.3"
 tar = "0.4.40"
 tarpc = "0.29.0"
 tempfile = "3.8.1"
-test-case = "3.2.1"
+test-case = "3.3.1"
 thiserror = "1.0.50"
 tiny-bip39 = "0.8.2"
 tokio = "1.29.1"

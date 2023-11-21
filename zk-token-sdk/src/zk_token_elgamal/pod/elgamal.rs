@@ -2,7 +2,7 @@
 
 #[cfg(not(target_os = "solana"))]
 use {
-    crate::{encryption::elgamal as decoded, errors::ProofError},
+    crate::encryption::elgamal::{self as decoded, ElGamalError},
     curve25519_dalek::ristretto::CompressedRistretto,
 };
 use {
@@ -55,10 +55,10 @@ impl From<decoded::ElGamalCiphertext> for ElGamalCiphertext {
 
 #[cfg(not(target_os = "solana"))]
 impl TryFrom<ElGamalCiphertext> for decoded::ElGamalCiphertext {
-    type Error = ProofError;
+    type Error = ElGamalError;
 
     fn try_from(pod_ciphertext: ElGamalCiphertext) -> Result<Self, Self::Error> {
-        Self::from_bytes(&pod_ciphertext.0).ok_or(ProofError::CiphertextDeserialization)
+        Self::from_bytes(&pod_ciphertext.0).ok_or(ElGamalError::CiphertextDeserialization)
     }
 }
 
@@ -88,10 +88,10 @@ impl From<decoded::ElGamalPubkey> for ElGamalPubkey {
 
 #[cfg(not(target_os = "solana"))]
 impl TryFrom<ElGamalPubkey> for decoded::ElGamalPubkey {
-    type Error = ProofError;
+    type Error = ElGamalError;
 
     fn try_from(pod_pubkey: ElGamalPubkey) -> Result<Self, Self::Error> {
-        Self::from_bytes(&pod_pubkey.0).ok_or(ProofError::CiphertextDeserialization)
+        Self::from_bytes(&pod_pubkey.0).ok_or(ElGamalError::PubkeyDeserialization)
     }
 }
 
@@ -123,9 +123,9 @@ impl From<DecryptHandle> for CompressedRistretto {
 
 #[cfg(not(target_os = "solana"))]
 impl TryFrom<DecryptHandle> for decoded::DecryptHandle {
-    type Error = ProofError;
+    type Error = ElGamalError;
 
     fn try_from(pod_handle: DecryptHandle) -> Result<Self, Self::Error> {
-        Self::from_bytes(&pod_handle.0).ok_or(ProofError::CiphertextDeserialization)
+        Self::from_bytes(&pod_handle.0).ok_or(ElGamalError::CiphertextDeserialization)
     }
 }
