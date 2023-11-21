@@ -27,7 +27,7 @@ use {
     solana_ledger::use_snapshot_archives_at_startup,
     solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
     solana_rpc::{rpc::MAX_REQUEST_BODY_SIZE, rpc_pubsub_service::PubSubConfig},
-    solana_rpc_client_api::request::MAX_MULTIPLE_ACCOUNTS,
+    solana_rpc_client_api::request::{MAX_MULTIPLE_ACCOUNTS, MAX_MULTIPLE_TRANSACTION_SIMULATIONS},
     solana_runtime::{
         snapshot_bank_utils::{
             DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
@@ -251,6 +251,15 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .default_value(&default_args.rpc_max_multiple_accounts)
                 .help("Override the default maximum accounts accepted by \
                        the getMultipleAccounts JSON RPC method")
+        )
+        .arg(
+            Arg::with_name("rpc_max_multiple_transaction_simulations")
+                .long("rpc-max-multiple-transaction-simulations")
+                .value_name("MAX TRANSACTIONS")
+                .takes_value(true)
+                .default_value(&default_args.rpc_max_multiple_transaction_simulations)
+                .help("Override the default maximum transactions accepted by \
+                       the simulateMultipleTransactions JSON RPC method")
         )
         .arg(
             Arg::with_name("health_check_slot_distance")
@@ -1928,6 +1937,7 @@ pub struct DefaultArgs {
     pub send_transaction_service_config: send_transaction_service::Config,
 
     pub rpc_max_multiple_accounts: String,
+    pub rpc_max_multiple_transaction_simulations: String,
     pub rpc_pubsub_max_active_subscriptions: String,
     pub rpc_pubsub_queue_capacity_items: String,
     pub rpc_pubsub_queue_capacity_bytes: String,
@@ -1994,6 +2004,8 @@ impl DefaultArgs {
             maximum_local_snapshot_age: "2500".to_string(),
             genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string(),
             rpc_max_multiple_accounts: MAX_MULTIPLE_ACCOUNTS.to_string(),
+            rpc_max_multiple_transaction_simulations: MAX_MULTIPLE_TRANSACTION_SIMULATIONS
+                .to_string(),
             health_check_slot_distance: "150".to_string(),
             tower_storage: "file".to_string(),
             etcd_domain_name: "localhost".to_string(),

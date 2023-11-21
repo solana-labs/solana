@@ -42,7 +42,8 @@ use {
             MAX_GET_CONFIRMED_BLOCKS_RANGE, MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT,
             MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE, MAX_GET_PROGRAM_ACCOUNT_FILTERS,
             MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, MAX_GET_SLOT_LEADERS, MAX_MULTIPLE_ACCOUNTS,
-            MAX_RPC_VOTE_ACCOUNT_INFO_EPOCH_CREDITS_HISTORY, NUM_LARGEST_ACCOUNTS,
+            MAX_MULTIPLE_TRANSACTION_SIMULATIONS, MAX_RPC_VOTE_ACCOUNT_INFO_EPOCH_CREDITS_HISTORY,
+            NUM_LARGEST_ACCOUNTS,
         },
         response::{Response as RpcResponse, *},
     },
@@ -143,6 +144,7 @@ pub struct JsonRpcConfig {
     pub health_check_slot_distance: u64,
     pub rpc_bigtable_config: Option<RpcBigtableConfig>,
     pub max_multiple_accounts: Option<usize>,
+    pub max_multiple_transaction_simulations: Option<usize>,
     pub account_indexes: AccountSecondaryIndexes,
     pub rpc_threads: usize,
     pub rpc_niceness_adj: i8,
@@ -3830,6 +3832,16 @@ pub mod rpc_full {
             config: Option<RpcSimulateTransactionConfig>,
         ) -> Result<RpcResponse<Vec<RpcSimulateTransactionResult>>> {
             debug!("simulate_multiple_transactions rpc request received");
+            let max_simulations = meta
+                .config
+                .max_multiple_transaction_simulations
+                .unwrap_or(MAX_MULTIPLE_TRANSACTION_SIMULATIONS);
+            if data.len() > max_simulations {
+                return Err(Error::invalid_params(format!(
+                    "Too many transactions provided; max {max_simulations}"
+                )));
+            }
+
             let RpcSimulateTransactionConfig {
                 sig_verify,
                 replace_recent_blockhash,
@@ -3844,7 +3856,6 @@ pub mod rpc_full {
                     "unsupported encoding: {tx_encoding}. Supported encodings: base58, base64"
                 ))
             })?;
-            // TODO: limit total number of transactions with default + config
             let mut unsanitized_txs = data
                 .into_iter()
                 .map(|data| {

@@ -207,6 +207,7 @@ pub const MAX_MULTIPLE_ACCOUNTS: usize = 100;
 pub const NUM_LARGEST_ACCOUNTS: usize = 20;
 pub const MAX_GET_PROGRAM_ACCOUNT_FILTERS: usize = 4;
 pub const MAX_GET_SLOT_LEADERS: usize = 5000;
+pub const MAX_MULTIPLE_TRANSACTION_SIMULATIONS: usize = 10;
 
 // Limit the length of the `epoch_credits` array for each validator in a `get_vote_accounts`
 // response

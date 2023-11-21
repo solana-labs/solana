@@ -1296,6 +1296,11 @@ pub fn main() {
                 "rpc_max_multiple_accounts",
                 usize
             )),
+            max_multiple_transaction_simulations: Some(value_t_or_exit!(
+                matches,
+                "rpc_max_multiple_transaction_simulations",
+                usize
+            )),
             health_check_slot_distance: value_t_or_exit!(
                 matches,
                 "health_check_slot_distance",
