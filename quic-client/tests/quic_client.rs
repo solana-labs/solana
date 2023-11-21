@@ -443,6 +443,7 @@ mod tests {
                             vec![0u8; PACKET_DATA_SIZE-1 /*PACKET_DATA_SIZE*/];
                             num_expected_packets
                         ];
+                        println!("Sending data");
                         let rslt = client.send_data_batch(&packets);
                         println!("Sent data: {rslt:?}");
                         if let Err(rslt) = rslt {
