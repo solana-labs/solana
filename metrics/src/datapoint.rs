@@ -39,9 +39,10 @@
 //!     ("some-string", "field-value", String),
 //! );
 //!
-use chrono::{DateTime, Utc};
-use std::{fmt, time::SystemTime};
-
+use {
+    chrono::{DateTime, SecondsFormat, Utc},
+    std::{fmt, time::SystemTime},
+};
 
 #[derive(Clone, Debug)]
 pub struct DataPoint {
@@ -92,7 +93,12 @@ impl DataPoint {
 impl fmt::Display for DataPoint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let datetime: DateTime<Utc> = self.timestamp.into();
-        write!(f, "datapoint: {}, timestamp: {}", self.name, datetime.to_rfc3339())?;
+        write!(
+            f,
+            "datapoint: {}, timestamp: {}",
+            self.name,
+            datetime.to_rfc3339_opts(SecondsFormat::Secs, true)
+        )?;
         for tag in &self.tags {
             write!(f, ",{}={}", tag.0, tag.1)?;
         }
