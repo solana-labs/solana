@@ -125,9 +125,9 @@ use {
         account::{
             create_account_shared_data_with_fields as create_account, from_account, Account,
             AccountSharedData, InheritableAccountFields, ReadableAccount, WritableAccount,
+            PROGRAM_OWNERS,
         },
         account_utils::StateMut,
-        bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{
             BankId, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_HASHES_PER_TICK,
@@ -5229,12 +5229,6 @@ impl Bank {
         );
         check_time.stop();
 
-        const PROGRAM_OWNERS: &[Pubkey] = &[
-            bpf_loader_upgradeable::id(),
-            bpf_loader::id(),
-            bpf_loader_deprecated::id(),
-            loader_v4::id(),
-        ];
         let mut program_accounts_map = self.filter_executable_program_accounts(
             &self.ancestors,
             sanitized_txs,
