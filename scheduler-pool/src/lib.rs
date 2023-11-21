@@ -933,7 +933,6 @@ where
                                                     Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count);
                                                 }
                                                 ControlFrame::EndSession => {
-                                                    log_scheduler!();
                                                     will_end_session = true;
                                                     log_scheduler!("end_sess");
                                                 }
@@ -941,7 +940,6 @@ where
                                         }
                                     };
                                 } else {
-                                    log_scheduler!();
                                     assert!(!will_end_thread);
                                     schedulable_transaction_receiver = never();
                                     will_end_thread = true;
