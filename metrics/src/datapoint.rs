@@ -95,9 +95,9 @@ impl fmt::Display for DataPoint {
         let datetime: DateTime<Utc> = self.timestamp.into();
         write!(
             f,
-            "datapoint: {}, timestamp: {}",
-            self.name,
-            datetime.to_rfc3339_opts(SecondsFormat::Secs, true)
+            "{} datapoint: {}",
+            datetime.format("%H:%M:%S %Z"),
+            self.name
         )?;
         for tag in &self.tags {
             write!(f, ",{}={}", tag.0, tag.1)?;
