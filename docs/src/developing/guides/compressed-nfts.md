@@ -282,7 +282,7 @@ two related instructions:
 2. actually create the tree, owned by the Bubblegum program
 
 Using the
-[`createAllocTreeIx`](https://solana-labs.github.io/solana-program-library/account-compression/sdk/docs/modules/index.html#createAllocTreeIx)
+[`createAllocTreeIx`](https://github.com/solana-labs/solana-program-library/blob/e4908b929f69f108f978b586bd0cd5b43f24cb1e/account-compression/sdk/src/instructions/index.ts#L169)
 helper function, we allocate enough space on-chain for our tree.
 
 ```ts
