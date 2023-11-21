@@ -279,12 +279,10 @@ impl MetricsAgent {
                         last_write_time = Instant::now();
                         barrier.wait();
                     }
-                    MetricsCommand::Submit(point, level) => {
-                        log!(level, "{}", point);
+                    MetricsCommand::Submit(point, _level) => {
                         points.push(point);
                     }
                     MetricsCommand::SubmitCounter(counter, _level, bucket) => {
-                        debug!("{:?}", counter);
                         let key = (counter.name, bucket);
                         if let Some(value) = counters.get_mut(&key) {
                             value.count += counter.count;
@@ -374,6 +372,7 @@ pub fn set_host_id(host_id: String) {
 /// Submits a new point from any thread.  Note that points are internally queued
 /// and transmitted periodically in batches.
 pub fn submit(point: DataPoint, level: log::Level) {
+    log!(level, "{}", point);
     let agent = get_singleton_agent();
     agent.submit(point, level);
 }
@@ -381,6 +380,7 @@ pub fn submit(point: DataPoint, level: log::Level) {
 /// Submits a new counter or updates an existing counter from any thread.  Note that points are
 /// internally queued and transmitted periodically in batches.
 pub(crate) fn submit_counter(point: CounterPoint, level: log::Level, bucket: u64) {
+    debug!("{:?}", point);
     let agent = get_singleton_agent();
     agent.submit_counter(point, level, bucket);
 }
