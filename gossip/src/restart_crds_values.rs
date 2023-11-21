@@ -1,5 +1,5 @@
 use {
-    crate::crds_value::new_rand_timestamp,
+    crate::crds_value::{new_rand_timestamp, sanitize_wallclock},
     bv::BitVec,
     itertools::Itertools,
     rand::Rng,
@@ -35,17 +35,17 @@ pub struct RestartHeaviestFork {
     pub wallclock: u64,
     pub last_slot: Slot,
     pub last_slot_hash: Hash,
-    // Sum of received heaviest fork validator stake / total stake * u16::MAX.
-    received_heaviest_fork_ratio: u16,
+    pub observed_stake: u64,
+    pub total_epoch_stake: u64,
     pub shred_version: u16,
 }
 
 #[derive(Debug, Error, PartialEq)]
 pub enum RestartHeaviestForkError {
     #[error("Received stake larger than total stake")]
-    ReceivedHeaviestForkStakeLargerThanTotalStake,
+    StakeLargerThanTotalStake,
     #[error("Total stake of received heaviest fork cannot be zero")]
-    ReceivedHeaviestForkStakeZero,
+    ZeroObservedStake,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample, AbiEnumVisitor)]
@@ -67,6 +67,7 @@ struct RawOffsets(BitVec<u8>);
 
 impl Sanitize for RestartLastVotedForkSlots {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        sanitize_wallclock(self.wallclock)?;
         self.last_voted_hash.sanitize()
     }
 }
@@ -143,10 +144,11 @@ impl RestartLastVotedForkSlots {
 
 impl Sanitize for RestartHeaviestFork {
     fn sanitize(&self) -> Result<(), SanitizeError> {
-        if self.received_heaviest_fork_ratio == 0 {
+        if self.observed_stake == 0 || self.observed_stake > self.total_epoch_stake {
             // this should at least include its own stake.
             return Err(SanitizeError::ValueOutOfBounds);
         }
+        sanitize_wallclock(self.wallclock)?;
         self.last_slot_hash.sanitize()
     }
 }
@@ -157,25 +159,23 @@ impl RestartHeaviestFork {
         now: u64,
         last_slot: Slot,
         last_slot_hash: Hash,
-        received_heaviest_fork_stake: u64,
-        total_stake: u64,
+        observed_stake: u64,
+        total_epoch_stake: u64,
         shred_version: u16,
     ) -> Result<Self, RestartHeaviestForkError> {
-        if received_heaviest_fork_stake == 0 {
-            return Err(RestartHeaviestForkError::ReceivedHeaviestForkStakeZero);
+        if observed_stake == 0 {
+            return Err(RestartHeaviestForkError::ZeroObservedStake);
         }
-        if received_heaviest_fork_stake > total_stake {
-            return Err(RestartHeaviestForkError::ReceivedHeaviestForkStakeLargerThanTotalStake);
+        if observed_stake > total_epoch_stake {
+            return Err(RestartHeaviestForkError::StakeLargerThanTotalStake);
         }
-        let received_heaviest_fork_ratio =
-            ((received_heaviest_fork_stake as f64) / (total_stake as f64) * (u16::MAX as f64))
-                .round() as u16;
         Ok(Self {
             from,
             wallclock: now,
             last_slot,
             last_slot_hash,
-            received_heaviest_fork_ratio,
+            observed_stake,
+            total_epoch_stake,
             shred_version,
         })
     }
@@ -192,10 +192,6 @@ impl RestartHeaviestFork {
             1,
         )
         .unwrap()
-    }
-
-    pub fn get_ratio(&self) -> f64 {
-        self.received_heaviest_fork_ratio as f64 / u16::MAX as f64
     }
 }
 
@@ -265,7 +261,6 @@ mod test {
             crds_value::{CrdsData, CrdsValue, CrdsValueLabel},
         },
         bincode::serialized_size,
-        num_traits::abs,
         solana_sdk::{signature::Signer, signer::keypair::Keypair, timing::timestamp},
         std::iter::repeat_with,
     };
@@ -411,7 +406,7 @@ mod test {
                 1_000_000,
                 1,
             ),
-            Err(RestartHeaviestForkError::ReceivedHeaviestForkStakeZero)
+            Err(RestartHeaviestForkError::ZeroObservedStake)
         );
         assert_eq!(
             RestartHeaviestFork::new(
@@ -423,7 +418,7 @@ mod test {
                 0,
                 1,
             ),
-            Err(RestartHeaviestForkError::ReceivedHeaviestForkStakeLargerThanTotalStake)
+            Err(RestartHeaviestForkError::StakeLargerThanTotalStake)
         );
         assert_eq!(
             RestartHeaviestFork::new(
@@ -435,7 +430,7 @@ mod test {
                 1_000_000,
                 1,
             ),
-            Err(RestartHeaviestForkError::ReceivedHeaviestForkStakeLargerThanTotalStake)
+            Err(RestartHeaviestForkError::StakeLargerThanTotalStake)
         );
         let mut fork = RestartHeaviestFork::new(
             keypair.pubkey(),
@@ -448,9 +443,11 @@ mod test {
         )
         .unwrap();
         assert_eq!(fork.sanitize(), Ok(()));
-        assert!(abs(fork.get_ratio() - 0.8) < 0.0001);
-
-        fork.received_heaviest_fork_ratio = 0;
+        assert_eq!(fork.observed_stake, 800_000);
+        assert_eq!(fork.total_epoch_stake, 1_000_000);
+        fork.total_epoch_stake = 600_000;
+        assert_eq!(fork.sanitize(), Err(SanitizeError::ValueOutOfBounds));
+        fork.observed_stake = 0;
         assert_eq!(fork.sanitize(), Err(SanitizeError::ValueOutOfBounds));
     }
 }
