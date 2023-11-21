@@ -577,12 +577,15 @@ impl ClientConnection for QuicClientConnection {
     }
 
     async fn send_data_batch(&self, buffers: &[Vec<u8>]) -> TransportResult<()> {
+        println!("Executing send_data_batch");
         let stats = ClientStats::default();
         let len = buffers.len();
         let res = self
             .client
             .send_batch(buffers, &stats, self.connection_stats.clone())
             .await;
+
+        println!("Result send_data_batch {res:?}");
         self.connection_stats
             .add_client_stats(&stats, len, res.is_ok());
         res?;
