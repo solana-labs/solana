@@ -33,7 +33,6 @@ use {
         marker::{PhantomData, Send, Sync},
         mem,
         sync::Arc,
-        time::Duration,
     },
     test::Bencher,
 };
