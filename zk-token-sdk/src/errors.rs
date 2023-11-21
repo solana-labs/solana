@@ -20,6 +20,8 @@ pub enum ProofError {
     PubkeyDeserialization,
     #[error("ciphertext does not exist in instruction data")]
     MissingCiphertext,
+    #[error("illegal commitment length")]
+    IllegalCommitmentLength,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
