@@ -279,6 +279,16 @@ where
     fn register_to_watchdog(&self, thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>) {
         self.watchdog_sender.send(thread_manager).unwrap();
     }
+
+    fn pooled_since(&self) -> Option<Duration> {
+        self.pooled_at.elapsed().ok()
+    }
+
+    fn stop_thread_manager(&mut self) {
+        debug!("stop_thread_manager()");
+        self.thread_manager.write().unwrap().stop_threads();
+    }
+
 }
 
 impl<T, TH, SEA> InstalledSchedulerPool<SEA> for SchedulerPool<T, TH, SEA>
