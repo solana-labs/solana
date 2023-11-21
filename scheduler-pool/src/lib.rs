@@ -220,7 +220,7 @@ where
                         }
                     }
                     info!(
-                    "watchdog: watched thread managers: {} => {} => {}, schedulers in the pool: {} => {}",
+                    "watchdog: schedulers in the pool: {} => {}, watched thread managers: {} => {} => {}",
                     pre_retain_len,
                     pre_push_len,
                     watched_thread_managers.len(),
