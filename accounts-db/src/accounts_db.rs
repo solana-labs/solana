@@ -378,7 +378,7 @@ impl CurrentAncientAppendVec {
         let accounts = accounts_to_store.get(storage_selector);
 
         db.store_accounts_frozen(
-            (self.slot(), accounts, accounts_to_store.slot),
+            (self.slot(), accounts, accounts_to_store.slot()),
             None::<Vec<AccountHash>>,
             self.append_vec(),
             None,
