@@ -349,7 +349,7 @@ impl QuicClient {
                         match conn {
                             Ok(conn) => {
                                 *conn_guard = Some(conn.clone());
-                                info!(
+                                println!(
                                     "Made connection to {} id {} try_count {}, from connection cache warming?: {}",
                                     self.addr,
                                     conn.connection.stable_id(),
