@@ -190,23 +190,7 @@ where
 
                     let mut schedulers = scheduler_pool.schedulers.lock().unwrap();
                     let pre_schedulers_len = schedulers.len();
-                    schedulers.retain_mut(|scheduler| {
-                        let Some(pooled_duration) = scheduler.pooled_since() else {
-                            return true;
-                        };
-                        if pooled_duration <= Duration::from_secs(600) {
-                            true
-                        } else {
-                            const BITS_PER_HEX_DIGIT: usize = 4;
-                            info!(
-                                "[sch_{:0width$x}]: watchdog: retiring unused scheduler...",
-                                scheduler.id(),
-                                width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
-                            );
-                            scheduler.stop_thread_manager();
-                            false
-                        }
-                    });
+                    schedulers.retain_mut(|scheduler| schedulers.should_retain_in_pool());
                     let post_schedulers_len = schedulers.len();
                     drop(schedulers);
 
@@ -1296,14 +1280,6 @@ pub trait SpawnableScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg>:
     where
         Self: Sized;
 
-    fn pooled_since(&self) -> Option<Duration>
-    where
-        Self: Sized;
-
-    fn stop_thread_manager(&mut self)
-    where
-        Self: Sized;
-
     fn should_retain_in_pool(&mut self) -> bool
     where
         Self: Sized;
@@ -1320,7 +1296,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
         Self::do_spawn(pool, initial_context, handler)
     }
 
-    fn pooled_since(&self) -> Option<Duration> {
+    fn should_retain_in_pool(&mut self) -> bool {
         const BITS_PER_HEX_DIGIT: usize = 4;
         info!(
             "[sch_{:0width$x}]: watchdog: address book size: {}...",
@@ -1328,22 +1304,13 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
             self.address_book.page_count(),
             width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
         );
-        self.pooled_at.elapsed().ok()
-    }
 
-    fn stop_thread_manager(&mut self) {
-        debug!("stop_thread_manager()");
-        self.thread_manager.write().unwrap().stop_threads();
-    }
-
-    fn should_retain_in_pool(&mut self) -> bool {
         let Some(pooled_duration) = self.pooled_since() else {
             return true;
         };
         if pooled_duration <= Duration::from_secs(600) {
             true
         } else {
-            const BITS_PER_HEX_DIGIT: usize = 4;
             info!(
                 "[sch_{:0width$x}]: watchdog: retiring unused scheduler...",
                 self.id(),
