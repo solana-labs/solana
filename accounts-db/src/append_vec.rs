@@ -10,7 +10,7 @@ use {
             AccountMeta, StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo,
             StoredAccountMeta, StoredMeta, StoredMetaWriteVersion,
         },
-        accounts_file::{AccountsFileError, Result, ALIGN_BOUNDARY_OFFSET},
+        accounts_file::{AccountsFileError, MatchAccountOwnerError, Result, ALIGN_BOUNDARY_OFFSET},
         accounts_hash::AccountHash,
         storable_accounts::StorableAccounts,
         u64_align,
@@ -94,14 +94,6 @@ impl<'append_vec> Iterator for AppendVecAccountsIter<'append_vec> {
             None
         }
     }
-}
-
-#[derive(Error, Debug, PartialEq, Eq)]
-pub enum MatchAccountOwnerError {
-    #[error("The account owner does not match with the provided list")]
-    NoMatch,
-    #[error("Unable to load the account")]
-    UnableToLoad,
 }
 
 /// References to account data stored elsewhere. Getting an `Account` requires cloning
