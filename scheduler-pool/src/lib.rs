@@ -190,7 +190,7 @@ where
 
                     let mut schedulers = scheduler_pool.schedulers.lock().unwrap();
                     let pre_schedulers_len = schedulers.len();
-                    schedulers.retain_mut(|scheduler| schedulers.should_retain_in_pool());
+                    schedulers.retain_mut(|scheduler| scheduler.should_retain_in_pool());
                     let post_schedulers_len = schedulers.len();
                     drop(schedulers);
 
