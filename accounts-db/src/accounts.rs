@@ -391,11 +391,11 @@ impl Accounts {
                         self.accounts_db
                             .load_with_fixed_root(ancestors, key)
                             .map(|(mut account, _)| {
+                                // get the updated state from the entry level lookup
+                                if let Some(lookup_acct) = entry_accts_lookup.get(key) {
+                                    account = lookup_acct.clone();
+                                }
                                 if message.is_writable(i) {
-                                    // get the updated state from the entry level lookup
-                                    if let Some(lookup_acct) = entry_accts_lookup.get(key) {
-                                        account = lookup_acct.clone();
-                                    }
                                     let rent_due = rent_collector
                                         .collect_from_existing_account(
                                             key,
@@ -1148,7 +1148,7 @@ impl Accounts {
         for k in writable_keys.iter() {
             if account_locks.is_locked_write(k) || account_locks.is_locked_readonly(k)
             {
-                self_conflicting_account = entry_accts_lookup.writables.contains(k);
+                self_conflicting_account = entry_accts_lookup.writables.contains(k) || entry_accts_lookup.readables.contains(k);
                 if !self_conflicting_account {
                     debug!("Writable account in use: {:?}", k);
                     return (Err(TransactionError::AccountInUse),self_conflicting_tx);
@@ -1161,7 +1161,7 @@ impl Accounts {
         }
         for k in readonly_keys.iter() {
             if account_locks.is_locked_write(k) { 
-                self_conflicting_account = entry_accts_lookup.readables.contains(k);
+                self_conflicting_account = entry_accts_lookup.writables.contains(k);
                 if !self_conflicting_account {
                     debug!("Read-only account in use: {:?}", k);
                     return (Err(TransactionError::AccountInUse),self_conflicting_tx);
