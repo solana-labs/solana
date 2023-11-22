@@ -1176,10 +1176,6 @@ impl Validator {
                 .unwrap_or_else(|| current_runtime_handle.as_ref().unwrap()),
             &identity_keypair,
             node.sockets.tvu_quic,
-            node.info
-                .tvu(Protocol::QUIC)
-                .map_err(|err| format!("Invalid QUIC TVU address: {err:?}"))?
-                .ip(),
             turbine_quic_endpoint_sender,
             bank_forks.clone(),
         )
@@ -1201,10 +1197,6 @@ impl Validator {
                     .unwrap_or_else(|| current_runtime_handle.as_ref().unwrap()),
                 &identity_keypair,
                 node.sockets.serve_repair_quic,
-                node.info
-                    .serve_repair(Protocol::QUIC)
-                    .map_err(|err| format!("Invalid QUIC serve-repair address: {err:?}"))?
-                    .ip(),
                 repair_quic_endpoint_sender,
                 bank_forks.clone(),
             )

@@ -11,10 +11,10 @@ mod tests {
         solana_sdk::{net::DEFAULT_TPU_COALESCE, packet::PACKET_DATA_SIZE, signature::Keypair},
         solana_streamer::{
             nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT, streamer::StakedNodes,
-            tls_certificates::new_self_signed_tls_certificate,
+            tls_certificates::new_dummy_x509_certificate,
         },
         std::{
-            net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
+            net::{IpAddr, SocketAddr, UdpSocket},
             sync::{
                 atomic::{AtomicBool, Ordering},
                 Arc, RwLock,
@@ -67,12 +67,11 @@ mod tests {
         solana_logger::setup();
         let (sender, receiver) = unbounded();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let (s, exit, keypair, ip) = server_args();
+        let (s, exit, keypair, _) = server_args();
         let (_, t) = solana_streamer::quic::spawn_server(
             "quic_streamer_test",
             s.try_clone().unwrap(),
             &keypair,
-            ip,
             sender,
             exit.clone(),
             1,
@@ -147,12 +146,11 @@ mod tests {
         solana_logger::setup();
         let (sender, receiver) = unbounded();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let (s, exit, keypair, ip) = server_args();
+        let (s, exit, keypair, _) = server_args();
         let (_, _, t) = solana_streamer::nonblocking::quic::spawn_server(
             "quic_streamer_test",
             s.try_clone().unwrap(),
             &keypair,
-            ip,
             sender,
             exit.clone(),
             1,
@@ -203,12 +201,11 @@ mod tests {
         // Request Receiver
         let (sender, receiver) = unbounded();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let (request_recv_socket, request_recv_exit, keypair, request_recv_ip) = server_args();
+        let (request_recv_socket, request_recv_exit, keypair, _) = server_args();
         let (request_recv_endpoint, request_recv_thread) = solana_streamer::quic::spawn_server(
             "quic_streamer_test",
             request_recv_socket.try_clone().unwrap(),
             &keypair,
-            request_recv_ip,
             sender,
             request_recv_exit.clone(),
             1,
@@ -222,7 +219,7 @@ mod tests {
 
         drop(request_recv_endpoint);
         // Response Receiver:
-        let (response_recv_socket, response_recv_exit, keypair2, response_recv_ip) = server_args();
+        let (response_recv_socket, response_recv_exit, keypair2, _) = server_args();
         let (sender2, receiver2) = unbounded();
 
         let addr = response_recv_socket.local_addr().unwrap().ip();
@@ -232,7 +229,6 @@ mod tests {
             "quic_streamer_test",
             response_recv_socket,
             &keypair2,
-            response_recv_ip,
             sender2,
             response_recv_exit.clone(),
             1,
@@ -250,9 +246,7 @@ mod tests {
         let tpu_addr = SocketAddr::new(addr, port);
         let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
 
-        let (cert, priv_key) =
-            new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::UNSPECIFIED))
-                .expect("Failed to initialize QUIC client certificates");
+        let (cert, priv_key) = new_dummy_x509_certificate(&Keypair::new());
         let client_certificate = Arc::new(QuicClientCertificate {
             certificate: cert,
             key: priv_key,
@@ -272,9 +266,7 @@ mod tests {
         info!("Received requests!");
 
         // Response sender
-        let (cert, priv_key) =
-            new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::LOCALHOST))
-                .expect("Failed to initialize QUIC client certificates");
+        let (cert, priv_key) = new_dummy_x509_certificate(&Keypair::new());
 
         let client_certificate2 = Arc::new(QuicClientCertificate {
             certificate: cert,

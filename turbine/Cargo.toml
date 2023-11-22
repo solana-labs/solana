@@ -21,7 +21,6 @@ quinn = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }
-rcgen = { workspace = true }
 rustls = { workspace = true }
 solana-entry = { workspace = true }
 solana-gossip = { workspace = true }

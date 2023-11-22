@@ -85,7 +85,6 @@ pub fn spawn_server(
     name: &'static str,
     sock: UdpSocket,
     keypair: &Keypair,
-    gossip_host: IpAddr,
     packet_sender: Sender<PacketBatch>,
     exit: Arc<AtomicBool>,
     max_connections_per_peer: usize,
@@ -96,7 +95,7 @@ pub fn spawn_server(
     coalesce: Duration,
 ) -> Result<(Endpoint, Arc<StreamStats>, JoinHandle<()>), QuicServerError> {
     info!("Start {name} quic server on {sock:?}");
-    let (config, _cert) = configure_server(keypair, gossip_host)?;
+    let (config, _cert) = configure_server(keypair)?;
 
     let endpoint = Endpoint::new(
         EndpointConfig::default(),
@@ -1094,7 +1093,7 @@ pub mod test {
         crate::{
             nonblocking::quic::compute_max_allowed_uni_streams,
             quic::{MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
-            tls_certificates::new_self_signed_tls_certificate,
+            tls_certificates::new_dummy_x509_certificate,
         },
         assert_matches::assert_matches,
         async_channel::unbounded as async_unbounded,
@@ -1106,7 +1105,7 @@ pub mod test {
             signature::Keypair,
             signer::Signer,
         },
-        std::{collections::HashMap, net::Ipv4Addr},
+        std::collections::HashMap,
         tokio::time::sleep,
     };
 
@@ -1133,9 +1132,7 @@ pub mod test {
     }
 
     pub fn get_client_config(keypair: &Keypair) -> ClientConfig {
-        let ipaddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
-        let (cert, key) = new_self_signed_tls_certificate(keypair, ipaddr)
-            .expect("Failed to generate client certificate");
+        let (cert, key) = new_dummy_x509_certificate(keypair);
 
         let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
@@ -1171,14 +1168,12 @@ pub mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let (sender, receiver) = unbounded();
         let keypair = Keypair::new();
-        let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(option_staked_nodes.unwrap_or_default()));
         let (_, stats, t) = spawn_server(
             "quic_streamer_test",
             s,
             &keypair,
-            ip,
             sender,
             exit.clone(),
             max_connections_per_peer,
@@ -1607,14 +1602,12 @@ pub mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let (sender, _) = unbounded();
         let keypair = Keypair::new();
-        let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let (_, _, t) = spawn_server(
             "quic_streamer_test",
             s,
             &keypair,
-            ip,
             sender,
             exit.clone(),
             1,
@@ -1638,14 +1631,12 @@ pub mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let (sender, receiver) = unbounded();
         let keypair = Keypair::new();
-        let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let (_, stats, t) = spawn_server(
             "quic_streamer_test",
             s,
             &keypair,
-            ip,
             sender,
             exit.clone(),
             2,

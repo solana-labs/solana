@@ -25,7 +25,6 @@ percentage = { workspace = true }
 quinn = { workspace = true }
 quinn-proto = { workspace = true }
 rand = { workspace = true }
-rcgen = { workspace = true }
 rustls = { workspace = true, features = ["dangerous_configuration"] }
 solana-metrics = { workspace = true }
 solana-perf = { workspace = true }
