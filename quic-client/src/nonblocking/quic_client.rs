@@ -407,7 +407,10 @@ impl QuicClient {
             last_connection_id = connection.stable_id();
             measure_prepare_connection.stop();
 
-            println!("To call _send_buffer_using_conn... {:?}", std::thread::current().id());
+            println!(
+                "To call _send_buffer_using_conn... {:?}",
+                std::thread::current().id()
+            );
             match self._send_buffer_using_conn(data, &connection).await {
                 Ok(()) => {
                     measure_send_packet.stop();

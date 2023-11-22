@@ -165,7 +165,9 @@ where
             .unwrap_or(PoolStatus::Empty);
 
         let (cache_hit, num_evictions, eviction_timing_ms) =
-            if matches!(pool_status, PoolStatus::Empty) || (no_async && matches!(pool_status, PoolStatus::PartiallyFull)) {
+            if matches!(pool_status, PoolStatus::Empty)
+                || (no_async && matches!(pool_status, PoolStatus::PartiallyFull))
+            {
                 Self::create_connection_internal(
                     &self.connection_config,
                     &self.connection_manager,
@@ -448,7 +450,8 @@ pub trait ConnectionPool: Send + Sync + 'static {
     fn borrow_connection(&self) -> Arc<Self::BaseClientConnection> {
         // let mut rng = thread_rng();
         // let n = rng.gen_range(0..self.num_connections());
-        self.get(self.num_connections() - 1).expect("index is within num_connections")
+        self.get(self.num_connections() - 1)
+            .expect("index is within num_connections")
     }
 
     /// Check if we need to create a new connection. If the count of the connections

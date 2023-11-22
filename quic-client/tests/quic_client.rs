@@ -3,20 +3,14 @@ mod tests {
     use {
         crossbeam_channel::{unbounded, Receiver},
         log::*,
-        quinn::Endpoint,
         rayon::iter::{IntoParallelIterator, ParallelIterator},
-        solana_connection_cache::{
-            client_connection::ClientConnection,
-            connection_cache::{ConnectionCache, NewConnectionConfig},
-            connection_cache_stats::ConnectionCacheStats,
-        },
+        solana_connection_cache::connection_cache_stats::ConnectionCacheStats,
         solana_perf::packet::PacketBatch,
-        solana_quic_client::{
-            nonblocking::quic_client::{QuicClientCertificate, QuicLazyInitializedEndpoint},
-            QuicConfig, QuicConnectionManager, QuicPool,
+        solana_quic_client::nonblocking::quic_client::{
+            QuicClientCertificate, QuicLazyInitializedEndpoint,
         },
         solana_sdk::{
-            net::DEFAULT_TPU_COALESCE, packet::PACKET_DATA_SIZE, pubkey::Pubkey,
+            net::DEFAULT_TPU_COALESCE, packet::PACKET_DATA_SIZE,
             quic::QUIC_MAX_STAKED_CONCURRENT_STREAMS, signature::Keypair,
         },
         solana_streamer::{
@@ -377,50 +371,32 @@ mod tests {
         }
     }
 
-    /// Create a quic connection_cache
-    fn new_quic(
-        name: &'static str,
-        connection_pool_size: usize,
-    ) -> ConnectionCache<QuicPool, QuicConnectionManager, QuicConfig> {
-        new_with_client_options(name, connection_pool_size, None, None, None)
-    }
-
-    /// Create a quic conneciton_cache with more client options
-    fn new_with_client_options(
-        name: &'static str,
-        connection_pool_size: usize,
-        client_endpoint: Option<Endpoint>,
-        cert_info: Option<(&Keypair, IpAddr)>,
-        stake_info: Option<(&Arc<RwLock<StakedNodes>>, &Pubkey)>,
-    ) -> ConnectionCache<QuicPool, QuicConnectionManager, QuicConfig> {
-        // The minimum pool size is 1.
-        let connection_pool_size = 1.max(connection_pool_size);
-        let mut config = QuicConfig::new().unwrap();
-        if let Some(client_endpoint) = client_endpoint {
-            config.update_client_endpoint(client_endpoint);
-        }
-        if let Some(cert_info) = cert_info {
-            config
-                .update_client_certificate(cert_info.0, cert_info.1)
-                .unwrap();
-        }
-        if let Some(stake_info) = stake_info {
-            config.set_staked_nodes(stake_info.0, stake_info.1);
-        }
-        let connection_manager = QuicConnectionManager::new_with_connection_config(config);
-        ConnectionCache::new(name, connection_manager, connection_pool_size).unwrap()
-    }
-
     #[tokio::test]
     async fn test_connection_cache_memory_usage_2() {
+        use {
+            solana_connection_cache::client_connection::ClientConnection,
+            solana_quic_client::quic_client::QuicClientConnection,
+        };
+
         solana_logger::setup();
 
-        let addr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        let port = 8009;
-        let tpu_addr = SocketAddr::new(addr, port);
-        let mut clients = Vec::default();
+        let (request_recv_socket, _request_recv_exit, _keypair, _request_recv_ip) = server_args();
 
-        let connection_cache = new_quic("test_connection_cache", 8000);
+        // Request Sender, it uses the same endpoint as the response receiver:
+        let addr = request_recv_socket.local_addr().unwrap().ip();
+        let port = request_recv_socket.local_addr().unwrap().port();
+        let tpu_addr = SocketAddr::new(addr, port);
+        let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
+
+        let (cert, priv_key) =
+            new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::UNSPECIFIED))
+                .expect("Failed to initialize QUIC client certificates");
+        let client_certificate = Arc::new(QuicClientCertificate {
+            certificate: cert,
+            key: priv_key,
+        });
+
+        let endpoint = Arc::new(QuicLazyInitializedEndpoint::new(client_certificate, None));
 
         let thread_pool = rayon::ThreadPoolBuilder::new()
             .num_threads(1)
@@ -428,10 +404,14 @@ mod tests {
             .build()
             .unwrap();
 
+        let mut clients = Vec::default();
         for i in 0..8000 {
             println!("Connection {i}");
-            let client = connection_cache.get_connection(&tpu_addr);
-
+            let client = QuicClientConnection::new(
+                endpoint.clone(),
+                tpu_addr,
+                connection_cache_stats.clone(),
+            );
             // Send a full size packet with single byte writes.
             let num_expected_packets: usize = 1;
 
