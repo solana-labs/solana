@@ -16,6 +16,7 @@ use {
         clock::{Epoch, Slot},
         feature_set,
         hash::Hash,
+        pubkey::Pubkey,
         timing,
     },
     std::{
@@ -693,6 +694,16 @@ impl BankForks {
         bank.slot() > self.last_accounts_hash_slot
             && bank.parent_slot() < start_slot
             && bank.slot() >= start_slot
+    }
+
+    pub fn new_bank_from_parent_for_tests(
+        &mut self,
+        parent: Arc<Bank>,
+        collector_id: &Pubkey,
+        slot: Slot,
+    ) -> Arc<Bank> {
+        let bank = Bank::new_from_parent(parent, collector_id, slot);
+        self.insert(bank).clone_without_scheduler()
     }
 }
 
