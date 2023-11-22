@@ -1,5 +1,4 @@
 use {
-    pkcs8::{der::Document, AlgorithmIdentifier, ObjectIdentifier},
     rcgen::{CertificateParams, DistinguishedName, DnType, RcgenError, SanType},
     solana_sdk::{pubkey::Pubkey, signature::Keypair},
     std::net::IpAddr,
@@ -10,32 +9,43 @@ pub fn new_self_signed_tls_certificate(
     keypair: &Keypair,
     san: IpAddr,
 ) -> Result<(rustls::Certificate, rustls::PrivateKey), RcgenError> {
-    // TODO(terorie): Is it safe to sign the TLS cert with the identity private key?
+    // Note: This function signs an X.509 certificate with the node
+    // identity key, which is theoretically redundant. (Peer validation
+    // is done at a later step in the TLS CertificateVerify) We are
+    // currently forced to use X.509 certificates regardless because the
+    // Rust ecosystem's poor support for RFC 7250 (raw public keys).
+    //
+    // This form of key reuse introduces risk of type confusion attacks
+    // against the signing payload. It was proven using a CBMC model
+    // that no such type confusion attack exists as of 2023-Nov:
+    //
+    // https://github.com/firedancer-io/firedancer/blob/7e91d9bda93dee2a43065e30f65ef6422bd93019/src/disco/keyguard/fd_keyguard_match.c
+
+    // TODO: Consider (1) signing with a dummy cert authority instead of
+    //       using a self-signed certificate, or (2) forcing use of
+    //       RFC 7250 RawPublicKeys.
 
     // Unfortunately, rcgen does not accept a "raw" Ed25519 key.
     // We have to convert it to DER and pass it to the library.
 
     // Convert private key into PKCS#8 v1 object.
     // RFC 8410, Section 7: Private Key Format
-    // https://datatracker.ietf.org/doc/html/rfc8410#section-
-
-    // from https://datatracker.ietf.org/doc/html/rfc8410#section-3
-    const ED25519_IDENTIFIER: [u32; 4] = [1, 3, 101, 112];
-    let mut private_key = Vec::<u8>::with_capacity(34);
-    private_key.extend_from_slice(&[0x04, 0x20]); // ASN.1 OCTET STRING
-    private_key.extend_from_slice(keypair.secret().as_bytes());
-    let key_pkcs8 = pkcs8::PrivateKeyInfo {
-        algorithm: AlgorithmIdentifier {
-            oid: ObjectIdentifier::from_arcs(&ED25519_IDENTIFIER).expect("Failed to convert OID"),
-            parameters: None,
-        },
-        private_key: &private_key,
-        public_key: None,
-    };
-    let key_pkcs8_der = key_pkcs8
-        .to_der()
-        .expect("Failed to convert keypair to DER")
-        .to_der();
+    // https://www.rfc-editor.org/rfc/rfc8410#section-7
+    //
+    // The hardcoded prefix decodes to the following ASN.1 structure:
+    //
+    //   PrivateKeyInfo SEQUENCE (3 elem)
+    //     version Version INTEGER 0
+    //     privateKeyAlgorithm AlgorithmIdentifier SEQUENCE (1 elem)
+    //       algorithm OBJECT IDENTIFIER 1.3.101.112 curveEd25519 (EdDSA 25519 signature algorithm)
+    //     privateKey PrivateKey OCTET STRING (34 byte)
+    const PKCS8_PREFIX: [u8; 16] = [
+        0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04,
+        0x20,
+    ];
+    let mut key_pkcs8_der = Vec::<u8>::with_capacity(PKCS8_PREFIX.len() + 32);
+    key_pkcs8_der.extend_from_slice(&PKCS8_PREFIX);
+    key_pkcs8_der.extend_from_slice(keypair.secret().as_bytes());
 
     let rcgen_keypair = rcgen::KeyPair::from_der(&key_pkcs8_der)?;
 
