@@ -380,11 +380,9 @@ mod tests {
 
         solana_logger::setup();
 
-        let (request_recv_socket, _request_recv_exit, _keypair, _request_recv_ip) = server_args();
-
         // Request Sender, it uses the same endpoint as the response receiver:
-        let addr = request_recv_socket.local_addr().unwrap().ip();
-        let port = request_recv_socket.local_addr().unwrap().port();
+        let addr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+        let port = 8009;
         let tpu_addr = SocketAddr::new(addr, port);
         let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
 
