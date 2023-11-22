@@ -5521,6 +5521,7 @@ dependencies = [
  "solana-sdk",
  "solana-zk-token-sdk",
  "solana_rbpf",
+ "test-case",
  "thiserror",
 ]
 
