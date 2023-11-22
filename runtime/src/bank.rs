@@ -4160,10 +4160,12 @@ impl Bank {
     }
 
     /// Forget all signatures. Useful for benchmarking.
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn clear_signatures(&self) {
         self.status_cache.write().unwrap().clear();
     }
 
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn clear_slot_signatures(&self, slot: Slot) {
         self.status_cache.write().unwrap().clear_slot_entries(slot);
     }
