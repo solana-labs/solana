@@ -770,20 +770,20 @@ async fn handle_connection(
         }
     }
 
-    let removed_connection_count = connection_table.lock().unwrap().remove_connection(
-        ConnectionTableKey::new(remote_addr.ip(), remote_pubkey),
-        remote_addr.port(),
-        stable_id,
-    );
-    if removed_connection_count > 0 {
-        stats
-            .connection_removed
-            .fetch_add(removed_connection_count, Ordering::Relaxed);
-    } else {
-        stats
-            .connection_remove_failed
-            .fetch_add(1, Ordering::Relaxed);
-    }
+    // let removed_connection_count = connection_table.lock().unwrap().remove_connection(
+    //     ConnectionTableKey::new(remote_addr.ip(), remote_pubkey),
+    //     remote_addr.port(),
+    //     stable_id,
+    // );
+    // if removed_connection_count > 0 {
+    //     stats
+    //         .connection_removed
+    //         .fetch_add(removed_connection_count, Ordering::Relaxed);
+    // } else {
+    //     stats
+    //         .connection_remove_failed
+    //         .fetch_add(1, Ordering::Relaxed);
+    // }
     stats.total_connections.fetch_sub(1, Ordering::Relaxed);
 }
 
