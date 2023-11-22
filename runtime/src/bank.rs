@@ -966,7 +966,7 @@ pub(super) enum RewardInterval {
 }
 
 impl Bank {
-    fn wrap_with_bank_forks_for_tests(self) -> (Arc<Self>, Arc<RwLock<BankForks>>) {
+    pub(super) fn wrap_with_bank_forks_for_tests(self) -> (Arc<Self>, Arc<RwLock<BankForks>>) {
         let bank_fork = BankForks::new_rw_arc(self);
         let bank_arc = bank_fork.read().unwrap().root_bank();
         bank_arc
@@ -975,6 +975,21 @@ impl Bank {
             .unwrap()
             .set_fork_graph(bank_fork.clone());
         (bank_arc, bank_fork)
+    }
+
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn new_from_parent_with_bank_forks(
+        bank_forks: &RwLock<BankForks>,
+        parent: Arc<Bank>,
+        collector_id: &Pubkey,
+        slot: Slot,
+    ) -> Arc<Bank> {
+        let bank = Bank::new_from_parent(parent, collector_id, slot);
+        bank_forks
+            .write()
+            .unwrap()
+            .insert(bank)
+            .clone_without_scheduler()
     }
 
     pub fn default_for_tests() -> Self {

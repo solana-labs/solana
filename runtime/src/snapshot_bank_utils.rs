@@ -1353,7 +1353,7 @@ mod tests {
         let key5 = Keypair::new();
 
         let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000_000.));
-        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+        let (bank0, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         bank0
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1368,7 +1368,8 @@ mod tests {
         }
 
         let slot = 1;
-        let bank1 = Arc::new(Bank::new_from_parent(bank0, &collector, slot));
+        let bank1 =
+            Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank0, &collector, slot);
         bank1
             .transfer(sol_to_lamports(3.), &mint_keypair, &key3.pubkey())
             .unwrap();
@@ -1383,7 +1384,8 @@ mod tests {
         }
 
         let slot = slot + 1;
-        let bank2 = Arc::new(Bank::new_from_parent(bank1, &collector, slot));
+        let bank2 =
+            Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank1, &collector, slot);
         bank2
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1392,7 +1394,8 @@ mod tests {
         }
 
         let slot = slot + 1;
-        let bank3 = Arc::new(Bank::new_from_parent(bank2, &collector, slot));
+        let bank3 =
+            Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank2, &collector, slot);
         bank3
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1401,7 +1404,8 @@ mod tests {
         }
 
         let slot = slot + 1;
-        let bank4 = Arc::new(Bank::new_from_parent(bank3, &collector, slot));
+        let bank4 =
+            Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank3, &collector, slot);
         bank4
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1471,7 +1475,7 @@ mod tests {
         let key5 = Keypair::new();
 
         let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000_000.));
-        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+        let (bank0, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         bank0
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1486,7 +1490,8 @@ mod tests {
         }
 
         let slot = 1;
-        let bank1 = Arc::new(Bank::new_from_parent(bank0, &collector, slot));
+        let bank1 =
+            Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank0, &collector, slot);
         bank1
             .transfer(sol_to_lamports(3.), &mint_keypair, &key3.pubkey())
             .unwrap();
@@ -1520,7 +1525,8 @@ mod tests {
         .unwrap();
 
         let slot = slot + 1;
-        let bank2 = Arc::new(Bank::new_from_parent(bank1, &collector, slot));
+        let bank2 =
+            Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank1, &collector, slot);
         bank2
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1529,7 +1535,8 @@ mod tests {
         }
 
         let slot = slot + 1;
-        let bank3 = Arc::new(Bank::new_from_parent(bank2, &collector, slot));
+        let bank3 =
+            Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank2, &collector, slot);
         bank3
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1538,7 +1545,8 @@ mod tests {
         }
 
         let slot = slot + 1;
-        let bank4 = Arc::new(Bank::new_from_parent(bank3, &collector, slot));
+        let bank4 =
+            Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank3, &collector, slot);
         bank4
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1593,7 +1601,7 @@ mod tests {
         let key3 = Keypair::new();
 
         let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000_000.));
-        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+        let (bank0, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         bank0
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1608,7 +1616,8 @@ mod tests {
         }
 
         let slot = 1;
-        let bank1 = Arc::new(Bank::new_from_parent(bank0, &collector, slot));
+        let bank1 =
+            Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank0, &collector, slot);
         bank1
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1642,7 +1651,8 @@ mod tests {
         .unwrap();
 
         let slot = slot + 1;
-        let bank2 = Arc::new(Bank::new_from_parent(bank1, &collector, slot));
+        let bank2 =
+            Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank1, &collector, slot);
         bank2
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1651,7 +1661,8 @@ mod tests {
         }
 
         let slot = slot + 1;
-        let bank3 = Arc::new(Bank::new_from_parent(bank2, &collector, slot));
+        let bank3 =
+            Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank2, &collector, slot);
         bank3
             .transfer(sol_to_lamports(2.), &mint_keypair, &key2.pubkey())
             .unwrap();
@@ -1660,7 +1671,8 @@ mod tests {
         }
 
         let slot = slot + 1;
-        let bank4 = Arc::new(Bank::new_from_parent(bank3, &collector, slot));
+        let bank4 =
+            Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank3, &collector, slot);
         bank4
             .transfer(sol_to_lamports(3.), &mint_keypair, &key3.pubkey())
             .unwrap();
@@ -1743,13 +1755,14 @@ mod tests {
         let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000_000.));
 
         let lamports_to_transfer = sol_to_lamports(123_456.);
-        let bank0 = Arc::new(Bank::new_with_paths_for_tests(
+        let (bank0, bank_forks) = Bank::new_with_paths_for_tests(
             &genesis_config,
             Arc::<RuntimeConfig>::default(),
             vec![accounts_dir.clone()],
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
-        ));
+        )
+        .wrap_with_bank_forks_for_tests();
         bank0
             .transfer(lamports_to_transfer, &mint_keypair, &key2.pubkey())
             .unwrap();
@@ -1758,7 +1771,8 @@ mod tests {
         }
 
         let slot = 1;
-        let bank1 = Arc::new(Bank::new_from_parent(bank0, &collector, slot));
+        let bank1 =
+            Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank0, &collector, slot);
         bank1
             .transfer(lamports_to_transfer, &key2, &key1.pubkey())
             .unwrap();
@@ -1780,7 +1794,8 @@ mod tests {
         .unwrap();
 
         let slot = slot + 1;
-        let bank2 = Arc::new(Bank::new_from_parent(bank1, &collector, slot));
+        let bank2 =
+            Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank1, &collector, slot);
         let blockhash = bank2.last_blockhash();
         let tx = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &key1,
@@ -1847,7 +1862,8 @@ mod tests {
         );
 
         let slot = slot + 1;
-        let bank3 = Arc::new(Bank::new_from_parent(bank2, &collector, slot));
+        let bank3 =
+            Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank2, &collector, slot);
         // Update Account2 so that it no longer holds a reference to slot2
         bank3
             .transfer(lamports_to_transfer, &mint_keypair, &key2.pubkey())
@@ -1857,7 +1873,8 @@ mod tests {
         }
 
         let slot = slot + 1;
-        let bank4 = Arc::new(Bank::new_from_parent(bank3, &collector, slot));
+        let bank4 =
+            Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank3, &collector, slot);
         while !bank4.is_complete() {
             bank4.register_unique_tick();
         }
@@ -1925,13 +1942,14 @@ mod tests {
         let key1 = Keypair::new();
 
         let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000_000.));
-        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+        let (bank0, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         while !bank0.is_complete() {
             bank0.register_unique_tick();
         }
 
         let slot = 1;
-        let bank1 = Arc::new(Bank::new_from_parent(bank0, &collector, slot));
+        let bank1 =
+            Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank0, &collector, slot);
         while !bank1.is_complete() {
             bank1.register_unique_tick();
         }
@@ -1953,7 +1971,8 @@ mod tests {
         .unwrap();
 
         let slot = slot + 1;
-        let bank2 = Arc::new(Bank::new_from_parent(bank1, &collector, slot));
+        let bank2 =
+            Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank1, &collector, slot);
         bank2
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -2192,12 +2211,18 @@ mod tests {
             bank.fill_bank_with_ticks_for_tests();
         };
 
-        let mut bank = Arc::new(Bank::new_for_tests(&genesis_config_info.genesis_config));
+        let (mut bank, bank_forks) =
+            Bank::new_with_bank_forks_for_tests(&genesis_config_info.genesis_config);
 
         // make some banks, do some transactions, ensure there's some zero-lamport accounts
         for _ in 0..5 {
             let slot = bank.slot() + 1;
-            bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::new_unique(), slot));
+            bank = Bank::new_from_parent_with_bank_forks(
+                bank_forks.as_ref(),
+                bank,
+                &Pubkey::new_unique(),
+                slot,
+            );
             do_transfers(&bank);
         }
 
@@ -2223,7 +2248,12 @@ mod tests {
         // make more banks, do more transactions, ensure there's more zero-lamport accounts
         for _ in 0..5 {
             let slot = bank.slot() + 1;
-            bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::new_unique(), slot));
+            bank = Bank::new_from_parent_with_bank_forks(
+                bank_forks.as_ref(),
+                bank,
+                &Pubkey::new_unique(),
+                slot,
+            );
             do_transfers(&bank);
         }
 
