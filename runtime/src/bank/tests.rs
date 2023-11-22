@@ -10012,10 +10012,9 @@ fn calculate_test_fee(
         );
     }
 
-    let budget_limits =
-        process_compute_budget_instructions(message.program_instructions_iter(), &feature_set)
-            .unwrap_or_default()
-            .into();
+    let budget_limits = process_compute_budget_instructions(message.program_instructions_iter())
+        .unwrap_or_default()
+        .into();
 
     fee_structure.calculate_fee(
         message,

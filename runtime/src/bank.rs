@@ -4067,12 +4067,9 @@ impl Bank {
         self.fee_structure.calculate_fee(
             message,
             lamports_per_signature,
-            &process_compute_budget_instructions(
-                message.program_instructions_iter(),
-                &self.feature_set,
-            )
-            .unwrap_or_default()
-            .into(),
+            &process_compute_budget_instructions(message.program_instructions_iter())
+                .unwrap_or_default()
+                .into(),
             self.feature_set
                 .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
             self.feature_set
@@ -5214,7 +5211,6 @@ impl Bank {
                                 Measure::start("compute_budget_process_transaction_time");
                             let maybe_compute_budget = ComputeBudget::try_from_instructions(
                                 tx.message().program_instructions_iter(),
-                                &self.feature_set,
                             );
                             compute_budget_process_transaction_time.stop();
                             saturating_add_assign!(
