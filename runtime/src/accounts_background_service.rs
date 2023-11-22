@@ -707,9 +707,21 @@ impl AccountsBackgroundService {
                             bank.force_flush_accounts_cache();
                             bank.clean_accounts(last_full_snapshot_slot);
                             last_cleaned_block_height = bank.block_height();
-                            bank.shrink_ancient_slots();
+                            // See justification below for why we skip 'shrink' here.
+                            if bank.is_startup_verification_complete() {
+                                bank.shrink_ancient_slots();
+                            }
                         }
-                        bank.shrink_candidate_slots();
+                        // Do not 'shrink' until *after* the startup verification is complete.
+                        // This is because startup verification needs to get the snapshot
+                        // storages *as they existed at startup* (to calculate the accounts hash).
+                        // If 'shrink' were to run, then it is possible startup verification
+                        // (1) could race with 'shrink', and fail to assert that shrinking is not in
+                        // progress, or (2) could get snapshot storages that were newer than what
+                        // was in the snapshot itself.
+                        if bank.is_startup_verification_complete() {
+                            bank.shrink_candidate_slots();
+                        }
                     }
                     stats.record_and_maybe_submit(start_time.elapsed());
                     sleep(Duration::from_millis(INTERVAL_MS));
