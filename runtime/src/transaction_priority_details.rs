@@ -25,6 +25,8 @@ pub trait GetTransactionPriorityDetails {
         _round_compute_unit_price_enabled: bool,
     ) -> Option<TransactionPriorityDetails> {
         let mut feature_set = FeatureSet::default();
+        // this feature was enabled on mainnet-beta since epooch 537
+        // https://github.com/solana-labs/solana/issues/30366
         feature_set.activate(
             &solana_sdk::feature_set::add_set_tx_loaded_accounts_data_size_instruction::id(),
             0,
