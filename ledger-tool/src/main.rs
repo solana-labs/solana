@@ -743,17 +743,23 @@ fn analyze_column<
     db: &Database,
     name: &str,
 ) {
+    let mut key_len: u64 = 0;
     let mut key_tot: u64 = 0;
     let mut val_hist = histogram::Histogram::new();
     let mut val_tot: u64 = 0;
     let mut row_hist = histogram::Histogram::new();
-    let a = C::key_size() as u64;
-    for (_x, y) in db.iter::<C>(blockstore_db::IteratorMode::Start).unwrap() {
-        let b = y.len() as u64;
-        key_tot += a;
-        val_hist.increment(b).unwrap();
-        val_tot += b;
-        row_hist.increment(a + b).unwrap();
+    for (key, val) in db.iter::<C>(blockstore_db::IteratorMode::Start).unwrap() {
+        // Key length is fixed, only need to calculate it once
+        if key_len == 0 {
+            key_len = C::key(key).len() as u64;
+        }
+        let val_len = val.len() as u64;
+
+        key_tot += key_len;
+        val_hist.increment(val_len).unwrap();
+        val_tot += val_len;
+
+        row_hist.increment(key_len + val_len).unwrap();
     }
 
     let json_result = if val_hist.entries() > 0 {
@@ -761,7 +767,7 @@ fn analyze_column<
             "column":name,
             "entries":val_hist.entries(),
             "key_stats":{
-                "max":a,
+                "max":key_len,
                 "total_bytes":key_tot,
             },
             "val_stats":{
@@ -790,7 +796,7 @@ fn analyze_column<
         "column":name,
         "entries":val_hist.entries(),
         "key_stats":{
-            "max":a,
+            "max":key_len,
             "total_bytes":0,
         },
         "val_stats":{
@@ -1134,21 +1140,6 @@ fn main() {
             "Debug option to skip rewrites for rent-exempt accounts but still add them in bank delta hash calculation",
         )
         .hidden(hidden_unless_forced());
-    let accounts_filler_count = Arg::with_name("accounts_filler_count")
-        .long("accounts-filler-count")
-        .value_name("COUNT")
-        .validator(is_parsable::<usize>)
-        .takes_value(true)
-        .default_value("0")
-        .help("How many accounts to add to stress the system. Accounts are ignored in operations related to correctness.");
-    let accounts_filler_size = Arg::with_name("accounts_filler_size")
-        .long("accounts-filler-size")
-        .value_name("BYTES")
-        .validator(is_parsable::<usize>)
-        .takes_value(true)
-        .default_value("0")
-        .requires("accounts_filler_count")
-        .help("Size per filler account in bytes.");
     let account_paths_arg = Arg::with_name("account_paths")
         .long("accounts")
         .value_name("PATHS")
@@ -1617,8 +1608,6 @@ fn main() {
             .arg(&accountsdb_skip_shrink)
             .arg(&accountsdb_verify_refcounts)
             .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash)
-            .arg(&accounts_filler_count)
-            .arg(&accounts_filler_size)
             .arg(&verify_index_arg)
             .arg(&accounts_db_skip_initial_hash_calc_arg)
             .arg(&ancient_append_vecs)

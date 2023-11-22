@@ -46,7 +46,7 @@ impl<'format> TieredStorageWriter<'format> {
             account_meta_format: self.format.account_meta_format,
             owners_block_format: self.format.owners_block_format,
             account_block_format: self.format.account_block_format,
-            account_index_format: self.format.account_index_format,
+            index_block_format: self.format.index_block_format,
             account_entry_count: accounts
                 .accounts
                 .len()

@@ -9,7 +9,6 @@ use {
         sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
-        feature_set,
         instruction::InstructionError,
         nonce,
         program_utils::limited_deserialize,
@@ -220,14 +219,6 @@ fn transfer(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
 ) -> Result<(), InstructionError> {
-    if !invoke_context
-        .feature_set
-        .is_active(&feature_set::system_transfer_zero_check::id())
-        && lamports == 0
-    {
-        return Ok(());
-    }
-
     if !instruction_context.is_instruction_account_signer(from_account_index)? {
         ic_msg!(
             invoke_context,
@@ -261,14 +252,6 @@ fn transfer_with_seed(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
 ) -> Result<(), InstructionError> {
-    if !invoke_context
-        .feature_set
-        .is_active(&feature_set::system_transfer_zero_check::id())
-        && lamports == 0
-    {
-        return Ok(());
-    }
-
     if !instruction_context.is_instruction_account_signer(from_base_account_index)? {
         ic_msg!(
             invoke_context,

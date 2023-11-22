@@ -941,8 +941,6 @@ where
         .set(rent_paying_accounts_by_partition)
         .unwrap();
 
-    accounts_db.maybe_add_filler_accounts(&genesis_config.epoch_schedule, snapshot_slot);
-
     handle.join().unwrap();
     measure_notify.stop();
 

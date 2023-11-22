@@ -154,7 +154,7 @@ impl ShredData {
         Ok(Self::SIZE_OF_HEADERS + Self::capacity(proof_size)?)
     }
 
-    fn merkle_root(&self) -> Result<Hash, Error> {
+    pub(super) fn merkle_root(&self) -> Result<Hash, Error> {
         let proof_size = self.proof_size()?;
         let index = self.erasure_shard_index()?;
         let proof_offset = Self::proof_offset(proof_size)?;
@@ -266,7 +266,7 @@ impl ShredCode {
         Ok(Self::SIZE_OF_HEADERS + Self::capacity(proof_size)?)
     }
 
-    fn merkle_root(&self) -> Result<Hash, Error> {
+    pub(super) fn merkle_root(&self) -> Result<Hash, Error> {
         let proof_size = self.proof_size()?;
         let index = self.erasure_shard_index()?;
         let proof_offset = Self::proof_offset(proof_size)?;

@@ -20,9 +20,10 @@ use {
 use {
     crate::{
         encryption::pedersen::{G, H},
-        errors::ProofVerificationError,
         range_proof::{
-            errors::RangeProofError, generators::BulletproofGens, inner_product::InnerProductProof,
+            errors::{RangeProofGenerationError, RangeProofVerificationError},
+            generators::BulletproofGens,
+            inner_product::InnerProductProof,
         },
         transcript::TranscriptProtocol,
     },
@@ -71,17 +72,29 @@ impl RangeProof {
         bit_lengths: Vec<usize>,
         openings: Vec<&PedersenOpening>,
         transcript: &mut Transcript,
-    ) -> Self {
+    ) -> Result<Self, RangeProofGenerationError> {
         // amounts, bit-lengths, openings must be same length vectors
         let m = amounts.len();
-        assert_eq!(bit_lengths.len(), m);
-        assert_eq!(openings.len(), m);
+        if bit_lengths.len() != m || openings.len() != m {
+            return Err(RangeProofGenerationError::VectorLengthMismatch);
+        }
+
+        // each bit length must be greater than 0 for the proof to make sense
+        if bit_lengths
+            .iter()
+            .any(|bit_length| *bit_length == 0 || *bit_length > u64::BITS as usize)
+        {
+            return Err(RangeProofGenerationError::InvalidBitSize);
+        }
 
         // total vector dimension to compute the ultimate inner product proof for
         let nm: usize = bit_lengths.iter().sum();
-        assert!(nm.is_power_of_two());
+        if !nm.is_power_of_two() {
+            return Err(RangeProofGenerationError::VectorLengthMismatch);
+        }
 
-        let bp_gens = BulletproofGens::new(nm);
+        let bp_gens = BulletproofGens::new(nm)
+            .map_err(|_| RangeProofGenerationError::MaximumGeneratorLengthExceeded)?;
 
         // bit-decompose values and generate their Pedersen vector commitment
         let a_blinding = Scalar::random(&mut OsRng);
@@ -91,7 +104,10 @@ impl RangeProof {
         for (amount_i, n_i) in amounts.iter().zip(bit_lengths.iter()) {
             for j in 0..(*n_i) {
                 let (G_ij, H_ij) = gens_iter.next().unwrap();
-                let v_ij = Choice::from(((amount_i >> j) & 1) as u8);
+
+                // `j` is guaranteed to be at most `u64::BITS` (a 6-bit number) and therefore,
+                // casting is lossless and right shift can be safely unwrapped
+                let v_ij = Choice::from((amount_i.checked_shr(j as u32).unwrap() & 1) as u8);
                 let mut point = -H_ij;
                 point.conditional_assign(G_ij, v_ij);
                 A += point;
@@ -136,7 +152,9 @@ impl RangeProof {
             let mut exp_2 = Scalar::one();
 
             for j in 0..(*n_i) {
-                let a_L_j = Scalar::from((amount_i >> j) & 1);
+                // `j` is guaranteed to be at most `u64::BITS` (a 6-bit number) and therefore,
+                // casting is lossless and right shift can be safely unwrapped
+                let a_L_j = Scalar::from(amount_i.checked_shr(j as u32).unwrap() & 1);
                 let a_R_j = a_L_j - Scalar::one();
 
                 l_poly.0[i] = a_L_j - z;
@@ -146,13 +164,17 @@ impl RangeProof {
 
                 exp_y *= y;
                 exp_2 = exp_2 + exp_2;
-                i += 1;
+
+                // `i` is capped by the sum of vectors in `bit_lengths`
+                i = i.checked_add(1).unwrap();
             }
             exp_z *= z;
         }
 
         // define t(x) = <l(x), r(x)> = t_0 + t_1*x + t_2*x
-        let t_poly = l_poly.inner_product(&r_poly);
+        let t_poly = l_poly
+            .inner_product(&r_poly)
+            .ok_or(RangeProofGenerationError::InnerProductLengthMismatch)?;
 
         // generate Pedersen commitment for the coefficients t_1 and t_2
         let (T_1, t_1_blinding) = Pedersen::new(t_poly.1);
@@ -214,9 +236,9 @@ impl RangeProof {
             l_vec,
             r_vec,
             transcript,
-        );
+        )?;
 
-        RangeProof {
+        Ok(RangeProof {
             A,
             S,
             T_1,
@@ -225,7 +247,7 @@ impl RangeProof {
             t_x_blinding,
             e_blinding,
             ipp_proof,
-        }
+        })
     }
 
     #[allow(clippy::many_single_char_names)]
@@ -234,16 +256,19 @@ impl RangeProof {
         comms: Vec<&PedersenCommitment>,
         bit_lengths: Vec<usize>,
         transcript: &mut Transcript,
-    ) -> Result<(), RangeProofError> {
+    ) -> Result<(), RangeProofVerificationError> {
         // commitments and bit-lengths must be same length vectors
-        assert_eq!(comms.len(), bit_lengths.len());
+        if comms.len() != bit_lengths.len() {
+            return Err(RangeProofVerificationError::VectorLengthMismatch);
+        }
 
         let m = bit_lengths.len();
         let nm: usize = bit_lengths.iter().sum();
-        let bp_gens = BulletproofGens::new(nm);
+        let bp_gens = BulletproofGens::new(nm)
+            .map_err(|_| RangeProofVerificationError::MaximumGeneratorLengthExceeded)?;
 
         if !nm.is_power_of_two() {
-            return Err(ProofVerificationError::InvalidBitSize.into());
+            return Err(RangeProofVerificationError::InvalidBitSize);
         }
 
         // append proof data to transcript and derive appropriate challenge scalars
@@ -320,12 +345,12 @@ impl RangeProof {
                 .chain(bp_gens.H(nm).map(|&x| Some(x)))
                 .chain(comms.iter().map(|V| Some(*V.get_point()))),
         )
-        .ok_or(ProofVerificationError::MultiscalarMul)?;
+        .ok_or(RangeProofVerificationError::MultiscalarMul)?;
 
         if mega_check.is_identity() {
             Ok(())
         } else {
-            Err(ProofVerificationError::AlgebraicRelation.into())
+            Err(RangeProofVerificationError::AlgebraicRelation)
         }
     }
 
@@ -346,12 +371,12 @@ impl RangeProof {
 
     // Following the dalek rangeproof library signature for now. The exact method signature can be
     // changed.
-    pub fn from_bytes(slice: &[u8]) -> Result<RangeProof, RangeProofError> {
+    pub fn from_bytes(slice: &[u8]) -> Result<RangeProof, RangeProofVerificationError> {
         if slice.len() % 32 != 0 {
-            return Err(ProofVerificationError::Deserialization.into());
+            return Err(RangeProofVerificationError::Deserialization);
         }
         if slice.len() < 7 * 32 {
-            return Err(ProofVerificationError::Deserialization.into());
+            return Err(RangeProofVerificationError::Deserialization);
         }
 
         let A = CompressedRistretto(util::read32(&slice[0..]));
@@ -360,11 +385,11 @@ impl RangeProof {
         let T_2 = CompressedRistretto(util::read32(&slice[3 * 32..]));
 
         let t_x = Scalar::from_canonical_bytes(util::read32(&slice[4 * 32..]))
-            .ok_or(ProofVerificationError::Deserialization)?;
+            .ok_or(RangeProofVerificationError::Deserialization)?;
         let t_x_blinding = Scalar::from_canonical_bytes(util::read32(&slice[5 * 32..]))
-            .ok_or(ProofVerificationError::Deserialization)?;
+            .ok_or(RangeProofVerificationError::Deserialization)?;
         let e_blinding = Scalar::from_canonical_bytes(util::read32(&slice[6 * 32..]))
-            .ok_or(ProofVerificationError::Deserialization)?;
+            .ok_or(RangeProofVerificationError::Deserialization)?;
 
         let ipp_proof = InnerProductProof::from_bytes(&slice[7 * 32..])?;
 
@@ -410,7 +435,8 @@ mod tests {
         let mut transcript_create = Transcript::new(b"Test");
         let mut transcript_verify = Transcript::new(b"Test");
 
-        let proof = RangeProof::new(vec![55], vec![32], vec![&open], &mut transcript_create);
+        let proof =
+            RangeProof::new(vec![55], vec![32], vec![&open], &mut transcript_create).unwrap();
 
         assert!(proof
             .verify(vec![&comm], vec![32], &mut transcript_verify)
@@ -431,7 +457,8 @@ mod tests {
             vec![64, 32, 32],
             vec![&open_1, &open_2, &open_3],
             &mut transcript_create,
-        );
+        )
+        .unwrap();
 
         assert!(proof
             .verify(

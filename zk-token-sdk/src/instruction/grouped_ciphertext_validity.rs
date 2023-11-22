@@ -17,7 +17,7 @@ use {
             elgamal::ElGamalPubkey, grouped_elgamal::GroupedElGamalCiphertext,
             pedersen::PedersenOpening,
         },
-        errors::ProofError,
+        errors::{ProofGenerationError, ProofVerificationError},
         sigma_proofs::grouped_ciphertext_validity_proof::GroupedCiphertext2HandlesValidityProof,
         transcript::TranscriptProtocol,
     },
@@ -62,7 +62,7 @@ impl GroupedCiphertext2HandlesValidityProofData {
         grouped_ciphertext: &GroupedElGamalCiphertext<2>,
         amount: u64,
         opening: &PedersenOpening,
-    ) -> Result<Self, ProofError> {
+    ) -> Result<Self, ProofGenerationError> {
         let pod_destination_pubkey = pod::ElGamalPubkey(destination_pubkey.to_bytes());
         let pod_auditor_pubkey = pod::ElGamalPubkey(auditor_pubkey.to_bytes());
         let pod_grouped_ciphertext = (*grouped_ciphertext).into();
@@ -97,7 +97,7 @@ impl ZkProofData<GroupedCiphertext2HandlesValidityProofContext>
     }
 
     #[cfg(not(target_os = "solana"))]
-    fn verify_proof(&self) -> Result<(), ProofError> {
+    fn verify_proof(&self) -> Result<(), ProofVerificationError> {
         let mut transcript = self.context.new_transcript();
 
         let destination_pubkey = self.context.destination_pubkey.try_into()?;
@@ -105,7 +105,7 @@ impl ZkProofData<GroupedCiphertext2HandlesValidityProofContext>
         let grouped_ciphertext: GroupedElGamalCiphertext<2> =
             self.context.grouped_ciphertext.try_into()?;
 
-        let destination_handle = grouped_ciphertext.handles.get(0).unwrap();
+        let destination_handle = grouped_ciphertext.handles.first().unwrap();
         let auditor_handle = grouped_ciphertext.handles.get(1).unwrap();
 
         let proof: GroupedCiphertext2HandlesValidityProof = self.proof.try_into()?;

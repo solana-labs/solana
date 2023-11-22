@@ -2,7 +2,7 @@ use {
     crate::LEDGER_TOOL_DIRECTORY,
     clap::{value_t, values_t_or_exit, ArgMatches},
     solana_accounts_db::{
-        accounts_db::{AccountsDb, AccountsDbConfig, FillerAccountsConfig},
+        accounts_db::{AccountsDb, AccountsDbConfig},
         accounts_index::{AccountsIndexConfig, IndexLimitMb},
         partitioned_rewards::TestPartitionedEpochRewards,
     },
@@ -53,11 +53,6 @@ pub fn get_accounts_db_config(
         ..AccountsIndexConfig::default()
     };
 
-    let filler_accounts_config = FillerAccountsConfig {
-        count: value_t!(arg_matches, "accounts_filler_count", usize).unwrap_or(0),
-        size: value_t!(arg_matches, "accounts_filler_size", usize).unwrap_or(0),
-    };
-
     let accounts_hash_cache_path = arg_matches
         .value_of("accounts_hash_cache_path")
         .map(Into::into)
@@ -77,7 +72,6 @@ pub fn get_accounts_db_config(
         index: Some(accounts_index_config),
         base_working_path: Some(ledger_tool_ledger_path),
         accounts_hash_cache_path: Some(accounts_hash_cache_path),
-        filler_accounts_config,
         ancient_append_vec_offset: value_t!(arg_matches, "accounts_db_ancient_append_vecs", i64)
             .ok(),
         exhaustively_verify_refcounts: arg_matches.is_present("accounts_db_verify_refcounts"),

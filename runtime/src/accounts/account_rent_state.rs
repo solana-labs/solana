@@ -10,7 +10,7 @@ use {
 };
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum RentState {
+pub(crate) enum RentState {
     /// account.lamports == 0
     Uninitialized,
     /// 0 < account.lamports < rent-exempt-minimum
@@ -58,7 +58,7 @@ impl RentState {
     }
 }
 
-pub(crate) fn submit_rent_state_metrics(pre_rent_state: &RentState, post_rent_state: &RentState) {
+pub(super) fn submit_rent_state_metrics(pre_rent_state: &RentState, post_rent_state: &RentState) {
     match (pre_rent_state, post_rent_state) {
         (&RentState::Uninitialized, &RentState::RentPaying { .. }) => {
             inc_new_counter_info!("rent_paying_err-new_account", 1);
@@ -73,7 +73,7 @@ pub(crate) fn submit_rent_state_metrics(pre_rent_state: &RentState, post_rent_st
     }
 }
 
-pub fn check_rent_state(
+pub(crate) fn check_rent_state(
     pre_rent_state: Option<&RentState>,
     post_rent_state: Option<&RentState>,
     transaction_context: &TransactionContext,
@@ -97,7 +97,7 @@ pub fn check_rent_state(
     Ok(())
 }
 
-pub(crate) fn check_rent_state_with_account(
+pub(super) fn check_rent_state_with_account(
     pre_rent_state: &RentState,
     post_rent_state: &RentState,
     address: &Pubkey,

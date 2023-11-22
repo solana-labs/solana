@@ -23,7 +23,6 @@ declare_builtin_function!(
             addr,
             len,
             invoke_context.get_check_aligned(),
-            invoke_context.get_check_size(),
             invoke_context
                 .feature_set
                 .is_active(&stop_truncating_strings_in_syscalls::id()),
@@ -129,7 +128,6 @@ declare_builtin_function!(
             addr,
             len,
             invoke_context.get_check_aligned(),
-            invoke_context.get_check_size(),
         )?;
 
         consume_compute_meter(
@@ -153,7 +151,6 @@ declare_builtin_function!(
                 untranslated_field.as_ptr() as *const _ as u64,
                 untranslated_field.len() as u64,
                 invoke_context.get_check_aligned(),
-                invoke_context.get_check_size(),
             )?);
         }
 
