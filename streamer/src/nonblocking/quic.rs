@@ -764,11 +764,24 @@ async fn handle_connection(
                 }
                 Err(e) => {
                     debug!("stream error: {:?}", e);
-                    break;
+                    match e {
+                        quinn_proto::ConnectionError::VersionMismatch => break,
+                        quinn_proto::ConnectionError::TransportError(_) => break,
+                        quinn_proto::ConnectionError::ConnectionClosed(_) => break,
+                        quinn_proto::ConnectionError::ApplicationClosed(_) => break,
+                        quinn_proto::ConnectionError::Reset => break,
+                        quinn_proto::ConnectionError::TimedOut => {
+                            continue;
+                        }
+                        quinn_proto::ConnectionError::LocallyClosed => break,
+                    }
                 }
             }
         } else {
-            debug!("Ran into timeout error on connection {:?} in {:?}", connection, WAIT_FOR_STREAM_TIMEOUT);
+            debug!(
+                "Ran into timeout error on connection {:?} in {:?}",
+                connection, WAIT_FOR_STREAM_TIMEOUT
+            );
             break;
         }
     }
