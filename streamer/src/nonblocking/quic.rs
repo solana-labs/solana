@@ -771,7 +771,7 @@ async fn handle_connection(
                         quinn_proto::ConnectionError::ApplicationClosed(_) => break,
                         quinn_proto::ConnectionError::Reset => break,
                         quinn_proto::ConnectionError::TimedOut => {
-                            continue;
+                            break;
                         }
                         quinn_proto::ConnectionError::LocallyClosed => break,
                     }
