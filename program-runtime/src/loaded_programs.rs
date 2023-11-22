@@ -808,6 +808,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         let mut extracting = extracted.lock().unwrap();
         extracting.loaded.entries = keys
             .filter_map(|(key, (match_criteria, count))| {
+                let mut reloading = false;
                 if let Some(second_level) = self.entries.get(&key) {
                     for entry in second_level.iter().rev() {
                         let is_ancestor = if let Some(fork_graph) = &self.fork_graph {
@@ -833,13 +834,12 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                                 if !Self::is_entry_usable(entry, current_slot, &match_criteria)
                                     || !Self::matches_environment(entry, environments)
                                 {
-                                    extracting.missing.insert(key, (count, false));
-                                    return None;
+                                    break;
                                 }
 
                                 if let LoadedProgramType::Unloaded(_environment) = &entry.program {
-                                    extracting.missing.insert(key, (count, true));
-                                    return None;
+                                    reloading = true;
+                                    break;
                                 }
 
                                 let mut usage_count =
@@ -862,7 +862,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                         }
                     }
                 }
-                extracting.missing.insert(key, (count, false));
+                extracting.missing.insert(key, (count, reloading));
                 None
             })
             .collect::<HashMap<Pubkey, Arc<LoadedProgram>>>();
