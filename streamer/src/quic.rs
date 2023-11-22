@@ -1,7 +1,7 @@
 use {
     crate::{
         nonblocking::quic::ALPN_TPU_PROTOCOL_ID, streamer::StakedNodes,
-        tls_certificates::new_self_signed_tls_certificate,
+        tls_certificates::new_dummy_x509_certificate,
     },
     crossbeam_channel::Sender,
     pem::Pem,
@@ -14,7 +14,7 @@ use {
         signature::Keypair,
     },
     std::{
-        net::{IpAddr, UdpSocket},
+        net::UdpSocket,
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
             Arc, RwLock,
@@ -61,9 +61,8 @@ impl rustls::server::ClientCertVerifier for SkipClientVerification {
 #[allow(clippy::field_reassign_with_default)] // https://github.com/rust-lang/rust-clippy/issues/6527
 pub(crate) fn configure_server(
     identity_keypair: &Keypair,
-    gossip_host: IpAddr,
 ) -> Result<(ServerConfig, String), QuicServerError> {
-    let (cert, priv_key) = new_self_signed_tls_certificate(identity_keypair, gossip_host)?;
+    let (cert, priv_key) = new_dummy_x509_certificate(identity_keypair);
     let cert_chain_pem_parts = vec![Pem {
         tag: "CERTIFICATE".to_string(),
         contents: cert.0.clone(),
@@ -113,20 +112,17 @@ fn rt() -> Runtime {
 pub enum QuicServerError {
     #[error("Endpoint creation failed: {0}")]
     EndpointFailed(std::io::Error),
-    #[error("Certificate error: {0}")]
-    CertificateError(#[from] rcgen::RcgenError),
     #[error("TLS error: {0}")]
     TlsError(#[from] rustls::Error),
 }
 
 pub struct EndpointKeyUpdater {
     endpoint: Endpoint,
-    gossip_host: IpAddr,
 }
 
 impl NotifyKeyUpdate for EndpointKeyUpdater {
     fn update_key(&self, key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
-        let (config, _) = configure_server(key, self.gossip_host)?;
+        let (config, _) = configure_server(key)?;
         self.endpoint.set_server_config(Some(config));
         Ok(())
     }
@@ -438,7 +434,6 @@ pub fn spawn_server(
     name: &'static str,
     sock: UdpSocket,
     keypair: &Keypair,
-    gossip_host: IpAddr,
     packet_sender: Sender<PacketBatch>,
     exit: Arc<AtomicBool>,
     max_connections_per_peer: usize,
@@ -455,7 +450,6 @@ pub fn spawn_server(
             name,
             sock,
             keypair,
-            gossip_host,
             packet_sender,
             exit,
             max_connections_per_peer,
@@ -476,7 +470,6 @@ pub fn spawn_server(
         .unwrap();
     let updater = EndpointKeyUpdater {
         endpoint: endpoint.clone(),
-        gossip_host,
     };
     Ok(SpawnServerResult {
         endpoint,
@@ -505,7 +498,6 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let (sender, receiver) = unbounded();
         let keypair = Keypair::new();
-        let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let SpawnServerResult {
@@ -516,7 +508,6 @@ mod test {
             "quic_streamer_test",
             s,
             &keypair,
-            ip,
             sender,
             exit.clone(),
             1,
@@ -565,7 +556,6 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let (sender, receiver) = unbounded();
         let keypair = Keypair::new();
-        let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let SpawnServerResult {
@@ -576,7 +566,6 @@ mod test {
             "quic_streamer_test",
             s,
             &keypair,
-            ip,
             sender,
             exit.clone(),
             2,
@@ -612,7 +601,6 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let (sender, _) = unbounded();
         let keypair = Keypair::new();
-        let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let SpawnServerResult {
@@ -623,7 +611,6 @@ mod test {
             "quic_streamer_test",
             s,
             &keypair,
-            ip,
             sender,
             exit.clone(),
             1,

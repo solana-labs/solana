@@ -91,9 +91,7 @@ impl ConnectionCache {
             config.update_client_endpoint(client_endpoint);
         }
         if let Some(cert_info) = cert_info {
-            config
-                .update_client_certificate(cert_info.0, cert_info.1)
-                .unwrap();
+            config.update_client_certificate(cert_info.0, cert_info.1);
         }
         if let Some(stake_info) = stake_info {
             config.set_staked_nodes(stake_info.0, stake_info.1);
@@ -253,7 +251,7 @@ mod tests {
     #[test]
     fn test_connection_with_specified_client_endpoint() {
         // Start a response receiver:
-        let (response_recv_socket, response_recv_exit, keypair2, response_recv_ip) = server_args();
+        let (response_recv_socket, response_recv_exit, keypair2, _) = server_args();
         let (sender2, _receiver2) = unbounded();
 
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
@@ -266,7 +264,6 @@ mod tests {
             "quic_streamer_test",
             response_recv_socket,
             &keypair2,
-            response_recv_ip,
             sender2,
             response_recv_exit.clone(),
             1,

@@ -4376,18 +4376,6 @@ name = "rbpf-cli"
 version = "1.18.0"
 
 [[package]]
-name = "rcgen"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffbe84efe2f38dea12e9bfc1f65377fdf03e53a18cb3b995faedf7934c7e785b"
-dependencies = [
- "pem",
- "ring 0.16.20",
- "time",
- "yasna",
-]
-
-[[package]]
 name = "rdrand"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5850,7 +5838,6 @@ dependencies = [
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rayon",
- "rcgen",
  "solana-logger",
  "solana-measure",
  "solana-metrics",
@@ -5889,7 +5876,6 @@ dependencies = [
  "rand_chacha 0.3.1",
  "raptorq",
  "rayon",
- "rcgen",
  "rolling-file",
  "rustc_version 0.4.0",
  "rustls",
@@ -6787,7 +6773,6 @@ dependencies = [
  "log",
  "quinn",
  "quinn-proto",
- "rcgen",
  "rustls",
  "solana-connection-cache",
  "solana-logger",
@@ -7283,7 +7268,6 @@ dependencies = [
  "quinn",
  "quinn-proto",
  "rand 0.8.5",
- "rcgen",
  "rustls",
  "solana-logger",
  "solana-metrics",
@@ -7473,7 +7457,6 @@ dependencies = [
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rayon",
- "rcgen",
  "rustls",
  "solana-entry",
  "solana-gossip",
@@ -9325,15 +9308,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
 dependencies = [
  "linked-hash-map",
-]
-
-[[package]]
-name = "yasna"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "346d34a236c9d3e5f3b9b74563f238f955bbd05fa0b8b4efa53c130c43982f4c"
-dependencies = [
- "time",
 ]
 
 [[package]]
