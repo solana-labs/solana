@@ -382,7 +382,7 @@ mod tests {
 
         // Request Sender, it uses the same endpoint as the response receiver:
         let addr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        let port = 8010;
+        let port = 8009;
         let tpu_addr = SocketAddr::new(addr, port);
         let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
 
