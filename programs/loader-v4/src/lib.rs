@@ -454,7 +454,7 @@ pub fn process_instruction_deploy(
     }
     invoke_context
         .programs_modified_by_tx
-        .replenish(*program.get_key(), Arc::new(executor));
+        .assign_program(*program.get_key(), Arc::new(executor));
     Ok(())
 }
 
@@ -672,7 +672,7 @@ mod tests {
                         invoke_context.programs_modified_by_tx.set_slot_for_tests(0);
                         invoke_context
                             .programs_modified_by_tx
-                            .replenish(*pubkey, Arc::new(loaded_program));
+                            .assign_program(*pubkey, Arc::new(loaded_program));
                     }
                 }
             }

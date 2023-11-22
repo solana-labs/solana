@@ -734,7 +734,7 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext), G: FnMut(&mut Invo
     transaction_accounts.push((*loader_id, processor_account));
     with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
     let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
-    programs_loaded_for_tx_batch.replenish(
+    programs_loaded_for_tx_batch.assign_program(
         *loader_id,
         Arc::new(LoadedProgram::new_builtin(0, 0, builtin_function)),
     );
@@ -988,7 +988,7 @@ mod tests {
             .collect::<Vec<_>>();
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
-        programs_loaded_for_tx_batch.replenish(
+        programs_loaded_for_tx_batch.assign_program(
             callee_program_id,
             Arc::new(LoadedProgram::new_builtin(0, 0, MockBuiltin::vm)),
         );
@@ -1137,7 +1137,7 @@ mod tests {
         ];
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
-        programs_loaded_for_tx_batch.replenish(
+        programs_loaded_for_tx_batch.assign_program(
             program_key,
             Arc::new(LoadedProgram::new_builtin(0, 0, MockBuiltin::vm)),
         );

@@ -1447,7 +1447,7 @@ impl Bank {
                     drop(loaded_programs_cache);
                     let recompiled = new.load_program(&key, false, Some(program_to_recompile));
                     let mut loaded_programs_cache = new.loaded_programs_cache.write().unwrap();
-                    loaded_programs_cache.replenish(key, recompiled);
+                    loaded_programs_cache.assign_program(key, recompiled);
                 }
             } else if new.epoch() != loaded_programs_cache.latest_root_epoch
                 || slot_index.saturating_add(slots_in_recompilation_phase) >= slots_in_epoch
@@ -5047,9 +5047,9 @@ impl Bank {
         // Lock the global cache again to replenish the missing programs
         let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
         for (key, program) in missing_programs {
-            let (_was_occupied, entry) = loaded_programs_cache.replenish(key, program);
+            let entry = loaded_programs_cache.assign_program(key, program);
             // Use the returned entry as that might have been deduplicated globally
-            loaded_programs_for_txs.replenish(key, entry);
+            loaded_programs_for_txs.assign_program(key, entry);
         }
         loaded_programs_for_txs
     }
@@ -7752,7 +7752,7 @@ impl Bank {
         self.loaded_programs_cache
             .write()
             .unwrap()
-            .replenish(program_id, Arc::new(builtin));
+            .assign_program(program_id, Arc::new(builtin));
         debug!("Added program {} under {:?}", name, program_id);
     }
 

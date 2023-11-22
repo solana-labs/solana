@@ -7324,7 +7324,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
                 .set_slot_for_tests(bank.slot() + DELAY_VISIBILITY_SLOT_OFFSET);
             invoke_context
                 .programs_modified_by_tx
-                .replenish(program_keypair.pubkey(), loaded_program.clone());
+                .assign_program(program_keypair.pubkey(), loaded_program.clone());
         },
         |_invoke_context| {},
     );

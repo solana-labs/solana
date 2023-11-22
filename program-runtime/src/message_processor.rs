@@ -267,7 +267,7 @@ mod tests {
         let mut transaction_context = TransactionContext::new(accounts, Rent::default(), 1, 3);
         let program_indices = vec![vec![2]];
         let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
-        programs_loaded_for_tx_batch.replenish(
+        programs_loaded_for_tx_batch.assign_program(
             mock_system_program_id,
             Arc::new(LoadedProgram::new_builtin(0, 0, MockBuiltin::vm)),
         );
@@ -490,7 +490,7 @@ mod tests {
         let mut transaction_context = TransactionContext::new(accounts, Rent::default(), 1, 3);
         let program_indices = vec![vec![2]];
         let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
-        programs_loaded_for_tx_batch.replenish(
+        programs_loaded_for_tx_batch.assign_program(
             mock_program_id,
             Arc::new(LoadedProgram::new_builtin(0, 0, MockBuiltin::vm)),
         );
@@ -668,7 +668,7 @@ mod tests {
         )));
         let sysvar_cache = SysvarCache::default();
         let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
-        programs_loaded_for_tx_batch.replenish(
+        programs_loaded_for_tx_batch.assign_program(
             mock_program_id,
             Arc::new(LoadedProgram::new_builtin(0, 0, MockBuiltin::vm)),
         );
