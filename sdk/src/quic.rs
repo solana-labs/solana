@@ -17,7 +17,7 @@ pub const QUIC_TOTAL_STAKED_CONCURRENT_STREAMS: usize = 1_024_000;
 // forwarded packets from staked nodes.
 pub const QUIC_MAX_STAKED_CONCURRENT_STREAMS: usize = 512;
 
-pub const QUIC_MAX_TIMEOUT: Duration = Duration::from_secs(2);
+pub const QUIC_MAX_TIMEOUT: Duration = Duration::from_secs(3600);
 pub const QUIC_KEEP_ALIVE: Duration = Duration::from_secs(1);
 
 // Based on commonly-used handshake timeouts for various TCP
