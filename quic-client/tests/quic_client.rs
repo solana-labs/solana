@@ -397,7 +397,7 @@ mod tests {
         let endpoint = Arc::new(QuicLazyInitializedEndpoint::new(client_certificate, None));
 
         let thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(1)
+            .num_threads(128)
             .thread_name(|i| format!("concame{i:02}"))
             .build()
             .unwrap();
