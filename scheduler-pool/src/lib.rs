@@ -367,7 +367,7 @@ struct Task {
     tx: SanitizedTransaction, // actually should be Bundle
     lock_attempts: LockAttemptsInCell,
     contention_count: std::sync::atomic::AtomicUsize,
-    pub uncontended: std::sync::atomic::AtomicUsize,
+    uncontended: std::sync::atomic::AtomicUsize,
 }
 
 impl Task {
