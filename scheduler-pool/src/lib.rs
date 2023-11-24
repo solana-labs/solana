@@ -383,7 +383,7 @@ impl Task {
         TaskInQueue::new(Self {
             unique_weight,
             tx,
-            lock_attempts: TaskStatus(UnsafeCell::new(lock_attempts)),
+            lock_attempts: TaskStatus(UnsafeCell::new(TaskStatus::new(lock_attempts))),
             uncontended: Default::default(),
             contention_count: Default::default(),
         })
