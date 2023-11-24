@@ -565,7 +565,6 @@ impl AddressBook {
 #[derive(Debug)]
 pub struct ExecutionEnvironment {
     task: TaskInQueue,
-    finalized_lock_attempts: Vec<LockAttempt>,
     result_with_timings: ResultWithTimings,
     finish_time: Option<SystemTime>,
     slot: Slot,
@@ -1718,7 +1717,7 @@ impl SchedulingStateMachine {
             should_remove,
             &ee.task.unique_weight,
             &mut self.retryable_task_queue,
-            &mut ee.finalized_lock_attempts,
+            &mut ee.task.lock_attempts_mut(),
         );
     }
 }
