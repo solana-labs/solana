@@ -517,7 +517,7 @@ impl Page {
 }
 
 impl Tasks {
-    pub fn insert_task(&mut self, task: TaskInQueue, requested_usage: RequestedUsage) {
+    fn insert_task(&mut self, task: TaskInQueue, requested_usage: RequestedUsage) {
         let pre_existed = self
             .blocked_task_queue
             .insert(task.unique_weight, (task, requested_usage));
