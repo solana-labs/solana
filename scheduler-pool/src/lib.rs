@@ -544,7 +544,7 @@ impl Tasks {
             .find_map(|(task, ru)| (ru == &RequestedUsage::Writable).then_some(task.unique_weight))
     }
 
-    pub fn heaviest_weight(&mut self) -> Option<UniqueWeight> {
+    fn heaviest_weight(&mut self) -> Option<UniqueWeight> {
         self.blocked_task_queue.last_entry().map(|j| *j.key())
     }
 
