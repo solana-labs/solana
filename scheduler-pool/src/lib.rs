@@ -800,7 +800,6 @@ where
             Ok(()) => {}
             Err(e) => *session_result = Err(e.clone()),
         }
-        session_timings.accumulate(&msg.result_with_timings.1);
     }
 
     fn receive_scheduled_transaction(
@@ -1151,6 +1150,7 @@ where
                 'inner: loop {
                     match drop_receiver.try_recv() {
                         Ok(SessionedMessage::Payload(ee)) => {
+                            session_timings.accumulate(&ee.result_with_timings.1);
                             if send_metrics {
                                 use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
 
