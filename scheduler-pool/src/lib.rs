@@ -792,7 +792,7 @@ where
 
     fn propagate_context(
         blocked_transaction_sessioned_sender: &mut Sender<
-            ChainedChannel<Box<ExecutionEnvironment>, ControlFrame>,
+            ChainedChannel<TaskInQueue, ControlFrame>,
         >,
         context: SchedulingContext,
         handler_count: usize,
