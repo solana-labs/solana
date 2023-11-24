@@ -1716,7 +1716,6 @@ impl SchedulingStateMachine {
             })
             .inspect(|task| {
                 self.rescheduled_task_count += 1;
-                task
             })
     }
 
