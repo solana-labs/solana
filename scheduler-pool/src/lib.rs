@@ -1722,11 +1722,7 @@ impl SchedulingStateMachine {
     fn deschedule_task(&mut self, ee: &Box<ExecutionEnvironment>) {
         self.active_task_count -= 1;
         self.handled_task_count += 1;
-        let should_remove = ee
-            .task
-            .contention_count
-            .load(std::sync::atomic::Ordering::SeqCst)
-            > 0;
+        let should_remove = ee.task.contention_count() > 0;
         ScheduleStage::unlock_after_execution(
             should_remove,
             &ee.task.unique_weight,
