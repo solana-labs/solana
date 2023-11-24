@@ -548,14 +548,13 @@ impl Tasks {
         self.blocked_task_queue.last_entry().map(|j| *j.key())
     }
 
-    fn reindex(&mut self, should_remove: bool, uq: &UniqueWeight) -> Option<TaskInQueue> {
+    fn reindex(&mut self, should_remove: bool, uq: &UniqueWeight) -> Option<&TaskInQueue> {
         if should_remove {
             self.remove_task(uq);
         }
 
         self.heaviest_task_cursor()
             .find(|task| task.currently_contended())
-            .cloned()
     }
 }
 
