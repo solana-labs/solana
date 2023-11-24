@@ -361,7 +361,7 @@ type TaskInQueue = Arc<Task>;
 struct TaskStatusInner {
     lock_attempts: Vec<LockAttempt>,
     contention_count: usize,
-    uncontended: usize
+    uncontended: usize,
 }
 
 #[derive(Debug)]
@@ -369,7 +369,11 @@ struct TaskStatus(UnsafeCell<TaskStatusInner>);
 
 impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
-        Self(UnsafeCell::new(TaskStatusInner { lock_attempts, contention_count: 0, uncontended: 0 }))
+        Self(UnsafeCell::new(TaskStatusInner {
+            lock_attempts,
+            contention_count: 0,
+            uncontended: 0,
+        }))
     }
 }
 
