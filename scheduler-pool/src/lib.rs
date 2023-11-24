@@ -574,7 +574,7 @@ impl AddressBook {
     pub fn load(&self, address: Pubkey) -> PageRc {
         PageRc::clone(&self.book.entry(address).or_insert_with(|| {
             PageRc(by_address::ByAddress(PageRcInner::new(UnsafeCell::new(
-                Page::new(&address, Usage::unused()),
+                Page::new(Usage::unused()),
             ))))
         }))
     }
