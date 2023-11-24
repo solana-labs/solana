@@ -416,7 +416,7 @@ impl Task {
     }
 
     fn uncontended(&self) -> &mut usize {
-        unsafe { (*self.task_status.0.get()).uncontended }
+        unsafe { &mut (*self.task_status.0.get()).uncontended }
     }
 
     pub fn currently_contended(&self) -> bool {
