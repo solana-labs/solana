@@ -2024,7 +2024,7 @@ mod tests {
 
         fn schedule_execution<'a>(
             &'a self,
-            &(transaction, index): <DefaultScheduleExecutionArg as ScheduleExecutionArg>::TransactionWithIndex<'a>,
+            &(_transaction, _index): <DefaultScheduleExecutionArg as ScheduleExecutionArg>::TransactionWithIndex<'a>,
         ) {
             todo!();
             /*
@@ -2089,9 +2089,9 @@ mod tests {
         for AsyncScheduler<TRIGGER_RACE_CONDITION>
     {
         fn spawn(
-            pool: Arc<SchedulerPool<Self, DefaultTransactionHandler, DefaultScheduleExecutionArg>>,
-            initial_context: SchedulingContext,
-            handler: DefaultTransactionHandler,
+            _pool: Arc<SchedulerPool<Self, DefaultTransactionHandler, DefaultScheduleExecutionArg>>,
+            _initial_context: SchedulingContext,
+            _handler: DefaultTransactionHandler,
         ) -> Self {
             todo!();
             /*
