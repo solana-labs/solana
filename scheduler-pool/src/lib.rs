@@ -934,7 +934,7 @@ where
                         select_biased! {
                             recv(handled_blocked_transaction_receiver) -> execution_environment => {
                                 log_scheduler!();
-                                let mut execution_environment = execution_environment.unwrap();
+                                let execution_environment = execution_environment.unwrap();
                                 Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
                                 state_machine.deschedule_task(&execution_environment);
                                 drop_sender.send(execution_environment).unwrap();
@@ -1405,7 +1405,7 @@ impl ScheduleStage {
     }
 
     fn attempt_lock_address(unique_weight: &UniqueWeight, attempt: &mut LockAttempt) {
-        let mut page = attempt.target_page_mut();
+        let page = attempt.target_page_mut();
         let tcuw = page.blocked_task_queue.heaviest_weight();
 
         let strictly_lockable = if tcuw.is_none() {
