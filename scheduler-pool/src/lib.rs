@@ -400,8 +400,8 @@ impl Task {
         }
     }
 
-    fn lock_attempts_mut(&self) -> std::cell::RefMut<'_, Vec<LockAttempt>> {
-        self.tx.1 .0.borrow_mut()
+    fn lock_attempts_mut(&self) -> &mut Vec<LockAttempt> {
+        unsafe { &mut *self.tx.1.0.get() }
     }
 
     pub fn currently_contended(&self) -> bool {
