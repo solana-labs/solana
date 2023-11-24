@@ -836,7 +836,7 @@ where
         blocked_transaction_sessioned_sender: &mut Sender<
             ChainedChannel<TaskInQueue, ControlFrame>,
         >,
-        drop_sender: Sender<SessionedMessage<Box<ExecutionEnvironment>>>,
+        drop_sender: &Sender<SessionedMessage<Box<ExecutionEnvironment>>>,
         context: SchedulingContext,
         handler_count: usize,
     ) {
