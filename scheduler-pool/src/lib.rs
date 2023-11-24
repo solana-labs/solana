@@ -894,7 +894,7 @@ where
             let mut result_with_timings = self
                 .session_result_with_timings
                 .take()
-                .or(Some((Ok(()), Default::default())));
+                .or(((Ok(()), Default::default()));
 
             move || {
                 trace!(
