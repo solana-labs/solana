@@ -536,7 +536,6 @@ static_assertions::const_assert_eq!(std::mem::size_of::<std::cell::UnsafeCell<Pa
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct PageRc(by_address::ByAddress<PageRcInner>);
-unsafe impl Send for PageRc {}
 unsafe impl Sync for PageRc {}
 unsafe impl Sync for LockAttemptsInCell {}
 type WeightedTaskQueue = std::collections::BTreeMap<UniqueWeight, TaskInQueue>;
