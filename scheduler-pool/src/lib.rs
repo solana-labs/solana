@@ -1555,7 +1555,7 @@ impl ScheduleStage {
                     assert!(heaviest_blocked_task.currently_contended());
                     retryable_task_queue
                         .entry(heaviest_blocked_task.unique_weight)
-                        .or_insert(heaviest_blocked_task.clone());
+                        .or_insert_with(|| heaviest_blocked_task.clone());
                 }
             }
         }
