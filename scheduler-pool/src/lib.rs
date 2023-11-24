@@ -49,7 +49,7 @@ type UniqueWeight = u64;
 
 #[derive(Debug, Default)]
 pub struct Tasks {
-    blocked_task_queue: std::collections::BTreeMap<UniqueWeight, TaskInQueue>,
+    blocked_task_queue: std::collections::BTreeMap<UniqueWeight, (TaskInQueue, RequestedUsage)>,
 }
 
 // SchedulerPool must be accessed via dyn by solana-runtime code, because of its internal fields'
