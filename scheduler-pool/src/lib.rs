@@ -836,7 +836,6 @@ where
         blocked_transaction_sessioned_sender: &mut Sender<
             ChainedChannel<TaskInQueue, ControlFrame>,
         >,
-        drop_sender: &Sender<SessionedMessage<Box<ExecutionEnvironment>>>,
         context: SchedulingContext,
         handler_count: usize,
     ) {
@@ -851,7 +850,6 @@ where
                 .unwrap();
         }
         *blocked_transaction_sessioned_sender = next_blocked_transaction_sessioned_sender;
-        drop_sender.send(SessionedMessage::EndSession).unwrap();
     }
 
     fn active_context(&self) -> Option<SchedulingContext> {
@@ -964,7 +962,7 @@ where
                                                 ControlFrame::StartSession(context) => {
                                                     slot = context.bank().slot();
                                                     log_scheduler!();
-                                                    Self::propagate_context(&mut blocked_transaction_sessioned_sender, &drop_sender, context, handler_count);
+                                                    Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count);
                                                 }
                                                 ControlFrame::EndSession => {
                                                     will_end_session = true;
@@ -1025,7 +1023,6 @@ where
                                                 slot = context.bank().slot();
                                                 Self::propagate_context(
                                                     &mut blocked_transaction_sessioned_sender,
-                                                    &drop_sender,
                                                     context,
                                                     handler_count,
                                                 );
@@ -1065,6 +1062,7 @@ where
                         // or should also consider will_end_thread?
                         log_scheduler!("S:ended ");
                         (state_machine, log_interval_counter) = <_>::default();
+                        drop_sender.send(SessionedMessage::EndSession).unwrap();
                         result_with_timings.as_mut().unwrap().1 = drop_receiver2.recv().unwrap();
                         result_sender
                             .send(
