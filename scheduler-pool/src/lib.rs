@@ -1572,11 +1572,10 @@ impl ScheduleStage {
 
     fn prepare_scheduled_execution(
         task: TaskInQueue,
-        finalized_lock_attempts: Vec<LockAttempt>,
     ) -> Box<ExecutionEnvironment> {
         Box::new(ExecutionEnvironment {
             task,
-            finalized_lock_attempts,
+            finalized_lock_attempts: std::mem::take(&mut *task.lock_attempts_mut()),
             result_with_timings: (Ok(()), Default::default()),
             finish_time: None,
             slot: 0,
@@ -1688,7 +1687,7 @@ impl SchedulingStateMachine {
             (TaskSource::Runnable, task),
             &mut self.retryable_task_queue,
         )
-        .map(|(task, lock_attemps)| ScheduleStage::prepare_scheduled_execution(task, lock_attemps))
+        .map(|task| ScheduleStage::prepare_scheduled_execution(task))
     }
 
     fn schedule_retryable_task(&mut self) -> Option<Box<ExecutionEnvironment>> {
@@ -1701,9 +1700,9 @@ impl SchedulingStateMachine {
                     &mut self.retryable_task_queue,
                 )
             })
-            .map(|(task, lock_attemps)| {
+            .map(|task| {
                 self.rescheduled_task_count += 1;
-                ScheduleStage::prepare_scheduled_execution(task, lock_attemps)
+                ScheduleStage::prepare_scheduled_execution(task)
             })
     }
 
