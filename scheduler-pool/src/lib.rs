@@ -869,7 +869,7 @@ where
             unbounded::<Box<ExecutionEnvironment>>();
         let (drop_sender, drop_receiver) =
             unbounded::<SessionedMessage<Box<ExecutionEnvironment>>>();
-        let (drop_sender2, drop_receiver2) = unbounded::<ExecuteTimings>();
+        let (drop_sender2, drop_receiver2) = unbounded::<ResultWithTimings>();
         let handler_count = self.handler_count;
         let scheduler_id = self.scheduler_id;
         let mut slot = context.bank().slot();
@@ -1043,7 +1043,7 @@ where
                         log_scheduler!("S:ended ");
                         (state_machine, log_interval_counter) = <_>::default();
                         drop_sender.send(SessionedMessage::EndSession).unwrap();
-                        result_with_timings.1 = drop_receiver2.recv().unwrap();
+                        result_with_timings = drop_receiver2.recv().unwrap();
                         result_sender
                             .send(
                                 std::mem::replace(&mut result_with_timings, (Ok(()), Default::default()))
@@ -1055,7 +1055,7 @@ where
                 log_scheduler!("T:ended ");
 
                 drop_sender.send(SessionedMessage::EndSession).unwrap();
-                result_with_timings.1 = drop_receiver2.recv().unwrap();
+                result_with_timings = drop_receiver2.recv().unwrap();
                 trace!(
                     "solScheduler thread is ended at: {:?}",
                     std::thread::current()
