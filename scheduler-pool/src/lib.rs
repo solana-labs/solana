@@ -614,8 +614,8 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     handler_threads: Vec<JoinHandle<()>>,
     drop_thread: Option<JoinHandle<()>>,
     handler: TH,
-    schedulrable_transaction_sender: Sender<ChainedChannel<Arc<Task>, ControlFrame>>,
-    schedulable_transaction_receiver: Receiver<ChainedChannel<Arc<Task>, ControlFrame>>,
+    schedulrable_transaction_sender: Sender<ChainedChannel<TaskInQueue, ControlFrame>>,
+    schedulable_transaction_receiver: Receiver<ChainedChannel<TaskInQueue, ControlFrame>>,
     result_sender: Sender<ResultWithTimings>,
     result_receiver: Receiver<ResultWithTimings>,
     handler_count: usize,
@@ -1216,7 +1216,7 @@ where
         );
     }
 
-    fn send_task(&self, task: Arc<Task>) {
+    fn send_task(&self, task: TaskInQueue) {
         debug!("send_task()");
         self.schedulrable_transaction_sender
             .send(ChainedChannel::Payload(task))
@@ -1679,7 +1679,7 @@ impl SchedulingStateMachine {
         self.total_task_count
     }
 
-    fn schedule_new_task(&mut self, task: Arc<Task>) -> Option<Arc<Task>> {
+    fn schedule_new_task(&mut self, task: TaskInQueue) -> Option<TaskInQueue> {
         self.total_task_count += 1;
         self.active_task_count += 1;
         ScheduleStage::try_lock_for_task(
@@ -1688,7 +1688,7 @@ impl SchedulingStateMachine {
         )
     }
 
-    fn schedule_retryable_task(&mut self) -> Option<Arc<Task>> {
+    fn schedule_retryable_task(&mut self) -> Option<TaskInQueue> {
         self.retryable_task_queue
             .pop_last()
             .and_then(|(_, task)| {
