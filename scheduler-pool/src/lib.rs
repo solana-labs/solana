@@ -1424,7 +1424,7 @@ impl ScheduleStage {
         }
     }
 
-    fn reset_lock(attempt: &mut LockAttempt) -> bool {
+    fn reset_lock(attempt: &LockAttempt) -> bool {
         match attempt.status {
             LockStatus::Succeded => Self::unlock(attempt),
             LockStatus::Failed => {
