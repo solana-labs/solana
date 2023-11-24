@@ -1578,16 +1578,16 @@ impl ScheduleStage {
             if should_remove {
                 unlock_attempt.target_page_mut().blocked_task_queue.remove_task(uq);
             }
-            let heaviest_uncontended = unlock_attempt
-                .target_page_mut()
-                .blocked_task_queue
-                .reindex();
 
             let is_unused_now = Self::reset_lock(unlock_attempt);
             if !is_unused_now {
                 continue;
             }
 
+            let heaviest_uncontended = unlock_attempt
+                .target_page_mut()
+                .blocked_task_queue
+                .reindex();
             if let Some(uncontended_task) = heaviest_uncontended {
                 assert!(uncontended_task.currently_contended());
                 retryable_task_queue
