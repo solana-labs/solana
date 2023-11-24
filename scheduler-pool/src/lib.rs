@@ -1160,7 +1160,7 @@ where
                             session_timings.accumulate(&ee.result_with_timings.1);
                             match &msg.result_with_timings.0 {
                                 Ok(()) => {}
-                                Err(e) => *session_result = Err(e.clone()),
+                                Err(e) => session_result = Err(e.clone()),
                             }
                             if send_metrics {
                                 use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
