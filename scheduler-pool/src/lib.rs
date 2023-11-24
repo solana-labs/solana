@@ -574,9 +574,7 @@ pub struct ExecutionEnvironment {
 }
 
 impl ExecutionEnvironment {
-    fn new_boxed(
-        task: TaskInQueue,
-    ) -> Box<Self> {
+    fn new_boxed(task: TaskInQueue) -> Box<Self> {
         Box::new(Self {
             task,
             result_with_timings: (Ok(()), Default::default()),
@@ -849,8 +847,7 @@ where
 
         let (blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) =
             unbounded::<ChainedChannel<TaskInQueue, ControlFrame>>();
-        let (idle_transaction_sender, idle_transaction_receiver) =
-            unbounded::<TaskInQueue>();
+        let (idle_transaction_sender, idle_transaction_receiver) = unbounded::<TaskInQueue>();
         let (handled_blocked_transaction_sender, handled_blocked_transaction_receiver) =
             unbounded::<Box<ExecutionEnvironment>>();
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
