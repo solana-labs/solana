@@ -1678,17 +1678,16 @@ impl SchedulingStateMachine {
         self.total_task_count
     }
 
-    fn schedule_new_task(&mut self, task: Arc<Task>) -> Option<Box<ExecutionEnvironment>> {
+    fn schedule_new_task(&mut self, task: Arc<Task>) -> Option<Arc<Task>> {
         self.total_task_count += 1;
         self.active_task_count += 1;
         ScheduleStage::try_lock_for_task(
             (TaskSource::Runnable, task),
             &mut self.retryable_task_queue,
         )
-        .map(|task| ScheduleStage::prepare_scheduled_execution(task))
     }
 
-    fn schedule_retryable_task(&mut self) -> Option<Box<ExecutionEnvironment>> {
+    fn schedule_retryable_task(&mut self) -> Option<Arc<Task>> {
         self.retryable_task_queue
             .pop_last()
             .and_then(|(_, task)| {
@@ -1700,7 +1699,7 @@ impl SchedulingStateMachine {
             })
             .map(|task| {
                 self.rescheduled_task_count += 1;
-                ScheduleStage::prepare_scheduled_execution(task)
+                task
             })
     }
 
