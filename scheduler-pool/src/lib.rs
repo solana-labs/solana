@@ -1184,7 +1184,9 @@ where
                                 );
                             }
                             drop(ee);
-                        }
+                        },
+                        Ok(SessionedMessage::EndSession) => {
+                        },
                         Err(TryRecvError::Disconnected) => break 'outer,
                         Err(TryRecvError::Empty) => break 'inner,
                     }
