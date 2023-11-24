@@ -377,7 +377,6 @@ struct Task {
     unique_weight: UniqueWeight,
     tx: SanitizedTransaction, // actually should be Bundle
     lock_attempts: TaskStatus,
-    contention_count: std::sync::atomic::AtomicUsize,
     uncontended: std::sync::atomic::AtomicUsize,
 }
 
@@ -392,7 +391,6 @@ impl Task {
             tx,
             lock_attempts: TaskStatus::new(lock_attempts),
             uncontended: Default::default(),
-            contention_count: Default::default(),
         })
     }
 
@@ -410,15 +408,12 @@ impl Task {
     }
 
     fn increment_contention_count(&self) {
-        self
-            .contention_count
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let c = unsafe { &mut (*self.lock_attempts.0.get()).contention_count }
+        c += 1;
     }
 
     fn contention_count(&self) -> usize {
-        self
-            .contention_count
-            .load(std::sync::atomic::Ordering::SeqCst)
+        unsafe { &mut (*self.lock_attempts.0.get()).contention_count }
     }
 
     pub fn currently_contended(&self) -> bool {
