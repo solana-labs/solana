@@ -1193,8 +1193,8 @@ where
                             session_timings = Default::default();
                             //drop2.send(session_timings).unwrap();
                         },
-                        Err(TryRecvError::Disconnected) => break 'outer,
-                        Err(TryRecvError::Empty) => break 'inner,
+                        Err(RecvTimeoutError::Disconnected) => break 'outer,
+                        Err(RecvTimeoutError::Empty) => break 'inner,
                     }
                 }
             }
