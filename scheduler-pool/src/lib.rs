@@ -452,6 +452,7 @@ impl LockAttempt {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
+#[repr(u8)]
 enum Usage {
     Unused,
     Readonly(UsageCount),
