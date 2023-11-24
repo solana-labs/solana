@@ -726,7 +726,7 @@ struct ChannelAndPayloadTuple<T1, T2>(ChannelAndPayload<T1, T2>);
 impl<T1: Send + Sync, T2: Send + Sync> WithChannelAndPayload<T1, T2>
     for ChannelAndPayloadTuple<T1, T2>
 {
-    fn channel_and_payload(mut self: Box<Self>) -> ChannelAndPayload<T1, T2> {
+    fn channel_and_payload(self: Box<Self>) -> ChannelAndPayload<T1, T2> {
         self.0
     }
 }
@@ -975,7 +975,7 @@ where
                             },
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
                                 log_scheduler!();
-                                let mut execution_environment = execution_environment.unwrap();
+                                let execution_environment = execution_environment.unwrap();
                                 Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
                                 state_machine.deschedule_task(&execution_environment);
                                 drop_sender.send(execution_environment).unwrap();
@@ -1091,7 +1091,7 @@ where
                     std::thread::current()
                 );
                 loop {
-                    let (mut m, was_blocked) = select_biased! {
+                    let (m, was_blocked) = select_biased! {
                         recv(blocked_transaction_sessioned_receiver) -> m => {
                             let Ok(mm) = m else { break };
 
