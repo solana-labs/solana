@@ -481,7 +481,6 @@ pub enum RequestedUsage {
 pub struct Page {
     current_usage: Usage,
     blocked_task_queue: Tasks,
-    blocked_write_requesting_task_ids: std::collections::BTreeSet<UniqueWeight>,
 }
 
 impl Page {
@@ -489,7 +488,6 @@ impl Page {
         Self {
             current_usage,
             blocked_task_queue: Default::default(),
-            blocked_write_requesting_task_ids: Default::default(),
         }
     }
 }
