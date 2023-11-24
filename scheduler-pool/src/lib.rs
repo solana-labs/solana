@@ -517,7 +517,7 @@ impl Tasks {
         self.blocked_task_queue
             .values()
             .rev()
-            .find(|(task, ru)| ru == &RequestedUsage::Writable)
+            .find_map(|(task, ru)| ru == &RequestedUsage::Writable)
             .map(|(task, _ru)| task.unique_weight)
     }
 
