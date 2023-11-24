@@ -355,10 +355,10 @@ enum LockStatus {
     Failed,
 }
 
-pub type TaskInQueue = Arc<Task>;
+type TaskInQueue = Arc<Task>;
 
 #[derive(Debug)]
-pub struct LockAttemptsInCell(UnsafeCell<Vec<LockAttempt>>);
+struct LockAttemptsInCell(UnsafeCell<Vec<LockAttempt>>);
 
 #[derive(Debug)]
 struct Task {
