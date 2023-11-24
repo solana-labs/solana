@@ -366,7 +366,7 @@ struct Task {
     unique_weight: UniqueWeight,
     tx: SanitizedTransaction, // actually should be Bundle
     lock_attempts: LockAttemptsInCell,
-    contention_count: std::sync::atomic::AtomicUsize,
+    contention_count: usize,
     pub uncontended: std::sync::atomic::AtomicUsize,
 }
 
@@ -1481,9 +1481,7 @@ impl ScheduleStage {
                 &next_task.unique_weight,
                 &mut next_task.lock_attempts_mut(),
             );
-            next_task
-                .contention_count
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            next_task.contention_count += 1
 
             if from_runnable {
                 next_task.mark_as_contended();
@@ -1496,9 +1494,7 @@ impl ScheduleStage {
         trace!(
             "successful lock: (from_runnable: {}) after {} contentions",
             from_runnable,
-            next_task
-                .contention_count
-                .load(std::sync::atomic::Ordering::SeqCst)
+            next_task.contention_count,
         );
 
         if !from_runnable {
@@ -1707,11 +1703,7 @@ impl SchedulingStateMachine {
     fn deschedule_task(&mut self, ee: &Box<ExecutionEnvironment>) {
         self.active_task_count -= 1;
         self.handled_task_count += 1;
-        let should_remove = ee
-            .task
-            .contention_count
-            .load(std::sync::atomic::Ordering::SeqCst)
-            > 0;
+        let should_remove = ee.task.contention_count > 0;
         ScheduleStage::unlock_after_execution(
             should_remove,
             &ee.task.unique_weight,
