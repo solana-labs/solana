@@ -511,7 +511,7 @@ impl Tasks {
     }
 
     fn heaviest_task_cursor(&self) -> impl Iterator<Item = &TaskInQueue> {
-        self.blocked_task_queue.values().rev().map(|(task, _ru) task)
+        self.blocked_task_queue.values().rev().map(|(task, _ru)| task)
     }
 
     pub fn heaviest_weight(&mut self) -> Option<UniqueWeight> {
