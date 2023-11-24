@@ -539,7 +539,6 @@ pub struct PageRc(by_address::ByAddress<PageRcInner>);
 unsafe impl Send for PageRc {}
 unsafe impl Sync for PageRc {}
 unsafe impl Send for LockAttemptsInCell {}
-unsafe impl Sync for LockAttemptsInCell {}
 type WeightedTaskQueue = std::collections::BTreeMap<UniqueWeight, TaskInQueue>;
 
 type AddressMap = dashmap::DashMap<Pubkey, PageRc>;
