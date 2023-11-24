@@ -79,7 +79,7 @@ pub struct SchedulerPool<
     // prune schedulers, stop idling scheduler's threads, sanity check on the
     // address book after scheduler is returned.
     watchdog_sender: Sender<Weak<RwLock<ThreadManager<TH, SEA>>>>,
-    watchdog_thread: JoinHandle<()>,
+    _watchdog_thread: JoinHandle<()>,
     _phantom: PhantomData<(T, TH, SEA)>,
 }
 
@@ -227,7 +227,7 @@ where
             replay_vote_sender,
             prioritization_fee_cache,
             weak_self: weak_self.clone(),
-            watchdog_thread,
+            _watchdog_thread: watchdog_thread,
             watchdog_sender,
             _phantom: PhantomData,
         });
