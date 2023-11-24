@@ -1618,7 +1618,7 @@ where
                 .chain(readonly_lock_iter)
                 .collect::<Vec<_>>();
             let uw = UniqueWeight::max_value() - index as UniqueWeight;
-            let task = Task::new_for_queue(uw, (transaction.clone(), locks));
+            let task = Task::new_for_queue(uw, transaction, locks);
             self.ensure_thread_manager_started().send_task(task.clone());
         });
     }
