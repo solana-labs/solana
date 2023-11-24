@@ -10,7 +10,7 @@
 
 use {
     crossbeam_channel::{
-        bounded, never, select_biased, unbounded, Receiver, RecvTimeoutError, Sender, TryRecvError,
+        bounded, never, select_biased, unbounded, Receiver, Sender, TryRecvError,
     },
     log::*,
     rand::{thread_rng, Rng},
@@ -211,7 +211,7 @@ where
                         pre_push_len,
                         watched_thread_managers.len(),
                     );
-                    std::thread::sleep(Duration::from_secs(2));
+                    sleep(Duration::from_secs(2));
                 }
             }
         };
