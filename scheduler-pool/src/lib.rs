@@ -1137,7 +1137,6 @@ where
                                         "priority",
                                         ee.task
                                             .tx
-                                            .0
                                             .get_transaction_priority_details(false)
                                             .map(|d| d.priority)
                                             .unwrap_or_default(),
