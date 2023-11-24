@@ -195,11 +195,11 @@ where
 
                     let pre_push_len = watched_thread_managers.len();
                     'inner: loop {
-                        match watchdog_receiver.recv_timeout(Duration::from_secs(2)) {
+                        match watchdog_receiver.try_recv() {
                             Ok(thread_manager) => watched_thread_managers
                                 .push(WatchedThreadManager::new(thread_manager)),
-                            Err(RecvTimeoutError::Disconnected) => break 'outer,
-                            Err(RecvTimeoutError::Timeout) => break 'inner,
+                            Err(TryRecvError::Disconnected) => break 'outer,
+                            Err(TryRecvError::Empty) => break 'inner,
                         }
                     }
 
@@ -211,6 +211,7 @@ where
                         pre_push_len,
                         watched_thread_managers.len(),
                     );
+                    std::thread::sleep(Duration::from_secs(2));
                 }
             }
         };
