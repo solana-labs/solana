@@ -1468,7 +1468,7 @@ impl ScheduleStage {
     fn try_lock_for_task(
         (task_source, next_task): (TaskSource, TaskInQueue),
         retryable_task_queue: &mut WeightedTaskQueue,
-    ) -> Option<(TaskInQueue, Vec<LockAttempt>)> {
+    ) -> Option<TaskInQueue> {
         let from_runnable = matches!(task_source, TaskSource::Runnable);
 
         let lock_failure_count = Self::attempt_lock_for_execution(
@@ -1523,9 +1523,8 @@ impl ScheduleStage {
                 }
             }
         }
-        let lock_attempts = std::mem::take(&mut *next_task.lock_attempts_mut());
 
-        Some((next_task, lock_attempts))
+        Some(next_task)
     }
 
     fn reset_lock_for_failed_execution(
