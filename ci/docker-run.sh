@@ -42,9 +42,6 @@ ARGS=(
 )
 
 if [[ -n $CI ]]; then
-  # Share the real ~/.cargo between docker containers in CI for speed
-  ARGS+=(--volume "$HOME:/home")
-
   if [[ -n $BUILDKITE ]]; then
     # I hate buildkite-esque echo is leaking into this generic shell wrapper.
     # but it's easiest to notify to users, and properly guarded under $BUILDKITE_ env
@@ -54,28 +51,37 @@ if [[ -n $CI ]]; then
       # sccache-related bugs
       echo "--- $0 ... (with sccache being DISABLED due to many (${BUILDKITE_RETRY_COUNT}) retries)"
     else
-      echo "--- $0 ... (with sccache enabled with prefix: $SCCACHE_S3_KEY_PREFIX)"
+      echo "--- $0 ... (with sccache enabled with prefix: $SCCACHE_KEY_PREFIX)"
+
       # sccache
       ARGS+=(
         --env "RUSTC_WRAPPER=/usr/local/cargo/bin/sccache"
-        --env AWS_ACCESS_KEY_ID
-        --env AWS_SECRET_ACCESS_KEY
-        --env SCCACHE_BUCKET
-        --env SCCACHE_REGION
-        --env SCCACHE_S3_KEY_PREFIX
       )
+
+      # s3
+      if [ -n "$AWS_ACCESS_KEY_ID" ]; then
+        ARGS+=(
+          --env AWS_ACCESS_KEY_ID
+          --env AWS_SECRET_ACCESS_KEY
+          --env SCCACHE_BUCKET
+          --env SCCACHE_REGION
+          --env SCCACHE_S3_KEY_PREFIX
+        )
+      fi
+
+      # gcs
+      if [ -n "$SCCACHE_GCS_KEY_PATH" ]; then
+        ARGS+=(
+          --env SCCACHE_GCS_KEY_PATH
+          --volume "$SCCACHE_GCS_KEY_PATH:$SCCACHE_GCS_KEY_PATH"
+          --env SCCACHE_GCS_BUCKET
+          --env SCCACHE_GCS_RW_MODE
+          --env SCCACHE_GCS_KEY_PREFIX
+        )
+      fi
     fi
   fi
-else
-  # Avoid sharing ~/.cargo when building locally to avoid a mixed macOS/Linux
-  # ~/.cargo
-  ARGS+=(--volume "$PWD:/home")
 fi
-ARGS+=(--env "HOME=/home" --env "CARGO_HOME=/home/.cargo")
-
-# kcov tries to set the personality of the binary which docker
-# doesn't allow by default.
-ARGS+=(--security-opt "seccomp=unconfined")
 
 # Ensure files are created with the current host uid/gid
 if [[ -z "$SOLANA_DOCKER_RUN_NOSETUID" ]]; then

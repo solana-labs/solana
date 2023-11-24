@@ -1221,15 +1221,16 @@ impl ServeRepair {
             }
         }
         if !pending_pongs.is_empty() {
-            if let Err(SendPktsError::IoError(err, num_failed)) =
-                batch_send(repair_socket, &pending_pongs)
-            {
-                warn!(
-                    "batch_send failed to send {}/{} packets. First error: {:?}",
-                    num_failed,
-                    pending_pongs.len(),
-                    err
-                );
+            match batch_send(repair_socket, &pending_pongs) {
+                Ok(()) => (),
+                Err(SendPktsError::IoError(err, num_failed)) => {
+                    warn!(
+                        "batch_send failed to send {}/{} packets. First error: {:?}",
+                        num_failed,
+                        pending_pongs.len(),
+                        err
+                    );
+                }
             }
         }
     }

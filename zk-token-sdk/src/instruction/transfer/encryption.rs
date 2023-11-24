@@ -35,7 +35,7 @@ impl TransferAmountCiphertext {
     pub fn get_source_handle(&self) -> &DecryptHandle {
         // `TransferAmountCiphertext` is a wrapper for `GroupedElGamalCiphertext<3>`, which
         // holds exactly three decryption handles.
-        self.0.handles.get(0).unwrap()
+        self.0.handles.first().unwrap()
     }
 
     pub fn get_destination_handle(&self) -> &DecryptHandle {
@@ -80,7 +80,7 @@ impl FeeEncryption {
     pub fn get_destination_handle(&self) -> &DecryptHandle {
         // `FeeEncryption` is a wrapper for `GroupedElGamalCiphertext<2>`, which holds
         // exactly two decryption handles.
-        self.0.handles.get(0).unwrap()
+        self.0.handles.first().unwrap()
     }
 
     pub fn get_withdraw_withheld_authority_handle(&self) -> &DecryptHandle {

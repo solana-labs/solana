@@ -1,7 +1,7 @@
 use {
     solana_sdk::{clock::Slot, signature::Signature, transaction::SanitizedTransaction},
     solana_transaction_status::TransactionStatusMeta,
-    std::sync::{Arc, RwLock},
+    std::sync::Arc,
 };
 
 pub trait TransactionNotifier {
@@ -15,4 +15,4 @@ pub trait TransactionNotifier {
     );
 }
 
-pub type TransactionNotifierLock = Arc<RwLock<dyn TransactionNotifier + Sync + Send>>;
+pub type TransactionNotifierArc = Arc<dyn TransactionNotifier + Sync + Send>;

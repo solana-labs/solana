@@ -197,20 +197,30 @@ impl PrioGraphScheduler {
     }
 
     /// Receive completed batches of transactions without blocking.
+    /// Returns (num_transactions, num_retryable_transactions) on success.
     pub fn receive_completed(
         &mut self,
         container: &mut TransactionStateContainer,
-    ) -> Result<(), SchedulerError> {
-        while self.try_receive_completed(container)? {}
-        Ok(())
+    ) -> Result<(usize, usize), SchedulerError> {
+        let mut total_num_transactions = 0;
+        let mut total_num_retryable = 0;
+        loop {
+            let (num_transactions, num_retryable) = self.try_receive_completed(container)?;
+            if num_transactions == 0 {
+                break;
+            }
+            total_num_transactions += num_transactions;
+            total_num_retryable += num_retryable;
+        }
+        Ok((total_num_transactions, total_num_retryable))
     }
 
     /// Receive completed batches of transactions.
-    /// Returns `Ok(true)` if a batch was received, `Ok(false)` if no batch was received.
+    /// Returns `Ok((num_transactions, num_retryable))` if a batch was received, `Ok((0, 0))` if no batch was received.
     fn try_receive_completed(
         &mut self,
         container: &mut TransactionStateContainer,
-    ) -> Result<bool, SchedulerError> {
+    ) -> Result<(usize, usize), SchedulerError> {
         match self.finished_consume_work_receiver.try_recv() {
             Ok(FinishedConsumeWork {
                 work:
@@ -222,6 +232,9 @@ impl PrioGraphScheduler {
                     },
                 retryable_indexes,
             }) => {
+                let num_transactions = ids.len();
+                let num_retryable = retryable_indexes.len();
+
                 // Free the locks
                 self.complete_batch(batch_id, &transactions);
 
@@ -246,9 +259,9 @@ impl PrioGraphScheduler {
                     container.remove_by_id(&id);
                 }
 
-                Ok(true)
+                Ok((num_transactions, num_retryable))
             }
-            Err(TryRecvError::Empty) => Ok(false),
+            Err(TryRecvError::Empty) => Ok((0, 0)),
             Err(TryRecvError::Disconnected) => Err(SchedulerError::DisconnectedRecvChannel(
                 "finished consume work",
             )),

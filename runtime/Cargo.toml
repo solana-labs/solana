@@ -10,6 +10,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+aquamarine = { workspace = true }
 arrayref = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }

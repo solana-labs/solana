@@ -12,6 +12,7 @@ use {
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
         commitment_config::CommitmentConfig,
+        hash::Hash,
         instruction::CompiledInstruction,
         message::{
             v0::{self, LoadedAddresses, LoadedMessage, MessageAddressTableLookup},
@@ -791,6 +792,23 @@ pub struct UiConfirmedBlock {
     pub rewards: Option<Rewards>,
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
+}
+
+// Confirmed block with type guarantees that transaction metadata is always
+// present, as well as a list of the entry data needed to cryptographically
+// verify the block. Used for uploading to BigTable.
+pub struct VersionedConfirmedBlockWithEntries {
+    pub block: VersionedConfirmedBlock,
+    pub entries: Vec<EntrySummary>,
+}
+
+// Data needed to reconstruct an Entry, given an ordered list of transactions in
+// a block. Used for uploading to BigTable.
+pub struct EntrySummary {
+    pub num_hashes: u64,
+    pub hash: Hash,
+    pub num_transactions: u64,
+    pub starting_transaction_index: usize,
 }
 
 #[derive(Clone, Debug, PartialEq)]

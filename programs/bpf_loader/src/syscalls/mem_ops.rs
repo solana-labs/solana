@@ -84,14 +84,12 @@ declare_builtin_function!(
                 s1_addr,
                 n,
                 invoke_context.get_check_aligned(),
-                invoke_context.get_check_size(),
             )?;
             let s2 = translate_slice::<u8>(
                 memory_mapping,
                 s2_addr,
                 n,
                 invoke_context.get_check_aligned(),
-                invoke_context.get_check_size(),
             )?;
             let cmp_result = translate_type_mut::<i32>(
                 memory_mapping,
@@ -137,7 +135,6 @@ declare_builtin_function!(
                 dst_addr,
                 n,
                 invoke_context.get_check_aligned(),
-                invoke_context.get_check_size(),
             )?;
             s.fill(c as u8);
             Ok(0)
@@ -163,7 +160,6 @@ fn memmove(
             dst_addr,
             n,
             invoke_context.get_check_aligned(),
-            invoke_context.get_check_size(),
         )?
         .as_mut_ptr();
         let src_ptr = translate_slice::<u8>(
@@ -171,7 +167,6 @@ fn memmove(
             src_addr,
             n,
             invoke_context.get_check_aligned(),
-            invoke_context.get_check_size(),
         )?
         .as_ptr();
 

@@ -173,8 +173,8 @@ solana program show --buffers
 To specify a different authority:
 
 ```bash
-solana program show --programs --buffer-authority <AURTHORITY_ADRESS>
-solana program show --buffers --buffer-authority <AURTHORITY_ADRESS>
+solana program show --programs --buffer-authority <AUTHORITY_ADDRESS>
+solana program show --buffers --buffer-authority <AUTHORITY_ADDRESS>
 ```
 
 To close a single account:

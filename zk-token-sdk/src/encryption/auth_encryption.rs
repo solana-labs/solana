@@ -52,6 +52,8 @@ pub enum AuthenticatedEncryptionError {
     SeedLengthTooShort,
     #[error("seed length too long for derivation")]
     SeedLengthTooLong,
+    #[error("failed to deserialize")]
+    Deserialization,
 }
 
 struct AuthenticatedEncryption;

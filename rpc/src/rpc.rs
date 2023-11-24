@@ -1323,7 +1323,7 @@ impl JsonRpcRequestProcessor {
         {
             let result = self.blockstore.get_rooted_block_time(slot);
             self.check_blockstore_root(&result, slot)?;
-            if result.is_err() || matches!(result, Ok(None)) {
+            if result.is_err() {
                 if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                     let bigtable_result = bigtable_ledger_storage.get_confirmed_block(slot).await;
                     self.check_bigtable_result(&bigtable_result)?;
@@ -1333,7 +1333,7 @@ impl JsonRpcRequestProcessor {
                 }
             }
             self.check_slot_cleaned_up(&result, slot)?;
-            Ok(result.ok().unwrap_or(None))
+            Ok(result.ok())
         } else {
             let r_bank_forks = self.bank_forks.read().unwrap();
             if let Some(bank) = r_bank_forks.get(slot) {

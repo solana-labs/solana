@@ -171,13 +171,15 @@ pub fn wait_for_duplicate_proof(ledger_path: &Path, dup_slot: Slot) -> Option<Du
     None
 }
 
-pub fn copy_blocks(end_slot: Slot, source: &Blockstore, dest: &Blockstore) {
+/// Copy blocks from `source` blockstore to `dest` blockstore
+/// Set `is_trusted` to avoid sanity checks typically performed by Blockstore::insert_shreds()
+pub fn copy_blocks(end_slot: Slot, source: &Blockstore, dest: &Blockstore, is_trusted: bool) {
     for slot in std::iter::once(end_slot).chain(AncestorIterator::new(end_slot, source)) {
         let source_meta = source.meta(slot).unwrap().unwrap();
         assert!(source_meta.is_full());
 
         let shreds = source.get_data_shreds_for_slot(slot, 0).unwrap();
-        dest.insert_shreds(shreds, None, false).unwrap();
+        dest.insert_shreds(shreds, None, is_trusted).unwrap();
 
         let dest_meta = dest.meta(slot).unwrap().unwrap();
         assert!(dest_meta.is_full());

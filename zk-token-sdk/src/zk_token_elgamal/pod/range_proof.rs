@@ -2,8 +2,7 @@
 
 #[cfg(not(target_os = "solana"))]
 use crate::{
-    errors::ProofVerificationError,
-    range_proof::{self as decoded, errors::RangeProofError},
+    range_proof::{self as decoded, errors::RangeProofVerificationError},
     UNIT_LEN,
 };
 use crate::{
@@ -42,11 +41,11 @@ pub struct RangeProofU64(pub [u8; RANGE_PROOF_U64_LEN]);
 
 #[cfg(not(target_os = "solana"))]
 impl TryFrom<decoded::RangeProof> for RangeProofU64 {
-    type Error = RangeProofError;
+    type Error = RangeProofVerificationError;
 
     fn try_from(decoded_proof: decoded::RangeProof) -> Result<Self, Self::Error> {
         if decoded_proof.ipp_proof.serialized_size() != INNER_PRODUCT_PROOF_U64_LEN {
-            return Err(ProofVerificationError::Deserialization.into());
+            return Err(RangeProofVerificationError::Deserialization);
         }
 
         let mut buf = [0_u8; RANGE_PROOF_U64_LEN];
@@ -59,7 +58,7 @@ impl TryFrom<decoded::RangeProof> for RangeProofU64 {
 
 #[cfg(not(target_os = "solana"))]
 impl TryFrom<RangeProofU64> for decoded::RangeProof {
-    type Error = RangeProofError;
+    type Error = RangeProofVerificationError;
 
     fn try_from(pod_proof: RangeProofU64) -> Result<Self, Self::Error> {
         Self::from_bytes(&pod_proof.0)
@@ -73,11 +72,11 @@ pub struct RangeProofU128(pub [u8; RANGE_PROOF_U128_LEN]);
 
 #[cfg(not(target_os = "solana"))]
 impl TryFrom<decoded::RangeProof> for RangeProofU128 {
-    type Error = RangeProofError;
+    type Error = RangeProofVerificationError;
 
     fn try_from(decoded_proof: decoded::RangeProof) -> Result<Self, Self::Error> {
         if decoded_proof.ipp_proof.serialized_size() != INNER_PRODUCT_PROOF_U128_LEN {
-            return Err(ProofVerificationError::Deserialization.into());
+            return Err(RangeProofVerificationError::Deserialization);
         }
 
         let mut buf = [0_u8; RANGE_PROOF_U128_LEN];
@@ -90,7 +89,7 @@ impl TryFrom<decoded::RangeProof> for RangeProofU128 {
 
 #[cfg(not(target_os = "solana"))]
 impl TryFrom<RangeProofU128> for decoded::RangeProof {
-    type Error = RangeProofError;
+    type Error = RangeProofVerificationError;
 
     fn try_from(pod_proof: RangeProofU128) -> Result<Self, Self::Error> {
         Self::from_bytes(&pod_proof.0)
@@ -104,11 +103,11 @@ pub struct RangeProofU256(pub [u8; RANGE_PROOF_U256_LEN]);
 
 #[cfg(not(target_os = "solana"))]
 impl TryFrom<decoded::RangeProof> for RangeProofU256 {
-    type Error = RangeProofError;
+    type Error = RangeProofVerificationError;
 
     fn try_from(decoded_proof: decoded::RangeProof) -> Result<Self, Self::Error> {
         if decoded_proof.ipp_proof.serialized_size() != INNER_PRODUCT_PROOF_U256_LEN {
-            return Err(ProofVerificationError::Deserialization.into());
+            return Err(RangeProofVerificationError::Deserialization);
         }
 
         let mut buf = [0_u8; RANGE_PROOF_U256_LEN];
@@ -121,7 +120,7 @@ impl TryFrom<decoded::RangeProof> for RangeProofU256 {
 
 #[cfg(not(target_os = "solana"))]
 impl TryFrom<RangeProofU256> for decoded::RangeProof {
-    type Error = RangeProofError;
+    type Error = RangeProofVerificationError;
 
     fn try_from(pod_proof: RangeProofU256) -> Result<Self, Self::Error> {
         Self::from_bytes(&pod_proof.0)

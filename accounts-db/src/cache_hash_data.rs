@@ -49,7 +49,7 @@ pub(crate) struct CacheHashDataFile {
 }
 
 impl CacheHashDataFileReference {
-    /// convert the open file refrence to a mmapped file that can be returned as a slice
+    /// convert the open file reference to a mmapped file that can be returned as a slice
     pub(crate) fn map(&self) -> Result<CacheHashDataFile, std::io::Error> {
         let file_len = self.file_len;
         let mut m1 = Measure::start("read_file");

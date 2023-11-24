@@ -334,6 +334,7 @@ impl Shred {
     dispatch!(pub(crate) fn erasure_shard_index(&self) -> Result<usize, Error>);
 
     dispatch!(pub fn into_payload(self) -> Vec<u8>);
+    dispatch!(pub fn merkle_root(&self) -> Result<Hash, Error>);
     dispatch!(pub fn payload(&self) -> &Vec<u8>);
     dispatch!(pub fn sanitize(&self) -> Result<(), Error>);
 

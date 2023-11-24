@@ -2,7 +2,7 @@ use std::{
     borrow::Borrow,
     cmp::Eq,
     collections::{HashMap, HashSet},
-    hash::Hash,
+    hash::{BuildHasher, Hash},
 };
 
 pub trait Contains<'a, T: Eq + Hash> {
@@ -12,24 +12,24 @@ pub trait Contains<'a, T: Eq + Hash> {
     fn contains_iter(&'a self) -> Self::Iter;
 }
 
-impl<'a, T: 'a + Eq + Hash, U: 'a> Contains<'a, T> for HashMap<T, U> {
+impl<'a, T: 'a + Eq + Hash, U: 'a, S: BuildHasher> Contains<'a, T> for HashMap<T, U, S> {
     type Item = &'a T;
     type Iter = std::collections::hash_map::Keys<'a, T, U>;
 
     fn contains(&self, key: &T) -> bool {
-        <HashMap<T, U>>::contains_key(self, key)
+        <HashMap<T, U, S>>::contains_key(self, key)
     }
     fn contains_iter(&'a self) -> Self::Iter {
         self.keys()
     }
 }
 
-impl<'a, T: 'a + Eq + Hash> Contains<'a, T> for HashSet<T> {
+impl<'a, T: 'a + Eq + Hash, S: BuildHasher> Contains<'a, T> for HashSet<T, S> {
     type Item = &'a T;
     type Iter = std::collections::hash_set::Iter<'a, T>;
 
     fn contains(&self, key: &T) -> bool {
-        <HashSet<T>>::contains(self, key)
+        <HashSet<T, S>>::contains(self, key)
     }
     fn contains_iter(&'a self) -> Self::Iter {
         self.iter()

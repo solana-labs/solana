@@ -109,7 +109,7 @@ impl GeyserPluginManager {
 
         // Call on_load and push plugin
         new_plugin
-            .on_load(new_config_file)
+            .on_load(new_config_file, false)
             .map_err(|on_load_err| jsonrpc_core::Error {
                 code: ErrorCode::InvalidRequest,
                 message: format!(
@@ -177,8 +177,24 @@ impl GeyserPluginManager {
                 data: None,
             })?;
 
+        // Then see if a plugin with this name already exists. If so, abort
+        if self
+            .plugins
+            .iter()
+            .any(|plugin| plugin.name().eq(new_plugin.name()))
+        {
+            return Err(jsonrpc_core::Error {
+                code: ErrorCode::InvalidRequest,
+                message: format!(
+                    "There already exists a plugin named {} loaded, while reloading {name}. Did not load requested plugin",
+                    new_plugin.name()
+                ),
+                data: None,
+            });
+        }
+
         // Attempt to on_load with new plugin
-        match new_plugin.on_load(new_parsed_config_file) {
+        match new_plugin.on_load(new_parsed_config_file, true) {
             // On success, push plugin and library
             Ok(()) => {
                 self.plugins.push(new_plugin);
@@ -201,9 +217,13 @@ impl GeyserPluginManager {
     }
 
     fn _drop_plugin(&mut self, idx: usize) {
+        let current_lib = self.libs.remove(idx);
         let mut current_plugin = self.plugins.remove(idx);
-        let _current_lib = self.libs.remove(idx);
+        let name = current_plugin.name().to_string();
         current_plugin.on_unload();
+        drop(current_plugin);
+        drop(current_lib);
+        info!("Unloaded plugin {name} at idx {idx}");
     }
 }
 
@@ -244,13 +264,13 @@ pub enum GeyserPluginManagerError {
     #[error("Invalid plugin path")]
     InvalidPluginPath,
 
-    #[error("Cannot load plugin shared library")]
+    #[error("Cannot load plugin shared library (error: {0})")]
     PluginLoadError(String),
 
     #[error("The geyser plugin {0} is already loaded shared library")]
     PluginAlreadyLoaded(String),
 
-    #[error("The GeyserPlugin on_load method failed")]
+    #[error("The GeyserPlugin on_load method failed (error: {0})")]
     PluginStartError(String),
 }
 
@@ -414,7 +434,7 @@ mod tests {
 
         // Mock having loaded plugin (TestPlugin)
         let (mut plugin, lib, config) = dummy_plugin_and_library(TestPlugin, DUMMY_CONFIG);
-        plugin.on_load(config).unwrap();
+        plugin.on_load(config, false).unwrap();
         plugin_manager_lock.plugins.push(plugin);
         plugin_manager_lock.libs.push(lib);
         // plugin_manager_lock.libs.push(lib);
@@ -449,12 +469,12 @@ mod tests {
         // Load two plugins
         // First
         let (mut plugin, lib, config) = dummy_plugin_and_library(TestPlugin, TESTPLUGIN_CONFIG);
-        plugin.on_load(config).unwrap();
+        plugin.on_load(config, false).unwrap();
         plugin_manager_lock.plugins.push(plugin);
         plugin_manager_lock.libs.push(lib);
         // Second
         let (mut plugin, lib, config) = dummy_plugin_and_library(TestPlugin2, TESTPLUGIN2_CONFIG);
-        plugin.on_load(config).unwrap();
+        plugin.on_load(config, false).unwrap();
         plugin_manager_lock.plugins.push(plugin);
         plugin_manager_lock.libs.push(lib);
 

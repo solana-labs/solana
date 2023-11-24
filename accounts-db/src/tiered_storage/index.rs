@@ -13,9 +13,24 @@ use {
 #[derive(Debug)]
 pub struct AccountIndexWriterEntry<'a> {
     pub address: &'a Pubkey,
-    pub block_offset: u64,
-    pub intra_block_offset: u64,
+    pub block_offset: u32,
+    pub intra_block_offset: u32,
 }
+
+/// The offset to an account stored inside its accounts block.
+/// This struct is used to access the meta and data of an account by looking through
+/// its accounts block.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct AccountOffset {
+    /// The offset to the accounts block that contains the account meta/data.
+    pub block: u32,
+}
+
+/// The offset to an account/address entry in the accounts index block.
+/// This can be used to obtain the AccountOffset and address by looking through
+/// the accounts index block.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct IndexOffset(pub u32);
 
 /// The index format of a tiered accounts file.
 #[repr(u16)]
@@ -30,15 +45,15 @@ pub struct AccountIndexWriterEntry<'a> {
     num_enum::IntoPrimitive,
     num_enum::TryFromPrimitive,
 )]
-pub enum AccountIndexFormat {
+pub enum IndexBlockFormat {
     /// This format optimizes the storage size by storing only account addresses
-    /// and offsets.  It skips storing the size of account data by storing account
-    /// block entries and index block entries in the same order.
+    /// and block offsets.  It skips storing the size of account data by storing
+    /// account block entries and index block entries in the same order.
     #[default]
-    AddressAndOffset = 0,
+    AddressAndBlockOffsetOnly = 0,
 }
 
-impl AccountIndexFormat {
+impl IndexBlockFormat {
     /// Persists the specified index_entries to the specified file and returns
     /// the total number of bytes written.
     pub fn write_index_block(
@@ -47,7 +62,7 @@ impl AccountIndexFormat {
         index_entries: &[AccountIndexWriterEntry],
     ) -> TieredStorageResult<usize> {
         match self {
-            Self::AddressAndOffset => {
+            Self::AddressAndBlockOffsetOnly => {
                 let mut bytes_written = 0;
                 for index_entry in index_entries {
                     bytes_written += file.write_type(index_entry.address)?;
@@ -63,34 +78,37 @@ impl AccountIndexFormat {
     /// Returns the address of the account given the specified index.
     pub fn get_account_address<'a>(
         &self,
-        map: &'a Mmap,
+        mmap: &'a Mmap,
         footer: &TieredStorageFooter,
-        index: usize,
+        index_offset: IndexOffset,
     ) -> TieredStorageResult<&'a Pubkey> {
-        let offset = match self {
-            Self::AddressAndOffset => {
-                footer.account_index_offset as usize + std::mem::size_of::<Pubkey>() * index
+        let account_offset = match self {
+            Self::AddressAndBlockOffsetOnly => {
+                footer.index_block_offset as usize
+                    + std::mem::size_of::<Pubkey>() * (index_offset.0 as usize)
             }
         };
-        let (address, _) = get_type::<Pubkey>(map, offset)?;
+        let (address, _) = get_type::<Pubkey>(mmap, account_offset)?;
         Ok(address)
     }
 
-    /// Returns the offset to the account block that contains the account
-    /// associated with the specified index to the index block.
-    pub fn get_account_block_offset(
+    /// Returns the offset to the account given the specified index.
+    pub fn get_account_offset(
         &self,
-        map: &Mmap,
+        mmap: &Mmap,
         footer: &TieredStorageFooter,
-        index: usize,
-    ) -> TieredStorageResult<u64> {
+        index_offset: IndexOffset,
+    ) -> TieredStorageResult<AccountOffset> {
         match self {
-            Self::AddressAndOffset => {
-                let offset = footer.account_index_offset as usize
+            Self::AddressAndBlockOffsetOnly => {
+                let account_offset = footer.index_block_offset as usize
                     + std::mem::size_of::<Pubkey>() * footer.account_entry_count as usize
-                    + index * std::mem::size_of::<u64>();
-                let (account_block_offset, _) = get_type(map, offset)?;
-                Ok(*account_block_offset)
+                    + std::mem::size_of::<u32>() * index_offset.0 as usize;
+                let (block_offset, _) = get_type(mmap, account_offset)?;
+
+                Ok(AccountOffset {
+                    block: *block_offset,
+                })
             }
         }
     }
@@ -98,7 +116,9 @@ impl AccountIndexFormat {
     /// Returns the size of one index entry.
     pub fn entry_size(&self) -> usize {
         match self {
-            Self::AddressAndOffset => std::mem::size_of::<Pubkey>() + std::mem::size_of::<u64>(),
+            Self::AddressAndBlockOffsetOnly => {
+                std::mem::size_of::<Pubkey>() + std::mem::size_of::<u32>()
+            }
         }
     }
 }
@@ -134,23 +154,25 @@ mod tests {
 
         {
             let file = TieredStorageFile::new_writable(&path).unwrap();
-            let indexer = AccountIndexFormat::AddressAndOffset;
+            let indexer = IndexBlockFormat::AddressAndBlockOffsetOnly;
             indexer.write_index_block(&file, &index_entries).unwrap();
         }
 
-        let indexer = AccountIndexFormat::AddressAndOffset;
+        let indexer = IndexBlockFormat::AddressAndBlockOffsetOnly;
         let file = OpenOptions::new()
             .read(true)
             .create(false)
             .open(&path)
             .unwrap();
-        let map = unsafe { MmapOptions::new().map(&file).unwrap() };
+        let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
         for (i, index_entry) in index_entries.iter().enumerate() {
-            assert_eq!(
-                index_entry.block_offset,
-                indexer.get_account_block_offset(&map, &footer, i).unwrap()
-            );
-            let address = indexer.get_account_address(&map, &footer, i).unwrap();
+            let account_offset = indexer
+                .get_account_offset(&mmap, &footer, IndexOffset(i as u32))
+                .unwrap();
+            assert_eq!(index_entry.block_offset, account_offset.block);
+            let address = indexer
+                .get_account_address(&mmap, &footer, IndexOffset(i as u32))
+                .unwrap();
             assert_eq!(index_entry.address, address);
         }
     }

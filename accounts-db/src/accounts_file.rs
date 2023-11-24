@@ -4,7 +4,7 @@ use {
             StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo, StoredAccountMeta,
         },
         accounts_hash::AccountHash,
-        append_vec::{AppendVec, AppendVecError, MatchAccountOwnerError},
+        append_vec::{AppendVec, AppendVecError},
         storable_accounts::StorableAccounts,
         tiered_storage::error::TieredStorageError,
     },
@@ -38,6 +38,14 @@ pub enum AccountsFileError {
 
     #[error("TieredStorageError: {0}")]
     TieredStorageError(#[from] TieredStorageError),
+}
+
+#[derive(Error, Debug, PartialEq, Eq)]
+pub enum MatchAccountOwnerError {
+    #[error("The account owner does not match with the provided list")]
+    NoMatch,
+    #[error("Unable to load the account")]
+    UnableToLoad,
 }
 
 pub type Result<T> = std::result::Result<T, AccountsFileError>;

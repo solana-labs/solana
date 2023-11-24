@@ -6,15 +6,14 @@ use {
         banking_trace::BankingTracer,
         cache_block_meta_service::CacheBlockMetaSender,
         cluster_info_vote_listener::{
-            GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver,
-            VerifiedVoteReceiver, VoteTracker,
+            DuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VerifiedVoteReceiver,
+            VoteTracker,
         },
         cluster_slots_service::{cluster_slots::ClusterSlots, ClusterSlotsService},
         completed_data_sets_service::CompletedDataSetsSender,
         consensus::{tower_storage::TowerStorage, Tower},
         cost_update_service::CostUpdateService,
         drop_bank_service::DropBankService,
-        ledger_cleanup_service::LedgerCleanupService,
         repair::{quic_endpoint::LocalRequest, repair_service::RepairInfo},
         replay_stage::{ReplayStage, ReplayStageConfig},
         rewards_recorder_service::RewardsRecorderSender,
@@ -26,14 +25,15 @@ use {
     bytes::Bytes,
     crossbeam_channel::{unbounded, Receiver, Sender},
     solana_client::connection_cache::ConnectionCache,
-    solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
+    solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierArc,
     solana_gossip::{
         cluster_info::ClusterInfo, duplicate_shred_handler::DuplicateShredHandler,
         duplicate_shred_listener::DuplicateShredListener,
     },
     solana_ledger::{
-        blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
-        entry_notifier_service::EntryNotifierSender, leader_schedule_cache::LeaderScheduleCache,
+        blockstore::Blockstore, blockstore_cleanup_service::BlockstoreCleanupService,
+        blockstore_processor::TransactionStatusSender, entry_notifier_service::EntryNotifierSender,
+        leader_schedule_cache::LeaderScheduleCache,
     },
     solana_poh::poh_recorder::PohRecorder,
     solana_rpc::{
@@ -63,7 +63,7 @@ pub struct Tvu {
     window_service: WindowService,
     cluster_slots_service: ClusterSlotsService,
     replay_stage: ReplayStage,
-    ledger_cleanup_service: Option<LedgerCleanupService>,
+    blockstore_cleanup_service: Option<BlockstoreCleanupService>,
     cost_update_service: CostUpdateService,
     voting_service: VotingService,
     warm_quic_cache_service: Option<WarmQuicCacheService>,
@@ -125,10 +125,10 @@ impl Tvu {
         replay_vote_sender: ReplayVoteSender,
         completed_data_sets_sender: CompletedDataSetsSender,
         bank_notification_sender: Option<BankNotificationSenderConfig>,
-        gossip_confirmed_slots_receiver: GossipDuplicateConfirmedSlotsReceiver,
+        duplicate_confirmed_slots_receiver: DuplicateConfirmedSlotsReceiver,
         tvu_config: TvuConfig,
         max_slots: &Arc<MaxSlots>,
-        block_metadata_notifier: Option<BlockMetadataNotifierLock>,
+        block_metadata_notifier: Option<BlockMetadataNotifierArc>,
         wait_to_vote_slot: Option<Slot>,
         accounts_background_request_sender: AbsRequestSender,
         log_messages_bytes_limit: Option<usize>,
@@ -236,14 +236,14 @@ impl Tvu {
             exit.clone(),
         );
 
-        let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = unbounded();
+        let (blockstore_cleanup_slot_sender, blockstore_cleanup_slot_receiver) = unbounded();
         let replay_stage_config = ReplayStageConfig {
             vote_account: *vote_account,
             authorized_voter_keypairs,
             exit: exit.clone(),
             rpc_subscriptions: rpc_subscriptions.clone(),
             leader_schedule_cache: leader_schedule_cache.clone(),
-            latest_root_senders: vec![ledger_cleanup_slot_sender],
+            latest_root_senders: vec![blockstore_cleanup_slot_sender],
             accounts_background_request_sender,
             block_commitment_cache,
             transaction_status_sender,
@@ -297,7 +297,7 @@ impl Tvu {
             retransmit_slots_sender,
             ancestor_duplicate_slots_receiver,
             replay_vote_sender,
-            gossip_confirmed_slots_receiver,
+            duplicate_confirmed_slots_receiver,
             gossip_verified_vote_hash_receiver,
             cluster_slots_update_sender,
             cost_update_sender,
@@ -311,9 +311,9 @@ impl Tvu {
             popular_pruned_forks_receiver,
         )?;
 
-        let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
-            LedgerCleanupService::new(
-                ledger_cleanup_slot_receiver,
+        let blockstore_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
+            BlockstoreCleanupService::new(
+                blockstore_cleanup_slot_receiver,
                 blockstore.clone(),
                 max_ledger_shreds,
                 exit.clone(),
@@ -337,7 +337,7 @@ impl Tvu {
             window_service,
             cluster_slots_service,
             replay_stage,
-            ledger_cleanup_service,
+            blockstore_cleanup_service,
             cost_update_service,
             voting_service,
             warm_quic_cache_service,
@@ -352,8 +352,8 @@ impl Tvu {
         self.cluster_slots_service.join()?;
         self.fetch_stage.join()?;
         self.shred_sigverify.join()?;
-        if self.ledger_cleanup_service.is_some() {
-            self.ledger_cleanup_service.unwrap().join()?;
+        if self.blockstore_cleanup_service.is_some() {
+            self.blockstore_cleanup_service.unwrap().join()?;
         }
         self.replay_stage.join()?;
         self.cost_update_service.join()?;

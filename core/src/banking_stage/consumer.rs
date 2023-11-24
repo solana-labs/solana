@@ -41,29 +41,29 @@ pub const TARGET_NUM_TRANSACTIONS_PER_BATCH: usize = 64;
 
 pub struct ProcessTransactionBatchOutput {
     // The number of transactions filtered out by the cost model
-    cost_model_throttled_transactions_count: usize,
+    pub(crate) cost_model_throttled_transactions_count: usize,
     // Amount of time spent running the cost model
-    cost_model_us: u64,
+    pub(crate) cost_model_us: u64,
     pub execute_and_commit_transactions_output: ExecuteAndCommitTransactionsOutput,
 }
 
 pub struct ExecuteAndCommitTransactionsOutput {
     // Total number of transactions that were passed as candidates for execution
-    transactions_attempted_execution_count: usize,
+    pub(crate) transactions_attempted_execution_count: usize,
     // The number of transactions of that were executed. See description of in `ProcessTransactionsSummary`
     // for possible outcomes of execution.
-    executed_transactions_count: usize,
+    pub(crate) executed_transactions_count: usize,
     // Total number of the executed transactions that returned success/not
     // an error.
-    executed_with_successful_result_count: usize,
+    pub(crate) executed_with_successful_result_count: usize,
     // Transactions that either were not executed, or were executed and failed to be committed due
     // to the block ending.
     pub(crate) retryable_transaction_indexes: Vec<usize>,
     // A result that indicates whether transactions were successfully
     // committed into the Poh stream.
     pub commit_transactions_result: Result<Vec<CommitTransactionDetails>, PohRecorderError>,
-    execute_and_commit_timings: LeaderExecuteAndCommitTimings,
-    error_counters: TransactionErrorMetrics,
+    pub(crate) execute_and_commit_timings: LeaderExecuteAndCommitTimings,
+    pub(crate) error_counters: TransactionErrorMetrics,
 }
 
 pub struct Consumer {
@@ -1264,7 +1264,7 @@ mod tests {
             let commit_transactions_result = commit_transactions_result.unwrap();
             assert_eq!(commit_transactions_result.len(), 2);
             assert_matches!(
-                commit_transactions_result.get(0),
+                commit_transactions_result.first(),
                 Some(CommitTransactionDetails::Committed { .. })
             );
             assert_matches!(
@@ -1274,7 +1274,7 @@ mod tests {
             assert_eq!(retryable_transaction_indexes, vec![1]);
 
             let expected_block_cost = if !apply_cost_tracker_during_replay_enabled {
-                let actual_bpf_execution_cost = match commit_transactions_result.get(0).unwrap() {
+                let actual_bpf_execution_cost = match commit_transactions_result.first().unwrap() {
                     CommitTransactionDetails::Committed { compute_units } => *compute_units,
                     CommitTransactionDetails::NotCommitted => {
                         unreachable!()

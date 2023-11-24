@@ -5,9 +5,12 @@ use {
             elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey, ElGamalSecretKey},
             pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
         },
-        errors::ProofError,
-        instruction::transfer::{
-            combine_lo_hi_ciphertexts, encryption::TransferAmountCiphertext, split_u64, Role,
+        errors::{ProofGenerationError, ProofVerificationError},
+        instruction::{
+            errors::InstructionError,
+            transfer::{
+                combine_lo_hi_ciphertexts, encryption::TransferAmountCiphertext, split_u64, Role,
+            },
         },
         range_proof::RangeProof,
         sigma_proofs::{
@@ -91,7 +94,7 @@ impl TransferData {
         (spendable_balance, ciphertext_old_source): (u64, &ElGamalCiphertext),
         source_keypair: &ElGamalKeypair,
         (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
-    ) -> Result<Self, ProofError> {
+    ) -> Result<Self, ProofGenerationError> {
         // split and encrypt transfer amount
         let (amount_lo, amount_hi) = split_u64(transfer_amount, TRANSFER_AMOUNT_LO_BITS);
 
@@ -112,7 +115,7 @@ impl TransferData {
         // subtract transfer amount from the spendable ciphertext
         let new_spendable_balance = spendable_balance
             .checked_sub(transfer_amount)
-            .ok_or(ProofError::Generation)?;
+            .ok_or(ProofGenerationError::NotEnoughFunds)?;
 
         let transfer_amount_lo_source = ElGamalCiphertext {
             commitment: *ciphertext_lo.get_commitment(),
@@ -157,14 +160,18 @@ impl TransferData {
             &opening_hi,
             (new_spendable_balance, &new_source_ciphertext),
             &mut transcript,
-        );
+        )?;
 
         Ok(Self { context, proof })
     }
 
     /// Extracts the lo ciphertexts associated with a transfer data
-    fn ciphertext_lo(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
-        let ciphertext_lo: TransferAmountCiphertext = self.context.ciphertext_lo.try_into()?;
+    fn ciphertext_lo(&self, role: Role) -> Result<ElGamalCiphertext, InstructionError> {
+        let ciphertext_lo: TransferAmountCiphertext = self
+            .context
+            .ciphertext_lo
+            .try_into()
+            .map_err(|_| InstructionError::Decryption)?;
 
         let handle_lo = match role {
             Role::Source => Some(ciphertext_lo.get_source_handle()),
@@ -179,13 +186,17 @@ impl TransferData {
                 handle: *handle,
             })
         } else {
-            Err(ProofError::MissingCiphertext)
+            Err(InstructionError::MissingCiphertext)
         }
     }
 
     /// Extracts the lo ciphertexts associated with a transfer data
-    fn ciphertext_hi(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
-        let ciphertext_hi: TransferAmountCiphertext = self.context.ciphertext_hi.try_into()?;
+    fn ciphertext_hi(&self, role: Role) -> Result<ElGamalCiphertext, InstructionError> {
+        let ciphertext_hi: TransferAmountCiphertext = self
+            .context
+            .ciphertext_hi
+            .try_into()
+            .map_err(|_| InstructionError::Decryption)?;
 
         let handle_hi = match role {
             Role::Source => Some(ciphertext_hi.get_source_handle()),
@@ -200,12 +211,16 @@ impl TransferData {
                 handle: *handle,
             })
         } else {
-            Err(ProofError::MissingCiphertext)
+            Err(InstructionError::MissingCiphertext)
         }
     }
 
     /// Decrypts transfer amount from transfer data
-    pub fn decrypt_amount(&self, role: Role, sk: &ElGamalSecretKey) -> Result<u64, ProofError> {
+    pub fn decrypt_amount(
+        &self,
+        role: Role,
+        sk: &ElGamalSecretKey,
+    ) -> Result<u64, InstructionError> {
         let ciphertext_lo = self.ciphertext_lo(role)?;
         let ciphertext_hi = self.ciphertext_hi(role)?;
 
@@ -216,7 +231,7 @@ impl TransferData {
             let two_power = 1 << TRANSFER_AMOUNT_LO_BITS;
             Ok(amount_lo + two_power * amount_hi)
         } else {
-            Err(ProofError::Decryption)
+            Err(InstructionError::Decryption)
         }
     }
 }
@@ -229,7 +244,7 @@ impl ZkProofData<TransferProofContext> for TransferData {
     }
 
     #[cfg(not(target_os = "solana"))]
-    fn verify_proof(&self) -> Result<(), ProofError> {
+    fn verify_proof(&self) -> Result<(), ProofVerificationError> {
         // generate transcript and append all public inputs
         let mut transcript = self.context.new_transcript();
 
@@ -297,7 +312,7 @@ impl TransferProof {
         opening_hi: &PedersenOpening,
         (source_new_balance, new_source_ciphertext): (u64, &ElGamalCiphertext),
         transcript: &mut Transcript,
-    ) -> Self {
+    ) -> Result<Self, ProofGenerationError> {
         // generate a Pedersen commitment for the remaining balance in source
         let (new_source_commitment, source_opening) = Pedersen::new(source_new_balance);
 
@@ -354,14 +369,16 @@ impl TransferProof {
                 vec![&source_opening, opening_lo, &opening_lo_negated, opening_hi],
                 transcript,
             )
-        };
+        }?;
 
-        Self {
+        Ok(Self {
             new_source_commitment: pod_new_source_commitment,
             equality_proof: equality_proof.into(),
             validity_proof: validity_proof.into(),
-            range_proof: range_proof.try_into().expect("range proof: length error"),
-        }
+            range_proof: range_proof
+                .try_into()
+                .map_err(|_| ProofGenerationError::ProofLength)?,
+        })
     }
 
     pub fn verify(
@@ -373,7 +390,7 @@ impl TransferProof {
         ciphertext_hi: &TransferAmountCiphertext,
         ciphertext_new_spendable: &ElGamalCiphertext,
         transcript: &mut Transcript,
-    ) -> Result<(), ProofError> {
+    ) -> Result<(), ProofVerificationError> {
         transcript.append_commitment(b"commitment-new-source", &self.new_source_commitment);
 
         let commitment: PedersenCommitment = self.new_source_commitment.try_into()?;

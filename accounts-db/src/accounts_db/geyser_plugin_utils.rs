@@ -56,8 +56,7 @@ impl AccountsDb {
         }
 
         let accounts_update_notifier = self.accounts_update_notifier.as_ref().unwrap();
-        let notifier = &accounts_update_notifier.read().unwrap();
-        notifier.notify_end_of_restore_from_snapshot();
+        accounts_update_notifier.notify_end_of_restore_from_snapshot();
         notify_stats.report();
     }
 
@@ -72,8 +71,7 @@ impl AccountsDb {
         P: Iterator<Item = u64>,
     {
         if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
-            let notifier = &accounts_update_notifier.read().unwrap();
-            notifier.notify_account_update(
+            accounts_update_notifier.notify_account_update(
                 slot,
                 account,
                 txn,
@@ -121,13 +119,7 @@ impl AccountsDb {
         mut accounts_to_stream: HashMap<Pubkey, StoredAccountMeta>,
         notify_stats: &mut GeyserPluginNotifyAtSnapshotRestoreStats,
     ) {
-        let notifier = self
-            .accounts_update_notifier
-            .as_ref()
-            .unwrap()
-            .read()
-            .unwrap();
-
+        let notifier = self.accounts_update_notifier.as_ref().unwrap();
         let mut measure_notify = Measure::start("accountsdb-plugin-notifying-accounts");
         let local_write_version = 0;
         for (_, mut account) in accounts_to_stream.drain() {
@@ -177,7 +169,7 @@ pub mod tests {
         },
         std::sync::{
             atomic::{AtomicBool, Ordering},
-            Arc, RwLock,
+            Arc,
         },
     };
 
@@ -246,12 +238,11 @@ pub mod tests {
 
         accounts.store_uncached(slot0, &[(&key2, &account2)]);
 
-        let notifier = Arc::new(RwLock::new(notifier));
+        let notifier = Arc::new(notifier);
         accounts.set_geyser_plugin_notifer(Some(notifier.clone()));
 
         accounts.notify_account_restore_from_snapshot();
 
-        let notifier = notifier.write().unwrap();
         assert_eq!(notifier.accounts_notified.get(&key1).unwrap().len(), 1);
         assert_eq!(
             notifier.accounts_notified.get(&key1).unwrap()[0]
@@ -303,12 +294,11 @@ pub mod tests {
             AccountSharedData::new(account3_lamports, 1, AccountSharedData::default().owner());
         accounts.store_uncached(slot1, &[(&key3, &account3)]);
 
-        let notifier = Arc::new(RwLock::new(notifier));
+        let notifier = Arc::new(notifier);
         accounts.set_geyser_plugin_notifer(Some(notifier.clone()));
 
         accounts.notify_account_restore_from_snapshot();
 
-        let notifier = notifier.write().unwrap();
         assert_eq!(notifier.accounts_notified.get(&key1).unwrap().len(), 1);
         assert_eq!(
             notifier.accounts_notified.get(&key1).unwrap()[0]
@@ -342,7 +332,7 @@ pub mod tests {
 
         let notifier = GeyserTestPlugin::default();
 
-        let notifier = Arc::new(RwLock::new(notifier));
+        let notifier = Arc::new(notifier);
         accounts.set_geyser_plugin_notifer(Some(notifier.clone()));
 
         // Account with key1 is updated twice in two different slots -- should only get notified twice.
@@ -372,7 +362,6 @@ pub mod tests {
             AccountSharedData::new(account3_lamports, 1, AccountSharedData::default().owner());
         accounts.store_cached((slot1, &[(&key3, &account3)][..]), None);
 
-        let notifier = notifier.write().unwrap();
         assert_eq!(notifier.accounts_notified.get(&key1).unwrap().len(), 2);
         assert_eq!(
             notifier.accounts_notified.get(&key1).unwrap()[0]

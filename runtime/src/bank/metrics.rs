@@ -39,6 +39,7 @@ pub(crate) struct NewBankTimings {
     pub(crate) feature_set_time_us: u64,
     pub(crate) ancestors_time_us: u64,
     pub(crate) update_epoch_time_us: u64,
+    pub(crate) recompilation_time_us: u64,
     pub(crate) update_sysvars_time_us: u64,
     pub(crate) fill_sysvar_cache_time_us: u64,
 }
@@ -144,6 +145,7 @@ pub(crate) fn report_new_bank_metrics(
         ("feature_set_us", timings.feature_set_time_us, i64),
         ("ancestors_us", timings.ancestors_time_us, i64),
         ("update_epoch_us", timings.update_epoch_time_us, i64),
+        ("recompilation_time_us", timings.recompilation_time_us, i64),
         ("update_sysvars_us", timings.update_sysvars_time_us, i64),
         (
             "fill_sysvar_cache_us",

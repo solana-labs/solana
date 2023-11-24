@@ -160,15 +160,6 @@ pub fn load_bank_forks(
             );
             (bank_forks, Some(starting_snapshot_hashes))
         } else {
-            let maybe_filler_accounts = process_options
-                .accounts_db_config
-                .as_ref()
-                .map(|config| config.filler_accounts_config.count > 0);
-
-            if let Some(true) = maybe_filler_accounts {
-                panic!("filler accounts specified, but not loading from snapshot");
-            }
-
             info!("Processing ledger from genesis");
             let bank_forks = blockstore_processor::process_blockstore_for_bank_0(
                 genesis_config,
