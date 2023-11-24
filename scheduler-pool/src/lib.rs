@@ -530,7 +530,7 @@ impl Tasks {
         assert!(removed_entry.is_some());
     }
 
-    fn heaviest_task_cursor(&self) -> impl Iterator<Item = &TaskInQueue> {
+    fn heaviest_task_iter(&self) -> impl Iterator<Item = &TaskInQueue> {
         self.blocked_task_queue
             .values()
             .rev()
@@ -553,7 +553,7 @@ impl Tasks {
             self.remove_task(uq);
         }
 
-        self.heaviest_task_cursor()
+        self.heaviest_task_iter()
             .find(|task| task.currently_contended())
     }
 }
