@@ -508,7 +508,7 @@ pub struct Page {
 }
 
 impl Page {
-    fn new(address: &Pubkey, current_usage: Usage) -> Self {
+    fn new(current_usage: Usage) -> Self {
         Self {
             current_usage,
             blocked_task_queue: Default::default(),
