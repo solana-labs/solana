@@ -901,7 +901,7 @@ where
                                 log_scheduler!();
                                 let mut execution_environment = execution_environment.unwrap();
                                 Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
-                                state_machine.deschedule_task(&mut execution_environment);
+                                state_machine.deschedule_task(&execution_environment);
                                 drop_sender.send(execution_environment).unwrap();
                             },
                             recv(schedulable_transaction_receiver) -> m => {
@@ -942,7 +942,7 @@ where
                                 log_scheduler!();
                                 let mut execution_environment = execution_environment.unwrap();
                                 Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
-                                state_machine.deschedule_task(&mut execution_environment);
+                                state_machine.deschedule_task(&execution_environment);
                                 drop_sender.send(execution_environment).unwrap();
                             },
                         };
