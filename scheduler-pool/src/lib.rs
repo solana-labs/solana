@@ -429,8 +429,7 @@ impl Task {
 
     fn mark_as_uncontended(&self) {
         assert!(self.currently_contended());
-        self.uncontended
-            .store(2, std::sync::atomic::Ordering::SeqCst)
+        *self.uncontended() = 2;
     }
 
     fn task_index(&self) -> usize {
