@@ -361,16 +361,11 @@ pub type TaskInQueue = Arc<Task>;
 #[derive(Debug)]
 pub struct LockAttemptsInCell(UnsafeCell<Vec<LockAttempt>>);
 
-impl LockAttemptsInCell {
-    fn new(ll: UnsafeCell<Vec<LockAttempt>>) -> Self {
-        Self(ll)
-    }
-}
-
 #[derive(Debug)]
 pub struct Task {
     unique_weight: UniqueWeight,
-    pub tx: (SanitizedTransaction, LockAttemptsInCell), // actually should be Bundle
+    pub tx: SanitizedTransaction, // actually should be Bundle
+    pub lock_attempts: LockAttemptsInCell,
     pub contention_count: std::sync::atomic::AtomicUsize,
     pub uncontended: std::sync::atomic::AtomicUsize,
 }
@@ -382,7 +377,8 @@ impl Task {
     ) -> TaskInQueue {
         TaskInQueue::new(Self {
             unique_weight,
-            tx: (tx.0, LockAttemptsInCell::new(UnsafeCell::new(tx.1))),
+            tx,
+            lock_attempts: LockAttemptsInCell(UnsafeCell::new(lock_attempts)),
             uncontended: Default::default(),
             contention_count: Default::default(),
         })
