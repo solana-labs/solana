@@ -1512,7 +1512,6 @@ impl ScheduleStage {
 
         if lock_failure_count > 0 {
             Self::reset_lock_for_failed_execution(
-                &next_task.unique_weight,
                 &mut next_task.lock_attempts_mut(),
             );
             next_task.increment_contention_count();
@@ -1557,7 +1556,6 @@ impl ScheduleStage {
     }
 
     fn reset_lock_for_failed_execution(
-        unique_weight: &UniqueWeight,
         lock_attempts: &[LockAttempt],
     ) {
         for l in lock_attempts {
@@ -1710,7 +1708,7 @@ impl SchedulingStateMachine {
                     &mut self.retryable_task_queue,
                 )
             })
-            .inspect(|task| {
+            .inspect(|_| {
                 self.rescheduled_task_count += 1;
             })
     }
