@@ -376,7 +376,7 @@ impl TaskStatus {
 struct Task {
     unique_weight: UniqueWeight,
     tx: SanitizedTransaction, // actually should be Bundle
-    lock_attempts: TaskStatus,
+    task_status: TaskStatus,
     uncontended: std::sync::atomic::AtomicUsize,
 }
 
@@ -389,7 +389,7 @@ impl Task {
         TaskInQueue::new(Self {
             unique_weight,
             tx,
-            lock_attempts: TaskStatus::new(lock_attempts),
+            task_status: TaskStatus::new(lock_attempts),
             uncontended: Default::default(),
         })
     }
@@ -404,16 +404,16 @@ impl Task {
     }
 
     fn lock_attempts_mut(&self) -> &mut Vec<LockAttempt> {
-        unsafe { &mut (*self.lock_attempts.0.get()).lock_attempts }
+        unsafe { &mut (*self.task_status.0.get()).lock_attempts }
     }
 
     fn increment_contention_count(&self) {
-        let c = unsafe { &mut (*self.lock_attempts.0.get()).contention_count };
+        let c = unsafe { &mut (*self.task_status.0.get()).contention_count };
         *c += 1;
     }
 
     fn contention_count(&self) -> usize {
-        unsafe { (*self.lock_attempts.0.get()).contention_count }
+        unsafe { (*self.task_status.0.get()).contention_count }
     }
 
     pub fn currently_contended(&self) -> bool {
