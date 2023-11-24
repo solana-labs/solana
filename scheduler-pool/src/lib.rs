@@ -369,7 +369,7 @@ struct TaskStatus(UnsafeCell<TaskStatusInner>);
 
 impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
-        Self(UnsafeCell::new(TaskStatusInner { lock_attempts, contention_count: 0 }))
+        Self(UnsafeCell::new(TaskStatusInner { lock_attempts, contention_count: 0, uncontended: 0 }))
     }
 }
 
