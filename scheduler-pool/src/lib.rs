@@ -836,6 +836,7 @@ where
         blocked_transaction_sessioned_sender: &mut Sender<
             ChainedChannel<TaskInQueue, ControlFrame>,
         >,
+        drop_sender: Sender<SessionedMessage<Box<ExecutionEnvironment>>>,
         context: SchedulingContext,
         handler_count: usize,
     ) {
@@ -960,7 +961,7 @@ where
                                                 ControlFrame::StartSession(context) => {
                                                     slot = context.bank().slot();
                                                     log_scheduler!();
-                                                    Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count);
+                                                    Self::propagate_context(&mut blocked_transaction_sessioned_sender, drop_sender, context, handler_count);
                                                 }
                                                 ControlFrame::EndSession => {
                                                     will_end_session = true;
@@ -1019,6 +1020,7 @@ where
                                                 slot = context.bank().slot();
                                                 Self::propagate_context(
                                                     &mut blocked_transaction_sessioned_sender,
+                                                    drop_sender,
                                                     context,
                                                     handler_count,
                                                 );
