@@ -388,7 +388,8 @@ impl Task {
         for lock_attempt in &*this.lock_attempts_mut() {
             let mut page = lock_attempt.target_page_mut();
 
-            page.blocked_task_queue.insert_task(this.clone(), lock_attempt.requested_usage);
+            page.blocked_task_queue
+                .insert_task(this.clone(), lock_attempt.requested_usage);
         }
     }
 
@@ -494,7 +495,9 @@ impl Page {
 
 impl Tasks {
     pub fn insert_task(&mut self, task: TaskInQueue, requested_usage: RequestedUsage) {
-        let pre_existed = self.blocked_task_queue.insert(task.unique_weight, (task, requested_usage));
+        let pre_existed = self
+            .blocked_task_queue
+            .insert(task.unique_weight, (task, requested_usage));
         assert!(pre_existed.is_none());
     }
 
@@ -504,11 +507,18 @@ impl Tasks {
     }
 
     fn heaviest_task_cursor(&self) -> impl Iterator<Item = &TaskInQueue> {
-        self.blocked_task_queue.values().rev().map(|(task, _ru)| task)
+        self.blocked_task_queue
+            .values()
+            .rev()
+            .map(|(task, _ru)| task)
     }
 
     fn heaviest_writing_task_weight(&self) -> Option<UniqueWeight> {
-        self.blocked_task_queue.values().rev().find(|(task, ru)| ru == &RequestedUsage::Writable).map(|(task, _ru)| task.unique_weight)
+        self.blocked_task_queue
+            .values()
+            .rev()
+            .find(|(task, ru)| ru == &RequestedUsage::Writable)
+            .map(|(task, _ru)| task.unique_weight)
     }
 
     pub fn heaviest_weight(&mut self) -> Option<UniqueWeight> {
@@ -1388,7 +1398,8 @@ impl ScheduleStage {
             true
         } else if attempt.requested_usage == RequestedUsage::Readonly
             && page
-                .blocked_task_queue.heaviest_writing_task_weight()
+                .blocked_task_queue
+                .heaviest_writing_task_weight()
                 .map(|existing_unique_weight| *unique_weight > existing_unique_weight)
                 .unwrap_or(true)
         {
