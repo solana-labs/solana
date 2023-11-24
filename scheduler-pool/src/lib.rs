@@ -1436,7 +1436,7 @@ impl ScheduleStage {
             status,
             ..
         } = attempt;
-        let mut page = page.as_mut();
+        let page = page.as_mut();
 
         match page.current_usage {
             Usage::Unused => {
@@ -1470,7 +1470,7 @@ impl ScheduleStage {
     fn unlock(attempt: &LockAttempt) -> bool {
         let mut is_unused_now = false;
 
-        let mut page = attempt.target_page_mut();
+        let page = attempt.target_page_mut();
 
         match &mut page.current_usage {
             Usage::Readonly(ref mut count) => match &attempt.requested_usage {
