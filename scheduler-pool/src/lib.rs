@@ -1045,11 +1045,9 @@ where
                         log_scheduler!("S:ended ");
                         (state_machine, log_interval_counter) = <_>::default();
                         drop_sender.send(SessionedMessage::EndSession).unwrap();
-                        result_with_timings = drop_receiver2.recv().unwrap();
+                        let result_with_timings = drop_receiver2.recv().unwrap();
                         result_sender
-                            .send(
-                                std::mem::replace(&mut result_with_timings, (Ok(()), Default::default()))
-                            )
+                            .send(result_with_timings)
                             .unwrap();
                         will_end_session = false;
                     }
@@ -1057,7 +1055,7 @@ where
                 log_scheduler!("T:ended ");
 
                 drop_sender.send(SessionedMessage::EndSession).unwrap();
-                result_with_timings = drop_receiver2.recv().unwrap();
+                let result_with_timings = drop_receiver2.recv().unwrap();
                 trace!(
                     "solScheduler thread is ended at: {:?}",
                     std::thread::current()
