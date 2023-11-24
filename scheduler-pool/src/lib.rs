@@ -1390,7 +1390,7 @@ impl ScheduleStage {
             true
         } else if attempt.requested_usage == RequestedUsage::Readonly
             && page
-                .heaviest_writing_task_weight()
+                .blocked_task_queue.heaviest_writing_task_weight()
                 .map(|existing_unique_weight| unique_weight > existing_unique_weight)
                 .unwrap_or(true)
         {
