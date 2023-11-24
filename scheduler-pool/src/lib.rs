@@ -1086,6 +1086,7 @@ where
                             (mm, false)
                         },
                     };
+                    let mut m = ScheduleStage::prepare_scheduled_execution(m);
 
                     m.thx = thx;
                     Self::receive_scheduled_transaction(&handler, &bank, &mut m, &pool);
