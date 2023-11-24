@@ -358,7 +358,12 @@ enum LockStatus {
 type TaskInQueue = Arc<Task>;
 
 #[derive(Debug)]
-struct TaskStatus(UnsafeCell<Vec<LockAttempt>>);
+struct TaskStatusInner {
+    lock_attempts: Vec<LockAttempt>,
+}
+
+#[derive(Debug)]
+struct TaskStatus(UnsafeCell<TaskStatusInner>);
 
 #[derive(Debug)]
 struct Task {
