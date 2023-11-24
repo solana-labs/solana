@@ -894,7 +894,7 @@ where
             let mut result_with_timings = self
                 .session_result_with_timings
                 .take()
-                .unwrap_or((Ok(()), Default::default()));
+                .or(Some((Ok(()), Default::default())));
 
             move || {
                 trace!(
@@ -1072,6 +1072,8 @@ where
                 }
                 log_scheduler!("T:ended ");
 
+                drop_sender.send(SessionedMessage::EndSession).unwrap();
+                result_with_timings.as_mut().unwrap().1 = drop_receiver2.recv().unwrap();
                 let res = result_with_timings.take().unwrap();
                 trace!(
                     "solScheduler thread is ended at: {:?}",
