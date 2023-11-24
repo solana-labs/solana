@@ -886,7 +886,9 @@ where
                 .session_result_with_timings
                 .take()
                 .unwrap_or((Ok(()), Default::default()));
-            drop_sender.send(SessionedMessage::StartSession(result_with_timings)).unwrap();
+            drop_sender
+                .send(SessionedMessage::StartSession(result_with_timings))
+                .unwrap();
 
             move || {
                 trace!(
@@ -1046,9 +1048,7 @@ where
                         (state_machine, log_interval_counter) = <_>::default();
                         drop_sender.send(SessionedMessage::EndSession).unwrap();
                         let result_with_timings = drop_receiver2.recv().unwrap();
-                        result_sender
-                            .send(result_with_timings)
-                            .unwrap();
+                        result_sender.send(result_with_timings).unwrap();
                         will_end_session = false;
                     }
                 }
@@ -1183,7 +1183,9 @@ where
                             (session_result, session_timings) = result_with_timings;
                         }
                         Ok(SessionedMessage::EndSession) => {
-                            drop_sender2.send((session_result, session_timings)).unwrap();
+                            drop_sender2
+                                .send((session_result, session_timings))
+                                .unwrap();
                             session_result = Ok(());
                             session_timings = Default::default();
                         }
