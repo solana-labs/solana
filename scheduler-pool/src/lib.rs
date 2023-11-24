@@ -1180,7 +1180,7 @@ where
                             drop(ee);
                         }
                         Ok(SessionedMessage::EndSession) => {
-                            drop_sender2.send(session_timings).unwrap();
+                            drop_sender2.send((session_result, session_timings)).unwrap();
                             session_result = Ok(());
                             session_timings = Default::default();
                         }
