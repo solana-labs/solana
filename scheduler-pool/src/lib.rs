@@ -1147,7 +1147,7 @@ where
             move || 'outer: loop {
                 'inner: loop {
                     match drop_receiver.try_recv() {
-                        Ok(ee) => {
+                        Ok(SessionedMessage::Payload(ee)) => {
                             if send_metrics {
                                 use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
 
