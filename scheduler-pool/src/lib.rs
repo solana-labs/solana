@@ -388,7 +388,7 @@ impl Task {
         for lock_attempt in &*this.lock_attempts_mut() {
             let mut page = lock_attempt.target_page_mut();
 
-            page.blocked_task_queue.insert_task(this.clone());
+            page.blocked_task_queue.insert_task(this.clone(), lock_attempt.requested_usage);
             if lock_attempt.requested_usage == RequestedUsage::Writable {
                 page.blocked_write_requesting_task_ids
                     .insert(this.unique_weight);
