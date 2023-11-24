@@ -1158,7 +1158,7 @@ where
                     match drop_receiver.recv_timeout(Duration::from_millis(40)) {
                         Ok(SessionedMessage::Payload(ee)) => {
                             session_timings.accumulate(&ee.result_with_timings.1);
-                            match &msg.result_with_timings.0 {
+                            match &ee.result_with_timings.0 {
                                 Ok(()) => {}
                                 Err(e) => session_result = Err(e.clone()),
                             }
