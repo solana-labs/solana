@@ -408,6 +408,12 @@ impl Task {
         unsafe { &mut (*self.lock_attempts.0.get()).lock_attempts }
     }
 
+    fn increment_contention_count(&self) {
+        self
+            .contention_count
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+
     pub fn currently_contended(&self) -> bool {
         self.uncontended.load(std::sync::atomic::Ordering::SeqCst) == 1
     }
@@ -1509,9 +1515,7 @@ impl ScheduleStage {
                 &next_task.unique_weight,
                 &mut next_task.lock_attempts_mut(),
             );
-            next_task
-                .contention_count
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            next_task.increment_contention_count();
 
             if from_runnable {
                 next_task.mark_as_contended();
