@@ -1573,7 +1573,6 @@ impl ScheduleStage {
         task: TaskInQueue,
     ) -> Box<ExecutionEnvironment> {
         Box::new(ExecutionEnvironment {
-            finalized_lock_attempts: std::mem::take(&mut *task.lock_attempts_mut()),
             task,
             result_with_timings: (Ok(()), Default::default()),
             finish_time: None,
