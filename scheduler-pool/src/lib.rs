@@ -373,7 +373,7 @@ pub struct Task {
 impl Task {
     pub fn new_for_queue(
         unique_weight: UniqueWeight,
-        tx: SanitizedTransaction
+        tx: SanitizedTransaction,
         lock_attempts: Vec<LockAttempt>,
     ) -> TaskInQueue {
         TaskInQueue::new(Self {
