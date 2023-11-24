@@ -35,6 +35,7 @@ use {
     },
     solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
+        cell::UnsafeCell,
         collections::HashMap,
         fmt::Debug,
         marker::PhantomData,
@@ -533,7 +534,7 @@ impl BTreeMapTaskIds {
 }
 
 // use UnsafeCell
-type PageRcInner = Arc<std::cell::RefCell<Page>>;
+type PageRcInner = Arc<UnsafeCell<Page>>;
 static_assertions::const_assert_eq!(std::mem::size_of::<std::cell::RefCell<Page>>(), 72);
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
