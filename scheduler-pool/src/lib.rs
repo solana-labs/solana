@@ -548,11 +548,7 @@ impl Tasks {
         self.blocked_task_queue.last_entry().map(|j| *j.key())
     }
 
-    fn reindex(&mut self, should_remove: bool, uq: &UniqueWeight) -> Option<&TaskInQueue> {
-        if should_remove {
-            self.remove_task(uq);
-        }
-
+    fn reindex(&mut self) -> Option<&TaskInQueue> {
         self.heaviest_task_iter()
             .find(|task| task.currently_contended())
     }
@@ -1550,7 +1546,7 @@ impl ScheduleStage {
                 if let Some(heaviest_blocked_task) = read_only_lock_attempt
                     .target_page_mut()
                     .blocked_task_queue
-                    .reindex(false, &next_task.unique_weight)
+                    .reindex()
                 {
                     assert!(heaviest_blocked_task.currently_contended());
                     retryable_task_queue
@@ -1579,11 +1575,13 @@ impl ScheduleStage {
         lock_attempts: &[LockAttempt],
     ) {
         for unlock_attempt in lock_attempts {
-            // skip reindex() bookkeeping unless contended?
+            if should_remove {
+                unlock_attempt.target_page_mut().blocked_task_queue.remove_task(uq);
+            }
             let heaviest_uncontended = unlock_attempt
                 .target_page_mut()
                 .blocked_task_queue
-                .reindex(should_remove, uq);
+                .reindex();
 
             let is_unused_now = Self::reset_lock(unlock_attempt);
             if !is_unused_now {
