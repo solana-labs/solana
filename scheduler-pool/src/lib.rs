@@ -1540,7 +1540,7 @@ impl ScheduleStage {
         should_remove: bool,
         uq: &UniqueWeight,
         retryable_task_queue: &mut WeightedTaskQueue,
-        lock_attempts: &mut [LockAttempt],
+        lock_attempts: &[LockAttempt],
     ) {
         for unlock_attempt in lock_attempts {
             // skip reindex() and blocked_write_requesting_task_ids bookkeeping unless contended?
