@@ -414,7 +414,7 @@ impl Task {
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
 
-    fn contention_count(&self) -> Self {
+    fn contention_count(&self) -> usize {
         self
             .contention_count
             .load(std::sync::atomic::Ordering::SeqCst)
