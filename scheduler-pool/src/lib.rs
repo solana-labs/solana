@@ -399,7 +399,7 @@ impl Task {
     }
 
     fn lock_attempts_mut(&self) -> &mut Vec<LockAttempt> {
-        unsafe { &mut *self.lock_attempts.0.lock_attempts.get() }
+        unsafe { &mut *self.lock_attempts.0.get().lock_attempts }
     }
 
     pub fn currently_contended(&self) -> bool {
