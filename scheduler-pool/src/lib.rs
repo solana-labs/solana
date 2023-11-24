@@ -886,6 +886,7 @@ where
                 .session_result_with_timings
                 .take()
                 .unwrap_or((Ok(()), Default::default()));
+            drop_sender.send(SessionedMessage::StartSession(result_with_timings)).unwrap();
 
             move || {
                 trace!(
