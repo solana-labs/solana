@@ -793,16 +793,6 @@ where
         self.scheduler_thread_and_tid.is_some()
     }
 
-    fn update_result_with_timings(
-        (session_result, _session_timings): &mut ResultWithTimings,
-        msg: &ExecutionEnvironment,
-    ) {
-        match &msg.result_with_timings.0 {
-            Ok(()) => {}
-            Err(e) => *session_result = Err(e.clone()),
-        }
-    }
-
     fn receive_scheduled_transaction(
         handler: &TH,
         bank: &Arc<Bank>,
@@ -940,7 +930,6 @@ where
                             recv(handled_blocked_transaction_receiver) -> execution_environment => {
                                 log_scheduler!();
                                 let execution_environment = execution_environment.unwrap();
-                                Self::update_result_with_timings(&mut result_with_timings, &execution_environment);
                                 state_machine.deschedule_task(&execution_environment);
                                 drop_sender.send_buffered(SessionedMessage::Payload(execution_environment)).unwrap();
                             },
@@ -981,7 +970,6 @@ where
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
                                 log_scheduler!();
                                 let execution_environment = execution_environment.unwrap();
-                                Self::update_result_with_timings(&mut result_with_timings, &execution_environment);
                                 state_machine.deschedule_task(&execution_environment);
                                 drop_sender.send_buffered(SessionedMessage::Payload(execution_environment)).unwrap();
                             },
@@ -999,10 +987,6 @@ where
                             if let Ok(mut execution_environment) =
                                 handled_blocked_transaction_receiver.try_recv()
                             {
-                                Self::update_result_with_timings(
-                                    &mut result_with_timings,
-                                    &execution_environment,
-                                );
                                 state_machine.deschedule_task(&mut execution_environment);
                                 drop_sender
                                     .send_buffered(SessionedMessage::Payload(execution_environment))
@@ -1044,10 +1028,6 @@ where
                             } else if let Ok(mut execution_environment) =
                                 handled_idle_transaction_receiver.try_recv()
                             {
-                                Self::update_result_with_timings(
-                                    &mut result_with_timings,
-                                    &execution_environment,
-                                );
                                 state_machine.deschedule_task(&mut execution_environment);
                                 drop_sender
                                     .send_buffered(SessionedMessage::Payload(execution_environment))
