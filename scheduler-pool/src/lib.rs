@@ -882,7 +882,7 @@ where
                 self.schedulable_transaction_receiver.clone();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
-            let mut result_with_timings = self
+            let result_with_timings = self
                 .session_result_with_timings
                 .take()
                 .unwrap_or((Ok(()), Default::default()));
