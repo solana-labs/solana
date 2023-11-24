@@ -1147,7 +1147,8 @@ where
 
         let drop_main_loop = || {
             move || 'outer: loop {
-                'inner: loop {
+                let mut session_timings = Default::default();
+                loop {
                     match drop_receiver.recv() {
                         Ok(SessionedMessage::Payload(ee)) => {
                             session_timings.accumulate(&ee.result_with_timings.1);
@@ -1189,6 +1190,7 @@ where
                             drop(ee);
                         },
                         Ok(SessionedMessage::EndSession) => {
+                            session_timings = Default::default();
                         },
                         Err(RecvError) => break 'outer,
                     }
