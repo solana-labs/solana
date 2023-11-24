@@ -365,7 +365,7 @@ pub struct LockAttemptsInCell(UnsafeCell<Vec<LockAttempt>>);
 pub struct Task {
     unique_weight: UniqueWeight,
     pub tx: SanitizedTransaction, // actually should be Bundle
-    pub lock_attempts: LockAttemptsInCell,
+    lock_attempts: LockAttemptsInCell,
     pub contention_count: std::sync::atomic::AtomicUsize,
     pub uncontended: std::sync::atomic::AtomicUsize,
 }
