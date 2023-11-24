@@ -1149,7 +1149,7 @@ where
             move || 'outer: loop {
                 let mut session_timings: ExecuteTimings = Default::default();
                 loop {
-                    match drop_receiver.recv() {
+                    match drop_receiver.recv_timeout(Duration::from_millis(20)) {
                         Ok(SessionedMessage::Payload(ee)) => {
                             session_timings.accumulate(&ee.result_with_timings.1);
                             if send_metrics {
@@ -1193,7 +1193,8 @@ where
                             session_timings = Default::default();
                             //drop2.send(session_timings).unwrap();
                         },
-                        Err(RecvError) => break 'outer,
+                        Err(TryRecvError::Disconnected) => break 'outer,
+                        Err(TryRecvError::Empty) => break 'inner,
                     }
                 }
             }

@@ -1386,7 +1386,7 @@ dependencies = [
 [[package]]
 name = "crossbeam-channel"
 version = "0.5.8"
-source = "git+https://github.com/ryoqun/crossbeam?rev=6cef1f7c1bda9da1508abebafe35d8ce63bd587b#6cef1f7c1bda9da1508abebafe35d8ce63bd587b"
+source = "git+https://github.com/ryoqun/crossbeam?rev=5b38a7d0fb61136c43686ec06a504aa5a76a6ee2#5b38a7d0fb61136c43686ec06a504aa5a76a6ee2"
 dependencies = [
  "cfg-if 1.0.0",
  "crossbeam-utils 0.8.15",
@@ -1427,7 +1427,7 @@ dependencies = [
 [[package]]
 name = "crossbeam-utils"
 version = "0.8.15"
-source = "git+https://github.com/ryoqun/crossbeam?rev=6cef1f7c1bda9da1508abebafe35d8ce63bd587b#6cef1f7c1bda9da1508abebafe35d8ce63bd587b"
+source = "git+https://github.com/ryoqun/crossbeam?rev=5b38a7d0fb61136c43686ec06a504aa5a76a6ee2#5b38a7d0fb61136c43686ec06a504aa5a76a6ee2"
 dependencies = [
  "cfg-if 1.0.0",
 ]
