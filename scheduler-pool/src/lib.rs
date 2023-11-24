@@ -36,7 +36,6 @@ use {
     solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
         cell::UnsafeCell,
-        collections::HashMap,
         fmt::Debug,
         marker::PhantomData,
         sync::{Arc, Mutex, RwLock, RwLockReadGuard, Weak},
@@ -130,10 +129,10 @@ where
         };
 
         let pid = std::process::id();
-        let task = (procfs::process::Process::new(pid.try_into().unwrap())
+        let task = procfs::process::Process::new(pid.try_into().unwrap())
             .unwrap()
             .task_from_tid(tid)
-            .unwrap());
+            .unwrap();
         let stat = task.stat().unwrap();
         let current_tick = stat.utime + stat.stime;
         if current_tick > self.tick {
@@ -836,7 +835,7 @@ where
     ) {
         let (next_blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) =
             unbounded();
-        for _ in (0..handler_count) {
+        for _ in 0..handler_count {
             blocked_transaction_sessioned_sender
                 .send(ChainedChannel::new_channel(
                     blocked_transaction_sessioned_receiver.clone(),
@@ -928,7 +927,7 @@ where
                         }
                         log_interval_counter += 1;
                     };
-                };
+                }
 
                 while !will_end_thread {
                     while !(state_machine.is_empty() && (will_end_session || will_end_thread)) {
