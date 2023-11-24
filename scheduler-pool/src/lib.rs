@@ -1147,7 +1147,7 @@ where
 
         let drop_main_loop = || {
             move || 'outer: loop {
-                let mut session_timings = Default::default();
+                let mut session_timings: ExecuteTimings = Default::default();
                 loop {
                     match drop_receiver.recv() {
                         Ok(SessionedMessage::Payload(ee)) => {
