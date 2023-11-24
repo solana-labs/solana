@@ -360,6 +360,7 @@ type TaskInQueue = Arc<Task>;
 #[derive(Debug)]
 struct TaskStatusInner {
     lock_attempts: Vec<LockAttempt>,
+    contention_count: usize,
 }
 
 #[derive(Debug)]
