@@ -389,10 +389,6 @@ impl Task {
             let mut page = lock_attempt.target_page_mut();
 
             page.blocked_task_queue.insert_task(this.clone(), lock_attempt.requested_usage);
-            if lock_attempt.requested_usage == RequestedUsage::Writable {
-                page.blocked_write_requesting_task_ids
-                    .insert(this.unique_weight);
-            }
         }
     }
 
@@ -485,7 +481,6 @@ pub enum RequestedUsage {
 pub struct Page {
     current_usage: Usage,
     blocked_task_queue: Tasks,
-    // unify into blocked_task_queue
     blocked_write_requesting_task_ids: std::collections::BTreeSet<UniqueWeight>,
 }
 
@@ -512,6 +507,10 @@ impl Tasks {
 
     fn heaviest_task_cursor(&self) -> impl Iterator<Item = &TaskInQueue> {
         self.blocked_task_queue.values().rev().map(|(task, _ru)| task)
+    }
+
+    fn heaviest_writing_task_weight(&self) -> Option<UniqueWeight> {
+        self.blocked_task_queue.values().rev().filter(|(task, ru) ru == RequestedUsage::Writable).next().map(|(task, _ru)| task.unique_weight)
     }
 
     pub fn heaviest_weight(&mut self) -> Option<UniqueWeight> {
@@ -1555,18 +1554,11 @@ impl ScheduleStage {
         lock_attempts: &[LockAttempt],
     ) {
         for unlock_attempt in lock_attempts {
-            // skip reindex() and blocked_write_requesting_task_ids bookkeeping unless contended?
+            // skip reindex() bookkeeping unless contended?
             let heaviest_uncontended = unlock_attempt
                 .target_page_mut()
                 .blocked_task_queue
                 .reindex(should_remove, uq);
-
-            if should_remove && unlock_attempt.requested_usage == RequestedUsage::Writable {
-                unlock_attempt
-                    .target_page_mut()
-                    .blocked_write_requesting_task_ids
-                    .remove(uq);
-            }
 
             let is_unused_now = Self::reset_lock(unlock_attempt);
             if !is_unused_now {
