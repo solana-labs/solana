@@ -430,7 +430,7 @@ pub struct LockAttempt {
 
 impl PageRc {
     fn as_mut(&self) -> &mut Page {
-        unsafe { &mut *self.0.0.get() }
+        unsafe { &mut *self.0 .0.get() }
     }
 }
 
@@ -551,9 +551,9 @@ pub struct AddressBook {
 impl AddressBook {
     pub fn load(&self, address: Pubkey) -> PageRc {
         PageRc::clone(&self.book.entry(address).or_insert_with(|| {
-            PageRc(by_address::ByAddress(PageRcInner::new(
-                UnsafeCell::new(Page::new(&address, Usage::unused())),
-            )))
+            PageRc(by_address::ByAddress(PageRcInner::new(UnsafeCell::new(
+                Page::new(&address, Usage::unused()),
+            ))))
         }))
     }
 
