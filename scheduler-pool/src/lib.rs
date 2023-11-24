@@ -362,7 +362,7 @@ pub type TaskInQueue = Arc<Task>;
 pub struct LockAttemptsInCell(UnsafeCell<Vec<LockAttempt>>);
 
 #[derive(Debug)]
-pub struct Task {
+struct Task {
     unique_weight: UniqueWeight,
     tx: SanitizedTransaction, // actually should be Bundle
     lock_attempts: LockAttemptsInCell,
