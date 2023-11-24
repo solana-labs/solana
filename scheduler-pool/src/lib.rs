@@ -1704,7 +1704,7 @@ impl SchedulingStateMachine {
             })
     }
 
-    fn deschedule_task(&mut self, ee: &mut Box<ExecutionEnvironment>) {
+    fn deschedule_task(&mut self, ee: &Box<ExecutionEnvironment>) {
         self.active_task_count -= 1;
         self.handled_task_count += 1;
         let should_remove = ee
