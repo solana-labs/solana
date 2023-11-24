@@ -1594,7 +1594,7 @@ impl ScheduleStage {
                 assert!(uncontended_task.currently_contended());
                 retryable_task_queue
                     .entry(uncontended_task.unique_weight)
-                    .or_insert(uncontended_task);
+                    .or_insert(uncontended_task.clone());
             }
         }
     }
