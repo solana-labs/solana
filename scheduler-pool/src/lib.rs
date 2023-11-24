@@ -878,7 +878,8 @@ where
             unbounded::<Box<ExecutionEnvironment>>();
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
             unbounded::<Box<ExecutionEnvironment>>();
-        let (drop_sender, drop_receiver) = unbounded::<SessionedMessage<Box<ExecutionEnvironment>>>();
+        let (drop_sender, drop_receiver) =
+            unbounded::<SessionedMessage<Box<ExecutionEnvironment>>>();
         let (drop_sender2, drop_receiver2) = unbounded::<ExecuteTimings>();
         let handler_count = self.handler_count;
         let scheduler_id = self.scheduler_id;
@@ -1004,7 +1005,9 @@ where
                                     &execution_environment,
                                 );
                                 state_machine.deschedule_task(&mut execution_environment);
-                                drop_sender.send_buffered(SessionedMessage::Payload(execution_environment)).unwrap();
+                                drop_sender
+                                    .send_buffered(SessionedMessage::Payload(execution_environment))
+                                    .unwrap();
                             } else if let Ok(mm) = schedulable_transaction_receiver.try_recv() {
                                 match mm {
                                     ChainedChannel::Payload(payload) => {
@@ -1048,7 +1051,9 @@ where
                                     &execution_environment,
                                 );
                                 state_machine.deschedule_task(&mut execution_environment);
-                                drop_sender.send_buffered(SessionedMessage::Payload(execution_environment)).unwrap();
+                                drop_sender
+                                    .send_buffered(SessionedMessage::Payload(execution_environment))
+                                    .unwrap();
                             } else {
                                 break;
                             }
@@ -1192,11 +1197,11 @@ where
                                 );
                             }
                             drop(ee);
-                        },
+                        }
                         Ok(SessionedMessage::EndSession) => {
                             drop_sender2.send(session_timings).unwrap();
                             session_timings = Default::default();
-                        },
+                        }
                         Err(RecvTimeoutError::Disconnected) => break 'outer,
                         Err(RecvTimeoutError::Timeout) => continue,
                     }
