@@ -517,8 +517,7 @@ impl Tasks {
         self.blocked_task_queue
             .values()
             .rev()
-            .find_map(|(task, ru)| ru == &RequestedUsage::Writable)
-            .map(|(task, _ru)| task.unique_weight)
+            .find_map(|(task, ru)| (ru == &RequestedUsage::Writable).then_some(task.unique_weight))
     }
 
     pub fn heaviest_weight(&mut self) -> Option<UniqueWeight> {
