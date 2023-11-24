@@ -414,6 +414,12 @@ impl Task {
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
 
+    fn contention_count(&self) -> Self {
+        self
+            .contention_count
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
     pub fn currently_contended(&self) -> bool {
         self.uncontended.load(std::sync::atomic::Ordering::SeqCst) == 1
     }
@@ -1528,9 +1534,7 @@ impl ScheduleStage {
         trace!(
             "successful lock: (from_runnable: {}) after {} contentions",
             from_runnable,
-            next_task
-                .contention_count
-                .load(std::sync::atomic::Ordering::SeqCst)
+            next_task.contention_count(),
         );
 
         if !from_runnable {
