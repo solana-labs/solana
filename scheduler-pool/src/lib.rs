@@ -211,6 +211,7 @@ where
                         pre_push_len,
                         watched_thread_managers.len(),
                     );
+                    // sleep here to write all logs at once.
                     sleep(Duration::from_secs(2));
                 }
             }
@@ -1158,7 +1159,7 @@ where
             move || 'outer: loop {
                 let mut session_timings: ExecuteTimings = Default::default();
                 loop {
-                    match drop_receiver.recv_timeout(Duration::from_millis(20)) {
+                    match drop_receiver.recv_timeout(Duration::from_millis(40)) {
                         Ok(SessionedMessage::Payload(ee)) => {
                             session_timings.accumulate(&ee.result_with_timings.1);
                             if send_metrics {
