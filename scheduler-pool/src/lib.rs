@@ -408,7 +408,7 @@ impl Task {
     }
 
     fn increment_contention_count(&self) {
-        let c = unsafe { &mut (*self.lock_attempts.0.get()).contention_count }
+        let c = unsafe { &mut (*self.lock_attempts.0.get()).contention_count };
         c += 1;
     }
 
