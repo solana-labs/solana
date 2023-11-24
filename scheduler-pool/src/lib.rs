@@ -1124,7 +1124,7 @@ where
                                     (
                                         "account_locks_in_json",
                                         serde_json::to_string(
-                                            &ee.task.tx.0.get_account_locks_unchecked()
+                                            &ee.task.tx.get_account_locks_unchecked()
                                         )
                                         .unwrap(),
                                         String
