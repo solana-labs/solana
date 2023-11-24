@@ -1059,6 +1059,7 @@ where
                         // or should also consider will_end_thread?
                         log_scheduler!("S:ended ");
                         (state_machine, log_interval_counter) = <_>::default();
+                        result_with_timings.1 = drop_receiver2.recv().unwrap();
                         result_sender
                             .send(
                                 result_with_timings
