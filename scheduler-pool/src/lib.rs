@@ -47,9 +47,8 @@ use {
 
 type UniqueWeight = u64;
 
-type Tasks = BTreeMapTaskIds;
 #[derive(Debug, Default)]
-pub struct BTreeMapTaskIds {
+pub struct Tasks {
     blocked_task_queue: std::collections::BTreeMap<UniqueWeight, TaskInQueue>,
 }
 
@@ -500,7 +499,7 @@ impl Page {
     }
 }
 
-impl BTreeMapTaskIds {
+impl Tasks {
     pub fn insert_task(&mut self, task: TaskInQueue) {
         let pre_existed = self.blocked_task_queue.insert(task.unique_weight, task);
         assert!(pre_existed.is_none());
