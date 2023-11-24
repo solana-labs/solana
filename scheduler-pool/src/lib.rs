@@ -399,9 +399,9 @@ impl Task {
 
     fn index_with_pages(this: &TaskInQueue) {
         for lock_attempt in &*this.lock_attempts_mut() {
-            let mut page = lock_attempt.target_page_mut();
-
-            page.blocked_task_queue
+            lock_attempt
+                .target_page_mut()
+                .blocked_task_queue
                 .insert_task(this.clone(), lock_attempt.requested_usage);
         }
     }
@@ -1575,7 +1575,10 @@ impl ScheduleStage {
     ) {
         for unlock_attempt in lock_attempts {
             if should_remove {
-                unlock_attempt.target_page_mut().blocked_task_queue.remove_task(uq);
+                unlock_attempt
+                    .target_page_mut()
+                    .blocked_task_queue
+                    .remove_task(uq);
             }
 
             let is_unused_now = Self::reset_lock(unlock_attempt);
