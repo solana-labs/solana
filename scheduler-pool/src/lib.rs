@@ -2053,7 +2053,7 @@ mod tests {
             */
         }
 
-        fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings> {
+        fn wait_for_termination(&mut self, _reason: &WaitReason) -> Option<ResultWithTimings> {
             todo!();
             /*
             if TRIGGER_RACE_CONDITION && matches!(reason, WaitReason::PausedForRecentBlockhash) {
