@@ -548,7 +548,7 @@ impl Tasks {
         self.blocked_task_queue.last_entry().map(|j| *j.key())
     }
 
-    fn reindex(&mut self) -> Option<&TaskInQueue> {
+    fn heaviest_contended_task(&mut self) -> Option<&TaskInQueue> {
         self.heaviest_task_iter()
             .find(|task| task.currently_contended())
     }
@@ -1546,9 +1546,8 @@ impl ScheduleStage {
                 if let Some(heaviest_blocked_task) = read_only_lock_attempt
                     .target_page_mut()
                     .blocked_task_queue
-                    .reindex()
+                    .heaviest_contended_task()
                 {
-                    assert!(heaviest_blocked_task.currently_contended());
                     retryable_task_queue
                         .entry(heaviest_blocked_task.unique_weight)
                         .or_insert_with(|| heaviest_blocked_task.clone());
@@ -1584,12 +1583,11 @@ impl ScheduleStage {
                 continue;
             }
 
-            let heaviest_uncontended = unlock_attempt
+            let heaviest_uncontended_now = unlock_attempt
                 .target_page_mut()
                 .blocked_task_queue
-                .reindex();
-            if let Some(uncontended_task) = heaviest_uncontended {
-                assert!(uncontended_task.currently_contended());
+                .heaviest_contended_task();
+            if let Some(uncontended_task) = heaviest_uncontended_now {
                 retryable_task_queue
                     .entry(uncontended_task.unique_weight)
                     .or_insert_with(|| uncontended_task.clone());
