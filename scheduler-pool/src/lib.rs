@@ -832,7 +832,7 @@ where
         let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
 
         let (blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) =
-            unbounded::<ChainedChannel<Box<ExecutionEnvironment>, ControlFrame>>();
+            unbounded::<ChainedChannel<TaskInQueue, ControlFrame>>();
         let (idle_transaction_sender, idle_transaction_receiver) =
             unbounded::<Box<ExecutionEnvironment>>();
         let (handled_blocked_transaction_sender, handled_blocked_transaction_receiver) =
