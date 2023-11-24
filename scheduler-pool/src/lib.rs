@@ -1714,7 +1714,7 @@ impl SchedulingStateMachine {
                     &mut self.retryable_task_queue,
                 )
             })
-            .map(|task| {
+            .inspect(|task| {
                 self.rescheduled_task_count += 1;
                 task
             })
