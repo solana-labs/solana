@@ -1511,9 +1511,7 @@ impl ScheduleStage {
         );
 
         if lock_failure_count > 0 {
-            Self::reset_lock_for_failed_execution(
-                &mut next_task.lock_attempts_mut(),
-            );
+            Self::reset_lock_for_failed_execution(&mut next_task.lock_attempts_mut());
             next_task.increment_contention_count();
 
             if from_runnable {
@@ -1555,9 +1553,7 @@ impl ScheduleStage {
         Some(next_task)
     }
 
-    fn reset_lock_for_failed_execution(
-        lock_attempts: &[LockAttempt],
-    ) {
+    fn reset_lock_for_failed_execution(lock_attempts: &[LockAttempt]) {
         for l in lock_attempts {
             Self::reset_lock(l);
         }
