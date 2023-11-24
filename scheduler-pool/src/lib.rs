@@ -361,6 +361,7 @@ type TaskInQueue = Arc<Task>;
 struct TaskStatusInner {
     lock_attempts: Vec<LockAttempt>,
     contention_count: usize,
+    uncontended: usize
 }
 
 #[derive(Debug)]
@@ -377,7 +378,6 @@ struct Task {
     unique_weight: UniqueWeight,
     tx: SanitizedTransaction, // actually should be Bundle
     task_status: TaskStatus,
-    uncontended: std::sync::atomic::AtomicUsize,
 }
 
 impl Task {
@@ -390,7 +390,6 @@ impl Task {
             unique_weight,
             tx,
             task_status: TaskStatus::new(lock_attempts),
-            uncontended: Default::default(),
         })
     }
 
@@ -416,13 +415,16 @@ impl Task {
         unsafe { (*self.task_status.0.get()).contention_count }
     }
 
+    fn uncontended(&self) -> &mut usize {
+        unsafe { (*self.task_status.0.get()).uncontended }
+    }
+
     pub fn currently_contended(&self) -> bool {
-        self.uncontended.load(std::sync::atomic::Ordering::SeqCst) == 1
+        *self.uncontended() == 1
     }
 
     fn mark_as_contended(&self) {
-        self.uncontended
-            .store(1, std::sync::atomic::Ordering::SeqCst)
+        *self.uncontended() = 1;
     }
 
     fn mark_as_uncontended(&self) {
