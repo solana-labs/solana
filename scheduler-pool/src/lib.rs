@@ -346,7 +346,7 @@ impl<SEA: ScheduleExecutionArg> Handler<SEA> for DefaultTransactionHandler {
     }
 }
 
-type UsageCount = usize;
+type UsageCount = u32;
 const SOLE_USE_COUNT: UsageCount = 1;
 
 #[derive(Clone, Debug)]
