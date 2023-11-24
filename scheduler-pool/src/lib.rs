@@ -1179,6 +1179,9 @@ where
                             }
                             drop(ee);
                         }
+                        Ok(SessionedMessage::StartSession(result_with_timings)) => {
+                            (session_result, session_timings) = result_with_timings;
+                        }
                         Ok(SessionedMessage::EndSession) => {
                             drop_sender2.send((session_result, session_timings)).unwrap();
                             session_result = Ok(());
