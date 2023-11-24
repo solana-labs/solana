@@ -739,7 +739,7 @@ enum ChainedChannel<T1, T2> {
 }
 
 enum SessionedMessage<T> {
-    StartSession(ResultWithTimings),
+    Resume(ResultWithTimings),
     Payload(T),
     EndSession,
 }
@@ -887,7 +887,7 @@ where
                 .take()
                 .unwrap_or((Ok(()), Default::default()));
             drop_sender
-                .send(SessionedMessage::StartSession(result_with_timings))
+                .send(SessionedMessage::Resume(result_with_timings))
                 .unwrap();
 
             move || {
@@ -1179,7 +1179,7 @@ where
                             }
                             drop(ee);
                         }
-                        Ok(SessionedMessage::StartSession(result_with_timings)) => {
+                        Ok(SessionedMessage::Resume(result_with_timings)) => {
                             (session_result, session_timings) = result_with_timings;
                         }
                         Ok(SessionedMessage::EndSession) => {
