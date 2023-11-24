@@ -535,7 +535,7 @@ impl BTreeMapTaskIds {
 
 // use UnsafeCell
 type PageRcInner = Arc<UnsafeCell<Page>>;
-static_assertions::const_assert_eq!(std::mem::size_of::<std::cell::UnsafeCell<Page>>(), 72);
+static_assertions::const_assert_eq!(std::mem::size_of::<std::cell::UnsafeCell<Page>>(), 64);
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct PageRc(by_address::ByAddress<PageRcInner>);
