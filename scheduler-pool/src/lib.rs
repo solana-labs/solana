@@ -739,6 +739,7 @@ enum ChainedChannel<T1, T2> {
 }
 
 enum SessionedMessage<T> {
+    StartSession(ResultWithTimings),
     Payload(T),
     EndSession,
 }
