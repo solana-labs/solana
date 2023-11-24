@@ -365,6 +365,12 @@ struct TaskStatusInner {
 #[derive(Debug)]
 struct TaskStatus(UnsafeCell<TaskStatusInner>);
 
+impl TaskStatus {
+    fn new(lock_attempts: Vec<LockAttempt>) -> Self {
+        Self { lock_attempts }
+    }
+}
+
 #[derive(Debug)]
 struct Task {
     unique_weight: UniqueWeight,
