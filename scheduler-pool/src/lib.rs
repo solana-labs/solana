@@ -737,6 +737,11 @@ enum ChainedChannel<T1, T2> {
     ChannelWithPayload(Box<dyn WithChannelAndPayload<T1, T2>>),
 }
 
+enum SessionedMessage<T> {
+    Payload(T),
+    EndSession,
+}
+
 enum ControlFrame {
     StartSession(SchedulingContext),
     EndSession,
