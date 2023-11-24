@@ -508,7 +508,7 @@ impl Tasks {
     }
 
     fn heaviest_writing_task_weight(&self) -> Option<UniqueWeight> {
-        self.blocked_task_queue.values().rev().filter(|(task, ru)| ru == &RequestedUsage::Writable).next().map(|(task, _ru)| task.unique_weight)
+        self.blocked_task_queue.values().rev().find(|(task, ru)| ru == &RequestedUsage::Writable).map(|(task, _ru)| task.unique_weight)
     }
 
     pub fn heaviest_weight(&mut self) -> Option<UniqueWeight> {
