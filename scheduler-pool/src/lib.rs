@@ -844,10 +844,7 @@ where
                 ))
                 .unwrap();
         }
-        drop(std::mem::replace(
-            blocked_transaction_sessioned_sender,
-            next_blocked_transaction_sessioned_sender,
-        ));
+        *blocked_transaction_sessioned_sender = next_blocked_transaction_sessioned_sender;
     }
 
     fn active_context(&self) -> Option<SchedulingContext> {
