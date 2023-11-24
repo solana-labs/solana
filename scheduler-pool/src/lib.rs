@@ -413,7 +413,7 @@ impl Task {
     }
 
     fn contention_count(&self) -> usize {
-        unsafe { *self.lock_attempts.0.get().contention_count }
+        unsafe { (*self.lock_attempts.0.get()).contention_count }
     }
 
     pub fn currently_contended(&self) -> bool {
