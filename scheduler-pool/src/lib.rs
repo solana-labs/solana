@@ -851,7 +851,7 @@ where
                 .unwrap();
         }
         *blocked_transaction_sessioned_sender = next_blocked_transaction_sessioned_sender;
-        drop_sender::send(SessionedMessage::EndSession).unwrap();
+        drop_sender.send(SessionedMessage::EndSession).unwrap();
     }
 
     fn active_context(&self) -> Option<SchedulingContext> {
