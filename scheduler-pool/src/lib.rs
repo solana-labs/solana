@@ -367,7 +367,7 @@ struct TaskStatus(UnsafeCell<TaskStatusInner>);
 
 impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
-        Self { lock_attempts: UnsafeCell::new(TaskStatusInner { lock_attempts }) }
+        Self(UnsafeCell::new(TaskStatusInner { lock_attempts }))
     }
 }
 
