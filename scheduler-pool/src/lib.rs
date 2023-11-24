@@ -879,6 +879,7 @@ where
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
             unbounded::<Box<ExecutionEnvironment>>();
         let (drop_sender, drop_receiver) = unbounded::<SessionedMessage<Box<ExecutionEnvironment>>>();
+        let (drop_sender2, drop_receiver2) = unbounded::<ExecuteTimings>();
         let handler_count = self.handler_count;
         let scheduler_id = self.scheduler_id;
         let mut slot = context.bank().slot();
