@@ -894,7 +894,7 @@ where
             let mut result_with_timings = self
                 .session_result_with_timings
                 .take()
-                .or(Some((Ok(()), Default::default())));
+                .unwrap_or((Ok(()), Default::default()));
 
             move || {
                 trace!(
@@ -940,7 +940,7 @@ where
                             recv(handled_blocked_transaction_receiver) -> execution_environment => {
                                 log_scheduler!();
                                 let execution_environment = execution_environment.unwrap();
-                                Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
+                                Self::update_result_with_timings(&mut result_with_timings, &execution_environment);
                                 state_machine.deschedule_task(&execution_environment);
                                 drop_sender.send_buffered(SessionedMessage::Payload(execution_environment)).unwrap();
                             },
@@ -981,7 +981,7 @@ where
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
                                 log_scheduler!();
                                 let execution_environment = execution_environment.unwrap();
-                                Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
+                                Self::update_result_with_timings(&mut result_with_timings, &execution_environment);
                                 state_machine.deschedule_task(&execution_environment);
                                 drop_sender.send_buffered(SessionedMessage::Payload(execution_environment)).unwrap();
                             },
@@ -1000,7 +1000,7 @@ where
                                 handled_blocked_transaction_receiver.try_recv()
                             {
                                 Self::update_result_with_timings(
-                                    result_with_timings.as_mut().unwrap(),
+                                    &mut result_with_timings,
                                     &execution_environment,
                                 );
                                 state_machine.deschedule_task(&mut execution_environment);
@@ -1045,7 +1045,7 @@ where
                                 handled_idle_transaction_receiver.try_recv()
                             {
                                 Self::update_result_with_timings(
-                                    result_with_timings.as_mut().unwrap(),
+                                    &mut result_with_timings,
                                     &execution_environment,
                                 );
                                 state_machine.deschedule_task(&mut execution_environment);
@@ -1063,12 +1063,10 @@ where
                         log_scheduler!("S:ended ");
                         (state_machine, log_interval_counter) = <_>::default();
                         drop_sender.send(SessionedMessage::EndSession).unwrap();
-                        result_with_timings.as_mut().unwrap().1 = drop_receiver2.recv().unwrap();
+                        result_with_timings.1 = drop_receiver2.recv().unwrap();
                         result_sender
                             .send(
-                                result_with_timings
-                                    .replace((Ok(()), Default::default()))
-                                    .unwrap(),
+                                std::mem::replace(result_with_timings, (Ok(()), Default::default()))
                             )
                             .unwrap();
                         will_end_session = false;
@@ -1077,13 +1075,12 @@ where
                 log_scheduler!("T:ended ");
 
                 drop_sender.send(SessionedMessage::EndSession).unwrap();
-                result_with_timings.as_mut().unwrap().1 = drop_receiver2.recv().unwrap();
-                let res = result_with_timings.take().unwrap();
+                result_with_timings.1 = drop_receiver2.recv().unwrap();
                 trace!(
                     "solScheduler thread is ended at: {:?}",
                     std::thread::current()
                 );
-                res
+                result_with_timings
             }
         };
 
