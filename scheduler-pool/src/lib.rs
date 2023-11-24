@@ -359,10 +359,10 @@ enum LockStatus {
 pub type TaskInQueue = Arc<Task>;
 
 #[derive(Debug)]
-pub struct LockAttemptsInCell(std::cell::RefCell<Vec<LockAttempt>>);
+pub struct LockAttemptsInCell(UnsafeCell<Vec<LockAttempt>>);
 
 impl LockAttemptsInCell {
-    fn new(ll: std::cell::RefCell<Vec<LockAttempt>>) -> Self {
+    fn new(ll: UnsafeCell<Vec<LockAttempt>>) -> Self {
         Self(ll)
     }
 }
@@ -382,7 +382,7 @@ impl Task {
     ) -> TaskInQueue {
         TaskInQueue::new(Self {
             unique_weight,
-            tx: (tx.0, LockAttemptsInCell::new(std::cell::RefCell::new(tx.1))),
+            tx: (tx.0, LockAttemptsInCell::new(UnsafeCell::new(tx.1))),
             uncontended: Default::default(),
             contention_count: Default::default(),
         })
