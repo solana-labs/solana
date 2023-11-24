@@ -1190,8 +1190,8 @@ where
                             drop(ee);
                         },
                         Ok(SessionedMessage::EndSession) => {
+                            drop_sender2.send(session_timings).unwrap();
                             session_timings = Default::default();
-                            //drop2.send(session_timings).unwrap();
                         },
                         Err(RecvTimeoutError::Disconnected) => break 'outer,
                         Err(RecvTimeoutError::Timeout) => continue,
