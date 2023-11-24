@@ -1152,11 +1152,16 @@ where
 
         let drop_main_loop = || {
             move || 'outer: loop {
+                let mut session_result: Result<()> = Ok(());
                 let mut session_timings: ExecuteTimings = Default::default();
                 loop {
                     match drop_receiver.recv_timeout(Duration::from_millis(40)) {
                         Ok(SessionedMessage::Payload(ee)) => {
                             session_timings.accumulate(&ee.result_with_timings.1);
+                            match &msg.result_with_timings.0 {
+                                Ok(()) => {}
+                                Err(e) => *session_result = Err(e.clone()),
+                            }
                             if send_metrics {
                                 use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
 
@@ -1196,6 +1201,7 @@ where
                         }
                         Ok(SessionedMessage::EndSession) => {
                             drop_sender2.send(session_timings).unwrap();
+                            session_result = Ok(());
                             session_timings = Default::default();
                         }
                         Err(RecvTimeoutError::Disconnected) => break 'outer,
