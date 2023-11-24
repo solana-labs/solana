@@ -741,7 +741,7 @@ enum ChainedChannel<T1, T2> {
 enum SessionedMessage<T> {
     Resume(ResultWithTimings),
     Payload(T),
-    EndSession,
+    Reset,
 }
 
 enum ControlFrame {
@@ -1046,7 +1046,7 @@ where
                         // or should also consider will_end_thread?
                         log_scheduler!("S:ended ");
                         (state_machine, log_interval_counter) = <_>::default();
-                        drop_sender.send(SessionedMessage::EndSession).unwrap();
+                        drop_sender.send(SessionedMessage::Reset).unwrap();
                         let result_with_timings = drop_receiver2.recv().unwrap();
                         result_sender.send(result_with_timings).unwrap();
                         will_end_session = false;
@@ -1054,7 +1054,7 @@ where
                 }
                 log_scheduler!("T:ended ");
 
-                drop_sender.send(SessionedMessage::EndSession).unwrap();
+                drop_sender.send(SessionedMessage::Reset).unwrap();
                 let result_with_timings = drop_receiver2.recv().unwrap();
                 trace!(
                     "solScheduler thread is ended at: {:?}",
@@ -1182,7 +1182,7 @@ where
                         Ok(SessionedMessage::Resume(result_with_timings)) => {
                             (session_result, session_timings) = result_with_timings;
                         }
-                        Ok(SessionedMessage::EndSession) => {
+                        Ok(SessionedMessage::Reset) => {
                             drop_sender2
                                 .send((session_result, session_timings))
                                 .unwrap();
