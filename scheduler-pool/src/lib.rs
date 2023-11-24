@@ -793,7 +793,7 @@ where
     }
 
     fn update_result_with_timings(
-        (session_result, session_timings): &mut ResultWithTimings,
+        (session_result, _session_timings): &mut ResultWithTimings,
         msg: &ExecutionEnvironment,
     ) {
         match &msg.result_with_timings.0 {
@@ -1148,7 +1148,7 @@ where
         let drop_main_loop = || {
             move || 'outer: loop {
                 'inner: loop {
-                    match drop_receiver.try_recv() {
+                    match drop_receiver.recv() {
                         Ok(SessionedMessage::Payload(ee)) => {
                             session_timings.accumulate(&ee.result_with_timings.1);
                             if send_metrics {
@@ -1194,7 +1194,6 @@ where
                         Err(TryRecvError::Empty) => break 'inner,
                     }
                 }
-                sleep(Duration::from_millis(40));
             }
         };
 
