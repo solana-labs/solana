@@ -778,7 +778,7 @@ where
             &mut ee.result_with_timings.0,
             &mut ee.result_with_timings.1,
             bank,
-            &ee.task.tx.0,
+            &ee.task.tx,
             ee.task.task_index(),
             pool,
         );
