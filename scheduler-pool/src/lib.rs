@@ -1529,7 +1529,7 @@ impl ScheduleStage {
 
     fn reset_lock_for_failed_execution(
         unique_weight: &UniqueWeight,
-        lock_attempts: &mut [LockAttempt],
+        lock_attempts: &[LockAttempt],
     ) {
         for l in lock_attempts {
             Self::reset_lock(l);
