@@ -10,7 +10,7 @@
 
 use {
     crossbeam_channel::{
-        bounded, never, select_biased, unbounded, Receiver, Sender, TryRecvError,
+        bounded, never, select_biased, unbounded, Receiver, RecvTimeoutError, Sender, TryRecvError,
     },
     log::*,
     rand::{thread_rng, Rng},
@@ -1194,7 +1194,7 @@ where
                             //drop2.send(session_timings).unwrap();
                         },
                         Err(RecvTimeoutError::Disconnected) => break 'outer,
-                        Err(RecvTimeoutError::Empty) => break 'inner,
+                        Err(RecvTimeoutError::Timeout) => continue,
                     }
                 }
             }
