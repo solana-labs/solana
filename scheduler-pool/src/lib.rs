@@ -39,7 +39,7 @@ use {
         collections::HashMap,
         fmt::Debug,
         marker::PhantomData,
-        sync::{atomic::AtomicUsize, Arc, Mutex, RwLock, RwLockReadGuard, Weak},
+        sync::{Arc, Mutex, RwLock, RwLockReadGuard, Weak},
         thread::{sleep, JoinHandle},
         time::{Duration, SystemTime},
     },
