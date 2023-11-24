@@ -573,6 +573,22 @@ pub struct ExecutionEnvironment {
     execution_cpu_us: u128,
 }
 
+impl ExecutionEnvironment {
+    fn new_boxed(
+        task: TaskInQueue,
+    ) -> Box<Self> {
+        Box::new(Self {
+            task,
+            result_with_timings: (Ok(()), Default::default()),
+            finish_time: None,
+            slot: 0,
+            thx: 0,
+            execution_us: 0,
+            execution_cpu_us: 0,
+        })
+    }
+}
+
 // Currently, simplest possible implementation (i.e. single-threaded)
 // this will be replaced with more proper implementation...
 // not usable at all, especially for mainnet-beta
@@ -1568,20 +1584,6 @@ impl ScheduleStage {
                     .or_insert(uncontended_task);
             }
         }
-    }
-
-    fn prepare_scheduled_execution(
-        task: TaskInQueue,
-    ) -> Box<ExecutionEnvironment> {
-        Box::new(ExecutionEnvironment {
-            task,
-            result_with_timings: (Ok(()), Default::default()),
-            finish_time: None,
-            slot: 0,
-            thx: 0,
-            execution_us: 0,
-            execution_cpu_us: 0,
-        })
     }
 }
 
