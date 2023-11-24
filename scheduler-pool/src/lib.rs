@@ -366,7 +366,7 @@ struct Task {
     unique_weight: UniqueWeight,
     tx: SanitizedTransaction, // actually should be Bundle
     lock_attempts: LockAttemptsInCell,
-    pub contention_count: std::sync::atomic::AtomicUsize,
+    contention_count: std::sync::atomic::AtomicUsize,
     pub uncontended: std::sync::atomic::AtomicUsize,
 }
 
