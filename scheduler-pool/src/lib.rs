@@ -941,7 +941,7 @@ where
                                 let execution_environment = execution_environment.unwrap();
                                 Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
                                 state_machine.deschedule_task(&execution_environment);
-                                drop_sender.send(SessionedMessage::Payload(execution_environment)).unwrap();
+                                drop_sender.send_buffered(SessionedMessage::Payload(execution_environment)).unwrap();
                             },
                             recv(schedulable_transaction_receiver) -> m => {
                                 if let Ok(mm) = m {
@@ -982,7 +982,7 @@ where
                                 let execution_environment = execution_environment.unwrap();
                                 Self::update_result_with_timings(result_with_timings.as_mut().unwrap(), &execution_environment);
                                 state_machine.deschedule_task(&execution_environment);
-                                drop_sender.send(SessionedMessage::Payload(execution_environment)).unwrap();
+                                drop_sender.send_buffered(SessionedMessage::Payload(execution_environment)).unwrap();
                             },
                         };
 
@@ -1003,7 +1003,7 @@ where
                                     &execution_environment,
                                 );
                                 state_machine.deschedule_task(&mut execution_environment);
-                                drop_sender.send(SessionedMessage::Payload(execution_environment)).unwrap();
+                                drop_sender.send_buffered(SessionedMessage::Payload(execution_environment)).unwrap();
                             } else if let Ok(mm) = schedulable_transaction_receiver.try_recv() {
                                 match mm {
                                     ChainedChannel::Payload(payload) => {
@@ -1047,7 +1047,7 @@ where
                                     &execution_environment,
                                 );
                                 state_machine.deschedule_task(&mut execution_environment);
-                                drop_sender.send(SessionedMessage::Payload(execution_environment)).unwrap();
+                                drop_sender.send_buffered(SessionedMessage::Payload(execution_environment)).unwrap();
                             } else {
                                 break;
                             }
@@ -1191,6 +1191,7 @@ where
                         },
                         Ok(SessionedMessage::EndSession) => {
                             session_timings = Default::default();
+                            //drop2.send(session_timings).unwrap();
                         },
                         Err(RecvError) => break 'outer,
                     }
