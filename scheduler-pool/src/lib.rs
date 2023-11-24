@@ -358,13 +358,13 @@ enum LockStatus {
 type TaskInQueue = Arc<Task>;
 
 #[derive(Debug)]
-struct LockAttemptsInCell(UnsafeCell<Vec<LockAttempt>>);
+struct TaskStatus(UnsafeCell<Vec<LockAttempt>>);
 
 #[derive(Debug)]
 struct Task {
     unique_weight: UniqueWeight,
     tx: SanitizedTransaction, // actually should be Bundle
-    lock_attempts: LockAttemptsInCell,
+    lock_attempts: TaskStatus,
     contention_count: std::sync::atomic::AtomicUsize,
     uncontended: std::sync::atomic::AtomicUsize,
 }
@@ -378,7 +378,7 @@ impl Task {
         TaskInQueue::new(Self {
             unique_weight,
             tx,
-            lock_attempts: LockAttemptsInCell(UnsafeCell::new(lock_attempts)),
+            lock_attempts: TaskStatus(UnsafeCell::new(lock_attempts)),
             uncontended: Default::default(),
             contention_count: Default::default(),
         })
@@ -543,7 +543,7 @@ pub struct PageRc(by_address::ByAddress<PageRcInner>);
 unsafe impl Send for PageRc {}
 unsafe impl Sync for PageRc {}
 
-unsafe impl Sync for LockAttemptsInCell {}
+unsafe impl Sync for TaskStatus {}
 type WeightedTaskQueue = std::collections::BTreeMap<UniqueWeight, TaskInQueue>;
 
 type AddressMap = dashmap::DashMap<Pubkey, PageRc>;
