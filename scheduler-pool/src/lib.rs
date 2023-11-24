@@ -534,6 +534,7 @@ impl BTreeMapTaskIds {
 
 // use UnsafeCell
 type PageRcInner = Arc<std::cell::RefCell<Page>>;
+static_assertions::const_assert_eq!(std::mem::size_of::<std::cell::RefCell<Page>>(), 72);
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct PageRc(by_address::ByAddress<PageRcInner>);
@@ -543,7 +544,7 @@ unsafe impl Send for LockAttemptsInCell {}
 unsafe impl Sync for LockAttemptsInCell {}
 type WeightedTaskQueue = std::collections::BTreeMap<UniqueWeight, TaskInQueue>;
 
-type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
+type AddressMap = dashmap::DashMap<Pubkey, PageRc>;
 #[derive(Default, Debug)]
 pub struct AddressBook {
     book: AddressMap,

@@ -7171,6 +7171,7 @@ dependencies = [
  "solana-scheduler",
  "solana-sdk",
  "solana-vote",
+ "static_assertions",
  "tikv-jemallocator",
 ]
 
