@@ -1066,7 +1066,7 @@ where
                         result_with_timings.1 = drop_receiver2.recv().unwrap();
                         result_sender
                             .send(
-                                std::mem::replace(result_with_timings, (Ok(()), Default::default()))
+                                std::mem::replace(&mut result_with_timings, (Ok(()), Default::default()))
                             )
                             .unwrap();
                         will_end_session = false;
