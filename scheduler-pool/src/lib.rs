@@ -1481,7 +1481,7 @@ impl ScheduleStage {
                 &next_task.unique_weight,
                 &mut next_task.lock_attempts_mut(),
             );
-            next_task.contention_count += 1
+            next_task.contention_count += 1;
 
             if from_runnable {
                 next_task.mark_as_contended();
