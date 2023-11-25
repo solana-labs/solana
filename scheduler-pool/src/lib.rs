@@ -879,8 +879,8 @@ where
                 .send(SessionedMessage::Resume(result_with_timings))
                 .unwrap();
 
-            let mut will_end_session = false;
-            let mut will_end_thread = false;
+            let mut end_session = false;
+            let mut end_thread = false;
             let mut state_machine = SchedulingStateMachine::default();
             let mut log_interval_counter = 0;
             // hint compiler about inline[never] and unlikely?
@@ -889,7 +889,7 @@ where
                     const BITS_PER_HEX_DIGIT: usize = 4;
                     info!(
                         "[sch_{:0width$x}]: slot: {}[{}]({}/{}): state_machine(({}(+{})=>{})/{}|{}/{}) channels(<{} >{}+{} <{}+{})",
-                        scheduler_id, slot, ($a), (if will_end_thread {"T"} else {"-"}), (if will_end_session {"S"} else {"-"}),
+                        scheduler_id, slot, ($a), (if end_thread {"T"} else {"-"}), (if end_session {"S"} else {"-"}),
                         state_machine.active_task_count(), state_machine.retryable_task_count(), state_machine.handled_task_count(),
                         state_machine.total_task_count(),
                         state_machine.reschedule_count(),
@@ -917,7 +917,7 @@ where
                 );
                 tid_sender.send(unsafe { libc::gettid() }).unwrap();
 
-                while !will_end_thread {
+                while !end_thread {
                     loop {
                         select_biased! {
                             recv(handled_blocked_transaction_receiver) -> task => {
@@ -928,9 +928,9 @@ where
                             },
                             recv(schedulable_transaction_receiver) -> m => {
                                 let Ok(mm) = m else {
-                                    assert!(!will_end_thread);
+                                    assert!(!end_thread);
                                     schedulable_transaction_receiver = never();
-                                    will_end_thread = true;
+                                    end_thread = true;
                                     log_scheduler!("T:ending");
                                     continue;
                                 };
@@ -954,7 +954,7 @@ where
                                                 Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count);
                                             }
                                             ControlFrame::EndSession => {
-                                                will_end_session = true;
+                                                end_session = true;
                                                 log_scheduler!("S:ending");
                                             }
                                         }
@@ -978,20 +978,19 @@ where
                             },
                         };
 
-                        let is_finished =
-                            state_machine.is_empty() && (will_end_session || will_end_thread);
+                        let is_finished = state_machine.is_empty() && (end_session || end_thread);
                         if is_finished {
                             break;
                         }
                     }
 
-                    if will_end_session {
-                        // or should also consider will_end_thread?
+                    if end_session {
+                        // or should also consider end_thread?
                         log_scheduler!("S:ended ");
                         (state_machine, log_interval_counter) = <_>::default();
                         drop_sender.send(SessionedMessage::Reset).unwrap();
                         result_sender.send(drop_receiver2.recv().unwrap()).unwrap();
-                        will_end_session = false;
+                        end_session = false;
                     }
                 }
                 log_scheduler!("T:ended ");
