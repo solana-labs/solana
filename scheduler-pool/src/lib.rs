@@ -1680,6 +1680,10 @@ impl SchedulingStateMachine {
         )
     }
 
+    fn has_retryable_task(&self) -> bool {
+        !self.retryable_task_queue.is_empty()
+    }
+
     fn schedule_retryable_task(&mut self) -> Option<TaskInQueue> {
         self.retryable_task_queue
             .pop_last()
