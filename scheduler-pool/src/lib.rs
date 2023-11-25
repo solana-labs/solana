@@ -1386,6 +1386,7 @@ impl ScheduleStage {
     ) -> usize {
         let mut lock_success_count = 0;
 
+        std::iter::from_fn(|| {
         for attempt in lock_attempts.iter_mut() {
             match Self::attempt_lock_address(unique_weight, attempt) {
                 LockStatus::Succeded(usage) => {
@@ -1397,6 +1398,7 @@ impl ScheduleStage {
                 }
             }
         }
+        });
 
         lock_success_count
     }
