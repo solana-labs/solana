@@ -881,34 +881,6 @@ where
                 .send(SessionedMessage::Resume(result_with_timings))
                 .unwrap();
 
-            // hint compiler about inline[never] and unlikely?
-            macro_rules! log_scheduler {
-                ($a:tt) => {
-                    const BITS_PER_HEX_DIGIT: usize = 4;
-                    info!(
-                        "[sch_{:0width$x}]: slot: {}[{}]({}/{}): state_machine(({}(+{})=>{})/{}|{}/{}) channels(<{} >{}+{} <{}+{})",
-                        scheduler_id, slot, ($a), (if will_end_thread {"T"} else {"-"}), (if will_end_session {"S"} else {"-"}),
-                        state_machine.active_task_count(), state_machine.retryable_task_count(), state_machine.handled_task_count(),
-                        state_machine.total_task_count(),
-                        state_machine.reschedule_count(),
-                        state_machine.rescheduled_task_count(),
-                        schedulable_transaction_receiver.len(),
-                        blocked_transaction_sessioned_sender.len(), idle_transaction_sender.len(),
-                        handled_blocked_transaction_receiver.len(), handled_idle_transaction_receiver.len(),
-                        width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
-                    );
-                };
-                () => {
-                    if log_interval_counter == 0 {
-                        log_scheduler!("started ");
-                    } else if log_interval_counter % 1000 == 0 {
-                        log_scheduler!("interval");
-                    }
-                    log_interval_counter += 1;
-                };
-            }
-
-
             move || {
                 trace!(
                     "solScheduler thread is started at: {:?}",
@@ -920,6 +892,33 @@ where
                 let mut will_end_thread = false;
                 let mut state_machine = SchedulingStateMachine::default();
                 let mut log_interval_counter = 0;
+                // hint compiler about inline[never] and unlikely?
+                macro_rules! log_scheduler {
+                    ($a:tt) => {
+                        const BITS_PER_HEX_DIGIT: usize = 4;
+                        info!(
+                            "[sch_{:0width$x}]: slot: {}[{}]({}/{}): state_machine(({}(+{})=>{})/{}|{}/{}) channels(<{} >{}+{} <{}+{})",
+                            scheduler_id, slot, ($a), (if will_end_thread {"T"} else {"-"}), (if will_end_session {"S"} else {"-"}),
+                            state_machine.active_task_count(), state_machine.retryable_task_count(), state_machine.handled_task_count(),
+                            state_machine.total_task_count(),
+                            state_machine.reschedule_count(),
+                            state_machine.rescheduled_task_count(),
+                            schedulable_transaction_receiver.len(),
+                            blocked_transaction_sessioned_sender.len(), idle_transaction_sender.len(),
+                            handled_blocked_transaction_receiver.len(), handled_idle_transaction_receiver.len(),
+                            width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
+                        );
+                    };
+                    () => {
+                        if log_interval_counter == 0 {
+                            log_scheduler!("started ");
+                        } else if log_interval_counter % 1000 == 0 {
+                            log_scheduler!("interval");
+                        }
+                        log_interval_counter += 1;
+                    };
+                }
+
                 while !will_end_thread {
                     while !(state_machine.is_empty() && (will_end_session || will_end_thread)) {
                         select_biased! {
@@ -964,6 +963,7 @@ where
                                 };
                             },
                             recv(if state_machine.has_retryable_task() { ready() } else { never() }) -> _now => {
+                                log_scheduler!();
                                 blocked_transaction_sessioned_sender
                                     .send(ChainedChannel::Payload(state_machine.schedule_retryable_task().unwrap()))
                                     .unwrap();
