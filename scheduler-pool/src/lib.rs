@@ -352,7 +352,7 @@ const SOLE_USE_COUNT: UsageCount = 1;
 
 #[derive(Clone, Debug)]
 enum LockStatus {
-    Succeded,
+    Succeded(Usage),
     Failed,
 }
 
