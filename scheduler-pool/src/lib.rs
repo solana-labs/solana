@@ -433,8 +433,7 @@ impl Task {
     }
 }
 
-impl TaskInQueue {
-    fn index_with_pages(self: &Self) {
+    fn index_with_pages(self: &Arc<Self>) {
         for lock_attempt in self.lock_attempts_mut() {
             lock_attempt
                 .target_page_mut()
