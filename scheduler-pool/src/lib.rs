@@ -361,7 +361,6 @@ type TaskInQueue = Arc<Task>;
 #[derive(Debug)]
 struct TaskStatusInner {
     lock_attempts: Vec<LockAttempt>,
-    contention_count: usize,
     uncontended: usize,
 }
 
@@ -372,7 +371,6 @@ impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
         Self(UnsafeCell::new(TaskStatusInner {
             lock_attempts,
-            contention_count: 0,
             uncontended: 0,
         }))
     }
@@ -411,21 +409,16 @@ impl Task {
         unsafe { &mut (*self.task_status.0.get()).lock_attempts }
     }
 
-    fn increment_contention_count(&self) {
-        let c = unsafe { &mut (*self.task_status.0.get()).contention_count };
-        *c += 1;
-    }
-
-    fn contention_count(&self) -> usize {
-        unsafe { (*self.task_status.0.get()).contention_count }
-    }
-
     fn uncontended(&self) -> &mut usize {
         unsafe { &mut (*self.task_status.0.get()).uncontended }
     }
 
     pub fn currently_contended(&self) -> bool {
         *self.uncontended() == 1
+    }
+
+    fn has_contended(&self) -> bool {
+        *self.uncontended() > 0
     }
 
     fn mark_as_contended(&self) {
@@ -1519,7 +1512,6 @@ impl ScheduleStage {
 
         if lock_failure_count > 0 {
             Self::reset_lock_for_failed_execution(&mut next_task.lock_attempts_mut());
-            next_task.increment_contention_count();
 
             if from_runnable {
                 next_task.mark_as_contended();
@@ -1532,7 +1524,6 @@ impl ScheduleStage {
         trace!(
             "successful lock: (from_runnable: {}) after {} contentions",
             from_runnable,
-            next_task.contention_count(),
         );
 
         if !from_runnable {
@@ -1719,7 +1710,7 @@ impl SchedulingStateMachine {
     fn deschedule_task(&mut self, ee: &Box<ExecutionEnvironment>) {
         self.active_task_count -= 1;
         self.handled_task_count += 1;
-        let should_remove = ee.task.contention_count() > 0;
+        let should_remove = ee.task.has_contended();
         ScheduleStage::unlock_after_execution(
             should_remove,
             &ee.task.unique_weight,
