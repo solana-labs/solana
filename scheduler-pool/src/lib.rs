@@ -961,7 +961,8 @@ where
                                     }
                                 }
                             },
-                            recv(if state_machine.has_retryable_task() { ready() } else { never() }) -> _now => {
+                            recv(if state_machine.has_retryable_task() { ready() } else { never() }) -> now => {
+                                assert!(now.is_ok());
                                 log_scheduler!();
                                 blocked_transaction_sessioned_sender
                                     .send(ChainedChannel::Payload(state_machine.schedule_retryable_task().unwrap()))
