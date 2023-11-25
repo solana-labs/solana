@@ -927,38 +927,39 @@ where
                                 drop_sender.send_buffered(SessionedMessage::Payload(task)).unwrap();
                             },
                             recv(schedulable_transaction_receiver) -> m => {
-                                if let Ok(mm) = m {
-                                    match mm {
-                                        ChainedChannel::Payload(payload) => {
-                                            log_scheduler!();
-                                            if let Some(task) = state_machine.schedule_new_task(payload) {
-                                                idle_transaction_sender
-                                                    .send(task)
-                                                    .unwrap();
-                                            }
-                                        }
-                                        ChainedChannel::ChannelWithPayload(new_channel) => {
-                                            let control_frame;
-                                            (schedulable_transaction_receiver, control_frame) = new_channel.channel_and_payload();
-                                            match control_frame {
-                                                ControlFrame::StartSession(context) => {
-                                                    slot = context.bank().slot();
-                                                    log_scheduler!();
-                                                    Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count);
-                                                }
-                                                ControlFrame::EndSession => {
-                                                    will_end_session = true;
-                                                    log_scheduler!("S:ending");
-                                                }
-                                            }
-                                        }
-                                    };
-                                } else {
+                                let Ok(mm) = m else {
                                     assert!(!will_end_thread);
                                     schedulable_transaction_receiver = never();
                                     will_end_thread = true;
                                     log_scheduler!("T:ending");
-                                };
+                                    continue;
+                                }
+
+                                match mm {
+                                    ChainedChannel::Payload(payload) => {
+                                        log_scheduler!();
+                                        if let Some(task) = state_machine.schedule_new_task(payload) {
+                                            idle_transaction_sender
+                                                .send(task)
+                                                .unwrap();
+                                        }
+                                    }
+                                    ChainedChannel::ChannelWithPayload(new_channel) => {
+                                        let control_frame;
+                                        (schedulable_transaction_receiver, control_frame) = new_channel.channel_and_payload();
+                                        match control_frame {
+                                            ControlFrame::StartSession(context) => {
+                                                slot = context.bank().slot();
+                                                log_scheduler!();
+                                                Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count);
+                                            }
+                                            ControlFrame::EndSession => {
+                                                will_end_session = true;
+                                                log_scheduler!("S:ending");
+                                            }
+                                        }
+                                    }
+                                }
                             },
                             recv(if state_machine.has_retryable_task() { ready() } else { never() }) -> _now => {
                                 log_scheduler!();
