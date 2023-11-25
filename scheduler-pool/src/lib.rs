@@ -920,11 +920,11 @@ where
                 while !will_end_thread {
                     while !(state_machine.is_empty() && (will_end_session || will_end_thread)) {
                         select_biased! {
-                            recv(handled_blocked_transaction_receiver) -> execution_environment => {
+                            recv(handled_blocked_transaction_receiver) -> task => {
                                 log_scheduler!();
-                                let execution_environment = execution_environment.unwrap();
-                                state_machine.deschedule_task(&execution_environment);
-                                drop_sender.send_buffered(SessionedMessage::Payload(execution_environment)).unwrap();
+                                let task = task.unwrap();
+                                state_machine.deschedule_task(&task);
+                                drop_sender.send_buffered(SessionedMessage::Payload(task)).unwrap();
                             },
                             recv(schedulable_transaction_receiver) -> m => {
                                 if let Ok(mm) = m {
@@ -966,11 +966,11 @@ where
                                     .send(ChainedChannel::Payload(state_machine.schedule_retryable_task().unwrap()))
                                     .unwrap();
                             },
-                            recv(handled_idle_transaction_receiver) -> execution_environment => {
+                            recv(handled_idle_transaction_receiver) -> task => {
                                 log_scheduler!();
-                                let execution_environment = execution_environment.unwrap();
-                                state_machine.deschedule_task(&execution_environment);
-                                drop_sender.send_buffered(SessionedMessage::Payload(execution_environment)).unwrap();
+                                let task = task.unwrap();
+                                state_machine.deschedule_task(&task);
+                                drop_sender.send_buffered(SessionedMessage::Payload(task)).unwrap();
                             },
                         };
                     }
@@ -1043,21 +1043,21 @@ where
                             }
                         },
                     };
-                    let mut execution_environment = ExecutedTask::new_boxed(task, thx);
+                    let mut task = ExecutedTask::new_boxed(task, thx);
                     Self::receive_scheduled_transaction(
                         &handler,
                         &bank,
-                        &mut execution_environment,
+                        &mut task,
                         &pool,
                     );
 
                     if was_blocked {
                         handled_blocked_transaction_sender
-                            .send(execution_environment)
+                            .send(task)
                             .unwrap();
                     } else {
                         handled_idle_transaction_sender
-                            .send(execution_environment)
+                            .send(task)
                             .unwrap();
                     }
                 }
