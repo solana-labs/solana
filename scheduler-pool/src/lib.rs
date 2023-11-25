@@ -585,13 +585,13 @@ pub struct ExecutionEnvironment {
 }
 
 impl ExecutionEnvironment {
-    fn new_boxed(task: TaskInQueue) -> Box<Self> {
+    fn new_boxed(task: TaskInQueue, thx: usize) -> Box<Self> {
         Box::new(Self {
             task,
             result_with_timings: (Ok(()), Default::default()),
             finish_time: None,
             slot: 0,
-            thx: 0,
+            thx,
             execution_us: 0,
             execution_cpu_us: 0,
         })
@@ -1045,9 +1045,7 @@ where
                             (mm, false)
                         },
                     };
-                    let mut m = ExecutionEnvironment::new_boxed(m);
-
-                    m.thx = thx;
+                    let mut m = ExecutionEnvironment::new_boxed(m, thx);
                     Self::receive_scheduled_transaction(&handler, &bank, &mut m, &pool);
 
                     if was_blocked {
