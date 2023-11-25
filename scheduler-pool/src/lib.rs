@@ -1016,12 +1016,12 @@ where
                 );
                 loop {
                     let (m, was_blocked) = select_biased! {
-                        recv(blocked_transaction_sessioned_receiver) -> m => {
-                            let Ok(mm) = m else { break };
+                        recv(blocked_transaction_sessioned_receiver) -> message => {
+                            let Ok(message) = message else { break };
 
-                            match mm {
-                                ChainedChannel::Payload(payload) => {
-                                    (payload, true)
+                            match message {
+                                ChainedChannel::Payload(task) => {
+                                    (task, true)
                                 }
                                 ChainedChannel::ChannelWithPayload(new_channel) => {
                                     let control_frame;
@@ -1036,9 +1036,9 @@ where
                                 }
                             }
                         },
-                        recv(idle_transaction_receiver) -> payload => {
-                            if let Ok(payload) = payload {
-                                (payload, false)
+                        recv(idle_transaction_receiver) -> task => {
+                            if let Ok(task) = task {
+                                (task, false)
                             } else {
                                 idle_transaction_receiver = never();
                                 continue;
