@@ -1641,15 +1641,15 @@ impl SchedulingStateMachine {
             })
     }
 
-    fn deschedule_task(&mut self, ee: &Box<ExecutedTask>) {
+    fn deschedule_task(&mut self, task: &Box<ExecutedTask>) {
         self.active_task_count -= 1;
         self.handled_task_count += 1;
-        let should_remove = ee.task.has_contended();
+        let should_remove = task.task.has_contended();
         ScheduleStage::unlock_after_execution(
             should_remove,
-            &ee.task.unique_weight,
+            &task.task.unique_weight,
             &mut self.retryable_task_queue,
-            &mut ee.task.lock_attempts_mut(),
+            &mut task.task.lock_attempts_mut(),
         );
     }
 }
