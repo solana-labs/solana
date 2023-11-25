@@ -1384,23 +1384,16 @@ impl ScheduleStage {
         lock_attempts: &mut [LockAttempt],
         half_commit: bool,
     ) -> usize {
-        let mut lock_success_count = 0;
-
-        std::iter::from_fn(|| {
-        for attempt in lock_attempts.iter_mut() {
+        lock_attempts.iter_mut().filter_map(|attempt| {
             match Self::attempt_lock_address(unique_weight, attempt) {
                 LockStatus::Succeded(usage) => {
-                    attempt.target_page_mut().current_usage = usage;
-                    lock_success_count += 1;
+                    Some(usage)
                 }
                 LockStatus::Failed => {
-                    break;
+                    None
                 }
             }
-        }
-        });
-
-        lock_success_count
+        })
     }
 
     fn attempt_lock_address(unique_weight: &UniqueWeight, attempt: &mut LockAttempt) -> LockStatus {
