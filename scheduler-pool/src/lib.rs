@@ -918,7 +918,8 @@ where
                 tid_sender.send(unsafe { libc::gettid() }).unwrap();
 
                 while !will_end_thread {
-                    while !(state_machine.is_empty() && (will_end_session || will_end_thread)) {
+                    let is_finished = state_machine.is_empty() && (will_end_session || will_end_thread);
+                    while !is_finished {
                         select_biased! {
                             recv(handled_blocked_transaction_receiver) -> task => {
                                 log_scheduler!();
