@@ -1520,6 +1520,8 @@ impl ScheduleStage {
         );
 
         if !from_runnable {
+            for (attempt, usage) in next_task.lock_attempts_mut().iter().zip(usages) {
+            }
             // as soon as next tack is succeeded in locking, trigger re-checks on read only
             // addresses so that more readonly transactions can be executed
             next_task.mark_as_uncontended();
