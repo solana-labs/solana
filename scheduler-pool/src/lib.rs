@@ -10,7 +10,7 @@
 
 use {
     crossbeam_channel::{
-        bounded, never, select_biased, unbounded, Receiver, RecvTimeoutError, Sender, TryRecvError,
+        after, bounded, never, select_biased, unbounded, Receiver, RecvTimeoutError, Sender, TryRecvError,
     },
     log::*,
     rand::{thread_rng, Rng},
@@ -40,7 +40,7 @@ use {
         marker::PhantomData,
         sync::{Arc, Mutex, RwLock, RwLockReadGuard, Weak},
         thread::{sleep, JoinHandle},
-        time::{Duration, SystemTime},
+        time::{Duration, Instant, SystemTime},
     },
 };
 
@@ -743,7 +743,7 @@ impl<T1: Send + Sync + 'static, T2: Send + Sync + 'static> ChainedChannel<T1, T2
 }
 
 fn ready() -> Receiver<Instant> {
-    crossbeam_channel::after(Duration::default())
+    after(Duration::default())
 }
 
 impl<TH, SEA> ThreadManager<TH, SEA>
