@@ -574,7 +574,7 @@ impl AddressBook {
 }
 
 #[derive(Debug)]
-pub struct ExecutionEnvironment {
+pub struct ExecutedTask {
     task: TaskInQueue,
     result_with_timings: ResultWithTimings,
     finish_time: Option<SystemTime>,
@@ -584,7 +584,7 @@ pub struct ExecutionEnvironment {
     execution_cpu_us: u128,
 }
 
-impl ExecutionEnvironment {
+impl ExecutedTask {
     fn new_boxed(task: TaskInQueue, thx: usize) -> Box<Self> {
         Box::new(Self {
             task,
@@ -788,7 +788,7 @@ where
     fn receive_scheduled_transaction(
         handler: &TH,
         bank: &Arc<Bank>,
-        ee: &mut Box<ExecutionEnvironment>,
+        ee: &mut Box<ExecutedTask>,
         pool: &Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
     ) {
         use solana_measure::measure::Measure;
@@ -856,11 +856,11 @@ where
             unbounded::<ChainedChannel<TaskInQueue, ControlFrame>>();
         let (idle_transaction_sender, idle_transaction_receiver) = unbounded::<TaskInQueue>();
         let (handled_blocked_transaction_sender, handled_blocked_transaction_receiver) =
-            unbounded::<Box<ExecutionEnvironment>>();
+            unbounded::<Box<ExecutedTask>>();
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
-            unbounded::<Box<ExecutionEnvironment>>();
+            unbounded::<Box<ExecutedTask>>();
         let (drop_sender, drop_receiver) =
-            unbounded::<SessionedMessage<Box<ExecutionEnvironment>>>();
+            unbounded::<SessionedMessage<Box<ExecutedTask>>>();
         let (drop_sender2, drop_receiver2) = unbounded::<ResultWithTimings>();
         let handler_count = self.handler_count;
         let scheduler_id = self.scheduler_id;
@@ -1045,7 +1045,7 @@ where
                             }
                         },
                     };
-                    let mut execution_environment = ExecutionEnvironment::new_boxed(task, thx);
+                    let mut execution_environment = ExecutedTask::new_boxed(task, thx);
                     Self::receive_scheduled_transaction(&handler, &bank, &mut execution_environment, &pool);
 
                     if was_blocked {
@@ -1641,7 +1641,7 @@ impl SchedulingStateMachine {
             })
     }
 
-    fn deschedule_task(&mut self, ee: &Box<ExecutionEnvironment>) {
+    fn deschedule_task(&mut self, ee: &Box<ExecutedTask>) {
         self.active_task_count -= 1;
         self.handled_task_count += 1;
         let should_remove = ee.task.has_contended();
