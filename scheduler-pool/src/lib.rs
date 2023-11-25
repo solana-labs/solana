@@ -542,7 +542,7 @@ impl Tasks {
         self.blocked_task_queue.last_entry().map(|j| *j.key())
     }
 
-    fn heaviest_contended_task(&self) -> Option<&TaskInQueue> {
+    fn heaviest_contended_task(&self) -> Option<&(TaskInQueue, RequestedUsage)> {
         self.heaviest_task_iter()
             .find(|(task, _)| task.currently_contended())
     }
