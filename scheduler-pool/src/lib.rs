@@ -901,9 +901,7 @@ where
                     );
                 };
                 () => {
-                    if log_interval_counter == 0 {
-                        log_scheduler!("started ");
-                    } else if log_interval_counter % 1000 == 0 {
+                    if log_interval_counter % 1000 == 0 {
                         log_scheduler!("interval");
                     }
                     log_interval_counter += 1;
@@ -950,7 +948,7 @@ where
                                         match control_frame {
                                             ControlFrame::StartSession(context) => {
                                                 slot = context.bank().slot();
-                                                log_scheduler!();
+                                                log_scheduler!("started ");
                                                 Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count);
                                             }
                                             ControlFrame::EndSession => {
