@@ -1385,6 +1385,7 @@ impl ScheduleStage {
     fn attempt_lock_for_execution(
         unique_weight: &UniqueWeight,
         lock_attempts: &mut [LockAttempt],
+        half_commit: bool,
     ) -> usize {
         // no short-cuircuit; we at least all need to add to the contended queue
         let mut lock_failure_count = 0;
@@ -1430,7 +1431,6 @@ impl ScheduleStage {
         }
 
         let LockAttempt {
-            page,
             requested_usage,
             status,
             ..
@@ -1507,12 +1507,12 @@ impl ScheduleStage {
         let lock_failure_count = Self::attempt_lock_for_execution(
             &next_task.unique_weight,
             &mut next_task.lock_attempts_mut(),
+            from_runnable,
         );
 
         if lock_failure_count > 0 {
-            Self::reset_lock_for_failed_execution(&mut next_task.lock_attempts_mut());
-
             if from_runnable {
+                Self::reset_lock_for_failed_execution(&mut next_task.lock_attempts_mut());
                 next_task.mark_as_contended();
                 next_task.index_with_pages();
             }
@@ -1549,12 +1549,6 @@ impl ScheduleStage {
         }
 
         Some(next_task)
-    }
-
-    fn reset_lock_for_failed_execution(lock_attempts: &[LockAttempt]) {
-        for l in lock_attempts {
-            Self::reset_lock(l);
-        }
     }
 
     fn unlock_after_execution(
