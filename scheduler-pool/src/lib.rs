@@ -48,7 +48,7 @@ type UniqueWeight = u64;
 
 #[derive(Debug, Default)]
 pub struct Tasks {
-    blocked_task_queue: std::collections::BTreeMap<UniqueWeight, (TaskInQueue, RequestedUsage)>,
+    blocked_task_queue: std::collections::BTreeMap<UniqueWeight, (Task, RequestedUsage)>,
 }
 
 // SchedulerPool must be accessed via dyn by solana-runtime code, because of its internal fields'
@@ -356,7 +356,7 @@ enum LockStatus {
     Failed,
 }
 
-type TaskInQueue = Arc<Task>;
+type Task = Arc<TaskInner>;
 
 #[derive(Debug)]
 struct TaskStatusInner {
@@ -377,19 +377,19 @@ impl TaskStatus {
 }
 
 #[derive(Debug)]
-struct Task {
+struct TaskInner {
     unique_weight: UniqueWeight,
     tx: SanitizedTransaction, // actually should be Bundle
     task_status: TaskStatus,
 }
 
-impl Task {
+impl TaskInner {
     fn new_for_queue(
         unique_weight: UniqueWeight,
         tx: SanitizedTransaction,
         lock_attempts: Vec<LockAttempt>,
-    ) -> TaskInQueue {
-        TaskInQueue::new(Self {
+    ) -> Task {
+        Task::new(Self {
             unique_weight,
             tx,
             task_status: TaskStatus::new(lock_attempts),
@@ -509,7 +509,7 @@ impl Page {
 }
 
 impl Tasks {
-    fn insert_task(&mut self, task: TaskInQueue, requested_usage: RequestedUsage) {
+    fn insert_task(&mut self, task: Task, requested_usage: RequestedUsage) {
         let pre_existed = self
             .blocked_task_queue
             .insert(task.unique_weight, (task, requested_usage));
@@ -521,7 +521,7 @@ impl Tasks {
         assert!(removed_entry.is_some());
     }
 
-    fn heaviest_task_iter(&self) -> impl Iterator<Item = &(TaskInQueue, RequestedUsage)> {
+    fn heaviest_task_iter(&self) -> impl Iterator<Item = &(Task, RequestedUsage)> {
         self.blocked_task_queue.values().rev()
     }
 
@@ -536,7 +536,7 @@ impl Tasks {
         self.blocked_task_queue.last_entry().map(|j| *j.key())
     }
 
-    fn heaviest_contended_task(&self) -> Option<&(TaskInQueue, RequestedUsage)> {
+    fn heaviest_contended_task(&self) -> Option<&(Task, RequestedUsage)> {
         self.heaviest_task_iter()
             .find(|(task, _)| task.currently_contended())
     }
@@ -551,7 +551,7 @@ unsafe impl Send for PageRc {}
 unsafe impl Sync for PageRc {}
 
 unsafe impl Sync for TaskStatus {}
-type WeightedTaskQueue = std::collections::BTreeMap<UniqueWeight, TaskInQueue>;
+type WeightedTaskQueue = std::collections::BTreeMap<UniqueWeight, Task>;
 
 type AddressMap = dashmap::DashMap<Pubkey, PageRc>;
 #[derive(Default, Debug)]
@@ -575,7 +575,7 @@ impl AddressBook {
 
 #[derive(Debug)]
 pub struct ExecutedTask {
-    task: TaskInQueue,
+    task: Task,
     result_with_timings: ResultWithTimings,
     finish_time: Option<SystemTime>,
     slot: Slot,
@@ -585,7 +585,7 @@ pub struct ExecutedTask {
 }
 
 impl ExecutedTask {
-    fn new_boxed(task: TaskInQueue, thx: usize) -> Box<Self> {
+    fn new_boxed(task: Task, thx: usize) -> Box<Self> {
         Box::new(Self {
             task,
             result_with_timings: (Ok(()), Default::default()),
@@ -639,8 +639,8 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     handler_threads: Vec<JoinHandle<()>>,
     drop_thread: Option<JoinHandle<()>>,
     handler: TH,
-    schedulrable_transaction_sender: Sender<ChainedChannel<TaskInQueue, ControlFrame>>,
-    schedulable_transaction_receiver: Receiver<ChainedChannel<TaskInQueue, ControlFrame>>,
+    schedulrable_transaction_sender: Sender<ChainedChannel<Task, ControlFrame>>,
+    schedulable_transaction_receiver: Receiver<ChainedChannel<Task, ControlFrame>>,
     result_sender: Sender<ResultWithTimings>,
     result_receiver: Receiver<ResultWithTimings>,
     handler_count: usize,
@@ -816,7 +816,7 @@ where
 
     fn propagate_context(
         blocked_transaction_sessioned_sender: &mut Sender<
-            ChainedChannel<TaskInQueue, ControlFrame>,
+            ChainedChannel<Task, ControlFrame>,
         >,
         context: SchedulingContext,
         handler_count: usize,
@@ -853,8 +853,8 @@ where
         let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
 
         let (blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) =
-            unbounded::<ChainedChannel<TaskInQueue, ControlFrame>>();
-        let (idle_transaction_sender, idle_transaction_receiver) = unbounded::<TaskInQueue>();
+            unbounded::<ChainedChannel<Task, ControlFrame>>();
+        let (idle_transaction_sender, idle_transaction_receiver) = unbounded::<Task>();
         let (handled_blocked_transaction_sender, handled_blocked_transaction_receiver) =
             unbounded::<Box<ExecutedTask>>();
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
@@ -1189,7 +1189,7 @@ where
         );
     }
 
-    fn send_task(&self, task: TaskInQueue) {
+    fn send_task(&self, task: Task) {
         debug!("send_task()");
         self.schedulrable_transaction_sender
             .send(ChainedChannel::Payload(task))
@@ -1427,9 +1427,9 @@ impl ScheduleStage {
     }
 
     fn try_lock_for_task(
-        (task_source, next_task): (TaskSource, TaskInQueue),
+        (task_source, next_task): (TaskSource, Task),
         retryable_task_queue: &mut WeightedTaskQueue,
-    ) -> Option<TaskInQueue> {
+    ) -> Option<Task> {
         let from_runnable = matches!(task_source, TaskSource::Runnable);
 
         let (lock_success_count, usages) = Self::attempt_lock_for_execution(
@@ -1613,7 +1613,7 @@ impl SchedulingStateMachine {
         self.total_task_count
     }
 
-    fn schedule_new_task(&mut self, task: TaskInQueue) -> Option<TaskInQueue> {
+    fn schedule_new_task(&mut self, task: Task) -> Option<Task> {
         self.total_task_count += 1;
         self.active_task_count += 1;
         ScheduleStage::try_lock_for_task(
@@ -1626,7 +1626,7 @@ impl SchedulingStateMachine {
         !self.retryable_task_queue.is_empty()
     }
 
-    fn schedule_retryable_task(&mut self) -> Option<TaskInQueue> {
+    fn schedule_retryable_task(&mut self) -> Option<Task> {
         self.retryable_task_queue
             .pop_last()
             .and_then(|(_, task)| {
