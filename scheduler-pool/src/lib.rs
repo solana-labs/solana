@@ -860,12 +860,12 @@ where
             unbounded::<Box<ExecutedTask>>();
         let (drop_sender, drop_receiver) = unbounded::<SessionedMessage<Box<ExecutedTask>>>();
         let (drop_sender2, drop_receiver2) = unbounded::<ResultWithTimings>();
-        let handler_count = self.handler_count;
         let scheduler_id = self.scheduler_id;
         let mut slot = context.bank().slot();
         let (tid_sender, tid_receiver) = bounded(1);
 
         let scheduler_main_loop = || {
+            let handler_count = self.handler_count;
             let result_sender = self.result_sender.clone();
             let mut schedulable_transaction_receiver =
                 self.schedulable_transaction_receiver.clone();
@@ -1145,7 +1145,7 @@ where
                 .unwrap(),
         );
 
-        self.handler_threads = (0..handler_count)
+        self.handler_threads = (0..self.handler_count)
             .map({
                 |thx| {
                     std::thread::Builder::new()
