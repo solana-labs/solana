@@ -958,7 +958,7 @@ where
                                     log_scheduler!("T:ending");
                                 };
                             },
-                            recv(if let Ok(jjj) = Ok(3) { crossbeam_channel::after(Duration::default()) } else { never() }) -> _aa => {
+                            recv(if state_machine.has_retryable_task() { crossbeam_channel::after(Duration::default()) } else { never() }) -> _aa => {
                                 jjj
                             },
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
