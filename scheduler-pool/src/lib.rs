@@ -1383,7 +1383,7 @@ impl ScheduleStage {
         unique_weight: &UniqueWeight,
         lock_attempts: &mut [LockAttempt],
         half_commit: bool,
-    ) -> usize {
+    ) -> impl Iterator<Item = Usage> {
         lock_attempts.iter_mut().filter_map(|attempt| {
             match Self::attempt_lock_address(unique_weight, attempt) {
                 LockStatus::Succeded(usage) => {
