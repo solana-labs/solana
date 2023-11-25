@@ -10,7 +10,8 @@
 
 use {
     crossbeam_channel::{
-        after, bounded, never, select_biased, unbounded, Receiver, RecvTimeoutError, Sender, TryRecvError,
+        after, bounded, never, select_biased, unbounded, Receiver, RecvTimeoutError, Sender,
+        TryRecvError,
     },
     log::*,
     rand::{thread_rng, Rng},
@@ -815,9 +816,7 @@ where
     }
 
     fn propagate_context(
-        blocked_transaction_sessioned_sender: &mut Sender<
-            ChainedChannel<Task, ControlFrame>,
-        >,
+        blocked_transaction_sessioned_sender: &mut Sender<ChainedChannel<Task, ControlFrame>>,
         context: SchedulingContext,
         handler_count: usize,
     ) {
@@ -859,8 +858,7 @@ where
             unbounded::<Box<ExecutedTask>>();
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
             unbounded::<Box<ExecutedTask>>();
-        let (drop_sender, drop_receiver) =
-            unbounded::<SessionedMessage<Box<ExecutedTask>>>();
+        let (drop_sender, drop_receiver) = unbounded::<SessionedMessage<Box<ExecutedTask>>>();
         let (drop_sender2, drop_receiver2) = unbounded::<ResultWithTimings>();
         let handler_count = self.handler_count;
         let scheduler_id = self.scheduler_id;
@@ -1046,12 +1044,21 @@ where
                         },
                     };
                     let mut execution_environment = ExecutedTask::new_boxed(task, thx);
-                    Self::receive_scheduled_transaction(&handler, &bank, &mut execution_environment, &pool);
+                    Self::receive_scheduled_transaction(
+                        &handler,
+                        &bank,
+                        &mut execution_environment,
+                        &pool,
+                    );
 
                     if was_blocked {
-                        handled_blocked_transaction_sender.send(execution_environment).unwrap();
+                        handled_blocked_transaction_sender
+                            .send(execution_environment)
+                            .unwrap();
                     } else {
-                        handled_idle_transaction_sender.send(execution_environment).unwrap();
+                        handled_idle_transaction_sender
+                            .send(execution_environment)
+                            .unwrap();
                     }
                 }
                 trace!(
