@@ -1435,20 +1435,18 @@ impl ScheduleStage {
 
         match page.current_usage {
             Usage::Unused => {
-                page.current_usage = Usage::renew(*requested_usage);
-                return LockStatus::Succeded;
+                LockStatus::Succeded(Usage::renew(*requested_usage))
             }
-            Usage::Readonly(ref mut count) => match requested_usage {
+            Usage::Readonly(count) => match requested_usage {
                 RequestedUsage::Readonly => {
-                    *count += 1;
-                    return LockStatus::Succeded;
+                    LockStatus::Succeded(Usage::Readonly(count + 1))
                 }
                 RequestedUsage::Writable => {
-                    return LockStatus::Failed;
+                    LockStatus::Failed
                 }
             },
             Usage::Writable => {
-                return LockStatus::Failed;
+                LockStatus::Failed
             }
         }
     }
