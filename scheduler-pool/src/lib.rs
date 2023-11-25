@@ -1015,7 +1015,7 @@ where
                     std::thread::current()
                 );
                 loop {
-                    let (m, was_blocked) = select_biased! {
+                    let (task, was_blocked) = select_biased! {
                         recv(blocked_transaction_sessioned_receiver) -> message => {
                             let Ok(message) = message else { break };
 
@@ -1045,8 +1045,8 @@ where
                             }
                         },
                     };
-                    let mut m = ExecutionEnvironment::new_boxed(m, thx);
-                    Self::receive_scheduled_transaction(&handler, &bank, &mut m, &pool);
+                    let mut execution_environment = ExecutionEnvironment::new_boxed(task, thx);
+                    Self::receive_scheduled_transaction(&handler, &bank, &mut execution_environment, &pool);
 
                     if was_blocked {
                         handled_blocked_transaction_sender.send(m).unwrap();
