@@ -964,10 +964,12 @@ where
                             },
                             recv(if state_machine.has_retryable_task() { ready() } else { never() }) -> now => {
                                 assert!(now.is_ok());
-                                log_scheduler!();
-                                blocked_transaction_sessioned_sender
-                                    .send(ChainedChannel::Payload(state_machine.schedule_retryable_task().unwrap()))
-                                    .unwrap();
+                                if let Some(task) = state_machine.schedule_retryable_task() {
+                                    log_scheduler!();
+                                    blocked_transaction_sessioned_sender
+                                        .send(ChainedChannel::Payload(task))
+                                        .unwrap();
+                                }
                             },
                             recv(handled_idle_transaction_receiver) -> task => {
                                 log_scheduler!();
