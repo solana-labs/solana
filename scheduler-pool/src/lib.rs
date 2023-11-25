@@ -1383,17 +1383,30 @@ impl ScheduleStage {
         unique_weight: &UniqueWeight,
         lock_attempts: &mut [LockAttempt],
         half_commit: bool,
-    ) -> impl Iterator<Item = Usage> {
-        lock_attempts.iter_mut().filter_map(|attempt| {
+    ) -> (usize, Vec<Usage>) {
+        let mut lock_success_count = 0;
+        let usages = vec![];
+
+        for attempt in lock_attempts.iter_mut() {
             match Self::attempt_lock_address(unique_weight, attempt) {
                 LockStatus::Succeded(usage) => {
-                    Some(usage)
+                    if !half_commit {
+                        attempt.target_page_mut().current_usage = usage;
+                    } else {
+                        if lock_success_count == 0 {
+                            usages.reserve(lock_attempts.len());
+                        }
+                        usages.push(usage);
+                    }
+                    lock_success_count += 1;
                 }
                 LockStatus::Failed => {
-                    None
+                    break;
                 }
             }
-        })
+        }
+
+        (lock_success_count, usages)
     }
 
     fn attempt_lock_address(unique_weight: &UniqueWeight, attempt: &mut LockAttempt) -> LockStatus {
@@ -1484,12 +1497,11 @@ impl ScheduleStage {
     ) -> Option<TaskInQueue> {
         let from_runnable = matches!(task_source, TaskSource::Runnable);
 
-        if from_runnable {
-            Self::attempt_lock_for_execution(
-                &next_task.unique_weight,
-                &mut next_task.lock_attempts_mut(),
-            ).count()
-        }
+        let lock_success_count = Self::attempt_lock_for_execution(
+            &next_task.unique_weight,
+            &mut next_task.lock_attempts_mut(),
+            from_runnable,
+        );
 
         if lock_success_count < next_task.lock_attempts_mut().len() {
             if from_runnable {
