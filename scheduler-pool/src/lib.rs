@@ -1038,7 +1038,7 @@ where
                         },
                         recv(idle_transaction_receiver) -> payload => {
                             if let Ok(payload) = payload {
-                                (mm, false)
+                                (payload, false)
                             } else {
                                 idle_transaction_receiver = never();
                                 continue;
