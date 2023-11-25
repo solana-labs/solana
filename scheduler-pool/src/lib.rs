@@ -958,6 +958,8 @@ where
                                     log_scheduler!("T:ending");
                                 };
                             },
+                            recv(if let Ok(_) = 3 { never() } else { never() }) -> _aa => {
+                            },
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
                                 log_scheduler!();
                                 let execution_environment = execution_environment.unwrap();
