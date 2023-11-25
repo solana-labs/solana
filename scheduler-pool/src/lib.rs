@@ -933,7 +933,7 @@ where
                                     will_end_thread = true;
                                     log_scheduler!("T:ending");
                                     continue;
-                                }
+                                };
 
                                 match mm {
                                     ChainedChannel::Payload(payload) => {
