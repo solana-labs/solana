@@ -435,7 +435,6 @@ impl Task {
     }
 }
 
-
 #[derive(Debug)]
 pub struct LockAttempt {
     page: PageRc,
@@ -523,9 +522,7 @@ impl Tasks {
     }
 
     fn heaviest_task_iter(&self) -> impl Iterator<Item = &(TaskInQueue, RequestedUsage)> {
-        self.blocked_task_queue
-            .values()
-            .rev()
+        self.blocked_task_queue.values().rev()
     }
 
     fn heaviest_writing_task_weight(&self) -> Option<UniqueWeight> {
@@ -1443,20 +1440,12 @@ impl ScheduleStage {
         let page = page.as_mut();
 
         match page.current_usage {
-            Usage::Unused => {
-                LockStatus::Succeded(Usage::renew(*requested_usage))
-            }
+            Usage::Unused => LockStatus::Succeded(Usage::renew(*requested_usage)),
             Usage::Readonly(count) => match requested_usage {
-                RequestedUsage::Readonly => {
-                    LockStatus::Succeded(Usage::Readonly(count + 1))
-                }
-                RequestedUsage::Writable => {
-                    LockStatus::Failed
-                }
+                RequestedUsage::Readonly => LockStatus::Succeded(Usage::Readonly(count + 1)),
+                RequestedUsage::Writable => LockStatus::Failed,
             },
-            Usage::Writable => {
-                LockStatus::Failed
-            }
+            Usage::Writable => LockStatus::Failed,
         }
     }
 
@@ -1506,7 +1495,9 @@ impl ScheduleStage {
 
         if lock_success_count < next_task.lock_attempts_mut().len() {
             if from_runnable {
-                Self::unlock_for_failed_execution(&mut next_task.lock_attempts_mut()[0..lock_success_count]);
+                Self::unlock_for_failed_execution(
+                    &mut next_task.lock_attempts_mut()[0..lock_success_count],
+                );
                 next_task.mark_as_contended();
                 next_task.index_with_pages();
             }
@@ -1514,10 +1505,7 @@ impl ScheduleStage {
             return None;
         }
 
-        trace!(
-            "successful lock: (from_runnable: {})",
-            from_runnable,
-        );
+        trace!("successful lock: (from_runnable: {})", from_runnable,);
 
         if !from_runnable {
             for (usage, attempt) in usages.into_iter().zip(next_task.lock_attempts_mut().iter()) {
