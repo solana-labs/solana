@@ -1385,7 +1385,7 @@ impl ScheduleStage {
         half_commit: bool,
     ) -> (usize, Vec<Usage>) {
         let mut lock_success_count = 0;
-        let usages = if !half_commit {
+        let mut usages = if !half_commit {
             vec![]
         } else {
             Vec::with_capacity(lock_attempts.len())
