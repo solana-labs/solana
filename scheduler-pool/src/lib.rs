@@ -439,7 +439,7 @@ impl TaskInQueue {
             lock_attempt
                 .target_page_mut()
                 .blocked_task_queue
-                .insert_task(this.clone(), lock_attempt.requested_usage);
+                .insert_task(self.clone(), lock_attempt.requested_usage);
         }
     }
 
