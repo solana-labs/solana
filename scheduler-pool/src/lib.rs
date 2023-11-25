@@ -974,63 +974,6 @@ where
                                 drop_sender.send_buffered(SessionedMessage::Payload(execution_environment)).unwrap();
                             },
                         };
-
-
-                        while !(state_machine.is_empty() && (will_end_session || will_end_thread)) {
-                            log_scheduler!();
-
-                            if let Ok(mut execution_environment) =
-                                handled_blocked_transaction_receiver.try_recv()
-                            {
-                                state_machine.deschedule_task(&mut execution_environment);
-                                drop_sender
-                                    .send_buffered(SessionedMessage::Payload(execution_environment))
-                                    .unwrap();
-                            } else if let Ok(mm) = schedulable_transaction_receiver.try_recv() {
-                                match mm {
-                                    ChainedChannel::Payload(payload) => {
-                                        if let Some(ee) = state_machine.schedule_new_task(payload) {
-                                            idle_transaction_sender.send(ee).unwrap();
-                                        }
-                                    }
-                                    ChainedChannel::ChannelWithPayload(new_channel) => {
-                                        let control_frame;
-                                        (schedulable_transaction_receiver, control_frame) =
-                                            new_channel.channel_and_payload();
-                                        match control_frame {
-                                            ControlFrame::StartSession(context) => {
-                                                slot = context.bank().slot();
-                                                Self::propagate_context(
-                                                    &mut blocked_transaction_sessioned_sender,
-                                                    context,
-                                                    handler_count,
-                                                );
-                                            }
-                                            ControlFrame::EndSession => {
-                                                debug!(
-                                                    "scheduler_main_loop: will_end_session = true"
-                                                );
-                                                will_end_session = true;
-                                                log_scheduler!("S:ending");
-                                            }
-                                        }
-                                    }
-                                };
-                            } else if let Some(ee) = state_machine.schedule_retryable_task() {
-                                blocked_transaction_sessioned_sender
-                                    .send(ChainedChannel::Payload(ee))
-                                    .unwrap();
-                            } else if let Ok(mut execution_environment) =
-                                handled_idle_transaction_receiver.try_recv()
-                            {
-                                state_machine.deschedule_task(&mut execution_environment);
-                                drop_sender
-                                    .send_buffered(SessionedMessage::Payload(execution_environment))
-                                    .unwrap();
-                            } else {
-                                break;
-                            }
-                        }
                     }
 
                     if will_end_session {
