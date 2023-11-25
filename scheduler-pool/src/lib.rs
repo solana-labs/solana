@@ -1520,7 +1520,7 @@ impl ScheduleStage {
         );
 
         if !from_runnable {
-            for (usage, attempt) in usages.into_ite().zip(next_task.lock_attempts_mut().iter()) {
+            for (usage, attempt) in usages.into_iter().zip(next_task.lock_attempts_mut().iter()) {
                 attempt.target_page_mut().usage = usage;
             }
             // as soon as next tack is succeeded in locking, trigger re-checks on read only
