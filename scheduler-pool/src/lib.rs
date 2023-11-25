@@ -963,7 +963,9 @@ where
                                 };
                             },
                             recv(if state_machine.has_retryable_task() { ready() } else { never() }) -> _now => {
-                                jjj
+                                blocked_transaction_sessioned_sender
+                                    .send(ChainedChannel::Payload(state_machine.schedule_retryable_task().unwrap()))
+                                    .unwrap();
                             },
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
                                 log_scheduler!();
@@ -973,11 +975,6 @@ where
                             },
                         };
 
-                        if let Some(ee) = state_machine.schedule_retryable_task() {
-                            blocked_transaction_sessioned_sender
-                                .send(ChainedChannel::Payload(ee))
-                                .unwrap();
-                        }
 
                         while !(state_machine.is_empty() && (will_end_session || will_end_thread)) {
                             log_scheduler!();
