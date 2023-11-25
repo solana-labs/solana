@@ -1539,6 +1539,7 @@ impl ScheduleStage {
                     .target_page_mut()
                     .blocked_task_queue
                     .heaviest_contended_task()
+                    .map(|(task, _ru)| task)
                 {
                     retryable_task_queue
                         .entry(heaviest_blocked_task.unique_weight)
