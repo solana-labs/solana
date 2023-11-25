@@ -1576,11 +1576,11 @@ impl ScheduleStage {
                 continue;
             }
 
-            let (heaviest_uncontended_now, _ru) = unlock_attempt
+            let heaviest_uncontended_now = unlock_attempt
                 .target_page_mut()
                 .blocked_task_queue
                 .heaviest_contended_task();
-            if let Some(uncontended_task) = heaviest_uncontended_now {
+            if let Some((uncontended_task, _ru)) = heaviest_uncontended_now {
                 retryable_task_queue
                     .entry(uncontended_task.unique_weight)
                     .or_insert_with(|| uncontended_task.clone());
