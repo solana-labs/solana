@@ -1385,7 +1385,11 @@ impl ScheduleStage {
         half_commit: bool,
     ) -> (usize, Vec<Usage>) {
         let mut lock_success_count = 0;
-        let usages = vec![];
+        let usages = if !half_commit {
+            vec![]
+        } else {
+            Vec::with_capacity(lock_attempts.len())
+        };
 
         for attempt in lock_attempts.iter_mut() {
             match Self::attempt_lock_address(unique_weight, attempt) {
@@ -1393,9 +1397,6 @@ impl ScheduleStage {
                     if !half_commit {
                         attempt.target_page_mut().current_usage = usage;
                     } else {
-                        if lock_success_count == 0 {
-                            usages.reserve(lock_attempts.len());
-                        }
                         usages.push(usage);
                     }
                     lock_success_count += 1;
