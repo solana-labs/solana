@@ -1522,7 +1522,7 @@ impl ScheduleStage {
         }
 
         trace!(
-            "successful lock: (from_runnable: {}) after {} contentions",
+            "successful lock: (from_runnable: {})",
             from_runnable,
         );
 
