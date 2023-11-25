@@ -1551,6 +1551,12 @@ impl ScheduleStage {
         Some(next_task)
     }
 
+    fn reset_lock_for_failed_execution(lock_attempts: &[LockAttempt]) {
+        for l in lock_attempts {
+            Self::reset_lock(l);
+        }
+    }
+
     fn unlock_after_execution(
         should_remove: bool,
         uq: &UniqueWeight,
