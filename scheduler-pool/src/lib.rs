@@ -384,7 +384,7 @@ struct TaskInner {
 }
 
 impl TaskInner {
-    fn new_for_queue(
+    fn new(
         unique_weight: UniqueWeight,
         tx: SanitizedTransaction,
         lock_attempts: Vec<LockAttempt>,
