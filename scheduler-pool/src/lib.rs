@@ -544,7 +544,7 @@ impl Tasks {
 
     fn heaviest_contended_task(&self) -> Option<&TaskInQueue> {
         self.heaviest_task_iter()
-            .find(|task| task.currently_contended())
+            .find(|(task, _)| task.currently_contended())
     }
 }
 
