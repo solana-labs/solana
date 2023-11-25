@@ -525,7 +525,7 @@ impl Tasks {
         assert!(removed_entry.is_some());
     }
 
-    fn heaviest_task_iter(&self) -> impl Iterator<Item = &TaskInQueue> {
+    fn heaviest_task_iter(&self) -> impl Iterator<Item = &(TaskInQueue, RequestedUsage)> {
         self.blocked_task_queue
             .values()
             .rev()
