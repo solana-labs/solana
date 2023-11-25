@@ -879,15 +879,6 @@ where
                 .send(SessionedMessage::Resume(result_with_timings))
                 .unwrap();
 
-            move || {
-                trace!(
-                    "solScheduler thread is started at: {:?}",
-                    std::thread::current()
-                );
-                tid_sender.send(unsafe { libc::gettid() }).unwrap();
-
-                let mut will_end_session = false;
-                let mut will_end_thread = false;
                 let mut state_machine = SchedulingStateMachine::default();
                 let mut log_interval_counter = 0;
                 // hint compiler about inline[never] and unlikely?
@@ -917,6 +908,15 @@ where
                     };
                 }
 
+            move || {
+                trace!(
+                    "solScheduler thread is started at: {:?}",
+                    std::thread::current()
+                );
+                tid_sender.send(unsafe { libc::gettid() }).unwrap();
+
+                let mut will_end_session = false;
+                let mut will_end_thread = false;
                 while !will_end_thread {
                     while !(state_machine.is_empty() && (will_end_session || will_end_thread)) {
                         select_biased! {
