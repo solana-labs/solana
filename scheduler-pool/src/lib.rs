@@ -1484,11 +1484,12 @@ impl ScheduleStage {
     ) -> Option<TaskInQueue> {
         let from_runnable = matches!(task_source, TaskSource::Runnable);
 
-        let lock_success_count = Self::attempt_lock_for_execution(
-            &next_task.unique_weight,
-            &mut next_task.lock_attempts_mut(),
-            from_runnable,
-        );
+        if from_runnable {
+            Self::attempt_lock_for_execution(
+                &next_task.unique_weight,
+                &mut next_task.lock_attempts_mut(),
+            ).count()
+        }
 
         if lock_success_count < next_task.lock_attempts_mut().len() {
             if from_runnable {
