@@ -962,7 +962,7 @@ where
                                     log_scheduler!("T:ending");
                                 };
                             },
-                            recv(if state_machine.has_retryable_task() { ready() } else { never() }) -> _aa => {
+                            recv(if state_machine.has_retryable_task() { ready() } else { never() }) -> _now => {
                                 jjj
                             },
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
