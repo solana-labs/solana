@@ -918,8 +918,7 @@ where
                 tid_sender.send(unsafe { libc::gettid() }).unwrap();
 
                 while !will_end_thread {
-                    let is_finished = || state_machine.is_empty() && (will_end_session || will_end_thread);
-                    while !is_finished() {
+                    loop {
                         select_biased! {
                             recv(handled_blocked_transaction_receiver) -> task => {
                                 log_scheduler!();
@@ -978,6 +977,11 @@ where
                                 drop_sender.send_buffered(SessionedMessage::Payload(task)).unwrap();
                             },
                         };
+
+                        let is_finished = state_machine.is_empty() && (will_end_session || will_end_thread);
+                        if is_finished {
+                            break;
+                        }
                     }
 
                     if will_end_session {
