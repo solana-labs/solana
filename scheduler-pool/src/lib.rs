@@ -1512,7 +1512,7 @@ impl ScheduleStage {
             from_runnable,
         );
 
-        if lock_success_count <= next_task.lock_attempts_mut().len() {
+        if lock_success_count < next_task.lock_attempts_mut().len() {
             if from_runnable {
                 Self::reset_lock_for_failed_execution(&mut next_task.lock_attempts_mut()[0..lock_success_count]);
                 next_task.mark_as_contended();
