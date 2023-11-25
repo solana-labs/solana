@@ -1036,13 +1036,13 @@ where
                                 }
                             }
                         },
-                        recv(idle_transaction_receiver) -> m => {
-                            let Ok(mm) = m else {
+                        recv(idle_transaction_receiver) -> payload => {
+                            if let Ok(payload) = payload {
+                                (mm, false)
+                            } else {
                                 idle_transaction_receiver = never();
                                 continue;
-                            };
-
-                            (mm, false)
+                            }
                         },
                     };
                     let mut m = ExecutionEnvironment::new_boxed(m, thx);
