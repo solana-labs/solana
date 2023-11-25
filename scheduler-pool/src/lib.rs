@@ -1400,7 +1400,7 @@ impl ScheduleStage {
         lock_success_count
     }
 
-    fn attempt_lock_address(unique_weight: &UniqueWeight, attempt: &mut LockAttempt) {
+    fn attempt_lock_address(unique_weight: &UniqueWeight, attempt: &mut LockAttempt) -> LockStatus {
         let page = attempt.target_page_mut();
         let tcuw = page.blocked_task_queue.heaviest_weight();
 
