@@ -1576,7 +1576,7 @@ impl ScheduleStage {
                 continue;
             }
 
-            let heaviest_uncontended_now = unlock_attempt
+            let (heaviest_uncontended_now, _ru) = unlock_attempt
                 .target_page_mut()
                 .blocked_task_queue
                 .heaviest_contended_task();
