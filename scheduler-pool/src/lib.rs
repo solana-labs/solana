@@ -529,7 +529,6 @@ impl Tasks {
         self.blocked_task_queue
             .values()
             .rev()
-            .map(|(task, _ru)| task)
     }
 
     fn heaviest_writing_task_weight(&self) -> Option<UniqueWeight> {
