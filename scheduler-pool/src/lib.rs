@@ -1487,7 +1487,7 @@ impl ScheduleStage {
     ) -> Option<TaskInQueue> {
         let from_runnable = matches!(task_source, TaskSource::Runnable);
 
-        let (lock_success_count, uncommited_usages) = Self::attempt_lock_for_execution(
+        let (lock_success_count, usages) = Self::attempt_lock_for_execution(
             &next_task.unique_weight,
             &mut next_task.lock_attempts_mut(),
             from_runnable,
@@ -1508,10 +1508,7 @@ impl ScheduleStage {
         trace!("successful lock: (from_runnable: {})", from_runnable,);
 
         if !from_runnable {
-            for (usage, attempt) in uncommited_usages
-                .into_iter()
-                .zip(next_task.lock_attempts_mut().iter())
-            {
+            for (usage, attempt) in usages.into_iter().zip(next_task.lock_attempts_mut().iter()) {
                 attempt.target_page_mut().current_usage = usage;
             }
             // as soon as next tack is succeeded in locking, trigger re-checks on read only
