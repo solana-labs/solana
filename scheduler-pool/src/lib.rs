@@ -1508,7 +1508,10 @@ impl ScheduleStage {
         trace!("successful lock: (from_runnable: {})", from_runnable,);
 
         if !from_runnable {
-            for (usage, attempt) in uncommited_usages.into_iter().zip(next_task.lock_attempts_mut().iter()) {
+            for (usage, attempt) in uncommited_usages
+                .into_iter()
+                .zip(next_task.lock_attempts_mut().iter())
+            {
                 attempt.target_page_mut().current_usage = usage;
             }
             // as soon as next tack is succeeded in locking, trigger re-checks on read only
