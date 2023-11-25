@@ -1384,7 +1384,6 @@ impl ScheduleStage {
         lock_attempts: &mut [LockAttempt],
         half_commit: bool,
     ) -> usize {
-        // no short-cuircuit; we at least all need to add to the contended queue
         let mut lock_success_count = 0;
 
         for attempt in lock_attempts.iter_mut() {
@@ -1394,6 +1393,7 @@ impl ScheduleStage {
                     lock_success_count += 1;
                 }
                 LockStatus::Failed => {
+                    break;
                 }
             }
         }
