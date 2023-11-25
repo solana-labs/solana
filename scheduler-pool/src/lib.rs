@@ -742,6 +742,10 @@ impl<T1: Send + Sync + 'static, T2: Send + Sync + 'static> ChainedChannel<T1, T2
     }
 }
 
+fn ready() -> Receiver<Instant> {
+    crossbeam_channel::after(Duration::default())
+}
+
 impl<TH, SEA> ThreadManager<TH, SEA>
 where
     TH: Handler<SEA>,
@@ -958,7 +962,7 @@ where
                                     log_scheduler!("T:ending");
                                 };
                             },
-                            recv(if state_machine.has_retryable_task() { crossbeam_channel::after(Duration::default()) } else { never() }) -> _aa => {
+                            recv(if state_machine.has_retryable_task() { ready() } else { never() }) -> _aa => {
                                 jjj
                             },
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
