@@ -1049,9 +1049,9 @@ where
                     Self::receive_scheduled_transaction(&handler, &bank, &mut execution_environment, &pool);
 
                     if was_blocked {
-                        handled_blocked_transaction_sender.send(m).unwrap();
+                        handled_blocked_transaction_sender.send(execution_environment).unwrap();
                     } else {
-                        handled_idle_transaction_sender.send(m).unwrap();
+                        handled_idle_transaction_sender.send(execution_environment).unwrap();
                     }
                 }
                 trace!(
