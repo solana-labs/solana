@@ -1389,7 +1389,8 @@ impl ScheduleStage {
 
         for attempt in lock_attempts.iter_mut() {
             match Self::attempt_lock_address(unique_weight, attempt) {
-                LockStatus::Succeded => {
+                LockStatus::Succeded(usage) => {
+                    attempt.target_page_mut().current_usage = usage;
                     lock_success_count += 1;
                 }
                 LockStatus::Failed => {
