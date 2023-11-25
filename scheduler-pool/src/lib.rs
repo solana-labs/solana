@@ -789,7 +789,7 @@ where
     fn receive_scheduled_transaction(
         handler: &TH,
         bank: &Arc<Bank>,
-        ee: &mut Box<ExecutedTask>,
+        task: &mut Box<ExecutedTask>,
         pool: &Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
     ) {
         use solana_measure::measure::Measure;
@@ -800,19 +800,19 @@ where
         debug!("handling task at {:?}", std::thread::current());
         TH::handle(
             handler,
-            &mut ee.result_with_timings.0,
-            &mut ee.result_with_timings.1,
+            &mut task.result_with_timings.0,
+            &mut task.result_with_timings.1,
             bank,
-            &ee.task.tx,
-            ee.task.task_index(),
+            &task.task.tx,
+            task.task.task_index(),
             pool,
         );
-        ee.slot = bank.slot();
-        ee.finish_time = Some(SystemTime::now());
-        ee.execution_cpu_us = cpu_time.elapsed().as_micros();
+        task.slot = bank.slot();
+        task.finish_time = Some(SystemTime::now());
+        task.execution_cpu_us = cpu_time.elapsed().as_micros();
         // make wall time is longer than cpu time, always
         wall_time.stop();
-        ee.execution_us = wall_time.as_us();
+        task.execution_us = wall_time.as_us();
     }
 
     fn propagate_context(
@@ -931,9 +931,9 @@ where
                                     match mm {
                                         ChainedChannel::Payload(payload) => {
                                             log_scheduler!();
-                                            if let Some(ee) = state_machine.schedule_new_task(payload) {
+                                            if let Some(task) = state_machine.schedule_new_task(payload) {
                                                 idle_transaction_sender
-                                                    .send(ee)
+                                                    .send(task)
                                                     .unwrap();
                                             }
                                         }
@@ -1075,39 +1075,43 @@ where
                 let mut session_timings: ExecuteTimings = Default::default();
                 loop {
                     match drop_receiver.recv_timeout(Duration::from_millis(40)) {
-                        Ok(SessionedMessage::Payload(ee)) => {
-                            session_timings.accumulate(&ee.result_with_timings.1);
-                            match &ee.result_with_timings.0 {
+                        Ok(SessionedMessage::Payload(task)) => {
+                            session_timings.accumulate(&task.result_with_timings.1);
+                            match &task.result_with_timings.0 {
                                 Ok(()) => {}
                                 Err(e) => session_result = Err(e.clone()),
                             }
                             if send_metrics {
                                 use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
 
-                                let sig = ee.task.tx.signature().to_string();
+                                let sig = task.task.tx.signature().to_string();
 
                                 solana_metrics::datapoint_info_at!(
-                                    ee.finish_time.unwrap(),
+                                    task.finish_time.unwrap(),
                                     "transaction_timings",
-                                    ("slot", ee.slot, i64),
-                                    ("index", ee.task.task_index(), i64),
-                                    ("thread", format!("solScExLane{:02}", ee.thx), String),
+                                    ("slot", task.slot, i64),
+                                    ("index", task.task.task_index(), i64),
+                                    ("thread", format!("solScExLane{:02}", task.thx), String),
                                     ("signature", &sig, String),
                                     (
                                         "account_locks_in_json",
                                         serde_json::to_string(
-                                            &ee.task.tx.get_account_locks_unchecked()
+                                            &task.task.tx.get_account_locks_unchecked()
                                         )
                                         .unwrap(),
                                         String
                                     ),
-                                    ("status", format!("{:?}", ee.result_with_timings.0), String),
-                                    ("duration", ee.execution_us, i64),
-                                    ("cpu_duration", ee.execution_cpu_us, i64),
-                                    ("compute_units", 0 /*ee.cu*/, i64),
+                                    (
+                                        "status",
+                                        format!("{:?}", task.result_with_timings.0),
+                                        String
+                                    ),
+                                    ("duration", task.execution_us, i64),
+                                    ("cpu_duration", task.execution_cpu_us, i64),
+                                    ("compute_units", 0 /*task.cu*/, i64),
                                     (
                                         "priority",
-                                        ee.task
+                                        task.task
                                             .tx
                                             .get_transaction_priority_details(false)
                                             .map(|d| d.priority)
@@ -1116,7 +1120,7 @@ where
                                     ),
                                 );
                             }
-                            drop(ee);
+                            drop(task);
                         }
                         Ok(SessionedMessage::Resume(result_with_timings)) => {
                             (session_result, session_timings) = result_with_timings;
