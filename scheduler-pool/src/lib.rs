@@ -1433,6 +1433,7 @@ impl ScheduleStage {
         let LockAttempt {
             requested_usage,
             status,
+            page,
             ..
         } = attempt;
         let page = page.as_mut();
