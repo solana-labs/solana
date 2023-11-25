@@ -1379,10 +1379,10 @@ impl ScheduleStage {
     fn attempt_lock_for_execution(
         unique_weight: &UniqueWeight,
         lock_attempts: &mut [LockAttempt],
-        half_commit: bool,
+        optimistic: bool,
     ) -> (usize, Vec<Usage>) {
         let mut lock_success_count = 0;
-        let mut usages = if !half_commit {
+        let mut uncommited_usages = if optimistic {
             vec![]
         } else {
             Vec::with_capacity(lock_attempts.len())
@@ -1391,10 +1391,10 @@ impl ScheduleStage {
         for attempt in lock_attempts.iter_mut() {
             match Self::attempt_lock_address(unique_weight, attempt) {
                 LockStatus::Succeded(usage) => {
-                    if !half_commit {
+                    if optimistic {
                         attempt.target_page_mut().current_usage = usage;
                     } else {
-                        usages.push(usage);
+                        uncommited_usages.push(usage);
                     }
                     lock_success_count += 1;
                 }
@@ -1404,7 +1404,7 @@ impl ScheduleStage {
             }
         }
 
-        (lock_success_count, usages)
+        (lock_success_count, uncommited_usages)
     }
 
     fn attempt_lock_address(unique_weight: &UniqueWeight, attempt: &mut LockAttempt) -> LockStatus {
@@ -1487,7 +1487,7 @@ impl ScheduleStage {
     ) -> Option<TaskInQueue> {
         let from_runnable = matches!(task_source, TaskSource::Runnable);
 
-        let (lock_success_count, usages) = Self::attempt_lock_for_execution(
+        let (lock_success_count, uncommited_usages) = Self::attempt_lock_for_execution(
             &next_task.unique_weight,
             &mut next_task.lock_attempts_mut(),
             from_runnable,
@@ -1508,7 +1508,7 @@ impl ScheduleStage {
         trace!("successful lock: (from_runnable: {})", from_runnable,);
 
         if !from_runnable {
-            for (usage, attempt) in usages.into_iter().zip(next_task.lock_attempts_mut().iter()) {
+            for (usage, attempt) in uncommited_usages.into_iter().zip(next_task.lock_attempts_mut().iter()) {
                 attempt.target_page_mut().current_usage = usage;
             }
             // as soon as next tack is succeeded in locking, trigger re-checks on read only
