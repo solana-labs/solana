@@ -398,6 +398,15 @@ impl Task {
         })
     }
 
+    fn index_with_pages(self: &Arc<Self>) {
+        for lock_attempt in self.lock_attempts_mut() {
+            lock_attempt
+                .target_page_mut()
+                .blocked_task_queue
+                .insert_task(self.clone(), lock_attempt.requested_usage);
+        }
+    }
+
     fn lock_attempts_mut(&self) -> &mut Vec<LockAttempt> {
         unsafe { &mut (*self.task_status.0.get()).lock_attempts }
     }
@@ -431,17 +440,6 @@ impl Task {
     fn task_index(&self) -> usize {
         (UniqueWeight::max_value() - self.unique_weight) as usize
     }
-}
-
-    fn index_with_pages(self: &Arc<Self>) {
-        for lock_attempt in self.lock_attempts_mut() {
-            lock_attempt
-                .target_page_mut()
-                .blocked_task_queue
-                .insert_task(self.clone(), lock_attempt.requested_usage);
-        }
-    }
-
 }
 
 
