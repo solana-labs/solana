@@ -1388,20 +1388,21 @@ impl ScheduleStage {
         half_commit: bool,
     ) -> usize {
         // no short-cuircuit; we at least all need to add to the contended queue
-        let mut lock_failure_count = 0;
+        let mut lock_success_count = 0;
 
         for attempt in lock_attempts.iter_mut() {
             Self::attempt_lock_address(unique_weight, attempt);
 
             match attempt.status {
-                LockStatus::Succeded => {}
+                LockStatus::Succeded => {
+                    lock_success_count += 1;
+                }
                 LockStatus::Failed => {
-                    lock_failure_count += 1;
                 }
             }
         }
 
-        lock_failure_count
+        lock_success_count
     }
 
     fn attempt_lock_address(unique_weight: &UniqueWeight, attempt: &mut LockAttempt) {
@@ -1505,15 +1506,15 @@ impl ScheduleStage {
     ) -> Option<TaskInQueue> {
         let from_runnable = matches!(task_source, TaskSource::Runnable);
 
-        let lock_failure_count = Self::attempt_lock_for_execution(
+        let lock_success_count = Self::attempt_lock_for_execution(
             &next_task.unique_weight,
             &mut next_task.lock_attempts_mut(),
             from_runnable,
         );
 
-        if lock_failure_count > 0 {
+        if lock_success_count <= next_task.lock_attempts_mut().len() {
             if from_runnable {
-                Self::reset_lock_for_failed_execution(&mut next_task.lock_attempts_mut());
+                Self::reset_lock_for_failed_execution(&mut next_task.lock_attempts_mut()[0..lock_success_count]);
                 next_task.mark_as_contended();
                 next_task.index_with_pages();
             }
