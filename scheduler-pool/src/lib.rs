@@ -978,7 +978,8 @@ where
                             },
                         };
 
-                        let is_finished = state_machine.is_empty() && (will_end_session || will_end_thread);
+                        let is_finished =
+                            state_machine.is_empty() && (will_end_session || will_end_thread);
                         if is_finished {
                             break;
                         }
