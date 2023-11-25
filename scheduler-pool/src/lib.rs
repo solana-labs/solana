@@ -439,7 +439,6 @@ impl Task {
 #[derive(Debug)]
 pub struct LockAttempt {
     page: PageRc,
-    status: LockStatus,
     requested_usage: RequestedUsage,
 }
 
@@ -453,7 +452,6 @@ impl LockAttempt {
     pub fn new(page: PageRc, requested_usage: RequestedUsage) -> Self {
         Self {
             page,
-            status: LockStatus::Succeded,
             requested_usage,
         }
     }
@@ -461,7 +459,6 @@ impl LockAttempt {
     pub fn clone_for_test(&self) -> Self {
         Self {
             page: self.page.clone(),
-            status: LockStatus::Succeded,
             requested_usage: self.requested_usage,
         }
     }
@@ -1391,9 +1388,7 @@ impl ScheduleStage {
         let mut lock_success_count = 0;
 
         for attempt in lock_attempts.iter_mut() {
-            Self::attempt_lock_address(unique_weight, attempt);
-
-            match attempt.status {
+            match Self::attempt_lock_address(unique_weight, attempt) {
                 LockStatus::Succeded => {
                     lock_success_count += 1;
                 }
@@ -1427,13 +1422,11 @@ impl ScheduleStage {
         };
 
         if !strictly_lockable {
-            attempt.status = LockStatus::Failed;
-            return;
+            return LockStatus::Failed;
         }
 
         let LockAttempt {
             requested_usage,
-            status,
             page,
             ..
         } = attempt;
@@ -1442,28 +1435,19 @@ impl ScheduleStage {
         match page.current_usage {
             Usage::Unused => {
                 page.current_usage = Usage::renew(*requested_usage);
-                *status = LockStatus::Succeded;
+                return LockStatus::Succeded;
             }
             Usage::Readonly(ref mut count) => match requested_usage {
                 RequestedUsage::Readonly => {
                     *count += 1;
-                    *status = LockStatus::Succeded;
+                    return LockStatus::Succeded;
                 }
                 RequestedUsage::Writable => {
-                    *status = LockStatus::Failed;
+                    return LockStatus::Failed;
                 }
             },
             Usage::Writable => {
-                *status = LockStatus::Failed;
-            }
-        }
-    }
-
-    fn reset_lock(attempt: &LockAttempt) -> bool {
-        match attempt.status {
-            LockStatus::Succeded => Self::unlock(attempt),
-            LockStatus::Failed => {
-                false // do nothing
+                return LockStatus::Failed;
             }
         }
     }
@@ -1514,7 +1498,7 @@ impl ScheduleStage {
 
         if lock_success_count < next_task.lock_attempts_mut().len() {
             if from_runnable {
-                Self::reset_lock_for_failed_execution(&mut next_task.lock_attempts_mut()[0..lock_success_count]);
+                Self::unlock_for_failed_execution(&mut next_task.lock_attempts_mut()[0..lock_success_count]);
                 next_task.mark_as_contended();
                 next_task.index_with_pages();
             }
@@ -1553,9 +1537,9 @@ impl ScheduleStage {
         Some(next_task)
     }
 
-    fn reset_lock_for_failed_execution(lock_attempts: &[LockAttempt]) {
+    fn unlock_for_failed_execution(lock_attempts: &[LockAttempt]) {
         for l in lock_attempts {
-            Self::reset_lock(l);
+            Self::unlock(l);
         }
     }
 
@@ -1573,7 +1557,7 @@ impl ScheduleStage {
                     .remove_task(uq);
             }
 
-            let is_unused_now = Self::reset_lock(unlock_attempt);
+            let is_unused_now = Self::unlock(unlock_attempt);
             if !is_unused_now {
                 continue;
             }
