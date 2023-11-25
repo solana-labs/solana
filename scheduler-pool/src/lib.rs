@@ -958,7 +958,8 @@ where
                                     log_scheduler!("T:ending");
                                 };
                             },
-                            recv(if let Ok(_) = 3 { never() } else { never() }) -> _aa => {
+                            recv(if let Ok(jjj) = Ok(3) { never() } else { never() }) -> _aa => {
+                                jjj
                             },
                             recv(handled_idle_transaction_receiver) -> execution_environment => {
                                 log_scheduler!();
