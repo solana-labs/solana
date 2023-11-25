@@ -982,8 +982,7 @@ where
                         log_scheduler!("S:ended ");
                         (state_machine, log_interval_counter) = <_>::default();
                         drop_sender.send(SessionedMessage::Reset).unwrap();
-                        let result_with_timings = drop_receiver2.recv().unwrap();
-                        result_sender.send(result_with_timings).unwrap();
+                        result_sender.send(drop_receiver2.recv().unwrap()).unwrap();
                         will_end_session = false;
                     }
                 }
