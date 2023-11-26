@@ -883,11 +883,6 @@ where
             let mut end_thread = false;
             let mut state_machine = SchedulingStateMachine::default();
             let log_interval_counter = &mut 0;
-            let mut increment_log_counter = || {
-                let should_log = *log_interval_counter % 1000 == 0;
-                *log_interval_counter += 1;
-                should_log
-            };
             // hint compiler about inline[never] and unlikely?
             macro_rules! log_scheduler {
                 ($prefix:tt) => {
@@ -908,6 +903,11 @@ where
             }
 
             move || {
+            let mut increment_log_counter = || {
+                let should_log = *log_interval_counter % 1000 == 0;
+                *log_interval_counter += 1;
+                should_log
+            };
                 trace!(
                     "solScheduler thread is started at: {:?}",
                     std::thread::current()
