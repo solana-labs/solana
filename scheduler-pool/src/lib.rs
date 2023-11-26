@@ -738,10 +738,6 @@ enum SessionedMessage<T> {
     Reset,
 }
 
-enum ControlFrame {
-    StartSession(SchedulingContext),
-}
-
 impl<T1: Send + Sync + 'static, T2: Send + Sync + 'static> ChainedChannel<T1, T2> {
     fn new_channel(receiver: Receiver<Self>, sender: T2) -> Self {
         Self::ChannelWithPayload(Box::new(ChannelAndPayloadTuple((receiver, sender))))
@@ -832,7 +828,7 @@ where
     }
 
     fn propagate_context(
-        blocked_transaction_sessioned_sender: &mut Sender<ChainedChannel<Task, ControlFrame>>,
+        blocked_transaction_sessioned_sender: &mut Sender<ChainedChannel<Task, SchedulingContext>>,
         context: SchedulingContext,
         handler_count: usize,
     ) {
@@ -842,7 +838,7 @@ where
             blocked_transaction_sessioned_sender
                 .send(ChainedChannel::new_channel(
                     blocked_transaction_sessioned_receiver.clone(),
-                    ControlFrame::StartSession(context.clone()),
+                    context.clone(),
                 ))
                 .unwrap();
         }
@@ -868,7 +864,7 @@ where
         let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
 
         let (blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) =
-            unbounded::<ChainedChannel<Task, ControlFrame>>();
+            unbounded::<ChainedChannel<Task, SchedulingContext>>();
         let (idle_transaction_sender, idle_transaction_receiver) = unbounded::<Task>();
         let (handled_blocked_transaction_sender, handled_blocked_transaction_receiver) =
             unbounded::<Box<ExecutedTask>>();
@@ -1037,12 +1033,8 @@ where
                                 }
                                 ChainedChannel::ChannelWithPayload(new_channel) => {
                                     let control_frame;
-                                    (blocked_transaction_sessioned_receiver, control_frame) = new_channel.channel_and_payload();
-                                    match control_frame {
-                                        ControlFrame::StartSession(new_context) => {
-                                            bank = new_context.bank().clone();
-                                        },
-                                    }
+                                    (blocked_transaction_sessioned_receiver, new_context) = new_channel.channel_and_payload();
+                                    bank = new_context.bank().clone();
                                     continue;
                                 }
                             }
