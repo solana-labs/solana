@@ -884,7 +884,7 @@ where
             let mut state_machine = SchedulingStateMachine::default();
             let log_interval_counter = &mut 0;
             let increment_log_counter = || {
-                let should_log = log_interval_counter % 1000 == 0;
+                let should_log = *log_interval_counter % 1000 == 0;
                 *log_interval_counter += 1;
                 should_log
             };
