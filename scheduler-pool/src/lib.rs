@@ -1025,17 +1025,18 @@ where
                 loop {
                     let (task, was_blocked) = select_biased! {
                         recv(blocked_transaction_sessioned_receiver) -> message => {
-                            let Ok(message) = message else { break };
-
                             match message {
-                                ChainedChannel::Payload(task) => {
+                                Ok(ChainedChannel::Payload(task)) => {
                                     (task, true)
                                 }
-                                ChainedChannel::ChannelWithPayload(new_channel) => {
+                                Ok(ChainedChannel::ChannelWithPayload(new_channel)) => {
                                     let new_context;
                                     (blocked_transaction_sessioned_receiver, new_context) = new_channel.channel_and_payload();
                                     bank = new_context.bank().clone();
                                     continue;
+                                }
+                                Err(_) => {
+                                    break;
                                 }
                             }
                         },
