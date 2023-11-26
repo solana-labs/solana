@@ -1016,11 +1016,11 @@ where
                     std::thread::current()
                 );
                 loop {
-                    let (task, was_blocked) = select_biased! {
+                    let (task, sender) = select_biased! {
                         recv(blocked_transaction_sessioned_receiver) -> message => {
                             match message {
                                 Ok(ChainedChannel::Payload(task)) => {
-                                    (task, true)
+                                    (task, &handled_blocked_transaction_sender)
                                 }
                                 Ok(ChainedChannel::ChannelWithPayload(new_channel)) => {
                                     let new_context;
@@ -1035,7 +1035,7 @@ where
                         },
                         recv(idle_transaction_receiver) -> task => {
                             if let Ok(task) = task {
-                                (task, false)
+                                (task, &handled_idle_transaction_sender)
                             } else {
                                 idle_transaction_receiver = never();
                                 continue;
@@ -1044,12 +1044,6 @@ where
                     };
                     let mut task = ExecutedTask::new_boxed(task, thx);
                     Self::receive_scheduled_transaction(&handler, &bank, &mut task, &pool);
-
-                    let sender = if was_blocked {
-                        &handled_blocked_transaction_sender
-                    } else {
-                        &handled_idle_transaction_sender
-                    };
                     sender.send(task).unwrap();
                 }
                 trace!(
