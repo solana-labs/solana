@@ -942,12 +942,12 @@ where
                                         }
                                         "step"
                                     }
-                                    Ok(SessionedMessage2::StartSession(context)) => {
+                                    Ok(SessionedMessage222::StartSession(context)) => {
                                         slot = context.bank().slot();
                                         Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count);
                                         "started"
                                     }
-                                    Ok(SessionedMessage2::EndSession) => {
+                                    Ok(SessionedMessage222::EndSession) => {
                                         end_session = true;
                                         "S:ending"
                                     }
