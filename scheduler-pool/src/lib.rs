@@ -1032,7 +1032,7 @@ where
                                     (task, true)
                                 }
                                 ChainedChannel::ChannelWithPayload(new_channel) => {
-                                    let control_frame;
+                                    let new_context;
                                     (blocked_transaction_sessioned_receiver, new_context) = new_channel.channel_and_payload();
                                     bank = new_context.bank().clone();
                                     continue;
