@@ -747,6 +747,17 @@ fn ready() -> Receiver<Instant> {
     after(Duration::default())
 }
 
+#[derive(Default)]
+struct LogInterval(usize);
+
+impl LogInterval {
+    fn increment(&mut self) -> bool {
+        let should_log = self.0 % 1000 == 0;
+        self.0 += 1;
+        should_log
+    }
+}
+
 impl<TH, SEA> ThreadManager<TH, SEA>
 where
     TH: Handler<SEA>,
@@ -863,17 +874,6 @@ where
         let scheduler_id = self.scheduler_id;
         let mut slot = context.bank().slot();
         let (tid_sender, tid_receiver) = bounded(1);
-
-        #[derive(Default)]
-        struct LogInterval(usize);
-
-        impl LogInterval {
-            fn increment(&mut self) -> bool {
-                let should_log = self.0 % 1000 == 0;
-                self.0 += 1;
-                should_log
-            }
-        }
 
         let scheduler_main_loop = || {
             let handler_count = self.handler_count;
