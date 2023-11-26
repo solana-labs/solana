@@ -733,15 +733,6 @@ enum SessionedMessage222<T1, T2> {
 }
 type SessionedMessage2 = SessionedMessage222<Task, SchedulingContext>;
 
-type SessionedMessage = ;
-/*
-enum SessionedMessage {
-    Resume(ResultWithTimings),
-    Payload(Box<ExecutedTask>),
-    Reset,
-}
-*/
-
 impl<T1: Send + Sync + 'static, T2: Send + Sync + 'static> ChainedChannel<T1, T2> {
     fn new_channel(receiver: Receiver<Self>, sender: T2) -> Self {
         Self::ChannelWithPayload(Box::new(ChannelAndPayloadTuple((receiver, sender))))
