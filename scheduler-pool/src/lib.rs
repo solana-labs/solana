@@ -945,20 +945,14 @@ where
                                         }
                                         "step"
                                     }
-                                    Ok(ChainedChannel::ChannelWithPayload(new_channel)) => {
-                                        let control_frame;
-                                        (schedulable_transaction_receiver, control_frame) = new_channel.channel_and_payload();
-                                        match control_frame {
-                                            ControlFrame::StartSession(context) => {
-                                                slot = context.bank().slot();
-                                                Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count);
-                                                "started"
-                                            }
-                                            ControlFrame::EndSession => {
-                                                end_session = true;
-                                                "S:ending"
-                                            }
-                                        }
+                                    Ok(SessionedMessage2::StartSession(context)) => {
+                                        slot = context.bank().slot();
+                                        Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count);
+                                        "started"
+                                    }
+                                    Ok(SessionedMessage2::EndSession) => {
+                                        end_session = true;
+                                        "S:ending"
                                     }
                                     Err(_) => {
                                         assert!(!end_thread);
