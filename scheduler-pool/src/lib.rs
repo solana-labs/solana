@@ -726,11 +726,12 @@ enum ChainedChannel<T1, T2> {
     ChannelWithPayload(Box<dyn WithChannelAndPayload<T1, T2>>),
 }
 
-enum SessionedMessage2 {
-    Payload(Task),
-    StartSession(SchedulingContext),
+enum SessionedMessage222<T1, T2> {
+    Payload(T1),
+    StartSession(T2),
     EndSession,
 }
+type SessionedMessage2 = SessionedMessage222<Task, SchedulingContext>;
 
 enum SessionedMessage<T> {
     Resume(ResultWithTimings),
