@@ -260,7 +260,7 @@ where
     }
 
     pub fn return_scheduler(&self, scheduler: Box<T>) {
-        //assert!(!scheduler.has_context());
+        assert!(!scheduler.has_context());
 
         self.schedulers
             .lock()
@@ -612,14 +612,21 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
 
 #[derive(Debug)]
 struct WeakSchedulingContext {
-    mode: SchedulingMode,
+    mode: Option<SchedulingMode>,
     bank: Weak<Bank>,
 }
 
 impl WeakSchedulingContext {
-    fn new(context: SchedulingContext) -> Self {
+    fn new() -> Self {
         Self {
-            mode: context.mode(),
+            mode: None,
+            bank: Weak::new(),
+        }
+    }
+
+    fn downgrade(context: SchedulingContext) -> Self {
+        Self {
+            mode: Some(context.mode()),
             bank: Arc::downgrade(context.bank()),
         }
     }
@@ -627,7 +634,7 @@ impl WeakSchedulingContext {
     fn upgrade(&self) -> Option<SchedulingContext> {
         self.bank
             .upgrade()
-            .map(|bank| SchedulingContext::new(self.mode, bank))
+            .map(|bank| SchedulingContext::new(self.mode.unwrap(), bank))
     }
 }
 
@@ -1201,7 +1208,9 @@ where
         self.schedulrable_transaction_sender
             .send(SessionedMessage::EndSession)
             .unwrap();
-        self.result_receiver.recv().unwrap()
+        let result_with_timings = self.result_receiver.recv().unwrap();
+        self.context = WeakSchedulingContext::new();
+        result_with_timings
     }
 
     fn start_session(&mut self, context: SchedulingContext) {
@@ -1209,9 +1218,9 @@ where
             self.schedulrable_transaction_sender
                 .send(SessionedMessage::StartSession(context.clone()))
                 .unwrap();
-            self.context = WeakSchedulingContext::new(context);
+            self.context = WeakSchedulingContext::downgrade(context);
         } else {
-            self.context = WeakSchedulingContext::new(context);
+            self.context = WeakSchedulingContext::downgrade(context);
             self.start_threads();
         }
     }
