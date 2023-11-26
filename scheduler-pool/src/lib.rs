@@ -934,9 +934,7 @@ where
                                 match m {
                                     Ok(SessionedMessage2::Payload(payload)) => {
                                         if let Some(task) = state_machine.schedule_new_task(payload) {
-                                            idle_transaction_sender
-                                                .send(task)
-                                                .unwrap();
+                                            idle_transaction_sender.send(task).unwrap();
                                         }
                                         "step"
                                     }
@@ -951,8 +949,8 @@ where
                                     }
                                     Err(_) => {
                                         assert!(!end_thread);
-                                        schedulable_transaction_receiver = never();
                                         end_thread = true;
+                                        schedulable_transaction_receiver = never();
                                         "T:ending"
                                     }
                                 }
