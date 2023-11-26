@@ -733,7 +733,7 @@ enum SessionedMessage222<T1, T2> {
 }
 type SessionedMessage2 = SessionedMessage222<Task, SchedulingContext>;
 
-type SessionedMessage = SessionedMessage222<Box<ExecutedTask>, ResultWithTimings>;
+type SessionedMessage = ;
 /*
 enum SessionedMessage {
     Resume(ResultWithTimings),
@@ -874,7 +874,7 @@ where
             unbounded::<Box<ExecutedTask>>();
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
             unbounded::<Box<ExecutedTask>>();
-        let (drop_sender, drop_receiver) = unbounded::<SessionedMessage>();
+        let (drop_sender, drop_receiver) = unbounded::<SessionedMessage222<Box<ExecutedTask>, ResultWithTimings>>();
         let (drop_sender2, drop_receiver2) = unbounded::<ResultWithTimings>();
         let scheduler_id = self.scheduler_id;
         let mut slot = context.bank().slot();
