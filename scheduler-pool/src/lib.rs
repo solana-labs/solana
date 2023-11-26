@@ -640,8 +640,8 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     handler_threads: Vec<JoinHandle<()>>,
     drop_thread: Option<JoinHandle<()>>,
     handler: TH,
-    schedulrable_transaction_sender: Sender<ChainedChannel<Task, ControlFrame>>,
-    schedulable_transaction_receiver: Receiver<ChainedChannel<Task, ControlFrame>>,
+    schedulrable_transaction_sender: Sender<SessionedMessage2>,
+    schedulable_transaction_receiver: Receiver<SessionedMessage2>,
     result_sender: Sender<ResultWithTimings>,
     result_receiver: Receiver<ResultWithTimings>,
     handler_count: usize,
@@ -724,6 +724,12 @@ impl<T1: Send + Sync, T2: Send + Sync> WithChannelAndPayload<T1, T2>
 enum ChainedChannel<T1, T2> {
     Payload(T1),
     ChannelWithPayload(Box<dyn WithChannelAndPayload<T1, T2>>),
+}
+
+enum SessionedMessage2 {
+    Payload(Task),
+    StartSession(SchedulingContext),
+    EndSession,
 }
 
 enum SessionedMessage<T> {
