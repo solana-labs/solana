@@ -1052,10 +1052,10 @@ where
                     let mut task = ExecutedTask::new_boxed(task, thx);
                     Self::receive_scheduled_transaction(&handler, &bank, &mut task, &pool);
 
-                    let sender = &if was_blocked {
-                        handled_blocked_transaction_sender
+                    let sender = if was_blocked {
+                        &handled_blocked_transaction_sender
                     } else {
-                        handled_idle_transaction_sender
+                        &handled_idle_transaction_sender
                     };
                     sender.send(task).unwrap();
                 }
