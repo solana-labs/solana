@@ -740,7 +740,6 @@ enum SessionedMessage<T> {
 
 enum ControlFrame {
     StartSession(SchedulingContext),
-    EndSession,
 }
 
 impl<T1: Send + Sync + 'static, T2: Send + Sync + 'static> ChainedChannel<T1, T2> {
