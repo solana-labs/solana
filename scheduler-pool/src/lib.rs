@@ -864,6 +864,17 @@ where
         let mut slot = context.bank().slot();
         let (tid_sender, tid_receiver) = bounded(1);
 
+        #[derive(Default)]
+        struct LogInterval(usize);
+
+        impl LogInterval {
+            fn increment(&mut self) -> bool {
+                let should_log = self.0 % 1000 == 0;
+                self.0 += 1;
+                should_log
+            }
+        }
+
         let scheduler_main_loop = || {
             let handler_count = self.handler_count;
             let result_sender = self.result_sender.clone();
@@ -882,7 +893,7 @@ where
             let mut end_session = false;
             let mut end_thread = false;
             let mut state_machine = SchedulingStateMachine::default();
-            let log_interval_counter = &mut 0;
+            let log_interval = LogInterval::default();
             // hint compiler about inline[never] and unlikely?
             macro_rules! log_scheduler {
                 ($prefix:tt) => {
@@ -903,11 +914,6 @@ where
             }
 
             move || {
-            let mut increment_log_counter = || {
-                let should_log = *log_interval_counter % 1000 == 0;
-                *log_interval_counter += 1;
-                should_log
-            };
                 trace!(
                     "solScheduler thread is started at: {:?}",
                     std::thread::current()
@@ -972,7 +978,7 @@ where
                                 "step"
                             },
                         };
-                        if log_prefix != "step" || (log_prefix == "step" && increment_log_counter()) {
+                        if log_prefix != "step" || (log_prefix == "step" && log_interval.increment()) {
                             log_scheduler!(log_prefix);
                         }
 
@@ -985,7 +991,7 @@ where
                     if end_session {
                         // or should also consider end_thread?
                         log_scheduler!("S:ended ");
-                        (state_machine, *log_interval_counter) = <_>::default();
+                        (state_machine, log_interval) = <_>::default();
                         drop_sender.send(SessionedMessage::Reset).unwrap();
                         result_sender.send(drop_receiver2.recv().unwrap()).unwrap();
                         end_session = false;
