@@ -1227,20 +1227,10 @@ where
 
     fn start_session(&mut self, context: SchedulingContext) {
         if self.is_active() {
-            let next_sender_and_receiver = unbounded();
-            let (_next_sender, next_receiver) = &next_sender_and_receiver;
-
             self.schedulrable_transaction_sender
-                .send(
-                    SessionedMessage2::StartSession(context.clone()),
-                )
+                .send(SessionedMessage2::StartSession(context.clone()))
                 .unwrap();
-
             self.context = WeakSchedulingContext::new(context);
-            (
-                self.schedulrable_transaction_sender,
-                self.schedulable_transaction_receiver,
-            ) = next_sender_and_receiver;
         } else {
             self.context = WeakSchedulingContext::new(context);
             self.start_threads();
