@@ -731,7 +731,6 @@ enum SessionedMessage222<T1, T2> {
     StartSession(T2),
     EndSession,
 }
-type SessionedMessage2 = ;
 
 impl<T1: Send + Sync + 'static, T2: Send + Sync + 'static> ChainedChannel<T1, T2> {
     fn new_channel(receiver: Receiver<Self>, sender: T2) -> Self {
