@@ -1219,23 +1219,10 @@ where
             self.start_threads();
         }
 
-        let next_sender_and_receiver = unbounded();
-        let (_next_sender, next_receiver) = &next_sender_and_receiver;
-
         self.schedulrable_transaction_sender
-            .send(ChainedChannel::new_channel(
-                next_receiver.clone(),
-                ControlFrame::EndSession,
-            ))
+            .send(SessionedMessage2::EndSession)
             .unwrap();
-        let res = self.result_receiver.recv().unwrap();
-
-        (
-            self.schedulrable_transaction_sender,
-            self.schedulable_transaction_receiver,
-        ) = next_sender_and_receiver;
-
-        res
+        self.result_receiver.recv().unwrap()
     }
 
     fn start_session(&mut self, context: SchedulingContext) {
