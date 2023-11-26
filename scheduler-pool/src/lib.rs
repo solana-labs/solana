@@ -1250,10 +1250,9 @@ where
             let (_next_sender, next_receiver) = &next_sender_and_receiver;
 
             self.schedulrable_transaction_sender
-                .send(ChainedChannel::new_channel(
-                    next_receiver.clone(),
-                    ControlFrame::StartSession(context.clone()),
-                ))
+                .send(
+                    SessionedMessage2::StartSession(context.clone()),
+                )
                 .unwrap();
 
             self.context = WeakSchedulingContext::new(context);
