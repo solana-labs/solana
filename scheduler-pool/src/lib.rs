@@ -1042,7 +1042,6 @@ where
                                         ControlFrame::StartSession(new_context) => {
                                             bank = new_context.bank().clone();
                                         },
-                                        ControlFrame::EndSession => unreachable!(),
                                     }
                                     continue;
                                 }
