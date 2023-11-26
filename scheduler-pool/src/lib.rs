@@ -991,14 +991,14 @@ where
                         // or should also consider end_thread?
                         log_scheduler!("S:ended ");
                         (state_machine, log_interval) = <_>::default();
-                        drop_sender.send(SessionedMessage::Reset).unwrap();
+                        drop_sender.send(SessionedMessage::EndSession).unwrap();
                         result_sender.send(drop_receiver2.recv().unwrap()).unwrap();
                         end_session = false;
                     }
                 }
                 log_scheduler!("T:ended ");
 
-                drop_sender.send(SessionedMessage::Reset).unwrap();
+                drop_sender.send(SessionedMessage::EndSession).unwrap();
                 let result_with_timings = drop_receiver2.recv().unwrap();
                 trace!(
                     "solScheduler thread is ended at: {:?}",
