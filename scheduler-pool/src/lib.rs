@@ -1203,7 +1203,7 @@ where
     fn send_task(&self, task: Task) {
         debug!("send_task()");
         self.schedulrable_transaction_sender
-            .send(SessionedMessage2::Payload(task))
+            .send(SessionedMessage222::Payload(task))
             .unwrap();
     }
 
@@ -1214,7 +1214,7 @@ where
         }
 
         self.schedulrable_transaction_sender
-            .send(SessionedMessage2::EndSession)
+            .send(SessionedMessage222::EndSession)
             .unwrap();
         self.result_receiver.recv().unwrap()
     }
@@ -1222,7 +1222,7 @@ where
     fn start_session(&mut self, context: SchedulingContext) {
         if self.is_active() {
             self.schedulrable_transaction_sender
-                .send(SessionedMessage2::StartSession(context.clone()))
+                .send(SessionedMessage222::StartSession(context.clone()))
                 .unwrap();
             self.context = WeakSchedulingContext::new(context);
         } else {
