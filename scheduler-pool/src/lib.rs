@@ -962,8 +962,8 @@ where
                                     blocked_transaction_sessioned_sender
                                         .send(ChainedChannel::Payload(task))
                                         .unwrap();
-                                    "step"
                                 }
+                                "step"
                             },
                             recv(handled_idle_transaction_receiver) -> task => {
                                 let task = task.unwrap();
