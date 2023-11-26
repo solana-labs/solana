@@ -925,16 +925,8 @@ where
                                 drop_sender.send_buffered(SessionedMessage::Payload(task)).unwrap();
                             },
                             recv(schedulable_transaction_receiver) -> m => {
-                                let Ok(mm) = m else {
-                                    assert!(!end_thread);
-                                    schedulable_transaction_receiver = never();
-                                    end_thread = true;
-                                    log_scheduler!("T:ending");
-                                    continue;
-                                };
-
-                                match mm {
-                                    ChainedChannel::Payload(payload) => {
+                                match m {
+                                    Ok(ChainedChannel::Payload(payload)) => {
                                         log_scheduler!();
                                         if let Some(task) = state_machine.schedule_new_task(payload) {
                                             idle_transaction_sender
@@ -942,7 +934,7 @@ where
                                                 .unwrap();
                                         }
                                     }
-                                    ChainedChannel::ChannelWithPayload(new_channel) => {
+                                    Ok(ChainedChannel::ChannelWithPayload(new_channel)) => {
                                         let control_frame;
                                         (schedulable_transaction_receiver, control_frame) = new_channel.channel_and_payload();
                                         match control_frame {
@@ -956,6 +948,12 @@ where
                                                 log_scheduler!("S:ending");
                                             }
                                         }
+                                    }
+                                    Err(_) => {
+                                        assert!(!end_thread);
+                                        schedulable_transaction_receiver = never();
+                                        end_thread = true;
+                                        log_scheduler!("T:ending");
                                     }
                                 }
                             },
