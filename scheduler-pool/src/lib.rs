@@ -937,7 +937,7 @@ where
                             },
                             recv(schedulable_transaction_receiver) -> m => {
                                 match m {
-                                    Ok(ChainedChannel::Payload(payload)) => {
+                                    Ok(SessionedMessage2::Payload(payload)) => {
                                         if let Some(task) = state_machine.schedule_new_task(payload) {
                                             idle_transaction_sender
                                                 .send(task)
