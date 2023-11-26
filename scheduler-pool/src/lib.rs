@@ -882,14 +882,19 @@ where
             let mut end_session = false;
             let mut end_thread = false;
             let mut state_machine = SchedulingStateMachine::default();
-            let mut log_interval_counter = 0;
+            let log_interval_counter = &mut 0;
+            let increment_log_counter = || {
+                let should_log = log_interval_counter % 1000 == 0;
+                log_interval_counter += 1;
+                should_log
+            };
             // hint compiler about inline[never] and unlikely?
             macro_rules! log_scheduler {
-                ($a:tt) => {
+                ($prefix:tt) => {
                     const BITS_PER_HEX_DIGIT: usize = 4;
                     info!(
-                        "[sch_{:0width$x}]: slot: {}[{}]({}/{}): state_machine(({}(+{})=>{})/{}|{}/{}) channels(<{} >{}+{} <{}+{})",
-                        scheduler_id, slot, ($a), (if end_thread {"T"} else {"-"}), (if end_session {"S"} else {"-"}),
+                        "[sch_{:0width$x}]: slot: {}[{:8}]({}/{}): state_machine(({}(+{})=>{})/{}|{}/{}) channels(<{} >{}+{} <{}+{})",
+                        scheduler_id, slot, (if ($prefix) == "step" { "interval" } else { $prefix }), (if end_thread {"T"} else {"-"}), (if end_session {"S"} else {"-"}),
                         state_machine.active_task_count(), state_machine.retryable_task_count(), state_machine.handled_task_count(),
                         state_machine.total_task_count(),
                         state_machine.reschedule_count(),
@@ -899,12 +904,6 @@ where
                         handled_blocked_transaction_receiver.len(), handled_idle_transaction_receiver.len(),
                         width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
                     );
-                };
-                () => {
-                    if log_interval_counter % 1000 == 0 {
-                        log_scheduler!("interval");
-                    }
-                    log_interval_counter += 1;
                 };
             }
 
@@ -917,22 +916,22 @@ where
 
                 while !end_thread {
                     loop {
-                        select_biased! {
+                        let log_prefix = select_biased! {
                             recv(handled_blocked_transaction_receiver) -> task => {
-                                log_scheduler!();
                                 let task = task.unwrap();
                                 state_machine.deschedule_task(&task);
                                 drop_sender.send_buffered(SessionedMessage::Payload(task)).unwrap();
+                                "step"
                             },
                             recv(schedulable_transaction_receiver) -> m => {
                                 match m {
                                     Ok(ChainedChannel::Payload(payload)) => {
-                                        log_scheduler!();
                                         if let Some(task) = state_machine.schedule_new_task(payload) {
                                             idle_transaction_sender
                                                 .send(task)
                                                 .unwrap();
                                         }
+                                        "step"
                                     }
                                     Ok(ChainedChannel::ChannelWithPayload(new_channel)) => {
                                         let control_frame;
@@ -940,12 +939,12 @@ where
                                         match control_frame {
                                             ControlFrame::StartSession(context) => {
                                                 slot = context.bank().slot();
-                                                log_scheduler!("started ");
                                                 Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count);
+                                                "started "
                                             }
                                             ControlFrame::EndSession => {
                                                 end_session = true;
-                                                log_scheduler!("S:ending");
+                                                "S:ending"
                                             }
                                         }
                                     }
@@ -953,26 +952,29 @@ where
                                         assert!(!end_thread);
                                         schedulable_transaction_receiver = never();
                                         end_thread = true;
-                                        log_scheduler!("T:ending");
+                                        "T:ending"
                                     }
                                 }
                             },
                             recv(if state_machine.has_retryable_task() { ready() } else { never() }) -> now => {
                                 assert!(now.is_ok());
                                 if let Some(task) = state_machine.schedule_retryable_task() {
-                                    log_scheduler!();
                                     blocked_transaction_sessioned_sender
                                         .send(ChainedChannel::Payload(task))
                                         .unwrap();
+                                    "step"
                                 }
                             },
                             recv(handled_idle_transaction_receiver) -> task => {
-                                log_scheduler!();
                                 let task = task.unwrap();
-                                state_machine.deschedule_task(&task);
+                                stuuate_machine.deschedule_task(&task);
                                 drop_sender.send_buffered(SessionedMessage::Payload(task)).unwrap();
+                                "step"
                             },
                         };
+                        if log_prefix != "step" || (log_prefix == "step" && increment_log_counter()) {
+                            log_scheduler!(log_prefix);
+                        }
 
                         let is_finished = state_machine.is_empty() && (end_session || end_thread);
                         if is_finished {
@@ -983,7 +985,7 @@ where
                     if end_session {
                         // or should also consider end_thread?
                         log_scheduler!("S:ended ");
-                        (state_machine, log_interval_counter) = <_>::default();
+                        (state_machine, *log_interval_counter) = <_>::default();
                         drop_sender.send(SessionedMessage::Reset).unwrap();
                         result_sender.send(drop_receiver2.recv().unwrap()).unwrap();
                         end_session = false;
