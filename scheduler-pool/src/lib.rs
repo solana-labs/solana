@@ -780,7 +780,7 @@ where
             schedulable_transaction_receiver,
             result_sender,
             result_receiver,
-            context: WeakSchedulingContext::new(initial_context),
+            context: WeakSchedulingContext::downgrade(initial_context),
             scheduler_thread_and_tid: None,
             drop_thread: None,
             handler_threads: Vec::with_capacity(handler_count),
