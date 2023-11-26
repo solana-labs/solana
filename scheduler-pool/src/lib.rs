@@ -892,7 +892,7 @@ where
                 .take()
                 .unwrap_or((Ok(()), Default::default()));
             drop_sender
-                .send(SessionedMessage::Resume(result_with_timings))
+                .send(SessionedMessage::StartSession(result_with_timings))
                 .unwrap();
 
             let mut end_session = false;
