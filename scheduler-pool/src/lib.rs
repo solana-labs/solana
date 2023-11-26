@@ -640,8 +640,8 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     handler_threads: Vec<JoinHandle<()>>,
     drop_thread: Option<JoinHandle<()>>,
     handler: TH,
-    schedulrable_transaction_sender: Sender<SessionedMessage222<Task, SchedulingContext>>,
-    schedulable_transaction_receiver: Receiver<SessionedMessage222<Task, SchedulingContext>>,
+    schedulrable_transaction_sender: Sender<SessionedMessage<Task, SchedulingContext>>,
+    schedulable_transaction_receiver: Receiver<SessionedMessage<Task, SchedulingContext>>,
     result_sender: Sender<ResultWithTimings>,
     result_receiver: Receiver<ResultWithTimings>,
     handler_count: usize,
@@ -726,7 +726,7 @@ enum ChainedChannel<T1, T2> {
     ChannelWithPayload(Box<dyn WithChannelAndPayload<T1, T2>>),
 }
 
-enum SessionedMessage222<T1, T2> {
+enum SessionedMessage<T1, T2> {
     Payload(T1),
     StartSession(T2),
     EndSession,
@@ -864,7 +864,7 @@ where
             unbounded::<Box<ExecutedTask>>();
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
             unbounded::<Box<ExecutedTask>>();
-        let (drop_sender, drop_receiver) = unbounded::<SessionedMessage222<Box<ExecutedTask>, ResultWithTimings>>();
+        let (drop_sender, drop_receiver) = unbounded::<SessionedMessage<Box<ExecutedTask>, ResultWithTimings>>();
         let (drop_sender2, drop_receiver2) = unbounded::<ResultWithTimings>();
         let scheduler_id = self.scheduler_id;
         let mut slot = context.bank().slot();
@@ -882,7 +882,7 @@ where
                 .take()
                 .unwrap_or((Ok(()), Default::default()));
             drop_sender
-                .send(SessionedMessage222::StartSession(result_with_timings))
+                .send(SessionedMessage::StartSession(result_with_timings))
                 .unwrap();
 
             let mut end_session = false;
@@ -921,23 +921,23 @@ where
                             recv(handled_blocked_transaction_receiver) -> task => {
                                 let task = task.unwrap();
                                 state_machine.deschedule_task(&task);
-                                drop_sender.send_buffered(SessionedMessage222::Payload(task)).unwrap();
+                                drop_sender.send_buffered(SessionedMessage::Payload(task)).unwrap();
                                 "step"
                             },
                             recv(schedulable_transaction_receiver) -> m => {
                                 match m {
-                                    Ok(SessionedMessage222::Payload(payload)) => {
+                                    Ok(SessionedMessage::Payload(payload)) => {
                                         if let Some(task) = state_machine.schedule_new_task(payload) {
                                             idle_transaction_sender.send(task).unwrap();
                                         }
                                         "step"
                                     }
-                                    Ok(SessionedMessage222::StartSession(context)) => {
+                                    Ok(SessionedMessage::StartSession(context)) => {
                                         slot = context.bank().slot();
                                         Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count);
                                         "started"
                                     }
-                                    Ok(SessionedMessage222::EndSession) => {
+                                    Ok(SessionedMessage::EndSession) => {
                                         end_session = true;
                                         "S:ending"
                                     }
@@ -961,7 +961,7 @@ where
                             recv(handled_idle_transaction_receiver) -> task => {
                                 let task = task.unwrap();
                                 state_machine.deschedule_task(&task);
-                                drop_sender.send_buffered(SessionedMessage222::Payload(task)).unwrap();
+                                drop_sender.send_buffered(SessionedMessage::Payload(task)).unwrap();
                                 "step"
                             },
                         };
@@ -981,14 +981,14 @@ where
                         // or should also consider end_thread?
                         log_scheduler!("S:ended ");
                         (state_machine, log_interval) = <_>::default();
-                        drop_sender.send(SessionedMessage222::EndSession).unwrap();
+                        drop_sender.send(SessionedMessage::EndSession).unwrap();
                         result_sender.send(drop_receiver2.recv().unwrap()).unwrap();
                         end_session = false;
                     }
                 }
                 log_scheduler!("T:ended ");
 
-                drop_sender.send(SessionedMessage222::EndSession).unwrap();
+                drop_sender.send(SessionedMessage::EndSession).unwrap();
                 let result_with_timings = drop_receiver2.recv().unwrap();
                 trace!(
                     "solScheduler thread is ended at: {:?}",
@@ -1065,7 +1065,7 @@ where
                 let mut session_timings: ExecuteTimings = Default::default();
                 loop {
                     match drop_receiver.recv_timeout(Duration::from_millis(40)) {
-                        Ok(SessionedMessage222::Payload(task)) => {
+                        Ok(SessionedMessage::Payload(task)) => {
                             session_timings.accumulate(&task.result_with_timings.1);
                             match &task.result_with_timings.0 {
                                 Ok(()) => {}
@@ -1112,10 +1112,10 @@ where
                             }
                             drop(task);
                         }
-                        Ok(SessionedMessage222::StartSession(result_with_timings)) => {
+                        Ok(SessionedMessage::StartSession(result_with_timings)) => {
                             (session_result, session_timings) = result_with_timings;
                         }
-                        Ok(SessionedMessage222::EndSession) => {
+                        Ok(SessionedMessage::EndSession) => {
                             drop_sender2
                                 .send((session_result, session_timings))
                                 .unwrap();
@@ -1193,7 +1193,7 @@ where
     fn send_task(&self, task: Task) {
         debug!("send_task()");
         self.schedulrable_transaction_sender
-            .send(SessionedMessage222::Payload(task))
+            .send(SessionedMessage::Payload(task))
             .unwrap();
     }
 
@@ -1204,7 +1204,7 @@ where
         }
 
         self.schedulrable_transaction_sender
-            .send(SessionedMessage222::EndSession)
+            .send(SessionedMessage::EndSession)
             .unwrap();
         self.result_receiver.recv().unwrap()
     }
@@ -1212,7 +1212,7 @@ where
     fn start_session(&mut self, context: SchedulingContext) {
         if self.is_active() {
             self.schedulrable_transaction_sender
-                .send(SessionedMessage222::StartSession(context.clone()))
+                .send(SessionedMessage::StartSession(context.clone()))
                 .unwrap();
             self.context = WeakSchedulingContext::new(context);
         } else {
