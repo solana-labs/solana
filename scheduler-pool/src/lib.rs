@@ -892,7 +892,7 @@ where
                 .take()
                 .unwrap_or((Ok(()), Default::default()));
             drop_sender
-                .send(SessionedMessage::StartSession(result_with_timings))
+                .send(SessionedMessage222::StartSession(result_with_timings))
                 .unwrap();
 
             let mut end_session = false;
@@ -931,7 +931,7 @@ where
                             recv(handled_blocked_transaction_receiver) -> task => {
                                 let task = task.unwrap();
                                 state_machine.deschedule_task(&task);
-                                drop_sender.send_buffered(SessionedMessage::Payload(task)).unwrap();
+                                drop_sender.send_buffered(SessionedMessage222::Payload(task)).unwrap();
                                 "step"
                             },
                             recv(schedulable_transaction_receiver) -> m => {
@@ -971,7 +971,7 @@ where
                             recv(handled_idle_transaction_receiver) -> task => {
                                 let task = task.unwrap();
                                 state_machine.deschedule_task(&task);
-                                drop_sender.send_buffered(SessionedMessage::Payload(task)).unwrap();
+                                drop_sender.send_buffered(SessionedMessage222::Payload(task)).unwrap();
                                 "step"
                             },
                         };
@@ -991,14 +991,14 @@ where
                         // or should also consider end_thread?
                         log_scheduler!("S:ended ");
                         (state_machine, log_interval) = <_>::default();
-                        drop_sender.send(SessionedMessage::EndSession).unwrap();
+                        drop_sender.send(SessionedMessage222::EndSession).unwrap();
                         result_sender.send(drop_receiver2.recv().unwrap()).unwrap();
                         end_session = false;
                     }
                 }
                 log_scheduler!("T:ended ");
 
-                drop_sender.send(SessionedMessage::EndSession).unwrap();
+                drop_sender.send(SessionedMessage222::EndSession).unwrap();
                 let result_with_timings = drop_receiver2.recv().unwrap();
                 trace!(
                     "solScheduler thread is ended at: {:?}",
@@ -1075,7 +1075,7 @@ where
                 let mut session_timings: ExecuteTimings = Default::default();
                 loop {
                     match drop_receiver.recv_timeout(Duration::from_millis(40)) {
-                        Ok(SessionedMessage::Payload(task)) => {
+                        Ok(SessionedMessage222::Payload(task)) => {
                             session_timings.accumulate(&task.result_with_timings.1);
                             match &task.result_with_timings.0 {
                                 Ok(()) => {}
@@ -1122,10 +1122,10 @@ where
                             }
                             drop(task);
                         }
-                        Ok(SessionedMessage::StartSession(result_with_timings)) => {
+                        Ok(SessionedMessage222::StartSession(result_with_timings)) => {
                             (session_result, session_timings) = result_with_timings;
                         }
-                        Ok(SessionedMessage::EndSession) => {
+                        Ok(SessionedMessage222::EndSession) => {
                             drop_sender2
                                 .send((session_result, session_timings))
                                 .unwrap();
