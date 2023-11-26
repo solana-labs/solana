@@ -922,7 +922,7 @@ where
 
                 while !end_thread {
                     loop {
-                        let log_prefix = select_biased! {
+                        let state_change = select_biased! {
                             recv(handled_blocked_transaction_receiver) -> task => {
                                 let task = task.unwrap();
                                 state_machine.deschedule_task(&task);
@@ -946,7 +946,7 @@ where
                                             ControlFrame::StartSession(context) => {
                                                 slot = context.bank().slot();
                                                 Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count);
-                                                "started "
+                                                "started"
                                             }
                                             ControlFrame::EndSession => {
                                                 end_session = true;
@@ -978,8 +978,8 @@ where
                                 "step"
                             },
                         };
-                        if log_prefix != "step" || (log_prefix == "step" && log_interval.increment()) {
-                            log_scheduler!(log_prefix);
+                        if state_change != "step" || (state_change == "step" && log_interval.increment()) {
+                            log_scheduler!(state_change);
                         }
 
                         let is_finished = state_machine.is_empty() && (end_session || end_thread);
