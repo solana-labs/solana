@@ -205,7 +205,7 @@ where
                     }
 
                     info!(
-                        "watchdog: schedulers in the pool: {} => {}, watched thread managers: {} => {} => {}",
+                        "watchdog: unused schedulers: {} => {}, all thread managers: {} => {} => {}",
                         pre_schedulers_len,
                         post_schedulers_len,
                         pre_retain_len,
