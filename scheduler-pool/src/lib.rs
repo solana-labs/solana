@@ -1641,7 +1641,11 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn has_context(&self) -> bool {
-        true // consider to remove this method entirely???
+        self.thread_manager
+            .read()
+            .unwrap()
+            .active_context()
+            .is_some()
     }
 
     fn replace_context(&mut self, context: SchedulingContext) {
