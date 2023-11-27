@@ -112,8 +112,8 @@ use {
         compute_budget_processor::process_compute_budget_instructions,
         invoke_context::BuiltinFunctionWithContext,
         loaded_programs::{
-            ExtractedPrograms, LoadProgramMetrics, LoadedProgram, LoadedProgramMatchCriteria,
-            LoadedProgramType, LoadedPrograms, LoadedProgramsForTxBatch, ProgramRuntimeEnvironment,
+            LoadProgramMetrics, LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType,
+            LoadedPrograms, LoadedProgramsForTxBatch, ProgramRuntimeEnvironment,
             ProgramRuntimeEnvironments, WorkingSlot, DELAY_VISIBILITY_SLOT_OFFSET,
         },
         log_collector::LogCollector,
@@ -5016,42 +5016,43 @@ impl Bank {
                     .collect()
             };
 
-        let ExtractedPrograms {
-            loaded: mut loaded_programs_for_txs,
-            missing,
-        } = {
+        let extracted = {
             // Lock the global cache to figure out which programs need to be loaded
             let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
-            Mutex::into_inner(
-                Arc::into_inner(
-                    loaded_programs_cache.extract(self, programs_and_slots.into_iter()),
-                )
-                .unwrap(),
-            )
-            .unwrap()
+            loaded_programs_cache.extract(self, programs_and_slots.into_iter())
         };
 
-        // Load missing programs while global cache is unlocked
-        let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing
-            .iter()
-            .map(|(key, (entry, reloading))| {
-                let program = self.load_program(key, *reloading, None);
-                program.tx_usage_counter.store(
-                    entry.tx_usage_counter.load(Ordering::Relaxed),
-                    Ordering::Relaxed,
-                );
-                (*key, program)
-            })
-            .collect();
-
-        // Lock the global cache again to replenish the missing programs
-        let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
-        for (key, program) in missing_programs {
-            let entry = loaded_programs_cache.assign_program(key, program);
-            // Use the returned entry as that might have been deduplicated globally
-            loaded_programs_for_txs.assign_program(key, entry);
+        // Cooperative loading phase
+        let mut finished_task = None;
+        loop {
+            // Critical section for global coordination
+            let (key, loading, reload) = {
+                let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
+                if let Some((key, loading, loaded)) = finished_task.take() {
+                    loaded_programs_cache.cooperative_loading_task_complete(key, loading, loaded);
+                }
+                if Arc::strong_count(&extracted) == 1 {
+                    // All the missing entries for this batch have been loaded
+                    break;
+                }
+                if let Some(task) = loaded_programs_cache.next_cooperative_loading_task(&extracted)
+                {
+                    task
+                } else {
+                    // Waiting for some other TX batch to complete loading the programs needed by this TX batch
+                    // TODO: Use a Condvar here
+                    continue;
+                }
+            };
+            // Load, verify and compile the program outside of the critical section
+            let loaded = self.load_program(&key, reload, None);
+            finished_task = Some((key, loading, loaded));
         }
-        loaded_programs_for_txs
+
+        // When we get here we should be the only remaining owner
+        std::sync::Mutex::into_inner(Arc::into_inner(extracted).unwrap())
+            .unwrap()
+            .loaded
     }
 
     /// Returns a hash map of executable program accounts (program accounts that are not writable

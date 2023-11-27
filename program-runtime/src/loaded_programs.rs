@@ -898,6 +898,85 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         extracted
     }
 
+    /// In cooperative loading a TX batch calls this to receive the next task
+    pub fn next_cooperative_loading_task(
+        &mut self,
+        extracted: &Arc<Mutex<ExtractedPrograms>>,
+    ) -> Option<(Pubkey, Arc<LoadedProgram>, bool)> {
+        // The Mutexes are strictly speaking unnecessary
+        // because the entire `LoadedPrograms` cache is already locked here.
+        let extracted = extracted.lock().unwrap();
+        let (key, (entry, reload)) =
+            extracted.missing.iter().find(|(_key, (entry, _reload))| {
+                let LoadedProgramType::Loading(mutex) = &entry.program else {
+                    debug_assert!(false);
+                    return false;
+                };
+                let processing = mutex.lock().unwrap().0;
+                !processing
+            })?;
+        let (key, entry, reload) = (*key, entry.clone(), *reload);
+        drop(extracted);
+        {
+            let LoadedProgramType::Loading(mutex) = &entry.program else {
+                debug_assert!(false);
+                return None;
+            };
+            let processing = &mut mutex.lock().unwrap().0;
+            *processing = true;
+        }
+        Some((key, entry, reload))
+    }
+
+    /// Upon completing a task in cooperative loading a TX batch calls this to submit the result
+    pub fn cooperative_loading_task_complete(
+        &mut self,
+        key: Pubkey,
+        loading: Arc<LoadedProgram>,
+        loaded: Arc<LoadedProgram>,
+    ) {
+        let LoadedProgramType::Loading(mutex) = &loading.program else {
+            debug_assert!(false);
+            return;
+        };
+        loaded.tx_usage_counter.store(
+            loading.tx_usage_counter.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        let mut mutex = mutex.lock().unwrap();
+        let processing = &mut mutex.0;
+        *processing = false;
+        let waiting_list_is_empty = {
+            let fork_graph = self
+                .fork_graph
+                .as_ref()
+                .expect("Program cache doesn't have fork graph.");
+            let fork_graph = fork_graph
+                .read()
+                .expect("Failed to lock fork graph for reading.");
+            let waiting_list = &mut mutex.1;
+            waiting_list.retain(|waiting| {
+                // The Mutex around `waiting` is strictly speaking unnecessary
+                // because the entire `LoadedPrograms` cache is already locked here.
+                let mut waiting = waiting.lock().unwrap();
+                let relation = fork_graph.relationship(loaded.deployment_slot, waiting.loaded.slot);
+                if loaded.deployment_slot <= self.latest_root_slot
+                    || matches!(relation, BlockRelation::Equal | BlockRelation::Descendant)
+                {
+                    waiting.missing.remove(&key);
+                    waiting.loaded.assign_program(key, loaded.clone());
+                    return false;
+                }
+                true
+            });
+            waiting_list.is_empty()
+        };
+        if waiting_list_is_empty {
+            self.remove_program(key, &loading);
+        }
+        self.assign_program(key, loaded);
+    }
+
     pub fn merge(&mut self, tx_batch_cache: &LoadedProgramsForTxBatch) {
         tx_batch_cache.entries.iter().for_each(|(key, entry)| {
             self.assign_program(*key, entry.clone());
