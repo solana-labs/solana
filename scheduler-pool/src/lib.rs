@@ -555,7 +555,7 @@ unsafe impl Send for Page {}
 unsafe impl Sync for Page {}
 
 unsafe impl Sync for TaskStatus {}
-type WeightedTaskQueue = std::collections::BTreeMap<UniqueWeight, Task>;
+type TaskQueue = std::collections::BTreeMap<UniqueWeight, Task>;
 
 #[derive(Default, Debug)]
 pub struct AddressBook {
@@ -1441,7 +1441,7 @@ impl ScheduleStage {
 
     fn try_lock_for_task(
         (task_source, next_task): (TaskSource, Task),
-        retryable_task_queue: &mut WeightedTaskQueue,
+        retryable_task_queue: &mut TaskQueue,
     ) -> Option<Task> {
         let from_runnable = matches!(task_source, TaskSource::Runnable);
 
@@ -1503,7 +1503,7 @@ impl ScheduleStage {
     fn unlock_after_execution(
         should_remove: bool,
         uq: &UniqueWeight,
-        retryable_task_queue: &mut WeightedTaskQueue,
+        retryable_task_queue: &mut TaskQueue,
         lock_attempts: &[LockAttempt],
     ) {
         for unlock_attempt in lock_attempts {
@@ -1589,7 +1589,7 @@ where
 
 #[derive(Default)]
 struct SchedulingStateMachine {
-    retryable_task_queue: WeightedTaskQueue,
+    retryable_task_queue: TaskQueue,
     active_task_count: usize,
     handled_task_count: usize,
     reschedule_count: usize,
