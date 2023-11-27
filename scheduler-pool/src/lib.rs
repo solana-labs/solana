@@ -117,11 +117,7 @@ where
         let Some(thread_manager) = self.thread_manager.upgrade() else {
             return false;
         };
-        let Some(tid) = thread_manager
-            .read()
-            .unwrap()
-            .tid_if_not_primary()
-        else {
+        let Some(tid) = thread_manager.read().unwrap().tid_if_not_primary() else {
             self.tick = 0;
             self.updated_at = Instant::now();
             return true;
