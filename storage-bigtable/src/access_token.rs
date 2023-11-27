@@ -34,24 +34,12 @@ fn load_stringified_credentials(credential: String) -> Result<Credentials, Strin
     Credentials::from_str(&credential).map_err(|err| format!("{err}"))
 }
 
-pub struct AccessTokenInner {
-    credentials: Credentials,
-    scope: Scope,
-    token: RwLock<(Token, Instant)>,
-    refresh_active: AtomicBool,
-}
-
 #[derive(Clone)]
 pub struct AccessToken {
-    inner: Arc<AccessTokenInner>,
-}
-
-impl std::ops::Deref for AccessToken {
-    type Target = AccessTokenInner;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
+    credentials: Credentials,
+    scope: Scope,
+    token: Arc<RwLock<(Token, Instant)>>,
+    refresh_active: Arc<AtomicBool>,
 }
 
 impl AccessToken {
@@ -64,14 +52,12 @@ impl AccessToken {
         if let Err(err) = credentials.rsa_key() {
             Err(format!("Invalid rsa key: {err}"))
         } else {
-            let token = RwLock::new(Self::get_token(&credentials, &scope).await?);
+            let token = Arc::new(RwLock::new(Self::get_token(&credentials, &scope).await?));
             let access_token = Self {
-                inner: Arc::new(AccessTokenInner {
-                    credentials,
-                    scope,
-                    token,
-                    refresh_active: AtomicBool::new(false),
-                }),
+                credentials,
+                scope,
+                token,
+                refresh_active: Arc::new(AtomicBool::new(false)),
             };
             Ok(access_token)
         }
@@ -105,54 +91,45 @@ impl AccessToken {
     }
 
     /// Call this function regularly to ensure the access token does not expire
-    pub fn try_refresh(&self) {
+    pub fn refresh(&self) {
         // Check if it's time to try a token refresh
-        match self.token.read() {
-            Ok(token_r) => {
-                if token_r.1.elapsed().as_secs() < token_r.0.expires_in() as u64 / 2 {
-                    debug!("token is not expired yet");
-                    return;
-                }
-                drop(token_r);
-            }
-            Err(_poisoned) => {
-                error!("token is poisoned (read op)");
-                return;
-            }
-        }
-
-        // Refresh already is progress
-        let refresh_progress =
-            self.refresh_active
-                .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed);
-        if refresh_progress.is_err() {
-            debug!("token update is already in progress");
+        let token_r = self.token.read().unwrap();
+        if token_r.1.elapsed().as_secs() < token_r.0.expires_in() as u64 / 2 {
+            debug!("Token is not expired yet");
             return;
         }
 
-        let this = self.clone();
+        // Refresh already is progress
+        let refresh_progress = self.refresh_active.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed);
+        if refresh_progress.is_err() {
+            debug!("Token update is already in progress");
+            return;
+        }
+
+        let credentials = self.credentials.clone();
+        let scope = self.scope.clone();
+        let refresh_active = Arc::clone(&self.refresh_active);
+        let token = Arc::clone(&self.token);
         tokio::spawn(async move {
             match time::timeout(
                 time::Duration::from_secs(5),
-                Self::get_token(&this.credentials, &this.scope),
+                Self::get_token(&credentials, &scope),
             )
             .await
             {
-                Ok(new_token) => match (new_token, this.token.write()) {
-                    (Ok(new_token), Ok(mut token_w)) => {
+                Ok(new_token) => match new_token {
+                    Ok(new_token) => {
+                        let mut token_w = token.write().unwrap();
                         *token_w = new_token;
                     }
-                    (Ok(_new_token), Err(_poisoned)) => {
-                        error!("token is poisoned (write op)")
-                    }
-                    (Err(err), _) => error!("failed to fetch new token: {}", err),
+                    Err(err) => error!("Failed to fetch new token: {}", err),
                 },
                 Err(_timeout) => {
-                    warn!("token refresh timeout")
+                    warn!("Token refresh timeout")
                 }
             }
-            this.refresh_active.store(false, Ordering::Relaxed);
-            info!("token refreshed");
+            refresh_active.store(false, Ordering::Relaxed);
+            info!("Token refreshed");
         });
     }
 

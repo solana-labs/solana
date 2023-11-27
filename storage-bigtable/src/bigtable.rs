@@ -412,7 +412,7 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
 
     fn refresh_access_token(&self) {
         if let Some(ref access_token) = self.access_token {
-            access_token.try_refresh();
+            access_token.refresh();
         }
     }
 
