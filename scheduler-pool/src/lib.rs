@@ -547,7 +547,7 @@ impl Tasks {
 }
 
 type PageRc = Arc<UnsafeCell<PageInner>>;
-static_assertions::const_assert_eq!(std::mem::size_of::<std::cell::UnsafeCell<PageInner>>(), 32);
+static_assertions::const_assert_eq!(std::mem::size_of::<UnsafeCell<PageInner>>(), 32);
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct Page(by_address::ByAddress<PageRc>);
