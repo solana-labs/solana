@@ -139,7 +139,8 @@ where
         if current_tick > self.tick {
             self.tick = current_tick;
             self.updated_at = Instant::now();
-        } else let elapsed = self.updated_at.elapsed() {
+        } else {
+            let elapsed = self.updated_at.elapsed()
             if elapsed > Duration::from_secs(60) {
                 const BITS_PER_HEX_DIGIT: usize = 4;
                 let mut thread_manager = thread_manager.write().unwrap();
