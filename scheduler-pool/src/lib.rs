@@ -145,7 +145,7 @@ where
                 const BITS_PER_HEX_DIGIT: usize = 4;
                 let mut thread_manager = thread_manager.write().unwrap();
                 info!(
-                    "[sch_{:0width$x}]: watchdog: update_tick_to_retain(): stopping thread manager ({tid:?}/{} <= {}/{:?})...",
+                    "[sch_{:0width$x}]: watchdog: update_tick_to_retain(): stopping thread manager ({tid}/{} <= {}/{:?})...",
                     thread_manager.scheduler_id,
                     current_tick,
                     self.tick,
@@ -639,14 +639,12 @@ impl WeakSchedulingContext {
     }
 }
 
-type LinuxOnlyTid = Option<i32>;
-
 #[derive(Debug)]
 struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     scheduler_id: SchedulerId,
     pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
     context: WeakSchedulingContext,
-    scheduler_thread_and_tid: Option<(JoinHandle<ResultWithTimings>, LinuxOnlyTid)>,
+    scheduler_thread_and_tid: Option<(JoinHandle<ResultWithTimings>, i32)>,
     handler_threads: Vec<JoinHandle<()>>,
     drop_thread: Option<JoinHandle<()>>,
     handler: TH,
@@ -879,7 +877,6 @@ where
         let (drop_sender2, drop_receiver2) = unbounded::<ResultWithTimings>();
         let scheduler_id = self.scheduler_id;
         let mut slot = context.bank().slot();
-        #[cfg(target_os = "linux")]
         let (tid_sender, tid_receiver) = bounded(1);
 
         let scheduler_main_loop = || {
@@ -925,7 +922,6 @@ where
                     "solScheduler thread is started at: {:?}",
                     std::thread::current()
                 );
-                #[cfg(target_os = "linux")]
                 tid_sender.send(rustix::thread::gettid().as_raw_nonzero().get() as i32).unwrap();
 
                 while !end_thread {
@@ -1136,17 +1132,12 @@ where
             }
         };
 
-        #[cfg(target_os = "linux")]
-        let tid = Some(tid_receiver.recv().unwrap());
-        #[cfg(not(target_os = "linux"))]
-        let tid = None;
-
         self.scheduler_thread_and_tid = Some((
             std::thread::Builder::new()
                 .name("solScheduler".to_owned())
                 .spawn(scheduler_main_loop())
                 .unwrap(),
-            tid,
+            tid_receiver.recv().unwrap(),
         ));
 
         self.drop_thread = Some(
