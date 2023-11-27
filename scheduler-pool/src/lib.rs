@@ -1377,7 +1377,7 @@ impl ScheduleStage {
         };
 
         if strictly_lockable {
-            match attempt.page_mut().current_usage {
+            match page.current_usage {
                 Usage::Unused => LockStatus::Succeded(Usage::renew(attempt.requested_usage)),
                 Usage::Readonly(count) => match attempt.requested_usage {
                     RequestedUsage::Readonly => LockStatus::Succeded(Usage::Readonly(count + 1)),
