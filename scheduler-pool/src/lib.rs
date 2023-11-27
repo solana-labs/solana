@@ -1380,10 +1380,9 @@ impl ScheduleStage {
             return LockStatus::Failed;
         }
 
-        let requested_usage = attempt.requested_usage;
         match attempt.page_mut().current_usage {
-            Usage::Unused => LockStatus::Succeded(Usage::renew(requested_usage)),
-            Usage::Readonly(count) => match requested_usage {
+            Usage::Unused => LockStatus::Succeded(Usage::renew(attempt.requested_usage)),
+            Usage::Readonly(count) => match attempt.requested_usage {
                 RequestedUsage::Readonly => LockStatus::Succeded(Usage::Readonly(count + 1)),
                 RequestedUsage::Writable => LockStatus::Failed,
             },
