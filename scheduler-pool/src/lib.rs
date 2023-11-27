@@ -84,6 +84,7 @@ pub struct SchedulerPool<
     watchdog_sender: Sender<Weak<RwLock<ThreadManager<TH, SEA>>>>,
     _watchdog_thread: JoinHandle<()>,
     _phantom: PhantomData<(T, TH, SEA)>,
+    next_id: AtomicU64,
 }
 
 pub type DefaultSchedulerPool = SchedulerPool<
@@ -772,12 +773,11 @@ where
         pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
         handler_count: usize,
     ) -> Self {
-        static NEXT_ID: AtomicU64 = AtomicU64::new(PRIMARY_SCHEDULER_ID);
         let (schedulrable_transaction_sender, schedulable_transaction_receiver) = unbounded();
         let (result_sender, result_receiver) = unbounded();
 
         let mut thread_manager = Self {
-            scheduler_id: NEXT_ID.fetch_add(1, Relaxed),
+            scheduler_id: pool.next_scheduler_id(),
             schedulrable_transaction_sender,
             schedulable_transaction_receiver,
             result_sender,
