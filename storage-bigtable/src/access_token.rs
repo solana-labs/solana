@@ -98,9 +98,12 @@ impl AccessToken {
             debug!("Token is not expired yet");
             return;
         }
+        drop(token_r);
 
         // Refresh already is progress
-        let refresh_progress = self.refresh_active.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed);
+        let refresh_progress =
+            self.refresh_active
+                .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed);
         if refresh_progress.is_err() {
             debug!("Token update is already in progress");
             return;
