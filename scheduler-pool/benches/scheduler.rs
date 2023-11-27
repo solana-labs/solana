@@ -249,7 +249,7 @@ mod nonblocking {
             unimplemented!();
         }
 
-        fn should_keep_alive(&mut self) -> bool {
+        fn retire_if_stale(&mut self) -> bool {
             unimplemented!();
         }
     }

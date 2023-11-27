@@ -113,7 +113,7 @@ where
         }
     }
 
-    fn should_keep_alive(&mut self) -> bool {
+    fn retire_if_stale(&mut self) -> bool {
         let Some(thread_manager) = self.thread_manager.upgrade() else {
             return false;
         };
@@ -145,7 +145,7 @@ where
                 const BITS_PER_HEX_DIGIT: usize = 4;
                 let mut thread_manager = thread_manager.write().unwrap();
                 info!(
-                    "[sch_{:0width$x}]: watchdog: should_keep_alive(): stopping thread manager ({tid}/{} <= {}/{:?})...",
+                    "[sch_{:0width$x}]: watchdog: retire_if_stale(): stopping thread manager ({tid}/{} <= {}/{:?})...",
                     thread_manager.scheduler_id,
                     current_tick,
                     self.tick,
@@ -187,12 +187,12 @@ where
                 'outer: loop {
                     let mut schedulers = scheduler_pool.schedulers.lock().unwrap();
                     let schedulers_len_pre_retain = schedulers.len();
-                    schedulers.retain_mut(|scheduler| scheduler.should_keep_alive());
+                    schedulers.retain_mut(|scheduler| scheduler.retire_if_stale());
                     let schedulers_len_post_retain = schedulers.len();
                     drop(schedulers);
 
                     let thread_manager_len_pre_retain = thread_managers.len();
-                    thread_managers.retain_mut(|thread_manager| thread_manager.should_keep_alive());
+                    thread_managers.retain_mut(|thread_manager| thread_manager.retire_if_stale());
 
                     let thread_manager_len_pre_push = thread_managers.len();
                     'inner: loop {
@@ -206,7 +206,7 @@ where
                     }
 
                     info!(
-                        "watchdog: unused schedulers: {} => {}, all thread managers: {} => {} => {}",
+                        "watchdog: unused schedulers in the pool: {} => {}, all thread managers: {} => {} => {}",
                         schedulers_len_pre_retain,
                         schedulers_len_post_retain,
                         thread_manager_len_pre_retain,
@@ -1247,7 +1247,7 @@ pub trait SpawnableScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg>:
     where
         Self: Sized;
 
-    fn should_keep_alive(&mut self) -> bool
+    fn retire_if_stale(&mut self) -> bool
     where
         Self: Sized;
 }
@@ -1263,7 +1263,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
         Self::do_spawn(pool, initial_context, handler)
     }
 
-    fn should_keep_alive(&mut self) -> bool {
+    fn retire_if_stale(&mut self) -> bool {
         const BITS_PER_HEX_DIGIT: usize = 4;
         let page_count = self.address_book.page_count();
         if page_count < 200_000 {
@@ -2028,7 +2028,7 @@ mod tests {
             */
         }
 
-        fn should_keep_alive(&mut self) -> bool {
+        fn retire_if_stale(&mut self) -> bool {
             todo!();
         }
     }
