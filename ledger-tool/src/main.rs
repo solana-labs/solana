@@ -1246,7 +1246,7 @@ fn main() {
             .long(use_snapshot_archives_at_startup::cli::LONG_ARG)
             .takes_value(true)
             .possible_values(use_snapshot_archives_at_startup::cli::POSSIBLE_VALUES)
-            .default_value(use_snapshot_archives_at_startup::cli::default_value())
+            .default_value(use_snapshot_archives_at_startup::cli::default_value_for_ledger_tool())
             .help(use_snapshot_archives_at_startup::cli::HELP)
             .long_help(use_snapshot_archives_at_startup::cli::LONG_HELP);
 
