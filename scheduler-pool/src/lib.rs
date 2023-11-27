@@ -792,6 +792,7 @@ where
             handler,
             pool,
             session_result_with_timings: None,
+            is_primary: pool.schedulers.lock().unwrap().len() == 0,
         };
         // needs to start threads immediately, because the bank in initial_context can be dropped
         // anytime.
