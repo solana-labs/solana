@@ -198,7 +198,7 @@ where
                     'inner: loop {
                         match watchdog_receiver.try_recv() {
                             Ok(thread_manager) =>
-                                thread_managers.push(WatchedThreadManager::new(thread_manager))
+                                thread_managers.push(WatchedThreadManager::new(thread_manager)),
                             Err(TryRecvError::Disconnected) => break 'outer,
                             Err(TryRecvError::Empty) => break 'inner,
                         }
