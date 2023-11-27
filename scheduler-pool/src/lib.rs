@@ -877,7 +877,7 @@ where
         let (drop_sender2, drop_receiver2) = unbounded::<ResultWithTimings>();
         let scheduler_id = self.scheduler_id;
         let mut slot = context.bank().slot();
-        #[cfg(linux_kernel)]
+        #[cfg(target_os = "linux")]
         let (tid_sender, tid_receiver) = bounded(1);
 
         let scheduler_main_loop = || {
@@ -923,6 +923,7 @@ where
                     "solScheduler thread is started at: {:?}",
                     std::thread::current()
                 );
+                #[cfg(target_os = "linux")]
                 tid_sender.send(rustix::thread::gettid().as_raw_nonzero().get() as i32).unwrap();
 
                 while !end_thread {
@@ -1138,6 +1139,7 @@ where
                 .name("solScheduler".to_owned())
                 .spawn(scheduler_main_loop())
                 .unwrap(),
+            #[cfg(target_os = "linux")]
             tid_receiver.recv().unwrap(),
         ));
 
