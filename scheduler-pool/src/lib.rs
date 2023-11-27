@@ -39,7 +39,7 @@ use {
         cell::UnsafeCell,
         fmt::Debug,
         marker::PhantomData,
-        sync::{Arc, AtomicU64, Mutex, RwLock, RwLockReadGuard, Weak},
+        sync::{Arc, atomic::AtomicU64, Mutex, RwLock, RwLockReadGuard, Weak},
         thread::{sleep, JoinHandle},
         time::{Duration, Instant, SystemTime},
     },
