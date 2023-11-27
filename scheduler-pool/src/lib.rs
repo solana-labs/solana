@@ -1330,7 +1330,7 @@ impl ScheduleStage {
         lock_attempts: &mut [LockAttempt],
         optimistic: bool,
     ) -> (usize, Vec<Usage>) {
-        let mut lock_success_count = 0;
+        let mut lock_count = 0;
         let mut uncommited_usages = if optimistic {
             vec![]
         } else {
@@ -1345,7 +1345,7 @@ impl ScheduleStage {
                     } else {
                         uncommited_usages.push(usage);
                     }
-                    lock_success_count += 1;
+                    lock_count += 1;
                 }
                 LockStatus::Failed => {
                     break;
@@ -1353,7 +1353,7 @@ impl ScheduleStage {
             }
         }
 
-        (lock_success_count, uncommited_usages)
+        (lock_count, uncommited_usages)
     }
 
     fn attempt_lock_address(unique_weight: &UniqueWeight, attempt: &mut LockAttempt) -> LockStatus {
@@ -1435,16 +1435,16 @@ impl ScheduleStage {
     ) -> Option<Task> {
         let from_runnable = matches!(task_source, TaskSource::Runnable);
 
-        let (lock_success_count, usages) = Self::attempt_lock_for_execution(
+        let (lock_count, usages) = Self::attempt_lock_for_execution(
             &next_task.unique_weight,
             &mut next_task.lock_attempts_mut(),
             from_runnable,
         );
 
-        if lock_success_count < next_task.lock_attempts_mut().len() {
+        if lock_count < next_task.lock_attempts_mut().len() {
             if from_runnable {
                 Self::unlock_for_failed_execution(
-                    &next_task.lock_attempts_mut()[0..lock_success_count],
+                    &next_task.lock_attempts_mut()[..lock_count],
                 );
                 next_task.mark_as_contended();
                 next_task.index_with_pages();
