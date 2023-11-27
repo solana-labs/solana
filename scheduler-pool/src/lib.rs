@@ -97,7 +97,7 @@ where
 {
     thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>,
     tick: u64,
-    updated_at: SystemTime,
+    updated_at: Instant,
 }
 
 impl<TH, SEA> WatchedThreadManager<TH, SEA>
@@ -109,7 +109,7 @@ where
         Self {
             thread_manager,
             tick: 0,
-            updated_at: SystemTime::now(),
+            updated_at: Instant::now(),
         }
     }
 
@@ -125,7 +125,7 @@ where
             .map(|&(_, tid)| tid)
         else {
             self.tick = 0;
-            self.updated_at = SystemTime::now();
+            self.updated_at = Instant::now();
             return true;
         };
 
@@ -138,23 +138,21 @@ where
         let current_tick = stat.utime + stat.stime;
         if current_tick > self.tick {
             self.tick = current_tick;
-            self.updated_at = SystemTime::now();
-        } else if let Ok(elapsed) = self.updated_at.elapsed() {
-            if elapsed > Duration::from_secs(60) {
-                const BITS_PER_HEX_DIGIT: usize = 4;
-                let mut thread_manager = thread_manager.write().unwrap();
-                info!(
-                    "[sch_{:0width$x}]: watchdog: update_tick_to_retain(): stopping thread manager ({tid}/{} <= {}/{:?})...",
-                    thread_manager.scheduler_id,
-                    current_tick,
-                    self.tick,
-                    elapsed,
-                    width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
-                );
-                thread_manager.stop_threads();
-                self.tick = 0;
-                self.updated_at = SystemTime::now();
-            }
+            self.updated_at = Instant::now();
+        } else if self.updated_at.elapsed() > Duration::from_secs(60) {
+            const BITS_PER_HEX_DIGIT: usize = 4;
+            let mut thread_manager = thread_manager.write().unwrap();
+            info!(
+                "[sch_{:0width$x}]: watchdog: update_tick_to_retain(): stopping thread manager ({tid}/{} <= {}/{:?})...",
+                thread_manager.scheduler_id,
+                current_tick,
+                self.tick,
+                elapsed,
+                width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
+            );
+            thread_manager.stop_threads();
+            self.tick = 0;
+            self.updated_at = Instant::now();
         }
 
         true
