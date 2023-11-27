@@ -1316,6 +1316,8 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
             );
             self.stop_thread_manager();
             false
+        } else {
+            true
         }
     }
 }
