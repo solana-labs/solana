@@ -51,7 +51,6 @@ type UniqueWeight = u64;
 
 #[derive(Debug, Default)]
 pub struct Tasks {
-    blocked_task_queue: std::collections::BTreeMap<UniqueWeight, (Task, RequestedUsage)>,
 }
 
 // SchedulerPool must be accessed via dyn by solana-runtime code, because of its internal fields'
@@ -500,7 +499,7 @@ pub enum RequestedUsage {
 #[derive(Debug)]
 pub struct PageInner {
     current_usage: Usage,
-    blocked_task_queue: Tasks,
+    blocked_task_queue: std::collections::BTreeMap<UniqueWeight, (Task, RequestedUsage)>,
 }
 
 impl PageInner {
@@ -510,9 +509,7 @@ impl PageInner {
             blocked_task_queue: Default::default(),
         }
     }
-}
 
-impl Tasks {
     fn insert_task(&mut self, task: Task, requested_usage: RequestedUsage) {
         let pre_existed = self
             .blocked_task_queue
