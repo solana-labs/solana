@@ -44,6 +44,7 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
+use std::sync::atomic::Ordering::Relaxed;
 
 type UniqueWeight = u64;
 
