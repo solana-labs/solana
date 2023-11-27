@@ -82,9 +82,9 @@ pub struct SchedulerPool<
     // prune schedulers, stop idling scheduler's threads, sanity check on the
     // address book after scheduler is returned.
     watchdog_sender: Sender<Weak<RwLock<ThreadManager<TH, SEA>>>>,
+    next_scheduler_id: AtomicU64,
     _watchdog_thread: JoinHandle<()>,
     _phantom: PhantomData<(T, TH, SEA)>,
-    next_id: AtomicU64,
 }
 
 pub type DefaultSchedulerPool = SchedulerPool<
@@ -228,9 +228,9 @@ where
             replay_vote_sender,
             prioritization_fee_cache,
             weak_self: weak_self.clone(),
+            next_scheduler_id: AtomicU64::new(PRIMARY_SCHEDULER_ID),
             _watchdog_thread: watchdog_thread,
             watchdog_sender,
-            next_id: AtomicU64::new(PRIMARY_SCHEDULER_ID),
             _phantom: PhantomData,
         });
         scheduler_pool_sender.send(scheduler_pool.clone()).unwrap();
@@ -280,6 +280,10 @@ where
 
     fn register_to_watchdog(&self, thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>) {
         self.watchdog_sender.send(thread_manager).unwrap();
+    }
+
+    fn new_scheduler_id(&self) -> SchedulerId {
+        self.next_scheduler_id.fetch_add(1, Relaxed)
     }
 }
 
@@ -761,7 +765,7 @@ impl LogInterval {
     }
 }
 
-const PRIMARY_SCHEDULER_ID: u64 = 0;
+const PRIMARY_SCHEDULER_ID: SchedulerId = 0;
 
 impl<TH, SEA> ThreadManager<TH, SEA>
 where
@@ -778,7 +782,7 @@ where
         let (result_sender, result_receiver) = unbounded();
 
         let mut thread_manager = Self {
-            scheduler_id: pool.next_scheduler_id(),
+            scheduler_id: pool.new_scheduler_id(),
             schedulrable_transaction_sender,
             schedulable_transaction_receiver,
             result_sender,
