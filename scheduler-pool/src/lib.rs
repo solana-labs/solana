@@ -1386,7 +1386,7 @@ impl ScheduleStage {
                 Usage::Writable => LockStatus::Failed,
             }
         } else {
-            LockStatus::Failed;
+            LockStatus::Failed
         }
     }
 
