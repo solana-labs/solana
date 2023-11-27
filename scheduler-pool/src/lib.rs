@@ -136,24 +136,25 @@ where
             .unwrap();
         let stat = task.stat().unwrap();
         let current_tick = stat.utime + stat.stime;
-        let elapsed;
         if current_tick > self.tick {
             self.tick = current_tick;
             self.updated_at = Instant::now();
-        } else if (elapsed = self.updated_at.elapsed()) > Duration::from_secs(60) {
-            const BITS_PER_HEX_DIGIT: usize = 4;
-            let mut thread_manager = thread_manager.write().unwrap();
-            info!(
-                "[sch_{:0width$x}]: watchdog: update_tick_to_retain(): stopping thread manager ({tid}/{} <= {}/{:?})...",
-                thread_manager.scheduler_id,
-                current_tick,
-                self.tick,
-                elapsed,
-                width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
-            );
-            thread_manager.stop_threads();
-            self.tick = 0;
-            self.updated_at = Instant::now();
+        } else if let elapsed = self.updated_at.elapsed() {
+            if elapsed > Duration::from_secs(60) {
+                const BITS_PER_HEX_DIGIT: usize = 4;
+                let mut thread_manager = thread_manager.write().unwrap();
+                info!(
+                    "[sch_{:0width$x}]: watchdog: update_tick_to_retain(): stopping thread manager ({tid}/{} <= {}/{:?})...",
+                    thread_manager.scheduler_id,
+                    current_tick,
+                    self.tick,
+                    elapsed,
+                    width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
+                );
+                thread_manager.stop_threads();
+                self.tick = 0;
+                self.updated_at = Instant::now();
+            }
         }
 
         true
