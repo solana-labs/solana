@@ -877,6 +877,7 @@ where
         let (drop_sender2, drop_receiver2) = unbounded::<ResultWithTimings>();
         let scheduler_id = self.scheduler_id;
         let mut slot = context.bank().slot();
+        #[cfg(linuaaja)]
         let (tid_sender, tid_receiver) = bounded(1);
 
         let scheduler_main_loop = || {
