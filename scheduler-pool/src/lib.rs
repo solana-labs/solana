@@ -557,10 +557,9 @@ unsafe impl Sync for PageRc {}
 unsafe impl Sync for TaskStatus {}
 type WeightedTaskQueue = std::collections::BTreeMap<UniqueWeight, Task>;
 
-type AddressMap = dashmap::DashMap<Pubkey, PageRc>;
 #[derive(Default, Debug)]
 pub struct AddressBook {
-    book: AddressMap,
+    book: dashmap::DashMap<Pubkey, PageRc>,
 }
 
 impl AddressBook {
