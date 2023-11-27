@@ -186,9 +186,9 @@ where
 
                 'outer: loop {
                     let mut schedulers = scheduler_pool.schedulers.lock().unwrap();
-                    let pre_schedulers_len = schedulers.len();
+                    let schedulers_len_pre_retain = schedulers.len();
                     schedulers.retain_mut(|scheduler| scheduler.should_keep_alive());
-                    let post_schedulers_len = schedulers.len();
+                    let schedulers_len_post_retain = schedulers.len();
                     drop(schedulers);
 
                     let thread_manager_len_pre_retain = thread_managers.len();
