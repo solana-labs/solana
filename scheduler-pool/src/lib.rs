@@ -38,12 +38,14 @@ use {
         cell::UnsafeCell,
         fmt::Debug,
         marker::PhantomData,
-        sync::{Arc, atomic::AtomicU64, Mutex, RwLock, RwLockReadGuard, Weak},
+        sync::{
+            atomic::{AtomicU64, Ordering::Relaxed},
+            Arc, Mutex, RwLock, RwLockReadGuard, Weak,
+        },
         thread::{sleep, JoinHandle},
         time::{Duration, Instant, SystemTime},
     },
 };
-use std::sync::atomic::Ordering::Relaxed;
 
 type UniqueWeight = u64;
 
