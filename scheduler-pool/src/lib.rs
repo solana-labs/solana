@@ -222,7 +222,7 @@ where
             .unwrap();
 
         let scheduler_pool = Arc::new_cyclic(|weak_self| Self {
-            schedulers: Mutex::new(vec![]),
+            schedulers: Mutex::default(),
             log_messages_bytes_limit,
             transaction_status_sender,
             replay_vote_sender,
