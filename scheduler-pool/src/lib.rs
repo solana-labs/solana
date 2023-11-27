@@ -562,6 +562,10 @@ impl AddressBook {
     pub fn page_count(&self) -> usize {
         self.book.len()
     }
+
+    pub fn clear(&self) -> usize {
+        self.book.clear()
+    }
 }
 
 #[derive(Debug)]
@@ -1283,7 +1287,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
                     self.id(),
                     width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
                 );
-                self.address_book.book.clear();
+                self.address_book.clear();
                 return true;
             } else {
                 info!(
