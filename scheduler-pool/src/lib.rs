@@ -1363,7 +1363,7 @@ impl ScheduleStage {
 
     fn attempt_lock_address(unique_weight: &UniqueWeight, attempt: &mut LockAttempt) -> LockStatus {
         let page = attempt.target_page_mut();
-        let tcuw = page.blocked_task_queue.heaviest_weight();
+        let tcuw = page.heaviest_weight();
 
         let strictly_lockable = if tcuw.is_none() {
             true
@@ -1371,7 +1371,6 @@ impl ScheduleStage {
             true
         } else if attempt.requested_usage == RequestedUsage::Readonly
             && page
-                .blocked_task_queue
                 .heaviest_writing_task_weight()
                 .map(|existing_unique_weight| *unique_weight > existing_unique_weight)
                 .unwrap_or(true)
