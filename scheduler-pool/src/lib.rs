@@ -44,6 +44,7 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
+use rustix::thread::Pid;
 
 type UniqueWeight = u64;
 
