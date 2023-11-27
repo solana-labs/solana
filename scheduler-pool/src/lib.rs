@@ -768,12 +768,12 @@ where
         pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
         handler_count: usize,
     ) -> Self {
-        static ID: AtomicU64 = AtomicU64::new(0);
+        static NEXT_ID: AtomicU64 = AtomicU64::new(0);
         let (schedulrable_transaction_sender, schedulable_transaction_receiver) = unbounded();
         let (result_sender, result_receiver) = unbounded();
 
         let mut thread_manager = Self {
-            scheduler_id: I.fetch_add(1),
+            scheduler_id: NEXT_ID.fetch_add(1),
             schedulrable_transaction_sender,
             schedulable_transaction_receiver,
             result_sender,
