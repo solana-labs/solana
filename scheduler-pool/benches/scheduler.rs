@@ -249,7 +249,7 @@ mod nonblocking {
             unimplemented!();
         }
 
-        fn should_retain_in_pool(&mut self) -> bool {
+        fn should_keep_alive(&mut self) -> bool {
             unimplemented!();
         }
     }
