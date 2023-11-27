@@ -15,7 +15,10 @@ use {
     crossbeam_channel::{Receiver, Sender, TryRecvError},
     itertools::izip,
     prio_graph::{AccessKind, PrioGraph},
-    solana_sdk::{pubkey::Pubkey, slot_history::Slot, transaction::SanitizedTransaction},
+    solana_sdk::{
+        pubkey::Pubkey, saturating_add_assign, slot_history::Slot,
+        transaction::SanitizedTransaction,
+    },
     std::collections::HashMap,
 };
 
@@ -77,9 +80,9 @@ impl PrioGraphScheduler {
         let mut unblock_this_batch =
             Vec::with_capacity(self.consume_work_senders.len() * TARGET_NUM_TRANSACTIONS_PER_BATCH);
         const MAX_TRANSACTIONS_PER_SCHEDULING_PASS: usize = 100_000;
-        let mut num_scheduled = 0;
-        let mut num_sent = 0;
-        let mut num_unschedulable = 0;
+        let mut num_scheduled: usize = 0;
+        let mut num_sent: usize = 0;
+        let mut num_unschedulable: usize = 0;
         while num_scheduled < MAX_TRANSACTIONS_PER_SCHEDULING_PASS {
             // If nothing is in the main-queue of the `PrioGraph` then there's nothing left to schedule.
             if prio_graph.is_empty() {
@@ -110,7 +113,7 @@ impl PrioGraphScheduler {
                 if !blocking_locks.check_locks(transaction.message()) {
                     blocking_locks.take_locks(transaction.message());
                     unschedulable_ids.push(id);
-                    num_unschedulable += 1;
+                    saturating_add_assign!(num_unschedulable, 1);
                     continue;
                 }
 
@@ -135,11 +138,11 @@ impl PrioGraphScheduler {
                 ) else {
                     blocking_locks.take_locks(transaction.message());
                     unschedulable_ids.push(id);
-                    num_unschedulable += 1;
+                    saturating_add_assign!(num_unschedulable, 1);
                     continue;
                 };
 
-                num_scheduled += 1;
+                saturating_add_assign!(num_scheduled, 1);
 
                 // Track the chain-id to thread-index mapping.
                 chain_id_to_thread_index.insert(prio_graph.chain_id(&id), thread_id);
@@ -157,11 +160,11 @@ impl PrioGraphScheduler {
                 batches.transactions[thread_id].push(transaction);
                 batches.ids[thread_id].push(id.id);
                 batches.max_age_slots[thread_id].push(max_age_slot);
-                batches.total_cus[thread_id] += cu_limit;
+                saturating_add_assign!(batches.total_cus[thread_id], cu_limit);
 
                 // If target batch size is reached, send only this batch.
                 if batches.ids[thread_id].len() >= TARGET_NUM_TRANSACTIONS_PER_BATCH {
-                    num_sent += self.send_batch(&mut batches, thread_id)?;
+                    saturating_add_assign!(num_sent, self.send_batch(&mut batches, thread_id)?);
                 }
 
                 if num_scheduled >= MAX_TRANSACTIONS_PER_SCHEDULING_PASS {
@@ -170,7 +173,7 @@ impl PrioGraphScheduler {
             }
 
             // Send all non-empty batches
-            num_sent += self.send_batches(&mut batches)?;
+            saturating_add_assign!(num_sent, self.send_batches(&mut batches)?);
 
             // Unblock all transactions that were blocked by the transactions that were just sent.
             for id in unblock_this_batch.drain(..) {
@@ -179,7 +182,7 @@ impl PrioGraphScheduler {
         }
 
         // Send batches for any remaining transactions
-        num_sent += self.send_batches(&mut batches)?;
+        saturating_add_assign!(num_sent, self.send_batches(&mut batches)?);
 
         // Push unschedulable ids back into the container
         for id in unschedulable_ids {
@@ -208,15 +211,15 @@ impl PrioGraphScheduler {
         &mut self,
         container: &mut TransactionStateContainer,
     ) -> Result<(usize, usize), SchedulerError> {
-        let mut total_num_transactions = 0;
-        let mut total_num_retryable = 0;
+        let mut total_num_transactions: usize = 0;
+        let mut total_num_retryable: usize = 0;
         loop {
             let (num_transactions, num_retryable) = self.try_receive_completed(container)?;
             if num_transactions == 0 {
                 break;
             }
-            total_num_transactions += num_transactions;
-            total_num_retryable += num_retryable;
+            saturating_add_assign!(total_num_transactions, num_transactions);
+            saturating_add_assign!(total_num_retryable, num_retryable);
         }
         Ok((total_num_transactions, total_num_retryable))
     }
