@@ -977,7 +977,7 @@ where
                             },
                             recv(handled_idle_transaction_receiver) -> task => {
                                 let task = task.unwrap();
-                                state_machine.deschedule_task(&task);
+                                state_machine.deschedule_task(&task.task);
                                 drop_sender.send_buffered(SessionedMessage::Payload(task)).unwrap();
                                 "step"
                             },
