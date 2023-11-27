@@ -209,7 +209,7 @@ where
                         "watchdog: unused schedulers: {} => {}, all thread managers: {} => {} => {}",
                         pre_schedulers_len,
                         post_schedulers_len,
-                        thred_manager_len_pre_retain,
+                        thread_manager_len_pre_retain,
                         thread_manager_len_pre_push,
                         thread_managers.len(),
                     );
