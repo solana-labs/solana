@@ -534,7 +534,7 @@ type PageRc = Arc<UnsafeCell<PageInner>>;
 static_assertions::const_assert_eq!(std::mem::size_of::<UnsafeCell<PageInner>>(), 32);
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct Page(by_address::ByAddress<PageRc>);
+pub struct Page(ByAddress<PageRc>);
 unsafe impl Send for Page {}
 unsafe impl Sync for Page {}
 
@@ -549,7 +549,7 @@ pub struct AddressBook {
 impl AddressBook {
     pub fn load(&self, address: Pubkey) -> Page {
         Page::clone(&self.book.entry(address).or_insert_with(|| {
-            Page(by_address::ByAddress(PageRc::new(UnsafeCell::new(
+            Page(ByAddress(PageRc::new(UnsafeCell::new(
                 PageInner::new(Usage::Unused),
             ))))
         }))
