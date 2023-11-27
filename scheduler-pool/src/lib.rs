@@ -46,6 +46,7 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
+use by_address::ByAddress;
 
 type UniqueWeight = u64;
 
