@@ -1136,13 +1136,17 @@ where
             }
         };
 
+        #[cfg(target_os = "linux")]
+        let tid = Some(tid_receiver.recv().unwrap());
+        #[cfg(not(target_os = "linux"))]
+        let tid = None;
+
         self.scheduler_thread_and_tid = Some((
             std::thread::Builder::new()
                 .name("solScheduler".to_owned())
                 .spawn(scheduler_main_loop())
                 .unwrap(),
-            #[cfg(target_os = "linux")]
-            tid_receiver.recv().unwrap(),
+            tid,
         ));
 
         self.drop_thread = Some(
