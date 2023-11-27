@@ -32,6 +32,7 @@ static_assertions = { workspace = true }
 assert_matches = { workspace = true }
 bincode = { workspace = true }
 jemallocator = { workspace = true }
+rand = { workspace = true }
 log = { workspace = true }
 solana-logger = { workspace = true }
 solana-nohash-hasher = { workspace = true }
