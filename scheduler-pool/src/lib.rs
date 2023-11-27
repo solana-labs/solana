@@ -399,7 +399,7 @@ impl TaskInner {
         for lock_attempt in self.lock_attempts_mut() {
             lock_attempt
                 .target_page_mut()
-                .insert_task(self.clone(), lock_attempt.requested_usage);
+                .insert_blocked_task(self.clone(), lock_attempt.requested_usage);
         }
     }
 
@@ -494,46 +494,42 @@ pub enum RequestedUsage {
 #[derive(Debug)]
 pub struct PageInner {
     current_usage: Usage,
-    blocked_task_queue: std::collections::BTreeMap<UniqueWeight, (Task, RequestedUsage)>,
+    blocked_tasks: std::collections::BTreeMap<UniqueWeight, (Task, RequestedUsage)>,
 }
 
 impl PageInner {
     fn new(current_usage: Usage) -> Self {
         Self {
             current_usage,
-            blocked_task_queue: Default::default(),
+            blocked_tasks: Default::default(),
         }
     }
 
-    fn insert_task(&mut self, task: Task, requested_usage: RequestedUsage) {
+    fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
         let pre_existed = self
-            .blocked_task_queue
+            .blocked_tasks
             .insert(task.unique_weight, (task, requested_usage));
         assert!(pre_existed.is_none());
     }
 
-    fn remove_task(&mut self, u: &UniqueWeight) {
-        let removed_entry = self.blocked_task_queue.remove(u);
+    fn remove_blocked_task(&mut self, u: &UniqueWeight) {
+        let removed_entry = self.blocked_tasks.remove(u);
         assert!(removed_entry.is_some());
     }
 
-    fn heaviest_task_iter(&self) -> impl Iterator<Item = &(Task, RequestedUsage)> {
-        self.blocked_task_queue.values().rev()
-    }
-
-    fn heaviest_writing_task_weight(&self) -> Option<UniqueWeight> {
-        self.blocked_task_queue
+    fn heaviest_blocked_writing_task_weight(&self) -> Option<UniqueWeight> {
+        self.blocked_tasks
             .values()
             .rev()
             .find_map(|(task, ru)| (ru == &RequestedUsage::Writable).then_some(task.unique_weight))
     }
 
-    fn heaviest_weight(&mut self) -> Option<UniqueWeight> {
-        self.blocked_task_queue.last_entry().map(|j| *j.key())
+    fn heaviest_blocked_task(&mut self) -> Option<UniqueWeight> {
+        self.blocked_tasks.last_entry().map(|j| *j.key())
     }
 
-    fn heaviest_contended_task(&self) -> Option<&(Task, RequestedUsage)> {
-        self.heaviest_task_iter()
+    fn heaviest_still_blocked_task(&self) -> Option<&(Task, RequestedUsage)> {
+        self.blocked_tasks.values().rev()
             .find(|(task, _)| task.currently_contended())
     }
 }
@@ -1359,7 +1355,7 @@ impl ScheduleStage {
 
     fn attempt_lock_address(unique_weight: &UniqueWeight, attempt: &mut LockAttempt) -> LockStatus {
         let page = attempt.target_page_mut();
-        let tcuw = page.heaviest_weight();
+        let tcuw = page.heaviest_blocked_task();
 
         let strictly_lockable = if tcuw.is_none() {
             true
@@ -1367,7 +1363,7 @@ impl ScheduleStage {
             true
         } else if attempt.requested_usage == RequestedUsage::Readonly
             && page
-                .heaviest_writing_task_weight()
+                .heaviest_blocked_writing_task_weight()
                 .map(|existing_unique_weight| *unique_weight > existing_unique_weight)
                 .unwrap_or(true)
         {
@@ -1471,7 +1467,7 @@ impl ScheduleStage {
             {
                 if let Some(heaviest_blocked_task) = read_only_lock_attempt
                     .target_page_mut()
-                    .heaviest_contended_task()
+                    .heaviest_still_blocked_task()
                     .and_then(|(task, ru)| (*ru == RequestedUsage::Readonly).then_some(task))
                 {
                     retryable_task_queue
@@ -1500,7 +1496,7 @@ impl ScheduleStage {
             if should_remove {
                 unlock_attempt
                     .target_page_mut()
-                    .remove_task(uq);
+                    .remove_blocked_task(uq);
             }
 
             let is_unused_now = Self::unlock(unlock_attempt);
@@ -1510,7 +1506,7 @@ impl ScheduleStage {
 
             let heaviest_uncontended_now = unlock_attempt
                 .target_page_mut()
-                .heaviest_contended_task();
+                .heaviest_still_blocked_task();
             if let Some((uncontended_task, _ru)) = heaviest_uncontended_now {
                 retryable_task_queue
                     .entry(uncontended_task.unique_weight)
