@@ -421,7 +421,7 @@ impl Rocks {
         let column_options = options.column_options.clone();
         let detected_cfs = DB::list_cf(&Options::default(), path)
             .map_err(|err| {
-                warn!("Unable to detect Rocks colums: {err:?}");
+                warn!("Unable to detect Rocks columns: {err:?}");
             })
             .unwrap_or_default();
         let cf_descriptors = Self::cf_descriptors(&options, &oldest_slot, &detected_cfs);
@@ -513,8 +513,8 @@ impl Rocks {
             if known_cfs.get(cf_name.as_str()).is_none() {
                 info!("Detected unknown column {cf_name}, opening column with basic options");
                 // This version of the software was unaware of the column, so
-                // it fair to assume that we will not attempt to read or write
-                // the column. So, set some bare bones settings to avoid
+                // it is fair to assume that we will not attempt to read or
+                // write the column. So, set some bare bones settings to avoid
                 // using extra resources on this unknown column.
                 let mut options = Options::default();
                 // Lower the default to avoid unnecessary allocations
