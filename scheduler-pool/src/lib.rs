@@ -479,10 +479,6 @@ impl Usage {
             RequestedUsage::Writable => Usage::Writable,
         }
     }
-
-    fn unused() -> Self {
-        Usage::Unused
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -554,7 +550,7 @@ impl AddressBook {
     pub fn load(&self, address: Pubkey) -> Page {
         Page::clone(&self.book.entry(address).or_insert_with(|| {
             Page(by_address::ByAddress(PageRc::new(UnsafeCell::new(
-                PageInner::new(Usage::unused()),
+                PageInner::new(Usage::Unused),
             ))))
         }))
     }
