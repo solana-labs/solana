@@ -16,6 +16,7 @@ Release channels have their own copy of this changelog:
 * Changes
   * Added a github check to support `changelog` label
   * The default for `--use-snapshot-archives-at-startup` is now `when-newest` (#33883)
+    * The default for `solana-ledger-tool`, however, remains `always` (#34228)
 * Upgrade Notes
 
 ## [1.17.0]
