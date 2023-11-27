@@ -14,7 +14,6 @@ use {
         TryRecvError,
     },
     log::*,
-    rand::{thread_rng, Rng},
     solana_ledger::blockstore_processor::{
         execute_batch, TransactionBatchWithIndexes, TransactionStatusSender,
     },
