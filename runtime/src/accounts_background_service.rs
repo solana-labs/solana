@@ -707,7 +707,7 @@ impl AccountsBackgroundService {
                             bank.force_flush_accounts_cache();
                             bank.clean_accounts(last_full_snapshot_slot);
                             last_cleaned_block_height = bank.block_height();
-                            bank.shrink_candidate_slots_arc(exit.clone(), &request_handlers.pruned_banks_request_handler.pruned_banks_receiver);
+                            bank.shrink_ancient_slots();
                         }
                         bank.shrink_candidate_slots();
                     }
