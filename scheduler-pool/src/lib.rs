@@ -193,8 +193,8 @@ where
 
                     let pre_retain_len = thread_managers.len();
                     thread_managers.retain_mut(|thread_manager| thread_manager.should_keep_alive());
-
                     let pre_push_len = thread_managers.len();
+
                     'inner: loop {
                         match watchdog_receiver.try_recv() {
                             Ok(thread_manager) => {
