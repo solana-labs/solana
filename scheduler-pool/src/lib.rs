@@ -230,6 +230,7 @@ where
             weak_self: weak_self.clone(),
             _watchdog_thread: watchdog_thread,
             watchdog_sender,
+            scheduler_id: AtomicU64::new(PRIMARY_SCHEDULER_ID),
             _phantom: PhantomData,
         });
         scheduler_pool_sender.send(scheduler_pool.clone()).unwrap();
