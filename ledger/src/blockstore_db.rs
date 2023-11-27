@@ -419,12 +419,7 @@ impl Rocks {
         }
         let oldest_slot = OldestSlot::default();
         let column_options = options.column_options.clone();
-        let detected_cfs = DB::list_cf(&Options::default(), path)
-            .map_err(|err| {
-                warn!("Unable to detect Rocks columns: {err:?}");
-            })
-            .unwrap_or_default();
-        let cf_descriptors = Self::cf_descriptors(&options, &oldest_slot, &detected_cfs);
+        let cf_descriptors = Self::cf_descriptors(path, &options, &oldest_slot)?;
 
         // Open the database
         let db = match access_type {
@@ -469,10 +464,10 @@ impl Rocks {
     /// software version that adds a new column, and then also opened with an older version that
     /// did not have knowledge of that new column.
     fn cf_descriptors(
+        path: &Path,
         options: &BlockstoreOptions,
         oldest_slot: &OldestSlot,
-        detected_cfs: &[String],
-    ) -> Vec<ColumnFamilyDescriptor> {
+    ) -> Result<Vec<ColumnFamilyDescriptor>> {
         use columns::*;
 
         let (cf_descriptor_shred_data, cf_descriptor_shred_code) =
@@ -501,6 +496,20 @@ impl Rocks {
             new_cf_descriptor::<MerkleRootMeta>(options, oldest_slot),
         ];
 
+        // If the access type is Secondary, we don't need to open all of the
+        // columns so we can just return immediately.
+        match options.access_type {
+            AccessType::Secondary => {
+                return Ok(cf_descriptors);
+            }
+            AccessType::Primary | AccessType::PrimaryForMaintenance => {}
+        }
+
+        let detected_cfs = DB::list_cf(&Options::default(), path)
+            .map_err(|err| {
+                warn!("Unable to detect Rocks columns: {err:?}");
+            })
+            .unwrap_or_default();
         // The default column is handled automatically, we don't need to create
         // a descriptor for it
         const DEFAULT_COLUMN_NAME: &str = "default";
@@ -525,7 +534,7 @@ impl Rocks {
             }
         });
 
-        cf_descriptors
+        Ok(cf_descriptors)
     }
 
     fn columns() -> Vec<&'static str> {
@@ -2205,7 +2214,9 @@ fn should_enable_compression<C: 'static + Column + ColumnName>() -> bool {
 
 #[cfg(test)]
 pub mod tests {
-    use {super::*, crate::blockstore_db::columns::ShredData, tempfile::tempdir};
+    use {
+        super::*, crate::blockstore_db::columns::ShredData, std::path::PathBuf, tempfile::tempdir,
+    };
 
     #[test]
     fn test_compaction_filter() {
@@ -2258,6 +2269,7 @@ pub mod tests {
 
     #[test]
     fn test_cf_names_and_descriptors_equal_length() {
+        let path = PathBuf::default();
         let options = BlockstoreOptions::default();
         let oldest_slot = OldestSlot::default();
         // The names and descriptors don't need to be in the same order for our use cases;
@@ -2265,7 +2277,9 @@ pub mod tests {
         // should update both lists.
         assert_eq!(
             Rocks::columns().len(),
-            Rocks::cf_descriptors(&options, &oldest_slot, &[]).len()
+            Rocks::cf_descriptors(&path, &options, &oldest_slot)
+                .unwrap()
+                .len()
         );
     }
 
