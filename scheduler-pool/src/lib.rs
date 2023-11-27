@@ -44,7 +44,6 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
-use rustix::thread::Pid;
 
 type UniqueWeight = u64;
 
@@ -146,7 +145,7 @@ where
                 const BITS_PER_HEX_DIGIT: usize = 4;
                 let mut thread_manager = thread_manager.write().unwrap();
                 info!(
-                    "[sch_{:0width$x}]: watchdog: update_tick_to_retain(): stopping thread manager ({tid:?}/{} <= {}/{:?})...",
+                    "[sch_{:0width$x}]: watchdog: update_tick_to_retain(): stopping thread manager ({tid}/{} <= {}/{:?})...",
                     thread_manager.scheduler_id,
                     current_tick,
                     self.tick,
@@ -645,7 +644,7 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     scheduler_id: SchedulerId,
     pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
     context: WeakSchedulingContext,
-    scheduler_thread_and_tid: Option<(JoinHandle<ResultWithTimings>, Pid)>,
+    scheduler_thread_and_tid: Option<(JoinHandle<ResultWithTimings>, i32)>,
     handler_threads: Vec<JoinHandle<()>>,
     drop_thread: Option<JoinHandle<()>>,
     handler: TH,
@@ -923,7 +922,7 @@ where
                     "solScheduler thread is started at: {:?}",
                     std::thread::current()
                 );
-                tid_sender.send(rustix::thread::gettid()).unwrap();
+                tid_sender.send(rustix::thread::gettid().as_raw_nonzero().get() as i32).unwrap();
 
                 while !end_thread {
                     loop {
