@@ -117,7 +117,7 @@ where
         let Some(thread_manager) = self.thread_manager.upgrade() else {
             return false;
         };
-        let Some(tid) = thread_manager.read().unwrap().tid_if_not_primary() else {
+        let Some(tid) = thread_manager.read().unwrap().active_tid_if_not_primary() else {
             self.tick = 0;
             self.updated_at = Instant::now();
             return true;
@@ -1227,7 +1227,7 @@ where
         }
     }
 
-    fn tid_if_not_primary(&self) -> Option<Tid> {
+    fn active_tid_if_not_primary(&self) -> Option<Tid> {
         if self.is_primary {
             self.scheduler_thread_and_tid.as_ref().map(|&(_, tid)| tid)
         } else {
