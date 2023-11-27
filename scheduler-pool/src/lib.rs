@@ -1291,7 +1291,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
                     self.id(),
                     width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
                 );
-                self.address_book.clear();
+                self.address_book.book.clear();
                 return true;
             } else {
                 info!(
