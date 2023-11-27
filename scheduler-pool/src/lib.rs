@@ -9,6 +9,7 @@
 //! helper fun called `execute_batch()`.
 
 use {
+    by_address::ByAddress,
     crossbeam_channel::{
         after, bounded, never, select_biased, unbounded, Receiver, RecvTimeoutError, Sender,
         TryRecvError,
@@ -46,7 +47,6 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
-use by_address::ByAddress;
 
 type UniqueWeight = u64;
 
@@ -526,7 +526,9 @@ impl PageInner {
     }
 
     fn heaviest_still_blocked_task(&self) -> Option<&(Task, RequestedUsage)> {
-        self.blocked_tasks.values().rev()
+        self.blocked_tasks
+            .values()
+            .rev()
             .find(|(task, _)| task.currently_contended())
     }
 }
@@ -550,9 +552,9 @@ pub struct AddressBook {
 impl AddressBook {
     pub fn load(&self, address: Pubkey) -> Page {
         Page::clone(&self.book.entry(address).or_insert_with(|| {
-            Page(ByAddress(PageRc::new(UnsafeCell::new(
-                PageInner::new(Usage::Unused),
-            ))))
+            Page(ByAddress(PageRc::new(UnsafeCell::new(PageInner::new(
+                Usage::Unused,
+            )))))
         }))
     }
 
@@ -1495,9 +1497,7 @@ impl ScheduleStage {
     ) {
         for unlock_attempt in lock_attempts {
             if should_remove {
-                unlock_attempt
-                    .target_page_mut()
-                    .remove_blocked_task(uq);
+                unlock_attempt.target_page_mut().remove_blocked_task(uq);
             }
 
             let is_unused_now = Self::unlock(unlock_attempt);
