@@ -182,7 +182,7 @@ where
                 let scheduler_pool: Arc<Self> = scheduler_pool_receiver.recv().unwrap();
                 drop(scheduler_pool_receiver);
 
-                let mut watched_thread_managers: Vec<WatchedThreadManager<TH, SEA>> = vec![];
+                let mut thread_managers: Vec<WatchedThreadManager<TH, SEA>> = vec![];
 
                 'outer: loop {
                     let mut schedulers = scheduler_pool.schedulers.lock().unwrap();
@@ -191,15 +191,15 @@ where
                     let post_schedulers_len = schedulers.len();
                     drop(schedulers);
 
-                    let pre_retain_len = watched_thread_managers.len();
-                    watched_thread_managers
-                        .retain_mut(|thread_manager| thread_manager.should_keep_alive());
+                    let pre_retain_len = thread_managers.len();
+                    thread_managers.retain_mut(|thread_manager| thread_manager.should_keep_alive());
 
-                    let pre_push_len = watched_thread_managers.len();
+                    let pre_push_len = thread_managers.len();
                     'inner: loop {
                         match watchdog_receiver.try_recv() {
-                            Ok(thread_manager) => watched_thread_managers
-                                .push(WatchedThreadManager::new(thread_manager)),
+                            Ok(thread_manager) => {
+                                thread_managers.push(WatchedThreadManager::new(thread_manager))
+                            }
                             Err(TryRecvError::Disconnected) => break 'outer,
                             Err(TryRecvError::Empty) => break 'inner,
                         }
@@ -211,7 +211,7 @@ where
                         post_schedulers_len,
                         pre_retain_len,
                         pre_push_len,
-                        watched_thread_managers.len(),
+                        thread_managers.len(),
                     );
                     // sleep here to write all logs at once.
                     sleep(Duration::from_secs(2));
