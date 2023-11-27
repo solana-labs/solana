@@ -650,7 +650,6 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     result_receiver: Receiver<ResultWithTimings>,
     handler_count: usize,
     session_result_with_timings: Option<ResultWithTimings>,
-    is_primary: bool,
 }
 
 impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
@@ -769,12 +768,12 @@ where
         pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
         handler_count: usize,
     ) -> Self {
+        static ID: AtomicU64 = AtomicU64::new(0);
         let (schedulrable_transaction_sender, schedulable_transaction_receiver) = unbounded();
         let (result_sender, result_receiver) = unbounded();
-        let is_primary = pool.schedulers.lock().unwrap().len() == 0;
 
         let mut thread_manager = Self {
-            scheduler_id: thread_rng().gen::<SchedulerId>(),
+            scheduler_id: I.fetch_add(1),
             schedulrable_transaction_sender,
             schedulable_transaction_receiver,
             result_sender,
@@ -787,7 +786,6 @@ where
             handler,
             pool,
             session_result_with_timings: None,
-            is_primary,
         };
         // needs to start threads immediately, because the bank in initial_context can be dropped
         // anytime.
@@ -1228,7 +1226,7 @@ where
     }
 
     fn active_tid_if_not_primary(&self) -> Option<Tid> {
-        if self.is_primary {
+        if self.id == PRIMARY_SCHEDULER_ID {
             // always exempt from watchdog...
             None
         } else {
