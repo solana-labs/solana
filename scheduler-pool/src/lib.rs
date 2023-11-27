@@ -207,8 +207,8 @@ where
 
                     info!(
                         "watchdog: unused schedulers: {} => {}, all thread managers: {} => {} => {}",
-                        pre_schedulers_len,
-                        post_schedulers_len,
+                        schedulers_len_pre_retain,
+                        schedulers_len_post_retain,
                         thread_manager_len_pre_retain,
                         thread_manager_len_pre_push,
                         thread_managers.len(),
