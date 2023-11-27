@@ -1477,7 +1477,6 @@ impl ScheduleStage {
             {
                 if let Some(heaviest_blocked_task) = read_only_lock_attempt
                     .target_page_mut()
-                    .blocked_task_queue
                     .heaviest_contended_task()
                     .and_then(|(task, ru)| (*ru == RequestedUsage::Readonly).then_some(task))
                 {
@@ -1507,7 +1506,6 @@ impl ScheduleStage {
             if should_remove {
                 unlock_attempt
                     .target_page_mut()
-                    .blocked_task_queue
                     .remove_task(uq);
             }
 
@@ -1518,7 +1516,6 @@ impl ScheduleStage {
 
             let heaviest_uncontended_now = unlock_attempt
                 .target_page_mut()
-                .blocked_task_queue
                 .heaviest_contended_task();
             if let Some((uncontended_task, _ru)) = heaviest_uncontended_now {
                 retryable_task_queue
