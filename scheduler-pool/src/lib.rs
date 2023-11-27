@@ -790,9 +790,9 @@ where
             handler_threads: Vec::with_capacity(handler_count),
             handler_count,
             handler,
-            pool,
             session_result_with_timings: None,
             is_primary: pool.schedulers.lock().unwrap().len() == 0,
+            pool,
         };
         // needs to start threads immediately, because the bank in initial_context can be dropped
         // anytime.
