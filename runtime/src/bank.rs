@@ -966,7 +966,7 @@ pub(super) enum RewardInterval {
 }
 
 impl Bank {
-    fn with_mocked_fork(self) -> (Arc<Self>, Arc<RwLock<BankForks>>) {
+    fn wrap_with_bank_forks_for_tests(self) -> (Arc<Self>, Arc<RwLock<BankForks>>) {
         let bank_fork = BankForks::new_rw_arc(self);
         let bank_arc = bank_fork.read().unwrap().root_bank();
         bank_arc
@@ -989,21 +989,21 @@ impl Bank {
         Self::new_for_tests_with_config(genesis_config, BankTestConfig::default())
     }
 
-    pub fn new_with_fork_for_tests(
+    pub fn new_with_bank_forks_for_tests(
         genesis_config: &GenesisConfig,
     ) -> (Arc<Self>, Arc<RwLock<BankForks>>) {
         let bank = Self::new_for_tests(genesis_config);
-        bank.with_mocked_fork()
+        bank.wrap_with_bank_forks_for_tests()
     }
 
-    pub fn new_with_mockup_builtin(
+    pub fn new_with_mockup_builtin_for_tests(
         genesis_config: &GenesisConfig,
         program_id: Pubkey,
         builtin_function: BuiltinFunctionWithContext,
     ) -> (Arc<Self>, Arc<RwLock<BankForks>>) {
         let mut bank = Self::new_for_tests(genesis_config);
         bank.add_mockup_builtin(program_id, builtin_function);
-        bank.with_mocked_fork()
+        bank.wrap_with_bank_forks_for_tests()
     }
 
     pub fn new_for_tests_with_config(
