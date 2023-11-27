@@ -18,7 +18,9 @@ use {
     crossbeam_channel::RecvTimeoutError,
     solana_measure::measure_us,
     solana_runtime::bank_forks::BankForks,
-    solana_sdk::{saturating_add_assign, timing::AtomicInterval},
+    solana_sdk::{
+        saturating_add_assign, timing::AtomicInterval, transaction::SanitizedTransaction,
+    },
     std::{
         sync::{Arc, RwLock},
         time::Duration,
@@ -199,6 +201,7 @@ impl SchedulerController {
         // Sanitize packets, generate IDs, and insert into the container.
         let bank = self.bank_forks.read().unwrap().working_bank();
         let last_slot_in_epoch = bank.epoch_schedule().get_last_slot_in_epoch(bank.epoch());
+        let transaction_account_lock_limit = bank.get_transaction_account_lock_limit();
         let feature_set = &bank.feature_set;
         let vote_only = bank.vote_only_bank();
         for packet in packets {
@@ -208,6 +211,18 @@ impl SchedulerController {
                 saturating_add_assign!(self.count_metrics.num_dropped_on_sanitization, 1);
                 continue;
             };
+
+            // Check transaction does not have too many or duplicate locks.
+            // If it does, transaction is not valid and should be dropped here.
+            if SanitizedTransaction::validate_account_locks(
+                transaction.message(),
+                transaction_account_lock_limit,
+            )
+            .is_err()
+            {
+                saturating_add_assign!(self.count_metrics.num_dropped_on_validate_locks, 1);
+                continue;
+            }
 
             let transaction_id = self.transaction_id_generator.next();
             let transaction_ttl = SanitizedTransactionTTL {
@@ -247,6 +262,8 @@ struct SchedulerCountMetrics {
     num_dropped_on_receive: usize,
     /// Number of transactions that were dropped due to sanitization failure.
     num_dropped_on_sanitization: usize,
+    /// Number of transactions that were dropped due to failed lock validation.
+    num_dropped_on_validate_locks: usize,
     /// Number of transactions that were dropped due to clearing.
     num_dropped_on_clear: usize,
     /// Number of transactions that were dropped due to exceeded capacity.
@@ -278,6 +295,11 @@ impl SchedulerCountMetrics {
                 self.num_dropped_on_sanitization,
                 i64
             ),
+            (
+                "num_dropped_on_validate_locks",
+                self.num_dropped_on_validate_locks,
+                i64
+            ),
             ("num_dropped_on_clear", self.num_dropped_on_clear, i64),
             ("num_dropped_on_capacity", self.num_dropped_on_capacity, i64)
         );
@@ -291,6 +313,7 @@ impl SchedulerCountMetrics {
             || self.num_retryable != 0
             || self.num_dropped_on_receive != 0
             || self.num_dropped_on_sanitization != 0
+            || self.num_dropped_on_validate_locks != 0
             || self.num_dropped_on_clear != 0
             || self.num_dropped_on_capacity != 0
     }
@@ -303,6 +326,7 @@ impl SchedulerCountMetrics {
         self.num_retryable = 0;
         self.num_dropped_on_receive = 0;
         self.num_dropped_on_sanitization = 0;
+        self.num_dropped_on_validate_locks = 0;
         self.num_dropped_on_clear = 0;
         self.num_dropped_on_capacity = 0;
     }
