@@ -922,7 +922,7 @@ where
                     "solScheduler thread is started at: {:?}",
                     std::thread::current()
                 );
-                tid_sender.send(unsafe { libc::gettid() }).unwrap();
+                tid_sender.send(rustix::thread::gettid()).unwrap();
 
                 while !end_thread {
                     loop {
