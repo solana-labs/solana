@@ -1229,7 +1229,7 @@ where
     }
 
     fn active_tid_if_not_primary(&self) -> Option<Tid> {
-        if self.id == PRIMARY_SCHEDULER_ID {
+        if self.scheduler_id == PRIMARY_SCHEDULER_ID {
             // always exempt from watchdog...
             None
         } else {
