@@ -403,7 +403,6 @@ impl TaskInner {
         for lock_attempt in self.lock_attempts_mut() {
             lock_attempt
                 .target_page_mut()
-                .blocked_task_queue
                 .insert_task(self.clone(), lock_attempt.requested_usage);
         }
     }
