@@ -644,7 +644,7 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     scheduler_id: SchedulerId,
     pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
     context: WeakSchedulingContext,
-    scheduler_thread_and_tid: Option<(JoinHandle<ResultWithTimings>, i32)>,
+    scheduler_thread_and_tid: Option<(JoinHandle<ResultWithTimings>, Pid)>,
     handler_threads: Vec<JoinHandle<()>>,
     drop_thread: Option<JoinHandle<()>>,
     handler: TH,
