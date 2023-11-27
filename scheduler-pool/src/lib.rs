@@ -399,7 +399,7 @@ impl TaskInner {
     fn index_with_pages(self: &Arc<Self>) {
         for lock_attempt in self.lock_attempts_mut() {
             lock_attempt
-                .target_page_mut()
+                .page_mut()
                 .insert_blocked_task(self.clone(), lock_attempt.requested_usage);
         }
     }
@@ -461,7 +461,7 @@ impl LockAttempt {
         }
     }
 
-    fn target_page_mut(&self) -> &mut PageInner {
+    fn page_mut(&self) -> &mut PageInner {
         self.page.as_mut()
     }
 }
@@ -1341,7 +1341,7 @@ impl ScheduleStage {
             match Self::attempt_lock_address(unique_weight, attempt) {
                 LockStatus::Succeded(usage) => {
                     if optimistic {
-                        attempt.target_page_mut().current_usage = usage;
+                        attempt.page_mut().current_usage = usage;
                     } else {
                         uncommited_usages.push(usage);
                     }
@@ -1357,7 +1357,7 @@ impl ScheduleStage {
     }
 
     fn attempt_lock_address(unique_weight: &UniqueWeight, attempt: &mut LockAttempt) -> LockStatus {
-        let page = attempt.target_page_mut();
+        let page = attempt.page_mut();
         let tcuw = page.heaviest_blocked_task();
 
         let strictly_lockable = if tcuw.is_none() {
@@ -1400,7 +1400,7 @@ impl ScheduleStage {
     fn unlock(attempt: &LockAttempt) -> bool {
         let mut is_unused_now = false;
 
-        let page = attempt.target_page_mut();
+        let page = attempt.page_mut();
 
         match &mut page.current_usage {
             Usage::Readonly(ref mut count) => match &attempt.requested_usage {
@@ -1457,7 +1457,7 @@ impl ScheduleStage {
 
         if !from_runnable {
             for (usage, attempt) in usages.into_iter().zip(next_task.lock_attempts_mut().iter()) {
-                attempt.target_page_mut().current_usage = usage;
+                attempt.page_mut().current_usage = usage;
             }
             // as soon as next tack is succeeded in locking, trigger re-checks on read only
             // addresses so that more readonly transactions can be executed
@@ -1469,7 +1469,7 @@ impl ScheduleStage {
                 .filter(|l| l.requested_usage == RequestedUsage::Readonly)
             {
                 if let Some(heaviest_blocked_task) = read_only_lock_attempt
-                    .target_page_mut()
+                    .page_mut()
                     .heaviest_still_blocked_task()
                     .and_then(|(task, ru)| (*ru == RequestedUsage::Readonly).then_some(task))
                 {
@@ -1497,7 +1497,7 @@ impl ScheduleStage {
     ) {
         for unlock_attempt in lock_attempts {
             if should_remove {
-                unlock_attempt.target_page_mut().remove_blocked_task(uq);
+                unlock_attempt.page_mut().remove_blocked_task(uq);
             }
 
             let is_unused_now = Self::unlock(unlock_attempt);
@@ -1505,9 +1505,7 @@ impl ScheduleStage {
                 continue;
             }
 
-            let heaviest_uncontended_now = unlock_attempt
-                .target_page_mut()
-                .heaviest_still_blocked_task();
+            let heaviest_uncontended_now = unlock_attempt.page_mut().heaviest_still_blocked_task();
             if let Some((uncontended_task, _ru)) = heaviest_uncontended_now {
                 retryable_task_queue
                     .entry(uncontended_task.unique_weight)
