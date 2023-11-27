@@ -793,6 +793,7 @@ where
             handler,
             pool,
             session_result_with_timings: None,
+            is_primary,
         };
         // needs to start threads immediately, because the bank in initial_context can be dropped
         // anytime.
