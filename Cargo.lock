@@ -7158,6 +7158,7 @@ dependencies = [
  "dashmap",
  "log",
  "procfs",
+ "rand 0.8.5",
  "rustix",
  "serde_json",
  "solana-ledger",
