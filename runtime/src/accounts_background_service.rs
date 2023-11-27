@@ -663,12 +663,6 @@ impl AccountsBackgroundService {
                             bank.force_flush_accounts_cache();
                             bank.clean_accounts(last_full_snapshot_slot);
                             last_cleaned_block_height = bank.block_height();
-<<<<<<< HEAD
-=======
-                            // See justification below for why we skip 'shrink' here.
-                            if bank.is_startup_verification_complete() {
-                                bank.shrink_ancient_slots();
-                            }
                         }
                         // Do not 'shrink' until *after* the startup verification is complete.
                         // This is because startup verification needs to get the snapshot
@@ -679,7 +673,6 @@ impl AccountsBackgroundService {
                         // was in the snapshot itself.
                         if bank.is_startup_verification_complete() {
                             bank.shrink_candidate_slots();
->>>>>>> da9fad84b3 (Skip shrink until startup verification is complete (#34209))
                         }
                     }
                     stats.record_and_maybe_submit(start_time.elapsed());
