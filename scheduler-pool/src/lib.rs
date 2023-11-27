@@ -758,6 +758,8 @@ impl LogInterval {
     }
 }
 
+const PRIMARY_SCHEDULER_ID: u64 = 0;
+
 impl<TH, SEA> ThreadManager<TH, SEA>
 where
     TH: Handler<SEA>,
@@ -769,7 +771,6 @@ where
         pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
         handler_count: usize,
     ) -> Self {
-        const PRIMARY_SCHEDULER_ID: u64 = 0;
         static NEXT_ID: AtomicU64 = AtomicU64::new(PRIMARY_SCHEDULER_ID);
         let (schedulrable_transaction_sender, schedulable_transaction_receiver) = unbounded();
         let (result_sender, result_receiver) = unbounded();
