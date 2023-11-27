@@ -563,8 +563,8 @@ impl AddressBook {
         self.book.len()
     }
 
-    pub fn clear(&self) -> usize {
-        self.book.clear()
+    pub fn clear(&self) {
+        self.book.clear();
     }
 }
 
