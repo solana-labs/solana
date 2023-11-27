@@ -1229,9 +1229,10 @@ where
 
     fn active_tid_if_not_primary(&self) -> Option<Tid> {
         if self.is_primary {
-            self.scheduler_thread_and_tid.as_ref().map(|&(_, tid)| tid)
-        } else {
+            // always exempt from watchdog...
             None
+        } else {
+            self.scheduler_thread_and_tid.as_ref().map(|&(_, tid)| tid)
         }
     }
 }
