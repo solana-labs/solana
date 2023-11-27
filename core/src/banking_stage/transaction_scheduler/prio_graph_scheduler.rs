@@ -43,7 +43,7 @@ impl PrioGraphScheduler {
     }
 
     /// Schedule transactions from the given `TransactionStateContainer` to be consumed by the
-    /// worker threads. Returns the number of transactions scheduled, or an error.
+    /// worker threads. Returns summary of scheduling, or an error.
     ///
     /// Uses a `PrioGraph` to perform look-ahead during the scheduling of transactions.
     /// This, combined with internal tracking of threads' in-flight transactions, allows
@@ -52,7 +52,7 @@ impl PrioGraphScheduler {
     pub(crate) fn schedule(
         &mut self,
         container: &mut TransactionStateContainer,
-    ) -> Result<usize, SchedulerError> {
+    ) -> Result<SchedulingSummary, SchedulerError> {
         let num_threads = self.consume_work_senders.len();
         let mut batches = Batches::new(num_threads);
         let mut chain_id_to_thread_index = HashMap::new();
@@ -79,6 +79,7 @@ impl PrioGraphScheduler {
         const MAX_TRANSACTIONS_PER_SCHEDULING_PASS: usize = 100_000;
         let mut num_scheduled = 0;
         let mut num_sent = 0;
+        let mut num_unschedulable = 0;
         while num_scheduled < MAX_TRANSACTIONS_PER_SCHEDULING_PASS {
             // If nothing is in the main-queue of the `PrioGraph` then there's nothing left to schedule.
             if prio_graph.is_empty() {
@@ -109,6 +110,7 @@ impl PrioGraphScheduler {
                 if !blocking_locks.check_locks(transaction.message()) {
                     blocking_locks.take_locks(transaction.message());
                     unschedulable_ids.push(id);
+                    num_unschedulable += 1;
                     continue;
                 }
 
@@ -133,6 +135,7 @@ impl PrioGraphScheduler {
                 ) else {
                     blocking_locks.take_locks(transaction.message());
                     unschedulable_ids.push(id);
+                    num_unschedulable += 1;
                     continue;
                 };
 
@@ -193,7 +196,10 @@ impl PrioGraphScheduler {
             "number of scheduled and sent transactions must match"
         );
 
-        Ok(num_scheduled)
+        Ok(SchedulingSummary {
+            num_scheduled,
+            num_unschedulable,
+        })
     }
 
     /// Receive completed batches of transactions without blocking.
@@ -377,6 +383,15 @@ impl PrioGraphScheduler {
     }
 }
 
+/// Metrics from scheduling transactions.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct SchedulingSummary {
+    /// Number of transactions scheduled.
+    pub num_scheduled: usize,
+    /// Number of transactions that were not scheduled due to conflicts.
+    pub num_unschedulable: usize,
+}
+
 struct Batches {
     ids: Vec<Vec<TransactionId>>,
     transactions: Vec<Vec<SanitizedTransaction>>,
@@ -553,8 +568,9 @@ mod tests {
             (&Keypair::new(), &[Pubkey::new_unique()], 2, 2),
         ]);
 
-        let num_scheduled = scheduler.schedule(&mut container).unwrap();
-        assert_eq!(num_scheduled, 2);
+        let scheduling_summary = scheduler.schedule(&mut container).unwrap();
+        assert_eq!(scheduling_summary.num_scheduled, 2);
+        assert_eq!(scheduling_summary.num_unschedulable, 0);
         assert_eq!(collect_work(&work_receivers[0]).1, vec![txids!([1, 0])]);
     }
 
@@ -567,8 +583,9 @@ mod tests {
             (&Keypair::new(), &[pubkey], 1, 2),
         ]);
 
-        let num_scheduled = scheduler.schedule(&mut container).unwrap();
-        assert_eq!(num_scheduled, 2);
+        let scheduling_summary = scheduler.schedule(&mut container).unwrap();
+        assert_eq!(scheduling_summary.num_scheduled, 2);
+        assert_eq!(scheduling_summary.num_unschedulable, 0);
         assert_eq!(
             collect_work(&work_receivers[0]).1,
             vec![txids!([1]), txids!([0])]
@@ -584,8 +601,12 @@ mod tests {
         );
 
         // expect 4 full batches to be scheduled
-        let num_scheduled = scheduler.schedule(&mut container).unwrap();
-        assert_eq!(num_scheduled, 4 * TARGET_NUM_TRANSACTIONS_PER_BATCH);
+        let scheduling_summary = scheduler.schedule(&mut container).unwrap();
+        assert_eq!(
+            scheduling_summary.num_scheduled,
+            4 * TARGET_NUM_TRANSACTIONS_PER_BATCH
+        );
+        assert_eq!(scheduling_summary.num_unschedulable, 0);
 
         let thread0_work_counts: Vec<_> = work_receivers[0]
             .try_iter()
@@ -600,8 +621,9 @@ mod tests {
         let mut container =
             create_container((0..4).map(|i| (Keypair::new(), [Pubkey::new_unique()], 1, i)));
 
-        let num_scheduled = scheduler.schedule(&mut container).unwrap();
-        assert_eq!(num_scheduled, 4);
+        let scheduling_summary = scheduler.schedule(&mut container).unwrap();
+        assert_eq!(scheduling_summary.num_scheduled, 4);
+        assert_eq!(scheduling_summary.num_unschedulable, 0);
         assert_eq!(collect_work(&work_receivers[0]).1, [txids!([3, 1])]);
         assert_eq!(collect_work(&work_receivers[1]).1, [txids!([2, 0])]);
     }
@@ -631,8 +653,9 @@ mod tests {
         // fact they eventually join means that the scheduler will schedule them
         // onto the same thread to avoid causing [4], which conflicts with both
         // chains, to be un-schedulable.
-        let num_scheduled = scheduler.schedule(&mut container).unwrap();
-        assert_eq!(num_scheduled, 5);
+        let scheduling_summary = scheduler.schedule(&mut container).unwrap();
+        assert_eq!(scheduling_summary.num_scheduled, 5);
+        assert_eq!(scheduling_summary.num_unschedulable, 0);
         assert_eq!(
             collect_work(&work_receivers[0]).1,
             [txids!([0, 2]), txids!([1, 3]), txids!([4])]
@@ -671,15 +694,17 @@ mod tests {
         // Because the look-ahead window is shortened to a size of 4, the scheduler does
         // not have knowledge of the joining at transaction [4] until after [0] and [1]
         // have been scheduled.
-        let num_scheduled = scheduler.schedule(&mut container).unwrap();
-        assert_eq!(num_scheduled, 4);
+        let scheduling_summary = scheduler.schedule(&mut container).unwrap();
+        assert_eq!(scheduling_summary.num_scheduled, 4);
+        assert_eq!(scheduling_summary.num_unschedulable, 2);
         let (thread_0_work, thread_0_ids) = collect_work(&work_receivers[0]);
         assert_eq!(thread_0_ids, [txids!([0, 2])]);
         assert_eq!(collect_work(&work_receivers[1]).1, [txids!([1, 3])]);
 
         // Cannot schedule even on next pass because of lock conflicts
-        let num_scheduled = scheduler.schedule(&mut container).unwrap();
-        assert_eq!(num_scheduled, 0);
+        let scheduling_summary = scheduler.schedule(&mut container).unwrap();
+        assert_eq!(scheduling_summary.num_scheduled, 0);
+        assert_eq!(scheduling_summary.num_unschedulable, 2);
 
         // Complete batch on thread 0. Remaining txs can be scheduled onto thread 1
         finished_work_sender
@@ -689,8 +714,9 @@ mod tests {
             })
             .unwrap();
         scheduler.receive_completed(&mut container).unwrap();
-        let num_scheduled = scheduler.schedule(&mut container).unwrap();
-        assert_eq!(num_scheduled, 2);
+        let scheduling_summary = scheduler.schedule(&mut container).unwrap();
+        assert_eq!(scheduling_summary.num_scheduled, 2);
+        assert_eq!(scheduling_summary.num_unschedulable, 0);
 
         assert_eq!(
             collect_work(&work_receivers[1]).1,
