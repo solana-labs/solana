@@ -181,19 +181,14 @@ impl Bank {
             (staked1, pubkey1).cmp(&(staked2, pubkey2)).reverse()
         });
 
-        let enforce_fix = self.no_overflow_rent_distribution_enabled();
-
         let mut rent_distributed_in_initial_round = 0;
         let validator_rent_shares = validator_stakes
             .into_iter()
             .map(|(pubkey, staked)| {
-                let rent_share = if !enforce_fix {
-                    (((staked * rent_to_be_distributed) as f64) / (total_staked as f64)) as u64
-                } else {
-                    (((staked as u128) * (rent_to_be_distributed as u128)) / (total_staked as u128))
-                        .try_into()
-                        .unwrap()
-                };
+                let rent_share = (((staked as u128) * (rent_to_be_distributed as u128))
+                    / (total_staked as u128))
+                    .try_into()
+                    .unwrap();
                 rent_distributed_in_initial_round += rent_share;
                 (pubkey, rent_share)
             })
@@ -214,7 +209,7 @@ impl Bank {
                 } else {
                     rent_share
                 };
-                if !enforce_fix || rent_to_be_paid > 0 {
+                if rent_to_be_paid > 0 {
                     let check_account_owner = self.validate_fee_collector_account();
                     let check_rent_paying = self.prevent_rent_paying_rent_recipients();
                     match self.deposit_fees(
@@ -260,15 +255,7 @@ impl Bank {
             );
         }
 
-        if enforce_fix {
-            assert_eq!(leftover_lamports, 0);
-        } else if leftover_lamports != 0 {
-            warn!(
-                "There was leftover from rent distribution: {}",
-                leftover_lamports
-            );
-            self.capitalization.fetch_sub(leftover_lamports, Relaxed);
-        }
+        assert_eq!(leftover_lamports, 0);
     }
 
     pub(super) fn distribute_rent_fees(&self) {
@@ -308,7 +295,6 @@ pub mod tests {
             create_genesis_config, create_genesis_config_with_leader,
             create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
         },
-        log::info,
         solana_sdk::{
             account::AccountSharedData, feature_set, native_token::sol_to_lamports, pubkey,
             rent::Rent, signature::Signer,
@@ -620,50 +606,6 @@ pub mod tests {
                 Ok(initial_balance + deposit_amount),
                 "New balance should be the sum of the initial balance and deposit amount"
             );
-        }
-    }
-
-    #[test]
-    fn test_distribute_rent_to_validators_overflow() {
-        solana_logger::setup();
-
-        // These values are taken from the real cluster (testnet)
-        const RENT_TO_BE_DISTRIBUTED: u64 = 120_525;
-        const VALIDATOR_STAKE: u64 = 374_999_998_287_840;
-
-        let validator_pubkey = solana_sdk::pubkey::new_rand();
-        let mut genesis_config =
-            create_genesis_config_with_leader(10, &validator_pubkey, VALIDATOR_STAKE)
-                .genesis_config;
-
-        let bank = Bank::new_for_tests(&genesis_config);
-        let old_validator_lamports = bank.get_balance(&validator_pubkey);
-        bank.distribute_rent_to_validators(&bank.vote_accounts(), RENT_TO_BE_DISTRIBUTED);
-        let new_validator_lamports = bank.get_balance(&validator_pubkey);
-        assert_eq!(
-            new_validator_lamports,
-            old_validator_lamports + RENT_TO_BE_DISTRIBUTED
-        );
-
-        genesis_config
-            .accounts
-            .remove(&feature_set::no_overflow_rent_distribution::id())
-            .unwrap();
-        let bank = std::panic::AssertUnwindSafe(Bank::new_for_tests(&genesis_config));
-        let old_validator_lamports = bank.get_balance(&validator_pubkey);
-        let new_validator_lamports = std::panic::catch_unwind(|| {
-            bank.distribute_rent_to_validators(&bank.vote_accounts(), RENT_TO_BE_DISTRIBUTED);
-            bank.get_balance(&validator_pubkey)
-        });
-
-        if let Ok(new_validator_lamports) = new_validator_lamports {
-            info!("asserting overflowing incorrect rent distribution");
-            assert_ne!(
-                new_validator_lamports,
-                old_validator_lamports + RENT_TO_BE_DISTRIBUTED
-            );
-        } else {
-            info!("NOT-asserting overflowing incorrect rent distribution");
         }
     }
 
