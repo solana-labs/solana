@@ -1307,7 +1307,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
         let pooled_duration = self.pooled_since();
         if pooled_duration <= Duration::from_secs(600) {
             true
-        } else {
+        } else if !self.thread_manager.read().unwrap().is_primary() {
             info!(
                 "[sch_{:0width$x}]: watchdog: retiring unused scheduler after {:?}...",
                 self.id(),
