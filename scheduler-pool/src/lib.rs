@@ -1380,14 +1380,8 @@ impl ScheduleStage {
             return LockStatus::Failed;
         }
 
-        let LockAttempt {
-            requested_usage,
-            page,
-            ..
-        } = attempt;
-        let page = page.as_mut();
-
-        match page.current_usage {
+        let requested_usage = attempt.requested_usage;
+        match attempt.page_mut() {
             Usage::Unused => LockStatus::Succeded(Usage::renew(*requested_usage)),
             Usage::Readonly(count) => match requested_usage {
                 RequestedUsage::Readonly => LockStatus::Succeded(Usage::Readonly(count + 1)),
@@ -1443,9 +1437,7 @@ impl ScheduleStage {
 
         if lock_count < next_task.lock_attempts_mut().len() {
             if from_runnable {
-                Self::unlock_for_failed_execution(
-                    &next_task.lock_attempts_mut()[..lock_count],
-                );
+                Self::unlock_for_failed_execution(&next_task.lock_attempts_mut()[..lock_count]);
                 next_task.mark_as_contended();
                 next_task.index_with_pages();
             }
