@@ -1376,17 +1376,17 @@ impl ScheduleStage {
             false
         };
 
-        if !strictly_lockable {
-            return LockStatus::Failed;
-        }
-
-        match attempt.page_mut().current_usage {
-            Usage::Unused => LockStatus::Succeded(Usage::renew(attempt.requested_usage)),
-            Usage::Readonly(count) => match attempt.requested_usage {
-                RequestedUsage::Readonly => LockStatus::Succeded(Usage::Readonly(count + 1)),
-                RequestedUsage::Writable => LockStatus::Failed,
-            },
-            Usage::Writable => LockStatus::Failed,
+        if strictly_lockable {
+            match attempt.page_mut().current_usage {
+                Usage::Unused => LockStatus::Succeded(Usage::renew(attempt.requested_usage)),
+                Usage::Readonly(count) => match attempt.requested_usage {
+                    RequestedUsage::Readonly => LockStatus::Succeded(Usage::Readonly(count + 1)),
+                    RequestedUsage::Writable => LockStatus::Failed,
+                },
+                Usage::Writable => LockStatus::Failed,
+            }
+        } else {
+            LockStatus::Failed;
         }
     }
 
