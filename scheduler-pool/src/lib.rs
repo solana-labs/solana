@@ -656,6 +656,7 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     result_receiver: Receiver<ResultWithTimings>,
     handler_count: usize,
     session_result_with_timings: Option<ResultWithTimings>,
+    is_primary: bool,
 }
 
 impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
