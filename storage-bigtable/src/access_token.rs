@@ -38,8 +38,8 @@ fn load_stringified_credentials(credential: String) -> Result<Credentials, Strin
 pub struct AccessToken {
     credentials: Credentials,
     scope: Scope,
-    token: Arc<RwLock<(Token, Instant)>>,
     refresh_active: Arc<AtomicBool>,
+    token: Arc<RwLock<(Token, Instant)>>,
 }
 
 impl AccessToken {
