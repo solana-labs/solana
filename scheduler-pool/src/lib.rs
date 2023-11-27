@@ -777,6 +777,7 @@ where
     ) -> Self {
         let (schedulrable_transaction_sender, schedulable_transaction_receiver) = unbounded();
         let (result_sender, result_receiver) = unbounded();
+        let is_primary = pool.schedulers.lock().unwrap().len() == 0;
 
         let mut thread_manager = Self {
             scheduler_id: thread_rng().gen::<SchedulerId>(),
@@ -790,9 +791,8 @@ where
             handler_threads: Vec::with_capacity(handler_count),
             handler_count,
             handler,
-            session_result_with_timings: None,
-            is_primary: pool.schedulers.lock().unwrap().len() == 0,
             pool,
+            session_result_with_timings: None,
         };
         // needs to start threads immediately, because the bank in initial_context can be dropped
         // anytime.
