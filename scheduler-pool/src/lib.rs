@@ -723,10 +723,10 @@ trait WithChannelAndPayload<T1, T2>: Send + Sync {
     fn channel_and_payload(self: Box<Self>) -> ChannelAndPayload<T1, T2>;
 }
 
-struct ChannelAndPayloadTuple<T1, T2>(ChannelAndPayload<T1, T2>);
+struct ChannelAndPayloadWrapper<T1, T2>(ChannelAndPayload<T1, T2>);
 
 impl<T1: Send + Sync, T2: Send + Sync> WithChannelAndPayload<T1, T2>
-    for ChannelAndPayloadTuple<T1, T2>
+    for ChannelAndPayloadWrapper<T1, T2>
 {
     fn channel_and_payload(self: Box<Self>) -> ChannelAndPayload<T1, T2> {
         self.0
@@ -745,8 +745,8 @@ enum SessionedMessage<T1, T2> {
 }
 
 impl<T1: Send + Sync + 'static, T2: Send + Sync + 'static> ChainedChannel<T1, T2> {
-    fn new_channel(receiver: Receiver<Self>, sender: T2) -> Self {
-        Self::ChannelWithPayload(Box::new(ChannelAndPayloadTuple((receiver, sender))))
+    fn new_channel(receiver: Receiver<Self>, payload: T2) -> Self {
+        Self::ChannelWithPayload(Box::new(ChannelAndPayloadWrapper((receiver, payload))))
     }
 }
 
