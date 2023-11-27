@@ -197,9 +197,8 @@ where
                     let thread_manager_len_pre_push = thread_managers.len();
                     'inner: loop {
                         match watchdog_receiver.try_recv() {
-                            Ok(thread_manager) => {
+                            Ok(thread_manager) =>
                                 thread_managers.push(WatchedThreadManager::new(thread_manager))
-                            }
                             Err(TryRecvError::Disconnected) => break 'outer,
                             Err(TryRecvError::Empty) => break 'inner,
                         }
@@ -213,7 +212,7 @@ where
                         thread_manager_len_pre_push,
                         thread_managers.len(),
                     );
-                    // sleep here to write all logs at once.
+                    // sleep here instead of recv_timeout() to write all logs at once.
                     sleep(Duration::from_secs(2));
                 }
             }
