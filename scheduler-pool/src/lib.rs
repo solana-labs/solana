@@ -441,18 +441,18 @@ impl TaskInner {
 
 #[derive(Debug)]
 pub struct LockAttempt {
-    page: PageRc,
+    page: Page,
     requested_usage: RequestedUsage,
 }
 
-impl PageRc {
-    fn as_mut(&self) -> &mut Page {
+impl Page {
+    fn as_mut(&self) -> &mut PageInner {
         unsafe { &mut *self.0 .0.get() }
     }
 }
 
 impl LockAttempt {
-    pub fn new(page: PageRc, requested_usage: RequestedUsage) -> Self {
+    pub fn new(page: Page, requested_usage: RequestedUsage) -> Self {
         Self {
             page,
             requested_usage,
@@ -466,7 +466,7 @@ impl LockAttempt {
         }
     }
 
-    fn target_page_mut(&self) -> &mut Page {
+    fn target_page_mut(&self) -> &mut PageInner {
         self.page.as_mut()
     }
 }
@@ -498,12 +498,12 @@ pub enum RequestedUsage {
 }
 
 #[derive(Debug)]
-pub struct Page {
+pub struct PageInner {
     current_usage: Usage,
     blocked_task_queue: Tasks,
 }
 
-impl Page {
+impl PageInner {
     fn new(current_usage: Usage) -> Self {
         Self {
             current_usage,
@@ -546,27 +546,27 @@ impl Tasks {
     }
 }
 
-type PageRcInner = Arc<UnsafeCell<Page>>;
-static_assertions::const_assert_eq!(std::mem::size_of::<std::cell::UnsafeCell<Page>>(), 32);
+type PageRc = Arc<UnsafeCell<PageInner>>;
+static_assertions::const_assert_eq!(std::mem::size_of::<std::cell::UnsafeCell<PageInner>>(), 32);
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct PageRc(by_address::ByAddress<PageRcInner>);
-unsafe impl Send for PageRc {}
-unsafe impl Sync for PageRc {}
+pub struct Page(by_address::ByAddress<PageRc>);
+unsafe impl Send for Page {}
+unsafe impl Sync for Page {}
 
 unsafe impl Sync for TaskStatus {}
 type WeightedTaskQueue = std::collections::BTreeMap<UniqueWeight, Task>;
 
 #[derive(Default, Debug)]
 pub struct AddressBook {
-    book: dashmap::DashMap<Pubkey, PageRc>,
+    book: dashmap::DashMap<Pubkey, Page>,
 }
 
 impl AddressBook {
-    pub fn load(&self, address: Pubkey) -> PageRc {
-        PageRc::clone(&self.book.entry(address).or_insert_with(|| {
-            PageRc(by_address::ByAddress(PageRcInner::new(UnsafeCell::new(
-                Page::new(Usage::unused()),
+    pub fn load(&self, address: Pubkey) -> Page {
+        Page::clone(&self.book.entry(address).or_insert_with(|| {
+            Page(by_address::ByAddress(PageRc::new(UnsafeCell::new(
+                PageInner::new(Usage::unused()),
             ))))
         }))
     }
