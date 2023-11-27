@@ -937,7 +937,7 @@ where
                         let state_change = select_biased! {
                             recv(handled_blocked_transaction_receiver) -> task => {
                                 let task = task.unwrap();
-                                state_machine.deschedule_task(&task);
+                                state_machine.deschedule_task(&task.task);
                                 drop_sender.send_buffered(SessionedMessage::Payload(task)).unwrap();
                                 "step"
                             },
@@ -1655,15 +1655,15 @@ impl SchedulingStateMachine {
             })
     }
 
-    fn deschedule_task(&mut self, task: &Box<ExecutedTask>) {
+    fn deschedule_task(&mut self, task: &Task) {
         self.active_task_count -= 1;
         self.handled_task_count += 1;
-        let should_remove = task.task.has_contended();
+        let should_remove = task.has_contended();
         ScheduleStage::unlock_after_execution(
             should_remove,
-            &task.task.unique_weight,
+            &task.unique_weight,
             &mut self.retryable_task_queue,
-            &mut task.task.lock_attempts_mut(),
+            &mut task.lock_attempts_mut(),
         );
     }
 }
