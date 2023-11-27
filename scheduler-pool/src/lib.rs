@@ -1283,7 +1283,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
             true
         } else {
             info!(
-                "[sch_{:0width$x}]: watchdog: retiring unused scheduler after {}...",
+                "[sch_{:0width$x}]: watchdog: retiring unused scheduler after {:?}...",
                 self.id(),
                 pooled_duration,
                 width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
