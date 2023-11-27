@@ -608,7 +608,7 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     completed_result_with_timings: Option<ResultWithTimings>,
     thread_manager: Arc<RwLock<ThreadManager<TH, SEA>>>,
     address_book: AddressBook,
-    pooled_at: SystemTime,
+    pooled_at: Instant,
 }
 
 #[derive(Debug)]
@@ -675,7 +675,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
                 handler_count,
             ))),
             address_book: AddressBook::default(),
-            pooled_at: SystemTime::now(),
+            pooled_at: Instant::now(),
         };
         pool.register_to_watchdog(Arc::downgrade(&scheduler.thread_manager));
 
@@ -700,11 +700,11 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
     }
 
     fn pooled_now(&mut self) {
-        self.pooled_at = SystemTime::now();
+        self.pooled_at = Instant::now();
     }
 
-    fn pooled_since(&self) -> Option<Duration> {
-        self.pooled_at.elapsed().ok()
+    fn pooled_since(&self) -> Duration {
+        self.pooled_at.elapsed()
     }
 
     fn stop_thread_manager(&mut self) {
@@ -1278,15 +1278,14 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
             return false;
         }
 
-        let Some(pooled_duration) = self.pooled_since() else {
-            return true;
-        };
+        let pooled_duration = self.pooled_since();
         if pooled_duration <= Duration::from_secs(600) {
             true
         } else {
             info!(
-                "[sch_{:0width$x}]: watchdog: retiring unused scheduler...",
+                "[sch_{:0width$x}]: watchdog: retiring unused scheduler after {}...",
                 self.id(),
+                pooled_duration,
                 width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
             );
             self.stop_thread_manager();
