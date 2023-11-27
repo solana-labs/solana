@@ -773,7 +773,7 @@ where
         let (result_sender, result_receiver) = unbounded();
 
         let mut thread_manager = Self {
-            scheduler_id: NEXT_ID.fetch_add(1),
+            scheduler_id: NEXT_ID.fetch_add(1, Relaxed),
             schedulrable_transaction_sender,
             schedulable_transaction_receiver,
             result_sender,
