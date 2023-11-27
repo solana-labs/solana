@@ -924,7 +924,9 @@ where
                     "solScheduler thread is started at: {:?}",
                     std::thread::current()
                 );
-                tid_sender.send(rustix::thread::gettid().as_raw_nonzero().get()).unwrap();
+                tid_sender
+                    .send(rustix::thread::gettid().as_raw_nonzero().get())
+                    .unwrap();
 
                 while !end_thread {
                     loop {
