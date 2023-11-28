@@ -1118,11 +1118,6 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
     }
 }
 
-enum TaskSource {
-    Runnable,
-    Retryable,
-}
-
 impl<TH, SEA> InstalledScheduler<SEA> for PooledScheduler<TH, SEA>
 where
     TH: Handler<SEA>,
