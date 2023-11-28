@@ -210,45 +210,45 @@ pub struct SchedulingStateMachine {
 }
 
 impl SchedulingStateMachine {
-    fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.active_task_count == 0
     }
 
-    fn retryable_task_count(&self) -> usize {
+    pub fn retryable_task_count(&self) -> usize {
         self.retryable_task_queue.len()
     }
 
-    fn active_task_count(&self) -> usize {
+    pub fn active_task_count(&self) -> usize {
         self.active_task_count
     }
 
-    fn handled_task_count(&self) -> usize {
+    pub fn handled_task_count(&self) -> usize {
         self.handled_task_count
     }
 
-    fn reschedule_count(&self) -> usize {
+    pub fn reschedule_count(&self) -> usize {
         self.reschedule_count
     }
 
-    fn rescheduled_task_count(&self) -> usize {
+    pub fn rescheduled_task_count(&self) -> usize {
         self.rescheduled_task_count
     }
 
-    fn total_task_count(&self) -> usize {
+    pub fn total_task_count(&self) -> usize {
         self.total_task_count
     }
 
-    fn schedule_new_task(&mut self, task: Task) -> Option<Task> {
+    pub fn schedule_new_task(&mut self, task: Task) -> Option<Task> {
         self.total_task_count += 1;
         self.active_task_count += 1;
         Self::try_lock_for_task((TaskSource::Runnable, task), &mut self.retryable_task_queue)
     }
 
-    fn has_retryable_task(&self) -> bool {
+    pub fn has_retryable_task(&self) -> bool {
         !self.retryable_task_queue.is_empty()
     }
 
-    fn schedule_retryable_task(&mut self) -> Option<Task> {
+    pub fn schedule_retryable_task(&mut self) -> Option<Task> {
         self.retryable_task_queue
             .pop_last()
             .and_then(|(_, task)| {
@@ -263,7 +263,7 @@ impl SchedulingStateMachine {
             })
     }
 
-    fn deschedule_task(&mut self, task: &Task) {
+    pub fn deschedule_task(&mut self, task: &Task) {
         self.active_task_count -= 1;
         self.handled_task_count += 1;
         Self::unlock_after_execution(&task, &mut self.retryable_task_queue);
