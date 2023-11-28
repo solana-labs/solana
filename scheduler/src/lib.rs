@@ -200,7 +200,7 @@ unsafe impl Sync for TaskStatus {}
 type TaskQueue = BTreeMap<UniqueWeight, Task>;
 
 #[derive(Default)]
-struct SchedulingStateMachine {
+pub struct SchedulingStateMachine {
     retryable_task_queue: TaskQueue,
     active_task_count: usize,
     handled_task_count: usize,
