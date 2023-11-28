@@ -28,6 +28,7 @@ use {
         },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
+    solana_scheduler::{LockAttempt, Page, SchedulingStateMachine, Task},
     solana_sdk::{
         pubkey::Pubkey,
         slot_history::Slot,
@@ -45,10 +46,6 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
-use solana_scheduler::LockAttempt;
-use solana_scheduler::Task;
-use solana_scheduler::SchedulingStateMachine;
-use solana_scheduler::Page;
 
 // SchedulerPool must be accessed via dyn by solana-runtime code, because of its internal fields'
 // types (currently TransactionStatusSender; also, PohRecorder in the future) aren't available
@@ -346,7 +343,6 @@ impl<SEA: ScheduleExecutionArg> Handler<SEA> for DefaultTransactionHandler {
         );
     }
 }
-
 
 #[derive(Default, Debug)]
 pub struct AddressBook {
@@ -1137,12 +1133,14 @@ where
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
         transaction_with_index.with_transaction_and_index(|transaction, index| {
             let locks = transaction.get_account_locks_unchecked();
-            let writable_locks = locks.writable.iter().map(|address|
-                LockAttempt::writable(self.address_book.load(**address))
-            );
-            let readonly_locks = locks.readonly.iter().map(|address|
-                LockAttempt::readonly(self.address_book.load(**address))
-            );
+            let writable_locks = locks
+                .writable
+                .iter()
+                .map(|address| LockAttempt::writable(self.address_book.load(**address)));
+            let readonly_locks = locks
+                .readonly
+                .iter()
+                .map(|address| LockAttempt::readonly(self.address_book.load(**address)));
             let locks = writable_locks.chain(readonly_locks).collect();
             let task = SchedulingStateMachine::create_task(index, transaction.clone(), locks);
             self.ensure_thread_manager_started().send_task(task);

@@ -1,8 +1,8 @@
-use std::collections::BTreeMap;
-use std::cell::UnsafeCell;
-use std::sync::Arc;
-use by_address::ByAddress;
-use solana_sdk::transaction::SanitizedTransaction;
+use {
+    by_address::ByAddress,
+    solana_sdk::transaction::SanitizedTransaction,
+    std::{cell::UnsafeCell, collections::BTreeMap, sync::Arc},
+};
 
 type UsageCount = u32;
 const SOLE_USE_COUNT: UsageCount = 1;
