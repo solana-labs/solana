@@ -1476,14 +1476,15 @@ impl ScheduleStage {
     }
 
     fn unlock_after_execution(
-        should_remove: bool,
-        uq: &UniqueWeight,
+        task: &Task,
         retryable_task_queue: &mut TaskQueue,
-        lock_attempts: &mut [LockAttempt],
     ) {
-        for unlock_attempt in lock_attempts {
+        let unique_weight = &task.unique_weight,
+        let should_remove = task.has_contended();
+
+        for unlock_attempt in task.lock_attempts_mut() {
             if should_remove {
-                unlock_attempt.page_mut().remove_blocked_task(uq);
+                unlock_attempt.page_mut().remove_blocked_task(unique_weight);
             }
 
             let is_unused_now = Self::unlock(unlock_attempt);
@@ -1626,12 +1627,9 @@ impl SchedulingStateMachine {
     fn deschedule_task(&mut self, task: &Task) {
         self.active_task_count -= 1;
         self.handled_task_count += 1;
-        let should_remove = task.has_contended();
         ScheduleStage::unlock_after_execution(
-            should_remove,
-            &task.unique_weight,
+            &task,
             &mut self.retryable_task_queue,
-            &mut task.lock_attempts_mut(),
         );
     }
 }
