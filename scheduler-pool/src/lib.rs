@@ -1329,10 +1329,12 @@ impl ScheduleStage {
     fn attempt_lock_for_execution(
         unique_weight: &UniqueWeight,
         lock_attempts: &mut [LockAttempt],
-        optimistic: bool,
+        task_source: TaskSource,
     ) -> (usize, Vec<Usage>) {
+        let try_optimistic_locking = matchess!(task_source, TaskSource::Runnable);
+
         let mut lock_count = 0;
-        let mut uncommited_usages = if optimistic {
+        let mut uncommited_usages = if try_optimistic_locking {
             vec![]
         } else {
             Vec::with_capacity(lock_attempts.len())
@@ -1341,7 +1343,7 @@ impl ScheduleStage {
         for attempt in lock_attempts.iter_mut() {
             match Self::attempt_lock_address(unique_weight, attempt) {
                 LockStatus::Succeded(usage) => {
-                    if optimistic {
+                    if try_optimistic_locking {
                         attempt.page_mut().current_usage = usage;
                     } else {
                         uncommited_usages.push(usage);
@@ -1437,7 +1439,7 @@ impl ScheduleStage {
         let (lock_count, usages) = Self::attempt_lock_for_execution(
             &next_task.unique_weight,
             &mut next_task.lock_attempts_mut(),
-            from_runnable,
+            task_source,
         );
 
         if lock_count < next_task.lock_attempts_mut().len() {
