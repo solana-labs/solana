@@ -1479,7 +1479,7 @@ impl ScheduleStage {
         task: &Task,
         retryable_task_queue: &mut TaskQueue,
     ) {
-        let unique_weight = &task.unique_weight,
+        let unique_weight = &task.unique_weight;
         let should_remove = task.has_contended();
 
         for unlock_attempt in task.lock_attempts_mut() {
