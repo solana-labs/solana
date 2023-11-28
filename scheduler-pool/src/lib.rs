@@ -493,7 +493,7 @@ pub enum RequestedUsage {
 #[derive(Debug, Default)]
 pub struct PageInner {
     current_usage: Usage,
-    blocked_tasks: std::collections::BTreeMap<UniqueWeight, (Task, RequestedUsage)>,
+    blocked_tasks: BTreeMap<UniqueWeight, (Task, RequestedUsage)>,
 }
 
 impl PageInner {
@@ -537,7 +537,7 @@ unsafe impl Send for Page {}
 unsafe impl Sync for Page {}
 
 unsafe impl Sync for TaskStatus {}
-type TaskQueue = std::collections::BTreeMap<UniqueWeight, Task>;
+type TaskQueue = BTreeMap<UniqueWeight, Task>;
 
 #[derive(Default, Debug)]
 pub struct AddressBook {
