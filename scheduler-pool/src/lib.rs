@@ -1329,7 +1329,7 @@ impl ScheduleStage {
     fn attempt_lock_for_execution(
         unique_weight: &UniqueWeight,
         lock_attempts: &mut [LockAttempt],
-        task_source: TaskSource,
+        task_source: &TaskSource,
     ) -> (usize, Vec<Usage>) {
         let try_optimistic_locking = matches!(task_source, TaskSource::Runnable);
 
@@ -1437,7 +1437,7 @@ impl ScheduleStage {
         let (lock_count, usages) = Self::attempt_lock_for_execution(
             &next_task.unique_weight,
             &mut next_task.lock_attempts_mut(),
-            task_source,
+            &task_source,
         );
 
         if lock_count < next_task.lock_attempts_mut().len() {
