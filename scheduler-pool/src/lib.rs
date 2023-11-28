@@ -1455,7 +1455,7 @@ impl ScheduleStage {
         if !from_runnable {
             for (usage, attempt) in usages
                 .into_iter()
-                .zip(next_task.lock_attempts_mut().iter_mut())
+                .zip(next_task.lock_attempts_mut())
             {
                 attempt.page_mut().current_usage = usage;
             }
