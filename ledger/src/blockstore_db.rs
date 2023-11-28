@@ -505,11 +505,16 @@ impl Rocks {
             AccessType::Primary | AccessType::PrimaryForMaintenance => {}
         }
 
-        let detected_cfs = DB::list_cf(&Options::default(), path)
-            .map_err(|err| {
+        // Attempt to detect the column families that are present. It is not a
+        // fatal error if we cannot, for example, if the Blockstore is brand
+        // new and will be created by the call to Rocks::open().
+        let detected_cfs = match DB::list_cf(&Options::default(), path) {
+            Ok(detected_cfs) => detected_cfs,
+            Err(err) => {
                 warn!("Unable to detect Rocks columns: {err:?}");
-            })
-            .unwrap_or_default();
+                vec![]
+            }
+        };
         // The default column is handled automatically, we don't need to create
         // a descriptor for it
         const DEFAULT_COLUMN_NAME: &str = "default";
