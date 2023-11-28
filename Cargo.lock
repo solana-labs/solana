@@ -7146,6 +7146,7 @@ name = "solana-scheduler"
 version = "1.18.0"
 dependencies = [
  "by_address",
+ "solana-sdk",
  "static_assertions",
 ]
 

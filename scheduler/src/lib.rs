@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::cell::UnsafeCell;
 use std::sync::Arc;
 use by_address::ByAddress;
+use solana_sdk::transaction::SanitizedTransaction;
 
 type UsageCount = u32;
 const SOLE_USE_COUNT: UsageCount = 1;
