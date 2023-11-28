@@ -1461,7 +1461,7 @@ impl ScheduleStage {
             for read_only_lock_attempt in next_task
                 .lock_attempts_mut()
                 .iter_mut()
-                .filter(|l| l.requested_usage == RequestedUsage::Readonly)
+                .filter(|l| matches!(l.requested_usage, RequestedUsage::Readonly))
             {
                 if let Some(heaviest_blocked_task) = read_only_lock_attempt
                     .page_mut()
