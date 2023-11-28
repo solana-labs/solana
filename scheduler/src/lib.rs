@@ -36,7 +36,7 @@ impl TaskStatus {
 #[derive(Debug)]
 pub struct TaskInner {
     unique_weight: UniqueWeight,
-    pub tx: SanitizedTransaction, // actually should be Bundle
+    tx: SanitizedTransaction, // actually should be Bundle
     task_status: TaskStatus,
 }
 
