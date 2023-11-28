@@ -481,7 +481,7 @@ solana-zk-token-sdk = { path = "zk-token-sdk" }
 # newer versions, but we have not updated yet.  As we update, we need to remove
 # these patch requests.
 #
-# When our dependencies are upgraded, we can remove this patches.  Before that
+# When our dependencies are upgraded, we can remove these patches.  Before that
 # we might need to maintain these patches in sync with our full dependency
 # tree.
 
@@ -506,17 +506,16 @@ git = "https://github.com/RustCrypto/AEADs"
 rev = "6105d7a5591aefa646a95d12b5e8d3f55a9214ef"
 
 # Our dependency tree has `curve25519-dalek` v3.2.1.  They have removed the
-# constrain in the next major release.  Commit that removes `zeroize` constrain
-# was added to multiple release branches.  Bot not to the 3.2 branch.
+# constraint in the next major release. The commit that removes the `zeroize` constraint
+# was added to multiple release branches, but not to the 3.2 branch.
 #
 # `curve25519-dalek` maintainers are saying they do not want to invest any more
 # time in the 3.2 release:
 #
 # https://github.com/dalek-cryptography/curve25519-dalek/issues/452#issuecomment-1749809428
 #
-# So we have to fork and create our own release, based on v3.2.1.  Commit that
-# removed `zeroize` constrain on the `main` branch cherry picked on top of the
-# v3.2.1 release.
+# So we have to fork and create our own release, based on v3.2.1, with the commit that
+# removed `zeroize` constraint on the `main` branch cherry-picked on top.
 #
 # `curve25519-dalek` v3.2.1 release:
 #
