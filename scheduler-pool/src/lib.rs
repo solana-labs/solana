@@ -546,10 +546,7 @@ pub struct AddressBook {
 
 impl AddressBook {
     pub fn load(&self, address: Pubkey) -> Page {
-        self.book
-            .entry(address)
-            .or_insert_with(|| Page::default())
-            .clone()
+        self.book.entry(address).or_default().clone()
     }
 
     pub fn page_count(&self) -> usize {
