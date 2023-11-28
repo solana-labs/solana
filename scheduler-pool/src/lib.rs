@@ -1457,7 +1457,7 @@ impl ScheduleStage {
             // addresses so that more readonly transactions can be executed
             next_task.mark_as_uncontended();
 
-            for read_only_lock_attempt in next_task
+            for mut read_only_lock_attempt in next_task
                 .lock_attempts_mut()
                 .iter()
                 .filter(|l| l.requested_usage == RequestedUsage::Readonly)
