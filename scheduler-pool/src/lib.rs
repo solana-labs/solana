@@ -35,8 +35,6 @@ use {
     },
     solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
-        cell::UnsafeCell,
-        collections::BTreeMap,
         fmt::Debug,
         marker::PhantomData,
         sync::{
