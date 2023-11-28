@@ -24,11 +24,11 @@ use {
         installed_scheduler_pool::{
             DefaultScheduleExecutionArg, InstalledScheduler, InstalledSchedulerPool,
             InstalledSchedulerPoolArc, ResultWithTimings, ScheduleExecutionArg, SchedulerId,
-            SchedulingContext, WaitReason, WithTransactionAndIndex,
+            SchedulingContext, SchedulingMode, WaitReason, WithSchedulingMode,
+            WithTransactionAndIndex,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
-    solana_runtime::installed_scheduler_pool::{SchedulingMode, WithSchedulingMode},
     solana_sdk::{
         pubkey::Pubkey,
         slot_history::Slot,
