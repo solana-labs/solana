@@ -54,6 +54,10 @@ impl TaskInner {
         })
     }
 
+    fn transaction(&self) -> &SanitizedTransaction {
+        self.tx
+    }
+
     fn index_with_pages(self: &Arc<Self>) {
         for lock_attempt in self.lock_attempts_mut() {
             let requested_usage = lock_attempt.requested_usage;
