@@ -273,7 +273,7 @@ pub fn create_program_runtime_environment_v1<'a>(
         max_call_depth: compute_budget.max_call_depth,
         stack_frame_size: compute_budget.stack_frame_size,
         enable_address_translation: true,
-        enable_stack_frame_gaps: true,
+        enable_stack_frame_gaps: !feature_set.is_active(&bpf_account_data_direct_mapping::id()),
         instruction_meter_checkpoint_distance: 10000,
         enable_instruction_meter: true,
         enable_instruction_tracing: debugging_features,
