@@ -1470,8 +1470,8 @@ impl ScheduleStage {
     }
 
     fn rollback_locking(lock_attempts: &mut [LockAttempt]) {
-        for l in lock_attempts {
-            Self::unlock(l);
+        for lock_attempt in lock_attempts {
+            Self::unlock(lock_attempt);
         }
     }
 
