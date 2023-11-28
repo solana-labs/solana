@@ -10,5 +10,6 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+solana-sdk = { workspace = true }
 static_assertions = { workspace = true }
 by_address = { workspace = true }
