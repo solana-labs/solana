@@ -511,13 +511,13 @@ impl PageInner {
     }
 
     fn heaviest_blocked_writing_task_weight(&self) -> Option<UniqueWeight> {
-        self.blocked_tasks.values().rev().find_map(|(task, ru)| {
-            matches!(ru, RequestedUsage::Writable).then_some(task.unique_weight)
+        self.blocked_tasks.values().rev().find_map(|(task, requested_usage)| {
+            matches!(requested_usage, RequestedUsage::Writable).then_some(task.unique_weight)
         })
     }
 
     fn heaviest_blocked_task(&mut self) -> Option<UniqueWeight> {
-        self.blocked_tasks.last_entry().map(|j| *j.key())
+        self.blocked_tasks.last_entry().map(|entry| *entry.key())
     }
 
     fn heaviest_still_blocked_task(&self) -> Option<&(Task, RequestedUsage)> {
@@ -1457,7 +1457,7 @@ impl ScheduleStage {
                 if let Some(heaviest_blocked_task) = read_only_lock_attempt
                     .page_mut()
                     .heaviest_still_blocked_task()
-                    .and_then(|(task, ru)| matches!(ru, RequestedUsage::Readonly).then_some(task))
+                    .and_then(|(task, requested_usage)| matches!(requested_usage, RequestedUsage::Readonly).then_some(task))
                 {
                     retryable_task_queue
                         .entry(heaviest_blocked_task.unique_weight)
