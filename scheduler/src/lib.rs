@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::cell::UnsafeCell;
 use std::sync::Arc;
+use by_address::ByAddress;
 
 type UsageCount = u32;
 const SOLE_USE_COUNT: UsageCount = 1;

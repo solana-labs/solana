@@ -7145,6 +7145,7 @@ dependencies = [
 name = "solana-scheduler"
 version = "1.18.0"
 dependencies = [
+ "by_address",
  "static_assertions",
 ]
 
@@ -7154,7 +7155,6 @@ version = "1.18.0"
 dependencies = [
  "assert_matches",
  "bincode",
- "by_address",
  "cpu-time",
  "crossbeam-channel",
  "dashmap",
