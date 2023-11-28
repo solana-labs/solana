@@ -126,6 +126,14 @@ impl SchedulerController {
                     self.count_metrics.num_unschedulable,
                     scheduling_summary.num_unschedulable
                 );
+                saturating_add_assign!(
+                    self.count_metrics.num_schedule_filtered_out,
+                    scheduling_summary.num_filtered_out
+                );
+                saturating_add_assign!(
+                    self.timing_metrics.schedule_filter_time_us,
+                    scheduling_summary.filter_time_us
+                );
                 saturating_add_assign!(self.timing_metrics.schedule_time_us, schedule_time_us);
             }
             BufferedPacketsDecision::Forward => {
@@ -329,6 +337,8 @@ struct SchedulerCountMetrics {
     num_scheduled: usize,
     /// Number of transactions that were unschedulable.
     num_unschedulable: usize,
+    /// Number of transactions that were filtered out during scheduling.
+    num_schedule_filtered_out: usize,
     /// Number of completed transactions received from workers.
     num_finished: usize,
     /// Number of transactions that were retryable.
@@ -366,6 +376,11 @@ impl SchedulerCountMetrics {
             ("num_buffered", self.num_buffered, i64),
             ("num_scheduled", self.num_scheduled, i64),
             ("num_unschedulable", self.num_unschedulable, i64),
+            (
+                "num_schedule_filtered_out",
+                self.num_schedule_filtered_out,
+                i64
+            ),
             ("num_finished", self.num_finished, i64),
             ("num_retryable", self.num_retryable, i64),
             ("num_dropped_on_receive", self.num_dropped_on_receive, i64),
@@ -394,6 +409,7 @@ impl SchedulerCountMetrics {
             || self.num_buffered != 0
             || self.num_scheduled != 0
             || self.num_unschedulable != 0
+            || self.num_schedule_filtered_out != 0
             || self.num_finished != 0
             || self.num_retryable != 0
             || self.num_dropped_on_receive != 0
@@ -409,6 +425,7 @@ impl SchedulerCountMetrics {
         self.num_buffered = 0;
         self.num_scheduled = 0;
         self.num_unschedulable = 0;
+        self.num_schedule_filtered_out = 0;
         self.num_finished = 0;
         self.num_retryable = 0;
         self.num_dropped_on_receive = 0;
@@ -429,6 +446,8 @@ struct SchedulerTimingMetrics {
     receive_time_us: u64,
     /// Time spent buffering packets.
     buffer_time_us: u64,
+    /// Time spent filtering transactions during scheduling.
+    schedule_filter_time_us: u64,
     /// Time spent scheduling transactions.
     schedule_time_us: u64,
     /// Time spent clearing transactions from the container.
@@ -456,6 +475,7 @@ impl SchedulerTimingMetrics {
             ("decision_time_us", self.decision_time_us, i64),
             ("receive_time_us", self.receive_time_us, i64),
             ("buffer_time_us", self.buffer_time_us, i64),
+            ("schedule_filter_time_us", self.schedule_filter_time_us, i64),
             ("schedule_time_us", self.schedule_time_us, i64),
             ("clear_time_us", self.clear_time_us, i64),
             ("clean_time_us", self.clean_time_us, i64),
@@ -471,6 +491,7 @@ impl SchedulerTimingMetrics {
         self.decision_time_us = 0;
         self.receive_time_us = 0;
         self.buffer_time_us = 0;
+        self.schedule_filter_time_us = 0;
         self.schedule_time_us = 0;
         self.clear_time_us = 0;
         self.clean_time_us = 0;

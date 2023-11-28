@@ -15,6 +15,7 @@ use {
     crossbeam_channel::{Receiver, Sender, TryRecvError},
     itertools::izip,
     prio_graph::{AccessKind, PrioGraph},
+    solana_measure::measure_us,
     solana_sdk::{
         pubkey::Pubkey, saturating_add_assign, slot_history::Slot,
         transaction::SanitizedTransaction,
@@ -70,6 +71,10 @@ impl PrioGraphScheduler {
         let mut blocking_locks = ReadWriteAccountSet::default();
         let mut prio_graph = PrioGraph::new(|id: &TransactionPriorityId, _graph_node| *id);
 
+        // Track metrics on filter.
+        let mut num_filtered_out: usize = 0;
+        let mut total_filter_time_us: u64 = 0;
+
         // Create the initial look-ahead window.
         // Check transactions against filter, remove from container if it fails.
         {
@@ -80,11 +85,14 @@ impl PrioGraphScheduler {
                 };
 
                 let transaction = container.get_transaction_ttl(&id.id).unwrap();
-                if filter(&transaction.transaction) {
+                let (filter_result, filter_time_us) = measure_us!(filter(&transaction.transaction));
+                saturating_add_assign!(total_filter_time_us, filter_time_us);
+                if filter_result {
                     saturating_add_assign!(num_inserted, 1);
                     prio_graph
                         .insert_transaction(id, Self::get_transaction_account_access(transaction));
                 } else {
+                    saturating_add_assign!(num_filtered_out, 1);
                     container.remove_by_id(&id.id);
                 }
             }
@@ -109,12 +117,16 @@ impl PrioGraphScheduler {
                 // Check transaction against filter, and remove from container if it fails.
                 if let Some(next_id) = container.pop() {
                     let transaction = container.get_transaction_ttl(&next_id.id).unwrap();
-                    if filter(&transaction.transaction) {
+                    let (filter_result, filter_time_us) =
+                        measure_us!(filter(&transaction.transaction));
+                    saturating_add_assign!(total_filter_time_us, filter_time_us);
+                    if filter_result {
                         prio_graph.insert_transaction(
                             next_id,
                             Self::get_transaction_account_access(transaction),
                         );
                     } else {
+                        saturating_add_assign!(num_filtered_out, 1);
                         container.remove_by_id(&next_id.id);
                     }
                 }
@@ -220,6 +232,8 @@ impl PrioGraphScheduler {
         Ok(SchedulingSummary {
             num_scheduled,
             num_unschedulable,
+            num_filtered_out,
+            filter_time_us: total_filter_time_us,
         })
     }
 
@@ -411,6 +425,10 @@ pub(crate) struct SchedulingSummary {
     pub num_scheduled: usize,
     /// Number of transactions that were not scheduled due to conflicts.
     pub num_unschedulable: usize,
+    /// Number of transactions that were dropped due to filter.
+    pub num_filtered_out: usize,
+    /// Time spent filtering transactions
+    pub filter_time_us: u64,
 }
 
 struct Batches {
