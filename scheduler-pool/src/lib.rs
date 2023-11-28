@@ -519,7 +519,7 @@ impl PageInner {
         self.blocked_tasks
             .values()
             .rev()
-            .find_map(|(task, ru)| (ru == &RequestedUsage::Writable).then_some(task.unique_weight))
+            .find_map(|(task, ru)| matches!(ru, RequestedUsage::Writable).then_some(task.unique_weight))
     }
 
     fn heaviest_blocked_task(&mut self) -> Option<UniqueWeight> {
