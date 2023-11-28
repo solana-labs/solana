@@ -885,7 +885,7 @@ impl LedgerStorage {
         );
         let mut by_addr: HashMap<&Pubkey, Vec<TransactionByAddrInfo>> = HashMap::new();
 
-        let mut tx_cells = vec![];
+        let mut tx_cells = Vec::with_capacity(confirmed_block.transactions.len());
         for (index, transaction_with_meta) in confirmed_block.transactions.iter().enumerate() {
             let VersionedTransactionWithStatusMeta { meta, transaction } = transaction_with_meta;
             let err = meta.status.clone().err();
