@@ -40,8 +40,8 @@ pub struct TaskInner {
     task_status: TaskStatus,
 }
 
-impl TaskInner {
-    pub fn new(
+impl SchedulingStateMachine {
+    pub fn create_task(
         index: usize,
         tx: SanitizedTransaction,
         lock_attempts: Vec<LockAttempt>,
@@ -53,7 +53,9 @@ impl TaskInner {
             task_status: TaskStatus::new(lock_attempts),
         })
     }
+}
 
+impl TaskInner {
     pub fn transaction(&self) -> &SanitizedTransaction {
         &self.tx
     }
