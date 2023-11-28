@@ -9,7 +9,6 @@
 //! helper fun called `execute_batch()`.
 
 use {
-    by_address::ByAddress,
     crossbeam_channel::{
         after, bounded, never, select_biased, unbounded, Receiver, RecvTimeoutError, Sender,
         TryRecvError,
