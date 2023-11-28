@@ -7144,6 +7144,9 @@ dependencies = [
 [[package]]
 name = "solana-scheduler"
 version = "1.18.0"
+dependencies = [
+ "static_assertions",
+]
 
 [[package]]
 name = "solana-scheduler-pool"
@@ -7170,7 +7173,6 @@ dependencies = [
  "solana-scheduler",
  "solana-sdk",
  "solana-vote",
- "static_assertions",
  "tikv-jemallocator",
 ]
 

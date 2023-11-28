@@ -11,3 +11,4 @@ edition = { workspace = true }
 
 [dependencies]
 static_assertions = { workspace = true }
+by_address = { workspace = true }
