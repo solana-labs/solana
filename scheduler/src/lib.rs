@@ -55,7 +55,7 @@ impl TaskInner {
     }
 
     fn transaction(&self) -> &SanitizedTransaction {
-        self.tx
+        &self.tx
     }
 
     fn index_with_pages(self: &Arc<Self>) {
