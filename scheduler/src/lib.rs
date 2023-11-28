@@ -47,7 +47,7 @@ impl SchedulingStateMachine {
         lock_attempts: Vec<LockAttempt>,
     ) -> Task {
         let unique_weight = UniqueWeight::max_value() - index as UniqueWeight;
-        Task::new(Self {
+        Task::new(TaskInner {
             unique_weight,
             tx,
             task_status: TaskStatus::new(lock_attempts),
