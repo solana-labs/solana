@@ -1487,7 +1487,7 @@ impl ScheduleStage {
         should_remove: bool,
         uq: &UniqueWeight,
         retryable_task_queue: &mut TaskQueue,
-        lock_attempts: &[LockAttempt],
+        lock_attempts: &mut [LockAttempt],
     ) {
         for unlock_attempt in lock_attempts {
             if should_remove {
