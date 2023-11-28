@@ -1369,7 +1369,7 @@ impl ScheduleStage {
         };
 
         if matches!(lock_status, LockStatus::Succeded(_)) {
-            let strictly_lockable =
+            let no_heavier_other_tasks =
                 //jajajaaj
                 page.heaviest_blocked_task().map(|heaviest_blocked_weight| heaviest_blocked_weight == *unique_weight).unwrap_or(true) ||
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
@@ -1379,7 +1379,7 @@ impl ScheduleStage {
                     .unwrap_or(true)
             ;
 
-            if !strictly_lockable {
+            if !no_heavier_other_tasks {
                 lock_status = LockStatus::Failed
             }
         }
