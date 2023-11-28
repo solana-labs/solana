@@ -155,7 +155,7 @@ enum RequestedUsage {
 }
 
 #[derive(Debug, Default)]
-pub struct PageInner {
+struct PageInner {
     current_usage: Usage,
     blocked_tasks: BTreeMap<UniqueWeight, (Task, RequestedUsage)>,
 }
