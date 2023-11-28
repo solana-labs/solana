@@ -483,7 +483,7 @@ impl Usage {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug)]
 pub enum RequestedUsage {
     Readonly,
     Writable,
