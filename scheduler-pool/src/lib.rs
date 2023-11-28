@@ -511,9 +511,12 @@ impl PageInner {
     }
 
     fn heaviest_blocked_writing_task_weight(&self) -> Option<UniqueWeight> {
-        self.blocked_tasks.values().rev().find_map(|(task, requested_usage)| {
-            matches!(requested_usage, RequestedUsage::Writable).then_some(task.unique_weight)
-        })
+        self.blocked_tasks
+            .values()
+            .rev()
+            .find_map(|(task, requested_usage)| {
+                matches!(requested_usage, RequestedUsage::Writable).then_some(task.unique_weight)
+            })
     }
 
     fn heaviest_blocked_task(&mut self) -> Option<UniqueWeight> {
@@ -1457,7 +1460,9 @@ impl ScheduleStage {
                 if let Some(heaviest_blocked_task) = read_only_lock_attempt
                     .page_mut()
                     .heaviest_still_blocked_task()
-                    .and_then(|(task, requested_usage)| matches!(requested_usage, RequestedUsage::Readonly).then_some(task))
+                    .and_then(|(task, requested_usage)| {
+                        matches!(requested_usage, RequestedUsage::Readonly).then_some(task)
+                    })
                 {
                     retryable_task_queue
                         .entry(heaviest_blocked_task.unique_weight)
@@ -1475,10 +1480,7 @@ impl ScheduleStage {
         }
     }
 
-    fn unlock_after_execution(
-        task: &Task,
-        retryable_task_queue: &mut TaskQueue,
-    ) {
+    fn unlock_after_execution(task: &Task, retryable_task_queue: &mut TaskQueue) {
         let unique_weight = &task.unique_weight;
         let should_remove = task.has_contended();
 
@@ -1627,10 +1629,7 @@ impl SchedulingStateMachine {
     fn deschedule_task(&mut self, task: &Task) {
         self.active_task_count -= 1;
         self.handled_task_count += 1;
-        ScheduleStage::unlock_after_execution(
-            &task,
-            &mut self.retryable_task_queue,
-        );
+        ScheduleStage::unlock_after_execution(&task, &mut self.retryable_task_queue);
     }
 }
 
