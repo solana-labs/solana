@@ -533,7 +533,7 @@ static_assertions::const_assert_eq!(std::mem::size_of::<UnsafeCell<PageInner>>()
 
 #[derive(Debug, Clone, Default)]
 pub struct Page(ByAddress<PageRc>);
-static_assertions::const_assert_eq!(std::mem::size_of::<Page>, 8);
+static_assertions::const_assert_eq!(std::mem::size_of::<Page>(), 8);
 unsafe impl Send for Page {}
 unsafe impl Sync for Page {}
 
