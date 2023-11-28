@@ -126,7 +126,7 @@ impl LockAttempt {
         }
     }
 
-    pub fn clone_for_test(&self) -> Self {
+    fn clone_for_test(&self) -> Self {
         Self {
             page: self.page.clone(),
             requested_usage: self.requested_usage,
@@ -156,7 +156,7 @@ impl Usage {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum RequestedUsage {
+enum RequestedUsage {
     Readonly,
     Writable,
 }
