@@ -483,7 +483,7 @@ impl Usage {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum RequestedUsage {
     Readonly,
     Writable,
@@ -537,7 +537,7 @@ impl PageInner {
 type PageRc = Arc<UnsafeCell<PageInner>>;
 static_assertions::const_assert_eq!(std::mem::size_of::<UnsafeCell<PageInner>>(), 32);
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Hash)]
 pub struct Page(ByAddress<PageRc>);
 unsafe impl Send for Page {}
 unsafe impl Sync for Page {}
@@ -1400,7 +1400,7 @@ impl ScheduleStage {
     fn unlock(attempt: &mut LockAttempt) -> bool {
         let mut is_unused_now = false;
 
-        let requested_usage = &attempt.requested_usage;
+        let requested_usage = attempt.requested_usage;
         let page = attempt.page_mut();
 
         match &mut page.current_usage {
