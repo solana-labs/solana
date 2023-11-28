@@ -18,7 +18,7 @@ Release channels have their own copy of this changelog:
   * The default for `--use-snapshot-archives-at-startup` is now `when-newest` (#33883)
     * The default for `solana-ledger-tool`, however, remains `always` (#34228)
   * Added `central-scheduler` option for `--block-production-method` (#33890)
-  * The default for `--full-snapshot-interval-slots` is now 50,000 (#34237)
+  * The value default for `--full-snapshot-interval-slots` has been increased from 25,000 to 50,000 (#34237)
 * Upgrade Notes
 
 ## [1.17.0]
