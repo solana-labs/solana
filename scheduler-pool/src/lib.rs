@@ -1361,11 +1361,12 @@ impl ScheduleStage {
         this_unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) -> LockStatus {
+        let requested_usage = attempt.requested_usage;
         let page = attempt.page_mut();
 
         let mut lock_status = match page.current_usage {
-            Usage::Unused => LockStatus::Succeded(Usage::renew(attempt.requested_usage)),
-            Usage::Readonly(count) => match attempt.requested_usage {
+            Usage::Unused => LockStatus::Succeded(Usage::renew(requested_usage)),
+            Usage::Readonly(count) => match requested_usage {
                 RequestedUsage::Readonly => LockStatus::Succeded(Usage::Readonly(count + 1)),
                 RequestedUsage::Writable => LockStatus::Failed,
             },
@@ -1381,7 +1382,7 @@ impl ScheduleStage {
                     .map(|existing_unique_weight| *this_unique_weight == existing_unique_weight)
                     .unwrap_or(true)) ||
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
-                (attempt.requested_usage == RequestedUsage::Readonly && page
+                (requested_usage == RequestedUsage::Readonly && page
                     .heaviest_blocked_writing_task_weight()
                     .map(|existing_unique_weight| *this_unique_weight > existing_unique_weight)
                     .unwrap_or(true))
