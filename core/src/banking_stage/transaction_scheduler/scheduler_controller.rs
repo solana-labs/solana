@@ -439,14 +439,14 @@ impl SchedulerTimingMetrics {
     fn report(&self) {
         datapoint_info!(
             "banking_stage_scheduler_timing",
-            ("decision_time", self.decision_time_us, i64),
-            ("receive_time", self.receive_time_us, i64),
-            ("buffer_time", self.buffer_time_us, i64),
-            ("schedule_time", self.schedule_time_us, i64),
-            ("clear_time", self.clear_time_us, i64),
-            ("clean_time", self.clean_time_us, i64),
+            ("decision_time_us", self.decision_time_us, i64),
+            ("receive_time_us", self.receive_time_us, i64),
+            ("buffer_time_us", self.buffer_time_us, i64),
+            ("schedule_time_us", self.schedule_time_us, i64),
+            ("clear_time_us", self.clear_time_us, i64),
+            ("clean_time_us", self.clean_time_us, i64),
             (
-                "receive_completed_time",
+                "receive_completed_time_us",
                 self.receive_completed_time_us,
                 i64
             )
