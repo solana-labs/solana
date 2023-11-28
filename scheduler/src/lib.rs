@@ -1,3 +1,198 @@
+type UsageCount = u32;
+const SOLE_USE_COUNT: UsageCount = 1;
+
+#[derive(Clone, Debug)]
+enum LockStatus {
+    Succeded(Usage),
+    Failed,
+}
+
+type Task = Arc<TaskInner>;
+
+#[derive(Debug)]
+struct TaskStatusInner {
+    lock_attempts: Vec<LockAttempt>,
+    uncontended: usize,
+}
+
+#[derive(Debug)]
+struct TaskStatus(UnsafeCell<TaskStatusInner>);
+
+impl TaskStatus {
+    fn new(lock_attempts: Vec<LockAttempt>) -> Self {
+        Self(UnsafeCell::new(TaskStatusInner {
+            lock_attempts,
+            uncontended: 0,
+        }))
+    }
+}
+
+#[derive(Debug)]
+struct TaskInner {
+    unique_weight: UniqueWeight,
+    tx: SanitizedTransaction, // actually should be Bundle
+    task_status: TaskStatus,
+}
+
+impl TaskInner {
+    fn new(
+        unique_weight: UniqueWeight,
+        tx: SanitizedTransaction,
+        lock_attempts: Vec<LockAttempt>,
+    ) -> Task {
+        Task::new(Self {
+            unique_weight,
+            tx,
+            task_status: TaskStatus::new(lock_attempts),
+        })
+    }
+
+    fn index_with_pages(self: &Arc<Self>) {
+        for lock_attempt in self.lock_attempts_mut() {
+            let requested_usage = lock_attempt.requested_usage;
+            lock_attempt
+                .page_mut()
+                .insert_blocked_task(self.clone(), requested_usage);
+        }
+    }
+
+    fn lock_attempts_mut(&self) -> &mut Vec<LockAttempt> {
+        unsafe { &mut (*self.task_status.0.get()).lock_attempts }
+    }
+
+    fn uncontended(&self) -> &mut usize {
+        unsafe { &mut (*self.task_status.0.get()).uncontended }
+    }
+
+    pub fn currently_contended(&self) -> bool {
+        *self.uncontended() == 1
+    }
+
+    fn has_contended(&self) -> bool {
+        *self.uncontended() > 0
+    }
+
+    fn mark_as_contended(&self) {
+        *self.uncontended() = 1;
+    }
+
+    fn mark_as_uncontended(&self) {
+        assert!(self.currently_contended());
+        *self.uncontended() = 2;
+    }
+
+    fn task_index(&self) -> usize {
+        (UniqueWeight::max_value() - self.unique_weight) as usize
+    }
+}
+
+#[derive(Debug)]
+pub struct LockAttempt {
+    page: Page,
+    requested_usage: RequestedUsage,
+}
+
+impl Page {
+    fn as_mut(&mut self) -> &mut PageInner {
+        unsafe { &mut *self.0 .0.get() }
+    }
+}
+
+impl LockAttempt {
+    pub fn new(page: Page, requested_usage: RequestedUsage) -> Self {
+        Self {
+            page,
+            requested_usage,
+        }
+    }
+
+    pub fn clone_for_test(&self) -> Self {
+        Self {
+            page: self.page.clone(),
+            requested_usage: self.requested_usage,
+        }
+    }
+
+    fn page_mut(&mut self) -> &mut PageInner {
+        self.page.as_mut()
+    }
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+enum Usage {
+    #[default]
+    Unused,
+    Readonly(UsageCount),
+    Writable,
+}
+
+impl Usage {
+    fn renew(requested_usage: RequestedUsage) -> Self {
+        match requested_usage {
+            RequestedUsage::Readonly => Usage::Readonly(SOLE_USE_COUNT),
+            RequestedUsage::Writable => Usage::Writable,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum RequestedUsage {
+    Readonly,
+    Writable,
+}
+
+#[derive(Debug, Default)]
+pub struct PageInner {
+    current_usage: Usage,
+    blocked_tasks: BTreeMap<UniqueWeight, (Task, RequestedUsage)>,
+}
+
+impl PageInner {
+    fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
+        let pre_existed = self
+            .blocked_tasks
+            .insert(task.unique_weight, (task, requested_usage));
+        assert!(pre_existed.is_none());
+    }
+
+    fn remove_blocked_task(&mut self, unique_weight: &UniqueWeight) {
+        let removed_entry = self.blocked_tasks.remove(unique_weight);
+        assert!(removed_entry.is_some());
+    }
+
+    fn heaviest_blocked_writing_task_weight(&self) -> Option<UniqueWeight> {
+        self.blocked_tasks
+            .values()
+            .rev()
+            .find_map(|(task, requested_usage)| {
+                matches!(requested_usage, RequestedUsage::Writable).then_some(task.unique_weight)
+            })
+    }
+
+    fn heaviest_blocked_task(&mut self) -> Option<UniqueWeight> {
+        self.blocked_tasks.last_entry().map(|entry| *entry.key())
+    }
+
+    fn heaviest_still_blocked_task(&self) -> Option<&(Task, RequestedUsage)> {
+        self.blocked_tasks
+            .values()
+            .rev()
+            .find(|(task, _)| task.currently_contended())
+    }
+}
+
+type PageRc = Arc<UnsafeCell<PageInner>>;
+static_assertions::const_assert_eq!(std::mem::size_of::<UnsafeCell<PageInner>>(), 32);
+
+#[derive(Debug, Clone, Default)]
+pub struct Page(ByAddress<PageRc>);
+static_assertions::const_assert_eq!(std::mem::size_of::<Page>(), 8);
+unsafe impl Send for Page {}
+unsafe impl Sync for Page {}
+
+unsafe impl Sync for TaskStatus {}
+type TaskQueue = BTreeMap<UniqueWeight, Task>;
+
 #[derive(Default)]
 struct SchedulingStateMachine {
     retryable_task_queue: TaskQueue,
