@@ -1370,7 +1370,7 @@ impl ScheduleStage {
 
         if matches!(lock_status, LockStatus::Succeded(_)) {
             let strictly_lockable = (
-                page.heaviest_blocked_task()tcuw.map(|heaviest_blocked_weight| heaviest_blocked_weight == *unique_weight).unwrap_or(true) || 
+                page.heaviest_blocked_task().map(|heaviest_blocked_weight| heaviest_blocked_weight == *unique_weight).unwrap_or(true) || 
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
                 attempt.requested_usage == RequestedUsage::Readonly && page
                     .heaviest_blocked_writing_task_weight()
