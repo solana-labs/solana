@@ -556,7 +556,7 @@ impl AddressBook {
             Page(ByAddress(PageRc::new(UnsafeCell::new(PageInner::new(
                 Usage::Unused,
             )))))
-        })
+        }).clone()
     }
 
     pub fn page_count(&self) -> usize {
