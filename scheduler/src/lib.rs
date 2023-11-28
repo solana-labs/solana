@@ -42,10 +42,11 @@ pub struct TaskInner {
 
 impl TaskInner {
     pub fn new(
-        unique_weight: UniqueWeight,
+        index: usize,
         tx: SanitizedTransaction,
         lock_attempts: Vec<LockAttempt>,
     ) -> Task {
+        let unique_weight = UniqueWeight::max_value() - index as UniqueWeight;
         Task::new(Self {
             unique_weight,
             tx,
