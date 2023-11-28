@@ -489,7 +489,7 @@ pub enum RequestedUsage {
     Writable,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct PageInner {
     current_usage: Usage,
     blocked_tasks: std::collections::BTreeMap<UniqueWeight, (Task, RequestedUsage)>,
