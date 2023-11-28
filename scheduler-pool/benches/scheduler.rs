@@ -20,7 +20,7 @@ use {
         },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
-    solana_scheduler::SchedulingMode,
+    solana_runtime::installed_scheduler_pool::SchedulingMode,
     solana_scheduler_pool::{
         Handler, InstallableScheduler, PooledScheduler, SchedulerPool, SpawnableScheduler,
     },
