@@ -52,6 +52,7 @@ use solana_scheduler::UniqueWeight;
 use solana_scheduler::TaskInner;
 use solana_scheduler::RequestedUsage;
 use solana_scheduler::LockAttempt;
+use solana_scheduler::Task;
 
 // SchedulerPool must be accessed via dyn by solana-runtime code, because of its internal fields'
 // types (currently TransactionStatusSender; also, PohRecorder in the future) aren't available
