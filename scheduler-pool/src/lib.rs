@@ -553,7 +553,11 @@ pub struct AddressBook {
 
 impl AddressBook {
     pub fn load(&self, address: Pubkey) -> Page {
-        self.book.entry(address).or_insert_default().clone()
+        self.book.entry(address).or_insert_with_defa(|| {
+            Page(ByAddress(PageRc::new(UnsafeCell::new(PageInner::new(
+                Usage::Unused,
+            )))))
+        }).clone()
     }
 
     pub fn page_count(&self) -> usize {
