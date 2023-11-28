@@ -1331,7 +1331,7 @@ impl ScheduleStage {
         lock_attempts: &mut [LockAttempt],
         task_source: TaskSource,
     ) -> (usize, Vec<Usage>) {
-        let try_optimistic_locking = matchess!(task_source, TaskSource::Runnable);
+        let try_optimistic_locking = matches!(task_source, TaskSource::Runnable);
 
         let mut lock_count = 0;
         let mut uncommited_usages = if try_optimistic_locking {
