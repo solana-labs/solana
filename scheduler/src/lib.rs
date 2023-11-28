@@ -54,7 +54,7 @@ impl TaskInner {
         })
     }
 
-    fn transaction(&self) -> &SanitizedTransaction {
+    pub fn transaction(&self) -> &SanitizedTransaction {
         &self.tx
     }
 
