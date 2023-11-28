@@ -1360,9 +1360,7 @@ impl ScheduleStage {
         let page = attempt.page_mut();
         let tcuw = page.heaviest_blocked_task();
 
-        let strictly_lockable = if tcuw.is_none() {
-            true
-        } else if tcuw.unwrap() == *unique_weight {
+        let strictly_lockable = if tcuw.map(|heaviest_blocked_weight| heaviest_blocked_weight == unique_weight).unwrap_or(true) {
             true
         } else if attempt.requested_usage == RequestedUsage::Readonly
             && page
