@@ -41,7 +41,7 @@ pub struct TaskInner {
 }
 
 impl TaskInner {
-    fn new(
+    pub fn new(
         unique_weight: UniqueWeight,
         tx: SanitizedTransaction,
         lock_attempts: Vec<LockAttempt>,
