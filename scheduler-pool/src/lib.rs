@@ -615,7 +615,7 @@ where
             &mut task.result_with_timings.0,
             &mut task.result_with_timings.1,
             bank,
-            &task.task.tx,
+            &task.task.transaction(),
             task.task.task_index(),
             pool,
         );
@@ -877,7 +877,7 @@ where
                             if send_metrics {
                                 use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
 
-                                let sig = task.task.tx.signature().to_string();
+                                let sig = task.task.transaction().signature().to_string();
 
                                 solana_metrics::datapoint_info_at!(
                                     task.finish_time.unwrap(),
@@ -889,7 +889,7 @@ where
                                     (
                                         "account_locks_in_json",
                                         serde_json::to_string(
-                                            &task.task.tx.get_account_locks_unchecked()
+                                            &task.task.transaction().get_account_locks_unchecked()
                                         )
                                         .unwrap(),
                                         String
@@ -905,7 +905,7 @@ where
                                     (
                                         "priority",
                                         task.task
-                                            .tx
+                                            .transaction()
                                             .get_transaction_priority_details(false)
                                             .map(|d| d.priority)
                                             .unwrap_or_default(),
