@@ -1356,7 +1356,7 @@ impl ScheduleStage {
         (lock_count, uncommited_usages)
     }
 
-    fn attempt_lock_address(unique_weight: &UniqueWeight, attempt: &mut LockAttempt) -> LockStatus {
+    fn attempt_lock_address(this_unique_weight: &UniqueWeight, attempt: &mut LockAttempt) -> LockStatus {
         let page = attempt.page_mut();
 
         let mut lock_status = match page.current_usage {
@@ -1371,11 +1371,11 @@ impl ScheduleStage {
         if matches!(lock_status, LockStatus::Succeded(_)) {
             let no_heavier_other_tasks =
                 //jajajaaj
-                page.heaviest_blocked_task().map(|heaviest_blocked_weight| heaviest_blocked_weight == *unique_weight).unwrap_or(true) ||
+                page.heaviest_blocked_task().map(|existing_unique_weight| *this_unique_weight == existing_unique_weight).unwrap_or(true) ||
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
                 attempt.requested_usage == RequestedUsage::Readonly && page
                     .heaviest_blocked_writing_task_weight()
-                    .map(|existing_unique_weight| *unique_weight > existing_unique_weight)
+                    .map(|existing_unique_weight| *this_unique_weight > existing_unique_weight)
                     .unwrap_or(true)
             ;
 
