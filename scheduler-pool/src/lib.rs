@@ -1422,34 +1422,34 @@ impl ScheduleStage {
     }
 
     fn try_lock_for_task(
-        (task_source, next_task): (TaskSource, Task),
+        (task_source, task): (TaskSource, Task),
         retryable_task_queue: &mut TaskQueue,
     ) -> Option<Task> {
         let (lock_count, usages) = Self::attempt_lock_for_execution(
-            &next_task.unique_weight,
-            &mut next_task.lock_attempts_mut(),
+            &task.unique_weight,
+            &mut task.lock_attempts_mut(),
             &task_source,
         );
 
-        if lock_count < next_task.lock_attempts_mut().len() {
+        if lock_count < task.lock_attempts_mut().len() {
             if matches!(task_source, TaskSource::Runnable) {
-                Self::rollback_locking(&mut next_task.lock_attempts_mut()[..lock_count]);
-                next_task.mark_as_contended();
-                next_task.index_with_pages();
+                Self::rollback_locking(&mut task.lock_attempts_mut()[..lock_count]);
+                task.mark_as_contended();
+                task.index_with_pages();
             }
 
             return None;
         }
 
         if matches!(task_source, TaskSource::Retryable) {
-            for (usage, attempt) in usages.into_iter().zip(next_task.lock_attempts_mut()) {
+            for (usage, attempt) in usages.into_iter().zip(task.lock_attempts_mut()) {
                 attempt.page_mut().current_usage = usage;
             }
             // as soon as next tack is succeeded in locking, trigger re-checks on read only
             // addresses so that more readonly transactions can be executed
-            next_task.mark_as_uncontended();
+            task.mark_as_uncontended();
 
-            for read_only_lock_attempt in next_task
+            for read_only_lock_attempt in task
                 .lock_attempts_mut()
                 .iter_mut()
                 .filter(|l| matches!(l.requested_usage, RequestedUsage::Readonly))
@@ -1466,7 +1466,7 @@ impl ScheduleStage {
             }
         }
 
-        Some(next_task)
+        Some(task)
     }
 
     fn rollback_locking(lock_attempts: &mut [LockAttempt]) {
