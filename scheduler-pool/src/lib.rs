@@ -1450,8 +1450,6 @@ impl ScheduleStage {
             return None;
         }
 
-        trace!("successful lock: (from_runnable: {})", from_runnable,);
-
         if !from_runnable {
             for (usage, attempt) in usages.into_iter().zip(next_task.lock_attempts_mut()) {
                 attempt.page_mut().current_usage = usage;
