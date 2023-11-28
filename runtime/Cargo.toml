@@ -44,12 +44,7 @@ rayon = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true }
-<<<<<<< HEAD
-=======
 serde_json = { workspace = true }
-siphasher = { workspace = true }
-solana-accounts-db = { workspace = true }
->>>>>>> 6bbf514e78 (Add ability to output components that go into Bank hash (#32632))
 solana-address-lookup-table-program = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
 solana-bucket-map = { workspace = true }

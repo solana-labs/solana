@@ -2,13 +2,13 @@
 
 use {
     super::Bank,
+    crate::{accounts_db::PubkeyHashAccount, accounts_hash::AccountsDeltaHash},
     base64::{prelude::BASE64_STANDARD, Engine},
     log::*,
     serde::{
         de::{self, Deserialize, Deserializer},
         ser::{Serialize, SerializeSeq, Serializer},
     },
-    solana_accounts_db::{accounts_db::PubkeyHashAccount, accounts_hash::AccountsDeltaHash},
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount},
         clock::{Epoch, Slot},

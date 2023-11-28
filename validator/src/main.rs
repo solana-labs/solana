@@ -7,19 +7,6 @@ use {
     crossbeam_channel::unbounded,
     log::*,
     rand::{seq::SliceRandom, thread_rng},
-<<<<<<< HEAD
-=======
-    solana_accounts_db::{
-        accounts_db::{
-            AccountShrinkThreshold, AccountsDbConfig, CreateAncientStorage, FillerAccountsConfig,
-        },
-        accounts_index::{
-            AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
-            AccountsIndexConfig, IndexLimitMb,
-        },
-        partitioned_rewards::TestPartitionedEpochRewards,
-    },
->>>>>>> 6bbf514e78 (Add ability to output components that go into Bank hash (#32632))
     solana_clap_utils::input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
     solana_core::{
         banking_trace::DISABLED_BAKING_TRACE_DIR,
@@ -1194,11 +1181,8 @@ pub fn main() {
 
     let accounts_db_config = AccountsDbConfig {
         index: Some(accounts_index_config),
-<<<<<<< HEAD
         accounts_hash_cache_path: Some(accounts_hash_cache_path),
-=======
         base_working_path: Some(ledger_path.clone()),
->>>>>>> 6bbf514e78 (Add ability to output components that go into Bank hash (#32632))
         filler_accounts_config,
         write_cache_limit_bytes: value_t!(matches, "accounts_db_cache_limit_mb", u64)
             .ok()

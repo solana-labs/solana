@@ -44,14 +44,10 @@ use {
     },
     solana_measure::{measure, measure::Measure},
     solana_runtime::{
-<<<<<<< HEAD
         accounts::Accounts,
         accounts_db::CalcAccountsHashDataSource,
         accounts_index::ScanConfig,
-        bank::{Bank, RewardCalculationEvent, TotalAccountsStats},
-=======
         bank::{bank_hash_details, Bank, RewardCalculationEvent, TotalAccountsStats},
->>>>>>> 6bbf514e78 (Add ability to output components that go into Bank hash (#32632))
         bank_forks::BankForks,
         cost_model::CostModel,
         cost_tracker::CostTracker,

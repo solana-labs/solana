@@ -470,6 +470,7 @@ pub(crate) struct ShrinkCollect<'a, T: ShrinkCollectRefs<'a>> {
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
     base_working_path: None,
+    accounts_hash_cache_path: None,
     filler_accounts_config: FillerAccountsConfig::const_default(),
     write_cache_limit_bytes: None,
     ancient_append_vec_offset: None,
@@ -481,6 +482,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
     base_working_path: None,
+    accounts_hash_cache_path: None,
     filler_accounts_config: FillerAccountsConfig::const_default(),
     write_cache_limit_bytes: None,
     ancient_append_vec_offset: None,
@@ -541,6 +543,7 @@ pub struct AccountsDbConfig {
     pub index: Option<AccountsIndexConfig>,
     /// Base directory for various necessary files
     pub base_working_path: Option<PathBuf>,
+    pub accounts_hash_cache_path: Option<PathBuf>,
     pub filler_accounts_config: FillerAccountsConfig,
     pub write_cache_limit_bytes: Option<u64>,
     /// if None, ancient append vecs are set to ANCIENT_APPEND_VEC_DEFAULT_OFFSET
@@ -1396,21 +1399,14 @@ pub struct AccountsDb {
     /// Set of storage paths to pick from
     pub(crate) paths: Vec<PathBuf>,
 
-<<<<<<< HEAD:runtime/src/accounts_db.rs
-    accounts_hash_cache_path: PathBuf,
-=======
     /// Base directory for various necessary files
     base_working_path: PathBuf,
-    /// Directories for account hash calculations, within base_working_path
-    full_accounts_hash_cache_path: PathBuf,
-    incremental_accounts_hash_cache_path: PathBuf,
-    transient_accounts_hash_cache_path: PathBuf,
->>>>>>> 6bbf514e78 (Add ability to output components that go into Bank hash (#32632)):accounts-db/src/accounts_db.rs
-
     // used by tests
     // holds this until we are dropped
     #[allow(dead_code)]
-    temp_accounts_hash_cache_path: Option<TempDir>,
+    temp_base_working_path: Option<TempDir>,
+    /// Directory for account hash calculations, within base_working_path
+    accounts_hash_cache_path: PathBuf,
 
     pub shrink_paths: RwLock<Option<Vec<PathBuf>>>,
 
@@ -2368,49 +2364,35 @@ impl AccountsDb {
     pub const DEFAULT_ACCOUNTS_HASH_CACHE_DIR: &str = "accounts_hash_cache";
 
     pub fn default_for_tests() -> Self {
-        Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests(), None)
+        Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests(), None, None)
     }
 
     fn default_with_accounts_index(
         accounts_index: AccountInfoAccountsIndex,
         base_working_path: Option<PathBuf>,
+        accounts_hash_cache_path: Option<PathBuf>,
     ) -> Self {
         let num_threads = get_thread_count();
         const MAX_READ_ONLY_CACHE_DATA_SIZE: usize = 400_000_000; // 400M bytes
 
-<<<<<<< HEAD:runtime/src/accounts_db.rs
-        let (accounts_hash_cache_path, temp_accounts_hash_cache_path) =
-            if let Some(accounts_hash_cache_path) = accounts_hash_cache_path {
-                (accounts_hash_cache_path, None)
+        let (base_working_path, temp_base_working_path) =
+            if let Some(base_working_path) = base_working_path {
+                (base_working_path, None)
             } else {
-                let temp_dir = TempDir::new().expect("new tempdir");
-                let cache_path = temp_dir.path().to_path_buf();
-                (cache_path, Some(temp_dir))
-=======
-        let (base_working_path, accounts_hash_cache_path, temp_accounts_hash_cache_path) =
-            match base_working_path {
-                Some(base_working_path) => {
-                    let accounts_hash_cache_path =
-                        base_working_path.join(Self::ACCOUNTS_HASH_CACHE_DIR);
-                    (base_working_path, accounts_hash_cache_path, None)
-                }
-                None => {
-                    let temp_accounts_hash_cache_path = Some(TempDir::new().unwrap());
-                    let base_working_path = temp_accounts_hash_cache_path
-                        .as_ref()
-                        .unwrap()
-                        .path()
-                        .to_path_buf();
-                    let accounts_hash_cache_path =
-                        base_working_path.join(Self::ACCOUNTS_HASH_CACHE_DIR);
-                    (
-                        base_working_path,
-                        accounts_hash_cache_path,
-                        temp_accounts_hash_cache_path,
-                    )
-                }
->>>>>>> 6bbf514e78 (Add ability to output components that go into Bank hash (#32632)):accounts-db/src/accounts_db.rs
+                let temp_base_working_dir = TempDir::new().unwrap();
+                let base_working_path = temp_base_working_dir.path().to_path_buf();
+                (base_working_path, Some(temp_base_working_dir))
             };
+
+        let accounts_hash_cache_path = accounts_hash_cache_path.unwrap_or_else(|| {
+            let accounts_hash_cache_path =
+                base_working_path.join(Self::DEFAULT_ACCOUNTS_HASH_CACHE_DIR);
+            if !accounts_hash_cache_path.exists() {
+                std::fs::create_dir(&accounts_hash_cache_path)
+                    .expect("create accounts hash cache dir");
+            }
+            accounts_hash_cache_path
+        });
 
         let mut bank_hash_stats = HashMap::new();
         bank_hash_stats.insert(0, BankHashStats::default());
@@ -2440,15 +2422,9 @@ impl AccountsDb {
             write_cache_limit_bytes: None,
             write_version: AtomicU64::new(0),
             paths: vec![],
-<<<<<<< HEAD:runtime/src/accounts_db.rs
-            accounts_hash_cache_path,
-=======
             base_working_path,
-            full_accounts_hash_cache_path: accounts_hash_cache_path.join("full"),
-            incremental_accounts_hash_cache_path: accounts_hash_cache_path.join("incremental"),
-            transient_accounts_hash_cache_path: accounts_hash_cache_path.join("transient"),
->>>>>>> 6bbf514e78 (Add ability to output components that go into Bank hash (#32632)):accounts-db/src/accounts_db.rs
-            temp_accounts_hash_cache_path,
+            temp_base_working_path,
+            accounts_hash_cache_path,
             shrink_paths: RwLock::new(None),
             temp_paths: None,
             file_size: DEFAULT_FILE_SIZE,
@@ -2528,12 +2504,10 @@ impl AccountsDb {
         );
         let base_working_path = accounts_db_config
             .as_ref()
-<<<<<<< HEAD:runtime/src/accounts_db.rs
+            .and_then(|config| config.base_working_path.clone());
+        let accounts_hash_cache_path = accounts_db_config
+            .as_ref()
             .and_then(|config| config.accounts_hash_cache_path.clone());
-=======
-            .and_then(|x| x.base_working_path.clone());
-
->>>>>>> 6bbf514e78 (Add ability to output components that go into Bank hash (#32632)):accounts-db/src/accounts_db.rs
         let filler_accounts_config = accounts_db_config
             .as_ref()
             .map(|config| config.filler_accounts_config)
@@ -2588,7 +2562,11 @@ impl AccountsDb {
                 .and_then(|x| x.write_cache_limit_bytes),
             partitioned_epoch_rewards_config,
             exhaustively_verify_refcounts,
-            ..Self::default_with_accounts_index(accounts_index, base_working_path)
+            ..Self::default_with_accounts_index(
+                accounts_index,
+                base_working_path,
+                accounts_hash_cache_path,
+            )
         };
         if paths_is_empty {
             // Create a temporary set of accounts directories, used primarily
