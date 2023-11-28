@@ -4003,9 +4003,9 @@ dependencies = [
 
 [[package]]
 name = "prio-graph"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78dd2fa9ca0901b4d0dbf51d9862d7e3fb004605e4f4b4132472c3d08e7d901b"
+checksum = "952091df80157ff6f267c9bcb6ad68e42405e217bd83268f2aedee0aa4f03b5c"
 
 [[package]]
 name = "proc-macro-crate"

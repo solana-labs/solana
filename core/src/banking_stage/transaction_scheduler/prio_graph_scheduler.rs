@@ -190,7 +190,7 @@ impl PrioGraphScheduler {
         }
 
         // Push remaining transactions back into the container
-        while let Some(id) = prio_graph.pop_and_unblock() {
+        while let Some((id, _)) = prio_graph.pop_and_unblock() {
             container.push_id_into_queue(id);
         }
 
