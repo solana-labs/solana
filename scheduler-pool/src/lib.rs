@@ -1366,7 +1366,7 @@ impl ScheduleStage {
                 RequestedUsage::Writable => LockStatus::Failed,
             },
             Usage::Writable => LockStatus::Failed,
-        }
+        };
 
         if matches!(lock_status, LockStatus::Succeded(_)) {
             let strictly_lockable = (
