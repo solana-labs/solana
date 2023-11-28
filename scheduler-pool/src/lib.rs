@@ -45,7 +45,6 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
-use solana_scheduler::TaskInner;
 use solana_scheduler::RequestedUsage;
 use solana_scheduler::LockAttempt;
 use solana_scheduler::Task;
@@ -1139,12 +1138,12 @@ where
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
         transaction_with_index.with_transaction_and_index(|transaction, index| {
             let locks = transaction.get_account_locks_unchecked();
-            let writable_locks = locks.writable.iter().map(|address| {
-                LockAttempt::new(self.address_book.load(**address), RequestedUsage::Writable)
-            });
-            let readonly_locks = locks.readonly.iter().map(|address| {
-                LockAttempt::new(self.address_book.load(**address), RequestedUsage::Readonly)
-            });
+            let writable_locks = locks.writable.iter().map(|address|
+                LockAttempt::writable(self.address_book.load(**address))
+            );
+            let readonly_locks = locks.readonly.iter().map(|address|
+                LockAttempt::readonly(self.address_book.load(**address))
+            );
             let locks = writable_locks.chain(readonly_locks).collect();
             let task = SchedulingStateMachine::create_task(index, transaction.clone(), locks);
             self.ensure_thread_manager_started().send_task(task);

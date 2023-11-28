@@ -112,10 +112,17 @@ impl Page {
 }
 
 impl LockAttempt {
-    pub fn new(page: Page, requested_usage: RequestedUsage) -> Self {
+    pub fn readonly(page: Page) -> Self {
         Self {
             page,
-            requested_usage,
+            requested_usage: RequestedUsage::Readonly,
+        }
+    }
+
+    pub fn writable(page: Page) -> Self {
+        Self {
+            page,
+            requested_usage: RequestedUsage::Writable,
         }
     }
 
