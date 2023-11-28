@@ -497,13 +497,6 @@ pub struct PageInner {
 }
 
 impl PageInner {
-    fn new(current_usage: Usage) -> Self {
-        Self {
-            current_usage,
-            blocked_tasks: Default::default(),
-        }
-    }
-
     fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
         let pre_existed = self
             .blocked_tasks
