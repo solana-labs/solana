@@ -37,6 +37,7 @@ use {
     solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
         cell::UnsafeCell,
+        collections::BTreeMap,
         fmt::Debug,
         marker::PhantomData,
         sync::{
@@ -47,7 +48,6 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
-use std::collections::BTreeMap;
 
 type UniqueWeight = u64;
 
@@ -511,10 +511,9 @@ impl PageInner {
     }
 
     fn heaviest_blocked_writing_task_weight(&self) -> Option<UniqueWeight> {
-        self.blocked_tasks
-            .values()
-            .rev()
-            .find_map(|(task, ru)| matches!(ru, RequestedUsage::Writable).then_some(task.unique_weight))
+        self.blocked_tasks.values().rev().find_map(|(task, ru)| {
+            matches!(ru, RequestedUsage::Writable).then_some(task.unique_weight)
+        })
     }
 
     fn heaviest_blocked_task(&mut self) -> Option<UniqueWeight> {
@@ -547,7 +546,10 @@ pub struct AddressBook {
 
 impl AddressBook {
     pub fn load(&self, address: Pubkey) -> Page {
-        self.book.entry(address).or_insert_with(|| Page::default()).clone()
+        self.book
+            .entry(address)
+            .or_insert_with(|| Page::default())
+            .clone()
     }
 
     pub fn page_count(&self) -> usize {
