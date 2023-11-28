@@ -1147,7 +1147,7 @@ where
             });
             let locks = writable_lock_iter
                 .chain(readonly_lock_iter)
-                .collect::<Vec<_>>();
+                .collect();
             let task = TaskInner::new(index, transaction.clone(), locks);
             self.ensure_thread_manager_started().send_task(task);
         });
