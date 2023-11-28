@@ -1384,7 +1384,7 @@ impl ScheduleStage {
                     .map(|existing_unique_weight| *this_unique_weight == existing_unique_weight)
                     .unwrap_or(true)) ||
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
-                (requested_usage == RequestedUsage::Readonly && page
+                (matches!(requested_usage, RequestedUsage::Readonly) && page
                     .heaviest_blocked_writing_task_weight()
                     .map(|existing_unique_weight| *this_unique_weight > existing_unique_weight)
                     .unwrap_or(true))
