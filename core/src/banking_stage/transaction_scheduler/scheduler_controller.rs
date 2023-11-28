@@ -295,40 +295,80 @@ impl SchedulerController {
         let transaction_account_lock_limit = bank.get_transaction_account_lock_limit();
         let feature_set = &bank.feature_set;
         let vote_only = bank.vote_only_bank();
-        for packet in packets {
-            let Some(transaction) =
-                packet.build_sanitized_transaction(feature_set, vote_only, bank.as_ref())
-            else {
-                saturating_add_assign!(self.count_metrics.num_dropped_on_sanitization, 1);
-                continue;
-            };
 
-            // Check transaction does not have too many or duplicate locks.
-            // If it does, transaction is not valid and should be dropped here.
-            if SanitizedTransaction::validate_account_locks(
-                transaction.message(),
-                transaction_account_lock_limit,
-            )
-            .is_err()
+        const CHUNK_SIZE: usize = 128;
+        let lock_results: [_; CHUNK_SIZE] = core::array::from_fn(|_| Ok(()));
+        let mut error_counts = TransactionErrorMetrics::default();
+        for chunk in packets.chunks(CHUNK_SIZE) {
+            let mut post_sanitization_count: usize = 0;
+            let (transactions, priority_details): (Vec<_>, Vec<_>) = chunk
+                .iter()
+                .filter_map(|packet| {
+                    packet
+                        .build_sanitized_transaction(feature_set, vote_only, bank.as_ref())
+                        .map(|tx| (tx, packet.priority_details()))
+                })
+                .inspect(|_| saturating_add_assign!(post_sanitization_count, 1))
+                .filter(|(tx, _)| {
+                    SanitizedTransaction::validate_account_locks(
+                        tx.message(),
+                        transaction_account_lock_limit,
+                    )
+                    .is_ok()
+                })
+                .unzip();
+
+            let check_results = bank.check_transactions(
+                &transactions,
+                &lock_results[..transactions.len()],
+                MAX_PROCESSING_AGE,
+                &mut error_counts,
+            );
+            let post_lock_validation_count = transactions.len();
+
+            let mut post_transaction_check_count: usize = 0;
+            for ((transaction, priority_details), _) in transactions
+                .into_iter()
+                .zip(priority_details)
+                .zip(check_results)
+                .filter(|(_, check_result)| check_result.0.is_ok())
             {
-                saturating_add_assign!(self.count_metrics.num_dropped_on_validate_locks, 1);
-                continue;
+                saturating_add_assign!(post_transaction_check_count, 1);
+                let transaction_id = self.transaction_id_generator.next();
+                let transaction_ttl = SanitizedTransactionTTL {
+                    transaction,
+                    max_age_slot: last_slot_in_epoch,
+                };
+
+                if self.container.insert_new_transaction(
+                    transaction_id,
+                    transaction_ttl,
+                    priority_details,
+                ) {
+                    saturating_add_assign!(self.count_metrics.num_dropped_on_capacity, 1);
+                }
+                saturating_add_assign!(self.count_metrics.num_buffered, 1);
             }
 
-            let transaction_id = self.transaction_id_generator.next();
-            let transaction_ttl = SanitizedTransactionTTL {
-                transaction,
-                max_age_slot: last_slot_in_epoch,
-            };
-            let transaction_priority_details = packet.priority_details();
-            if self.container.insert_new_transaction(
-                transaction_id,
-                transaction_ttl,
-                transaction_priority_details,
-            ) {
-                saturating_add_assign!(self.count_metrics.num_dropped_on_capacity, 1);
-            }
-            saturating_add_assign!(self.count_metrics.num_buffered, 1);
+            // Update metrics for transactions that were dropped.
+            let num_dropped_on_sanitization = chunk.len().saturating_sub(post_sanitization_count);
+            let num_dropped_on_lock_validation =
+                post_sanitization_count.saturating_sub(post_lock_validation_count);
+            let num_dropped_on_transaction_checks =
+                post_lock_validation_count.saturating_sub(post_transaction_check_count);
+
+            saturating_add_assign!(
+                self.count_metrics.num_dropped_on_sanitization,
+                num_dropped_on_sanitization
+            );
+            saturating_add_assign!(
+                self.count_metrics.num_dropped_on_validate_locks,
+                num_dropped_on_lock_validation
+            );
+            saturating_add_assign!(
+                self.count_metrics.num_dropped_on_receive_transaction_checks,
+                num_dropped_on_transaction_checks
+            );
         }
     }
 }
@@ -359,6 +399,9 @@ struct SchedulerCountMetrics {
     num_dropped_on_sanitization: usize,
     /// Number of transactions that were dropped due to failed lock validation.
     num_dropped_on_validate_locks: usize,
+    /// Number of transactions that were dropped due to failed transaction
+    /// checks during receive.
+    num_dropped_on_receive_transaction_checks: usize,
     /// Number of transactions that were dropped due to clearing.
     num_dropped_on_clear: usize,
     /// Number of transactions that were dropped due to age and status checks.
@@ -403,6 +446,11 @@ impl SchedulerCountMetrics {
                 self.num_dropped_on_validate_locks,
                 i64
             ),
+            (
+                "num_dropped_on_receive_transaction_checks",
+                self.num_dropped_on_receive_transaction_checks,
+                i64
+            ),
             ("num_dropped_on_clear", self.num_dropped_on_clear, i64),
             (
                 "num_dropped_on_age_and_status",
@@ -424,6 +472,7 @@ impl SchedulerCountMetrics {
             || self.num_dropped_on_receive != 0
             || self.num_dropped_on_sanitization != 0
             || self.num_dropped_on_validate_locks != 0
+            || self.num_dropped_on_receive_transaction_checks != 0
             || self.num_dropped_on_clear != 0
             || self.num_dropped_on_age_and_status != 0
             || self.num_dropped_on_capacity != 0
@@ -440,6 +489,7 @@ impl SchedulerCountMetrics {
         self.num_dropped_on_receive = 0;
         self.num_dropped_on_sanitization = 0;
         self.num_dropped_on_validate_locks = 0;
+        self.num_dropped_on_receive_transaction_checks = 0;
         self.num_dropped_on_clear = 0;
         self.num_dropped_on_age_and_status = 0;
         self.num_dropped_on_capacity = 0;
