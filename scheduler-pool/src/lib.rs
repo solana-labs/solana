@@ -1317,9 +1317,131 @@ enum TaskSource {
     Retryable,
 }
 
-pub struct ScheduleStage;
+impl<TH, SEA> InstalledScheduler<SEA> for PooledScheduler<TH, SEA>
+where
+    TH: Handler<SEA>,
+    SEA: ScheduleExecutionArg,
+{
+    fn id(&self) -> SchedulerId {
+        self.thread_manager.read().unwrap().scheduler_id
+    }
 
-impl ScheduleStage {
+    fn context(&self) -> SchedulingContext {
+        self.thread_manager
+            .read()
+            .unwrap()
+            .active_context()
+            .unwrap()
+    }
+
+    fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
+        transaction_with_index.with_transaction_and_index(|transaction, index| {
+            let locks = transaction.get_account_locks_unchecked();
+            let writable_lock_iter = locks.writable.iter().map(|address| {
+                LockAttempt::new(self.address_book.load(**address), RequestedUsage::Writable)
+            });
+            let readonly_lock_iter = locks.readonly.iter().map(|address| {
+                LockAttempt::new(self.address_book.load(**address), RequestedUsage::Readonly)
+            });
+            let locks = writable_lock_iter
+                .chain(readonly_lock_iter)
+                .collect::<Vec<_>>();
+            let uw = UniqueWeight::max_value() - index as UniqueWeight;
+            let task = TaskInner::new(uw, transaction.clone(), locks);
+            self.ensure_thread_manager_started().send_task(task);
+        });
+    }
+
+    fn wait_for_termination(&mut self, wait_reason: &WaitReason) -> Option<ResultWithTimings> {
+        if self.completed_result_with_timings.is_none() {
+            self.completed_result_with_timings =
+                Some(self.thread_manager.write().unwrap().end_session());
+        }
+
+        if wait_reason.is_paused() {
+            None
+        } else {
+            self.completed_result_with_timings.take()
+        }
+    }
+
+    fn return_to_pool(mut self: Box<Self>) {
+        let pool = self.thread_manager.read().unwrap().pool.clone();
+        self.pooled_now();
+        pool.return_scheduler(self);
+    }
+}
+
+#[derive(Default)]
+struct SchedulingStateMachine {
+    retryable_task_queue: TaskQueue,
+    active_task_count: usize,
+    handled_task_count: usize,
+    reschedule_count: usize,
+    rescheduled_task_count: usize,
+    total_task_count: usize,
+}
+
+impl SchedulingStateMachine {
+    fn is_empty(&self) -> bool {
+        self.active_task_count == 0
+    }
+
+    fn retryable_task_count(&self) -> usize {
+        self.retryable_task_queue.len()
+    }
+
+    fn active_task_count(&self) -> usize {
+        self.active_task_count
+    }
+
+    fn handled_task_count(&self) -> usize {
+        self.handled_task_count
+    }
+
+    fn reschedule_count(&self) -> usize {
+        self.reschedule_count
+    }
+
+    fn rescheduled_task_count(&self) -> usize {
+        self.rescheduled_task_count
+    }
+
+    fn total_task_count(&self) -> usize {
+        self.total_task_count
+    }
+
+    fn schedule_new_task(&mut self, task: Task) -> Option<Task> {
+        self.total_task_count += 1;
+        self.active_task_count += 1;
+        Self::try_lock_for_task((TaskSource::Runnable, task), &mut self.retryable_task_queue)
+    }
+
+    fn has_retryable_task(&self) -> bool {
+        !self.retryable_task_queue.is_empty()
+    }
+
+    fn schedule_retryable_task(&mut self) -> Option<Task> {
+        self.retryable_task_queue
+            .pop_last()
+            .and_then(|(_, task)| {
+                self.reschedule_count += 1;
+                Self::try_lock_for_task(
+                    (TaskSource::Retryable, task),
+                    &mut self.retryable_task_queue,
+                )
+            })
+            .inspect(|_| {
+                self.rescheduled_task_count += 1;
+            })
+    }
+
+    fn deschedule_task(&mut self, task: &Task) {
+        self.active_task_count -= 1;
+        self.handled_task_count += 1;
+        Self::unlock_after_execution(&task, &mut self.retryable_task_queue);
+    }
+
     fn attempt_lock_for_execution(
         unique_weight: &UniqueWeight,
         lock_attempts: &mut [LockAttempt],
@@ -1501,135 +1623,6 @@ impl ScheduleStage {
                     .or_insert_with(|| uncontended_task.clone());
             }
         }
-    }
-}
-
-impl<TH, SEA> InstalledScheduler<SEA> for PooledScheduler<TH, SEA>
-where
-    TH: Handler<SEA>,
-    SEA: ScheduleExecutionArg,
-{
-    fn id(&self) -> SchedulerId {
-        self.thread_manager.read().unwrap().scheduler_id
-    }
-
-    fn context(&self) -> SchedulingContext {
-        self.thread_manager
-            .read()
-            .unwrap()
-            .active_context()
-            .unwrap()
-    }
-
-    fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
-        transaction_with_index.with_transaction_and_index(|transaction, index| {
-            let locks = transaction.get_account_locks_unchecked();
-            let writable_lock_iter = locks.writable.iter().map(|address| {
-                LockAttempt::new(self.address_book.load(**address), RequestedUsage::Writable)
-            });
-            let readonly_lock_iter = locks.readonly.iter().map(|address| {
-                LockAttempt::new(self.address_book.load(**address), RequestedUsage::Readonly)
-            });
-            let locks = writable_lock_iter
-                .chain(readonly_lock_iter)
-                .collect::<Vec<_>>();
-            let uw = UniqueWeight::max_value() - index as UniqueWeight;
-            let task = TaskInner::new(uw, transaction.clone(), locks);
-            self.ensure_thread_manager_started().send_task(task);
-        });
-    }
-
-    fn wait_for_termination(&mut self, wait_reason: &WaitReason) -> Option<ResultWithTimings> {
-        if self.completed_result_with_timings.is_none() {
-            self.completed_result_with_timings =
-                Some(self.thread_manager.write().unwrap().end_session());
-        }
-
-        if wait_reason.is_paused() {
-            None
-        } else {
-            self.completed_result_with_timings.take()
-        }
-    }
-
-    fn return_to_pool(mut self: Box<Self>) {
-        let pool = self.thread_manager.read().unwrap().pool.clone();
-        self.pooled_now();
-        pool.return_scheduler(self);
-    }
-}
-
-#[derive(Default)]
-struct SchedulingStateMachine {
-    retryable_task_queue: TaskQueue,
-    active_task_count: usize,
-    handled_task_count: usize,
-    reschedule_count: usize,
-    rescheduled_task_count: usize,
-    total_task_count: usize,
-}
-
-impl SchedulingStateMachine {
-    fn is_empty(&self) -> bool {
-        self.active_task_count == 0
-    }
-
-    fn retryable_task_count(&self) -> usize {
-        self.retryable_task_queue.len()
-    }
-
-    fn active_task_count(&self) -> usize {
-        self.active_task_count
-    }
-
-    fn handled_task_count(&self) -> usize {
-        self.handled_task_count
-    }
-
-    fn reschedule_count(&self) -> usize {
-        self.reschedule_count
-    }
-
-    fn rescheduled_task_count(&self) -> usize {
-        self.rescheduled_task_count
-    }
-
-    fn total_task_count(&self) -> usize {
-        self.total_task_count
-    }
-
-    fn schedule_new_task(&mut self, task: Task) -> Option<Task> {
-        self.total_task_count += 1;
-        self.active_task_count += 1;
-        ScheduleStage::try_lock_for_task(
-            (TaskSource::Runnable, task),
-            &mut self.retryable_task_queue,
-        )
-    }
-
-    fn has_retryable_task(&self) -> bool {
-        !self.retryable_task_queue.is_empty()
-    }
-
-    fn schedule_retryable_task(&mut self) -> Option<Task> {
-        self.retryable_task_queue
-            .pop_last()
-            .and_then(|(_, task)| {
-                self.reschedule_count += 1;
-                ScheduleStage::try_lock_for_task(
-                    (TaskSource::Retryable, task),
-                    &mut self.retryable_task_queue,
-                )
-            })
-            .inspect(|_| {
-                self.rescheduled_task_count += 1;
-            })
-    }
-
-    fn deschedule_task(&mut self, task: &Task) {
-        self.active_task_count -= 1;
-        self.handled_task_count += 1;
-        ScheduleStage::unlock_after_execution(&task, &mut self.retryable_task_queue);
     }
 }
 
