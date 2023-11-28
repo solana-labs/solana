@@ -461,7 +461,7 @@ impl LockAttempt {
         }
     }
 
-    fn page_mut(&self) -> &mut PageInner {
+    fn page_mut(&mut self) -> &mut PageInner {
         self.page.as_mut()
     }
 }
