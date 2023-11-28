@@ -154,6 +154,20 @@ impl VoteReward {
     }
 }
 
+fn new_bank_from_parent_with_bank_forks(
+    bank_forks: &RwLock<BankForks>,
+    parent: Arc<Bank>,
+    collector_id: &Pubkey,
+    slot: Slot,
+) -> Arc<Bank> {
+    let bank = Bank::new_from_parent(parent, collector_id, slot);
+    bank_forks
+        .write()
+        .unwrap()
+        .insert(bank)
+        .clone_without_scheduler()
+}
+
 #[test]
 fn test_race_register_tick_freeze() {
     solana_logger::setup();
@@ -423,7 +437,7 @@ fn test_credit_debit_rent_no_side_effect_on_hash() {
             genesis_config.ticks_per_slot,
         ) as u64;
         let (root_bank, bank_forks_1) = Bank::new_with_bank_forks_for_tests(&genesis_config);
-        let bank = Bank::new_from_parent_with_bank_forks(
+        let bank = new_bank_from_parent_with_bank_forks(
             bank_forks_1.as_ref(),
             root_bank,
             &Pubkey::default(),
@@ -431,7 +445,7 @@ fn test_credit_debit_rent_no_side_effect_on_hash() {
         );
 
         let (root_bank_2, bank_forks_2) = Bank::new_with_bank_forks_for_tests(&genesis_config);
-        let bank_with_success_txs = Bank::new_from_parent_with_bank_forks(
+        let bank_with_success_txs = new_bank_from_parent_with_bank_forks(
             bank_forks_2.as_ref(),
             root_bank_2,
             &Pubkey::default(),
@@ -2384,7 +2398,7 @@ fn test_executed_transaction_count_post_bank_transaction_count_fix() {
     assert_eq!(bank.executed_transaction_count(), 2);
     assert_eq!(bank.transaction_error_count(), 1);
 
-    let bank2 = Bank::new_from_parent_with_bank_forks(
+    let bank2 = new_bank_from_parent_with_bank_forks(
         bank_forks.as_ref(),
         bank,
         &Pubkey::default(),
@@ -2570,7 +2584,7 @@ fn test_bank_tx_fee() {
     );
 
     // Verify that an InstructionError collects fees, too
-    let bank = Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank, &leader, 1);
+    let bank = new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank, &leader, 1);
     let mut tx = system_transaction::transfer(&mint_keypair, &key, 1, bank.last_blockhash());
     // Create a bogus instruction to system_program to cause an instruction error
     tx.message.instructions[0].data[0] = 40;
@@ -2682,7 +2696,7 @@ fn test_bank_tx_compute_unit_fee() {
     );
 
     // Verify that an InstructionError collects fees, too
-    let bank = Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank, &leader, 1);
+    let bank = new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank, &leader, 1);
     let mut tx = system_transaction::transfer(&mint_keypair, &key, 1, bank.last_blockhash());
     // Create a bogus instruction to system_program to cause an instruction error
     tx.message.instructions[0].data[0] = 40;
@@ -2790,13 +2804,13 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
     let cheap_lamports_per_signature = bank.get_lamports_per_signature();
     assert_eq!(cheap_lamports_per_signature, 0);
 
-    let bank = Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank, &leader, 1);
+    let bank = new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank, &leader, 1);
     goto_end_of_slot(bank.clone());
     let expensive_blockhash = bank.last_blockhash();
     let expensive_lamports_per_signature = bank.get_lamports_per_signature();
     assert!(cheap_lamports_per_signature < expensive_lamports_per_signature);
 
-    let bank = Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank, &leader, 2);
+    let bank = new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank, &leader, 2);
 
     // Send a transfer using cheap_blockhash
     let key = solana_sdk::pubkey::new_rand();
@@ -3214,7 +3228,7 @@ fn new_from_parent(parent: Arc<Bank>) -> Bank {
 
 fn new_from_parent_with_fork_next_slot(parent: Arc<Bank>, fork: &RwLock<BankForks>) -> Arc<Bank> {
     let slot = parent.slot() + 1;
-    Bank::new_from_parent_with_bank_forks(fork, parent, &Pubkey::default(), slot)
+    new_bank_from_parent_with_bank_forks(fork, parent, &Pubkey::default(), slot)
 }
 
 /// Verify that the parent's vector is computed correctly
@@ -3340,7 +3354,7 @@ fn test_bank_hash_internal_state_verify() {
 
         let bank0_state = bank0.hash_internal_state();
         // Checkpointing should result in a new state while freezing the parent
-        let bank2 = Bank::new_from_parent_with_bank_forks(
+        let bank2 = new_bank_from_parent_with_bank_forks(
             bank_forks.as_ref(),
             bank0.clone(),
             &solana_sdk::pubkey::new_rand(),
@@ -3359,7 +3373,7 @@ fn test_bank_hash_internal_state_verify() {
             bank2.update_accounts_hash_for_tests();
             assert!(bank2.verify_accounts_hash(None, VerifyAccountsHashConfig::default_for_test()));
         }
-        let bank3 = Bank::new_from_parent_with_bank_forks(
+        let bank3 = new_bank_from_parent_with_bank_forks(
             bank_forks.as_ref(),
             bank0.clone(),
             &solana_sdk::pubkey::new_rand(),
@@ -3430,7 +3444,7 @@ fn test_bank_hash_internal_state_same_account_different_fork() {
     let amount = genesis_config.rent.minimum_balance(0);
     let (bank0, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let initial_state = bank0.hash_internal_state();
-    let bank1 = Bank::new_from_parent_with_bank_forks(
+    let bank1 = new_bank_from_parent_with_bank_forks(
         bank_forks.as_ref(),
         bank0.clone(),
         &Pubkey::default(),
@@ -3446,7 +3460,7 @@ fn test_bank_hash_internal_state_same_account_different_fork() {
     info!("transfer bank2");
     // bank2 should not hash the same as bank1
     let bank2 =
-        Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank0, &Pubkey::default(), 2);
+        new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank0, &Pubkey::default(), 2);
     bank2.transfer(amount, &mint_keypair, &pubkey).unwrap();
     assert_ne!(bank2.hash_internal_state(), initial_state);
     assert_ne!(bank1.hash_internal_state(), bank2.hash_internal_state());
@@ -3623,7 +3637,7 @@ fn test_bank_get_account_in_parent_after_squash2() {
         .unwrap();
     assert_eq!(bank0.get_balance(&key1.pubkey()), amount);
 
-    let bank1 = Bank::new_from_parent_with_bank_forks(
+    let bank1 = new_bank_from_parent_with_bank_forks(
         bank_forks.as_ref(),
         bank0.clone(),
         &Pubkey::default(),
@@ -3632,7 +3646,7 @@ fn test_bank_get_account_in_parent_after_squash2() {
     bank1
         .transfer(3 * amount, &mint_keypair, &key1.pubkey())
         .unwrap();
-    let bank2 = Bank::new_from_parent_with_bank_forks(
+    let bank2 = new_bank_from_parent_with_bank_forks(
         bank_forks.as_ref(),
         bank0.clone(),
         &Pubkey::default(),
@@ -3642,7 +3656,7 @@ fn test_bank_get_account_in_parent_after_squash2() {
         .transfer(2 * amount, &mint_keypair, &key1.pubkey())
         .unwrap();
 
-    let bank3 = Bank::new_from_parent_with_bank_forks(
+    let bank3 = new_bank_from_parent_with_bank_forks(
         bank_forks.as_ref(),
         bank1.clone(),
         &Pubkey::default(),
@@ -3659,7 +3673,7 @@ fn test_bank_get_account_in_parent_after_squash2() {
     bank3.squash();
     assert_eq!(bank1.get_balance(&key1.pubkey()), 4 * amount);
 
-    let bank4 = Bank::new_from_parent_with_bank_forks(
+    let bank4 = new_bank_from_parent_with_bank_forks(
         bank_forks.as_ref(),
         bank3.clone(),
         &Pubkey::default(),
@@ -3671,7 +3685,7 @@ fn test_bank_get_account_in_parent_after_squash2() {
     assert_eq!(bank4.get_balance(&key1.pubkey()), 8 * amount);
     assert_eq!(bank3.get_balance(&key1.pubkey()), 4 * amount);
     bank4.squash();
-    let bank5 = Bank::new_from_parent_with_bank_forks(
+    let bank5 = new_bank_from_parent_with_bank_forks(
         bank_forks.as_ref(),
         bank4.clone(),
         &Pubkey::default(),
@@ -3679,7 +3693,7 @@ fn test_bank_get_account_in_parent_after_squash2() {
     );
     bank5.squash();
     let bank6 =
-        Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank5, &Pubkey::default(), 6);
+        new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank5, &Pubkey::default(), 6);
     bank6.squash();
 
     // This picks up the values from 4 which is the highest root:
@@ -3705,7 +3719,7 @@ fn test_bank_get_account_modified_since_parent_with_fixed_root() {
     assert_eq!(account.lamports(), amount);
     assert_eq!(slot, 0);
 
-    let bank2 = Bank::new_from_parent_with_bank_forks(
+    let bank2 = new_bank_from_parent_with_bank_forks(
         bank_forks.as_ref(),
         bank1.clone(),
         &Pubkey::default(),
@@ -3729,7 +3743,7 @@ fn test_bank_get_account_modified_since_parent_with_fixed_root() {
     bank1.squash();
 
     let bank3 =
-        Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank2, &Pubkey::default(), 3);
+        new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank2, &Pubkey::default(), 3);
     assert_eq!(
         None,
         bank3.get_account_modified_since_parent_with_fixed_root(&pubkey)
@@ -4083,14 +4097,14 @@ fn test_bank_inherit_tx_count() {
     let (bank0, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
 
     // Bank 1
-    let bank1 = Bank::new_from_parent_with_bank_forks(
+    let bank1 = new_bank_from_parent_with_bank_forks(
         bank_forks.as_ref(),
         bank0.clone(),
         &solana_sdk::pubkey::new_rand(),
         1,
     );
     // Bank 2
-    let bank2 = Bank::new_from_parent_with_bank_forks(
+    let bank2 = new_bank_from_parent_with_bank_forks(
         bank_forks.as_ref(),
         bank0.clone(),
         &solana_sdk::pubkey::new_rand(),
@@ -4124,7 +4138,7 @@ fn test_bank_inherit_tx_count() {
     assert_eq!(bank1.transaction_count(), 1);
     assert_eq!(bank1.non_vote_transaction_count_since_restart(), 1);
 
-    let bank6 = Bank::new_from_parent_with_bank_forks(
+    let bank6 = new_bank_from_parent_with_bank_forks(
         bank_forks.as_ref(),
         bank1.clone(),
         &solana_sdk::pubkey::new_rand(),
@@ -6069,7 +6083,7 @@ fn test_incinerator() {
     let (bank0, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
 
     // Move to the first normal slot so normal rent behaviour applies
-    let bank = Bank::new_from_parent_with_bank_forks(
+    let bank = new_bank_from_parent_with_bank_forks(
         bank_forks.as_ref(),
         bank0,
         &Pubkey::default(),
@@ -9109,7 +9123,7 @@ fn test_vote_epoch_panic() {
     ));
     assert!(result.is_ok());
 
-    let _bank = Bank::new_from_parent_with_bank_forks(
+    let _bank = new_bank_from_parent_with_bank_forks(
         bank_forks.as_ref(),
         bank,
         &mint_keypair.pubkey(),
@@ -9522,7 +9536,7 @@ fn do_test_clean_dropped_unrooted_banks(freeze_bank1: FreezeBank1) {
 
     let slot = 1;
     let bank1 =
-        Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank0.clone(), &collector, slot);
+        new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank0.clone(), &collector, slot);
     add_root_and_flush_write_cache(&bank0);
     bank1
         .transfer(amount, &mint_keypair, &key1.pubkey())
@@ -9535,7 +9549,7 @@ fn do_test_clean_dropped_unrooted_banks(freeze_bank1: FreezeBank1) {
     }
 
     let slot = slot + 1;
-    let bank2 = Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank0, &collector, slot);
+    let bank2 = new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank0, &collector, slot);
     bank2
         .transfer(amount * 2, &mint_keypair, &key2.pubkey())
         .unwrap();
@@ -12169,7 +12183,7 @@ fn test_bank_verify_accounts_hash_with_base() {
     // make some banks, do some transactions, ensure there's some zero-lamport accounts
     for _ in 0..2 {
         let slot = bank.slot() + 1;
-        bank = Bank::new_from_parent_with_bank_forks(
+        bank = new_bank_from_parent_with_bank_forks(
             bank_forks.as_ref(),
             bank,
             &Pubkey::new_unique(),
@@ -12188,7 +12202,7 @@ fn test_bank_verify_accounts_hash_with_base() {
     // make more banks, do more transactions, ensure there's more zero-lamport accounts
     for _ in 0..2 {
         let slot = bank.slot() + 1;
-        bank = Bank::new_from_parent_with_bank_forks(
+        bank = new_bank_from_parent_with_bank_forks(
             bank_forks.as_ref(),
             bank,
             &Pubkey::new_unique(),
@@ -12873,7 +12887,7 @@ fn test_program_execution_restricted_for_stake_account_in_reward_period() {
     assert_eq!(num_slots_in_epoch, 32);
 
     for slot in 1..=num_slots_in_epoch + 2 {
-        let bank = Bank::new_from_parent_with_bank_forks(
+        let bank = new_bank_from_parent_with_bank_forks(
             bank_forks.as_ref(),
             previous_bank.clone(),
             &Pubkey::default(),
@@ -13134,12 +13148,12 @@ where
     // create zero-lamports account to be cleaned
     let account = AccountSharedData::new(0, len1, &program);
     let slot = bank.slot() + 1;
-    let bank = Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank, &collector, slot);
+    let bank = new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank, &collector, slot);
     bank.store_account(&bob_pubkey, &account);
 
     // transfer some to bogus pubkey just to make previous bank (=slot) really cleanable
     let slot = bank.slot() + 1;
-    let bank = Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank, &collector, slot);
+    let bank = new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank, &collector, slot);
     let bank_client = BankClient::new_shared(bank.clone());
     bank_client
         .transfer_and_confirm(
@@ -13151,13 +13165,13 @@ where
 
     // super fun time; callback chooses to .clean_accounts(None) or not
     let slot = bank.slot() + 1;
-    let bank = Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank, &collector, slot);
+    let bank = new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank, &collector, slot);
     callback(&bank);
 
     // create a normal account at the same pubkey as the zero-lamports account
     let lamports = genesis_config.rent.minimum_balance(len2);
     let slot = bank.slot() + 1;
-    let bank = Bank::new_from_parent_with_bank_forks(bank_forks.as_ref(), bank, &collector, slot);
+    let bank = new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank, &collector, slot);
     let bank_client = BankClient::new_shared(bank);
     let ix = system_instruction::create_account(
         &alice_pubkey,

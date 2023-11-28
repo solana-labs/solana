@@ -977,21 +977,6 @@ impl Bank {
         (bank_arc, bank_fork)
     }
 
-    #[cfg(feature = "dev-context-only-utils")]
-    pub fn new_from_parent_with_bank_forks(
-        bank_forks: &RwLock<BankForks>,
-        parent: Arc<Bank>,
-        collector_id: &Pubkey,
-        slot: Slot,
-    ) -> Arc<Bank> {
-        let bank = Bank::new_from_parent(parent, collector_id, slot);
-        bank_forks
-            .write()
-            .unwrap()
-            .insert(bank)
-            .clone_without_scheduler()
-    }
-
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts(Accounts::default_for_tests())
     }

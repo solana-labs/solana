@@ -12,6 +12,7 @@ use {
         account::from_account,
         account_utils::StateMut,
         client::SyncClient,
+        clock::Slot,
         epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
         hash::Hash,
         message::Message,
@@ -32,6 +33,20 @@ use {
     std::sync::{Arc, RwLock},
 };
 
+fn new_bank_from_parent_with_bank_forks(
+    bank_forks: &RwLock<BankForks>,
+    parent: Arc<Bank>,
+    collector_id: &Pubkey,
+    slot: Slot,
+) -> Arc<Bank> {
+    let bank = Bank::new_from_parent(parent, collector_id, slot);
+    bank_forks
+        .write()
+        .unwrap()
+        .insert(bank)
+        .clone_without_scheduler()
+}
+
 /// get bank at next epoch + `n` slots
 fn next_epoch_and_n_slots(
     bank: Arc<Bank>,
@@ -40,13 +55,12 @@ fn next_epoch_and_n_slots(
 ) -> Arc<Bank> {
     bank.squash();
     let slot = bank.get_slots_in_epoch(bank.epoch()) + bank.slot();
-    let mut bank =
-        Bank::new_from_parent_with_bank_forks(bank_forks, bank, &Pubkey::default(), slot);
+    let mut bank = new_bank_from_parent_with_bank_forks(bank_forks, bank, &Pubkey::default(), slot);
 
     while n > 0 {
         bank.squash();
         let slot = bank.slot() + 1;
-        bank = Bank::new_from_parent_with_bank_forks(bank_forks, bank, &Pubkey::default(), slot);
+        bank = new_bank_from_parent_with_bank_forks(bank_forks, bank, &Pubkey::default(), slot);
         n -= 1;
     }
 
@@ -65,7 +79,7 @@ fn fill_epoch_with_votes(
     while bank.epoch() != old_epoch + 1 {
         bank.squash();
         let slot = bank.slot() + 1;
-        bank = Bank::new_from_parent_with_bank_forks(bank_forks, bank, &Pubkey::default(), slot);
+        bank = new_bank_from_parent_with_bank_forks(bank_forks, bank, &Pubkey::default(), slot);
 
         let bank_client = BankClient::new_shared(bank.clone());
         let parent = bank.parent().unwrap();
