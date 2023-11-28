@@ -1477,7 +1477,7 @@ impl ScheduleStage {
         Some(next_task)
     }
 
-    fn unlock_for_failed_execution(lock_attempts: &[LockAttempt]) {
+    fn unlock_for_failed_execution(lock_attempts: &mut [LockAttempt]) {
         for l in lock_attempts {
             Self::unlock(l);
         }
