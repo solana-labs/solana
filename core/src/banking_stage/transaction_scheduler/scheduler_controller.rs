@@ -18,7 +18,7 @@ use {
     crossbeam_channel::RecvTimeoutError,
     solana_accounts_db::transaction_error_metrics::TransactionErrorMetrics,
     solana_measure::measure_us,
-    solana_runtime::bank_forks::BankForks,
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         clock::MAX_PROCESSING_AGE, saturating_add_assign, timing::AtomicInterval,
         transaction::SanitizedTransaction,
@@ -113,9 +113,11 @@ impl SchedulerController {
         decision: &BufferedPacketsDecision,
     ) -> Result<(), SchedulerError> {
         match decision {
-            BufferedPacketsDecision::Consume(_bank_start) => {
+            BufferedPacketsDecision::Consume(bank_start) => {
                 let (scheduling_summary, schedule_time_us) =
-                    measure_us!(self.scheduler.schedule(&mut self.container, |_| true)?);
+                    measure_us!(self.scheduler.schedule(&mut self.container, |tx| {
+                        Self::pre_scheduling_filter(tx, &bank_start.working_bank)
+                    })?);
                 saturating_add_assign!(
                     self.count_metrics.num_scheduled,
                     scheduling_summary.num_scheduled
@@ -138,6 +140,18 @@ impl SchedulerController {
         }
 
         Ok(())
+    }
+
+    fn pre_scheduling_filter(transaction: &SanitizedTransaction, bank: &Bank) -> bool {
+        let mut error_counters = TransactionErrorMetrics::default();
+        bank.check_transactions(
+            &[transaction],
+            &[Ok(())],
+            MAX_PROCESSING_AGE,
+            &mut error_counters,
+        )[0]
+        .0
+        .is_ok()
     }
 
     /// Clears the transaction state container.
