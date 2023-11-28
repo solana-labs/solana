@@ -87,7 +87,7 @@ impl TaskInner {
         *self.uncontended() = 2;
     }
 
-    fn task_index(&self) -> usize {
+    pub fn task_index(&self) -> usize {
         (UniqueWeight::max_value() - self.unique_weight) as usize
     }
 }
