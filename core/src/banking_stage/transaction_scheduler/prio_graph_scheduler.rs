@@ -47,6 +47,8 @@ impl PrioGraphScheduler {
 
     /// Schedule transactions from the given `TransactionStateContainer` to be consumed by the
     /// worker threads. Returns summary of scheduling, or an error.
+    /// `filter` is used to filter out transactions that should be skipped and dropped, and
+    /// should return `true` for transactions that should attempt scheduling.
     ///
     /// Uses a `PrioGraph` to perform look-ahead during the scheduling of transactions.
     /// This, combined with internal tracking of threads' in-flight transactions, allows
@@ -55,6 +57,7 @@ impl PrioGraphScheduler {
     pub(crate) fn schedule(
         &mut self,
         container: &mut TransactionStateContainer,
+        filter: impl Fn(&SanitizedTransaction) -> bool,
     ) -> Result<SchedulingSummary, SchedulerError> {
         let num_threads = self.consume_work_senders.len();
         let mut batches = Batches::new(num_threads);
@@ -68,13 +71,23 @@ impl PrioGraphScheduler {
         let mut prio_graph = PrioGraph::new(|id: &TransactionPriorityId, _graph_node| *id);
 
         // Create the initial look-ahead window.
-        for _ in 0..self.look_ahead_window_size {
-            let Some(id) = container.pop() else {
-                break;
-            };
+        // Check transactions against filter, remove from container if it fails.
+        {
+            let mut num_inserted = 0;
+            while num_inserted < self.look_ahead_window_size {
+                let Some(id) = container.pop() else {
+                    break;
+                };
 
-            let transaction = container.get_transaction_ttl(&id.id).unwrap();
-            prio_graph.insert_transaction(id, Self::get_transaction_account_access(transaction));
+                let transaction = container.get_transaction_ttl(&id.id).unwrap();
+                if filter(&transaction.transaction) {
+                    saturating_add_assign!(num_inserted, 1);
+                    prio_graph
+                        .insert_transaction(id, Self::get_transaction_account_access(transaction));
+                } else {
+                    container.remove_by_id(&id.id);
+                }
+            }
         }
 
         let mut unblock_this_batch =
@@ -93,12 +106,17 @@ impl PrioGraphScheduler {
                 unblock_this_batch.push(id);
 
                 // Push next transaction from container into the `PrioGraph` look-ahead window.
+                // Check transaction against filter, and remove from container if it fails.
                 if let Some(next_id) = container.pop() {
                     let transaction = container.get_transaction_ttl(&next_id.id).unwrap();
-                    prio_graph.insert_transaction(
-                        next_id,
-                        Self::get_transaction_account_access(transaction),
-                    );
+                    if filter(&transaction.transaction) {
+                        prio_graph.insert_transaction(
+                            next_id,
+                            Self::get_transaction_account_access(transaction),
+                        );
+                    } else {
+                        container.remove_by_id(&next_id.id);
+                    }
                 }
 
                 // Should always be in the container, during initial testing phase panic.
@@ -558,7 +576,7 @@ mod tests {
 
         drop(work_receivers); // explicitly drop receivers
         assert_matches!(
-            scheduler.schedule(&mut container),
+            scheduler.schedule(&mut container, |_| true),
             Err(SchedulerError::DisconnectedSendChannel(_))
         );
     }
@@ -571,7 +589,7 @@ mod tests {
             (&Keypair::new(), &[Pubkey::new_unique()], 2, 2),
         ]);
 
-        let scheduling_summary = scheduler.schedule(&mut container).unwrap();
+        let scheduling_summary = scheduler.schedule(&mut container, |_| true).unwrap();
         assert_eq!(scheduling_summary.num_scheduled, 2);
         assert_eq!(scheduling_summary.num_unschedulable, 0);
         assert_eq!(collect_work(&work_receivers[0]).1, vec![txids!([1, 0])]);
@@ -586,7 +604,7 @@ mod tests {
             (&Keypair::new(), &[pubkey], 1, 2),
         ]);
 
-        let scheduling_summary = scheduler.schedule(&mut container).unwrap();
+        let scheduling_summary = scheduler.schedule(&mut container, |_| true).unwrap();
         assert_eq!(scheduling_summary.num_scheduled, 2);
         assert_eq!(scheduling_summary.num_unschedulable, 0);
         assert_eq!(
@@ -604,7 +622,7 @@ mod tests {
         );
 
         // expect 4 full batches to be scheduled
-        let scheduling_summary = scheduler.schedule(&mut container).unwrap();
+        let scheduling_summary = scheduler.schedule(&mut container, |_| true).unwrap();
         assert_eq!(
             scheduling_summary.num_scheduled,
             4 * TARGET_NUM_TRANSACTIONS_PER_BATCH
@@ -624,7 +642,7 @@ mod tests {
         let mut container =
             create_container((0..4).map(|i| (Keypair::new(), [Pubkey::new_unique()], 1, i)));
 
-        let scheduling_summary = scheduler.schedule(&mut container).unwrap();
+        let scheduling_summary = scheduler.schedule(&mut container, |_| true).unwrap();
         assert_eq!(scheduling_summary.num_scheduled, 4);
         assert_eq!(scheduling_summary.num_unschedulable, 0);
         assert_eq!(collect_work(&work_receivers[0]).1, [txids!([3, 1])]);
@@ -656,7 +674,7 @@ mod tests {
         // fact they eventually join means that the scheduler will schedule them
         // onto the same thread to avoid causing [4], which conflicts with both
         // chains, to be un-schedulable.
-        let scheduling_summary = scheduler.schedule(&mut container).unwrap();
+        let scheduling_summary = scheduler.schedule(&mut container, |_| true).unwrap();
         assert_eq!(scheduling_summary.num_scheduled, 5);
         assert_eq!(scheduling_summary.num_unschedulable, 0);
         assert_eq!(
@@ -697,7 +715,7 @@ mod tests {
         // Because the look-ahead window is shortened to a size of 4, the scheduler does
         // not have knowledge of the joining at transaction [4] until after [0] and [1]
         // have been scheduled.
-        let scheduling_summary = scheduler.schedule(&mut container).unwrap();
+        let scheduling_summary = scheduler.schedule(&mut container, |_| true).unwrap();
         assert_eq!(scheduling_summary.num_scheduled, 4);
         assert_eq!(scheduling_summary.num_unschedulable, 2);
         let (thread_0_work, thread_0_ids) = collect_work(&work_receivers[0]);
@@ -705,7 +723,7 @@ mod tests {
         assert_eq!(collect_work(&work_receivers[1]).1, [txids!([1, 3])]);
 
         // Cannot schedule even on next pass because of lock conflicts
-        let scheduling_summary = scheduler.schedule(&mut container).unwrap();
+        let scheduling_summary = scheduler.schedule(&mut container, |_| true).unwrap();
         assert_eq!(scheduling_summary.num_scheduled, 0);
         assert_eq!(scheduling_summary.num_unschedulable, 2);
 
@@ -717,7 +735,7 @@ mod tests {
             })
             .unwrap();
         scheduler.receive_completed(&mut container).unwrap();
-        let scheduling_summary = scheduler.schedule(&mut container).unwrap();
+        let scheduling_summary = scheduler.schedule(&mut container, |_| true).unwrap();
         assert_eq!(scheduling_summary.num_scheduled, 2);
         assert_eq!(scheduling_summary.num_unschedulable, 0);
 

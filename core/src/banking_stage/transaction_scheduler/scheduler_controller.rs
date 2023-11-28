@@ -115,7 +115,7 @@ impl SchedulerController {
         match decision {
             BufferedPacketsDecision::Consume(_bank_start) => {
                 let (scheduling_summary, schedule_time_us) =
-                    measure_us!(self.scheduler.schedule(&mut self.container)?);
+                    measure_us!(self.scheduler.schedule(&mut self.container, |_| true)?);
                 saturating_add_assign!(
                     self.count_metrics.num_scheduled,
                     scheduling_summary.num_scheduled
