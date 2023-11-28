@@ -1393,7 +1393,7 @@ impl ScheduleStage {
         lock_status
     }
 
-    fn unlock(attempt: &LockAttempt) -> bool {
+    fn unlock(attempt: &mut LockAttempt) -> bool {
         let mut is_unused_now = false;
 
         let page = attempt.page_mut();
