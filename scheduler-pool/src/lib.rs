@@ -45,7 +45,6 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
-use solana_scheduler::RequestedUsage;
 use solana_scheduler::LockAttempt;
 use solana_scheduler::Task;
 use solana_scheduler::SchedulingStateMachine;
