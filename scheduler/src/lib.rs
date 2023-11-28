@@ -126,13 +126,6 @@ impl LockAttempt {
         }
     }
 
-    fn clone_for_test(&self) -> Self {
-        Self {
-            page: self.page.clone(),
-            requested_usage: self.requested_usage,
-        }
-    }
-
     fn page_mut(&mut self) -> &mut PageInner {
         self.page.as_mut()
     }
