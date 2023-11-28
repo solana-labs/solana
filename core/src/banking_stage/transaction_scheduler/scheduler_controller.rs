@@ -112,9 +112,16 @@ impl SchedulerController {
     ) -> Result<(), SchedulerError> {
         match decision {
             BufferedPacketsDecision::Consume(_bank_start) => {
-                let (num_scheduled, schedule_time_us) =
+                let (scheduling_summary, schedule_time_us) =
                     measure_us!(self.scheduler.schedule(&mut self.container)?);
-                saturating_add_assign!(self.count_metrics.num_scheduled, num_scheduled);
+                saturating_add_assign!(
+                    self.count_metrics.num_scheduled,
+                    scheduling_summary.num_scheduled
+                );
+                saturating_add_assign!(
+                    self.count_metrics.num_unschedulable,
+                    scheduling_summary.num_unschedulable
+                );
                 saturating_add_assign!(self.timing_metrics.schedule_time_us, schedule_time_us);
             }
             BufferedPacketsDecision::Forward => {
@@ -253,6 +260,8 @@ struct SchedulerCountMetrics {
 
     /// Number of transactions scheduled.
     num_scheduled: usize,
+    /// Number of transactions that were unschedulable.
+    num_unschedulable: usize,
     /// Number of completed transactions received from workers.
     num_finished: usize,
     /// Number of transactions that were retryable.
@@ -287,6 +296,7 @@ impl SchedulerCountMetrics {
             ("num_received", self.num_received, i64),
             ("num_buffered", self.num_buffered, i64),
             ("num_scheduled", self.num_scheduled, i64),
+            ("num_unschedulable", self.num_unschedulable, i64),
             ("num_finished", self.num_finished, i64),
             ("num_retryable", self.num_retryable, i64),
             ("num_dropped_on_receive", self.num_dropped_on_receive, i64),
@@ -309,6 +319,7 @@ impl SchedulerCountMetrics {
         self.num_received != 0
             || self.num_buffered != 0
             || self.num_scheduled != 0
+            || self.num_unschedulable != 0
             || self.num_finished != 0
             || self.num_retryable != 0
             || self.num_dropped_on_receive != 0
@@ -322,6 +333,7 @@ impl SchedulerCountMetrics {
         self.num_received = 0;
         self.num_buffered = 0;
         self.num_scheduled = 0;
+        self.num_unschedulable = 0;
         self.num_finished = 0;
         self.num_retryable = 0;
         self.num_dropped_on_receive = 0;
