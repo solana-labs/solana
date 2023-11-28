@@ -45,7 +45,6 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
-use solana_scheduler::UniqueWeight;
 use solana_scheduler::TaskInner;
 use solana_scheduler::RequestedUsage;
 use solana_scheduler::LockAttempt;
