@@ -1434,8 +1434,6 @@ impl ScheduleStage {
         (task_source, next_task): (TaskSource, Task),
         retryable_task_queue: &mut TaskQueue,
     ) -> Option<Task> {
-        let from_runnable = matches!(task_source, TaskSource::Runnable);
-
         let (lock_count, usages) = Self::attempt_lock_for_execution(
             &next_task.unique_weight,
             &mut next_task.lock_attempts_mut(),
@@ -1443,7 +1441,7 @@ impl ScheduleStage {
         );
 
         if lock_count < next_task.lock_attempts_mut().len() {
-            if from_runnable {
+            if matches!(task_source, TaskSource::Runnable) {
                 Self::unlock_for_failed_execution(&mut next_task.lock_attempts_mut()[..lock_count]);
                 next_task.mark_as_contended();
                 next_task.index_with_pages();
@@ -1452,7 +1450,7 @@ impl ScheduleStage {
             return None;
         }
 
-        if !from_runnable {
+        if matches!(task_source, TaskSource::Retryable) {
             for (usage, attempt) in usages.into_iter().zip(next_task.lock_attempts_mut()) {
                 attempt.page_mut().current_usage = usage;
             }
