@@ -13,7 +13,7 @@ enum LockStatus {
     Failed,
 }
 
-type Task = Arc<TaskInner>;
+pub type Task = Arc<TaskInner>;
 
 #[derive(Debug)]
 struct TaskStatusInner {
