@@ -467,8 +467,9 @@ impl LockAttempt {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 enum Usage {
+    #[default]
     Unused,
     Readonly(UsageCount),
     Writable,
