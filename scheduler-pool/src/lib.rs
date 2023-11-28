@@ -1466,7 +1466,7 @@ impl ScheduleStage {
                 if let Some(heaviest_blocked_task) = read_only_lock_attempt
                     .page_mut()
                     .heaviest_still_blocked_task()
-                    .and_then(|(task, ru)| matches!(*ru, RequestedUsage::Readonly).then_some(task))
+                    .and_then(|(task, ru)| matches!(ru, RequestedUsage::Readonly).then_some(task))
                 {
                     retryable_task_queue
                         .entry(heaviest_blocked_task.unique_weight)
