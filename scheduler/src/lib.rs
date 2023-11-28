@@ -465,4 +465,4 @@ enum TaskSource {
     Retryable,
 }
 
-pub type UniqueWeight = u64;
+type UniqueWeight = u64;
