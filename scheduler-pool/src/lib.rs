@@ -1358,34 +1358,31 @@ impl ScheduleStage {
 
     fn attempt_lock_address(unique_weight: &UniqueWeight, attempt: &mut LockAttempt) -> LockStatus {
         let page = attempt.page_mut();
-        let tcuw = page.heaviest_blocked_task();
 
-        let strictly_lockable = if tcuw.map(|heaviest_blocked_weight| heaviest_blocked_weight == *unique_weight).unwrap_or(true) {
-            true
-        } else if attempt.requested_usage == RequestedUsage::Readonly
-            && page
-                .heaviest_blocked_writing_task_weight()
-                .map(|existing_unique_weight| *unique_weight > existing_unique_weight)
-                .unwrap_or(true)
-        {
-            // this _read-only_ unique_weight is heavier than any of contened write locks.
-            true
-        } else {
-            false
-        };
-
-        if strictly_lockable {
-            match page.current_usage {
-                Usage::Unused => LockStatus::Succeded(Usage::renew(attempt.requested_usage)),
-                Usage::Readonly(count) => match attempt.requested_usage {
-                    RequestedUsage::Readonly => LockStatus::Succeded(Usage::Readonly(count + 1)),
-                    RequestedUsage::Writable => LockStatus::Failed,
-                },
-                Usage::Writable => LockStatus::Failed,
-            }
-        } else {
-            LockStatus::Failed
+        let mut lock_status = match page.current_usage {
+            Usage::Unused => LockStatus::Succeded(Usage::renew(attempt.requested_usage)),
+            Usage::Readonly(count) => match attempt.requested_usage {
+                RequestedUsage::Readonly => LockStatus::Succeded(Usage::Readonly(count + 1)),
+                RequestedUsage::Writable => LockStatus::Failed,
+            },
+            Usage::Writable => LockStatus::Failed,
         }
+
+        if matches!(lock_status, LockStatus::Succeded(_)) {
+            let strictly_lockable = (
+                = page.heaviest_blocked_task().map(|heaviest_blocked_weight| heaviest_blocked_weight == *unique_weight).unwrap_or(true) || 
+                // this _read-only_ unique_weight is heavier than any of contened write locks.
+                attempt.requested_usage == RequestedUsage::Readonly && page
+                    .heaviest_blocked_writing_task_weight()
+                    .map(|existing_unique_weight| *unique_weight > existing_unique_weight)
+                    .unwrap_or(true)
+            );
+
+            if !strictly_lockable {
+                lock_status = LockStatus::Failed 
+            }
+        }
+        lock_status
     }
 
     fn unlock(attempt: &LockAttempt) -> bool {
