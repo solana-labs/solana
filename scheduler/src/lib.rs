@@ -34,7 +34,7 @@ impl TaskStatus {
 }
 
 #[derive(Debug)]
-struct TaskInner {
+pub struct TaskInner {
     unique_weight: UniqueWeight,
     tx: SanitizedTransaction, // actually should be Bundle
     task_status: TaskStatus,
@@ -77,7 +77,7 @@ impl TaskInner {
         unsafe { &mut (*self.task_status.0.get()).uncontended }
     }
 
-    pub fn currently_contended(&self) -> bool {
+    fn currently_contended(&self) -> bool {
         *self.uncontended() == 1
     }
 
