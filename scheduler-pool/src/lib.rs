@@ -1322,19 +1322,19 @@ impl ScheduleStage {
         lock_attempts: &mut [LockAttempt],
         task_source: &TaskSource,
     ) -> (usize, Vec<Usage>) {
-        let try_optimistic_locking = matches!(task_source, TaskSource::Runnable);
+        let rollback_on_failure = matches!(task_source, TaskSource::Runnable);
 
         let mut lock_count = 0;
-        let mut uncommited_usages = if try_optimistic_locking {
-            vec![]
+        let mut uncommited_usages = Vec::with_capacity(if rollback_on_failure {
+            0
         } else {
-            Vec::with_capacity(lock_attempts.len())
-        };
+            lock_attempts.len()
+        });
 
         for attempt in lock_attempts.iter_mut() {
             match Self::attempt_lock_address(unique_weight, attempt) {
                 LockStatus::Succeded(usage) => {
-                    if try_optimistic_locking {
+                    if rollback_on_failure {
                         attempt.page_mut().current_usage = usage;
                     } else {
                         uncommited_usages.push(usage);
@@ -1433,7 +1433,7 @@ impl ScheduleStage {
 
         if lock_count < next_task.lock_attempts_mut().len() {
             if matches!(task_source, TaskSource::Runnable) {
-                Self::unlock_for_failed_execution(&mut next_task.lock_attempts_mut()[..lock_count]);
+                Self::rollback_locking(&mut next_task.lock_attempts_mut()[..lock_count]);
                 next_task.mark_as_contended();
                 next_task.index_with_pages();
             }
@@ -1469,7 +1469,7 @@ impl ScheduleStage {
         Some(next_task)
     }
 
-    fn unlock_for_failed_execution(lock_attempts: &mut [LockAttempt]) {
+    fn rollback_locking(lock_attempts: &mut [LockAttempt]) {
         for l in lock_attempts {
             Self::unlock(l);
         }
