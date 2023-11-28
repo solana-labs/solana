@@ -393,6 +393,7 @@ pub struct SystemMonitorStatsReportConfig {
     pub report_os_disk_stats: bool,
 }
 
+#[cfg(target_os = "linux")]
 enum InterestingLimit {
     Recommend(i64),
     QueryOnly,
