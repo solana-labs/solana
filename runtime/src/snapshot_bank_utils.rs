@@ -839,6 +839,8 @@ fn rebuild_bank_from_snapshot(
 
     bank.status_cache.write().unwrap().append(&slot_deltas);
 
+    bank.prepare_rewrites_for_hash();
+
     info!("Rebuilt bank for slot: {}", bank.slot());
     Ok(bank)
 }
