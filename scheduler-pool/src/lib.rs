@@ -1356,7 +1356,10 @@ impl ScheduleStage {
         (lock_count, uncommited_usages)
     }
 
-    fn attempt_lock_address(this_unique_weight: &UniqueWeight, attempt: &mut LockAttempt) -> LockStatus {
+    fn attempt_lock_address(
+        this_unique_weight: &UniqueWeight,
+        attempt: &mut LockAttempt,
+    ) -> LockStatus {
         let page = attempt.page_mut();
 
         let mut lock_status = match page.current_usage {
