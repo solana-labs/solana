@@ -194,11 +194,10 @@ impl PageInner {
     }
 }
 
-type PageRc = Arc<UnsafeCell<PageInner>>;
 static_assertions::const_assert_eq!(std::mem::size_of::<UnsafeCell<PageInner>>(), 32);
 
 #[derive(Debug, Clone, Default)]
-pub struct Page(ByAddress<PageRc>);
+pub struct Page(Arc<UnsafeCell<PageInner>>);
 static_assertions::const_assert_eq!(std::mem::size_of::<Page>(), 8);
 unsafe impl Send for Page {}
 unsafe impl Sync for Page {}
