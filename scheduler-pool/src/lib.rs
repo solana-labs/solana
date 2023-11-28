@@ -1139,18 +1139,7 @@ where
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
         transaction_with_index.with_transaction_and_index(|transaction, index| {
-            let locks = transaction.get_account_locks_unchecked();
-            let writable_lock_iter = locks.writable.iter().map(|address| {
-                LockAttempt::new(self.address_book.load(**address), RequestedUsage::Writable)
-            });
-            let readonly_lock_iter = locks.readonly.iter().map(|address| {
-                LockAttempt::new(self.address_book.load(**address), RequestedUsage::Readonly)
-            });
-            let locks = writable_lock_iter
-                .chain(readonly_lock_iter)
-                .collect::<Vec<_>>();
-            let uw = UniqueWeight::max_value() - index as UniqueWeight;
-            let task = TaskInner::new(uw, transaction.clone(), locks);
+            let task = SchedulingStateMachine::create_task(transaction, index);
             self.ensure_thread_manager_started().send_task(task);
         });
     }

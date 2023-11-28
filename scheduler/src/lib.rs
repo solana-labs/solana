@@ -210,6 +210,22 @@ pub struct SchedulingStateMachine {
 }
 
 impl SchedulingStateMachine {
+    pub fn create_task(transaction: &SanitizedTransaction, index: usize) {
+        let locks = transaction.get_account_locks_unchecked();
+        let writable_lock_iter = locks.writable.iter().map(|address| {
+            LockAttempt::new(self.address_book.load(**address), RequestedUsage::Writable)
+        });
+        let readonly_lock_iter = locks.readonly.iter().map(|address| {
+            LockAttempt::new(self.address_book.load(**address), RequestedUsage::Readonly)
+        });
+        let locks = writable_lock_iter
+            .chain(readonly_lock_iter)
+            .collect::<Vec<_>>();
+        let uw = UniqueWeight::max_value() - index as UniqueWeight;
+
+        TaskInner::new(uw, transaction.clone(), locks)
+    }
+
     pub fn is_empty(&self) -> bool {
         self.active_task_count == 0
     }
