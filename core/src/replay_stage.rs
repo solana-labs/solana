@@ -1352,11 +1352,11 @@ impl ReplayStage {
 
                     // Should not dump slots for which we were the leader
                     if Some(*my_pubkey) == leader_schedule_cache.slot_leader_at(*duplicate_slot, None) {
-                            panic!("We are attempting to dump a block that we produced. \
-                                This indicates that we are producing duplicate blocks, \
-                                or that there is a bug in our runtime/replay code which \
-                                causes us to compute different bank hashes than the rest of the cluster. \
-                                We froze slot {duplicate_slot} with hash {frozen_hash:?} while the cluster hash is {correct_hash}");
+                        panic!("We are attempting to dump a block that we produced. \
+                            This indicates that we are producing duplicate blocks, \
+                            or that there is a bug in our runtime/replay code which \
+                            causes us to compute different bank hashes than the rest of the cluster. \
+                            We froze slot {duplicate_slot} with hash {frozen_hash:?} while the cluster hash is {correct_hash}");
                     }
 
                     let attempt_no = purge_repair_slot_counter
