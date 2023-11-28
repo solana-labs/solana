@@ -966,7 +966,7 @@ pub(super) enum RewardInterval {
 }
 
 impl Bank {
-    pub(super) fn wrap_with_bank_forks_for_tests(self) -> (Arc<Self>, Arc<RwLock<BankForks>>) {
+    pub fn wrap_with_bank_forks_for_tests(self) -> (Arc<Self>, Arc<RwLock<BankForks>>) {
         let bank_fork = BankForks::new_rw_arc(self);
         let bank_arc = bank_fork.read().unwrap().root_bank();
         bank_arc
@@ -1032,11 +1032,13 @@ impl Bank {
         )
     }
 
-    pub fn new_no_wallclock_throttle_for_tests(genesis_config: &GenesisConfig) -> Self {
+    pub fn new_no_wallclock_throttle_for_tests(
+        genesis_config: &GenesisConfig,
+    ) -> (Arc<Self>, Arc<RwLock<BankForks>>) {
         let mut bank = Self::new_for_tests(genesis_config);
 
         bank.ns_per_slot = std::u128::MAX;
-        bank
+        bank.wrap_with_bank_forks_for_tests()
     }
 
     pub(crate) fn new_with_config_for_tests(
