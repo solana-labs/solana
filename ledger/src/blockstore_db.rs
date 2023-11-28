@@ -419,7 +419,7 @@ impl Rocks {
         }
         let oldest_slot = OldestSlot::default();
         let column_options = options.column_options.clone();
-        let cf_descriptors = Self::cf_descriptors(path, &options, &oldest_slot)?;
+        let cf_descriptors = Self::cf_descriptors(path, &options, &oldest_slot);
 
         // Open the database
         let db = match access_type {
@@ -467,7 +467,7 @@ impl Rocks {
         path: &Path,
         options: &BlockstoreOptions,
         oldest_slot: &OldestSlot,
-    ) -> Result<Vec<ColumnFamilyDescriptor>> {
+    ) -> Vec<ColumnFamilyDescriptor> {
         use columns::*;
 
         let (cf_descriptor_shred_data, cf_descriptor_shred_code) =
@@ -500,7 +500,7 @@ impl Rocks {
         // columns so we can just return immediately.
         match options.access_type {
             AccessType::Secondary => {
-                return Ok(cf_descriptors);
+                return cf_descriptors;
             }
             AccessType::Primary | AccessType::PrimaryForMaintenance => {}
         }
@@ -534,7 +534,7 @@ impl Rocks {
             }
         });
 
-        Ok(cf_descriptors)
+        cf_descriptors
     }
 
     fn columns() -> Vec<&'static str> {
@@ -2277,9 +2277,7 @@ pub mod tests {
         // should update both lists.
         assert_eq!(
             Rocks::columns().len(),
-            Rocks::cf_descriptors(&path, &options, &oldest_slot)
-                .unwrap()
-                .len()
+            Rocks::cf_descriptors(&path, &options, &oldest_slot).len()
         );
     }
 
