@@ -1397,10 +1397,11 @@ impl ScheduleStage {
     fn unlock(attempt: &mut LockAttempt) -> bool {
         let mut is_unused_now = false;
 
+        let requested_usage = attempt.requested_usage;
         let page = attempt.page_mut();
 
         match &mut page.current_usage {
-            Usage::Readonly(ref mut count) => match &attempt.requested_usage {
+            Usage::Readonly(ref mut count) => match requested_usage {
                 RequestedUsage::Readonly => {
                     if *count == SOLE_USE_COUNT {
                         is_unused_now = true;
@@ -1410,7 +1411,7 @@ impl ScheduleStage {
                 }
                 RequestedUsage::Writable => unreachable!(),
             },
-            Usage::Writable => match &attempt.requested_usage {
+            Usage::Writable => match requested_usage {
                 RequestedUsage::Writable => {
                     is_unused_now = true;
                 }
