@@ -1,5 +1,4 @@
 use {
-    by_address::ByAddress,
     solana_sdk::transaction::SanitizedTransaction,
     std::{cell::UnsafeCell, collections::BTreeMap, sync::Arc},
 };
