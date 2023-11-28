@@ -28,7 +28,7 @@ use {
         },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
-    solana_scheduler::{SchedulingMode, WithSchedulingMode},
+    solana_runtime::{SchedulingMode, WithSchedulingMode},
     solana_sdk::{
         pubkey::Pubkey,
         slot_history::Slot,
