@@ -403,11 +403,11 @@ impl SchedulingStateMachine {
         lock_status
     }
 
-    fn unlock(token: &mut Token, attempt: &mut LockAttempt) -> bool {
+    fn unlock(token: &mut Token, token2: &mut Token2, attempt: &mut LockAttempt) -> bool {
         let mut is_unused_now = false;
 
         let requested_usage = attempt.requested_usage;
-        let page = attempt.page_mut(token);
+        let page = attempt.page_mut(token2);
 
         match &mut page.current_usage {
             Usage::Readonly(ref mut count) => match requested_usage {
