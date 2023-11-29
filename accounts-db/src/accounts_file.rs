@@ -211,5 +211,11 @@ pub mod tests {
                 Self::AppendVec(av) => av.set_current_len_for_tests(len),
             }
         }
+
+        pub(crate) fn set_current_capacity_for_tests(&self, capacity: usize) {
+            match self {
+                Self::AppendVec(av) => av.set_current_capacity_for_tests(capacity),
+            }
+        }
     }
 }
