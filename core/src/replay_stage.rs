@@ -67,7 +67,6 @@ use {
     },
     solana_sdk::{
         clock::{BankId, Slot, MAX_PROCESSING_AGE, NUM_CONSECUTIVE_LEADER_SLOTS},
-        feature_set::FeatureSet,
         genesis_config::ClusterType,
         hash::Hash,
         pubkey::Pubkey,
@@ -3228,13 +3227,7 @@ impl ReplayStage {
                                 // Since we are updating our tower we need to update associated caches for previously computed
                                 // slots as well.
                                 for slot in frozen_banks.iter().map(|b| b.slot()) {
-                                    Self::cache_tower_stats(
-                                        progress,
-                                        tower,
-                                        slot,
-                                        ancestors,
-                                        &bank.feature_set,
-                                    );
+                                    Self::cache_tower_stats(progress, tower, slot, ancestors);
                                 }
                             }
                         }
@@ -3296,7 +3289,7 @@ impl ReplayStage {
                 cluster_slots,
             );
 
-            Self::cache_tower_stats(progress, tower, bank_slot, ancestors, &bank.feature_set);
+            Self::cache_tower_stats(progress, tower, bank_slot, ancestors);
         }
         new_stats
     }
@@ -3306,18 +3299,13 @@ impl ReplayStage {
         tower: &Tower,
         slot: Slot,
         ancestors: &HashMap<u64, HashSet<u64>>,
-        feature_set: &Arc<FeatureSet>,
     ) {
         let stats = progress
             .get_fork_stats_mut(slot)
             .expect("All frozen banks must exist in the Progress map");
 
-        stats.vote_threshold = tower.check_vote_stake_thresholds(
-            slot,
-            &stats.voted_stakes,
-            stats.total_stake,
-            Some(feature_set),
-        );
+        stats.vote_threshold =
+            tower.check_vote_stake_thresholds(slot, &stats.voted_stakes, stats.total_stake);
         stats.is_locked_out = tower.is_locked_out(
             slot,
             ancestors

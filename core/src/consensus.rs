@@ -22,7 +22,6 @@ use {
     solana_runtime::{bank::Bank, bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE},
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
-        feature_set::FeatureSet,
         hash::Hash,
         instruction::Instruction,
         pubkey::Pubkey,
@@ -45,7 +44,6 @@ use {
             Bound::{Included, Unbounded},
             Deref,
         },
-        sync::Arc,
     },
     thiserror::Error,
 };
@@ -1099,19 +1097,16 @@ impl Tower {
         slot: Slot,
         voted_stakes: &VotedStakes,
         total_stake: Stake,
-        feature_set: Option<&Arc<FeatureSet>>,
     ) -> ThresholdDecision {
         // Generate the vote state assuming this vote is included.
         let mut vote_state = self.vote_state.clone();
         process_slot_vote_unchecked(&mut vote_state, slot);
 
         // Assemble all the vote thresholds and depths to check.
-        let mut vote_thresholds_and_depths = vec![(self.threshold_depth, self.threshold_size)];
-        if feature_set.as_ref().map_or(true, |fs| {
-            fs.is_active(&solana_sdk::feature_set::additional_vote_stake_threshold::id())
-        }) {
-            vote_thresholds_and_depths.push((VOTE_THRESHOLD_DEPTH_SHALLOW, SWITCH_FORK_THRESHOLD));
-        }
+        let vote_thresholds_and_depths = vec![
+            (VOTE_THRESHOLD_DEPTH_SHALLOW, SWITCH_FORK_THRESHOLD),
+            (self.threshold_depth, self.threshold_size),
+        ];
 
         // Check one by one. If any threshold fails, return failure.
         for (threshold_depth, threshold_size) in vote_thresholds_and_depths {
@@ -2345,9 +2340,7 @@ pub mod test {
     fn test_check_vote_threshold_without_votes() {
         let tower = Tower::new_for_tests(1, 0.67);
         let stakes = vec![(0, 1)].into_iter().collect();
-        assert!(tower
-            .check_vote_stake_thresholds(0, &stakes, 2, None)
-            .passed());
+        assert!(tower.check_vote_stake_thresholds(0, &stakes, 2).passed());
     }
 
     #[test]
@@ -2360,7 +2353,7 @@ pub mod test {
             tower.record_vote(i, Hash::default());
         }
         assert!(!tower
-            .check_vote_stake_thresholds(MAX_LOCKOUT_HISTORY as u64 + 1, &stakes, 2, None)
+            .check_vote_stake_thresholds(MAX_LOCKOUT_HISTORY as u64 + 1, &stakes, 2)
             .passed());
     }
 
@@ -2476,18 +2469,14 @@ pub mod test {
         let mut tower = Tower::new_for_tests(1, 0.67);
         let stakes = vec![(0, 1)].into_iter().collect();
         tower.record_vote(0, Hash::default());
-        assert!(!tower
-            .check_vote_stake_thresholds(1, &stakes, 2, None)
-            .passed());
+        assert!(!tower.check_vote_stake_thresholds(1, &stakes, 2).passed());
     }
     #[test]
     fn test_check_vote_threshold_above_threshold() {
         let mut tower = Tower::new_for_tests(1, 0.67);
         let stakes = vec![(0, 2)].into_iter().collect();
         tower.record_vote(0, Hash::default());
-        assert!(tower
-            .check_vote_stake_thresholds(1, &stakes, 2, None)
-            .passed());
+        assert!(tower.check_vote_stake_thresholds(1, &stakes, 2).passed());
     }
 
     #[test]
@@ -2500,7 +2489,7 @@ pub mod test {
             tower.record_vote(slot as Slot, Hash::default());
         }
         assert!(tower
-            .check_vote_stake_thresholds(VOTE_THRESHOLD_DEPTH.try_into().unwrap(), &stakes, 4, None)
+            .check_vote_stake_thresholds(VOTE_THRESHOLD_DEPTH.try_into().unwrap(), &stakes, 4)
             .passed());
     }
 
@@ -2514,12 +2503,7 @@ pub mod test {
             tower.record_vote(slot as Slot, Hash::default());
         }
         assert!(!tower
-            .check_vote_stake_thresholds(
-                VOTE_THRESHOLD_DEPTH.try_into().unwrap(),
-                &stakes,
-                10,
-                None
-            )
+            .check_vote_stake_thresholds(VOTE_THRESHOLD_DEPTH.try_into().unwrap(), &stakes, 10)
             .passed());
     }
 
@@ -2533,12 +2517,7 @@ pub mod test {
             tower.record_vote(slot as Slot, Hash::default());
         }
         assert!(!tower
-            .check_vote_stake_thresholds(
-                VOTE_THRESHOLD_DEPTH.try_into().unwrap(),
-                &stakes,
-                10,
-                None
-            )
+            .check_vote_stake_thresholds(VOTE_THRESHOLD_DEPTH.try_into().unwrap(), &stakes, 10)
             .passed());
     }
 
@@ -2549,9 +2528,7 @@ pub mod test {
         tower.record_vote(0, Hash::default());
         tower.record_vote(1, Hash::default());
         tower.record_vote(2, Hash::default());
-        assert!(tower
-            .check_vote_stake_thresholds(6, &stakes, 2, None)
-            .passed());
+        assert!(tower.check_vote_stake_thresholds(6, &stakes, 2).passed());
     }
 
     #[test]
@@ -2559,9 +2536,7 @@ pub mod test {
         let mut tower = Tower::new_for_tests(1, 0.67);
         let stakes = HashMap::new();
         tower.record_vote(0, Hash::default());
-        assert!(!tower
-            .check_vote_stake_thresholds(1, &stakes, 2, None)
-            .passed());
+        assert!(!tower.check_vote_stake_thresholds(1, &stakes, 2).passed());
     }
 
     #[test]
@@ -2572,9 +2547,7 @@ pub mod test {
         tower.record_vote(0, Hash::default());
         tower.record_vote(1, Hash::default());
         tower.record_vote(2, Hash::default());
-        assert!(tower
-            .check_vote_stake_thresholds(6, &stakes, 2, None)
-            .passed());
+        assert!(tower.check_vote_stake_thresholds(6, &stakes, 2).passed());
     }
 
     #[test]
@@ -2638,7 +2611,7 @@ pub mod test {
             &mut LatestValidatorVotesForFrozenBanks::default(),
         );
         assert!(tower
-            .check_vote_stake_thresholds(vote_to_evaluate, &voted_stakes, total_stake, None)
+            .check_vote_stake_thresholds(vote_to_evaluate, &voted_stakes, total_stake)
             .passed());
 
         // CASE 2: Now we want to evaluate a vote for slot VOTE_THRESHOLD_DEPTH + 1. This slot
@@ -2658,7 +2631,7 @@ pub mod test {
             &mut LatestValidatorVotesForFrozenBanks::default(),
         );
         assert!(!tower
-            .check_vote_stake_thresholds(vote_to_evaluate, &voted_stakes, total_stake, None)
+            .check_vote_stake_thresholds(vote_to_evaluate, &voted_stakes, total_stake)
             .passed());
     }
 
