@@ -243,7 +243,6 @@ unsafe impl Sync for Page {}
 unsafe impl Sync for TaskStatus {}
 type TaskQueue = BTreeMap<UniqueWeight, Task>;
 
-#[derive(Default)]
 pub struct SchedulingStateMachine {
     retryable_task_queue: TaskQueue,
     active_task_count: usize,
@@ -254,6 +253,17 @@ pub struct SchedulingStateMachine {
 }
 
 impl SchedulingStateMachine {
+    fn new() -> Self {
+        Self {
+            retryable_task_queue: TaskQueue::default(),
+            active_task_count: 0,
+            handled_task_count: 0,
+            reschedule_count: 0,
+            rescheduled_task_count: 0,
+            total_task_count: 0,
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.active_task_count == 0
     }
@@ -310,7 +320,7 @@ impl SchedulingStateMachine {
     pub fn deschedule_task(&mut self, task: &Task) {
         self.active_task_count -= 1;
         self.handled_task_count += 1;
-        Self::unlock_after_execution(&task, &mut self.retryable_task_queue);
+        Self::unlock_after_execution(&task, &mut self.token, &mut self.retryable_task_queue);
     }
 
     fn attempt_lock_for_execution(
