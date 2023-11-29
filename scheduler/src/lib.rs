@@ -22,7 +22,7 @@ struct TaskStatusInner {
 }
 
 #[derive(Debug)]
-struct TaskStatus(UnsafeCell<TaskStatusInner>);
+struct TaskStatus(SchedulerCell<TaskStatusInner>);
 
 mod cell {
     use std::cell::UnsafeCell;
