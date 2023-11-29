@@ -17335,86 +17335,81 @@ pub mod tests {
     fn test_shrink_ancient_overflow_with_min_size() {
         solana_logger::setup();
 
+        let ideal_av_size = ancient_append_vecs::get_ancient_append_vec_capacity();
         let num_normal_slots = 2;
-        // build an ancient append vec at slot 'ancient_slot'
-        let (db, ancient_slot) = get_one_ancient_append_vec_and_others(true, num_normal_slots);
+
+        // build an ancient append vec at slot 'ancient_slot' with one `fat`
+        // account that's larger than the ideal size of ancient append vec to
+        // simulate the *oversized* append vec for shrinking.
+        let account_size = (1.5 * ideal_av_size as f64) as u64;
+        let (db, ancient_slot) = get_one_ancient_append_vec_and_others_with_account_size(
+            true,
+            num_normal_slots,
+            Some(account_size),
+        );
 
         let max_slot_inclusive = ancient_slot + (num_normal_slots as Slot);
         let initial_accounts = get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1));
 
         let ancient = db.storage.get_slot_storage_entry(ancient_slot).unwrap();
-        let initial_len = ancient.alive_bytes();
-        let initial_capacity = ancient.capacity() as usize;
 
-        adjust_append_vec_capacity_for_tests(&ancient, 5 * initial_capacity);
+        // assert that the min_size, which about 1.5 * ideal_av_size, kicked in
+        // and result that the ancient append vec capacity exceeds the ideal_av_size
+        assert!(ancient.capacity() > ideal_av_size);
 
-        // set size of ancient to be 'full'
-        adjust_append_vec_len_for_tests(&ancient, ancient.accounts.capacity() as usize);
-
-        // combine 1 normal append vec into existing ancient append vec
-        // this will overflow the original ancient append vec because of the marking full above
+        // combine 1 normal append vec into existing oversize ancient append vec.
         db.combine_ancient_slots(
             (ancient_slot..max_slot_inclusive).collect(),
             CAN_RANDOMLY_SHRINK_FALSE,
         );
-
-        // Restore size of ancient so we don't read garbage accounts when comparing. Now that we have created a second ancient append vec,
-        // This first one is happy to be quite empty.
-        adjust_append_vec_len_for_tests(&ancient, initial_len);
 
         compare_all_accounts(
             &initial_accounts,
             &get_all_accounts(&db, ancient_slot..max_slot_inclusive),
         );
 
-        // the append vec at max_slot_inclusive-1 should NOT have been removed since we created an ancient append vec there
-        assert!(is_ancient(
-            &db.storage
-                .get_slot_storage_entry(max_slot_inclusive - 1)
-                .unwrap()
-                .accounts
-        ));
+        // the append vec at max_slot_inclusive-1 should NOT have been removed
+        // since the append vec is already oversized and we created an ancient
+        // append vec there.
+        let ancient2 = db
+            .storage
+            .get_slot_storage_entry(max_slot_inclusive - 1)
+            .unwrap();
+        assert!(is_ancient(&ancient2.accounts));
+        assert!(ancient2.capacity() > ideal_av_size); // min_size kicked in, which cause the appendvec to be larger than the ideal_av_size
 
-        println!(
-            "{} {}",
-            db.storage
-                .get_slot_storage_entry(max_slot_inclusive - 1)
-                .unwrap()
-                .accounts
-                .capacity(),
-            initial_capacity,
-        );
-
-        // combine normal append vec(s) into existing ancient append vec
-        // this will overflow the original ancient append vec because of the marking full above
+        // Combine normal append vec(s) into existing ancient append vec this
+        // will overflow the original ancient append vec because of the oversized
+        // anacient append vec is full.
         db.combine_ancient_slots(
             (ancient_slot..=max_slot_inclusive).collect(),
             CAN_RANDOMLY_SHRINK_FALSE,
         );
 
-        // now, combine the next slot into the one that was just overflow
         compare_all_accounts(
             &initial_accounts,
             &get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1)),
         );
 
-        // 2 ancients and then missing (because combined into 2nd ancient)
-        assert!(is_ancient(
-            &db.storage
-                .get_slot_storage_entry(ancient_slot)
-                .unwrap()
-                .accounts
-        ));
-        assert!(is_ancient(
-            &db.storage
-                .get_slot_storage_entry(max_slot_inclusive - 1)
-                .unwrap()
-                .accounts
-        ));
-        assert!(db
+        // Nothing should be combined because the append vec are oversized.
+        // min_size kicked in, which cause the appendvecs to be larger than the ideal_av_size.
+        let ancient = db.storage.get_slot_storage_entry(ancient_slot).unwrap();
+        assert!(is_ancient(&ancient.accounts));
+        assert!(ancient.capacity() > ideal_av_size);
+
+        let ancient2 = db
+            .storage
+            .get_slot_storage_entry(max_slot_inclusive - 1)
+            .unwrap();
+        assert!(is_ancient(&ancient2.accounts));
+        assert!(ancient2.capacity() > ideal_av_size);
+
+        let ancient3 = db
             .storage
             .get_slot_storage_entry(max_slot_inclusive)
-            .is_none());
+            .unwrap();
+        assert!(is_ancient(&ancient3.accounts));
+        assert!(ancient3.capacity() > ideal_av_size);
     }
 
     #[test]
@@ -17768,7 +17763,7 @@ pub mod tests {
         (db, slot1)
     }
 
-    fn get_one_ancient_append_vec_and_others_fill(
+    fn get_one_ancient_append_vec_and_others_with_account_size(
         alive: bool,
         num_normal_slots: usize,
         account_data_size: Option<u64>,
@@ -17776,6 +17771,7 @@ pub mod tests {
         let (db, slot1) =
             create_db_with_storages_and_index(alive, num_normal_slots + 1, account_data_size);
         let storage = db.get_storage_for_slot(slot1).unwrap();
+        println!("slot storage {:?}", (slot1, &storage));
         let created_accounts = db.get_unique_accounts_from_storage(&storage);
 
         db.combine_ancient_slots(vec![slot1], CAN_RANDOMLY_SHRINK_FALSE);
@@ -17788,7 +17784,7 @@ pub mod tests {
             capacity: after_capacity,
         } = db.get_unique_accounts_from_storage(&after_store);
         if alive {
-            assert_ne!(created_accounts.capacity, after_capacity);
+            assert!(created_accounts.capacity <= after_capacity);
         } else {
             assert_eq!(created_accounts.capacity, after_capacity);
         }
@@ -17803,29 +17799,7 @@ pub mod tests {
         alive: bool,
         num_normal_slots: usize,
     ) -> (AccountsDb, Slot) {
-        let (db, slot1) = create_db_with_storages_and_index(alive, num_normal_slots + 1, None);
-        let storage = db.get_storage_for_slot(slot1).unwrap();
-        let created_accounts = db.get_unique_accounts_from_storage(&storage);
-
-        db.combine_ancient_slots(vec![slot1], CAN_RANDOMLY_SHRINK_FALSE);
-        assert!(db.storage.get_slot_storage_entry(slot1).is_some());
-        let ancient = db.get_storage_for_slot(slot1).unwrap();
-        assert_eq!(alive, is_ancient(&ancient.accounts));
-        let after_store = db.get_storage_for_slot(slot1).unwrap();
-        let GetUniqueAccountsResult {
-            stored_accounts: after_stored_accounts,
-            capacity: after_capacity,
-        } = db.get_unique_accounts_from_storage(&after_store);
-        if alive {
-            assert_ne!(created_accounts.capacity, after_capacity);
-        } else {
-            assert_eq!(created_accounts.capacity, after_capacity);
-        }
-        assert_eq!(created_accounts.stored_accounts.len(), 1);
-        // always 1 account: either we leave the append vec alone if it is all dead
-        // or we create a new one and copy into it if account is alive
-        assert_eq!(after_stored_accounts.len(), 1);
-        (db, slot1)
+        get_one_ancient_append_vec_and_others_with_account_size(alive, num_normal_slots, None)
     }
 
     #[test]
@@ -18010,12 +17984,6 @@ pub mod tests {
 
     fn adjust_alive_bytes(storage: &Arc<AccountStorageEntry>, alive_bytes: usize) {
         storage.alive_bytes.store(alive_bytes, Ordering::Release);
-    }
-
-    /// cause 'ancient' to appear to be oversized
-    fn adjust_append_vec_capacity_for_tests(ancient: &Arc<AccountStorageEntry>, capacity: usize) {
-        assert!(is_ancient(&ancient.accounts));
-        ancient.accounts.set_current_capacity_for_tests(capacity);
     }
 
     /// cause 'ancient' to appear to contain 'len' bytes
