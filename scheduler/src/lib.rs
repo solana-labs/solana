@@ -140,6 +140,12 @@ pub struct LockAttempt {
     requested_usage: RequestedUsage,
 }
 
+impl Page {
+    fn as_mut<'t>(&self, page_token: &'t mut PageToken) -> &'t mut PageInner {
+        self.0.get(page_token)
+    }
+}
+
 impl LockAttempt {
     pub fn readonly(page: Page) -> Self {
         Self {
@@ -156,7 +162,7 @@ impl LockAttempt {
     }
 
     fn page_mut<'t>(&self, page_token: &'t mut PageToken) -> &'t mut PageInner {
-        self.page.get(page_token)
+        self.page.as_mut(page_token)
     }
 }
 
@@ -225,7 +231,8 @@ impl PageInner {
 
 static_assertions::const_assert_eq!(std::mem::size_of::<SchedulerCell<PageInner>>(), 32);
 
-pub type Page = Arc<SchedulerCell<PageInner>>;
+#[derive(Debug, Clone, Default)]
+pub struct Page(Arc<SchedulerCell<PageInner>>);
 static_assertions::const_assert_eq!(std::mem::size_of::<Page>(), 8);
 
 type TaskQueue = BTreeMap<UniqueWeight, Task>;
