@@ -121,6 +121,7 @@ impl TaskInner {
     }
 
     fn currently_contended(&self, token: &Token) -> bool {
+        dbg!((self.uncontended22(token), self.uncontended(token));
         *self.uncontended22(token) == 1
     }
 
