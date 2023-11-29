@@ -446,16 +446,17 @@ fn network_run_push(
             .map(|node| node.gossip.push.num_pending(&node.gossip.crds))
             .sum();
         trace!(
-                "network_run_push_{}: now: {} queue: {} bytes: {} num_msgs: {} prunes: {} stake_pruned: {} delivered: {}",
-                num,
-                now,
-                total,
-                bytes,
-                num_msgs,
-                prunes,
-                stake_pruned,
-                delivered,
-            );
+            "network_run_push_{}: now: {} queue: {} bytes: {} num_msgs: {} prunes: {} \
+             stake_pruned: {} delivered: {}",
+            num,
+            now,
+            total,
+            bytes,
+            num_msgs,
+            prunes,
+            stake_pruned,
+            delivered,
+        );
     }
 
     network.stake_pruned += stake_pruned;
@@ -599,15 +600,16 @@ fn network_run_pull(
             break;
         }
         trace!(
-                "network_run_pull_{}: now: {} connections: {} convergance: {} bytes: {} msgs: {} overhead: {}",
-                num,
-                now,
-                total,
-                convergance,
-                bytes,
-                msgs,
-                overhead
-            );
+            "network_run_pull_{}: now: {} connections: {} convergance: {} bytes: {} msgs: {} \
+             overhead: {}",
+            num,
+            now,
+            total,
+            convergance,
+            bytes,
+            msgs,
+            overhead
+        );
     }
     (convergance, bytes)
 }

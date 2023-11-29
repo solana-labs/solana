@@ -454,16 +454,8 @@ mod tests {
         assert_eq!(
             format!("{info:?}"),
             format!(
-                "AccountInfo {{ \
-                key: {}, \
-                owner: {}, \
-                is_signer: {}, \
-                is_writable: {}, \
-                executable: {}, \
-                rent_epoch: {}, \
-                lamports: {}, \
-                data.len: {}, \
-                data: {}, .. }}",
+                "AccountInfo {{ key: {}, owner: {}, is_signer: {}, is_writable: {}, executable: \
+                 {}, rent_epoch: {}, lamports: {}, data.len: {}, data: {}, .. }}",
                 key,
                 key,
                 false,
@@ -482,16 +474,8 @@ mod tests {
         assert_eq!(
             format!("{info:?}"),
             format!(
-                "AccountInfo {{ \
-                key: {}, \
-                owner: {}, \
-                is_signer: {}, \
-                is_writable: {}, \
-                executable: {}, \
-                rent_epoch: {}, \
-                lamports: {}, \
-                data.len: {}, \
-                data: {}, .. }}",
+                "AccountInfo {{ key: {}, owner: {}, is_signer: {}, is_writable: {}, executable: \
+                 {}, rent_epoch: {}, lamports: {}, data.len: {}, data: {}, .. }}",
                 key,
                 key,
                 false,
@@ -509,15 +493,8 @@ mod tests {
         assert_eq!(
             format!("{info:?}"),
             format!(
-                "AccountInfo {{ \
-                key: {}, \
-                owner: {}, \
-                is_signer: {}, \
-                is_writable: {}, \
-                executable: {}, \
-                rent_epoch: {}, \
-                lamports: {}, \
-                data.len: {}, .. }}",
+                "AccountInfo {{ key: {}, owner: {}, is_signer: {}, is_writable: {}, executable: \
+                 {}, rent_epoch: {}, lamports: {}, data.len: {}, .. }}",
                 key,
                 key,
                 false,

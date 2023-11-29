@@ -130,7 +130,11 @@ pub fn is_version_string(arg: &str) -> Result<(), String> {
     if semver_re.is_match(arg) {
         return Ok(());
     }
-    Err("a version string starts with 'v' and contains major and minor version numbers separated by a dot, e.g. v1.32".to_string())
+    Err(
+        "a version string starts with 'v' and contains major and minor version numbers separated \
+         by a dot, e.g. v1.32"
+            .to_string(),
+    )
 }
 
 fn find_installed_platform_tools() -> Vec<String> {
@@ -658,7 +662,8 @@ fn build_solana_package(
     // this by removing RUSTC from the child process environment.
     if env::var("RUSTC").is_ok() {
         warn!(
-            "Removed RUSTC from cargo environment, because it overrides +solana cargo command line option."
+            "Removed RUSTC from cargo environment, because it overrides +solana cargo command \
+             line option."
         );
         env::remove_var("RUSTC")
     }
@@ -799,12 +804,17 @@ fn build_solana_package(
             let dump_script = config.sbf_sdk.join("scripts").join("dump.sh");
             #[cfg(windows)]
             {
-                error!("Using Bash scripts from within a program is not supported on Windows, skipping `--dump`.");
                 error!(
-                    "Please run \"{} {} {}\" from a Bash-supporting shell, then re-run this command to see the processed program dump.",
+                    "Using Bash scripts from within a program is not supported on Windows, \
+                     skipping `--dump`."
+                );
+                error!(
+                    "Please run \"{} {} {}\" from a Bash-supporting shell, then re-run this \
+                     command to see the processed program dump.",
                     &dump_script.display(),
                     &program_unstripped_so.display(),
-                    &program_dump.display());
+                    &program_dump.display()
+                );
             }
             #[cfg(not(windows))]
             {

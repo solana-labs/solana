@@ -98,7 +98,8 @@ impl From<RpcCustomError> for Error {
             } => Self {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_BLOCK_CLEANED_UP),
                 message: format!(
-                    "Block {slot} cleaned up, does not exist on node. First available block: {first_available_block}",
+                    "Block {slot} cleaned up, does not exist on node. First available block: \
+                     {first_available_block}",
                 ),
                 data: None,
             },
@@ -161,8 +162,8 @@ impl From<RpcCustomError> for Error {
                     JSON_RPC_SERVER_ERROR_KEY_EXCLUDED_FROM_SECONDARY_INDEX,
                 ),
                 message: format!(
-                    "{index_key} excluded from account secondary indexes; \
-                    this RPC method unavailable for key"
+                    "{index_key} excluded from account secondary indexes; this RPC method \
+                     unavailable for key"
                 ),
                 data: None,
             },
@@ -194,8 +195,8 @@ impl From<RpcCustomError> for Error {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_UNSUPPORTED_TRANSACTION_VERSION),
                 message: format!(
                     "Transaction version ({version}) is not supported by the requesting client. \
-                    Please try the request again with the following configuration parameter: \
-                    \"maxSupportedTransactionVersion\": {version}"
+                     Please try the request again with the following configuration parameter: \
+                     \"maxSupportedTransactionVersion\": {version}"
                 ),
                 data: None,
             },

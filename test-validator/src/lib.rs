@@ -795,7 +795,8 @@ impl TestValidator {
                 match genesis_config.accounts.remove(deactivate_feature_pk) {
                     Some(_) => info!("Feature for {:?} deactivated", deactivate_feature_pk),
                     None => warn!(
-                        "Feature {:?} set for deactivation not found in genesis_config account list, ignored.",
+                        "Feature {:?} set for deactivation not found in genesis_config account \
+                         list, ignored.",
                         deactivate_feature_pk
                     ),
                 }

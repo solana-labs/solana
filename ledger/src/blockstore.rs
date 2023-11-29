@@ -1261,8 +1261,8 @@ impl Blockstore {
             // ToDo: This is a potential slashing condition
             warn!("Received multiple erasure configs for the same erasure set!!!");
             warn!(
-                "Slot: {}, shred index: {}, erasure_set: {:?}, \
-                is_duplicate: {}, stored config: {:#?}, new shred: {:#?}",
+                "Slot: {}, shred index: {}, erasure_set: {:?}, is_duplicate: {}, stored config: \
+                 {:#?}, new shred: {:#?}",
                 slot,
                 shred.index(),
                 erasure_set,
@@ -1420,7 +1420,11 @@ impl Blockstore {
                 // just purge all shreds > the new last index slot, but because replay may have already
                 // replayed entries past the newly detected "last" shred, then mark the slot as dead
                 // and wait for replay to dump and repair the correct version.
-                warn!("Received *last* shred index {} less than previous shred index {}, and slot {} is not full, marking slot dead", shred_index, slot_meta.received, slot);
+                warn!(
+                    "Received *last* shred index {} less than previous shred index {}, and slot \
+                     {} is not full, marking slot dead",
+                    shred_index, slot_meta.received, slot
+                );
                 write_batch.put::<cf::DeadSlots>(slot, &true).unwrap();
             }
 
@@ -1559,7 +1563,8 @@ impl Blockstore {
                 (
                     "error",
                     format!(
-                        "Leader {leader_pubkey:?}, slot {slot}: received index {shred_index} >= slot.last_index {last_index:?}, shred_source: {shred_source:?}"
+                        "Leader {leader_pubkey:?}, slot {slot}: received index {shred_index} >= \
+                         slot.last_index {last_index:?}, shred_source: {shred_source:?}"
                     ),
                     String
                 )
@@ -1598,7 +1603,8 @@ impl Blockstore {
                 (
                     "error",
                     format!(
-                        "Leader {:?}, slot {}: received shred_index {} < slot.received {}, shred_source: {:?}",
+                        "Leader {:?}, slot {}: received shred_index {} < slot.received {}, \
+                         shred_source: {:?}",
                         leader_pubkey, slot, shred_index, slot_meta.received, shred_source
                     ),
                     String
@@ -2133,9 +2139,7 @@ impl Blockstore {
                     .map(|transaction| {
                         if let Err(err) = transaction.sanitize() {
                             warn!(
-                                "Blockstore::get_block sanitize failed: {:?}, \
-                                slot: {:?}, \
-                                {:?}",
+                                "Blockstore::get_block sanitize failed: {:?}, slot: {:?}, {:?}",
                                 err, slot, transaction,
                             );
                         }
@@ -2578,9 +2582,8 @@ impl Blockstore {
             .map(|transaction| {
                 if let Err(err) = transaction.sanitize() {
                     warn!(
-                        "Blockstore::find_transaction_in_slot sanitize failed: {:?}, \
-                        slot: {:?}, \
-                        {:?}",
+                        "Blockstore::find_transaction_in_slot sanitize failed: {:?}, slot: {:?}, \
+                         {:?}",
                         err, slot, transaction,
                     );
                 }
@@ -3098,39 +3101,38 @@ impl Blockstore {
             .collect();
         let data_shreds = data_shreds?;
 
-        let data_shreds: Result<Vec<Shred>> =
-            data_shreds
-                .into_iter()
-                .enumerate()
-                .map(|(idx, shred_bytes)| {
-                    if shred_bytes.is_none() {
-                        if let Some(slot_meta) = slot_meta {
-                            if slot > self.lowest_cleanup_slot() {
-                                panic!(
-                                    "Shred with slot: {}, index: {}, consumed: {}, completed_indexes: {:?} \
-                                    must exist if shred index was included in a range: {} {}",
-                                    slot,
-                                    idx,
-                                    slot_meta.consumed,
-                                    slot_meta.completed_data_indexes,
-                                    start_index,
-                                    end_index
-                                );
-                            }
+        let data_shreds: Result<Vec<Shred>> = data_shreds
+            .into_iter()
+            .enumerate()
+            .map(|(idx, shred_bytes)| {
+                if shred_bytes.is_none() {
+                    if let Some(slot_meta) = slot_meta {
+                        if slot > self.lowest_cleanup_slot() {
+                            panic!(
+                                "Shred with slot: {}, index: {}, consumed: {}, completed_indexes: \
+                                 {:?} must exist if shred index was included in a range: {} {}",
+                                slot,
+                                idx,
+                                slot_meta.consumed,
+                                slot_meta.completed_data_indexes,
+                                start_index,
+                                end_index
+                            );
                         }
-                        return Err(BlockstoreError::InvalidShredData(Box::new(
-                            bincode::ErrorKind::Custom(format!(
-                                "Missing shred for slot {slot}, index {idx}"
-                            )),
-                        )));
                     }
-                    Shred::new_from_serialized_shred(shred_bytes.unwrap()).map_err(|err| {
-                        BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
-                            format!("Could not reconstruct shred from shred payload: {err:?}"),
-                        )))
-                    })
+                    return Err(BlockstoreError::InvalidShredData(Box::new(
+                        bincode::ErrorKind::Custom(format!(
+                            "Missing shred for slot {slot}, index {idx}"
+                        )),
+                    )));
+                }
+                Shred::new_from_serialized_shred(shred_bytes.unwrap()).map_err(|err| {
+                    BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
+                        format!("Could not reconstruct shred from shred payload: {err:?}"),
+                    )))
                 })
-                .collect();
+            })
+            .collect();
         let data_shreds = data_shreds?;
         let last_shred = data_shreds.last().unwrap();
         assert!(last_shred.data_complete() || last_shred.last_in_slot());

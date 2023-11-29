@@ -102,9 +102,10 @@ impl SnapshotGossipManager {
             .as_mut()
             .expect("there must already be a full snapshot hash");
         assert_eq!(
-            base_slot, latest_snapshot_hashes.full.0.0,
-            "the incremental snapshot's base slot ({}) must match the latest full snapshot's slot ({})",
-            base_slot, latest_snapshot_hashes.full.0.0,
+            base_slot, latest_snapshot_hashes.full.0 .0,
+            "the incremental snapshot's base slot ({}) must match the latest full snapshot's slot \
+             ({})",
+            base_slot, latest_snapshot_hashes.full.0 .0,
         );
         latest_snapshot_hashes.incremental = Some(incremental_snapshot_hash);
     }
@@ -129,8 +130,8 @@ impl SnapshotGossipManager {
                     .collect(),
             )
             .expect(
-                "Bug! The programmer contract has changed for push_snapshot_hashes() \
-                 and a new error case has been added that has not been handled here.",
+                "Bug! The programmer contract has changed for push_snapshot_hashes() and a new \
+                 error case has been added that has not been handled here.",
             );
     }
 }

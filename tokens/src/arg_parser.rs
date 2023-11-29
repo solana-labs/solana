@@ -44,8 +44,8 @@ where
                 .global(true)
                 .validator(is_url_or_moniker)
                 .help(
-                    "URL for Solana's JSON RPC or moniker (or their first letter): \
-                       [mainnet-beta, testnet, devnet, localhost]",
+                    "URL for Solana's JSON RPC or moniker (or their first letter): [mainnet-beta, \
+                     testnet, devnet, localhost]",
                 ),
         )
         .subcommand(
@@ -58,9 +58,9 @@ where
                         .takes_value(true)
                         .value_name("FILE")
                         .help(
-                            "Location for storing distribution database. \
-                            The database is used for tracking transactions as they are finalized \
-                            and preventing double spends.",
+                            "Location for storing distribution database. The database is used for \
+                             tracking transactions as they are finalized and preventing double \
+                             spends.",
                         ),
                 )
                 .arg(
@@ -121,9 +121,9 @@ where
                         .takes_value(true)
                         .value_name("FILE")
                         .help(
-                            "Location for storing distribution database. \
-                            The database is used for tracking transactions as they are finalized \
-                            and preventing double spends.",
+                            "Location for storing distribution database. The database is used for \
+                             tracking transactions as they are finalized and preventing double \
+                             spends.",
                         ),
                 )
                 .arg(
@@ -192,9 +192,9 @@ where
                         .takes_value(true)
                         .value_name("FILE")
                         .help(
-                            "Location for storing distribution database. \
-                            The database is used for tracking transactions as they are finalized \
-                            and preventing double spends.",
+                            "Location for storing distribution database. The database is used for \
+                             tracking transactions as they are finalized and preventing double \
+                             spends.",
                         ),
                 )
                 .arg(
@@ -290,9 +290,9 @@ where
                         .takes_value(true)
                         .value_name("FILE")
                         .help(
-                            "Location for storing distribution database. \
-                            The database is used for tracking transactions as they are finalized \
-                            and preventing double spends.",
+                            "Location for storing distribution database. The database is used for \
+                             tracking transactions as they are finalized and preventing double \
+                             spends.",
                         ),
                 )
                 .arg(

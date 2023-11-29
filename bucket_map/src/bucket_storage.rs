@@ -171,7 +171,15 @@ impl<O: BucketOccupied> BucketStorage<O> {
             let full_page_bytes = bytes / PAGE_SIZE * PAGE_SIZE / cell_size * cell_size;
             if full_page_bytes < bytes {
                 let bytes_new = ((bytes / PAGE_SIZE) + 1) * PAGE_SIZE / cell_size * cell_size;
-                assert!(bytes_new >= bytes, "allocating less than requested, capacity: {}, bytes: {}, bytes_new: {}, full_page_bytes: {}", capacity.capacity(), bytes, bytes_new, full_page_bytes);
+                assert!(
+                    bytes_new >= bytes,
+                    "allocating less than requested, capacity: {}, bytes: {}, bytes_new: {}, \
+                     full_page_bytes: {}",
+                    capacity.capacity(),
+                    bytes,
+                    bytes_new,
+                    full_page_bytes
+                );
                 assert_eq!(bytes_new % cell_size, 0);
                 bytes = bytes_new;
                 *capacity = Capacity::Actual(bytes / cell_size);

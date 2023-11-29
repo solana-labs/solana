@@ -320,13 +320,15 @@ impl AncestorRequestStatus {
                         let mismatch_our_frozen_hash = blockstore.get_bank_hash(mismatch_slot);
                         info!(
                             "When processing the ancestor sample for {}, there was a mismatch
-                            for {mismatch_slot}: we had frozen hash {:?} and the cluster agreed upon
-                            {mismatch_agreed_upon_hash}. However for a later ancestor {ancestor_slot}
-                            we have agreement on {our_frozen_hash} as the bank hash. This should never
+                            for {mismatch_slot}: we had frozen hash {:?} and the cluster agreed \
+                             upon
+                            {mismatch_agreed_upon_hash}. However for a later ancestor \
+                             {ancestor_slot}
+                            we have agreement on {our_frozen_hash} as the bank hash. This should \
+                             never
                             be possible, something is wrong or the cluster sample is invalid.
                             Rejecting and queuing the ancestor hashes request for retry",
-                            self.requested_mismatched_slot,
-                            mismatch_our_frozen_hash
+                            self.requested_mismatched_slot, mismatch_our_frozen_hash
                         );
                         return DuplicateAncestorDecision::InvalidSample;
                     }
@@ -346,12 +348,18 @@ impl AncestorRequestStatus {
                         let (mismatch_slot, mismatch_agreed_upon_hash) =
                             agreed_response[*mismatch_i];
                         info!(
-                            "When processing the ancestor sample for {}, an earlier ancestor {mismatch_slot}
-                            was agreed upon by the cluster with hash {mismatch_agreed_upon_hash} but not
-                            frozen in our blockstore. However for a later ancestor {ancestor_slot} we have
-                            agreement on {our_frozen_hash} as the bank hash. This should only be possible if
-                            we have just started from snapshot and immediately encountered a duplicate block on
-                            a popular pruned fork, otherwise something is seriously wrong. Continuing with the
+                            "When processing the ancestor sample for {}, an earlier ancestor \
+                             {mismatch_slot}
+                            was agreed upon by the cluster with hash {mismatch_agreed_upon_hash} \
+                             but not
+                            frozen in our blockstore. However for a later ancestor {ancestor_slot} \
+                             we have
+                            agreement on {our_frozen_hash} as the bank hash. This should only be \
+                             possible if
+                            we have just started from snapshot and immediately encountered a \
+                             duplicate block on
+                            a popular pruned fork, otherwise something is seriously wrong. \
+                             Continuing with the
                             repair",
                             self.requested_mismatched_slot
                         );

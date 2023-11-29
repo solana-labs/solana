@@ -185,8 +185,19 @@ impl Stats {
             ("empty_entries", empty_entries, i64),
         );
         debug!(
-            "Loaded Programs Cache Stats -- Hits: {}, Misses: {}, Evictions: {}, Insertions: {}, Replacements: {}, One-Hit-Wonders: {}, Prunes-Orphan: {}, Prunes-Expired: {}, Prunes-Environment: {}, Empty: {}",
-            hits, misses, evictions, insertions, replacements, one_hit_wonders, prunes_orphan, prunes_expired, prunes_environment, empty_entries
+            "Loaded Programs Cache Stats -- Hits: {}, Misses: {}, Evictions: {}, Insertions: {}, \
+             Replacements: {}, One-Hit-Wonders: {}, Prunes-Orphan: {}, Prunes-Expired: {}, \
+             Prunes-Environment: {}, Empty: {}",
+            hits,
+            misses,
+            evictions,
+            insertions,
+            replacements,
+            one_hit_wonders,
+            prunes_orphan,
+            prunes_expired,
+            prunes_environment,
+            empty_entries
         );
         if log_enabled!(log::Level::Trace) && !self.evictions.is_empty() {
             let mut evictions = self.evictions.iter().collect::<Vec<_>>();

@@ -61,7 +61,8 @@ const MAX_SNAPSHOT_DOWNLOAD_ABORT: u32 = 5;
 const MINIMUM_TICKS_PER_SLOT: u64 = 2;
 
 pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
-    return App::new(crate_name!()).about(crate_description!())
+    return App::new(crate_name!())
+        .about(crate_description!())
         .version(version)
         .setting(AppSettings::VersionlessSubcommands)
         .setting(AppSettings::InferSubcommands)
@@ -87,9 +88,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .validator(is_keypair_or_ask_keyword)
                 .requires("vote_account")
                 .multiple(true)
-                .help("Include an additional authorized voter keypair. \
-                       May be specified multiple times. \
-                       [default: the --identity keypair]"),
+                .help(
+                    "Include an additional authorized voter keypair. May be specified multiple \
+                     times. [default: the --identity keypair]",
+                ),
         )
         .arg(
             Arg::with_name("vote_account")
@@ -98,18 +100,21 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .validator(is_pubkey_or_keypair)
                 .requires("identity")
-                .help("Validator vote account public key.  \
-                       If unspecified voting will be disabled. \
-                       The authorized voter for the account must either be the \
-                       --identity keypair or with the --authorized-voter argument")
+                .help(
+                    "Validator vote account public key.  If unspecified voting will be disabled. \
+                     The authorized voter for the account must either be the --identity keypair \
+                     or with the --authorized-voter argument",
+                ),
         )
         .arg(
             Arg::with_name("init_complete_file")
                 .long("init-complete-file")
                 .value_name("FILE")
                 .takes_value(true)
-                .help("Create this file if it doesn't already exist \
-                       once validator initialization is complete"),
+                .help(
+                    "Create this file if it doesn't already exist once validator initialization \
+                     is complete",
+                ),
         )
         .arg(
             Arg::with_name("ledger_path")
@@ -135,8 +140,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("no_snapshot_fetch")
                 .long("no-snapshot-fetch")
                 .takes_value(false)
-                .help("Do not attempt to fetch a snapshot from the cluster, \
-                      start from a local snapshot if present"),
+                .help(
+                    "Do not attempt to fetch a snapshot from the cluster, start from a local \
+                     snapshot if present",
+                ),
         )
         .arg(
             Arg::with_name("no_genesis_fetch")
@@ -157,18 +164,21 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("RPC_URL")
                 .requires("entrypoint")
                 .conflicts_with_all(&["no_check_vote_account", "no_voting"])
-                .help("Sanity check vote account state at startup. The JSON RPC endpoint at RPC_URL must expose `--full-rpc-api`")
+                .help(
+                    "Sanity check vote account state at startup. The JSON RPC endpoint at RPC_URL \
+                     must expose `--full-rpc-api`",
+                ),
         )
         .arg(
             Arg::with_name("restricted_repair_only_mode")
                 .long("restricted-repair-only-mode")
                 .takes_value(false)
-                .help("Do not publish the Gossip, TPU, TVU or Repair Service ports causing \
-                       the validator to operate in a limited capacity that reduces its \
-                       exposure to the rest of the cluster. \
-                       \
-                       The --no-voting flag is implicit when this flag is enabled \
-                      "),
+                .help(
+                    "Do not publish the Gossip, TPU, TVU or Repair Service ports causing the \
+                     validator to operate in a limited capacity that reduces its exposure to the \
+                     rest of the cluster. The --no-voting flag is implicit when this flag is \
+                     enabled ",
+                ),
         )
         .arg(
             Arg::with_name("dev_halt_at_slot")
@@ -203,30 +213,33 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("private_rpc")
                 .long("private-rpc")
                 .takes_value(false)
-                .help("Do not publish the RPC port for use by others")
+                .help("Do not publish the RPC port for use by others"),
         )
         .arg(
             Arg::with_name("no_port_check")
                 .long("no-port-check")
                 .takes_value(false)
                 .hidden(hidden_unless_forced())
-                .help("Do not perform TCP/UDP reachable port checks at start-up")
+                .help("Do not perform TCP/UDP reachable port checks at start-up"),
         )
         .arg(
             Arg::with_name("enable_rpc_transaction_history")
                 .long("enable-rpc-transaction-history")
                 .takes_value(false)
-                .help("Enable historical transaction info over JSON RPC, \
-                       including the 'getConfirmedBlock' API.  \
-                       This will cause an increase in disk usage and IOPS"),
+                .help(
+                    "Enable historical transaction info over JSON RPC, including the \
+                     'getConfirmedBlock' API.  This will cause an increase in disk usage and IOPS",
+                ),
         )
         .arg(
             Arg::with_name("enable_rpc_bigtable_ledger_storage")
                 .long("enable-rpc-bigtable-ledger-storage")
                 .requires("enable_rpc_transaction_history")
                 .takes_value(false)
-                .help("Fetch historical transaction info from a BigTable instance \
-                       as a fallback to local ledger data"),
+                .help(
+                    "Fetch historical transaction info from a BigTable instance as a fallback to \
+                     local ledger data",
+                ),
         )
         .arg(
             Arg::with_name("enable_bigtable_ledger_upload")
@@ -240,8 +253,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .long("enable-extended-tx-metadata-storage")
                 .requires("enable_rpc_transaction_history")
                 .takes_value(false)
-                .help("Include CPI inner instructions, logs, and return data in \
-                       the historical transaction info stored"),
+                .help(
+                    "Include CPI inner instructions, logs, and return data in the historical \
+                     transaction info stored",
+                ),
         )
         .arg(
             Arg::with_name("rpc_max_multiple_accounts")
@@ -249,8 +264,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("MAX ACCOUNTS")
                 .takes_value(true)
                 .default_value(&default_args.rpc_max_multiple_accounts)
-                .help("Override the default maximum accounts accepted by \
-                       the getMultipleAccounts JSON RPC method")
+                .help(
+                    "Override the default maximum accounts accepted by the getMultipleAccounts \
+                     JSON RPC method",
+                ),
         )
         .arg(
             Arg::with_name("health_check_slot_distance")
@@ -258,9 +275,11 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("SLOT_DISTANCE")
                 .takes_value(true)
                 .default_value(&default_args.health_check_slot_distance)
-                .help("Report this validator healthy if its latest optimistically confirmed slot \
-                       that has been replayed is no further behind than this number of slots from \
-                       the cluster latest optimistically confirmed slot")
+                .help(
+                    "Report this validator healthy if its latest optimistically confirmed slot \
+                     that has been replayed is no further behind than this number of slots from \
+                     the cluster latest optimistically confirmed slot",
+                ),
         )
         .arg(
             Arg::with_name("rpc_faucet_addr")
@@ -291,7 +310,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .long("accounts-hash-cache-path")
                 .value_name("PATH")
                 .takes_value(true)
-                .help("Use PATH as accounts hash cache location [default: <LEDGER>/accounts_hash_cache]"),
+                .help(
+                    "Use PATH as accounts hash cache location [default: \
+                     <LEDGER>/accounts_hash_cache]",
+                ),
         )
         .arg(
             Arg::with_name("snapshots")
@@ -307,7 +329,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .possible_values(use_snapshot_archives_at_startup::cli::POSSIBLE_VALUES)
                 .default_value(use_snapshot_archives_at_startup::cli::default_value())
                 .help(use_snapshot_archives_at_startup::cli::HELP)
-                .long_help(use_snapshot_archives_at_startup::cli::LONG_HELP)
+                .long_help(use_snapshot_archives_at_startup::cli::LONG_HELP),
         )
         .arg(
             Arg::with_name("incremental_snapshot_archive_path")
@@ -315,7 +337,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .conflicts_with("no-incremental-snapshots")
                 .value_name("DIR")
                 .takes_value(true)
-                .help("Use DIR as separate location for incremental snapshot archives [default: --snapshots value]"),
+                .help(
+                    "Use DIR as separate location for incremental snapshot archives [default: \
+                     --snapshots value]",
+                ),
         )
         .arg(
             Arg::with_name("tower")
@@ -340,7 +365,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .multiple(true)
                 .validator(solana_net_utils::is_host_port)
-                .help("etcd gRPC endpoint to connect with")
+                .help("etcd gRPC endpoint to connect with"),
         )
         .arg(
             Arg::with_name("etcd_domain_name")
@@ -349,7 +374,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("DOMAIN")
                 .default_value(&default_args.etcd_domain_name)
                 .takes_value(true)
-                .help("domain name against which to verify the etcd server’s TLS certificate")
+                .help("domain name against which to verify the etcd server’s TLS certificate"),
         )
         .arg(
             Arg::with_name("etcd_cacert_file")
@@ -357,7 +382,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .required_if("tower_storage", "etcd")
                 .value_name("FILE")
                 .takes_value(true)
-                .help("verify the TLS certificate of the etcd endpoint using this CA bundle")
+                .help("verify the TLS certificate of the etcd endpoint using this CA bundle"),
         )
         .arg(
             Arg::with_name("etcd_key_file")
@@ -365,7 +390,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .required_if("tower_storage", "etcd")
                 .value_name("FILE")
                 .takes_value(true)
-                .help("TLS key file to use when establishing a connection to the etcd endpoint")
+                .help("TLS key file to use when establishing a connection to the etcd endpoint"),
         )
         .arg(
             Arg::with_name("etcd_cert_file")
@@ -373,7 +398,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .required_if("tower_storage", "etcd")
                 .value_name("FILE")
                 .takes_value(true)
-                .help("TLS certificate to use when establishing a connection to the etcd endpoint")
+                .help("TLS certificate to use when establishing a connection to the etcd endpoint"),
         )
         .arg(
             Arg::with_name("gossip_port")
@@ -388,8 +413,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("HOST")
                 .takes_value(true)
                 .validator(solana_net_utils::is_host)
-                .help("Gossip DNS name or IP address for the validator to advertise in gossip \
-                       [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
+                .help(
+                    "Gossip DNS name or IP address for the validator to advertise in gossip \
+                     [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]",
+                ),
         )
         .arg(
             Arg::with_name("public_tpu_addr")
@@ -398,8 +425,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .validator(solana_net_utils::is_host_port)
-                .help("Specify TPU address to advertise in gossip [default: ask --entrypoint or localhost\
-                    when --entrypoint is not provided]"),
+                .help(
+                    "Specify TPU address to advertise in gossip [default: ask --entrypoint or \
+                     localhostwhen --entrypoint is not provided]",
+                ),
         )
         .arg(
             Arg::with_name("public_tpu_forwards_addr")
@@ -407,8 +436,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .validator(solana_net_utils::is_host_port)
-                .help("Specify TPU Forwards address to advertise in gossip [default: ask --entrypoint or localhost\
-                    when --entrypoint is not provided]"),
+                .help(
+                    "Specify TPU Forwards address to advertise in gossip [default: ask \
+                     --entrypoint or localhostwhen --entrypoint is not provided]",
+                ),
         )
         .arg(
             Arg::with_name("public_rpc_addr")
@@ -417,9 +448,11 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .conflicts_with("private_rpc")
                 .validator(solana_net_utils::is_host_port)
-                .help("RPC address for the validator to advertise publicly in gossip. \
-                      Useful for validators running behind a load balancer or proxy \
-                      [default: use --rpc-bind-address / --rpc-port]"),
+                .help(
+                    "RPC address for the validator to advertise publicly in gossip. Useful for \
+                     validators running behind a load balancer or proxy [default: use \
+                     --rpc-bind-address / --rpc-port]",
+                ),
         )
         .arg(
             Arg::with_name("dynamic_port_range")
@@ -436,19 +469,21 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("NUMBER_OF_SLOTS")
                 .takes_value(true)
                 .default_value(&default_args.maximum_local_snapshot_age)
-                .help("Reuse a local snapshot if it's less than this many \
-                       slots behind the highest snapshot available for \
-                       download from other validators"),
+                .help(
+                    "Reuse a local snapshot if it's less than this many slots behind the highest \
+                     snapshot available for download from other validators",
+                ),
         )
         .arg(
             Arg::with_name("no_incremental_snapshots")
                 .long("no-incremental-snapshots")
                 .takes_value(false)
                 .help("Disable incremental snapshots")
-                .long_help("Disable incremental snapshots by setting this flag. \
-                   When enabled, --snapshot-interval-slots will set the \
-                   incremental snapshot interval. To set the full snapshot \
-                   interval, use --full-snapshot-interval-slots.")
+                .long_help(
+                    "Disable incremental snapshots by setting this flag. When enabled, \
+                     --snapshot-interval-slots will set the incremental snapshot interval. To set \
+                     the full snapshot interval, use --full-snapshot-interval-slots.",
+                ),
         )
         .arg(
             Arg::with_name("incremental_snapshot_interval_slots")
@@ -457,8 +492,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("NUMBER")
                 .takes_value(true)
                 .default_value(&default_args.incremental_snapshot_archive_interval_slots)
-                .help("Number of slots between generating snapshots, \
-                      0 to disable snapshots"),
+                .help("Number of slots between generating snapshots, 0 to disable snapshots"),
         )
         .arg(
             Arg::with_name("full_snapshot_interval_slots")
@@ -466,8 +500,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("NUMBER")
                 .takes_value(true)
                 .default_value(&default_args.full_snapshot_archive_interval_slots)
-                .help("Number of slots between generating full snapshots. \
-                    Must be a multiple of the incremental snapshot interval.")
+                .help(
+                    "Number of slots between generating full snapshots. Must be a multiple of the \
+                     incremental snapshot interval.",
+                ),
         )
         .arg(
             Arg::with_name("maximum_full_snapshots_to_retain")
@@ -477,7 +513,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .default_value(&default_args.maximum_full_snapshot_archives_to_retain)
                 .validator(validate_maximum_full_snapshot_archives_to_retain)
-                .help("The maximum number of full snapshot archives to hold on to when purging older snapshots.")
+                .help(
+                    "The maximum number of full snapshot archives to hold on to when purging \
+                     older snapshots.",
+                ),
         )
         .arg(
             Arg::with_name("maximum_incremental_snapshots_to_retain")
@@ -486,7 +525,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .default_value(&default_args.maximum_incremental_snapshot_archives_to_retain)
                 .validator(validate_maximum_incremental_snapshot_archives_to_retain)
-                .help("The maximum number of incremental snapshot archives to hold on to when purging older snapshots.")
+                .help(
+                    "The maximum number of incremental snapshot archives to hold on to when \
+                     purging older snapshots.",
+                ),
         )
         .arg(
             Arg::with_name("snapshot_packager_niceness_adj")
@@ -495,8 +537,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .validator(solana_perf::thread::is_niceness_adjustment_valid)
                 .default_value(&default_args.snapshot_packager_niceness_adjustment)
-                .help("Add this value to niceness of snapshot packager thread. Negative value \
-                      increases priority, positive value decreases priority.")
+                .help(
+                    "Add this value to niceness of snapshot packager thread. Negative value \
+                     increases priority, positive value decreases priority.",
+                ),
         )
         .arg(
             Arg::with_name("minimal_snapshot_download_speed")
@@ -504,9 +548,11 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("MINIMAL_SNAPSHOT_DOWNLOAD_SPEED")
                 .takes_value(true)
                 .default_value(&default_args.min_snapshot_download_speed)
-                .help("The minimal speed of snapshot downloads measured in bytes/second. \
-                      If the initial download speed falls below this threshold, the system will \
-                      retry the download against a different rpc node."),
+                .help(
+                    "The minimal speed of snapshot downloads measured in bytes/second. If the \
+                     initial download speed falls below this threshold, the system will retry the \
+                     download against a different rpc node.",
+                ),
         )
         .arg(
             Arg::with_name("maximum_snapshot_download_abort")
@@ -514,8 +560,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("MAXIMUM_SNAPSHOT_DOWNLOAD_ABORT")
                 .takes_value(true)
                 .default_value(&default_args.max_snapshot_download_abort)
-                .help("The maximum number of times to abort and retry when encountering a \
-                      slow snapshot download."),
+                .help(
+                    "The maximum number of times to abort and retry when encountering a slow \
+                     snapshot download.",
+                ),
         )
         .arg(
             Arg::with_name("contact_debug_interval")
@@ -535,31 +583,31 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("no_os_network_limits_test")
                 .hidden(hidden_unless_forced())
                 .long("no-os-network-limits-test")
-                .help("Skip checks for OS network limits.")
+                .help("Skip checks for OS network limits."),
         )
         .arg(
             Arg::with_name("no_os_memory_stats_reporting")
                 .long("no-os-memory-stats-reporting")
                 .hidden(hidden_unless_forced())
-                .help("Disable reporting of OS memory statistics.")
+                .help("Disable reporting of OS memory statistics."),
         )
         .arg(
             Arg::with_name("no_os_network_stats_reporting")
                 .long("no-os-network-stats-reporting")
                 .hidden(hidden_unless_forced())
-                .help("Disable reporting of OS network statistics.")
+                .help("Disable reporting of OS network statistics."),
         )
         .arg(
             Arg::with_name("no_os_cpu_stats_reporting")
                 .long("no-os-cpu-stats-reporting")
                 .hidden(hidden_unless_forced())
-                .help("Disable reporting of OS CPU statistics.")
+                .help("Disable reporting of OS CPU statistics."),
         )
         .arg(
             Arg::with_name("no_os_disk_stats_reporting")
                 .long("no-os-disk-stats-reporting")
                 .hidden(hidden_unless_forced())
-                .help("Disable reporting of OS disk statistics.")
+                .help("Disable reporting of OS disk statistics."),
         )
         .arg(
             Arg::with_name("snapshot_version")
@@ -587,12 +635,13 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .possible_values(&["level", "fifo"])
                 .default_value(&default_args.rocksdb_shred_compaction)
-                .help("Controls how RocksDB compacts shreds. \
-                       *WARNING*: You will lose your ledger data when you switch between options. \
-                       Possible values are: \
-                       'level': stores shreds using RocksDB's default (level) compaction. \
-                       'fifo': stores shreds under RocksDB's FIFO compaction. \
-                           This option is more efficient on disk-write-bytes of the ledger store."),
+                .help(
+                    "Controls how RocksDB compacts shreds. *WARNING*: You will lose your ledger \
+                     data when you switch between options. Possible values are: 'level': stores \
+                     shreds using RocksDB's default (level) compaction. 'fifo': stores shreds \
+                     under RocksDB's FIFO compaction. This option is more efficient on \
+                     disk-write-bytes of the ledger store.",
+                ),
         )
         .arg(
             Arg::with_name("rocksdb_fifo_shred_storage_size")
@@ -600,13 +649,13 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("SHRED_STORAGE_SIZE_BYTES")
                 .takes_value(true)
                 .validator(is_parsable::<u64>)
-                .help("The shred storage size in bytes. \
-                       The suggested value is at least 50% of your ledger storage size. \
-                       If this argument is unspecified, we will assign a proper \
-                       value based on --limit-ledger-size.  If --limit-ledger-size \
-                       is not presented, it means there is no limitation on the ledger \
-                       size and thus rocksdb_fifo_shred_storage_size will also be \
-                       unbounded."),
+                .help(
+                    "The shred storage size in bytes. The suggested value is at least 50% of your \
+                     ledger storage size. If this argument is unspecified, we will assign a \
+                     proper value based on --limit-ledger-size.  If --limit-ledger-size is not \
+                     presented, it means there is no limitation on the ledger size and thus \
+                     rocksdb_fifo_shred_storage_size will also be unbounded.",
+                ),
         )
         .arg(
             Arg::with_name("rocksdb_ledger_compression")
@@ -616,9 +665,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .possible_values(&["none", "lz4", "snappy", "zlib"])
                 .default_value(&default_args.rocksdb_ledger_compression)
-                .help("The compression algorithm that is used to compress \
-                       transaction status data.  \
-                       Turning on compression can save ~10% of the ledger size."),
+                .help(
+                    "The compression algorithm that is used to compress transaction status data.  \
+                     Turning on compression can save ~10% of the ledger size.",
+                ),
         )
         .arg(
             Arg::with_name("rocksdb_perf_sample_interval")
@@ -628,8 +678,11 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
                 .default_value(&default_args.rocksdb_perf_sample_interval)
-                .help("Controls how often RocksDB read/write performance sample is collected. \
-                       Reads/writes perf samples are collected in 1 / ROCKS_PERF_SAMPLE_INTERVAL sampling rate."),
+                .help(
+                    "Controls how often RocksDB read/write performance sample is collected. \
+                     Reads/writes perf samples are collected in 1 / ROCKS_PERF_SAMPLE_INTERVAL \
+                     sampling rate.",
+                ),
         )
         .arg(
             Arg::with_name("skip_startup_ledger_verification")
@@ -679,9 +732,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .long("log")
                 .value_name("FILE")
                 .takes_value(true)
-                .help("Redirect logging to the specified file, '-' for standard error. \
-                       Sending the SIGUSR1 signal to the validator process will cause it \
-                       to re-open the log file"),
+                .help(
+                    "Redirect logging to the specified file, '-' for standard error. Sending the \
+                     SIGUSR1 signal to the validator process will cause it to re-open the log file",
+                ),
         )
         .arg(
             Arg::with_name("wait_for_supermajority")
@@ -689,16 +743,20 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .requires("expected_bank_hash")
                 .value_name("SLOT")
                 .validator(is_slot)
-                .help("After processing the ledger and the next slot is SLOT, wait until a \
-                       supermajority of stake is visible on gossip before starting PoH"),
+                .help(
+                    "After processing the ledger and the next slot is SLOT, wait until a \
+                     supermajority of stake is visible on gossip before starting PoH",
+                ),
         )
         .arg(
             Arg::with_name("no_wait_for_vote_to_start_leader")
                 .hidden(hidden_unless_forced())
                 .long("no-wait-for-vote-to-start-leader")
-                .help("If the validator starts up with no ledger, it will wait to start block
+                .help(
+                    "If the validator starts up with no ledger, it will wait to start block
                       production until it sees a vote land in a rooted slot. This prevents
-                      double signing. Turn off to risk double signing a block."),
+                      double signing. Turn off to risk double signing a block.",
+                ),
         )
         .arg(
             Arg::with_name("hard_forks")
@@ -717,8 +775,11 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("VALIDATOR IDENTITY")
                 .multiple(true)
                 .takes_value(true)
-                .help("A snapshot hash must be published in gossip by this validator to be accepted. \
-                       May be specified multiple times. If unspecified any snapshot hash will be accepted"),
+                .help(
+                    "A snapshot hash must be published in gossip by this validator to be \
+                     accepted. May be specified multiple times. If unspecified any snapshot hash \
+                     will be accepted",
+                ),
         )
         .arg(
             Arg::with_name("debug_key")
@@ -735,7 +796,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .long("only-known-rpc")
                 .takes_value(false)
                 .requires("known_validators")
-                .help("Use the RPC service of known validators only")
+                .help("Use the RPC service of known validators only"),
         )
         .arg(
             Arg::with_name("repair_validators")
@@ -744,8 +805,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("VALIDATOR IDENTITY")
                 .multiple(true)
                 .takes_value(true)
-                .help("A list of validators to request repairs from. If specified, repair will not \
-                       request from validators outside this set [default: all validators]")
+                .help(
+                    "A list of validators to request repairs from. If specified, repair will not \
+                     request from validators outside this set [default: all validators]",
+                ),
         )
         .arg(
             Arg::with_name("repair_whitelist")
@@ -755,9 +818,11 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("VALIDATOR IDENTITY")
                 .multiple(true)
                 .takes_value(true)
-                .help("A list of validators to prioritize repairs from. If specified, repair requests \
-                       from validators in the list will be prioritized over requests from other validators. \
-                       [default: all validators]")
+                .help(
+                    "A list of validators to prioritize repairs from. If specified, repair \
+                     requests from validators in the list will be prioritized over requests from \
+                     other validators. [default: all validators]",
+                ),
         )
         .arg(
             Arg::with_name("gossip_validators")
@@ -766,9 +831,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("VALIDATOR IDENTITY")
                 .multiple(true)
                 .takes_value(true)
-                .help("A list of validators to gossip with.  If specified, gossip \
-                      will not push/pull from from validators outside this set. \
-                      [default: all validators]")
+                .help(
+                    "A list of validators to gossip with.  If specified, gossip will not \
+                     push/pull from from validators outside this set. [default: all validators]",
+                ),
         )
         .arg(
             Arg::with_name("tpu_coalesce_ms")
@@ -811,11 +877,15 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .long("staked-nodes-overrides")
                 .value_name("PATH")
                 .takes_value(true)
-                .help("Provide path to a yaml file with custom overrides for stakes of specific
+                .help(
+                    "Provide path to a yaml file with custom overrides for stakes of specific
                             identities. Overriding the amount of stake this validator considers
-                            as valid for other peers in network. The stake amount is used for calculating
-                            number of QUIC streams permitted from the peer and vote packet sender stage.
-                            Format of the file: `staked_map_id: {<pubkey>: <SOL stake amount>}"),
+                            as valid for other peers in network. The stake amount is used for \
+                     calculating
+                            number of QUIC streams permitted from the peer and vote packet sender \
+                     stage.
+                            Format of the file: `staked_map_id: {<pubkey>: <SOL stake amount>}",
+                ),
         )
         .arg(
             Arg::with_name("bind_address")
@@ -832,7 +902,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("HOST")
                 .takes_value(true)
                 .validator(solana_net_utils::is_host)
-                .help("IP address to bind the RPC port [default: 127.0.0.1 if --private-rpc is present, otherwise use --bind-address]"),
+                .help(
+                    "IP address to bind the RPC port [default: 127.0.0.1 if --private-rpc is \
+                     present, otherwise use --bind-address]",
+                ),
         )
         .arg(
             Arg::with_name("rpc_threads")
@@ -850,8 +923,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .validator(solana_perf::thread::is_niceness_adjustment_valid)
                 .default_value(&default_args.rpc_niceness_adjustment)
-                .help("Add this value to niceness of RPC threads. Negative value \
-                      increases priority, positive value decreases priority.")
+                .help(
+                    "Add this value to niceness of RPC threads. Negative value increases \
+                     priority, positive value decreases priority.",
+                ),
         )
         .arg(
             Arg::with_name("rpc_bigtable_timeout")
@@ -868,7 +943,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .value_name("INSTANCE_NAME")
                 .default_value(&default_args.rpc_bigtable_instance_name)
-                .help("Name of the Bigtable instance to upload to")
+                .help("Name of the Bigtable instance to upload to"),
         )
         .arg(
             Arg::with_name("rpc_bigtable_app_profile_id")
@@ -876,7 +951,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .value_name("APP_PROFILE_ID")
                 .default_value(&default_args.rpc_bigtable_app_profile_id)
-                .help("Bigtable application profile id to use in requests")
+                .help("Bigtable application profile id to use in requests"),
         )
         .arg(
             Arg::with_name("rpc_pubsub_worker_threads")
@@ -907,9 +982,11 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
                 .hidden(hidden_unless_forced())
-                .help("The maximum number of connections that RPC PubSub will support. \
-                       This is a hard limit and no new connections beyond this limit can \
-                       be made until an old connection is dropped. (Obsolete)"),
+                .help(
+                    "The maximum number of connections that RPC PubSub will support. This is a \
+                     hard limit and no new connections beyond this limit can be made until an old \
+                     connection is dropped. (Obsolete)",
+                ),
         )
         .arg(
             Arg::with_name("rpc_pubsub_max_fragment_size")
@@ -918,8 +995,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
                 .hidden(hidden_unless_forced())
-                .help("The maximum length in bytes of acceptable incoming frames. Messages longer \
-                       than this will be rejected. (Obsolete)"),
+                .help(
+                    "The maximum length in bytes of acceptable incoming frames. Messages longer \
+                     than this will be rejected. (Obsolete)",
+                ),
         )
         .arg(
             Arg::with_name("rpc_pubsub_max_in_buffer_capacity")
@@ -928,8 +1007,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
                 .hidden(hidden_unless_forced())
-                .help("The maximum size in bytes to which the incoming websocket buffer can grow. \
-                      (Obsolete)"),
+                .help(
+                    "The maximum size in bytes to which the incoming websocket buffer can grow. \
+                     (Obsolete)",
+                ),
         )
         .arg(
             Arg::with_name("rpc_pubsub_max_out_buffer_capacity")
@@ -938,8 +1019,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
                 .hidden(hidden_unless_forced())
-                .help("The maximum size in bytes to which the outgoing websocket buffer can grow. \
-                       (Obsolete)"),
+                .help(
+                    "The maximum size in bytes to which the outgoing websocket buffer can grow. \
+                     (Obsolete)",
+                ),
         )
         .arg(
             Arg::with_name("rpc_pubsub_max_active_subscriptions")
@@ -948,8 +1031,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("NUMBER")
                 .validator(is_parsable::<usize>)
                 .default_value(&default_args.rpc_pubsub_max_active_subscriptions)
-                .help("The maximum number of active subscriptions that RPC PubSub will accept \
-                       across all connections."),
+                .help(
+                    "The maximum number of active subscriptions that RPC PubSub will accept \
+                     across all connections.",
+                ),
         )
         .arg(
             Arg::with_name("rpc_pubsub_queue_capacity_items")
@@ -958,8 +1043,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("NUMBER")
                 .validator(is_parsable::<usize>)
                 .default_value(&default_args.rpc_pubsub_queue_capacity_items)
-                .help("The maximum number of notifications that RPC PubSub will store \
-                       across all connections."),
+                .help(
+                    "The maximum number of notifications that RPC PubSub will store across all \
+                     connections.",
+                ),
         )
         .arg(
             Arg::with_name("rpc_pubsub_queue_capacity_bytes")
@@ -968,8 +1055,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("BYTES")
                 .validator(is_parsable::<usize>)
                 .default_value(&default_args.rpc_pubsub_queue_capacity_bytes)
-                .help("The maximum total size of notifications that RPC PubSub will store \
-                       across all connections."),
+                .help(
+                    "The maximum total size of notifications that RPC PubSub will store across \
+                     all connections.",
+                ),
         )
         .arg(
             Arg::with_name("rpc_pubsub_notification_threads")
@@ -978,8 +1067,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .value_name("NUM_THREADS")
                 .validator(is_parsable::<usize>)
-                .help("The maximum number of threads that RPC PubSub will use \
-                       for generating notifications. 0 will disable RPC PubSub notifications"),
+                .help(
+                    "The maximum number of threads that RPC PubSub will use for generating \
+                     notifications. 0 will disable RPC PubSub notifications",
+                ),
         )
         .arg(
             Arg::with_name("rpc_send_transaction_retry_ms")
@@ -1007,7 +1098,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .validator(is_parsable::<u64>)
                 .default_value(&default_args.rpc_send_transaction_leader_forward_count)
-                .help("The number of upcoming leaders to which to forward transactions sent via rpc service."),
+                .help(
+                    "The number of upcoming leaders to which to forward transactions sent via rpc \
+                     service.",
+                ),
         )
         .arg(
             Arg::with_name("rpc_send_transaction_default_max_retries")
@@ -1015,7 +1109,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("NUMBER")
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
-                .help("The maximum number of transaction broadcast retries when unspecified by the request, otherwise retried until expiration."),
+                .help(
+                    "The maximum number of transaction broadcast retries when unspecified by the \
+                     request, otherwise retried until expiration.",
+                ),
         )
         .arg(
             Arg::with_name("rpc_send_transaction_service_max_retries")
@@ -1024,7 +1121,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
                 .default_value(&default_args.rpc_send_transaction_service_max_retries)
-                .help("The maximum number of transaction broadcast retries, regardless of requested value."),
+                .help(
+                    "The maximum number of transaction broadcast retries, regardless of requested \
+                     value.",
+                ),
         )
         .arg(
             Arg::with_name("rpc_send_transaction_batch_size")
@@ -1066,7 +1166,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .validator(solana_net_utils::is_host)
                 .hidden(hidden_unless_forced())
-                .help("IP address to bind the AccountsDb Replication port [default: use --bind-address]"),
+                .help(
+                    "IP address to bind the AccountsDb Replication port [default: use \
+                     --bind-address]",
+                ),
         )
         .arg(
             Arg::with_name("accountsdb_repl_port")
@@ -1112,9 +1215,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("NUMBER")
                 .takes_value(true)
                 .default_value(&default_args.genesis_archive_unpacked_size)
-                .help(
-                    "maximum total uncompressed file size of downloaded genesis archive",
-                ),
+                .help("maximum total uncompressed file size of downloaded genesis archive"),
         )
         .arg(
             Arg::with_name("wal_recovery_mode")
@@ -1125,10 +1226,9 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                     "tolerate_corrupted_tail_records",
                     "absolute_consistency",
                     "point_in_time",
-                    "skip_any_corrupted_record"])
-                .help(
-                    "Mode to recovery the ledger db write ahead log."
-                ),
+                    "skip_any_corrupted_record",
+                ])
+                .help("Mode to recovery the ledger db write ahead log."),
         )
         .arg(
             Arg::with_name("poh_pinned_cpu_core")
@@ -1138,7 +1238,9 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("CPU_CORE_INDEX")
                 .validator(|s| {
                     let core_index = usize::from_str(&s).map_err(|e| e.to_string())?;
-                    let max_index = core_affinity::get_core_ids().map(|cids| cids.len() - 1).unwrap_or(0);
+                    let max_index = core_affinity::get_core_ids()
+                        .map(|cids| cids.len() - 1)
+                        .unwrap_or(0);
                     if core_index > max_index {
                         return Err(format!("core index must be in the range [0, {max_index}]"));
                     }
@@ -1158,7 +1260,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("process_ledger_before_services")
                 .long("process-ledger-before-services")
                 .hidden(hidden_unless_forced())
-                .help("Process the local ledger fully before starting networking services")
+                .help("Process the local ledger fully before starting networking services"),
         )
         .arg(
             Arg::with_name("account_indexes")
@@ -1186,40 +1288,52 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .conflicts_with("account_index_exclude_key")
                 .multiple(true)
                 .value_name("KEY")
-                .help("When account indexes are enabled, only include specific keys in the index. This overrides --account-index-exclude-key."),
+                .help(
+                    "When account indexes are enabled, only include specific keys in the index. \
+                     This overrides --account-index-exclude-key.",
+                ),
         )
         .arg(
             Arg::with_name("accounts_db_verify_refcounts")
                 .long("accounts-db-verify-refcounts")
-                .help("Debug option to scan all append vecs and verify account index refcounts prior to clean")
-                .hidden(hidden_unless_forced())
+                .help(
+                    "Debug option to scan all append vecs and verify account index refcounts \
+                     prior to clean",
+                )
+                .hidden(hidden_unless_forced()),
         )
         .arg(
             Arg::with_name("accounts_db_test_skip_rewrites")
                 .long("accounts-db-test-skip-rewrites")
-                .help("Debug option to skip rewrites for rent-exempt accounts but still add them in bank delta hash calculation")
-                .hidden(hidden_unless_forced())
+                .help(
+                    "Debug option to skip rewrites for rent-exempt accounts but still add them in \
+                     bank delta hash calculation",
+                )
+                .hidden(hidden_unless_forced()),
         )
         .arg(
             Arg::with_name("no_skip_initial_accounts_db_clean")
                 .long("no-skip-initial-accounts-db-clean")
                 .help("Do not skip the initial cleaning of accounts when verifying snapshot bank")
                 .hidden(hidden_unless_forced())
-                .conflicts_with("accounts_db_skip_shrink")
+                .conflicts_with("accounts_db_skip_shrink"),
         )
         .arg(
             Arg::with_name("accounts_db_create_ancient_storage_packed")
                 .long("accounts-db-create-ancient-storage-packed")
                 .help("Create ancient storages in one shot instead of appending.")
                 .hidden(hidden_unless_forced()),
-            )
+        )
         .arg(
             Arg::with_name("accounts_db_ancient_append_vecs")
                 .long("accounts-db-ancient-append-vecs")
                 .value_name("SLOT-OFFSET")
                 .validator(is_parsable::<i64>)
                 .takes_value(true)
-                .help("AppendVecs that are older than (slots_per_epoch - SLOT-OFFSET) are squashed together.")
+                .help(
+                    "AppendVecs that are older than (slots_per_epoch - SLOT-OFFSET) are squashed \
+                     together.",
+                )
                 .hidden(hidden_unless_forced()),
         )
         .arg(
@@ -1228,7 +1342,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("MEGABYTES")
                 .validator(is_parsable::<u64>)
                 .takes_value(true)
-                .help("How large the write cache for account data can become. If this is exceeded, the cache is flushed more aggressively."),
+                .help(
+                    "How large the write cache for account data can become. If this is exceeded, \
+                     the cache is flushed more aggressively.",
+                ),
         )
         .arg(
             Arg::with_name("accounts_index_scan_results_limit_mb")
@@ -1236,7 +1353,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("MEGABYTES")
                 .validator(is_parsable::<usize>)
                 .takes_value(true)
-                .help("How large accumulated results from an accounts index scan can become. If this is exceeded, the scan aborts."),
+                .help(
+                    "How large accumulated results from an accounts index scan can become. If \
+                     this is exceeded, the scan aborts.",
+                ),
         )
         .arg(
             Arg::with_name("accounts_index_memory_limit_mb")
@@ -1244,7 +1364,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("MEGABYTES")
                 .validator(is_parsable::<usize>)
                 .takes_value(true)
-                .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk."),
+                .help(
+                    "How much memory the accounts index can consume. If this is exceeded, some \
+                     account index entries will be stored on disk.",
+                ),
         )
         .arg(
             Arg::with_name("accounts_index_bins")
@@ -1258,16 +1381,24 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("partitioned_epoch_rewards_compare_calculation")
                 .long("partitioned-epoch-rewards-compare-calculation")
                 .takes_value(false)
-                .help("Do normal epoch rewards distribution, but also calculate rewards using the partitioned rewards code path and compare the resulting vote and stake accounts")
-                .hidden(hidden_unless_forced())
+                .help(
+                    "Do normal epoch rewards distribution, but also calculate rewards using the \
+                     partitioned rewards code path and compare the resulting vote and stake \
+                     accounts",
+                )
+                .hidden(hidden_unless_forced()),
         )
         .arg(
             Arg::with_name("partitioned_epoch_rewards_force_enable_single_slot")
                 .long("partitioned-epoch-rewards-force-enable-single-slot")
                 .takes_value(false)
-                .help("Force the partitioned rewards distribution, but distribute all rewards in the first slot in the epoch. This should match consensus with the normal rewards distribution.")
+                .help(
+                    "Force the partitioned rewards distribution, but distribute all rewards in \
+                     the first slot in the epoch. This should match consensus with the normal \
+                     rewards distribution.",
+                )
                 .conflicts_with("partitioned_epoch_rewards_compare_calculation")
-                .hidden(hidden_unless_forced())
+                .hidden(hidden_unless_forced()),
         )
         .arg(
             Arg::with_name("accounts_index_path")
@@ -1275,15 +1406,18 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("PATH")
                 .takes_value(true)
                 .multiple(true)
-                .help("Persistent accounts-index location. \
-                       May be specified multiple times. \
-                       [default: [ledger]/accounts_index]"),
+                .help(
+                    "Persistent accounts-index location. May be specified multiple times. \
+                     [default: [ledger]/accounts_index]",
+                ),
         )
         .arg(
             Arg::with_name("accounts_db_test_hash_calculation")
                 .long("accounts-db-test-hash-calculation")
-                .help("Enables testing of hash calculation using stores in \
-                      AccountsHashVerifier. This has a computational cost."),
+                .help(
+                    "Enables testing of hash calculation using stores in AccountsHashVerifier. \
+                     This has a computational cost.",
+                ),
         )
         .arg(
             Arg::with_name("accounts_shrink_optimize_total_space")
@@ -1291,10 +1425,12 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .value_name("BOOLEAN")
                 .default_value(&default_args.accounts_shrink_optimize_total_space)
-                .help("When this is set to true, the system will shrink the most \
-                       sparse accounts and when the overall shrink ratio is above \
-                       the specified accounts-shrink-ratio, the shrink will stop and \
-                       it will skip all other less sparse accounts."),
+                .help(
+                    "When this is set to true, the system will shrink the most sparse accounts \
+                     and when the overall shrink ratio is above the specified \
+                     accounts-shrink-ratio, the shrink will stop and it will skip all other less \
+                     sparse accounts.",
+                ),
         )
         .arg(
             Arg::with_name("accounts_shrink_ratio")
@@ -1302,11 +1438,12 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .value_name("RATIO")
                 .default_value(&default_args.accounts_shrink_ratio)
-                .help("Specifies the shrink ratio for the accounts to be shrunk. \
-                       The shrink ratio is defined as the ratio of the bytes alive over the  \
-                       total bytes used. If the account's shrink ratio is less than this ratio \
-                       it becomes a candidate for shrinking. The value must between 0. and 1.0 \
-                       inclusive."),
+                .help(
+                    "Specifies the shrink ratio for the accounts to be shrunk. The shrink ratio \
+                     is defined as the ratio of the bytes alive over the  total bytes used. If \
+                     the account's shrink ratio is less than this ratio it becomes a candidate \
+                     for shrinking. The value must between 0. and 1.0 inclusive.",
+                ),
         )
         .arg(
             Arg::with_name("allow_private_addr")
@@ -1321,12 +1458,12 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
                 .value_name("BYTES")
-                .help("Maximum number of bytes written to the program log before truncation")
+                .help("Maximum number of bytes written to the program log before truncation"),
         )
         .arg(
             Arg::with_name("replay_slots_concurrently")
                 .long("replay-slots-concurrently")
-                .help("Allow concurrent replay of slots on different forks")
+                .help("Allow concurrent replay of slots on different forks"),
         )
         .arg(
             Arg::with_name("banking_trace_dir_byte_limit")
@@ -1342,17 +1479,19 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 // explicitly given, similar to --limit-ledger-size.
                 // see configure_banking_trace_dir_byte_limit() for this.
                 .default_value(&default_args.banking_trace_dir_byte_limit)
-                .help("Enables the banking trace explicitly, which is enabled by default and \
-                       writes trace files for simulate-leader-blocks, retaining up to the default \
-                       or specified total bytes in the ledger. This flag can be used to override \
-                       its byte limit.")
+                .help(
+                    "Enables the banking trace explicitly, which is enabled by default and writes \
+                     trace files for simulate-leader-blocks, retaining up to the default or \
+                     specified total bytes in the ledger. This flag can be used to override its \
+                     byte limit.",
+                ),
         )
         .arg(
             Arg::with_name("disable_banking_trace")
                 .long("disable-banking-trace")
                 .conflicts_with("banking_trace_dir_byte_limit")
                 .takes_value(false)
-                .help("Disables the banking trace")
+                .help("Disables the banking trace"),
         )
         .arg(
             Arg::with_name("block_verification_method")
@@ -1361,7 +1500,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("METHOD")
                 .takes_value(true)
                 .possible_values(BlockVerificationMethod::cli_names())
-                .help(BlockVerificationMethod::cli_message())
+                .help(BlockVerificationMethod::cli_message()),
         )
         .arg(
             Arg::with_name("block_production_method")
@@ -1370,7 +1509,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("METHOD")
                 .takes_value(true)
                 .possible_values(BlockProductionMethod::cli_names())
-                .help(BlockProductionMethod::cli_message())
+                .help(BlockProductionMethod::cli_message()),
         )
         .arg(
             Arg::with_name("wen_restart")
@@ -1399,7 +1538,8 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
 
                     If wen_restart fails, refer to the progress file (in proto3 format) for
                     further debugging.
-                ")
+                ",
+                ),
         )
         .args(&get_deprecated_arguments())
         .after_help("The default subcommand is run")
@@ -1411,14 +1551,17 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                         .short("f")
                         .long("force")
                         .takes_value(false)
-                        .help("Request the validator exit immediately instead of waiting for a restart window")
+                        .help(
+                            "Request the validator exit immediately instead of waiting for a \
+                             restart window",
+                        ),
                 )
                 .arg(
                     Arg::with_name("monitor")
                         .short("m")
                         .long("monitor")
                         .takes_value(false)
-                        .help("Monitor the validator after sending the exit request")
+                        .help("Monitor the validator after sending the exit request"),
                 )
                 .arg(
                     Arg::with_name("min_idle_time")
@@ -1427,7 +1570,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                         .validator(is_parsable::<usize>)
                         .value_name("MINUTES")
                         .default_value(&default_args.exit_min_idle_time)
-                        .help("Minimum time that the validator should not be leader before restarting")
+                        .help(
+                            "Minimum time that the validator should not be leader before \
+                             restarting",
+                        ),
                 )
                 .arg(
                     Arg::with_name("max_delinquent_stake")
@@ -1436,18 +1582,18 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                         .validator(is_valid_percentage)
                         .default_value(&default_args.exit_max_delinquent_stake)
                         .value_name("PERCENT")
-                        .help("The maximum delinquent stake % permitted for an exit")
+                        .help("The maximum delinquent stake % permitted for an exit"),
                 )
                 .arg(
                     Arg::with_name("skip_new_snapshot_check")
                         .long("skip-new-snapshot-check")
-                        .help("Skip check for a new snapshot")
+                        .help("Skip check for a new snapshot"),
                 )
                 .arg(
                     Arg::with_name("skip_health_check")
                         .long("skip-health-check")
-                        .help("Skip health check")
-                )
+                        .help("Skip health check"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("authorized-voter")
@@ -1464,18 +1610,24 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                                 .required(false)
                                 .takes_value(true)
                                 .validator(is_keypair)
-                                .help("Path to keypair of the authorized voter to add \
-                               [default: read JSON keypair from stdin]"),
+                                .help(
+                                    "Path to keypair of the authorized voter to add [default: \
+                                     read JSON keypair from stdin]",
+                                ),
                         )
-                        .after_help("Note: the new authorized voter only applies to the \
-                             currently running validator instance")
+                        .after_help(
+                            "Note: the new authorized voter only applies to the currently running \
+                             validator instance",
+                        ),
                 )
                 .subcommand(
                     SubCommand::with_name("remove-all")
                         .about("Remove all authorized voters")
-                        .after_help("Note: the removal only applies to the \
-                             currently running validator instance")
-                )
+                        .after_help(
+                            "Note: the removal only applies to the currently running validator \
+                             instance",
+                        ),
+                ),
         )
         .subcommand(
             SubCommand::with_name("contact-info")
@@ -1486,8 +1638,8 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                         .takes_value(true)
                         .value_name("MODE")
                         .possible_values(&["json", "json-compact"])
-                        .help("Output display mode")
-                )
+                        .help("Output display mode"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("repair-whitelist")
@@ -1503,8 +1655,8 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                                 .takes_value(true)
                                 .value_name("MODE")
                                 .possible_values(&["json", "json-compact"])
-                                .help("Output display mode")
-                        )
+                                .help("Output display mode"),
+                        ),
                 )
                 .subcommand(
                     SubCommand::with_name("set")
@@ -1512,76 +1664,65 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                         .setting(AppSettings::ArgRequiredElseHelp)
                         .arg(
                             Arg::with_name("whitelist")
-                            .long("whitelist")
-                            .validator(is_pubkey)
-                            .value_name("VALIDATOR IDENTITY")
-                            .multiple(true)
-                            .takes_value(true)
-                            .help("Set the validator's repair protocol whitelist")
+                                .long("whitelist")
+                                .validator(is_pubkey)
+                                .value_name("VALIDATOR IDENTITY")
+                                .multiple(true)
+                                .takes_value(true)
+                                .help("Set the validator's repair protocol whitelist"),
                         )
-                        .after_help("Note: repair protocol whitelist changes only apply to the currently \
-                                    running validator instance")
+                        .after_help(
+                            "Note: repair protocol whitelist changes only apply to the currently \
+                             running validator instance",
+                        ),
                 )
                 .subcommand(
                     SubCommand::with_name("remove-all")
                         .about("Clear the validator's repair protocol whitelist")
-                        .after_help("Note: repair protocol whitelist changes only apply to the currently \
-                                    running validator instance")
-                )
+                        .after_help(
+                            "Note: repair protocol whitelist changes only apply to the currently \
+                             running validator instance",
+                        ),
+                ),
         )
         .subcommand(
-            SubCommand::with_name("init")
-                .about("Initialize the ledger directory then exit")
+            SubCommand::with_name("init").about("Initialize the ledger directory then exit"),
         )
-        .subcommand(
-            SubCommand::with_name("monitor")
-                .about("Monitor the validator")
-        )
-        .subcommand(
-            SubCommand::with_name("run")
-                .about("Run the validator")
-        )
+        .subcommand(SubCommand::with_name("monitor").about("Monitor the validator"))
+        .subcommand(SubCommand::with_name("run").about("Run the validator"))
         .subcommand(
             SubCommand::with_name("plugin")
                 .about("Manage and view geyser plugins")
                 .setting(AppSettings::SubcommandRequiredElseHelp)
                 .setting(AppSettings::InferSubcommands)
                 .subcommand(
-                    SubCommand::with_name("list")
-                        .about("List all current running gesyer plugins")
+                    SubCommand::with_name("list").about("List all current running gesyer plugins"),
                 )
                 .subcommand(
                     SubCommand::with_name("unload")
-                        .about("Unload a particular gesyer plugin. You must specify the gesyer plugin name")
-                        .arg(
-                            Arg::with_name("name")
-                                .required(true)
-                                .takes_value(true)
+                        .about(
+                            "Unload a particular gesyer plugin. You must specify the gesyer \
+                             plugin name",
                         )
+                        .arg(Arg::with_name("name").required(true).takes_value(true)),
                 )
                 .subcommand(
                     SubCommand::with_name("reload")
-                        .about("Reload a particular gesyer plugin. You must specify the gesyer plugin name and the new config path")
-                        .arg(
-                            Arg::with_name("name")
-                                .required(true)
-                                .takes_value(true)
+                        .about(
+                            "Reload a particular gesyer plugin. You must specify the gesyer \
+                             plugin name and the new config path",
                         )
-                        .arg(
-                            Arg::with_name("config")
-                                .required(true)
-                                .takes_value(true)
-                        )
+                        .arg(Arg::with_name("name").required(true).takes_value(true))
+                        .arg(Arg::with_name("config").required(true).takes_value(true)),
                 )
                 .subcommand(
                     SubCommand::with_name("load")
-                        .about("Load a new gesyer plugin. You must specify the config path. Fails if overwriting (use reload)")
-                        .arg(
-                            Arg::with_name("config")
-                                .required(true)
-                                .takes_value(true)
+                        .about(
+                            "Load a new gesyer plugin. You must specify the config path. Fails if \
+                             overwriting (use reload)",
                         )
-                )
+                        .arg(Arg::with_name("config").required(true).takes_value(true)),
+                ),
         )
         .subcommand(
             SubCommand::with_name("set-identity")
@@ -1593,28 +1734,36 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                         .required(false)
                         .takes_value(true)
                         .validator(is_keypair)
-                        .help("Path to validator identity keypair \
-                           [default: read JSON keypair from stdin]")
+                        .help(
+                            "Path to validator identity keypair [default: read JSON keypair from \
+                             stdin]",
+                        ),
                 )
                 .arg(
                     clap::Arg::with_name("require_tower")
                         .long("require-tower")
                         .takes_value(false)
-                        .help("Refuse to set the validator identity if saved tower state is not found"),
+                        .help(
+                            "Refuse to set the validator identity if saved tower state is not \
+                             found",
+                        ),
                 )
-                .after_help("Note: the new identity only applies to the \
-                         currently running validator instance")
+                .after_help(
+                    "Note: the new identity only applies to the currently running validator \
+                     instance",
+                ),
         )
         .subcommand(
             SubCommand::with_name("set-log-filter")
                 .about("Adjust the validator log filter")
                 .arg(
-                    Arg::with_name("filter")
-                        .takes_value(true)
-                        .index(1)
-                        .help("New filter using the same format as the RUST_LOG environment variable")
+                    Arg::with_name("filter").takes_value(true).index(1).help(
+                        "New filter using the same format as the RUST_LOG environment variable",
+                    ),
                 )
-                .after_help("Note: the new filter only applies to the currently running validator instance")
+                .after_help(
+                    "Note: the new filter only applies to the currently running validator instance",
+                ),
         )
         .subcommand(
             SubCommand::with_name("staked-nodes-overrides")
@@ -1624,10 +1773,15 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                         .value_name("PATH")
                         .takes_value(true)
                         .required(true)
-                        .help("Provide path to a file with custom overrides for stakes of specific validator identities."),
+                        .help(
+                            "Provide path to a file with custom overrides for stakes of specific \
+                             validator identities.",
+                        ),
                 )
-                .after_help("Note: the new staked nodes overrides only applies to the \
-                         currently running validator instance")
+                .after_help(
+                    "Note: the new staked nodes overrides only applies to the currently running \
+                     validator instance",
+                ),
         )
         .subcommand(
             SubCommand::with_name("wait-for-restart-window")
@@ -1639,7 +1793,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                         .validator(is_parsable::<usize>)
                         .value_name("MINUTES")
                         .default_value(&default_args.wait_for_restart_window_min_idle_time)
-                        .help("Minimum time that the validator should not be leader before restarting")
+                        .help(
+                            "Minimum time that the validator should not be leader before \
+                             restarting",
+                        ),
                 )
                 .arg(
                     Arg::with_name("identity")
@@ -1647,7 +1804,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                         .value_name("ADDRESS")
                         .takes_value(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("Validator identity to monitor [default: your validator]")
+                        .help("Validator identity to monitor [default: your validator]"),
                 )
                 .arg(
                     Arg::with_name("max_delinquent_stake")
@@ -1656,22 +1813,24 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                         .validator(is_valid_percentage)
                         .default_value(&default_args.wait_for_restart_window_max_delinquent_stake)
                         .value_name("PERCENT")
-                        .help("The maximum delinquent stake % permitted for a restart")
+                        .help("The maximum delinquent stake % permitted for a restart"),
                 )
                 .arg(
                     Arg::with_name("skip_new_snapshot_check")
                         .long("skip-new-snapshot-check")
-                        .help("Skip check for a new snapshot")
+                        .help("Skip check for a new snapshot"),
                 )
                 .arg(
                     Arg::with_name("skip_health_check")
                         .long("skip-health-check")
-                        .help("Skip health check")
+                        .help("Skip health check"),
                 )
-                .after_help("Note: If this command exits with a non-zero status \
-                         then this not a good time for a restart")
-        ).
-        subcommand(
+                .after_help(
+                    "Note: If this command exits with a non-zero status then this not a good time \
+                     for a restart",
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("set-public-address")
                 .about("Specify addresses to advertise in gossip")
                 .arg(
@@ -1680,7 +1839,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                         .value_name("HOST:PORT")
                         .takes_value(true)
                         .validator(solana_net_utils::is_host_port)
-                        .help("TPU address to advertise in gossip")
+                        .help("TPU address to advertise in gossip"),
                 )
                 .arg(
                     Arg::with_name("tpu_forwards_addr")
@@ -1688,13 +1847,13 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                         .value_name("HOST:PORT")
                         .takes_value(true)
                         .validator(solana_net_utils::is_host_port)
-                        .help("TPU Forwards address to advertise in gossip")
+                        .help("TPU Forwards address to advertise in gossip"),
                 )
                 .group(
                     ArgGroup::with_name("set_public_address_details")
                         .args(&["tpu_addr", "tpu_forwards_addr"])
                         .required(true)
-                        .multiple(true)
+                        .multiple(true),
                 )
                 .after_help("Note: At least one arg must be used. Using multiple is ok"),
         );
@@ -1804,7 +1963,10 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
             .long("halt-on-known-validators-accounts-hash-mismatch")
             .requires("known_validators")
             .takes_value(false)
-            .help("Abort the validator if a bank hash mismatch is detected within known validator set"),
+            .help(
+                "Abort the validator if a bank hash mismatch is detected within known validator \
+                 set"
+            ),
     );
     add_arg!(Arg::with_name("incremental_snapshots")
         .long("incremental-snapshots")
@@ -1813,7 +1975,7 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
         .help("Enable incremental snapshots")
         .long_help(
             "Enable incremental snapshots by setting this flag.  When enabled, \
-                 --snapshot-interval-slots will set the incremental snapshot interval. To set the
+             --snapshot-interval-slots will set the incremental snapshot interval. To set the
                  full snapshot interval, use --full-snapshot-interval-slots.",
         ));
     add_arg!(Arg::with_name("minimal_rpc_api")
@@ -2108,8 +2270,8 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .takes_value(true)
                 .validator(is_url_or_moniker)
                 .help(
-                    "URL for Solana's JSON RPC or moniker (or their first letter): \
-                   [mainnet-beta, testnet, devnet, localhost]",
+                    "URL for Solana's JSON RPC or moniker (or their first letter): [mainnet-beta, \
+                     testnet, devnet, localhost]",
                 ),
         )
         .arg(
@@ -2119,9 +2281,9 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .validator(is_pubkey)
                 .takes_value(true)
                 .help(
-                    "Address of the mint account that will receive tokens \
-                       created at genesis.  If the ledger already exists then \
-                       this parameter is silently ignored [default: client keypair]",
+                    "Address of the mint account that will receive tokens created at genesis.  If \
+                     the ledger already exists then this parameter is silently ignored [default: \
+                     client keypair]",
                 ),
         )
         .arg(
@@ -2140,8 +2302,8 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .long("reset")
                 .takes_value(false)
                 .help(
-                    "Reset the ledger to genesis if it exists. \
-                       By default the validator will resume an existing ledger (if present)",
+                    "Reset the ledger to genesis if it exists. By default the validator will \
+                     resume an existing ledger (if present)",
                 ),
         )
         .arg(
@@ -2191,8 +2353,10 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .long("enable-rpc-bigtable-ledger-storage")
                 .takes_value(false)
                 .hidden(hidden_unless_forced())
-                .help("Fetch historical transaction info from a BigTable instance \
-                       as a fallback to local ledger data"),
+                .help(
+                    "Fetch historical transaction info from a BigTable instance as a fallback to \
+                     local ledger data",
+                ),
         )
         .arg(
             Arg::with_name("rpc_bigtable_instance")
@@ -2210,7 +2374,7 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .takes_value(true)
                 .hidden(hidden_unless_forced())
                 .default_value(solana_storage_bigtable::DEFAULT_APP_PROFILE_ID)
-                .help("Application profile id to use in Bigtable requests")
+                .help("Application profile id to use in Bigtable requests"),
         )
         .arg(
             Arg::with_name("rpc_pubsub_enable_vote_subscription")
@@ -2232,9 +2396,9 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .number_of_values(2)
                 .multiple(true)
                 .help(
-                    "Add a SBF program to the genesis configuration with upgrades disabled. \
-                       If the ledger already exists then this parameter is silently ignored. \
-                       First argument can be a pubkey string or path to a keypair",
+                    "Add a SBF program to the genesis configuration with upgrades disabled. If \
+                     the ledger already exists then this parameter is silently ignored. First \
+                     argument can be a pubkey string or path to a keypair",
                 ),
         )
         .arg(
@@ -2245,10 +2409,10 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .number_of_values(3)
                 .multiple(true)
                 .help(
-                    "Add an upgradeable SBF program to the genesis configuration. \
-                       If the ledger already exists then this parameter is silently ignored. \
-                       First and third arguments can be a pubkey string or path to a keypair. \
-                       Upgrade authority set to \"none\" disables upgrades",
+                    "Add an upgradeable SBF program to the genesis configuration. If the ledger \
+                     already exists then this parameter is silently ignored. First and third \
+                     arguments can be a pubkey string or path to a keypair. Upgrade authority set \
+                     to \"none\" disables upgrades",
                 ),
         )
         .arg(
@@ -2260,10 +2424,11 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .allow_hyphen_values(true)
                 .multiple(true)
                 .help(
-                    "Load an account from the provided JSON file (see `solana account --help` on how to dump \
-                        an account to file). Files are searched for relatively to CWD and tests/fixtures. \
-                        If ADDRESS is omitted via the `-` placeholder, the one in the file will be used. \
-                        If the ledger already exists then this parameter is silently ignored",
+                    "Load an account from the provided JSON file (see `solana account --help` on \
+                     how to dump an account to file). Files are searched for relatively to CWD \
+                     and tests/fixtures. If ADDRESS is omitted via the `-` placeholder, the one \
+                     in the file will be used. If the ledger already exists then this parameter \
+                     is silently ignored",
                 ),
         )
         .arg(
@@ -2278,7 +2443,9 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                             if path.exists() && path.is_dir() {
                                 Ok(())
                             } else {
-                                Err(format!("path does not exist or is not a directory: {value}"))
+                                Err(format!(
+                                    "path does not exist or is not a directory: {value}"
+                                ))
                             }
                         })
                 })
@@ -2286,8 +2453,8 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .multiple(true)
                 .help(
                     "Load all the accounts from the JSON files found in the specified DIRECTORY \
-                        (see also the `--account` flag). \
-                        If the ledger already exists then this parameter is silently ignored",
+                     (see also the `--account` flag). If the ledger already exists then this \
+                     parameter is silently ignored",
                 ),
         )
         .arg(
@@ -2327,8 +2494,8 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 })
                 .takes_value(true)
                 .help(
-                    "Override the number of slots in an epoch. \
-                       If the ledger already exists then this parameter is silently ignored",
+                    "Override the number of slots in an epoch. If the ledger already exists then \
+                     this parameter is silently ignored",
                 ),
         )
         .arg(
@@ -2346,7 +2513,7 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .validator(solana_net_utils::is_host)
                 .help(
                     "Gossip DNS name or IP address for the validator to advertise in gossip \
-                       [default: 127.0.0.1]",
+                     [default: 127.0.0.1]",
                 ),
         )
         .arg(
@@ -2355,10 +2522,7 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .value_name("MIN_PORT-MAX_PORT")
                 .takes_value(true)
                 .validator(port_range_validator)
-                .help(
-                    "Range to use for dynamically assigned ports \
-                    [default: 1024-65535]",
-                ),
+                .help("Range to use for dynamically assigned ports [default: 1024-65535]"),
         )
         .arg(
             Arg::with_name("bind_address")
@@ -2380,8 +2544,8 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .requires("json_rpc_url")
                 .help(
                     "Copy an account from the cluster referenced by the --url argument the \
-                     genesis configuration. \
-                     If the ledger already exists then this parameter is silently ignored",
+                     genesis configuration. If the ledger already exists then this parameter is \
+                     silently ignored",
                 ),
         )
         .arg(
@@ -2393,9 +2557,9 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .multiple(true)
                 .requires("json_rpc_url")
                 .help(
-                    "Copy an account from the cluster referenced by the --url argument, \
-                     skipping it if it doesn't exist. \
-                     If the ledger already exists then this parameter is silently ignored",
+                    "Copy an account from the cluster referenced by the --url argument, skipping \
+                     it if it doesn't exist. If the ledger already exists then this parameter is \
+                     silently ignored",
                 ),
         )
         .arg(
@@ -2408,8 +2572,8 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .requires("json_rpc_url")
                 .help(
                     "Copy an upgradeable program and its executable data from the cluster \
-                     referenced by the --url argument the genesis configuration. \
-                     If the ledger already exists then this parameter is silently ignored",
+                     referenced by the --url argument the genesis configuration. If the ledger \
+                     already exists then this parameter is silently ignored",
                 ),
         )
         .arg(
@@ -2423,9 +2587,9 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .min_values(0)
                 .max_values(1)
                 .help(
-                    "Warp the ledger to WARP_SLOT after starting the validator. \
-                        If no slot is provided then the current slot of the cluster \
-                        referenced by the --url argument will be used",
+                    "Warp the ledger to WARP_SLOT after starting the validator. If no slot is \
+                     provided then the current slot of the cluster referenced by the --url \
+                     argument will be used",
                 ),
         )
         .arg(
@@ -2443,8 +2607,8 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .value_name("SOL")
                 .default_value(default_args.faucet_sol.as_str())
                 .help(
-                    "Give the faucet address this much SOL in genesis. \
-                     If the ledger already exists then this parameter is silently ignored",
+                    "Give the faucet address this much SOL in genesis. If the ledger already \
+                     exists then this parameter is silently ignored",
                 ),
         )
         .arg(
@@ -2453,9 +2617,7 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .takes_value(true)
                 .value_name("SECS")
                 .default_value(default_args.faucet_time_slice_secs.as_str())
-                .help(
-                    "Time slice (in secs) over which to limit faucet requests",
-                ),
+                .help("Time slice (in secs) over which to limit faucet requests"),
         )
         .arg(
             Arg::with_name("faucet_per_time_sol_cap")
@@ -2464,9 +2626,7 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .value_name("SOL")
                 .min_values(0)
                 .max_values(1)
-                .help(
-                    "Per-time slice limit for faucet requests, in SOL",
-                ),
+                .help("Per-time slice limit for faucet requests, in SOL"),
         )
         .arg(
             Arg::with_name("faucet_per_request_sol_cap")
@@ -2475,9 +2635,7 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .value_name("SOL")
                 .min_values(0)
                 .max_values(1)
-                .help(
-                    "Per-request limit for faucet requests, in SOL",
-                ),
+                .help("Per-request limit for faucet requests, in SOL"),
         )
         .arg(
             Arg::with_name("geyser_plugin_config")
@@ -2495,7 +2653,7 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .value_name("FEATURE_PUBKEY")
                 .validator(is_pubkey)
                 .multiple(true)
-                .help("deactivate this feature in genesis.")
+                .help("deactivate this feature in genesis."),
         )
         .arg(
             Arg::with_name("compute_unit_limit")
@@ -2504,7 +2662,7 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .value_name("COMPUTE_UNITS")
                 .validator(is_parsable::<u64>)
                 .takes_value(true)
-                .help("Override the runtime's compute unit limit per transaction")
+                .help("Override the runtime's compute unit limit per transaction"),
         )
         .arg(
             Arg::with_name("log_messages_bytes_limit")
@@ -2512,7 +2670,7 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .value_name("BYTES")
                 .validator(is_parsable::<usize>)
                 .takes_value(true)
-                .help("Maximum number of bytes written to the program log before truncation")
+                .help("Maximum number of bytes written to the program log before truncation"),
         )
         .arg(
             Arg::with_name("transaction_account_lock_limit")
@@ -2520,7 +2678,7 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .value_name("NUM_ACCOUNTS")
                 .validator(is_parsable::<u64>)
                 .takes_value(true)
-                .help("Override the runtime's account lock limit per transaction")
+                .help("Override the runtime's account lock limit per transaction"),
         );
 }
 
@@ -2568,8 +2726,8 @@ mod test {
 
             assert!(
                 curr_name != next_name,
-                "Arguments in `deprecated_arguments()` should be distinct.\n\
-                 Arguments {} and {} use the same name: {}",
+                "Arguments in `deprecated_arguments()` should be distinct.\nArguments {} and {} \
+                 use the same name: {}",
                 i,
                 i + 1,
                 curr_name,
@@ -2578,10 +2736,8 @@ mod test {
             assert!(
                 curr_name < next_name,
                 "To generate better diffs and for readability purposes, `deprecated_arguments()` \
-                 should list arguments in alphabetical order.\n\
-                 Arguments {} and {} are not.\n\
-                 Argument {} name: {}\n\
-                 Argument {} name: {}",
+                 should list arguments in alphabetical order.\nArguments {} and {} are \
+                 not.\nArgument {} name: {}\nArgument {} name: {}",
                 i,
                 i + 1,
                 i,

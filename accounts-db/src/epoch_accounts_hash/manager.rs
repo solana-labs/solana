@@ -51,9 +51,9 @@ impl Manager {
         let mut state = self.state.lock().unwrap();
         if let State::Valid(old_epoch_accounts_hash, old_slot) = &*state {
             panic!(
-                "The epoch accounts hash is already valid! \
-                \nold slot: {old_slot}, epoch accounts hash: {old_epoch_accounts_hash:?} \
-                \nnew slot: {slot}, epoch accounts hash: {epoch_accounts_hash:?}"
+                "The epoch accounts hash is already valid! \nold slot: {old_slot}, epoch accounts \
+                 hash: {old_epoch_accounts_hash:?} \nnew slot: {slot}, epoch accounts hash: \
+                 {epoch_accounts_hash:?}"
             );
         }
         *state = State::Valid(epoch_accounts_hash, slot);

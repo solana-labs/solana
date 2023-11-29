@@ -264,7 +264,9 @@ impl VerifiedVotePackets {
                             {
                                 if slot > gossip_vote.slot {
                                     warn!(
-                                        "Originally {} submitted full tower votes, but now has reverted to incremental votes. Converting back to old format.",
+                                        "Originally {} submitted full tower votes, but now has \
+                                         reverted to incremental votes. Converting back to old \
+                                         format.",
                                         vote_account_key
                                     );
                                     let mut votes = BTreeMap::new();
@@ -848,7 +850,10 @@ mod tests {
         if let IncrementalVotes(votes) = verified_vote_packets.0.get(&vote_account_key).unwrap() {
             assert!(votes.contains_key(&(42, hash)));
         } else {
-            panic!("Although feature is active, incremental votes should not be stored as full tower votes");
+            panic!(
+                "Although feature is active, incremental votes should not be stored as full tower \
+                 votes"
+            );
         }
     }
 

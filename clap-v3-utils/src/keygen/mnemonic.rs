@@ -90,10 +90,9 @@ pub fn acquire_passphrase_and_message(
         Ok(no_passphrase_and_message())
     } else {
         match prompt_passphrase(
-            "\nFor added security, enter a BIP39 passphrase\n\
-             \nNOTE! This passphrase improves security of the recovery seed phrase NOT the\n\
-             keypair file itself, which is stored as insecure plain text\n\
-             \nBIP39 Passphrase (empty for none): ",
+            "\nFor added security, enter a BIP39 passphrase\n\nNOTE! This passphrase improves \
+             security of the recovery seed phrase NOT the\nkeypair file itself, which is stored \
+             as insecure plain text\n\nBIP39 Passphrase (empty for none): ",
         ) {
             Ok(passphrase) => {
                 println!();

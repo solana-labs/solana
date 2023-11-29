@@ -479,10 +479,8 @@ impl Default for ProgramTest {
     ///
     fn default() -> Self {
         solana_logger::setup_with_default(
-            "solana_rbpf::vm=debug,\
-             solana_runtime::message_processor=debug,\
-             solana_runtime::system_instruction_processor=trace,\
-             solana_program_test=info",
+            "solana_rbpf::vm=debug,solana_runtime::message_processor=debug,\
+             solana_runtime::system_instruction_processor=trace,solana_program_test=info",
         );
         let prefer_bpf =
             std::env::var("BPF_OUT_DIR").is_ok() || std::env::var("SBF_OUT_DIR").is_ok();
@@ -678,8 +676,8 @@ impl ProgramTest {
             }
 
             warn!(
-                "Possible bogus program name. Ensure the program name ({}) \
-                matches one of the following recognizable program names:",
+                "Possible bogus program name. Ensure the program name ({}) matches one of the \
+                 following recognizable program names:",
                 program_name,
             );
             for name in valid_program_names {
@@ -788,7 +786,8 @@ impl ProgramTest {
                 match genesis_config.accounts.remove(deactivate_feature_pk) {
                     Some(_) => debug!("Feature for {:?} deactivated", deactivate_feature_pk),
                     None => warn!(
-                        "Feature {:?} set for deactivation not found in genesis_config account list, ignored.",
+                        "Feature {:?} set for deactivation not found in genesis_config account \
+                         list, ignored.",
                         deactivate_feature_pk
                     ),
                 }

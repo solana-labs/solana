@@ -293,7 +293,8 @@ pub fn pubkey_range_from_partition(
                 start_index + 1
             },
             partition_from_pubkey(&start_pubkey_final, partition_count),
-            "{start_index}, {end_index}, start_key_prefix: {start_key_prefix}, {start_pubkey_final}, {partition_count}"
+            "{start_index}, {end_index}, start_key_prefix: {start_key_prefix}, \
+             {start_pubkey_final}, {partition_count}"
         );
         assert_eq!(
             end_index,
@@ -322,7 +323,8 @@ pub fn pubkey_range_from_partition(
             assert_eq!(
                 end_index.saturating_add(1),
                 partition_from_pubkey(&pubkey_test, partition_count),
-                "start: {}, end: {}, pubkey: {}, partition_count: {}, prefix_before_addition: {}, prefix after: {}",
+                "start: {}, end: {}, pubkey: {}, partition_count: {}, prefix_before_addition: {}, \
+                 prefix after: {}",
                 start_index,
                 end_index,
                 pubkey_test,

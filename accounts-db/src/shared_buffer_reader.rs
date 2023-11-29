@@ -269,7 +269,8 @@ impl SharedBufferBgReader {
         }
 
         info!(
-            "reading entire decompressed file took: {} us, bytes: {}, read_us: {}, waiting_for_buffer_us: {}, largest fetch: {}, error: {:?}",
+            "reading entire decompressed file took: {} us, bytes: {}, read_us: {}, \
+             waiting_for_buffer_us: {}, largest fetch: {}, error: {:?}",
             now.elapsed().as_micros(),
             total_bytes,
             read_us,

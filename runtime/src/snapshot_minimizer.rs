@@ -93,7 +93,8 @@ impl<'a> SnapshotMinimizer<'a> {
         let added_accounts = total_accounts_len - initial_accounts_len;
 
         info!(
-            "Added {added_accounts} {name} for total of {total_accounts_len} accounts. get {measure}"
+            "Added {added_accounts} {name} for total of {total_accounts_len} accounts. get \
+             {measure}"
         );
     }
 

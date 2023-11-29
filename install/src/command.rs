@@ -305,7 +305,8 @@ fn check_env_path_for_bin_dir(config: &Config) {
 
     if !found {
         println!(
-            "\nPlease update your PATH environment variable to include the solana programs:\n    PATH=\"{}:$PATH\"\n",
+            "\nPlease update your PATH environment variable to include the solana programs:\n    \
+             PATH=\"{}:$PATH\"\n",
             config.active_release_bin_dir().to_str().unwrap()
         );
     }
@@ -367,7 +368,10 @@ fn get_windows_path_var() -> Result<Option<String>, String> {
             if let Some(s) = string_from_winreg_value(&val) {
                 Ok(Some(s))
             } else {
-                println!("the registry key HKEY_CURRENT_USER\\Environment\\PATH does not contain valid Unicode. Not modifying the PATH variable");
+                println!(
+                    "the registry key HKEY_CURRENT_USER\\Environment\\PATH does not contain valid \
+                     Unicode. Not modifying the PATH variable"
+                );
                 Ok(None)
             }
         }
@@ -439,9 +443,14 @@ fn add_to_path(new_path: &str) -> bool {
 
     println!(
         "\n{}\n  {}\n\n{}",
-        style("The HKEY_CURRENT_USER/Environment/PATH registry key has been modified to include:").bold(),
+        style("The HKEY_CURRENT_USER/Environment/PATH registry key has been modified to include:")
+            .bold(),
         new_path,
-        style("Future applications will automatically have the correct environment, but you may need to restart your current shell.").bold()
+        style(
+            "Future applications will automatically have the correct environment, but you may \
+             need to restart your current shell."
+        )
+        .bold()
     );
     true
 }
@@ -524,9 +533,14 @@ fn add_to_path(new_path: &str) -> bool {
     if modified_rcfiles {
         println!(
             "\n{}\n  {}\n",
-            style("Close and reopen your terminal to apply the PATH changes or run the following in your existing shell:").bold().blue(),
+            style(
+                "Close and reopen your terminal to apply the PATH changes or run the following in \
+                 your existing shell:"
+            )
+            .bold()
+            .blue(),
             shell_export_string
-       );
+        );
     }
 
     modified_rcfiles
@@ -1006,8 +1020,9 @@ pub fn init_or_update(config_file: &str, is_init: bool, check_only: bool) -> Res
                                         == active_release_version.channel
                                     {
                                         println!(
-                                        "Install is up to date. {release_semver} is the latest compatible release"
-                                    );
+                                            "Install is up to date. {release_semver} is the \
+                                             latest compatible release"
+                                        );
                                         return Ok(false);
                                     }
                                 }
@@ -1293,8 +1308,8 @@ pub fn list(config_file: &str) -> Result<(), String> {
 
     let entries = fs::read_dir(&config.releases_dir).map_err(|err| {
         format!(
-            "Failed to read install directory, \
-            double check that your configuration file is correct: {err}"
+            "Failed to read install directory, double check that your configuration file is \
+             correct: {err}"
         )
     })?;
 

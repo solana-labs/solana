@@ -451,7 +451,8 @@ fn check_epoch_slots_hash_against_bank_status(
             assert!(is_popular_pruned);
             // The cluster sample found the troublesome slot which caused this fork to be pruned
             warn!(
-                "EpochSlots sample returned slot {slot} with hash {epoch_slots_frozen_hash}, but we
+                "EpochSlots sample returned slot {slot} with hash {epoch_slots_frozen_hash}, but \
+                 we
                 have pruned it due to incorrect ancestry"
             );
         }
@@ -671,9 +672,13 @@ fn on_epoch_slots_frozen(
 }
 
 fn on_popular_pruned_fork(slot: Slot) -> Vec<ResultingStateChange> {
-    warn!("{slot} is part of a pruned fork which has reached the DUPLICATE_THRESHOLD aggregating across descendants
-            and slot versions. It is suspected to be duplicate or have an ancestor that is duplicate.
-            Notifying ancestor_hashes_service");
+    warn!(
+        "{slot} is part of a pruned fork which has reached the DUPLICATE_THRESHOLD aggregating \
+         across descendants
+            and slot versions. It is suspected to be duplicate or have an ancestor that is \
+         duplicate.
+            Notifying ancestor_hashes_service"
+    );
     vec![ResultingStateChange::SendAncestorHashesReplayUpdate(
         AncestorHashesReplayUpdate::PopularPrunedFork(slot),
     )]

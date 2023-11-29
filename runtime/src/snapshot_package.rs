@@ -269,8 +269,11 @@ impl SnapshotPackage {
             SnapshotKind::IncrementalSnapshot(incremental_snapshot_base_slot) => {
                 snapshot_storages.retain(|storage| storage.slot() > incremental_snapshot_base_slot);
                 assert!(
-                    snapshot_storages.iter().all(|storage| storage.slot() > incremental_snapshot_base_slot),
-                    "Incremental snapshot package must only contain storage entries where slot > incremental snapshot base slot (i.e. full snapshot slot)!"
+                    snapshot_storages
+                        .iter()
+                        .all(|storage| storage.slot() > incremental_snapshot_base_slot),
+                    "Incremental snapshot package must only contain storage entries where slot > \
+                     incremental snapshot base slot (i.e. full snapshot slot)!"
                 );
                 snapshot_utils::build_incremental_snapshot_archive_path(
                     snapshot_info.incremental_snapshot_archives_dir,

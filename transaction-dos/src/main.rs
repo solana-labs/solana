@@ -69,14 +69,16 @@ pub fn airdrop_lamports(
                     }
                     if tries >= 5 {
                         panic!(
-                            "Error requesting airdrop: to addr: {faucet_addr:?} amount: {airdrop_amount} {result:?}"
+                            "Error requesting airdrop: to addr: {faucet_addr:?} amount: \
+                             {airdrop_amount} {result:?}"
                         )
                     }
                 }
             }
             Err(err) => {
                 panic!(
-                    "Error requesting airdrop: {err:?} to addr: {faucet_addr:?} amount: {airdrop_amount}"
+                    "Error requesting airdrop: {err:?} to addr: {faucet_addr:?} amount: \
+                     {airdrop_amount}"
                 );
             }
         };
@@ -471,14 +473,17 @@ fn main() {
                 .takes_value(true)
                 .multiple(true)
                 .value_name("FILE")
-                .help("One or more keypairs to create accounts owned by the program and which the program will write to."),
+                .help(
+                    "One or more keypairs to create accounts owned by the program and which the \
+                     program will write to.",
+                ),
         )
         .arg(
             Arg::with_name("account_groups")
-            .long("account_groups")
-            .takes_value(true)
-            .value_name("NUM")
-            .help("Number of groups of accounts to split the accounts into")
+                .long("account_groups")
+                .takes_value(true)
+                .value_name("NUM")
+                .help("Number of groups of accounts to split the accounts into"),
         )
         .arg(
             Arg::with_name("batch_size")
@@ -513,7 +518,10 @@ fn main() {
                 .long("batch-sleep-ms")
                 .takes_value(true)
                 .value_name("NUM")
-                .help("Sleep for this long the num outstanding transctions is greater than the batch size."),
+                .help(
+                    "Sleep for this long the num outstanding transctions is greater than the \
+                     batch size.",
+                ),
         )
         .arg(
             Arg::with_name("check_gossip")

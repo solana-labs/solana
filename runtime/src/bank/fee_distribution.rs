@@ -263,7 +263,10 @@ impl Bank {
 
         if !self.should_collect_rent() {
             if total_rent_collected != 0 {
-                warn!("Rent fees collection is disabled, yet total rent collected was non zero! Total rent collected: {total_rent_collected}");
+                warn!(
+                    "Rent fees collection is disabled, yet total rent collected was non zero! \
+                     Total rent collected: {total_rent_collected}"
+                );
             }
             return;
         }

@@ -89,7 +89,8 @@ pub trait SyncClient {
     /// Get recent blockhash. Uses explicit commitment configuration.
     #[deprecated(
         since = "1.9.0",
-        note = "Please use `get_latest_blockhash_with_commitment` and `get_latest_blockhash_with_commitment` instead"
+        note = "Please use `get_latest_blockhash_with_commitment` and \
+                `get_latest_blockhash_with_commitment` instead"
     )]
     fn get_recent_blockhash_with_commitment(
         &self,

@@ -38,7 +38,10 @@ pub fn warmup_cooldown_rate(current_epoch: Epoch, new_rate_activation_epoch: Opt
 #[allow(clippy::large_enum_variant)]
 #[deprecated(
     since = "1.17.0",
-    note = "Please use `StakeStateV2` instead, and match the third `StakeFlags` field when matching `StakeStateV2::Stake` to resolve any breakage. For example, `if let StakeState::Stake(meta, stake)` becomes `if let StakeStateV2::Stake(meta, stake, _stake_flags)`."
+    note = "Please use `StakeStateV2` instead, and match the third `StakeFlags` field when \
+            matching `StakeStateV2::Stake` to resolve any breakage. For example, `if let \
+            StakeState::Stake(meta, stake)` becomes `if let StakeStateV2::Stake(meta, stake, \
+            _stake_flags)`."
 )]
 pub enum StakeState {
     #[default]

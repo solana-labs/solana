@@ -126,8 +126,8 @@ impl Faucet {
         if let Some((per_request_cap, per_time_cap)) = per_request_cap.zip(per_time_cap) {
             if per_time_cap < per_request_cap {
                 warn!(
-                    "per_time_cap {} SOL < per_request_cap {} SOL; \
-                    maximum single requests will fail",
+                    "per_time_cap {} SOL < per_request_cap {} SOL; maximum single requests will \
+                     fail",
                     lamports_to_sol(per_time_cap),
                     lamports_to_sol(per_request_cap),
                 );
@@ -363,13 +363,17 @@ pub async fn run_faucet(
 ) {
     let listener = TcpListener::bind(&faucet_addr).await;
     if let Some(sender) = sender {
-        sender.send(
-            listener.as_ref().map(|listener| listener.local_addr().unwrap())
-                .map_err(|err| {
-                    format!(
-                        "Unable to bind faucet to {faucet_addr:?}, check the address is not already in use: {err}"
-                    )
-                })
+        sender
+            .send(
+                listener
+                    .as_ref()
+                    .map(|listener| listener.local_addr().unwrap())
+                    .map_err(|err| {
+                        format!(
+                            "Unable to bind faucet to {faucet_addr:?}, check the address is not \
+                             already in use: {err}"
+                        )
+                    }),
             )
             .unwrap();
     }

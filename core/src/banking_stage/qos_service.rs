@@ -99,25 +99,39 @@ impl QosService {
         let mut cost_tracking_time = Measure::start("cost_tracking_time");
         let mut cost_tracker = bank.write_cost_tracker().unwrap();
         let mut num_included = 0;
-        let select_results = transactions.zip(transactions_costs)
-            .map(|(tx, cost)| {
-                match cost {
-                    Ok(cost) => {
-                        match cost_tracker.try_add(&cost) {
-                            Ok(current_block_cost) => {
-                                debug!("slot {:?}, transaction {:?}, cost {:?}, fit into current block, current block cost {}", bank.slot(), tx, cost, current_block_cost);
-                                self.metrics.stats.selected_txs_count.fetch_add(1, Ordering::Relaxed);
-                                num_included += 1;
-                                Ok(cost)
-                            },
-                            Err(e) => {
-                                debug!("slot {:?}, transaction {:?}, cost {:?}, not fit into current block, '{:?}'", bank.slot(), tx, cost, e);
-                                Err(TransactionError::from(e))
-                            }
-                        }
-                    },
-                    Err(e) => Err(e),
-                }
+        let select_results = transactions
+            .zip(transactions_costs)
+            .map(|(tx, cost)| match cost {
+                Ok(cost) => match cost_tracker.try_add(&cost) {
+                    Ok(current_block_cost) => {
+                        debug!(
+                            "slot {:?}, transaction {:?}, cost {:?}, fit into current block, \
+                             current block cost {}",
+                            bank.slot(),
+                            tx,
+                            cost,
+                            current_block_cost
+                        );
+                        self.metrics
+                            .stats
+                            .selected_txs_count
+                            .fetch_add(1, Ordering::Relaxed);
+                        num_included += 1;
+                        Ok(cost)
+                    }
+                    Err(e) => {
+                        debug!(
+                            "slot {:?}, transaction {:?}, cost {:?}, not fit into current block, \
+                             '{:?}'",
+                            bank.slot(),
+                            tx,
+                            cost,
+                            e
+                        );
+                        Err(TransactionError::from(e))
+                    }
+                },
+                Err(e) => Err(e),
             })
             .collect();
 

@@ -76,14 +76,16 @@ fn ip_echo_server_request(
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
                         format!(
-                            "Invalid gossip entrypoint. {ip_echo_server_addr} looks to be an HTTP port: {http_response}"
+                            "Invalid gossip entrypoint. {ip_echo_server_addr} looks to be an HTTP \
+                             port: {http_response}"
                         ),
                     ));
                 }
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
                     format!(
-                        "Invalid gossip entrypoint. {ip_echo_server_addr} provided an invalid response header: '{response_header}'"
+                        "Invalid gossip entrypoint. {ip_echo_server_addr} provided an invalid \
+                         response header: '{response_header}'"
                     ),
                 ));
             }

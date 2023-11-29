@@ -147,8 +147,9 @@ pub struct Memcmp {
     /// Optional encoding specification
     #[deprecated(
         since = "1.11.2",
-        note = "Field has no server-side effect. Specify encoding with `MemcmpEncodedBytes` variant instead. \
-            Field will be made private in future. Please use a constructor method instead."
+        note = "Field has no server-side effect. Specify encoding with `MemcmpEncodedBytes` \
+                variant instead. Field will be made private in future. Please use a constructor \
+                method instead."
     )]
     pub encoding: Option<MemcmpEncoding>,
 }
@@ -310,8 +311,8 @@ pub fn maybe_map_filters(
                         memcmp.bytes = MemcmpEncodedBytes::Binary(string.clone());
                     }
                     MemcmpEncodedBytes::Base64(_) => {
-                        return Err("RPC node on old version does not support base64 \
-                            encoding for memcmp filters"
+                        return Err("RPC node on old version does not support base64 encoding \
+                                    for memcmp filters"
                             .to_string());
                     }
                     _ => {}

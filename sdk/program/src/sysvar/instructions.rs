@@ -149,7 +149,8 @@ fn serialize_instructions(instructions: &[BorrowedInstruction]) -> Vec<u8> {
 /// `data` is the instructions sysvar account data.
 #[deprecated(
     since = "1.8.0",
-    note = "Unsafe because the sysvar accounts address is not checked, please use `load_current_index_checked` instead"
+    note = "Unsafe because the sysvar accounts address is not checked, please use \
+            `load_current_index_checked` instead"
 )]
 pub fn load_current_index(data: &[u8]) -> u16 {
     let mut instr_fixed_data = [0u8; 2];
@@ -234,7 +235,8 @@ fn deserialize_instruction(index: usize, data: &[u8]) -> Result<Instruction, San
 /// `data` is the instructions sysvar account data.
 #[deprecated(
     since = "1.8.0",
-    note = "Unsafe because the sysvar accounts address is not checked, please use `load_instruction_at_checked` instead"
+    note = "Unsafe because the sysvar accounts address is not checked, please use \
+            `load_instruction_at_checked` instead"
 )]
 pub fn load_instruction_at(index: usize, data: &[u8]) -> Result<Instruction, SanitizeError> {
     deserialize_instruction(index, data)

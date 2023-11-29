@@ -1897,8 +1897,8 @@ impl Bank {
             Some(account)
         })
         .expect(
-            "Stakes cache is inconsistent with accounts-db. This can indicate \
-            a corrupted snapshot or bugs in cached accounts or accounts-db.",
+            "Stakes cache is inconsistent with accounts-db. This can indicate a corrupted \
+             snapshot or bugs in cached accounts or accounts-db.",
         );
         let stakes_accounts_load_duration = now.elapsed();
         let mut bank = Self {
@@ -1978,8 +1978,8 @@ impl Bank {
         // from the passed in genesis_config instead (as new()/new_with_paths() already do)
         assert_eq!(
             bank.genesis_creation_time, genesis_config.creation_time,
-            "Bank snapshot genesis creation time does not match genesis.bin creation time.\
-             The snapshot and genesis.bin might pertain to different clusters"
+            "Bank snapshot genesis creation time does not match genesis.bin creation time.The \
+             snapshot and genesis.bin might pertain to different clusters"
         );
         assert_eq!(bank.ticks_per_slot, genesis_config.ticks_per_slot);
         assert_eq!(
@@ -3445,8 +3445,13 @@ impl Bank {
                 if let Some(curr_stake_account) = self.get_account_with_fixed_root(&stake_pubkey) {
                     let pre_lamport = curr_stake_account.lamports();
                     let post_lamport = post_stake_account.lamports();
-                    assert_eq!(pre_lamport + u64::try_from(reward_amount).unwrap(), post_lamport,
-                        "stake account balance has changed since the reward calculation! account: {stake_pubkey}, pre balance: {pre_lamport}, post balance: {post_lamport}, rewards: {reward_amount}");
+                    assert_eq!(
+                        pre_lamport + u64::try_from(reward_amount).unwrap(),
+                        post_lamport,
+                        "stake account balance has changed since the reward calculation! account: \
+                         {stake_pubkey}, pre balance: {pre_lamport}, post balance: \
+                         {post_lamport}, rewards: {reward_amount}"
+                    );
                 }
             }
         }
@@ -3995,8 +4000,9 @@ impl Bank {
 
         assert!(
             !self.freeze_started(),
-            "Can't change frozen bank by adding not-existing new builtin program ({name}, {program_id}). \
-            Maybe, inconsistent program activation is detected on snapshot restore?"
+            "Can't change frozen bank by adding not-existing new builtin program ({name}, \
+             {program_id}). Maybe, inconsistent program activation is detected on snapshot \
+             restore?"
         );
 
         // Add a bogus executable builtin account, which will be loaded and ignored.
@@ -4026,8 +4032,9 @@ impl Bank {
 
         assert!(
             !self.freeze_started(),
-            "Can't change frozen bank by adding not-existing new precompiled program ({program_id}). \
-                Maybe, inconsistent program activation is detected on snapshot restore?"
+            "Can't change frozen bank by adding not-existing new precompiled program \
+             ({program_id}). Maybe, inconsistent program activation is detected on snapshot \
+             restore?"
         );
 
         // Add a bogus executable account, which will be loaded and ignored.
@@ -5645,7 +5652,8 @@ impl Bank {
     ) -> TransactionResults {
         assert!(
             !self.freeze_started(),
-            "commit_transactions() working on a bank that is already frozen or is undergoing freezing!"
+            "commit_transactions() working on a bank that is already frozen or is undergoing \
+             freezing!"
         );
 
         let CommitTransactionCounts {
@@ -5997,8 +6005,8 @@ impl Bank {
                                 ("partition_from_pubkey", partition_from_pubkey, i64)
                             );
                             warn!(
-                                "Collecting rent from unexpected pubkey: {}, slot: {}, parent_slot: {:?}, \
-                                partition_index: {}, partition_from_pubkey: {}",
+                                "Collecting rent from unexpected pubkey: {}, slot: {}, \
+                                 parent_slot: {:?}, partition_index: {}, partition_from_pubkey: {}",
                                 pubkey,
                                 self.slot(),
                                 self.parent().map(|bank| bank.slot()),
@@ -6764,14 +6772,14 @@ impl Bank {
         let bank_frozen = *lock != Hash::default();
         if new_hard_fork_slot < bank_slot {
             warn!(
-                "Hard fork at slot {new_hard_fork_slot} ignored, the hard fork is older \
-                than the bank at slot {bank_slot} that attempted to register it."
+                "Hard fork at slot {new_hard_fork_slot} ignored, the hard fork is older than the \
+                 bank at slot {bank_slot} that attempted to register it."
             );
         } else if (new_hard_fork_slot == bank_slot) && bank_frozen {
             warn!(
-                "Hard fork at slot {new_hard_fork_slot} ignored, the hard fork is the same \
-                slot as the bank at slot {bank_slot} that attempted to register it, but that \
-                bank is already frozen."
+                "Hard fork at slot {new_hard_fork_slot} ignored, the hard fork is the same slot \
+                 as the bank at slot {bank_slot} that attempted to register it, but that bank is \
+                 already frozen."
             );
         } else {
             self.hard_forks
@@ -7076,7 +7084,8 @@ impl Bank {
             .get_bank_hash_stats(slot)
             .expect("No bank hash stats were found for this bank, that should not be possible");
         info!(
-            "bank frozen: {slot} hash: {hash} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}{}, stats: {bank_hash_stats:?}",
+            "bank frozen: {slot} hash: {hash} accounts_delta: {} signature_count: {} \
+             last_blockhash: {} capitalization: {}{}, stats: {bank_hash_stats:?}",
             accounts_delta_hash.0,
             self.signature_count(),
             self.last_blockhash(),
@@ -7168,7 +7177,12 @@ impl Bank {
                 .is_alive_root(self.slot())
         {
             if let Some(parent) = self.parent() {
-                info!("{} is not a root, so attempting to verify bank hash on parent bank at slot: {}", self.slot(), parent.slot());
+                info!(
+                    "{} is not a root, so attempting to verify bank hash on parent bank at slot: \
+                     {}",
+                    self.slot(),
+                    parent.slot()
+                );
                 return parent.verify_accounts_hash(base, config);
             } else {
                 // this will result in mismatch errors
@@ -7430,7 +7444,11 @@ impl Bank {
         let incremental_accounts_hash = self.get_incremental_accounts_hash();
 
         let accounts_hash = match (accounts_hash, incremental_accounts_hash) {
-            (Some(_), Some(_)) => panic!("Both full and incremental accounts hashes are present for slot {}; it is ambiguous which one to use for the snapshot hash!", self.slot()),
+            (Some(_), Some(_)) => panic!(
+                "Both full and incremental accounts hashes are present for slot {}; it is \
+                 ambiguous which one to use for the snapshot hash!",
+                self.slot()
+            ),
             (Some(accounts_hash), None) => accounts_hash.into(),
             (None, Some(incremental_accounts_hash)) => incremental_accounts_hash.into(),
             (None, None) => panic!("accounts hash is required to get snapshot hash"),

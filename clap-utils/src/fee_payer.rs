@@ -6,9 +6,9 @@ use {
 pub const FEE_PAYER_ARG: ArgConstant<'static> = ArgConstant {
     name: "fee_payer",
     long: "fee-payer",
-    help: "Specify the fee-payer account. This may be a keypair file, the ASK keyword \n\
-           or the pubkey of an offline signer, provided an appropriate --signer argument \n\
-           is also passed. Defaults to the client keypair.",
+    help: "Specify the fee-payer account. This may be a keypair file, the ASK keyword \nor the \
+           pubkey of an offline signer, provided an appropriate --signer argument \nis also \
+           passed. Defaults to the client keypair.",
 };
 
 pub fn fee_payer_arg<'a, 'b>() -> Arg<'a, 'b> {

@@ -198,7 +198,11 @@ impl AbiDigester {
         label: &'static str,
         variant: &'static str,
     ) -> Result<(), DigestError> {
-        assert!(self.for_enum, "derive AbiEnumVisitor or implement it for the enum, which contains a variant ({label}) named {variant}");
+        assert!(
+            self.for_enum,
+            "derive AbiEnumVisitor or implement it for the enum, which contains a variant \
+             ({label}) named {variant}"
+        );
         Ok(())
     }
 
@@ -217,7 +221,10 @@ impl AbiDigester {
                 .unwrap_or("unknown-test-thread")
                 .replace(':', "_");
             if thread_name == "main" {
-                error!("Bad thread name detected for dumping; Maybe, --test-threads=1? Sorry, SOLANA_ABI_DUMP_DIR doesn't work under 1; increase it");
+                error!(
+                    "Bad thread name detected for dumping; Maybe, --test-threads=1? Sorry, \
+                     SOLANA_ABI_DUMP_DIR doesn't work under 1; increase it"
+                );
             }
 
             let path = format!("{dir}/{thread_name}_{hash}",);

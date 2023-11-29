@@ -505,7 +505,8 @@ impl Instruction {
 
     #[deprecated(
         since = "1.6.0",
-        note = "Please use another Instruction constructor instead, such as `Instruction::new_with_borsh`"
+        note = "Please use another Instruction constructor instead, such as \
+                `Instruction::new_with_borsh`"
     )]
     pub fn new<T: Serialize>(program_id: Pubkey, data: &T, accounts: Vec<AccountMeta>) -> Self {
         Self::new_with_bincode(program_id, data, accounts)

@@ -1284,7 +1284,8 @@ fn process_loader_upgradeable_instruction(
             if new_len > MAX_PERMITTED_DATA_LENGTH as usize {
                 ic_logger_msg!(
                     log_collector,
-                    "Extended ProgramData length of {} bytes exceeds max account data length of {} bytes",
+                    "Extended ProgramData length of {} bytes exceeds max account data length of \
+                     {} bytes",
                     new_len,
                     MAX_PERMITTED_DATA_LENGTH
                 );

@@ -394,7 +394,8 @@ fn run_accounts_bench(
         count += 1;
         if last_log.elapsed().as_millis() > 3000 || (count >= iterations && iterations != 0) {
             info!(
-                "total_accounts_created: {} total_accounts_closed: {} tx_sent_count: {} loop_count: {} balance(s): {:?}",
+                "total_accounts_created: {} total_accounts_closed: {} tx_sent_count: {} \
+                 loop_count: {} balance(s): {:?}",
                 total_accounts_created, total_accounts_closed, tx_sent_count, count, balances
             );
             last_log = Instant::now();
@@ -512,8 +513,8 @@ fn main() {
                 .validator(is_url_or_moniker)
                 .conflicts_with("entrypoint")
                 .help(
-                    "URL for Solana's JSON RPC or moniker (or their first letter): \
-                       [mainnet-beta, testnet, devnet, localhost]",
+                    "URL for Solana's JSON RPC or moniker (or their first letter): [mainnet-beta, \
+                     testnet, devnet, localhost]",
                 ),
         )
         .arg(
@@ -569,9 +570,8 @@ fn main() {
                 .help(
                     "Every `n` batches, create a batch of close transactions for
                     the earliest remaining batch of accounts created.
-                    Note: Should be > 1 to avoid situations where the close \
-                    transactions will be submitted before the corresponding \
-                    create transactions have been confirmed",
+                    Note: Should be > 1 to avoid situations where the close transactions will be \
+                     submitted before the corresponding create transactions have been confirmed",
                 ),
         )
         .arg(

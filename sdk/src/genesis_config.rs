@@ -256,23 +256,10 @@ impl fmt::Display for GenesisConfig {
         write!(
             f,
             "\
-             Creation time: {}\n\
-             Cluster type: {:?}\n\
-             Genesis hash: {}\n\
-             Shred version: {}\n\
-             Ticks per slot: {:?}\n\
-             Hashes per tick: {:?}\n\
-             Target tick duration: {:?}\n\
-             Slots per epoch: {}\n\
-             Warmup epochs: {}abled\n\
-             Slots per year: {}\n\
-             {:?}\n\
-             {:?}\n\
-             {:?}\n\
-             Capitalization: {} SOL in {} accounts\n\
-             Native instruction processors: {:#?}\n\
-             Rewards pool: {:#?}\n\
-             ",
+             Creation time: {}\nCluster type: {:?}\nGenesis hash: {}\nShred version: {}\nTicks per \
+             slot: {:?}\nHashes per tick: {:?}\nTarget tick duration: {:?}\nSlots per epoch: \
+             {}\nWarmup epochs: {}abled\nSlots per year: {}\n{:?}\n{:?}\n{:?}\nCapitalization: {} \
+             SOL in {} accounts\nNative instruction processors: {:#?}\nRewards pool: {:#?}\n",
             Utc.timestamp_opt(self.creation_time, 0)
                 .unwrap()
                 .to_rfc3339(),

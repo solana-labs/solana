@@ -365,7 +365,8 @@ impl BankWithSchedulerInner {
     fn drop_scheduler(&self) {
         if std::thread::panicking() {
             error!(
-                "BankWithSchedulerInner::drop_scheduler(): slot: {} skipping due to already panicking...",
+                "BankWithSchedulerInner::drop_scheduler(): slot: {} skipping due to already \
+                 panicking...",
                 self.bank.slot(),
             );
             return;
@@ -377,7 +378,8 @@ impl BankWithSchedulerInner {
             .map(|(result, _timings)| result)
         {
             warn!(
-                "BankWithSchedulerInner::drop_scheduler(): slot: {} discarding error from scheduler: {:?}",
+                "BankWithSchedulerInner::drop_scheduler(): slot: {} discarding error from \
+                 scheduler: {:?}",
                 self.bank.slot(),
                 err,
             );

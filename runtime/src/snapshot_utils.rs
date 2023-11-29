@@ -322,7 +322,10 @@ pub enum SnapshotError {
     #[error("could not parse snapshot archive's file name: {0}")]
     ParseSnapshotArchiveFileNameError(String),
 
-    #[error("snapshots are incompatible: full snapshot slot ({0}) and incremental snapshot base slot ({1}) do not match")]
+    #[error(
+        "snapshots are incompatible: full snapshot slot ({0}) and incremental snapshot base slot \
+         ({1}) do not match"
+    )]
     MismatchedBaseSlot(Slot, Slot),
 
     #[error("no snapshot archives to load from")]
@@ -996,7 +999,8 @@ where
     let consumed_size = data_file_stream.stream_position()?;
     if consumed_size > maximum_file_size {
         let error_message = format!(
-            "too large snapshot data file to serialize: {data_file_path:?} has {consumed_size} bytes"
+            "too large snapshot data file to serialize: {data_file_path:?} has {consumed_size} \
+             bytes"
         );
         return Err(get_io_error(&error_message));
     }

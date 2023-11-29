@@ -15,7 +15,8 @@
 
 #[deprecated(
     since = "1.10.6",
-    note = "Please use `solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE}` instead"
+    note = "Please use `solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, \
+            VALIDATOR_PORT_RANGE}` instead"
 )]
 #[allow(deprecated)]
 pub use solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE};
@@ -813,7 +814,9 @@ impl ClusterInfo {
                 }
 
                 let node_version = self.get_node_version(node.pubkey());
-                if my_shred_version != 0 && (node.shred_version() != 0 && node.shred_version() != my_shred_version) {
+                if my_shred_version != 0
+                    && (node.shred_version() != 0 && node.shred_version() != my_shred_version)
+                {
                     different_shred_nodes = different_shred_nodes.saturating_add(1);
                     None
                 } else {
@@ -822,7 +825,8 @@ impl ClusterInfo {
                     }
                     let ip_addr = node.gossip().as_ref().map(SocketAddr::ip).ok();
                     Some(format!(
-                        "{:15} {:2}| {:5} | {:44} |{:^9}| {:5}|  {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {}\n",
+                        "{:15} {:2}| {:5} | {:44} |{:^9}| {:5}|  {:5}| {:5}| {:5}| {:5}| {:5}| \
+                         {:5}| {}\n",
                         node.gossip()
                             .ok()
                             .filter(|addr| self.socket_addr_space.check(addr))
@@ -831,7 +835,11 @@ impl ClusterInfo {
                             .as_ref()
                             .map(IpAddr::to_string)
                             .unwrap_or_else(|| String::from("none")),
-                        if node.pubkey() == &my_pubkey { "me" } else { "" },
+                        if node.pubkey() == &my_pubkey {
+                            "me"
+                        } else {
+                            ""
+                        },
                         now.saturating_sub(last_updated),
                         node.pubkey(),
                         if let Some(node_version) = node_version {
@@ -842,10 +850,16 @@ impl ClusterInfo {
                         self.addr_to_string(&ip_addr, &node.gossip().ok()),
                         self.addr_to_string(&ip_addr, &node.tpu_vote().ok()),
                         self.addr_to_string(&ip_addr, &node.tpu(contact_info::Protocol::UDP).ok()),
-                        self.addr_to_string(&ip_addr, &node.tpu_forwards(contact_info::Protocol::UDP).ok()),
+                        self.addr_to_string(
+                            &ip_addr,
+                            &node.tpu_forwards(contact_info::Protocol::UDP).ok()
+                        ),
                         self.addr_to_string(&ip_addr, &node.tvu(contact_info::Protocol::UDP).ok()),
                         self.addr_to_string(&ip_addr, &node.tvu(contact_info::Protocol::QUIC).ok()),
-                        self.addr_to_string(&ip_addr, &node.serve_repair(contact_info::Protocol::UDP).ok()),
+                        self.addr_to_string(
+                            &ip_addr,
+                            &node.serve_repair(contact_info::Protocol::UDP).ok()
+                        ),
                         node.shred_version(),
                     ))
                 }

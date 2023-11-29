@@ -590,8 +590,16 @@ fn main() {
         .transaction_count();
     debug!("processed: {} base: {}", txs_processed, base_tx_count);
 
-    eprintln!("[total_sent: {}, base_tx_count: {}, txs_processed: {}, txs_landed: {}, total_us: {}, tx_total_us: {}]",
-            total_sent, base_tx_count, txs_processed, (txs_processed - base_tx_count), total_us, tx_total_us);
+    eprintln!(
+        "[total_sent: {}, base_tx_count: {}, txs_processed: {}, txs_landed: {}, total_us: {}, \
+         tx_total_us: {}]",
+        total_sent,
+        base_tx_count,
+        txs_processed,
+        (txs_processed - base_tx_count),
+        total_us,
+        tx_total_us
+    );
 
     eprintln!(
         "{{'name': 'banking_bench_total', 'median': '{:.2}'}}",

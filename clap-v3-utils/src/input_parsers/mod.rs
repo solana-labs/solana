@@ -19,7 +19,8 @@ use {
 pub mod signer;
 #[deprecated(
     since = "1.17.0",
-    note = "Please use the functions in `solana_clap_v3_utils::input_parsers::signer` directly instead"
+    note = "Please use the functions in `solana_clap_v3_utils::input_parsers::signer` directly \
+            instead"
 )]
 pub use signer::{
     pubkey_of_signer, pubkeys_of_multiple_signers, pubkeys_sigs_of, resolve_signer, signer_of,

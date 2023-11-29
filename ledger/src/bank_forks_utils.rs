@@ -263,9 +263,8 @@ fn bank_forks_from_snapshot(
         )
         .unwrap_or_else(|err| {
             error!(
-                "Failed to load bank: {err} \
-                \nfull snapshot archive: {} \
-                \nincremental snapshot archive: {}",
+                "Failed to load bank: {err} \nfull snapshot archive: {} \nincremental snapshot \
+                 archive: {}",
                 full_snapshot_archive_info.path().display(),
                 incremental_snapshot_archive_info
                     .as_ref()
@@ -278,7 +277,8 @@ fn bank_forks_from_snapshot(
     } else {
         let Some(bank_snapshot) = latest_bank_snapshot else {
             error!(
-                "There is no local state to startup from. Ensure --{} is *not* set to \"{}\" and restart.",
+                "There is no local state to startup from. Ensure --{} is *not* set to \"{}\" and \
+                 restart.",
                 use_snapshot_archives_at_startup::cli::LONG_ARG,
                 UseSnapshotArchivesAtStartup::Never.to_string(),
             );
@@ -293,9 +293,9 @@ fn bank_forks_from_snapshot(
                 UseSnapshotArchivesAtStartup::Never,
             );
             warn!(
-                "Starting up from local state at slot {}, which is *older* than \
-                the latest snapshot archive at slot {}. If this is not desired, \
-                change the --{} CLI option to *not* \"{}\" and restart.",
+                "Starting up from local state at slot {}, which is *older* than the latest \
+                 snapshot archive at slot {}. If this is not desired, change the --{} CLI option \
+                 to *not* \"{}\" and restart.",
                 bank_snapshot.slot,
                 latest_snapshot_archive_slot,
                 use_snapshot_archives_at_startup::cli::LONG_ARG,
@@ -320,8 +320,7 @@ fn bank_forks_from_snapshot(
         )
         .unwrap_or_else(|err| {
             error!(
-                "Failed to load bank: {err} \
-                \nsnapshot: {}",
+                "Failed to load bank: {err} \nsnapshot: {}",
                 bank_snapshot.snapshot_path().display(),
             );
             process::exit(1);

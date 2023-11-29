@@ -3710,7 +3710,8 @@ impl RpcClient {
 
     #[deprecated(
         since = "1.9.0",
-        note = "Please use `get_latest_blockhash_with_commitment` and `get_fee_for_message` instead"
+        note = "Please use `get_latest_blockhash_with_commitment` and `get_fee_for_message` \
+                instead"
     )]
     #[allow(deprecated)]
     pub fn get_fees_with_commitment(&self, commitment_config: CommitmentConfig) -> RpcResult<Fees> {

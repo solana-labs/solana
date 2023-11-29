@@ -738,9 +738,10 @@ impl Tower {
                 // `switch < last` is needed not to warn! this message just because of using
                 // newer snapshots on validator restart
                 let message = format!(
-                            "bank_forks doesn't have corresponding data for the stray restored \
-                           last vote({last_voted_slot}), meaning some inconsistency between saved tower and ledger."
-                        );
+                    "bank_forks doesn't have corresponding data for the stray restored last \
+                     vote({last_voted_slot}), meaning some inconsistency between saved tower and \
+                     ledger."
+                );
                 warn!("{}", message);
                 datapoint_warn!("tower_warn", ("warn", message, String));
             }
@@ -845,8 +846,9 @@ impl Tower {
                 return suspended_decision_due_to_major_unsynced_ledger();
             } else {
                 panic!(
-                            "Should never consider switching to ancestor ({switch_slot}) of last vote: {last_voted_slot}, ancestors({last_vote_ancestors:?})",
-                        );
+                    "Should never consider switching to ancestor ({switch_slot}) of last vote: \
+                     {last_voted_slot}, ancestors({last_vote_ancestors:?})",
+                );
             }
         }
 
@@ -1058,8 +1060,13 @@ impl Tower {
             if let Some(fork_stake) = voted_stakes.get(&lockout.slot()) {
                 let lockout_stake = *fork_stake as f64 / total_stake as f64;
                 trace!(
-                    "fork_stake slot: {}, vote slot: {}, lockout: {} fork_stake: {} total_stake: {}",
-                    slot, lockout.slot(), lockout_stake, fork_stake, total_stake
+                    "fork_stake slot: {}, vote slot: {}, lockout: {} fork_stake: {} total_stake: \
+                     {}",
+                    slot,
+                    lockout.slot(),
+                    lockout_stake,
+                    fork_stake,
+                    total_stake
                 );
                 if lockout.confirmation_count() as usize > self.threshold_depth {
                     for old_vote in &self.vote_state.votes {
@@ -1181,9 +1188,8 @@ impl Tower {
                 // While this validator's voting is suspended this way,
                 // suspended_decision_due_to_major_unsynced_ledger() will be also touched.
                 let message = format!(
-                    "For some reason, we're REPROCESSING slots which has already been \
-                     voted and ROOTED by us; \
-                     VOTING will be SUSPENDED UNTIL {last_voted_slot}!",
+                    "For some reason, we're REPROCESSING slots which has already been voted and \
+                     ROOTED by us; VOTING will be SUSPENDED UNTIL {last_voted_slot}!",
                 );
                 error!("{}", message);
                 datapoint_error!("tower_error", ("error", message, String));
@@ -1311,7 +1317,8 @@ impl Tower {
             self.last_vote = VoteTransaction::from(Vote::default());
         } else {
             info!(
-                "{} restored votes (out of {}) were on different fork or are upcoming votes on unrooted slots: {:?}!",
+                "{} restored votes (out of {}) were on different fork or are upcoming votes on \
+                 unrooted slots: {:?}!",
                 self.voted_slots().len(),
                 original_votes_len,
                 self.voted_slots()
@@ -1388,8 +1395,8 @@ pub enum TowerError {
     WrongTower(String),
 
     #[error(
-        "The tower is too old: \
-        newest slot in tower ({0}) << oldest slot in available history ({1})"
+        "The tower is too old: newest slot in tower ({0}) << oldest slot in available history \
+         ({1})"
     )]
     TooOldTower(Slot, Slot),
 
@@ -1466,13 +1473,15 @@ pub fn reconcile_blockstore_roots_with_external_source(
                 Ordering::Equal => false,
                 Ordering::Less => panic!(
                     "last_blockstore_root({last_blockstore_root}) is skipped while traversing \
-                     blockstore (currently at {current}) from external root ({external_source:?})!?",
+                     blockstore (currently at {current}) from external root \
+                     ({external_source:?})!?",
                 ),
             })
             .collect();
         if !new_roots.is_empty() {
             info!(
-                "Reconciling slots as root based on external root: {:?} (external: {:?}, blockstore: {})",
+                "Reconciling slots as root based on external root: {:?} (external: {:?}, \
+                 blockstore: {})",
                 new_roots, external_source, last_blockstore_root
             );
 
@@ -1495,9 +1504,9 @@ pub fn reconcile_blockstore_roots_with_external_source(
             // That's because we might have a chance of recovering properly with
             // newer snapshot.
             warn!(
-                "Couldn't find any ancestor slots from external source ({:?}) \
-                 towards blockstore root ({}); blockstore pruned or only \
-                 tower moved into new ledger or just hard fork?",
+                "Couldn't find any ancestor slots from external source ({:?}) towards blockstore \
+                 root ({}); blockstore pruned or only tower moved into new ledger or just hard \
+                 fork?",
                 external_source, last_blockstore_root,
             );
         }
@@ -2958,9 +2967,10 @@ pub mod test {
     }
 
     #[test]
-    #[should_panic(expected = "last_blockstore_root(3) is skipped while \
-                               traversing blockstore (currently at 1) from \
-                               external root (Tower(4))!?")]
+    #[should_panic(
+        expected = "last_blockstore_root(3) is skipped while traversing blockstore (currently at \
+                    1) from external root (Tower(4))!?"
+    )]
     fn test_reconcile_blockstore_roots_with_tower_panic_no_common_root() {
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -3229,7 +3239,8 @@ pub mod test {
         let result = tower.adjust_lockouts_after_replay(MAX_ENTRIES, &slot_history);
         assert_eq!(
             format!("{}", result.unwrap_err()),
-            "The tower is too old: newest slot in tower (0) << oldest slot in available history (1)"
+            "The tower is too old: newest slot in tower (0) << oldest slot in available history \
+             (1)"
         );
     }
 
@@ -3308,7 +3319,8 @@ pub mod test {
         let result = tower.adjust_lockouts_after_replay(MAX_ENTRIES, &slot_history);
         assert_eq!(
             format!("{}", result.unwrap_err()),
-            "The tower is fatally inconsistent with blockstore: not too old once after got too old?"
+            "The tower is fatally inconsistent with blockstore: not too old once after got too \
+             old?"
         );
     }
 

@@ -44,7 +44,10 @@ fn app(crate_version: &str) -> Command {
         .arg_required_else_help(true)
         .subcommand(
             Command::new("new")
-                .about("Generate a new encryption key/keypair file from a random seed phrase and optional BIP39 passphrase")
+                .about(
+                    "Generate a new encryption key/keypair file from a random seed phrase and \
+                     optional BIP39 passphrase",
+                )
                 .disable_version_flag(true)
                 .arg(
                     Arg::new("type")
@@ -53,7 +56,7 @@ fn app(crate_version: &str) -> Command {
                         .possible_values(["elgamal", "aes128"])
                         .value_name("TYPE")
                         .required(true)
-                        .help("The type of encryption key")
+                        .help("The type of encryption key"),
                 )
                 .arg(
                     Arg::new("outfile")
@@ -68,13 +71,12 @@ fn app(crate_version: &str) -> Command {
                         .long("force")
                         .help("Overwrite the output file if it exists"),
                 )
-                .arg(
-                    Arg::new("silent")
-                        .long("silent")
-                        .help("Do not display seed phrase. Useful when piping output to other programs that prompt for user input, like gpg"),
-                )
+                .arg(Arg::new("silent").long("silent").help(
+                    "Do not display seed phrase. Useful when piping output to other programs that \
+                     prompt for user input, like gpg",
+                ))
                 .key_generation_common_args()
-                .arg(no_outfile_arg().conflicts_with_all(&["outfile", "silent"]))
+                .arg(no_outfile_arg().conflicts_with_all(&["outfile", "silent"])),
         )
         .subcommand(
             Command::new("pubkey")
@@ -87,7 +89,7 @@ fn app(crate_version: &str) -> Command {
                         .possible_values(["elgamal"])
                         .value_name("TYPE")
                         .required(true)
-                        .help("The type of keypair")
+                        .help("The type of keypair"),
                 )
                 .arg(
                     Arg::new("keypair")
@@ -100,7 +102,7 @@ fn app(crate_version: &str) -> Command {
                     Arg::new(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
                         .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
                         .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
-                )
+                ),
         )
         .subcommand(
             Command::new("recover")
@@ -113,7 +115,7 @@ fn app(crate_version: &str) -> Command {
                         .possible_values(["elgamal", "aes128"])
                         .value_name("TYPE")
                         .required(true)
-                        .help("The type of keypair")
+                        .help("The type of keypair"),
                 )
                 .arg(
                     Arg::new("prompt_signer")
@@ -199,8 +201,14 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                         let phrase: &str = mnemonic.phrase();
                         let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
                         println!(
-                            "{}\npubkey: {}\n{}\nSave this seed phrase{} to recover your new ElGamal keypair:\n{}\n{}",
-                            &divider, elgamal_keypair.pubkey(), &divider, passphrase_message, phrase, &divider
+                            "{}\npubkey: {}\n{}\nSave this seed phrase{} to recover your new \
+                             ElGamal keypair:\n{}\n{}",
+                            &divider,
+                            elgamal_keypair.pubkey(),
+                            &divider,
+                            passphrase_message,
+                            phrase,
+                            &divider
                         );
                     }
                 }

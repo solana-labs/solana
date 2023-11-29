@@ -1179,7 +1179,11 @@ pub mod tests {
                     NonZeroU64::new(ideal_size).unwrap(),
                 );
                 let storages_needed = result.len();
-                assert_eq!(storages_needed, expected_storages, "num_slots: {num_slots}, expected_storages: {expected_storages}, storages_needed: {storages_needed}, ideal_size: {ideal_size}");
+                assert_eq!(
+                    storages_needed, expected_storages,
+                    "num_slots: {num_slots}, expected_storages: {expected_storages}, \
+                     storages_needed: {storages_needed}, ideal_size: {ideal_size}"
+                );
                 compare_all_accounts(
                     &packed_to_compare(&result)[..],
                     &unique_to_compare(&original_results)[..],
@@ -1301,13 +1305,17 @@ pub mod tests {
                             largest_account_size
                         );
                     }
+                    assert!(packed.bytes > 0, "packed size of zero");
                     assert!(
-                        packed.bytes > 0,
-                        "packed size of zero"
-                    );
-                    assert!(
-                        packed.bytes <= ideal_size || packed.accounts.iter().map(|(_slot, accounts)| accounts.len()).sum::<usize>() == 1,
-                        "packed size too large: bytes: {}, ideal_size: {}, data_size: {}, num_slots: {}, # accounts: {}",
+                        packed.bytes <= ideal_size
+                            || packed
+                                .accounts
+                                .iter()
+                                .map(|(_slot, accounts)| accounts.len())
+                                .sum::<usize>()
+                                == 1,
+                        "packed size too large: bytes: {}, ideal_size: {}, data_size: {}, \
+                         num_slots: {}, # accounts: {}",
                         packed.bytes,
                         ideal_size,
                         data_size,
@@ -2847,8 +2855,13 @@ pub mod tests {
                     assert_eq!(
                         expected_infos,
                         count,
-                        "percent_of_alive_shrunk_data: {percent_of_alive_shrunk_data}, infos: {expected_infos}, method: {method:?}, swap: {swap}, data: {:?}",
-                        infos.all_infos.iter().map(|info| (info.slot, info.capacity, info.alive_bytes)).collect::<Vec<_>>()
+                        "percent_of_alive_shrunk_data: {percent_of_alive_shrunk_data}, infos: \
+                         {expected_infos}, method: {method:?}, swap: {swap}, data: {:?}",
+                        infos
+                            .all_infos
+                            .iter()
+                            .map(|info| (info.slot, info.capacity, info.alive_bytes))
+                            .collect::<Vec<_>>()
                     );
                 }
             }

@@ -82,7 +82,8 @@ impl LocalCluster {
         // Wait for a snapshot for a bank >= last_slot to be made so we know that the snapshot
         // must include the transactions just pushed
         trace!(
-            "Waiting for {:?} snapshot archive to be generated with slot >= {}, max wait duration: {:?}",
+            "Waiting for {:?} snapshot archive to be generated with slot >= {}, max wait \
+             duration: {:?}",
             next_snapshot_type,
             last_slot,
             max_wait_duration,
@@ -118,7 +119,8 @@ impl LocalCluster {
             if let Some(max_wait_duration) = max_wait_duration {
                 assert!(
                     timer.elapsed() < max_wait_duration,
-                    "Waiting for next {next_snapshot_type:?} snapshot exceeded the {max_wait_duration:?} maximum wait duration!",
+                    "Waiting for next {next_snapshot_type:?} snapshot exceeded the \
+                     {max_wait_duration:?} maximum wait duration!",
                 );
             }
             sleep(Duration::from_secs(5));

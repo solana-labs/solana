@@ -63,8 +63,8 @@ async fn main() {
                 .takes_value(true)
                 .multiple(true)
                 .help(
-                    "Allow requests from a particular IP address without request limit; \
-                    recipient address will be used to check request limits instead",
+                    "Allow requests from a particular IP address without request limit; recipient \
+                     address will be used to check request limits instead",
                 ),
         )
         .get_matches();

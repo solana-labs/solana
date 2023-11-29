@@ -171,8 +171,14 @@ impl<T> SnapshotAccountsDbFields<T> {
                 // There must not be any overlap in the slots of storages between the full snapshot and the incremental snapshot
                 incremental_snapshot_storages
                     .iter()
-                    .all(|storage_entry| !full_snapshot_storages.contains_key(storage_entry.0)).then_some(()).ok_or_else(|| {
-                        io::Error::new(io::ErrorKind::InvalidData, "Snapshots are incompatible: There are storages for the same slot in both the full snapshot and the incremental snapshot!")
+                    .all(|storage_entry| !full_snapshot_storages.contains_key(storage_entry.0))
+                    .then_some(())
+                    .ok_or_else(|| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "Snapshots are incompatible: There are storages for the same slot in \
+                             both the full snapshot and the incremental snapshot!",
+                        )
                     })?;
 
                 let mut combined_storages = full_snapshot_storages;
@@ -787,7 +793,8 @@ where
                 );
             assert!(
                 old_incremental_accounts_hash.is_none(),
-                "There should not already be an IncrementalAccountsHash at slot {slot}: {old_incremental_accounts_hash:?}",
+                "There should not already be an IncrementalAccountsHash at slot {slot}: \
+                 {old_incremental_accounts_hash:?}",
             );
         } else {
             // Otherwise, we've booted from a snapshot archive, or from local state that was *not*
@@ -820,17 +827,20 @@ where
                 let full_accounts_hash = &full_bank_hash_info.accounts_hash;
                 assert_eq!(
                     incremental_snapshot_persistence.full_slot, *full_slot,
-                    "The incremental snapshot's base slot ({}) must match the full snapshot's slot ({full_slot})!",
+                    "The incremental snapshot's base slot ({}) must match the full snapshot's \
+                     slot ({full_slot})!",
                     incremental_snapshot_persistence.full_slot,
                 );
                 assert_eq!(
                     &incremental_snapshot_persistence.full_hash, full_accounts_hash,
-                    "The incremental snapshot's base accounts hash ({}) must match the full snapshot's accounts hash ({})!",
+                    "The incremental snapshot's base accounts hash ({}) must match the full \
+                     snapshot's accounts hash ({})!",
                     &incremental_snapshot_persistence.full_hash.0, full_accounts_hash.0,
                 );
                 assert_eq!(
                     incremental_snapshot_persistence.full_capitalization, capitalizations.0,
-                    "The incremental snapshot's base capitalization ({}) must match the full snapshot's capitalization ({})!",
+                    "The incremental snapshot's base capitalization ({}) must match the full \
+                     snapshot's capitalization ({})!",
                     incremental_snapshot_persistence.full_capitalization, capitalizations.0,
                 );
                 let old_incremental_accounts_hash = accounts_db
@@ -841,7 +851,8 @@ where
                     );
                 assert!(
                     old_incremental_accounts_hash.is_none(),
-                    "There should not already be an IncrementalAccountsHash at slot {slot}: {old_incremental_accounts_hash:?}",
+                    "There should not already be an IncrementalAccountsHash at slot {slot}: \
+                     {old_incremental_accounts_hash:?}",
                 );
             } else {
                 // ..and without a BankIncrementalSnapshotPersistence then the Incremental Accounts
@@ -855,7 +866,8 @@ where
                 );
                 assert!(
                     old_accounts_hash.is_none(),
-                    "There should not already be an AccountsHash at slot {slot}: {old_accounts_hash:?}",
+                    "There should not already be an AccountsHash at slot {slot}: \
+                     {old_accounts_hash:?}",
                 );
             };
         }
@@ -900,8 +912,9 @@ where
     );
     assert!(
         old_accounts_delta_hash.is_none(),
-        "There should not already be an AccountsDeltaHash at slot {snapshot_slot}: {old_accounts_delta_hash:?}",
-        );
+        "There should not already be an AccountsDeltaHash at slot {snapshot_slot}: \
+         {old_accounts_delta_hash:?}",
+    );
     let old_stats = accounts_db
         .update_bank_hash_stats_from_snapshot(snapshot_slot, snapshot_bank_hash_info.stats);
     assert!(

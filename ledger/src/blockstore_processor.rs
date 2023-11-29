@@ -610,7 +610,8 @@ fn process_entries(
                             (
                                 "error",
                                 format!(
-                                    "Lock accounts error, entry conflicts with itself, txs: {transactions:?}"
+                                    "Lock accounts error, entry conflicts with itself, txs: \
+                                     {transactions:?}"
                                 ),
                                 String
                             )
@@ -1249,8 +1250,8 @@ fn confirm_slot_entries(
         let tick_hash_count = &mut progress.tick_hash_count;
         verify_ticks(bank, &entries, slot_full, tick_hash_count).map_err(|err| {
             warn!(
-                "{:#?}, slot: {}, entry len: {}, tick_height: {}, last entry: {}, \
-                last_blockhash: {}, shred_index: {}, slot_full: {}",
+                "{:#?}, slot: {}, entry len: {}, tick_height: {}, last entry: {}, last_blockhash: \
+                 {}, shred_index: {}, slot_full: {}",
                 err,
                 slot,
                 num_entries,
@@ -1531,18 +1532,13 @@ fn load_frozen_forks(
                 let slots_per_sec = slots_processed as f32 / secs;
                 let txs_per_sec = txs as f32 / secs;
                 info!(
-                    "processing ledger: slot={slot}, \
-                    root_slot={root} \
-                    slots={slots_processed}, \
-                    slots/s={slots_per_sec}, \
-                    txs/s={txs_per_sec}"
+                    "processing ledger: slot={slot}, root_slot={root} slots={slots_processed}, \
+                     slots/s={slots_per_sec}, txs/s={txs_per_sec}"
                 );
                 debug!(
-                    "processing ledger timing: \
-                    set_root_us={set_root_us}, \
-                    root_retain_us={root_retain_us}, \
-                    process_single_slot_us:{process_single_slot_us}, \
-                    voting_us: {voting_us}"
+                    "processing ledger timing: set_root_us={set_root_us}, \
+                     root_retain_us={root_retain_us}, \
+                     process_single_slot_us:{process_single_slot_us}, voting_us: {voting_us}"
                 );
 
                 last_status_report = Instant::now();

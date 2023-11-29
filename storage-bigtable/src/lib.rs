@@ -1111,10 +1111,9 @@ impl LedgerStorage {
                     }
                     Some(Ok(fetched_tx_info)) => {
                         warn!(
-                            "skipped tx row {} because the bigtable entry ({:?}) did not match to {:?}",
-                            signature,
-                            fetched_tx_info,
-                            &expected_tx_info,
+                            "skipped tx row {} because the bigtable entry ({:?}) did not match to \
+                             {:?}",
+                            signature, fetched_tx_info, &expected_tx_info,
                         );
                     }
                     Some(Err(err)) => {
@@ -1165,12 +1164,13 @@ impl LedgerStorage {
         }
 
         info!(
-            "{}deleted ledger data for slot {}: {} transaction rows, {} address slot rows, {} entry row",
+            "{}deleted ledger data for slot {}: {} transaction rows, {} address slot rows, {} \
+             entry row",
             if dry_run { "[dry run] " } else { "" },
             slot,
             tx_deletion_rows.len(),
             address_slot_rows.len(),
-            if entries_exist { "with" } else {"WITHOUT"}
+            if entries_exist { "with" } else { "WITHOUT" }
         );
 
         Ok(())

@@ -422,7 +422,10 @@ impl SnapshotRequestHandler {
                         accounts_hash_for_testing,
                     )
                 }
-                AccountsPackageKind::EpochAccountsHash => panic!("Illegal account package type: EpochAccountsHash packages must be from an EpochAccountsHash request!"),
+                AccountsPackageKind::EpochAccountsHash => panic!(
+                    "Illegal account package type: EpochAccountsHash packages must be from an \
+                     EpochAccountsHash request!"
+                ),
             },
             SnapshotRequestKind::EpochAccountsHash => {
                 // skip the bank snapshot, just make an accounts package to send to AHV
@@ -691,7 +694,10 @@ impl AccountsBackgroundService {
                                 last_cleaned_block_height = snapshot_block_height;
                             }
                             Err(err) => {
-                                error!("Stopping AccountsBackgroundService! Fatal error while handling snapshot requests: {err}");
+                                error!(
+                                    "Stopping AccountsBackgroundService! Fatal error while \
+                                     handling snapshot requests: {err}"
+                                );
                                 exit.store(true, Ordering::Relaxed);
                                 break;
                             }

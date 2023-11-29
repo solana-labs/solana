@@ -154,10 +154,9 @@ impl Dashboard {
                         };
 
                         progress_bar.set_message(format!(
-                            "{}{}| \
-                                    Processed Slot: {} | Confirmed Slot: {} | Finalized Slot: {} | \
-                                    Full Snapshot Slot: {} | Incremental Snapshot Slot: {} | \
-                                    Transactions: {} | {}",
+                            "{}{}| Processed Slot: {} | Confirmed Slot: {} | Finalized Slot: {} | \
+                             Full Snapshot Slot: {} | Incremental Snapshot Slot: {} | \
+                             Transactions: {} | {}",
                             uptime,
                             if health == "ok" {
                                 "".to_string()

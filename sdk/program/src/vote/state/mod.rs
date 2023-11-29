@@ -668,9 +668,11 @@ impl VoteState {
         for (i, v) in self.votes.iter_mut().enumerate() {
             // Don't increase the lockout for this vote until we get more confirmations
             // than the max number of confirmations this vote has seen
-            if stack_depth >
-                i.checked_add(v.confirmation_count() as usize)
-                    .expect("`confirmation_count` and tower_size should be bounded by `MAX_LOCKOUT_HISTORY`")
+            if stack_depth
+                > i.checked_add(v.confirmation_count() as usize).expect(
+                    "`confirmation_count` and tower_size should be bounded by \
+                     `MAX_LOCKOUT_HISTORY`",
+                )
             {
                 v.lockout.increase_confirmation_count(1);
             }

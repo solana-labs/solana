@@ -183,7 +183,8 @@ impl AccountsHashVerifier {
                     .count();
                 assert!(
                     num_eah_packages <= 1,
-                    "Only a single EAH accounts package is allowed at a time! count: {num_eah_packages}"
+                    "Only a single EAH accounts package is allowed at a time! count: \
+                     {num_eah_packages}"
                 );
 
                 // Get the two highest priority requests, `y` and `z`.
@@ -316,7 +317,10 @@ impl AccountsHashVerifier {
                     .accounts
                     .accounts_db
                     .get_accounts_hash(base_slot)
-                    .expect("incremental snapshot requires accounts hash and capitalization from the full snapshot it is based on");
+                    .expect(
+                        "incremental snapshot requires accounts hash and capitalization from the \
+                         full snapshot it is based on",
+                    );
                 let (incremental_accounts_hash, incremental_capitalization) =
                     Self::_calculate_incremental_accounts_hash(accounts_package, base_slot);
                 let bank_incremental_snapshot_persistence = BankIncrementalSnapshotPersistence {

@@ -104,9 +104,9 @@ impl RpcHealth {
             let num_slots = cluster_latest_optimistically_confirmed_slot
                 .saturating_sub(my_latest_optimistically_confirmed_slot);
             warn!(
-                "health check: behind by {num_slots} \
-                slots: me={my_latest_optimistically_confirmed_slot}, \
-                latest cluster={cluster_latest_optimistically_confirmed_slot}",
+                "health check: behind by {num_slots} slots: \
+                 me={my_latest_optimistically_confirmed_slot}, latest \
+                 cluster={cluster_latest_optimistically_confirmed_slot}",
             );
             RpcHealthStatus::Behind { num_slots }
         }

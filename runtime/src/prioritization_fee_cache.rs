@@ -332,7 +332,10 @@ impl PrioritizationFeeCache {
                 // It should be rare that optimistically confirmed bank had no prioritized
                 // transactions, but duplicated and unconfirmed bank had.
                 if pre_purge_bank_count > 0 && post_purge_bank_count == 0 {
-                    warn!("Finalized bank has empty prioritization fee cache. slot {slot} bank id {bank_id}");
+                    warn!(
+                        "Finalized bank has empty prioritization fee cache. slot {slot} bank id \
+                         {bank_id}"
+                    );
                 }
 
                 let mut block_prioritization_fee = slot_prioritization_fee

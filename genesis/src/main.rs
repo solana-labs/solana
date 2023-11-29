@@ -159,7 +159,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_name("RFC3339 DATE TIME")
                 .validator(is_rfc3339_datetime)
                 .takes_value(true)
-                .help("Time when the bootstrap validator will start the cluster [default: current system time]"),
+                .help(
+                    "Time when the bootstrap validator will start the cluster [default: current \
+                     system time]",
+                ),
         )
         .arg(
             Arg::with_name("bootstrap_validator")
@@ -235,8 +238,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .takes_value(true)
                 .default_value(default_target_lamports_per_signature)
                 .help(
-                    "The cost in lamports that the cluster will charge for signature \
-                     verification when the cluster is operating at target-signatures-per-slot",
+                    "The cost in lamports that the cluster will charge for signature verification \
+                     when the cluster is operating at target-signatures-per-slot",
                 ),
         )
         .arg(
@@ -246,8 +249,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .takes_value(true)
                 .default_value(default_lamports_per_byte_year)
                 .help(
-                    "The cost in lamports that the cluster will charge per byte per year \
-                     for accounts with data",
+                    "The cost in lamports that the cluster will charge per byte per year for \
+                     accounts with data",
                 ),
         )
         .arg(
@@ -257,8 +260,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .takes_value(true)
                 .default_value(default_rent_exemption_threshold)
                 .help(
-                    "amount of time (in years) the balance has to include rent for \
-                     to qualify as rent exempted account",
+                    "amount of time (in years) the balance has to include rent for to qualify as \
+                     rent exempted account",
                 ),
         )
         .arg(
@@ -295,10 +298,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .takes_value(true)
                 .default_value(default_target_signatures_per_slot)
                 .help(
-                    "Used to estimate the desired processing capacity of the cluster. \
-                    When the latest slot processes fewer/greater signatures than this \
-                    value, the lamports-per-signature fee will decrease/increase for \
-                    the next slot. A value of 0 disables signature-based fee adjustments",
+                    "Used to estimate the desired processing capacity of the cluster. When the \
+                     latest slot processes fewer/greater signatures than this value, the \
+                     lamports-per-signature fee will decrease/increase for the next slot. A value \
+                     of 0 disables signature-based fee adjustments",
                 ),
         )
         .arg(
@@ -315,10 +318,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .takes_value(true)
                 .default_value("auto")
                 .help(
-                    "How many PoH hashes to roll before emitting the next tick. \
-                     If \"auto\", determine based on --target-tick-duration \
-                     and the hash rate of this computer. If \"sleep\", for development \
-                     sleep for --target-tick-duration instead of hashing",
+                    "How many PoH hashes to roll before emitting the next tick. If \"auto\", \
+                     determine based on --target-tick-duration and the hash rate of this \
+                     computer. If \"sleep\", for development sleep for --target-tick-duration \
+                     instead of hashing",
                 ),
         )
         .arg(
@@ -341,8 +344,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             Arg::with_name("enable_warmup_epochs")
                 .long("enable-warmup-epochs")
                 .help(
-                    "When enabled epochs start short and will grow. \
-                     Useful for warming up stake quickly during development"
+                    "When enabled epochs start short and will grow. Useful for warming up stake \
+                     quickly during development",
                 ),
         )
         .arg(
@@ -359,9 +362,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .possible_values(&ClusterType::STRINGS)
                 .takes_value(true)
                 .default_value(default_cluster_type)
-                .help(
-                    "Selects the features that will be enabled for the cluster"
-                ),
+                .help("Selects the features that will be enabled for the cluster"),
         )
         .arg(
             Arg::with_name("max_genesis_archive_unpacked_size")
@@ -369,9 +370,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_name("NUMBER")
                 .takes_value(true)
                 .default_value(&default_genesis_archive_unpacked_size)
-                .help(
-                    "maximum total uncompressed file size of created genesis archive",
-                ),
+                .help("maximum total uncompressed file size of created genesis archive"),
         )
         .arg(
             Arg::with_name("bpf_program")
@@ -389,7 +388,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .takes_value(true)
                 .number_of_values(4)
                 .multiple(true)
-                .help("Install an upgradeable SBF program at the given address with the given upgrade authority (or \"none\")"),
+                .help(
+                    "Install an upgradeable SBF program at the given address with the given \
+                     upgrade authority (or \"none\")",
+                ),
         )
         .arg(
             Arg::with_name("inflation")
@@ -1019,18 +1021,25 @@ mod tests {
 
         assert_eq!(genesis_config.accounts.len(), 4);
 
-        let yaml_string_keypair = "---
-\"[17,12,234,59,35,246,168,6,64,36,169,164,219,96,253,79,238,202,164,160,195,89,9,96,179,117,255,239,32,64,124,66,233,130,19,107,172,54,86,32,119,148,4,39,199,40,122,230,249,47,150,168,163,159,83,233,97,18,25,238,103,25,253,108]\":
+        let yaml_string_keypair =
+            "---
+\"[17,12,234,59,35,246,168,6,64,36,169,164,219,96,253,79,238,202,164,160,195,89,9,96,179,117,255,\
+             239,32,64,124,66,233,130,19,107,172,54,86,32,119,148,4,39,199,40,122,230,249,47,150,\
+             168,163,159,83,233,97,18,25,238,103,25,253,108]\":
   balance: 20
   owner: 9ZfsP6Um1KU8d5gNzTsEbSJxanKYp5EPF36qUu4FJqgp
   data: Y2F0IGRvZw==
   executable: true
-\"[36,246,244,43,37,214,110,50,134,148,148,8,205,82,233,67,223,245,122,5,149,232,213,125,244,182,26,29,56,224,70,45,42,163,71,62,222,33,229,54,73,136,53,174,128,103,247,235,222,27,219,129,180,77,225,174,220,74,201,123,97,155,159,234]\":
+\"[36,246,244,43,37,214,110,50,134,148,148,8,205,82,233,67,223,245,122,5,149,232,213,125,244,182,\
+             26,29,56,224,70,45,42,163,71,62,222,33,229,54,73,136,53,174,128,103,247,235,222,27,\
+             219,129,180,77,225,174,220,74,201,123,97,155,159,234]\":
   balance: 15
   owner: F9dmtjJPi8vfLu1EJN4KkyoGdXGmVfSAhxz35Qo9RDCJ
   data: bW9ua2V5IGVsZXBoYW50
   executable: false
-\"[103,27,132,107,42,149,72,113,24,138,225,109,209,31,158,6,26,11,8,76,24,128,131,215,156,80,251,114,103,220,111,235,56,22,87,5,209,56,53,12,224,170,10,66,82,42,11,138,51,76,120,27,166,200,237,16,200,31,23,5,57,22,131,221]\":
+\"[103,27,132,107,42,149,72,113,24,138,225,109,209,31,158,6,26,11,8,76,24,128,131,215,156,80,251,\
+             114,103,220,111,235,56,22,87,5,209,56,53,12,224,170,10,66,82,42,11,138,51,76,120,27,\
+             166,200,237,16,200,31,23,5,57,22,131,221]\":
   balance: 30
   owner: AwAR5mAbNPbvQ4CvMeBxwWE8caigQoMC2chkWAbh2b9V
   data: Y29tYSBtb2Nh

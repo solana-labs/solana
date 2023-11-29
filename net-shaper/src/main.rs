@@ -309,11 +309,12 @@ fn insert_tos_ifb_filter(class: &str, tos: &str) -> bool {
     run(
         "tc",
         &[
-            "filter", "add", "dev", "ifb0", "protocol", "ip", "parent", "1:", "prio", "1",
-            "u32", "match", "ip", "tos", tos, "0xff", "flowid", class,
+            "filter", "add", "dev", "ifb0", "protocol", "ip", "parent", "1:", "prio", "1", "u32",
+            "match", "ip", "tos", tos, "0xff", "flowid", class,
         ],
         "Failed to add tos filter",
-        "tc filter add dev ifb0 protocol ip parent 1: prio 1 u32 match ip tos <tos> 0xff flowid <class>",
+        "tc filter add dev ifb0 protocol ip parent 1: prio 1 u32 match ip tos <tos> 0xff flowid \
+         <class>",
         false,
     )
 }
@@ -584,7 +585,10 @@ fn main() {
                         .value_name("count")
                         .takes_value(true)
                         .required(false)
-                        .help("Maximum number of partitions. Used only with random configuration generation"),
+                        .help(
+                            "Maximum number of partitions. Used only with random configuration \
+                             generation",
+                        ),
                 )
                 .arg(
                     Arg::new("max-drop")
@@ -593,7 +597,10 @@ fn main() {
                         .value_name("percentage")
                         .takes_value(true)
                         .required(false)
-                        .help("Maximum amount of packet drop. Used only with random configuration generation"),
+                        .help(
+                            "Maximum amount of packet drop. Used only with random configuration \
+                             generation",
+                        ),
                 )
                 .arg(
                     Arg::new("max-delay")
@@ -602,7 +609,10 @@ fn main() {
                         .value_name("ms")
                         .takes_value(true)
                         .required(false)
-                        .help("Maximum amount of packet delay. Used only with random configuration generation"),
+                        .help(
+                            "Maximum amount of packet delay. Used only with random configuration \
+                             generation",
+                        ),
                 ),
         )
         .get_matches();

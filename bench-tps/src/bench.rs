@@ -214,7 +214,8 @@ where
         let bsps = (tx_count) as f64 / ns as f64;
         let nsps = ns as f64 / (tx_count) as f64;
         info!(
-            "Done. {:.2} thousand signatures per second, {:.2} us per signature, {} ms total time, {:?}",
+            "Done. {:.2} thousand signatures per second, {:.2} us per signature, {} ms total \
+             time, {:?}",
             bsps * 1_000_000_f64,
             nsps / 1_000_f64,
             duration_as_ms(&duration),
@@ -1028,7 +1029,8 @@ fn compute_and_report_stats(
         0.0
     };
     info!(
-        "\nHighest TPS: {:.2} sampling period {}s max transactions: {} clients: {} drop rate: {:.2}",
+        "\nHighest TPS: {:.2} sampling period {}s max transactions: {} clients: {} drop rate: \
+         {:.2}",
         max_of_maxes,
         sample_period,
         max_tx_count,

@@ -222,7 +222,9 @@ mod tests {
                 assert_eq!(
                     size,
                     expected,
-                    "(reserialize_accounts_hash, incremental_snapshot_persistence, update_accounts_hash, initial_epoch_accounts_hash): {:?}, previous_len: {previous_len}",
+                    "(reserialize_accounts_hash, incremental_snapshot_persistence, \
+                     update_accounts_hash, initial_epoch_accounts_hash): {:?}, previous_len: \
+                     {previous_len}",
                     (
                         reserialize_accounts_hash,
                         incremental_snapshot_persistence,
@@ -293,14 +295,19 @@ mod tests {
         }
         assert!(bank2 == dbank);
         assert_eq!(dbank.incremental_snapshot_persistence, incremental);
-        assert_eq!(dbank.get_epoch_accounts_hash_to_serialize().map(|epoch_accounts_hash| *epoch_accounts_hash.as_ref()), expected_epoch_accounts_hash,
-                   "(reserialize_accounts_hash, incremental_snapshot_persistence, update_accounts_hash, initial_epoch_accounts_hash): {:?}",
-                   (
-                       reserialize_accounts_hash,
-                       incremental_snapshot_persistence,
-                       update_accounts_hash,
-                       initial_epoch_accounts_hash,
-                   )
+        assert_eq!(
+            dbank
+                .get_epoch_accounts_hash_to_serialize()
+                .map(|epoch_accounts_hash| *epoch_accounts_hash.as_ref()),
+            expected_epoch_accounts_hash,
+            "(reserialize_accounts_hash, incremental_snapshot_persistence, update_accounts_hash, \
+             initial_epoch_accounts_hash): {:?}",
+            (
+                reserialize_accounts_hash,
+                incremental_snapshot_persistence,
+                update_accounts_hash,
+                initial_epoch_accounts_hash,
+            )
         );
     }
 

@@ -2025,21 +2025,24 @@ mod tests {
                     }
                     assert_eq!(
                         expected_result, result,
-                        "return value different. other: {other_slot:?}, {expected:?}, {slot_list:?}, original: {original:?}"
+                        "return value different. other: {other_slot:?}, {expected:?}, \
+                         {slot_list:?}, original: {original:?}"
                     );
                     // sort for easy comparison
                     expected_reclaims.sort_unstable();
                     reclaims.sort_unstable();
                     assert_eq!(
                         expected_reclaims, reclaims,
-                        "reclaims different. other: {other_slot:?}, {expected:?}, {slot_list:?}, original: {original:?}"
+                        "reclaims different. other: {other_slot:?}, {expected:?}, {slot_list:?}, \
+                         original: {original:?}"
                     );
                     // sort for easy comparison
                     slot_list.sort_unstable();
                     expected.sort_unstable();
                     assert_eq!(
                         slot_list, expected,
-                        "slot_list different. other: {other_slot:?}, {expected:?}, {slot_list:?}, original: {original:?}"
+                        "slot_list different. other: {other_slot:?}, {expected:?}, {slot_list:?}, \
+                         original: {original:?}"
                     );
                 }
             }

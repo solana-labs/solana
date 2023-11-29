@@ -150,7 +150,10 @@ pub trait DiskIndexValue:
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum ScanError {
-    #[error("Node detected it replayed bad version of slot {slot:?} with id {bank_id:?}, thus the scan on said slot was aborted")]
+    #[error(
+        "Node detected it replayed bad version of slot {slot:?} with id {bank_id:?}, thus the \
+         scan on said slot was aborted"
+    )]
     SlotRemoved { slot: Slot, bank_id: BankId },
     #[error("scan aborted: {0}")]
     Aborted(String),

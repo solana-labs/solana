@@ -788,7 +788,10 @@ impl<'a> LoadedAccountAccessor<'a> {
 
         match self {
             LoadedAccountAccessor::Cached(None) | LoadedAccountAccessor::Stored(None) => {
-                panic!("Should have already been taken care of when creating this LoadedAccountAccessor");
+                panic!(
+                    "Should have already been taken care of when creating this \
+                     LoadedAccountAccessor"
+                );
             }
             LoadedAccountAccessor::Cached(Some(_cached_account)) => {
                 // Cached(Some(x)) variant always produces `Some` for get_loaded_account() since
@@ -801,8 +804,10 @@ impl<'a> LoadedAccountAccessor<'a> {
                 // was still in the storage map. This means even if the storage entry is removed
                 // from the storage map after we grabbed the storage entry, the recycler should not
                 // reset the storage entry until we drop the reference to the storage entry.
-                self.get_loaded_account()
-                    .expect("If a storage entry was found in the storage map, it must not have been reset yet")
+                self.get_loaded_account().expect(
+                    "If a storage entry was found in the storage map, it must not have been reset \
+                     yet",
+                )
             }
         }
     }
@@ -2836,9 +2841,17 @@ impl AccountsDb {
                 let slot = pending_stores.iter().next().cloned().unwrap();
                 if Some(slot) == min_slot {
                     if let Some(failed_slot) = failed_slot.take() {
-                        info!("calc_delete_dependencies, oldest slot is not able to be deleted because of {pubkey} in slot {failed_slot}");
+                        info!(
+                            "calc_delete_dependencies, oldest slot is not able to be deleted \
+                             because of {pubkey} in slot {failed_slot}"
+                        );
                     } else {
-                        info!("calc_delete_dependencies, oldest slot is not able to be deleted because of {pubkey}, account infos len: {}, ref count: {ref_count_from_storage}", account_infos.len());
+                        info!(
+                            "calc_delete_dependencies, oldest slot is not able to be deleted \
+                             because of {pubkey}, account infos len: {}, ref count: \
+                             {ref_count_from_storage}",
+                            account_infos.len()
+                        );
                     }
                 }
 
@@ -3115,8 +3128,12 @@ impl AccountsDb {
         // Check if we should purge any of the zero_lamport_accounts_to_purge_later, based on the
         // last_full_snapshot_slot.
         assert!(
-            last_full_snapshot_slot.is_some() || self.zero_lamport_accounts_to_purge_after_full_snapshot.is_empty(),
-            "if snapshots are disabled, then zero_lamport_accounts_to_purge_later should always be empty"
+            last_full_snapshot_slot.is_some()
+                || self
+                    .zero_lamport_accounts_to_purge_after_full_snapshot
+                    .is_empty(),
+            "if snapshots are disabled, then zero_lamport_accounts_to_purge_later should always \
+             be empty"
         );
         if let Some(last_full_snapshot_slot) = last_full_snapshot_slot {
             self.zero_lamport_accounts_to_purge_after_full_snapshot
@@ -3172,29 +3189,56 @@ impl AccountsDb {
         let threads = quarter_thread_count();
         let per_batch = total / threads;
         (0..=threads).into_par_iter().for_each(|attempt| {
-                pubkey_refcount.iter().skip(attempt * per_batch).take(per_batch).for_each(|entry| {
+            pubkey_refcount
+                .iter()
+                .skip(attempt * per_batch)
+                .take(per_batch)
+                .for_each(|entry| {
                     if failed.load(Ordering::Relaxed) {
                         return;
                     }
                     if let Some(idx) = self.accounts_index.get_account_read_entry(entry.key()) {
                         match (idx.ref_count() as usize).cmp(&entry.value().len()) {
                             std::cmp::Ordering::Greater => {
-                            let list = idx.slot_list();
-                            let too_new = list.iter().filter_map(|(slot, _)| (slot > &max_slot_inclusive).then_some(())).count();
+                                let list = idx.slot_list();
+                                let too_new = list
+                                    .iter()
+                                    .filter_map(|(slot, _)| {
+                                        (slot > &max_slot_inclusive).then_some(())
+                                    })
+                                    .count();
 
-                            if ((idx.ref_count() as usize) - too_new) > entry.value().len() {
-                                failed.store(true, Ordering::Relaxed);
-                                error!("exhaustively_verify_refcounts: {} refcount too large: {}, should be: {}, {:?}, {:?}, original: {:?}, too_new: {too_new}", entry.key(), idx.ref_count(), entry.value().len(), *entry.value(), list, idx.slot_list());
+                                if ((idx.ref_count() as usize) - too_new) > entry.value().len() {
+                                    failed.store(true, Ordering::Relaxed);
+                                    error!(
+                                        "exhaustively_verify_refcounts: {} refcount too large: \
+                                         {}, should be: {}, {:?}, {:?}, original: {:?}, too_new: \
+                                         {too_new}",
+                                        entry.key(),
+                                        idx.ref_count(),
+                                        entry.value().len(),
+                                        *entry.value(),
+                                        list,
+                                        idx.slot_list()
+                                    );
+                                }
                             }
+                            std::cmp::Ordering::Less => {
+                                error!(
+                                    "exhaustively_verify_refcounts: {} refcount too small: {}, \
+                                     should be: {}, {:?}, {:?}",
+                                    entry.key(),
+                                    idx.ref_count(),
+                                    entry.value().len(),
+                                    *entry.value(),
+                                    idx.slot_list()
+                                );
+                            }
+                            _ => {}
                         }
-                        std::cmp::Ordering::Less => {
-                            error!("exhaustively_verify_refcounts: {} refcount too small: {}, should be: {}, {:?}, {:?}", entry.key(), idx.ref_count(), entry.value().len(), *entry.value(), idx.slot_list());
-                        }
-                        _ => {}
-                    }
                     }
                 });
-            });
+        });
         if failed.load(Ordering::Relaxed) {
             panic!("exhaustively_verify_refcounts failed");
         }
@@ -3404,7 +3448,8 @@ impl AccountsDb {
                     key_set.insert(*key);
                     assert!(
                         !account_info.is_cached(),
-                        "The Accounts Cache must be flushed first for this account info. pubkey: {}, slot: {}",
+                        "The Accounts Cache must be flushed first for this account info. pubkey: \
+                         {}, slot: {}",
                         *key,
                         *slot
                     );
@@ -3416,7 +3461,9 @@ impl AccountsDb {
                         - 1;
                     debug!(
                         "store_counts, inserting slot: {}, store id: {}, count: {}",
-                        slot, account_info.store_id(), count
+                        slot,
+                        account_info.store_id(),
+                        count
                     );
                     store_counts.insert(*slot, (count, key_set));
                 }
@@ -4307,13 +4354,21 @@ impl AccountsDb {
         for usage in &store_usage {
             let store = &usage.store;
             let alive_ratio = (total_alive_bytes as f64) / (total_bytes as f64);
-            debug!("alive_ratio: {:?} store_id: {:?}, store_ratio: {:?} requirement: {:?}, total_bytes: {:?} total_alive_bytes: {:?}",
-                alive_ratio, usage.store.append_vec_id(), usage.alive_ratio, shrink_ratio, total_bytes, total_alive_bytes);
+            debug!(
+                "alive_ratio: {:?} store_id: {:?}, store_ratio: {:?} requirement: {:?}, \
+                 total_bytes: {:?} total_alive_bytes: {:?}",
+                alive_ratio,
+                usage.store.append_vec_id(),
+                usage.alive_ratio,
+                shrink_ratio,
+                total_bytes,
+                total_alive_bytes
+            );
             if alive_ratio > shrink_ratio {
                 // we have reached our goal, stop
                 debug!(
                     "Shrinking goal can be achieved at slot {:?}, total_alive_bytes: {:?} \
-                    total_bytes: {:?}, alive_ratio: {:}, shrink_ratio: {:?}",
+                     total_bytes: {:?}, alive_ratio: {:}, shrink_ratio: {:?}",
                     usage.slot, total_alive_bytes, total_bytes, alive_ratio, shrink_ratio
                 );
                 if usage.alive_ratio < shrink_ratio {
@@ -5023,7 +5078,10 @@ impl AccountsDb {
     pub fn insert_default_bank_hash_stats(&self, slot: Slot, parent_slot: Slot) {
         let mut bank_hash_stats = self.bank_hash_stats.lock().unwrap();
         if bank_hash_stats.get(&slot).is_some() {
-            error!("set_hash: already exists; multiple forks with shared slot {slot} as child (parent: {parent_slot})!?");
+            error!(
+                "set_hash: already exists; multiple forks with shared slot {slot} as child \
+                 (parent: {parent_slot})!?"
+            );
             return;
         }
         bank_hash_stats.insert(slot, BankHashStats::default());
@@ -5349,7 +5407,8 @@ impl AccountsDb {
                 // accounts/purge_slots
                 let message = format!(
                     "do_load() failed to get key: {pubkey} from storage, latest attempt was for \
-                     slot: {slot}, storage_location: {storage_location:?}, load_hint: {load_hint:?}",
+                     slot: {slot}, storage_location: {storage_location:?}, load_hint: \
+                     {load_hint:?}",
                 );
                 datapoint_warn!("accounts_db-do_load_warn", ("warn", message, String));
                 true
@@ -5604,7 +5663,8 @@ impl AccountsDb {
                     // This info shows the appendvec change history.  It helps debugging
                     // the appendvec data corrupution issues related to recycling.
                     debug!(
-                        "recycling store: old slot {}, old_id: {}, new slot {}, new id{}, path {:?} ",
+                        "recycling store: old slot {}, old_id: {}, new slot {}, new id{}, path \
+                         {:?} ",
                         slot,
                         old_id,
                         ret.slot(),
@@ -5990,7 +6050,10 @@ impl AccountsDb {
         let mut purge_accounts_index_elapsed = Measure::start("purge_accounts_index_elapsed");
         let (reclaims, pubkeys_removed_from_accounts_index) = match scan_result {
             ScanStorageResult::Cached(_) => {
-                panic!("Should not see cached keys in this `else` branch, since we checked this slot did not exist in the cache above");
+                panic!(
+                    "Should not see cached keys in this `else` branch, since we checked this slot \
+                     did not exist in the cache above"
+                );
             }
             ScanStorageResult::Stored(stored_keys) => {
                 // Purge this slot from the accounts index
@@ -6906,8 +6969,9 @@ impl AccountsDb {
                     let result: Vec<Hash> = pubkeys
                         .iter()
                         .filter_map(|pubkey| {
-                            if let AccountIndexGetResult::Found(lock, index) =
-                                self.accounts_index.get(pubkey, config.ancestors, Some(max_slot))
+                            if let AccountIndexGetResult::Found(lock, index) = self
+                                .accounts_index
+                                .get(pubkey, config.ancestors, Some(max_slot))
                             {
                                 let (slot, account_info) = &lock.slot_list()[index];
                                 if !account_info.is_zero_lamport() {
@@ -6930,17 +6994,22 @@ impl AccountsDb {
                                         |loaded_account| {
                                             let mut loaded_hash = loaded_account.loaded_hash();
                                             let balance = loaded_account.lamports();
-                                            let hash_is_missing = loaded_hash == AccountHash(Hash::default());
+                                            let hash_is_missing =
+                                                loaded_hash == AccountHash(Hash::default());
                                             if config.check_hash || hash_is_missing {
                                                 let computed_hash =
                                                     loaded_account.compute_hash(pubkey);
                                                 if hash_is_missing {
                                                     loaded_hash = computed_hash;
-                                                }
-                                                else if config.check_hash && computed_hash != loaded_hash {
-                                                    info!("hash mismatch found: computed: {}, loaded: {}, pubkey: {}", computed_hash.0, loaded_hash.0, pubkey);
-                                                    mismatch_found
-                                                        .fetch_add(1, Ordering::Relaxed);
+                                                } else if config.check_hash
+                                                    && computed_hash != loaded_hash
+                                                {
+                                                    info!(
+                                                        "hash mismatch found: computed: {}, \
+                                                         loaded: {}, pubkey: {}",
+                                                        computed_hash.0, loaded_hash.0, pubkey
+                                                    );
+                                                    mismatch_found.fetch_add(1, Ordering::Relaxed);
                                                     return None;
                                                 }
                                             }
@@ -6958,10 +7027,10 @@ impl AccountsDb {
                         })
                         .collect();
                     let mut total = total_lamports.lock().unwrap();
-                    *total =
-                        AccountsHasher::checked_cast_for_capitalization(*total as u128 + sum);
+                    *total = AccountsHasher::checked_cast_for_capitalization(*total as u128 + sum);
                     result
-                }).collect()
+                })
+                .collect()
         };
 
         let hashes: Vec<Vec<Hash>> = if config.check_hash {
@@ -7358,7 +7427,18 @@ impl AccountsDb {
             let success = accounts_hash == accounts_hash_other
                 && total_lamports == total_lamports_other
                 && total_lamports == expected_capitalization.unwrap_or(total_lamports);
-            assert!(success, "calculate_accounts_hash_with_verify mismatch. hashes: {}, {}; lamports: {}, {}; expected lamports: {:?}, data source: {:?}, slot: {}", accounts_hash.0, accounts_hash_other.0, total_lamports, total_lamports_other, expected_capitalization, data_source, slot);
+            assert!(
+                success,
+                "calculate_accounts_hash_with_verify mismatch. hashes: {}, {}; lamports: {}, {}; \
+                 expected lamports: {:?}, data source: {:?}, slot: {}",
+                accounts_hash.0,
+                accounts_hash_other.0,
+                total_lamports,
+                total_lamports_other,
+                expected_capitalization,
+                data_source,
+                slot
+            );
         }
         Ok((accounts_hash, total_lamports))
     }
@@ -7408,7 +7488,10 @@ impl AccountsDb {
         let accounts_hash = self.calculate_accounts_hash_from_storages(config, storages, stats)?;
         let old_accounts_hash = self.set_accounts_hash(slot, accounts_hash);
         if let Some(old_accounts_hash) = old_accounts_hash {
-            warn!("Accounts hash was already set for slot {slot}! old: {old_accounts_hash:?}, new: {accounts_hash:?}");
+            warn!(
+                "Accounts hash was already set for slot {slot}! old: {old_accounts_hash:?}, new: \
+                 {accounts_hash:?}"
+            );
         }
         Ok(accounts_hash)
     }
@@ -7427,7 +7510,10 @@ impl AccountsDb {
         let old_incremental_accounts_hash =
             self.set_incremental_accounts_hash(slot, incremental_accounts_hash);
         if let Some(old_incremental_accounts_hash) = old_incremental_accounts_hash {
-            warn!("Incremental accounts hash was already set for slot {slot}! old: {old_incremental_accounts_hash:?}, new: {incremental_accounts_hash:?}");
+            warn!(
+                "Incremental accounts hash was already set for slot {slot}! old: \
+                 {old_incremental_accounts_hash:?}, new: {incremental_accounts_hash:?}"
+            );
         }
         Ok(incremental_accounts_hash)
     }
@@ -7727,7 +7813,10 @@ impl AccountsDb {
                     AccountsHashKind::Incremental(IncrementalAccountsHash(accounts_hash))
                 }
             };
-            info!("calculate_accounts_hash_from_storages: slot: {slot}, {accounts_hash:?}, capitalization: {capitalization}");
+            info!(
+                "calculate_accounts_hash_from_storages: slot: {slot}, {accounts_hash:?}, \
+                 capitalization: {capitalization}"
+            );
             Ok((accounts_hash, capitalization))
         };
 
@@ -7782,7 +7871,8 @@ impl AccountsDb {
             if calculated_incremental_accounts_hash != found_incremental_accounts_hash {
                 warn!(
                     "mismatched incremental accounts hash for slot {slot}: \
-                    {calculated_incremental_accounts_hash:?} (calculated) != {found_incremental_accounts_hash:?} (expected)"
+                     {calculated_incremental_accounts_hash:?} (calculated) != \
+                     {found_incremental_accounts_hash:?} (expected)"
                 );
                 if hash_mismatch_is_error {
                     return Err(MismatchedAccountsHash);
@@ -7810,8 +7900,8 @@ impl AccountsDb {
                 self.get_accounts_hash(slot).ok_or(MissingAccountsHash)?;
             if calculated_accounts_hash != found_accounts_hash {
                 warn!(
-                    "Mismatched accounts hash for slot {slot}: \
-                    {calculated_accounts_hash:?} (calculated) != {found_accounts_hash:?} (expected)"
+                    "Mismatched accounts hash for slot {slot}: {calculated_accounts_hash:?} \
+                     (calculated) != {found_accounts_hash:?} (expected)"
                 );
                 if hash_mismatch_is_error {
                     return Err(MismatchedAccountsHash);
@@ -8074,7 +8164,8 @@ impl AccountsDb {
 
         if Self::should_not_shrink(alive_bytes, total_bytes) {
             trace!(
-                "shrink_slot_forced ({}): not able to shrink at all: alive/stored: {} ({}b / {}b) save: {}",
+                "shrink_slot_forced ({}): not able to shrink at all: alive/stored: {} ({}b / {}b) \
+                 save: {}",
                 slot,
                 alive_count,
                 stored_count,
@@ -8148,9 +8239,12 @@ impl AccountsDb {
                 .get_account_storage_entry(*slot, account_info.store_id())
             {
                 assert_eq!(
-                    *slot, store.slot(),
-                    "AccountsDB::accounts_index corrupted. Storage pointed to: {}, expected: {}, should only point to one slot",
-                    store.slot(), *slot
+                    *slot,
+                    store.slot(),
+                    "AccountsDB::accounts_index corrupted. Storage pointed to: {}, expected: {}, \
+                     should only point to one slot",
+                    store.slot(),
+                    *slot
                 );
                 let offset = account_info.offset();
                 let account = store.accounts.get_account(offset).unwrap();
@@ -9414,7 +9508,8 @@ impl AccountsDb {
         let recycle_stores = self.recycle_stores.read().unwrap();
         for (recycled_time, entry) in recycle_stores.iter() {
             info!(
-                "  slot: {} id: {} count_and_status: {:?} approx_store_count: {} len: {} capacity: {} (recycled: {:?})",
+                "  slot: {} id: {} count_and_status: {:?} approx_store_count: {} len: {} \
+                 capacity: {} (recycled: {:?})",
                 entry.slot(),
                 entry.append_vec_id(),
                 *entry.count_and_status.read().unwrap(),
@@ -9452,7 +9547,8 @@ impl AccountsDb {
         for slot in &slots {
             let entry = self.storage.get_slot_storage_entry(*slot).unwrap();
             info!(
-                "  slot: {} id: {} count_and_status: {:?} approx_store_count: {} len: {} capacity: {}",
+                "  slot: {} id: {} count_and_status: {:?} approx_store_count: {} len: {} \
+                 capacity: {}",
                 slot,
                 entry.append_vec_id(),
                 *entry.count_and_status.read().unwrap(),
@@ -13876,7 +13972,8 @@ pub mod tests {
                         db.accounts_cache
                             .slot_cache(unrooted_slot as Slot)
                             .is_some(),
-                        "unrooted_slot: {unrooted_slot}, total_slots: {total_slots}, expected_size: {expected_size}"
+                        "unrooted_slot: {unrooted_slot}, total_slots: {total_slots}, \
+                         expected_size: {expected_size}"
                     );
                 }
             }
@@ -17021,7 +17118,15 @@ pub mod tests {
                                     pubkey_opposite_alive = Some(&pubkeys[account_count]);
                                     account_count += 1;
                                 }
-                                debug!("space: {space}, lamports: {lamports}, alive: {alive}, account_count: {account_count}, append_opposite_alive_account: {append_opposite_alive_account}, append_opposite_zero_lamport_account: {append_opposite_zero_lamport_account}, normal_account_count: {normal_account_count}");
+                                debug!(
+                                    "space: {space}, lamports: {lamports}, alive: {alive}, \
+                                     account_count: {account_count}, \
+                                     append_opposite_alive_account: \
+                                     {append_opposite_alive_account}, \
+                                     append_opposite_zero_lamport_account: \
+                                     {append_opposite_zero_lamport_account}, \
+                                     normal_account_count: {normal_account_count}"
+                                );
                                 let db = AccountsDb::new_single_for_tests();
                                 let slot5 = 5;
                                 let mut account = AccountSharedData::new(

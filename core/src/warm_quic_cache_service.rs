@@ -41,7 +41,7 @@ impl WarmQuicCacheService {
                 let slot_jitter = thread_rng().gen_range(-CACHE_JITTER_SLOT..CACHE_JITTER_SLOT);
                 let mut maybe_last_leader = None;
                 while !exit.load(Ordering::Relaxed) {
-                    let leader_pubkey =  poh_recorder
+                    let leader_pubkey = poh_recorder
                         .read()
                         .unwrap()
                         .leader_after_n_slots((CACHE_OFFSET_SLOT + slot_jitter) as u64);
@@ -51,12 +51,15 @@ impl WarmQuicCacheService {
                         {
                             maybe_last_leader = Some(leader_pubkey);
                             if let Some(Ok(addr)) = cluster_info
-                                .lookup_contact_info(&leader_pubkey, |node| node.tpu(Protocol::QUIC))
+                                .lookup_contact_info(&leader_pubkey, |node| {
+                                    node.tpu(Protocol::QUIC)
+                                })
                             {
                                 let conn = connection_cache.get_connection(&addr);
                                 if let Err(err) = conn.send_data(&[]) {
                                     warn!(
-                                        "Failed to warmup QUIC connection to the leader {:?}, Error {:?}",
+                                        "Failed to warmup QUIC connection to the leader {:?}, \
+                                         Error {:?}",
                                         leader_pubkey, err
                                     );
                                 }

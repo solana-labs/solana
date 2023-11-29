@@ -582,10 +582,9 @@ impl AdminRpc for AdminRpcImpl {
                 .tpu(Protocol::UDP)
                 .map_err(|err| {
                     error!(
-                        "The public TPU address isn't being published. \
-                        The node is likely in repair mode. \
-                        See help for --restricted-repair-only-mode for more information. \
-                        {err}"
+                        "The public TPU address isn't being published. The node is likely in \
+                         repair mode. See help for --restricted-repair-only-mode for more \
+                         information. {err}"
                     );
                     jsonrpc_core::error::Error::internal_error()
                 })?;
@@ -620,10 +619,9 @@ impl AdminRpc for AdminRpcImpl {
                 .tpu_forwards(Protocol::UDP)
                 .map_err(|err| {
                     error!(
-                        "The public TPU Forwards address isn't being published. \
-                        The node is likely in repair mode. \
-                        See help for --restricted-repair-only-mode for more information. \
-                        {err}"
+                        "The public TPU Forwards address isn't being published. The node is \
+                         likely in repair mode. See help for --restricted-repair-only-mode for \
+                         more information. {err}"
                     );
                     jsonrpc_core::error::Error::internal_error()
                 })?;

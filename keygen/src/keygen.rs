@@ -258,11 +258,14 @@ fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
                         .value_name("KEYPAIR")
                         .takes_value(true)
                         .help("Filepath or URL to a keypair"),
-                )
+                ),
         )
         .subcommand(
             Command::new("new")
-                .about("Generate new keypair file from a random seed phrase and optional BIP39 passphrase")
+                .about(
+                    "Generate new keypair file from a random seed phrase and optional BIP39 \
+                     passphrase",
+                )
                 .disable_version_flag(true)
                 .arg(
                     Arg::new("outfile")
@@ -278,19 +281,13 @@ fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
                         .long("force")
                         .help("Overwrite the output file if it exists"),
                 )
-                .arg(
-                    Arg::new("silent")
-                        .short('s')
-                        .long("silent")
-                        .help("Do not display seed phrase. Useful when piping output to other programs that prompt for user input, like gpg"),
-                )
-                .arg(
-                    derivation_path_arg()
-                )
+                .arg(Arg::new("silent").short('s').long("silent").help(
+                    "Do not display seed phrase. Useful when piping output to other programs that \
+                     prompt for user input, like gpg",
+                ))
+                .arg(derivation_path_arg())
                 .key_generation_common_args()
-                .arg(no_outfile_arg()
-                    .conflicts_with_all(&["outfile", "silent"])
-                )
+                .arg(no_outfile_arg().conflicts_with_all(&["outfile", "silent"])),
         )
         .subcommand(
             Command::new("grind")
@@ -310,7 +307,11 @@ fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
                         .multiple_occurrences(true)
                         .multiple_values(true)
                         .validator(grind_validator_starts_with)
-                        .help("Saves specified number of keypairs whos public key starts with the indicated prefix\nExample: --starts-with sol:4\nPREFIX type is Base58\nCOUNT type is u64"),
+                        .help(
+                            "Saves specified number of keypairs whos public key starts with the \
+                             indicated prefix\nExample: --starts-with sol:4\nPREFIX type is \
+                             Base58\nCOUNT type is u64",
+                        ),
                 )
                 .arg(
                     Arg::new("ends_with")
@@ -321,7 +322,11 @@ fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
                         .multiple_occurrences(true)
                         .multiple_values(true)
                         .validator(grind_validator_ends_with)
-                        .help("Saves specified number of keypairs whos public key ends with the indicated suffix\nExample: --ends-with ana:4\nSUFFIX type is Base58\nCOUNT type is u64"),
+                        .help(
+                            "Saves specified number of keypairs whos public key ends with the \
+                             indicated suffix\nExample: --ends-with ana:4\nSUFFIX type is \
+                             Base58\nCOUNT type is u64",
+                        ),
                 )
                 .arg(
                     Arg::new("starts_and_ends_with")
@@ -332,7 +337,12 @@ fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
                         .multiple_occurrences(true)
                         .multiple_values(true)
                         .validator(grind_validator_starts_and_ends_with)
-                        .help("Saves specified number of keypairs whos public key starts and ends with the indicated perfix and suffix\nExample: --starts-and-ends-with sol:ana:4\nPREFIX and SUFFIX type is Base58\nCOUNT type is u64"),
+                        .help(
+                            "Saves specified number of keypairs whos public key starts and ends \
+                             with the indicated perfix and suffix\nExample: \
+                             --starts-and-ends-with sol:ana:4\nPREFIX and SUFFIX type is \
+                             Base58\nCOUNT type is u64",
+                        ),
                 )
                 .arg(
                     Arg::new("num_threads")
@@ -343,22 +353,18 @@ fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
                         .default_value(num_threads)
                         .help("Specify the number of grind threads"),
                 )
-                .arg(
-                    Arg::new("use_mnemonic")
-                        .long("use-mnemonic")
-                        .help("Generate using a mnemonic key phrase.  Expect a significant slowdown in this mode"),
-                )
-                .arg(
-                    derivation_path_arg()
-                        .requires("use_mnemonic")
-                )
+                .arg(Arg::new("use_mnemonic").long("use-mnemonic").help(
+                    "Generate using a mnemonic key phrase.  Expect a significant slowdown in this \
+                     mode",
+                ))
+                .arg(derivation_path_arg().requires("use_mnemonic"))
                 .key_generation_common_args()
                 .arg(
                     no_outfile_arg()
-                    // Require a seed phrase to avoid generating a keypair
-                    // but having no way to get the private key
-                    .requires("use_mnemonic")
-                )
+                        // Require a seed phrase to avoid generating a keypair
+                        // but having no way to get the private key
+                        .requires("use_mnemonic"),
+                ),
         )
         .subcommand(
             Command::new("pubkey")
@@ -389,7 +395,7 @@ fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
                         .short('f')
                         .long("force")
                         .help("Overwrite the output file if it exists"),
-                )
+                ),
         )
         .subcommand(
             Command::new("recover")
@@ -422,7 +428,6 @@ fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
                         .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
                         .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
                 ),
-
         )
 }
 
@@ -504,8 +509,14 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                 let phrase: &str = mnemonic.phrase();
                 let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
                 println!(
-                    "{}\npubkey: {}\n{}\nSave this seed phrase{} to recover your new keypair:\n{}\n{}",
-                    &divider, keypair.pubkey(), &divider, passphrase_message, phrase, &divider
+                    "{}\npubkey: {}\n{}\nSave this seed phrase{} to recover your new \
+                     keypair:\n{}\n{}",
+                    &divider,
+                    keypair.pubkey(),
+                    &divider,
+                    passphrase_message,
+                    phrase,
+                    &divider
                 );
             }
         }
@@ -567,7 +578,9 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                 && starts_and_ends_with_args.is_empty()
             {
                 return Err(
-                    "Error: No keypair search criteria provided (--starts-with or --ends-with or --starts-and-ends-with)".into()
+                    "Error: No keypair search criteria provided (--starts-with or --ends-with or \
+                     --starts-and-ends-with)"
+                        .into(),
                 );
             }
 
@@ -648,15 +661,21 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                             let mnemonic = Mnemonic::new(mnemonic_type, language);
                             let seed = Seed::new(&mnemonic, &passphrase);
                             let keypair = match derivation_path {
-                                Some(_) => keypair_from_seed_and_derivation_path(seed.as_bytes(), derivation_path.clone()),
+                                Some(_) => keypair_from_seed_and_derivation_path(
+                                    seed.as_bytes(),
+                                    derivation_path.clone(),
+                                ),
                                 None => keypair_from_seed(seed.as_bytes()),
-                            }.unwrap();
+                            }
+                            .unwrap();
                             (keypair, mnemonic.phrase().to_string())
                         } else {
                             (Keypair::new(), "".to_string())
                         };
                         // Skip keypairs that will never match the user specified prefix
-                        if skip_len_44_pubkeys && keypair.pubkey() >= smallest_length_44_public_key::PUBKEY {
+                        if skip_len_44_pubkeys
+                            && keypair.pubkey() >= smallest_length_44_public_key::PUBKEY
+                        {
                             continue;
                         }
                         let mut pubkey = bs58::encode(keypair.pubkey()).into_string();
@@ -685,7 +704,10 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                                     .count
                                     .fetch_sub(1, Ordering::Relaxed);
                                 if !no_outfile {
-                                    write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey()))
+                                    write_keypair_file(
+                                        &keypair,
+                                        &format!("{}.json", keypair.pubkey()),
+                                    )
                                     .unwrap();
                                     println!(
                                         "Wrote keypair to {}",
@@ -693,12 +715,16 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                                     );
                                 }
                                 if use_mnemonic {
-                                    let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
+                                    let divider =
+                                        String::from_utf8(vec![b'='; phrase.len()]).unwrap();
                                     println!(
                                         "{}\nFound matching key {}",
-                                        &divider, keypair.pubkey());
+                                        &divider,
+                                        keypair.pubkey()
+                                    );
                                     println!(
-                                        "\nSave this seed phrase{} to recover your new keypair:\n{}\n{}",
+                                        "\nSave this seed phrase{} to recover your new \
+                                         keypair:\n{}\n{}",
                                         passphrase_message, phrase, &divider
                                     );
                                 }

@@ -63,8 +63,8 @@ impl<T> COption<T> {
     /// ```
     ///
     /// [`COption::None`]: #variant.COption::None
-    #[must_use = "if you intended to assert that this doesn't have a value, consider \
-                  `.and_then(|| panic!(\"`COption` had a value when expected `COption::None`\"))` instead"]
+    #[must_use = "if you intended to assert that this doesn't have a value, consider `.and_then(|| \
+                  panic!(\"`COption` had a value when expected `COption::None`\"))` instead"]
     #[inline]
     pub fn is_none(&self) -> bool {
         !self.is_some()

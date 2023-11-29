@@ -335,7 +335,8 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                 {
                     if cluster_partition.contains(node.pubkey()) {
                         info!(
-                            "Not broadcasting original shred index {}, slot {} to partition node {}",
+                            "Not broadcasting original shred index {}, slot {} to partition node \
+                             {}",
                             shred.index(),
                             shred.slot(),
                             node.pubkey(),
@@ -357,7 +358,8 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                             .iter()
                             .filter_map(|pubkey| {
                                 info!(
-                                    "Broadcasting partition shred index {}, slot {} to partition node {}",
+                                    "Broadcasting partition shred index {}, slot {} to partition \
+                                     node {}",
                                     shred.index(),
                                     shred.slot(),
                                     pubkey,

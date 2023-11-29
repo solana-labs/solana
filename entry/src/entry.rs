@@ -879,10 +879,9 @@ impl EntrySlice for [Entry] {
             if entry.is_tick() {
                 if *tick_hash_count != hashes_per_tick {
                     warn!(
-                        "invalid tick hash count!: entry: {:#?}, tick_hash_count: {}, hashes_per_tick: {}",
-                        entry,
-                        tick_hash_count,
-                        hashes_per_tick
+                        "invalid tick hash count!: entry: {:#?}, tick_hash_count: {}, \
+                         hashes_per_tick: {}",
+                        entry, tick_hash_count, hashes_per_tick
                     );
                     return false;
                 }

@@ -726,8 +726,14 @@ fn test_bank_forks_incremental_snapshot(
         INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS * 5;
     const LAST_SLOT: Slot = FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS * 2 - 1;
 
-    info!("Running bank forks incremental snapshot test, full snapshot interval: {} slots, incremental snapshot interval: {} slots, last slot: {}, set root interval: {} slots",
-              FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS, INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS, LAST_SLOT, SET_ROOT_INTERVAL);
+    info!(
+        "Running bank forks incremental snapshot test, full snapshot interval: {} slots, \
+         incremental snapshot interval: {} slots, last slot: {}, set root interval: {} slots",
+        FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+        INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+        LAST_SLOT,
+        SET_ROOT_INTERVAL
+    );
 
     let snapshot_test_config = SnapshotTestConfig::new(
         snapshot_version,
@@ -736,8 +742,20 @@ fn test_bank_forks_incremental_snapshot(
         FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
         INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
     );
-    trace!("SnapshotTestConfig:\naccounts_dir: {}\nbank_snapshots_dir: {}\nfull_snapshot_archives_dir: {}\nincremental_snapshot_archives_dir: {}",
-            snapshot_test_config.accounts_dir.display(), snapshot_test_config.bank_snapshots_dir.path().display(), snapshot_test_config.full_snapshot_archives_dir.path().display(), snapshot_test_config.incremental_snapshot_archives_dir.path().display());
+    trace!(
+        "SnapshotTestConfig:\naccounts_dir: {}\nbank_snapshots_dir: \
+         {}\nfull_snapshot_archives_dir: {}\nincremental_snapshot_archives_dir: {}",
+        snapshot_test_config.accounts_dir.display(),
+        snapshot_test_config.bank_snapshots_dir.path().display(),
+        snapshot_test_config
+            .full_snapshot_archives_dir
+            .path()
+            .display(),
+        snapshot_test_config
+            .incremental_snapshot_archives_dir
+            .path()
+            .display()
+    );
 
     let bank_forks = snapshot_test_config.bank_forks.clone();
     let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
@@ -960,12 +978,9 @@ fn test_snapshots_with_background_services(
 
     info!("Running snapshots with background services test...");
     trace!(
-        "Test configuration parameters:\
-        \n\tfull snapshot archive interval: {} slots\
-        \n\tincremental snapshot archive interval: {} slots\
-        \n\tbank snapshot interval: {} slots\
-        \n\tset root interval: {} slots\
-        \n\tlast slot: {}",
+        "Test configuration parameters:\n\tfull snapshot archive interval: {} \
+         slots\n\tincremental snapshot archive interval: {} slots\n\tbank snapshot interval: {} \
+         slots\n\tset root interval: {} slots\n\tlast slot: {}",
         FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
         INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
         BANK_SNAPSHOT_INTERVAL_SLOTS,
@@ -1097,7 +1112,8 @@ fn test_snapshots_with_background_services(
             {
                 assert!(
                     timer.elapsed() < MAX_WAIT_DURATION,
-                    "Waiting for full snapshot {slot} exceeded the {MAX_WAIT_DURATION:?} maximum wait duration!",
+                    "Waiting for full snapshot {slot} exceeded the {MAX_WAIT_DURATION:?} maximum \
+                     wait duration!",
                 );
                 std::thread::sleep(Duration::from_secs(1));
             }
@@ -1115,7 +1131,8 @@ fn test_snapshots_with_background_services(
             {
                 assert!(
                     timer.elapsed() < MAX_WAIT_DURATION,
-                    "Waiting for incremental snapshot {slot} exceeded the {MAX_WAIT_DURATION:?} maximum wait duration!",
+                    "Waiting for incremental snapshot {slot} exceeded the {MAX_WAIT_DURATION:?} \
+                     maximum wait duration!",
                 );
                 std::thread::sleep(Duration::from_secs(1));
             }

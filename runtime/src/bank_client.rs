@@ -196,7 +196,11 @@ impl SyncClient for BankClient {
         min_confirmed_blocks: usize,
     ) -> Result<usize> {
         // https://github.com/solana-labs/solana/issues/7199
-        assert_eq!(min_confirmed_blocks, 1, "BankClient cannot observe the passage of multiple blocks, so min_confirmed_blocks must be 1");
+        assert_eq!(
+            min_confirmed_blocks, 1,
+            "BankClient cannot observe the passage of multiple blocks, so min_confirmed_blocks \
+             must be 1"
+        );
         let now = Instant::now();
         let confirmed_blocks;
         loop {

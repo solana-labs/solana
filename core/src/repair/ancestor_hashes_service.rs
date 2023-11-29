@@ -557,8 +557,11 @@ impl AncestorHashesService {
                         // order to vote.
                         // This fits the alternate criteria we use in `find_epoch_slots_frozen_dead_slots`
                         // so we can upgrade it to `repairable_dead_slot_pool`.
-                        info!("{pruned_slot} is part of a popular pruned fork however we previously marked it as dead.
-                            Upgrading as dead duplicate confirmed");
+                        info!(
+                            "{pruned_slot} is part of a popular pruned fork however we previously \
+                             marked it as dead.
+                            Upgrading as dead duplicate confirmed"
+                        );
                         dead_slot_pool.remove(&pruned_slot);
                         repairable_dead_slot_pool.insert(pruned_slot);
                     } else if repairable_dead_slot_pool.contains(&pruned_slot) {
@@ -566,8 +569,12 @@ impl AncestorHashesService {
                         // ignore the additional information that `pruned_slot` is popular pruned.
                         // This is similar to the above case where `pruned_slot` was first pruned
                         // and then marked dead duplicate confirmed.
-                        info!("Received pruned duplicate confirmed status for {pruned_slot} that was previously marked
-                            dead duplicate confirmed. Ignoring and processing it as dead duplicate confirmed.");
+                        info!(
+                            "Received pruned duplicate confirmed status for {pruned_slot} that \
+                             was previously marked
+                            dead duplicate confirmed. Ignoring and processing it as dead duplicate \
+                             confirmed."
+                        );
                     } else {
                         popular_pruned_slot_pool.insert(pruned_slot);
                     }

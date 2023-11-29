@@ -82,7 +82,11 @@ fn transform(inc: &PathBuf) {
         let ty = &caps[1].to_string();
         let func = &caps[2].to_string();
         let args = &caps[3].to_string();
-        let warn = format!("/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE {} AND RUN `cargo run --bin gen-headers` */", inc.display());
+        let warn = format!(
+            "/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE {} AND RUN `cargo run --bin \
+             gen-headers` */",
+            inc.display()
+        );
         let ifndef = format!("#ifndef SOL_SBFV2\n{ty} {func}({args});");
         let hash = sys_hash(func);
         let typedef_statement = format!("typedef {ty}(*{func}_pointer_type)({args});");
@@ -99,9 +103,8 @@ fn transform(inc: &PathBuf) {
             arg_list = format!("{arg_list} arg{arg}");
         }
         let function_signature = format!("static {ty} {func}({arg_list})");
-        let pointer_assignment = format!(
-            "{func}_pointer_type {func}_pointer = ({func}_pointer_type) {hash};"
-        );
+        let pointer_assignment =
+            format!("{func}_pointer_type {func}_pointer = ({func}_pointer_type) {hash};");
         if !args.is_empty() {
             arg_list = "arg1".to_string();
             for a in 2..arg + 1 {
@@ -114,7 +117,8 @@ fn transform(inc: &PathBuf) {
             format!("return {func}_pointer({arg_list});")
         };
         format!(
-            "{warn}\n{ifndef}\n#else\n{typedef_statement}\n{function_signature} {{\n  {pointer_assignment}\n  {return_statement}\n}}\n#endif",
+            "{warn}\n{ifndef}\n#else\n{typedef_statement}\n{function_signature} {{\n  \
+             {pointer_assignment}\n  {return_statement}\n}}\n#endif",
         )
     });
     write!(output_writer, "{output_content}").unwrap();

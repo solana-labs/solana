@@ -306,7 +306,8 @@ impl QuicClient {
                             match conn {
                                 Ok(conn) => {
                                     info!(
-                                        "Made 0rtt connection to {} with id {} try_count {}, last_connection_id: {}, last_error: {:?}",
+                                        "Made 0rtt connection to {} with id {} try_count {}, \
+                                         last_connection_id: {}, last_error: {:?}",
                                         self.addr,
                                         conn.stable_id(),
                                         connection_try_count,
@@ -340,7 +341,8 @@ impl QuicClient {
                             Ok(conn) => {
                                 *conn_guard = Some(conn.clone());
                                 info!(
-                                    "Made connection to {} id {} try_count {}, from connection cache warming?: {}",
+                                    "Made connection to {} id {} try_count {}, from connection \
+                                     cache warming?: {}",
                                     self.addr,
                                     conn.connection.stable_id(),
                                     connection_try_count,
@@ -350,8 +352,13 @@ impl QuicClient {
                                 conn.connection.clone()
                             }
                             Err(err) => {
-                                info!("Cannot make connection to {}, error {:}, from connection cache warming?: {}",
-                                    self.addr, err, data.is_empty());
+                                info!(
+                                    "Cannot make connection to {}, error {:}, from connection \
+                                     cache warming?: {}",
+                                    self.addr,
+                                    err,
+                                    data.is_empty()
+                                );
                                 return Err(err);
                             }
                         }
@@ -406,7 +413,8 @@ impl QuicClient {
                         .prepare_connection_us
                         .fetch_add(measure_prepare_connection.as_us(), Ordering::Relaxed);
                     trace!(
-                        "Succcessfully sent to {} with id {}, thread: {:?}, data len: {}, send_packet_us: {} prepare_connection_us: {}",
+                        "Succcessfully sent to {} with id {}, thread: {:?}, data len: {}, \
+                         send_packet_us: {} prepare_connection_us: {}",
                         self.addr,
                         connection.stable_id(),
                         thread::current().id(),

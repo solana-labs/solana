@@ -775,8 +775,7 @@ mod tests {
         assert!(Pubkey::create_with_seed(
             &Pubkey::new_unique(),
             "\
-             \u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\
-             ",
+             \u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}",
             &Pubkey::new_unique()
         )
         .is_ok());
@@ -785,8 +784,7 @@ mod tests {
             Pubkey::create_with_seed(
                 &Pubkey::new_unique(),
                 "\
-                 x\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\
-                 ",
+                 x\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}",
                 &Pubkey::new_unique()
             ),
             Err(PubkeyError::MaxSeedLengthExceeded)

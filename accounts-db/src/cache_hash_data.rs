@@ -84,8 +84,11 @@ impl CacheHashDataFileReference {
         }
         cache_file.capacity = capacity;
         assert_eq!(
-            capacity, file_len,
-            "expected: {capacity}, len on disk: {file_len} {}, entries: {entries}, cell_size: {cell_size}", self.path.display(),
+            capacity,
+            file_len,
+            "expected: {capacity}, len on disk: {file_len} {}, entries: {entries}, cell_size: \
+             {cell_size}",
+            self.path.display(),
         );
 
         self.stats
@@ -454,7 +457,8 @@ mod tests {
                         }
                         assert_eq!(
                             accum, data_this_pass,
-                            "bins: {bins}, start_bin_this_pass: {start_bin_this_pass}, pass: {pass}, flatten: {flatten_data}, passes: {passes}"
+                            "bins: {bins}, start_bin_this_pass: {start_bin_this_pass}, pass: \
+                             {pass}, flatten: {flatten_data}, passes: {passes}"
                         );
                     }
                 }

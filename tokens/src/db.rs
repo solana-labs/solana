@@ -142,7 +142,8 @@ pub fn update_finalized_transaction(
     if opt_transaction_status.is_none() {
         if finalized_block_height > last_valid_block_height {
             eprintln!(
-                "Signature not found {signature} and blockhash expired. Transaction either dropped or the validator purged the transaction status."
+                "Signature not found {signature} and blockhash expired. Transaction either \
+                 dropped or the validator purged the transaction status."
             );
             eprintln!();
 

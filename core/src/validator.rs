@@ -579,8 +579,8 @@ impl Validator {
                 )
                 .map_err(|err| {
                     format!(
-                        "Failed to backup and clear shreds with incorrect \
-                        shred version from blockstore: {err:?}"
+                        "Failed to backup and clear shreds with incorrect shred version from \
+                         blockstore: {err:?}"
                     )
                 })?;
             }
@@ -653,9 +653,8 @@ impl Validator {
             .and_then(|geyser_plugin_service| geyser_plugin_service.get_block_metadata_notifier());
 
         info!(
-            "Geyser plugin: accounts_update_notifier: {}, \
-            transaction_notifier: {}, \
-            entry_notifier: {}",
+            "Geyser plugin: accounts_update_notifier: {}, transaction_notifier: {}, \
+             entry_notifier: {}",
             accounts_update_notifier.is_some(),
             transaction_notifier.is_some(),
             entry_notifier.is_some()
@@ -1568,7 +1567,8 @@ fn check_poh_speed(
             info!("PoH speed check: Will sleep {}ns per slot.", extra_ns);
         } else {
             return Err(format!(
-                "PoH is slower than cluster target tick rate! mine: {my_ns_per_slot} cluster: {target_ns_per_slot}.",
+                "PoH is slower than cluster target tick rate! mine: {my_ns_per_slot} cluster: \
+                 {target_ns_per_slot}.",
             ));
         }
     }
@@ -1643,20 +1643,21 @@ fn post_process_restored_tower(
             }
             if should_require_tower && voting_has_been_active {
                 return Err(format!(
-                    "Requested mandatory tower restore failed: {err}. \
-                     And there is an existing vote_account containing actual votes. \
-                     Aborting due to possible conflicting duplicate votes"
+                    "Requested mandatory tower restore failed: {err}. And there is an existing \
+                     vote_account containing actual votes. Aborting due to possible conflicting \
+                     duplicate votes"
                 ));
             }
             if err.is_file_missing() && !voting_has_been_active {
                 // Currently, don't protect against spoofed snapshots with no tower at all
                 info!(
-                    "Ignoring expected failed tower restore because this is the initial \
-                      validator start with the vote account..."
+                    "Ignoring expected failed tower restore because this is the initial validator \
+                     start with the vote account..."
                 );
             } else {
                 error!(
-                    "Rebuilding a new tower from the latest vote account due to failed tower restore: {}",
+                    "Rebuilding a new tower from the latest vote account due to failed tower \
+                     restore: {}",
                     err
                 );
             }
@@ -1722,7 +1723,8 @@ fn load_blockstore(
     if let Some(expected_genesis_hash) = config.expected_genesis_hash {
         if genesis_hash != expected_genesis_hash {
             return Err(format!(
-                "genesis hash mismatch: hash={genesis_hash} expected={expected_genesis_hash}. Delete the ledger directory to continue: {ledger_path:?}",
+                "genesis hash mismatch: hash={genesis_hash} expected={expected_genesis_hash}. \
+                 Delete the ledger directory to continue: {ledger_path:?}",
             ));
         }
     }
@@ -2243,8 +2245,8 @@ fn wait_for_supermajority(
                 std::cmp::Ordering::Less => return Ok(false),
                 std::cmp::Ordering::Greater => {
                     error!(
-                        "Ledger does not have enough data to wait for supermajority, \
-                             please enable snapshot fetch. Has {} needs {}",
+                        "Ledger does not have enough data to wait for supermajority, please \
+                         enable snapshot fetch. Has {} needs {}",
                         bank.slot(),
                         wait_for_supermajority_slot
                     );

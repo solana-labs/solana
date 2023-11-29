@@ -117,7 +117,10 @@ pub enum SyscallError {
         num_accounts: u64,
         max_accounts: u64,
     },
-    #[error("Invoked an instruction with too many account info's ({num_account_infos} > {max_account_infos})")]
+    #[error(
+        "Invoked an instruction with too many account info's ({num_account_infos} > \
+         {max_account_infos})"
+    )]
     MaxInstructionAccountInfosExceeded {
         num_account_infos: u64,
         max_account_infos: u64,

@@ -185,10 +185,10 @@ impl PartitionInfo {
         heaviest_fork_failures: Vec<HeaviestForkFailures>,
     ) {
         if self.partition_start_time.is_none() && partition_detected {
-            warn!("PARTITION DETECTED waiting to join heaviest fork: {} last vote: {:?}, reset slot: {}",
-                heaviest_slot,
-                last_voted_slot,
-                reset_bank_slot,
+            warn!(
+                "PARTITION DETECTED waiting to join heaviest fork: {} last vote: {:?}, reset \
+                 slot: {}",
+                heaviest_slot, last_voted_slot, reset_bank_slot,
             );
             datapoint_info!(
                 "replay_stage-partition-start",
@@ -1157,10 +1157,9 @@ impl ReplayStage {
                 ) {
                     if retransmit_info.reached_retransmit_threshold() {
                         info!(
-                            "Retrying retransmit: latest_leader_slot={} slot={} retransmit_info={:?}",
-                            latest_leader_slot,
-                            slot,
-                            &retransmit_info,
+                            "Retrying retransmit: latest_leader_slot={} slot={} \
+                             retransmit_info={:?}",
+                            latest_leader_slot, slot, &retransmit_info,
                         );
                         datapoint_info!(
                             metric_name,
@@ -1350,7 +1349,9 @@ impl ReplayStage {
                     }
 
                     // Should not dump slots for which we were the leader
-                    if Some(*my_pubkey) == leader_schedule_cache.slot_leader_at(*duplicate_slot, None) {
+                    if Some(*my_pubkey)
+                        == leader_schedule_cache.slot_leader_at(*duplicate_slot, None)
+                    {
                         if let Some(bank) = bank_forks.read().unwrap().get(*duplicate_slot) {
                             bank_hash_details::write_bank_hash_details_file(&bank)
                                 .map_err(|err| {
@@ -1360,11 +1361,13 @@ impl ReplayStage {
                         } else {
                             warn!("Unable to get bank for slot {duplicate_slot} from bank forks");
                         }
-                        panic!("We are attempting to dump a block that we produced. \
-                            This indicates that we are producing duplicate blocks, \
-                            or that there is a bug in our runtime/replay code which \
-                            causes us to compute different bank hashes than the rest of the cluster. \
-                            We froze slot {duplicate_slot} with hash {frozen_hash:?} while the cluster hash is {correct_hash}");
+                        panic!(
+                            "We are attempting to dump a block that we produced. This indicates \
+                             that we are producing duplicate blocks, or that there is a bug in \
+                             our runtime/replay code which causes us to compute different bank \
+                             hashes than the rest of the cluster. We froze slot {duplicate_slot} \
+                             with hash {frozen_hash:?} while the cluster hash is {correct_hash}"
+                        );
                     }
 
                     let attempt_no = purge_repair_slot_counter
@@ -1372,11 +1375,13 @@ impl ReplayStage {
                         .and_modify(|x| *x += 1)
                         .or_insert(1);
                     if *attempt_no > MAX_REPAIR_RETRY_LOOP_ATTEMPTS {
-                        panic!("We have tried to repair duplicate slot: {duplicate_slot} more than {MAX_REPAIR_RETRY_LOOP_ATTEMPTS} times \
-                            and are unable to freeze a block with bankhash {correct_hash}, \
-                            instead we have a block with bankhash {frozen_hash:?}. \
-                            This is most likely a bug in the runtime. \
-                            At this point manual intervention is needed to make progress. Exiting");
+                        panic!(
+                            "We have tried to repair duplicate slot: {duplicate_slot} more than \
+                             {MAX_REPAIR_RETRY_LOOP_ATTEMPTS} times and are unable to freeze a \
+                             block with bankhash {correct_hash}, instead we have a block with \
+                             bankhash {frozen_hash:?}. This is most likely a bug in the runtime. \
+                             At this point manual intervention is needed to make progress. Exiting"
+                        );
                     }
 
                     Self::purge_unconfirmed_duplicate_slot(
@@ -1437,8 +1442,15 @@ impl ReplayStage {
         } in ancestor_duplicate_slots_receiver.try_iter()
         {
             warn!(
-                "{} ReplayStage notified of duplicate slot from ancestor hashes service but we observed as {}: {:?}",
-                pubkey, if request_type.is_pruned() {"pruned"} else {"dead"}, (epoch_slots_frozen_slot, epoch_slots_frozen_hash),
+                "{} ReplayStage notified of duplicate slot from ancestor hashes service but we \
+                 observed as {}: {:?}",
+                pubkey,
+                if request_type.is_pruned() {
+                    "pruned"
+                } else {
+                    "dead"
+                },
+                (epoch_slots_frozen_slot, epoch_slots_frozen_hash),
             );
             let epoch_slots_frozen_state = EpochSlotsFrozenState::new_from_state(
                 epoch_slots_frozen_slot,
@@ -1570,7 +1582,11 @@ impl ReplayStage {
                 // replay on successful repair of the parent. If this block is also a duplicate, it
                 // will be handled in the next round of repair/replay - so we just clear the dead
                 // flag for now.
-                warn!("not purging descendant {} of slot {} as it is dead. resetting dead flag instead", slot, duplicate_slot);
+                warn!(
+                    "not purging descendant {} of slot {} as it is dead. resetting dead flag \
+                     instead",
+                    slot, duplicate_slot
+                );
                 // Clear the "dead" flag allowing ReplayStage to start replaying
                 // this slot once the parent is repaired
                 blockstore.remove_dead_slot(slot).unwrap();
@@ -1933,8 +1949,12 @@ impl ReplayStage {
             );
 
             if !Self::check_propagation_for_start_leader(poh_slot, parent_slot, progress_map) {
-                let latest_unconfirmed_leader_slot = progress_map.get_latest_leader_slot_must_exist(parent_slot)
-                    .expect("In order for propagated check to fail, latest leader must exist in progress map");
+                let latest_unconfirmed_leader_slot = progress_map
+                    .get_latest_leader_slot_must_exist(parent_slot)
+                    .expect(
+                        "In order for propagated check to fail, latest leader must exist in \
+                         progress map",
+                    );
                 if poh_slot != skipped_slots_info.last_skipped_slot {
                     datapoint_info!(
                         "replay_stage-skip_leader_slot",
@@ -2337,8 +2357,11 @@ impl ReplayStage {
             .find(|keypair| keypair.pubkey() == authorized_voter_pubkey)
         {
             None => {
-                warn!("The authorized keypair {} for vote account {} is not available.  Unable to vote",
-                      authorized_voter_pubkey, vote_account_pubkey);
+                warn!(
+                    "The authorized keypair {} for vote account {} is not available.  Unable to \
+                     vote",
+                    authorized_voter_pubkey, vote_account_pubkey
+                );
                 return None;
             }
             Some(authorized_voter_keypair) => authorized_voter_keypair,
@@ -2405,7 +2428,8 @@ impl ReplayStage {
         {
             last_vote_refresh_time.last_print_time = Instant::now();
             info!(
-                "Last landed vote for slot {} in bank {} is greater than the current last vote for slot: {} tracked by Tower",
+                "Last landed vote for slot {} in bank {} is greater than the current last vote \
+                 for slot: {} tracked by Tower",
                 my_latest_landed_vote,
                 heaviest_bank_on_same_fork.slot(),
                 last_voted_slot
@@ -2863,8 +2887,8 @@ impl ReplayStage {
                 let replay_progress = bank_progress.replay_progress.clone();
                 let r_replay_progress = replay_progress.read().unwrap();
                 debug!(
-                    "bank {} has completed replay from blockstore, \
-                     contribute to update cost with {:?}",
+                    "bank {} has completed replay from blockstore, contribute to update cost with \
+                     {:?}",
                     bank.slot(),
                     r_replay_stats.batch_execute.totals
                 );
@@ -3580,7 +3604,8 @@ impl ReplayStage {
                     // thus it's safe to use as the reset bank.
                     let reset_bank = Some(heaviest_bank);
                     info!(
-                        "Waiting to switch vote to {}, resetting to slot {:?} for now, latest duplicate ancestor: {:?}",
+                        "Waiting to switch vote to {}, resetting to slot {:?} for now, latest \
+                         duplicate ancestor: {:?}",
                         heaviest_bank.slot(),
                         reset_bank.as_ref().map(|b| b.slot()),
                         latest_duplicate_ancestor,
