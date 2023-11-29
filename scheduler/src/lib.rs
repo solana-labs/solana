@@ -31,7 +31,7 @@ mod cell {
     pub(super) struct SchedulerCell<T>(UnsafeCell<T>);
     
     impl<T> SchedulerCell<T> {
-        fn new(value) -> Self {
+        fn new(value: T) -> Self {
             Self(UnsafeCell::new(value))
         }
     }
