@@ -101,15 +101,15 @@ impl TaskInner {
     }
 
     fn lock_attempts<'t>(&self, task_token: &'t TaskToken) -> &'t Vec<LockAttempt> {
-        &self.task_status.0.get22(task_token).lock_attempts
+        &self.task_status.get22(task_token).lock_attempts
     }
 
     fn uncontended<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut usize {
-        &mut self.task_status.0.get(task_token).uncontended
+        &mut self.task_status.get(task_token).uncontended
     }
 
     fn uncontended22<'t>(&self, task_token: &'t TaskToken) -> &'t usize {
-        &self.task_status.0.get22(task_token).uncontended
+        &self.task_status.get22(task_token).uncontended
     }
 
     fn currently_contended(&self, task_token: &TaskToken) -> bool {
