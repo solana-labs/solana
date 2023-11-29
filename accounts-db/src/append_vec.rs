@@ -657,10 +657,6 @@ pub mod tests {
             self.current_len.store(len, Ordering::Release);
         }
 
-        pub(crate) fn set_current_capacity_for_tests(&self, capacity: usize) {
-            self.current_len.store(capacity, Ordering::Release);
-        }
-
         fn append_account_test(&self, data: &(StoredMeta, AccountSharedData)) -> Option<usize> {
             let slot_ignored = Slot::MAX;
             let accounts = [(&data.0.pubkey, &data.1)];
