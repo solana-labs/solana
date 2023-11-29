@@ -461,7 +461,8 @@ impl SchedulingStateMachine {
         if matches!(task_source, TaskSource::Retryable) {
             for (usage, attempt) in usages.into_iter().zip(task.lock_attempts_mut(&mut self.token)) {
                 attempt.page_mut(&mut self.token2).current_usage = usage;
-                attempt.page_mut(&mut self.token2).current_usage = usage;
+                dbg!((attempt.page_mut(&mut self.token2), attempt.page_mut(&mut self.token2)));
+
             }
             // as soon as next tack is succeeded in locking, trigger re-checks on read only
             // addresses so that more readonly transactions can be executed
