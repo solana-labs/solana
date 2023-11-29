@@ -64,7 +64,7 @@ pub fn aaa() {
 
 impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
-        Self(UnsafeCell::new(TaskStatusInner {
+        Self(SchedulerCell::new(TaskStatusInner {
             lock_attempts,
             uncontended: 0,
         }))
