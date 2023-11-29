@@ -29,18 +29,21 @@ mod cell {
     use std::marker::PhantomData;
 
     pub(super) struct SchedulerCell<T>(UnsafeCell<T>);
+    unsafe impl<T> Send for SchedulerCell<T> {}
+    unsafe impl<T> Sync for SchedulerCell<T> {}
+
     pub(super) struct Token(PhantomData<*mut ()>);
+
     impl Token {
         pub(super) unsafe fn assume_on_the_scheduler_thread() -> Self {
             Self(PhantomData)
         }
     }
-    unsafe impl<T> Send for SchedulerCell<T> {}
-    unsafe impl<T> Sync for SchedulerCell<T> {}
 }
 
 fn aaa() {
-    let a = unsafe { Token::assume_on_the_scheduler_thread() };
+    let token = unsafe { Token::assume_on_the_scheduler_thread() };
+    let cell = SchedulerCell(23);
     //let () = std::thread::spawn(move || { a; }).join().unwrap();
 }
 
