@@ -35,11 +35,11 @@ mod cell {
         }
 
         pub(super) fn borrow_mut<'t>(&self, _token: &'t mut Token<V>) -> &'t mut V {
-            unsafe { &mut *self.0.borrow_mut() }
+            unsafe { &mut *self.0.get() }
         }
 
         pub(super) fn borrow<'t>(&self, _token: &'t Token<V>) -> &'t V {
-            unsafe { &*self.0.borrow_mut() }
+            unsafe { &*self.0.get() }
         }
     }
 
