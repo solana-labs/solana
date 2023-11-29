@@ -24,6 +24,8 @@ struct TaskStatusInner {
 struct TaskStatus(UnsafeCell<TaskStatusInner>);
 
 mod cell {
+    use std::cell:UnsafeCell;
+
     struct SchedulerCell<T>(UnsafeCell<T>);
 }
 
