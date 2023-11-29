@@ -59,6 +59,7 @@ pub fn aaa() {
     let cell = SchedulerCell::new(23);
     let a = cell.get(&mut token);
     let b = cell.get(&mut token);
+    dbg!((b));
     //let () = std::thread::spawn(move || { a; }).join().unwrap();
 }
 
