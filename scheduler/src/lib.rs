@@ -231,8 +231,7 @@ impl PageInner {
 
 static_assertions::const_assert_eq!(std::mem::size_of::<SchedulerCell<PageInner>>(), 32);
 
-#[derive(Debug, Clone, Default)]
-pub struct Page(Arc<SchedulerCell<PageInner>>);
+pub type Page = Arc<SchedulerCell<PageInner>>;
 static_assertions::const_assert_eq!(std::mem::size_of::<Page>(), 8);
 
 type TaskQueue = BTreeMap<UniqueWeight, Task>;
