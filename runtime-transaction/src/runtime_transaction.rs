@@ -175,11 +175,10 @@ mod tests {
             TransactionMeta {
                 message_hash: hash,
                 is_simple_vote_tx: false,
-                ..TransactionMeta::default()
             },
             get_transaction_meta(
                 non_vote_sanitized_versioned_transaction(compute_unit_price),
-                Some(hash.clone()),
+                Some(hash),
                 None
             )
         );
@@ -188,11 +187,10 @@ mod tests {
             TransactionMeta {
                 message_hash: hash,
                 is_simple_vote_tx: true,
-                ..TransactionMeta::default()
             },
             get_transaction_meta(
                 non_vote_sanitized_versioned_transaction(compute_unit_price),
-                Some(hash.clone()),
+                Some(hash),
                 Some(true), // override
             )
         );
@@ -201,24 +199,18 @@ mod tests {
             TransactionMeta {
                 message_hash: hash,
                 is_simple_vote_tx: true,
-                ..TransactionMeta::default()
             },
-            get_transaction_meta(
-                vote_sanitized_versioned_transaction(),
-                Some(hash.clone()),
-                None
-            )
+            get_transaction_meta(vote_sanitized_versioned_transaction(), Some(hash), None)
         );
 
         assert_eq!(
             TransactionMeta {
                 message_hash: hash,
                 is_simple_vote_tx: false,
-                ..TransactionMeta::default()
             },
             get_transaction_meta(
                 vote_sanitized_versioned_transaction(),
-                Some(hash.clone()),
+                Some(hash),
                 Some(false), // override
             )
         );
