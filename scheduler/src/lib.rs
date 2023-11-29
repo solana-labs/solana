@@ -154,7 +154,7 @@ pub struct LockAttempt {
 
 impl Page {
     fn as_mut<'t>(&self, token: &'t mut Token2) -> &'t mut PageInner {
-        self.0.get(token)
+        self.0.get(unsafe { &mut Token::assume_on_the_scheduler_thread() })
     }
 }
 
