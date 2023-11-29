@@ -55,6 +55,12 @@ mod cell {
             Self(PhantomData)
         }
     }
+
+    impl Token2 {
+        pub(super) unsafe fn assume_on_the_scheduler_thread() -> Self {
+            Self(PhantomData)
+        }
+    }
 }
 
 pub fn aaa() {
