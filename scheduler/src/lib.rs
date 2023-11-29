@@ -35,6 +35,7 @@ mod cell {
             Self(UnsafeCell::new(value))
         }
     }
+
     unsafe impl<T> Send for SchedulerCell<T> {}
     unsafe impl<T> Sync for SchedulerCell<T> {}
 
