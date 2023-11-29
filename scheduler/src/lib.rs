@@ -37,7 +37,7 @@ mod cell {
             Self(UnsafeCell::new(value))
         }
 
-        pub(super) fn get<'t>(&self, _token: &'t mut Token) -> &'t mut V {
+        pub(super) fn get<'t>(&self, _token: &'t mut TokenNew<V>) -> &'t mut V {
             unsafe { &mut *self.0.get() }
         }
     }
