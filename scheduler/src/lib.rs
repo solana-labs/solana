@@ -55,6 +55,7 @@ mod cell {
     }
 
     pub(super) type PageToken = Token<crate::PageInner>;
+    static_assertions::const_assert_eq!(std::mem::size_of::<PageToken>(), 0);
 
     pub(super) type TaskToken = Token<crate::TaskStatus>;
     static_assertions::const_assert_eq!(std::mem::size_of::<TaskToken>(), 0);
