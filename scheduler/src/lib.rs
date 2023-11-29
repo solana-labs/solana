@@ -510,7 +510,7 @@ impl SchedulingStateMachine {
 
             let heaviest_uncontended_now = unlock_attempt.page_mut(&mut self.token2).heaviest_still_blocked_task(&mut self.token);
             if let Some((uncontended_task, _ru)) = heaviest_uncontended_now {
-                retryable_task_queue
+                self.retryable_task_queue
                     .entry(uncontended_task.unique_weight)
                     .or_insert_with(|| uncontended_task.clone());
             }
