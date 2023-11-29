@@ -99,7 +99,7 @@ impl TaskInner {
         &self.tx
     }
 
-    fn index_with_pages(self: &Arc<Self>) {
+    fn index_with_pages(self: &Arc<Self>, token: &mut Token) {
         for lock_attempt in self.lock_attempts_mut(token) {
             let requested_usage = lock_attempt.requested_usage;
             lock_attempt
