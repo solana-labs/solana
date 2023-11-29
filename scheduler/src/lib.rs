@@ -301,7 +301,7 @@ impl SchedulingStateMachine {
     pub fn schedule_new_task(&mut self, task: Task) -> Option<Task> {
         self.total_task_count += 1;
         self.active_task_count += 1;
-        Self::try_lock_for_task(&mut self.token, (TaskSource::Runnable, task), &mut self.retryable_task_queue)
+        Self::try_lock_for_task(&mut self.token, &mut self.token2, (TaskSource::Runnable, task), &mut self.retryable_task_queue)
     }
 
     pub fn has_retryable_task(&self) -> bool {
