@@ -688,6 +688,7 @@ where
 
             let mut end_session = false;
             let mut end_thread = false;
+            move || {
             let mut state_machine = SchedulingStateMachine::new();
             let mut log_interval = LogInterval::default();
             // hint compiler about inline[never] and unlikely?
@@ -709,7 +710,6 @@ where
                 };
             }
 
-            move || {
                 trace!(
                     "solScheduler thread is started at: {:?}",
                     std::thread::current()
