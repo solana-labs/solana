@@ -26,6 +26,7 @@ struct TaskStatus(UnsafeCell<TaskStatusInner>);
 
 mod cell {
     use std::cell::UnsafeCell;
+    use std::marker::PhantomData;
 
     pub(super) struct SchedulerCell<T>(UnsafeCell<T>);
     pub(super) struct SchedulerCellToken(PhantomData<*mut ()>);
