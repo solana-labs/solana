@@ -492,7 +492,7 @@ impl SchedulingStateMachine {
         }
     }
 
-    fn unlock_after_execution(token: &mut Token, task: &Task, retryable_task_queue: &mut TaskQueue) {
+    fn unlock_after_execution(token: &mut Token, token: &mut Token2, task: &Task, retryable_task_queue: &mut TaskQueue) {
         let unique_weight = &task.unique_weight;
         let should_remove = task.has_contended(token);
 
@@ -506,7 +506,7 @@ impl SchedulingStateMachine {
                 continue;
             }
 
-            let heaviest_uncontended_now = unlock_attempt.page_mut(token).heaviest_still_blocked_task(unsafe { &mut Token::assume_on_the_scheduler_thread() });
+            let heaviest_uncontended_now = unlock_attempt.page_mut(token2).heaviest_still_blocked_task(unsafe { &mut Token::assume_on_the_scheduler_thread() });
             if let Some((uncontended_task, _ru)) = heaviest_uncontended_now {
                 retryable_task_queue
                     .entry(uncontended_task.unique_weight)
