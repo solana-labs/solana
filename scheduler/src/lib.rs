@@ -50,7 +50,7 @@ mod cell {
 
 fn aaa() {
     let token = unsafe { Token::assume_on_the_scheduler_thread() };
-    static cell = SchedulerCell::new(23);
+    static cell: SchedulerCell<i32> = SchedulerCell::new(23);
     //let () = std::thread::spawn(move || { a; }).join().unwrap();
 }
 
