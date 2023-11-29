@@ -91,7 +91,7 @@ solana-cli-output = { workspace = true }
 solana-logger = { workspace = true }
 solana-measure = { workspace = true }
 solana-program-runtime = { workspace = true }
-solana-runtime = { workspace = true }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 solana-sbf-rust-invoke = { workspace = true }
 solana-sbf-rust-realloc = { workspace = true, features = ["default"] }
 solana-sbf-rust-realloc-invoke = { workspace = true }
