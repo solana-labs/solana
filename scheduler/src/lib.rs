@@ -473,9 +473,9 @@ impl SchedulingStateMachine {
         }
     }
 
-    fn unlock_after_execution(task: &Task, retryable_task_queue: &mut TaskQueue) {
+    fn unlock_after_execution(token: &mut Token, task: &Task, retryable_task_queue: &mut TaskQueue) {
         let unique_weight = &task.unique_weight;
-        let should_remove = task.has_contended();
+        let should_remove = task.has_contended(token);
 
         for unlock_attempt in task.lock_attempts_mut() {
             if should_remove {
