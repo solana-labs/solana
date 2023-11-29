@@ -473,7 +473,7 @@ impl SchedulingStateMachine {
             task.mark_as_uncontended(token);
 
             for read_only_lock_attempt in task
-                .lock_attempts_mut(token)
+                .lock_attempts(token)
                 .iter_mut()
                 .filter(|l| matches!(l.requested_usage, RequestedUsage::Readonly))
             {
