@@ -103,7 +103,7 @@ impl TaskInner {
         for lock_attempt in self.lock_attempts_mut(token) {
             let requested_usage = lock_attempt.requested_usage;
             lock_attempt
-                .page_mut()
+                .page_mut(token)
                 .insert_blocked_task(self.clone(), requested_usage);
         }
     }
