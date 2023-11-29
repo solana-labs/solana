@@ -689,26 +689,26 @@ where
             let mut end_session = false;
             let mut end_thread = false;
             move || {
-            let mut state_machine = SchedulingStateMachine::new();
-            let mut log_interval = LogInterval::default();
-            // hint compiler about inline[never] and unlikely?
-            macro_rules! log_scheduler {
-                ($prefix:tt) => {
-                    const BITS_PER_HEX_DIGIT: usize = 4;
-                    info!(
-                        "[sch_{:0width$x}]: slot: {}[{:8}]({}/{}): state_machine(({}(+{})=>{})/{}|{}/{}) channels(<{} >{}+{} <{}+{})",
-                        scheduler_id, slot, (if ($prefix) == "step" { "interval" } else { $prefix }), (if end_thread {"T"} else {"-"}), (if end_session {"S"} else {"-"}),
-                        state_machine.active_task_count(), state_machine.retryable_task_count(), state_machine.handled_task_count(),
-                        state_machine.total_task_count(),
-                        state_machine.reschedule_count(),
-                        state_machine.rescheduled_task_count(),
-                        schedulable_transaction_receiver.len(),
-                        blocked_transaction_sessioned_sender.len(), idle_transaction_sender.len(),
-                        handled_blocked_transaction_receiver.len(), handled_idle_transaction_receiver.len(),
-                        width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
-                    );
-                };
-            }
+                let mut state_machine = SchedulingStateMachine::new();
+                let mut log_interval = LogInterval::default();
+                // hint compiler about inline[never] and unlikely?
+                macro_rules! log_scheduler {
+                    ($prefix:tt) => {
+                        const BITS_PER_HEX_DIGIT: usize = 4;
+                        info!(
+                            "[sch_{:0width$x}]: slot: {}[{:8}]({}/{}): state_machine(({}(+{})=>{})/{}|{}/{}) channels(<{} >{}+{} <{}+{})",
+                            scheduler_id, slot, (if ($prefix) == "step" { "interval" } else { $prefix }), (if end_thread {"T"} else {"-"}), (if end_session {"S"} else {"-"}),
+                            state_machine.active_task_count(), state_machine.retryable_task_count(), state_machine.handled_task_count(),
+                            state_machine.total_task_count(),
+                            state_machine.reschedule_count(),
+                            state_machine.rescheduled_task_count(),
+                            schedulable_transaction_receiver.len(),
+                            blocked_transaction_sessioned_sender.len(), idle_transaction_sender.len(),
+                            handled_blocked_transaction_receiver.len(), handled_idle_transaction_receiver.len(),
+                            width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
+                        );
+                    };
+                }
 
                 trace!(
                     "solScheduler thread is started at: {:?}",
