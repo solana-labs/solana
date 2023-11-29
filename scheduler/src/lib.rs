@@ -45,7 +45,7 @@ mod cell {
     unsafe impl<V> Send for SchedulerCell<V> {}
     unsafe impl<V> Sync for SchedulerCell<V> {}
 
-    pub(super) struct Token<T>(PhantomData<(*mut T)>);
+    pub(super) struct Token<T>(PhantomData<*mut T>);
 
     impl<T> Token<T> {
         pub(super) unsafe fn assume_on_the_scheduler_thread() -> Self {
