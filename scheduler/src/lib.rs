@@ -486,11 +486,11 @@ impl SchedulingStateMachine {
     }
 
     fn index_task_with_pages(&mut self, task: &Task) {
-        for lock_attempt in self.lock_attempts_mut(&mut self.token) {
+        for lock_attempt in task.lock_attempts_mut(&mut self.token) {
             let requested_usage = lock_attempt.requested_usage;
             lock_attempt
                 .page_mut(&mut self.token2)
-                .insert_blocked_task(self.clone(), requested_usage);
+                .insert_blocked_task(task.clone(), requested_usage);
         }
     }
 
