@@ -255,7 +255,7 @@ pub struct SchedulingStateMachine {
 }
 
 impl SchedulingStateMachine {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             retryable_task_queue: TaskQueue::default(),
             active_task_count: 0,
