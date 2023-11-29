@@ -34,12 +34,12 @@ mod cell {
             Self(UnsafeCell::new(value))
         }
 
-        pub(super) fn get<'t>(&self, _token: &'t mut Token<V>) -> &'t mut V {
-            unsafe { &mut *self.0.get() }
+        pub(super) fn borrow_mut<'t>(&self, _token: &'t mut Token<V>) -> &'t mut V {
+            unsafe { &mut *self.0.borrow_mut() }
         }
 
         pub(super) fn borrow<'t>(&self, _token: &'t Token<V>) -> &'t V {
-            unsafe { &*self.0.get() }
+            unsafe { &*self.0.borrow_mut() }
         }
     }
 
@@ -97,7 +97,7 @@ impl TaskInner {
     }
 
     fn lock_attempts_mut<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut Vec<LockAttempt> {
-        &mut self.task_status.get(task_token).lock_attempts
+        &mut self.task_status.borrow_mut(task_token).lock_attempts
     }
 
     fn lock_attempts<'t>(&self, task_token: &'t TaskToken) -> &'t Vec<LockAttempt> {
@@ -105,7 +105,7 @@ impl TaskInner {
     }
 
     fn uncontended<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut usize {
-        &mut self.task_status.get(task_token).uncontended
+        &mut self.task_status.borrow_mut(task_token).uncontended
     }
 
     fn uncontended22<'t>(&self, task_token: &'t TaskToken) -> &'t usize {
@@ -156,7 +156,7 @@ impl LockAttempt {
     }
 
     fn page_mut<'t>(&self, page_token: &'t mut PageToken) -> &'t mut PageInner {
-        self.page.0.get(page_token)
+        self.page.0.borrow_mut(page_token)
     }
 }
 
