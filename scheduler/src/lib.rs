@@ -28,7 +28,7 @@ mod cell {
     use std::cell::UnsafeCell;
     use std::marker::PhantomData;
 
-    #[derive(Debug)]
+    #[derive(Debug, Default)]
     pub(super) struct SchedulerCell<V>(UnsafeCell<V>);
     
     impl<V> SchedulerCell<V> {
