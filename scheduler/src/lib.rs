@@ -53,7 +53,7 @@ mod cell {
         }
     }
 
-    pub(super) struct Token2(PhantomData<*mut ()>);
+    pub(super) type Token2 = TokenNew<Page>;
 
     pub(super) struct Token(PhantomData<*mut ()>);
     static_assertions::const_assert_eq!(std::mem::size_of::<Token>(), 0);
