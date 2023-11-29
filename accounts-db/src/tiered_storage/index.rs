@@ -23,7 +23,7 @@ pub struct AccountIndexWriterEntry<'a> {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AccountOffset {
     /// The offset to the accounts block that contains the account meta/data.
-    pub block: usize,
+    pub block: u32,
 }
 
 /// The offset to an account/address entry in the accounts index block.
@@ -104,10 +104,10 @@ impl IndexBlockFormat {
                 let account_offset = footer.index_block_offset as usize
                     + std::mem::size_of::<Pubkey>() * footer.account_entry_count as usize
                     + std::mem::size_of::<u32>() * index_offset.0 as usize;
-                let (block_offset, _) = get_type::<u32>(mmap, account_offset)?;
+                let (block_offset, _) = get_type(mmap, account_offset)?;
 
                 Ok(AccountOffset {
-                    block: *block_offset as usize,
+                    block: *block_offset,
                 })
             }
         }
@@ -169,7 +169,7 @@ mod tests {
             let account_offset = indexer
                 .get_account_offset(&mmap, &footer, IndexOffset(i as u32))
                 .unwrap();
-            assert_eq!(index_entry.block_offset, account_offset.block as u32);
+            assert_eq!(index_entry.block_offset, account_offset.block);
             let address = indexer
                 .get_account_address(&mmap, &footer, IndexOffset(i as u32))
                 .unwrap();

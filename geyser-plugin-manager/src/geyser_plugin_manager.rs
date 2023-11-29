@@ -221,6 +221,7 @@ impl GeyserPluginManager {
         let mut current_plugin = self.plugins.remove(idx);
         let name = current_plugin.name().to_string();
         current_plugin.on_unload();
+        // The plugin must be dropped before the library to avoid a crash.
         drop(current_plugin);
         drop(current_lib);
         info!("Unloaded plugin {name} at idx {idx}");

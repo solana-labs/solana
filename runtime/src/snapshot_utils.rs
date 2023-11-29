@@ -1211,20 +1211,6 @@ pub(crate) fn get_storages_to_serialize(
         .collect::<Vec<_>>()
 }
 
-#[derive(Debug, Default)]
-pub struct BankFromArchiveTimings {
-    pub rebuild_bank_from_snapshots_us: u64,
-    pub full_snapshot_untar_us: u64,
-    pub incremental_snapshot_untar_us: u64,
-    pub verify_snapshot_bank_us: u64,
-}
-
-#[derive(Debug, Default)]
-pub struct BankFromDirTimings {
-    pub rebuild_bank_from_snapshot_us: u64,
-    pub build_storage_us: u64,
-}
-
 // From testing, 4 seems to be a sweet spot for ranges of 60M-360M accounts and 16-64 cores. This may need to be tuned later.
 const PARALLEL_UNTAR_READERS_DEFAULT: usize = 4;
 
@@ -1461,9 +1447,11 @@ fn streaming_snapshot_dir_files(
     Ok(())
 }
 
-/// Perform the common tasks when deserialize a snapshot.  Handles reading snapshot file, reading the version file,
-/// and then returning those fields plus the rebuilt storage
-pub fn build_storage_from_snapshot_dir(
+/// Performs the common tasks when deserializing a snapshot
+///
+/// Handles reading the snapshot file and version file,
+/// then returning those fields plus the rebuilt storages.
+pub fn rebuild_storages_from_snapshot_dir(
     snapshot_info: &BankSnapshotInfo,
     account_paths: &[PathBuf],
     next_append_vec_id: Arc<AtomicAppendVecId>,

@@ -867,7 +867,7 @@ pub struct AccountsToStore<'a> {
     /// if 'accounts' contains more items than can be contained in the primary storage, then we have to split these accounts.
     /// 'index_first_item_overflow' specifies the index of the first item in 'accounts' that will go into the overflow storage
     index_first_item_overflow: usize,
-    pub slot: Slot,
+    slot: Slot,
 }
 
 impl<'a> AccountsToStore<'a> {
@@ -914,6 +914,10 @@ impl<'a> AccountsToStore<'a> {
             StorageSelector::Overflow => self.index_first_item_overflow..self.accounts.len(),
         };
         &self.accounts[range]
+    }
+
+    pub fn slot(&self) -> Slot {
+        self.slot
     }
 }
 

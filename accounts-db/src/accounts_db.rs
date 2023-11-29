@@ -31,7 +31,7 @@ use {
             AccountStorage, AccountStorageStatus, ShrinkInProgress,
         },
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
-        accounts_file::{AccountsFile, AccountsFileError},
+        accounts_file::{AccountsFile, AccountsFileError, MatchAccountOwnerError},
         accounts_hash::{
             AccountHash, AccountsDeltaHash, AccountsHash, AccountsHashKind, AccountsHasher,
             CalcAccountsHashConfig, CalculateHashIntermediate, HashStats, IncrementalAccountsHash,
@@ -54,8 +54,7 @@ use {
             get_ancient_append_vec_capacity, is_ancient, AccountsToStore, StorageSelector,
         },
         append_vec::{
-            aligned_stored_size, AppendVec, MatchAccountOwnerError, APPEND_VEC_MMAPPED_FILES_OPEN,
-            STORE_META_OVERHEAD,
+            aligned_stored_size, AppendVec, APPEND_VEC_MMAPPED_FILES_OPEN, STORE_META_OVERHEAD,
         },
         cache_hash_data::{CacheHashData, CacheHashDataFileReference},
         contains::Contains,
@@ -378,7 +377,7 @@ impl CurrentAncientAppendVec {
         let accounts = accounts_to_store.get(storage_selector);
 
         db.store_accounts_frozen(
-            (self.slot(), accounts, accounts_to_store.slot),
+            (self.slot(), accounts, accounts_to_store.slot()),
             None::<Vec<AccountHash>>,
             self.append_vec(),
             None,
@@ -5677,7 +5676,7 @@ impl AccountsDb {
     fn has_space_available(&self, slot: Slot, size: u64) -> bool {
         let store = self.storage.get_slot_storage_entry(slot).unwrap();
         if store.status() == AccountStorageStatus::Available
-            && (store.accounts.capacity() - store.accounts.len() as u64) > size
+            && store.accounts.remaining_bytes() >= size
         {
             return true;
         }

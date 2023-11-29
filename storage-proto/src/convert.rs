@@ -15,7 +15,7 @@ use {
         transaction_context::TransactionReturnData,
     },
     solana_transaction_status::{
-        ConfirmedBlock, InnerInstruction, InnerInstructions, Reward, RewardType,
+        ConfirmedBlock, EntrySummary, InnerInstruction, InnerInstructions, Reward, RewardType,
         TransactionByAddrInfo, TransactionStatusMeta, TransactionTokenBalance,
         TransactionWithStatusMeta, VersionedConfirmedBlock, VersionedTransactionWithStatusMeta,
     },
@@ -39,6 +39,11 @@ pub mod tx_by_addr {
         env!("OUT_DIR"),
         "/solana.storage.transaction_by_addr.rs"
     ));
+}
+
+#[allow(clippy::derive_partial_eq_without_eq)]
+pub mod entries {
+    include!(concat!(env!("OUT_DIR"), "/solana.storage.entries.rs"));
 }
 
 impl From<Vec<Reward>> for generated::Rewards {
@@ -1186,6 +1191,18 @@ impl TryFrom<tx_by_addr::TransactionByAddr> for Vec<TransactionByAddrInfo> {
             .into_iter()
             .map(|tx_by_addr| tx_by_addr.try_into())
             .collect::<Result<Vec<TransactionByAddrInfo>, Self::Error>>()
+    }
+}
+
+impl From<(usize, EntrySummary)> for entries::Entry {
+    fn from((index, entry_summary): (usize, EntrySummary)) -> Self {
+        entries::Entry {
+            index: index as u32,
+            num_hashes: entry_summary.num_hashes,
+            hash: entry_summary.hash.as_ref().into(),
+            num_transactions: entry_summary.num_transactions,
+            starting_transaction_index: entry_summary.starting_transaction_index as u32,
+        }
     }
 }
 

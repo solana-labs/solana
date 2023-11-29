@@ -67,7 +67,7 @@ impl VerifyAccountsHashInBackground {
         }
         let result = lock.take().unwrap().join().unwrap();
         if !result {
-            panic!("initial hash verification failed: {result:?}");
+            panic!("initial background accounts hash verification failed: {result}");
         }
         // we never have to check again
         self.verification_complete();
@@ -139,7 +139,7 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "initial hash verification failed")]
+    #[should_panic(expected = "initial background accounts hash verification failed")]
     fn test_panic() {
         let verify = Arc::new(VerifyAccountsHashInBackground::default());
         start_thread_and_return(&verify, false, || {});

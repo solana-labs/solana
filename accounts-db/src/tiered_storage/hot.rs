@@ -228,7 +228,7 @@ impl HotStorageReader {
         &self,
         account_offset: AccountOffset,
     ) -> TieredStorageResult<&HotAccountMeta> {
-        let (meta, _) = get_type::<HotAccountMeta>(&self.mmap, account_offset.block)?;
+        let (meta, _) = get_type::<HotAccountMeta>(&self.mmap, account_offset.block as usize)?;
         Ok(meta)
     }
 
@@ -467,7 +467,7 @@ pub mod tests {
                 .iter()
                 .map(|meta| {
                     let prev_offset = current_offset;
-                    current_offset += file.write_type(meta).unwrap();
+                    current_offset += file.write_type(meta).unwrap() as u32;
                     AccountOffset { block: prev_offset }
                 })
                 .collect();
@@ -534,7 +534,7 @@ pub mod tests {
             let account_offset = hot_storage
                 .get_account_offset(IndexOffset(i as u32))
                 .unwrap();
-            assert_eq!(account_offset.block as u32, index_writer_entry.block_offset);
+            assert_eq!(account_offset.block, index_writer_entry.block_offset);
 
             let account_address = hot_storage
                 .get_account_address(IndexOffset(i as u32))
