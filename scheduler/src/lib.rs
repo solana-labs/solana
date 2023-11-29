@@ -31,7 +31,8 @@ mod cell {
     pub(super) struct SchedulerCell<T>(UnsafeCell<T>);
     
     impl<T> SchedulerCell<T> {
-        pub(super) const fn new(value: T) -> Self {
+        // non-const to forbid unprotected sharing via static variables among threads.
+        pub(super) fn new(value: T) -> Self {
             Self(UnsafeCell::new(value))
         }
     }
@@ -50,7 +51,7 @@ mod cell {
 
 fn aaa() {
     let token = unsafe { Token::assume_on_the_scheduler_thread() };
-    static cell: SchedulerCell<i32> = SchedulerCell::new(23);
+    let cell = SchedulerCell::new(23);
     //let () = std::thread::spawn(move || { a; }).join().unwrap();
 }
 
