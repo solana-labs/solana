@@ -478,7 +478,7 @@ impl SchedulingStateMachine {
                         matches!(requested_usage, RequestedUsage::Readonly).then_some(task)
                     })
                 {
-                    retryable_task_queue
+                    self.retryable_task_queue
                         .entry(heaviest_blocked_task.unique_weight)
                         .or_insert_with(|| heaviest_blocked_task.clone());
                 }
