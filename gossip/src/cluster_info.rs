@@ -3082,6 +3082,7 @@ fn filter_on_shred_version(
                 // Allow contact-infos so that shred-versions are updated.
                 CrdsData::LegacyContactInfo(_) => true,
                 CrdsData::NodeInstance(_) => true,
+                CrdsData::ContactInfo(_) => true,
                 // Only retain values with the same shred version.
                 _ => crds.get_shred_version(&value.pubkey()) == Some(self_shred_version),
             })
@@ -3091,6 +3092,7 @@ fn filter_on_shred_version(
                 // shred-version changes
                 CrdsData::LegacyContactInfo(node) => node.pubkey() == from,
                 CrdsData::NodeInstance(_) => true,
+                CrdsData::ContactInfo(node) => node.pubkey() == from,
                 _ => false,
             })
         }

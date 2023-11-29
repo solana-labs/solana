@@ -277,6 +277,10 @@ impl Crds {
                         self.duplicate_shreds.remove(&entry.get().ordinal);
                         self.duplicate_shreds.insert(value.ordinal, entry_index);
                     }
+                    CrdsData::ContactInfo(node) => {
+                        self.shred_versions.insert(pubkey, node.shred_version());
+                        debug_assert_matches!(entry.get().value.data, CrdsData::ContactInfo(_));
+                    }
                     _ => (),
                 }
                 self.entries.remove(&entry.get().ordinal);
@@ -532,7 +536,7 @@ impl Crds {
         self.purged.push_back((value.value_hash, now));
         self.shards.remove(index, &value);
         match value.value.data {
-            CrdsData::LegacyContactInfo(_) => {
+            CrdsData::LegacyContactInfo(_) | CrdsData::ContactInfo(_) => {
                 self.nodes.swap_remove(&index);
             }
             CrdsData::Vote(_, _) => {
@@ -568,7 +572,7 @@ impl Crds {
             self.shards.remove(size, value);
             self.shards.insert(index, value);
             match value.value.data {
-                CrdsData::LegacyContactInfo(_) => {
+                CrdsData::LegacyContactInfo(_) | CrdsData::ContactInfo(_) => {
                     self.nodes.swap_remove(&size);
                     self.nodes.insert(index);
                 }
