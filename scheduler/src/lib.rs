@@ -29,6 +29,10 @@ mod cell {
     struct SchedulerCell<T>(UnsafeCell<T>);
 }
 
+fn aaa() {
+    let a = SchedulerCell(3);
+}
+
 impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
         Self(UnsafeCell::new(TaskStatusInner {
