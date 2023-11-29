@@ -31,7 +31,7 @@ mod cell {
     pub(super) struct SchedulerCell<T>(UnsafeCell<T>);
     pub(super) struct SchedulerCellToken(PhantomData<*mut ()>);
     impl SchedulerCellToken {
-        fn new() -> Self {
+        pub(super) fn new() -> Self {
             Self(PhantomData)
         }
     }
