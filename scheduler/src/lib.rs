@@ -23,6 +23,10 @@ struct TaskStatusInner {
 #[derive(Debug)]
 struct TaskStatus(UnsafeCell<TaskStatusInner>);
 
+mod cell {
+    struct SchedulerCell<T>(UnsafeCell<T>);
+}
+
 impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
         Self(UnsafeCell::new(TaskStatusInner {
