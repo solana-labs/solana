@@ -36,14 +36,11 @@ pub struct RestartHeaviestFork {
     pub last_slot: Slot,
     pub last_slot_hash: Hash,
     pub observed_stake: u64,
-    pub total_epoch_stake: u64,
     pub shred_version: u16,
 }
 
 #[derive(Debug, Error, PartialEq)]
 pub enum RestartHeaviestForkError {
-    #[error("Received stake larger than total stake")]
-    StakeLargerThanTotalStake,
     #[error("Total stake of received heaviest fork cannot be zero")]
     ZeroObservedStake,
 }
@@ -144,7 +141,7 @@ impl RestartLastVotedForkSlots {
 
 impl Sanitize for RestartHeaviestFork {
     fn sanitize(&self) -> Result<(), SanitizeError> {
-        if self.observed_stake == 0 || self.observed_stake > self.total_epoch_stake {
+        if self.observed_stake == 0 {
             // this should at least include its own stake.
             return Err(SanitizeError::ValueOutOfBounds);
         }
@@ -160,14 +157,10 @@ impl RestartHeaviestFork {
         last_slot: Slot,
         last_slot_hash: Hash,
         observed_stake: u64,
-        total_epoch_stake: u64,
         shred_version: u16,
     ) -> Result<Self, RestartHeaviestForkError> {
         if observed_stake == 0 {
             return Err(RestartHeaviestForkError::ZeroObservedStake);
-        }
-        if observed_stake > total_epoch_stake {
-            return Err(RestartHeaviestForkError::StakeLargerThanTotalStake);
         }
         Ok(Self {
             from,
@@ -175,7 +168,6 @@ impl RestartHeaviestFork {
             last_slot,
             last_slot_hash,
             observed_stake,
-            total_epoch_stake,
             shred_version,
         })
     }
@@ -188,7 +180,6 @@ impl RestartHeaviestFork {
             rng.gen_range(0..1000),
             Hash::new_unique(),
             rng.gen_range(1..u64::MAX),
-            u64::MAX,
             1,
         )
         .unwrap()
@@ -397,40 +388,8 @@ mod test {
         let slot = 53;
         // received_heaviest_fork_percent can never be 0.
         assert_eq!(
-            RestartHeaviestFork::new(
-                keypair.pubkey(),
-                timestamp(),
-                slot,
-                Hash::default(),
-                0,
-                1_000_000,
-                1,
-            ),
+            RestartHeaviestFork::new(keypair.pubkey(), timestamp(), slot, Hash::default(), 0, 1,),
             Err(RestartHeaviestForkError::ZeroObservedStake)
-        );
-        assert_eq!(
-            RestartHeaviestFork::new(
-                keypair.pubkey(),
-                timestamp(),
-                slot,
-                Hash::default(),
-                1_000_000,
-                0,
-                1,
-            ),
-            Err(RestartHeaviestForkError::StakeLargerThanTotalStake)
-        );
-        assert_eq!(
-            RestartHeaviestFork::new(
-                keypair.pubkey(),
-                timestamp(),
-                slot,
-                Hash::default(),
-                1_000_001,
-                1_000_000,
-                1,
-            ),
-            Err(RestartHeaviestForkError::StakeLargerThanTotalStake)
         );
         let mut fork = RestartHeaviestFork::new(
             keypair.pubkey(),
@@ -438,15 +397,11 @@ mod test {
             slot,
             Hash::default(),
             800_000,
-            1_000_000,
             1,
         )
         .unwrap();
         assert_eq!(fork.sanitize(), Ok(()));
         assert_eq!(fork.observed_stake, 800_000);
-        assert_eq!(fork.total_epoch_stake, 1_000_000);
-        fork.total_epoch_stake = 600_000;
-        assert_eq!(fork.sanitize(), Err(SanitizeError::ValueOutOfBounds));
         fork.observed_stake = 0;
         assert_eq!(fork.sanitize(), Err(SanitizeError::ValueOutOfBounds));
     }
