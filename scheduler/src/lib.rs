@@ -438,6 +438,7 @@ impl SchedulingStateMachine {
 
     fn try_lock_for_task(
         token: &mut Token,
+        token2: &mut Token2,
         (task_source, task): (TaskSource, Task),
         retryable_task_queue: &mut TaskQueue,
     ) -> Option<Task> {
@@ -472,7 +473,7 @@ impl SchedulingStateMachine {
                 .filter(|l| matches!(l.requested_usage, RequestedUsage::Readonly))
             {
                 if let Some(heaviest_blocked_task) = read_only_lock_attempt
-                    .page_mut(token)
+                    .page_mut(token2)
                     .heaviest_still_blocked_task(unsafe { &mut Token::assume_on_the_scheduler_thread() })
                     .and_then(|(task, requested_usage)| {
                         matches!(requested_usage, RequestedUsage::Readonly).then_some(task)
