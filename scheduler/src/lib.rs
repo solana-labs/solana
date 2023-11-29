@@ -493,7 +493,7 @@ impl SchedulingStateMachine {
 
         for unlock_attempt in task.lock_attempts_mut(token) {
             if should_remove {
-                unlock_attempt.page_mut().remove_blocked_task(unique_weight);
+                unlock_attempt.page_mut(token).remove_blocked_task(unique_weight);
             }
 
             let is_unused_now = Self::unlock(unlock_attempt);
