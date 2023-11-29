@@ -2,7 +2,7 @@ use {
     solana_sdk::transaction::SanitizedTransaction,
     std::{collections::BTreeMap, sync::Arc},
 };
-use crate::cell::{SchedulerCell, Token, PageToken};
+use crate::cell::{SchedulerCell, TaskToken, PageToken};
 
 type UsageCount = u32;
 const SOLE_USE_COUNT: UsageCount = 1;
@@ -59,8 +59,8 @@ mod cell {
 
     pub(super) type PageToken = TokenNew<crate::PageInner>;
 
-    pub(super) type Token = TokenNew<crate::TaskStatusInner>;
-    static_assertions::const_assert_eq!(std::mem::size_of::<Token>(), 0);
+    pub(super) type TaskToken = TokenNew<crate::TaskStatusInner>;
+    static_assertions::const_assert_eq!(std::mem::size_of::<TaskToken>(), 0);
 }
 
 impl TaskStatus {
@@ -99,35 +99,35 @@ impl TaskInner {
         &self.tx
     }
 
-    fn lock_attempts_mut<'t>(&self, token: &'t mut Token) -> &'t mut Vec<LockAttempt> {
+    fn lock_attempts_mut<'t>(&self, token: &'t mut TaskToken) -> &'t mut Vec<LockAttempt> {
         &mut self.task_status.0.get(token).lock_attempts
     }
 
-    fn lock_attempts<'t>(&self, token: &'t Token) -> &'t Vec<LockAttempt> {
+    fn lock_attempts<'t>(&self, token: &'t TaskToken) -> &'t Vec<LockAttempt> {
         &self.task_status.0.get22(token).lock_attempts
     }
 
-    fn uncontended<'t>(&self, token: &'t mut Token) -> &'t mut usize {
+    fn uncontended<'t>(&self, token: &'t mut TaskToken) -> &'t mut usize {
         &mut self.task_status.0.get(token).uncontended
     }
 
-    fn uncontended22<'t>(&self, token: &'t Token) -> &'t usize {
+    fn uncontended22<'t>(&self, token: &'t TaskToken) -> &'t usize {
         &self.task_status.0.get22(token).uncontended
     }
 
-    fn currently_contended(&self, token: &Token) -> bool {
+    fn currently_contended(&self, token: &TaskToken) -> bool {
         *self.uncontended22(token) == 1
     }
 
-    fn has_contended(&self, token: &mut Token) -> bool {
+    fn has_contended(&self, token: &mut TaskToken) -> bool {
         *self.uncontended(token) > 0
     }
 
-    fn mark_as_contended(&self, token: &mut Token) {
+    fn mark_as_contended(&self, token: &mut TaskToken) {
         *self.uncontended(token) = 1;
     }
 
-    fn mark_as_uncontended(&self, token: &mut Token) {
+    fn mark_as_uncontended(&self, token: &mut TaskToken) {
         assert!(self.currently_contended(token));
         *self.uncontended(token) = 2;
     }
@@ -224,7 +224,7 @@ impl PageInner {
         self.blocked_tasks.last_entry().map(|entry| *entry.key())
     }
 
-    fn heaviest_still_blocked_task(&self, token: &Token) -> Option<&(Task, RequestedUsage)> {
+    fn heaviest_still_blocked_task(&self, token: &TaskToken) -> Option<&(Task, RequestedUsage)> {
         self.blocked_tasks
             .values()
             .rev()
@@ -247,7 +247,7 @@ pub struct SchedulingStateMachine {
     reschedule_count: usize,
     rescheduled_task_count: usize,
     total_task_count: usize,
-    token: Token,
+    token: TaskToken,
     token2: PageToken,
 }
 
@@ -260,7 +260,7 @@ impl SchedulingStateMachine {
             reschedule_count: 0,
             rescheduled_task_count: 0,
             total_task_count: 0,
-            token: unsafe { Token::assume_on_the_scheduler_thread() },
+            token: unsafe { TaskToken::assume_on_the_scheduler_thread() },
             token2: unsafe { PageToken::assume_on_the_scheduler_thread() },
         }
     }
