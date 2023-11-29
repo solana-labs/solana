@@ -408,7 +408,7 @@ impl SchedulingStateMachine {
         lock_status
     }
 
-    fn unlock(token2: &mut Token2, attempt: &mut LockAttempt) -> bool {
+    fn unlock(token2: &mut Token2, attempt: &LockAttempt) -> bool {
         let mut is_unused_now = false;
 
         let requested_usage = attempt.requested_usage;
