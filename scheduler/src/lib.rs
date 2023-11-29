@@ -52,6 +52,7 @@ mod cell {
 fn aaa() {
     let token = unsafe { Token::assume_on_the_scheduler_thread() };
     let cell = SchedulerCell::new(23);
+    cell.get(&mut token);
     //let () = std::thread::spawn(move || { a; }).join().unwrap();
 }
 
