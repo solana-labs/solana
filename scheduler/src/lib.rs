@@ -488,7 +488,7 @@ impl SchedulingStateMachine {
         Some(task)
     }
 
-    fn rollback_locking(&mut self, task: usize, lock_count: usize) {
+    fn rollback_locking(&mut self, task: &Arc<Task>, lock_count: usize) {
         for lock_attempt in task.lock_attempts_mut(&mut self.token)[..lock_count] {
             Self::unlock(&mut self.token2, lock_attempt);
         }
