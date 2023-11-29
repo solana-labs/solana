@@ -248,7 +248,7 @@ pub struct SchedulingStateMachine {
     rescheduled_task_count: usize,
     total_task_count: usize,
     token: TaskToken,
-    token2: PageToken,
+    page_token: PageToken,
 }
 
 impl SchedulingStateMachine {
@@ -261,7 +261,7 @@ impl SchedulingStateMachine {
             rescheduled_task_count: 0,
             total_task_count: 0,
             token: unsafe { TaskToken::assume_on_the_scheduler_thread() },
-            token2: unsafe { PageToken::assume_on_the_scheduler_thread() },
+            page_token: unsafe { PageToken::assume_on_the_scheduler_thread() },
         }
     }
 
@@ -322,7 +322,7 @@ impl SchedulingStateMachine {
     }
 
     fn attempt_lock_for_execution(
-        token2: &mut PageToken,
+        page_token: &mut PageToken,
         unique_weight: &UniqueWeight,
         lock_attempts: &mut [LockAttempt],
         task_source: &TaskSource,
@@ -337,10 +337,10 @@ impl SchedulingStateMachine {
         });
 
         for attempt in lock_attempts.iter_mut() {
-            match Self::attempt_lock_address(token2, unique_weight, attempt) {
+            match Self::attempt_lock_address(page_token, unique_weight, attempt) {
                 LockStatus::Succeded(usage) => {
                     if rollback_on_failure {
-                        attempt.page_mut(token2).current_usage = usage;
+                        attempt.page_mut(page_token).current_usage = usage;
                     } else {
                         uncommited_usages.push(usage);
                     }
@@ -356,12 +356,12 @@ impl SchedulingStateMachine {
     }
 
     fn attempt_lock_address(
-        token2: &mut PageToken,
+        page_token: &mut PageToken,
         this_unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) -> LockStatus {
         let requested_usage = attempt.requested_usage;
-        let page = attempt.page_mut(token2);
+        let page = attempt.page_mut(page_token);
 
         let mut lock_status = match page.current_usage {
             Usage::Unused => LockStatus::Succeded(Usage::renew(requested_usage)),
@@ -394,11 +394,11 @@ impl SchedulingStateMachine {
         lock_status
     }
 
-    fn unlock(token2: &mut PageToken, attempt: &LockAttempt) -> bool {
+    fn unlock(page_token: &mut PageToken, attempt: &LockAttempt) -> bool {
         let mut is_unused_now = false;
 
         let requested_usage = attempt.requested_usage;
-        let page = attempt.page_mut(token2);
+        let page = attempt.page_mut(page_token);
 
         match &mut page.current_usage {
             Usage::Readonly(ref mut count) => match requested_usage {
@@ -433,7 +433,7 @@ impl SchedulingStateMachine {
         task: Task,
     ) -> Option<Task> {
         let (lock_count, usages) = Self::attempt_lock_for_execution(
-            &mut self.token2,
+            &mut self.page_token,
             &task.unique_weight,
             &mut task.lock_attempts_mut(&mut self.token),
             &task_source,
@@ -451,7 +451,7 @@ impl SchedulingStateMachine {
 
         if matches!(task_source, TaskSource::Retryable) {
             for (usage, attempt) in usages.into_iter().zip(task.lock_attempts_mut(&mut self.token)) {
-                attempt.page_mut(&mut self.token2).current_usage = usage;
+                attempt.page_mut(&mut self.page_token).current_usage = usage;
             }
             // as soon as next tack is succeeded in locking, trigger re-checks on read only
             // addresses so that more readonly transactions can be executed
@@ -463,7 +463,7 @@ impl SchedulingStateMachine {
                 .filter(|l| matches!(l.requested_usage, RequestedUsage::Readonly))
             {
                 if let Some(heaviest_blocked_task) = read_only_lock_attempt
-                    .page_mut(&mut self.token2)
+                    .page_mut(&mut self.page_token)
                     .heaviest_still_blocked_task(&self.token)
                     .and_then(|(task, requested_usage)| {
                         matches!(requested_usage, RequestedUsage::Readonly).then_some(task)
@@ -481,7 +481,7 @@ impl SchedulingStateMachine {
 
     fn rollback_locking(&mut self, task: &Task, lock_count: usize) {
         for lock_attempt in &task.lock_attempts_mut(&mut self.token)[..lock_count] {
-            Self::unlock(&mut self.token2, lock_attempt);
+            Self::unlock(&mut self.page_token, lock_attempt);
         }
     }
 
@@ -489,7 +489,7 @@ impl SchedulingStateMachine {
         for lock_attempt in task.lock_attempts_mut(&mut self.token) {
             let requested_usage = lock_attempt.requested_usage;
             lock_attempt
-                .page_mut(&mut self.token2)
+                .page_mut(&mut self.page_token)
                 .insert_blocked_task(task.clone(), requested_usage);
         }
     }
@@ -500,15 +500,15 @@ impl SchedulingStateMachine {
 
         for unlock_attempt in task.lock_attempts(&self.token) {
             if should_remove {
-                unlock_attempt.page_mut(&mut self.token2).remove_blocked_task(unique_weight);
+                unlock_attempt.page_mut(&mut self.page_token).remove_blocked_task(unique_weight);
             }
 
-            let is_unused_now = Self::unlock(&mut self.token2, unlock_attempt);
+            let is_unused_now = Self::unlock(&mut self.page_token, unlock_attempt);
             if !is_unused_now {
                 continue;
             }
 
-            let heaviest_uncontended_now = unlock_attempt.page_mut(&mut self.token2).heaviest_still_blocked_task(&self.token);
+            let heaviest_uncontended_now = unlock_attempt.page_mut(&mut self.page_token).heaviest_still_blocked_task(&self.token);
             if let Some((uncontended_task, _ru)) = heaviest_uncontended_now {
                 self.retryable_task_queue
                     .entry(uncontended_task.unique_weight)
