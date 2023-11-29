@@ -28,11 +28,11 @@ mod cell {
     use std::cell::UnsafeCell;
 
     pub(super) struct SchedulerCell<T>(UnsafeCell<T>);
-    pub(super) struct SchedulerCellToken(usize);
+    pub(super) struct SchedulerCellToken;
 }
 
 fn aaa() {
-    let a = SchedulerCellToken;
+    let a = &SchedulerCellToken;
     let () = std::thread::spawn(|| { a; }).join().unwrap();
 }
 
