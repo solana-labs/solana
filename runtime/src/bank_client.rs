@@ -361,8 +361,8 @@ mod tests {
         let jane_doe_keypair = Keypair::new();
         let jane_pubkey = jane_doe_keypair.pubkey();
         let doe_keypairs = vec![&john_doe_keypair, &jane_doe_keypair];
-        let bank = Bank::new_for_tests(&genesis_config);
-        let bank_client = BankClient::new(bank);
+        let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
+        let bank_client = BankClient::new_shared(bank);
         let amount = genesis_config.rent.minimum_balance(0);
 
         // Create 2-2 Multisig Transfer instruction.

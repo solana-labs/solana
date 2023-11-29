@@ -966,7 +966,7 @@ pub(super) enum RewardInterval {
 }
 
 impl Bank {
-    fn wrap_with_bank_forks_for_tests(self) -> (Arc<Self>, Arc<RwLock<BankForks>>) {
+    pub(super) fn wrap_with_bank_forks_for_tests(self) -> (Arc<Self>, Arc<RwLock<BankForks>>) {
         let bank_fork = BankForks::new_rw_arc(self);
         let bank_arc = bank_fork.read().unwrap().root_bank();
         bank_arc
