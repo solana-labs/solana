@@ -224,11 +224,11 @@ impl PageInner {
         self.blocked_tasks.last_entry().map(|entry| *entry.key())
     }
 
-    fn heaviest_still_blocked_task(&self) -> Option<&(Task, RequestedUsage)> {
+    fn heaviest_still_blocked_task(&self, token: &mut Token) -> Option<&(Task, RequestedUsage)> {
         self.blocked_tasks
             .values()
             .rev()
-            .find(|(task, _)| task.currently_contended())
+            .find(|(task, _)| task.currently_contended(token))
     }
 }
 
