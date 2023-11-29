@@ -242,6 +242,10 @@ impl Crds {
                     CrdsData::DuplicateShred(_, _) => {
                         self.duplicate_shreds.insert(value.ordinal, entry_index);
                     }
+                    CrdsData::ContactInfo(node) => {
+                        self.nodes.insert(entry_index);
+                        self.shred_versions.insert(pubkey, node.shred_version());
+                    }
                     _ => (),
                 };
                 self.entries.insert(value.ordinal, entry_index);
