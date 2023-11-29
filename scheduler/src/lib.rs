@@ -474,7 +474,6 @@ impl SchedulingStateMachine {
 
             for read_only_lock_attempt in task
                 .lock_attempts(token)
-                .iter_mut()
                 .filter(|l| matches!(l.requested_usage, RequestedUsage::Readonly))
             {
                 if let Some(heaviest_blocked_task) = read_only_lock_attempt
