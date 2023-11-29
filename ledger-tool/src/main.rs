@@ -2695,7 +2695,11 @@ fn main() {
                 }
                 if write_bank_file {
                     let working_bank = bank_forks.read().unwrap().working_bank();
-                    let _ = bank_hash_details::write_bank_hash_details_file(&working_bank);
+                    bank_hash_details::write_bank_hash_details_file(&working_bank)
+                        .map_err(|err| {
+                            warn!("Unable to write bank hash_details file: {err}");
+                        })
+                        .ok();
                 }
                 exit_signal.store(true, Ordering::Relaxed);
                 system_monitor_service.join().unwrap();
