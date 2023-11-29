@@ -250,6 +250,7 @@ pub struct SchedulingStateMachine {
     reschedule_count: usize,
     rescheduled_task_count: usize,
     total_task_count: usize,
+    token: Token,
 }
 
 impl SchedulingStateMachine {
@@ -261,6 +262,7 @@ impl SchedulingStateMachine {
             reschedule_count: 0,
             rescheduled_task_count: 0,
             total_task_count: 0,
+            token: unsafe { Token::assume_on_the_scheduler_thread() },
         }
     }
 
