@@ -38,7 +38,7 @@ mod cell {
 }
 
 fn aaa() {
-    let a = SchedulerCellToken::new();
+    let a = unsafe { SchedulerCellToken::new() };
     //let () = std::thread::spawn(move || { a; }).join().unwrap();
 }
 
