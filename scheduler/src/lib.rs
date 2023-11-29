@@ -239,6 +239,7 @@ static_assertions::const_assert_eq!(std::mem::size_of::<UnsafeCell<PageInner>>()
 pub struct Page(Arc<UnsafeCell<PageInner>>);
 static_assertions::const_assert_eq!(std::mem::size_of::<Page>(), 8);
 
+unsafe impl Sync for TaskStatus {}
 type TaskQueue = BTreeMap<UniqueWeight, Task>;
 
 pub struct SchedulingStateMachine {
