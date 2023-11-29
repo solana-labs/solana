@@ -16,13 +16,10 @@ enum LockStatus {
 pub type Task = Arc<TaskInner>;
 
 #[derive(Debug)]
-struct TaskStatusInner {
+struct TaskStatus {
     lock_attempts: Vec<LockAttempt>,
     uncontended: usize,
 }
-
-#[derive(Debug)]
-struct TaskStatus(SchedulerCell<TaskStatusInner>);
 
 mod cell {
     use std::cell::UnsafeCell;
@@ -59,16 +56,16 @@ mod cell {
 
     pub(super) type PageToken = Token<crate::PageInner>;
 
-    pub(super) type TaskToken = Token<crate::TaskStatusInner>;
+    pub(super) type TaskToken = Token<crate::TaskStatus>;
     static_assertions::const_assert_eq!(std::mem::size_of::<TaskToken>(), 0);
 }
 
 impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
-        Self(SchedulerCell::new(TaskStatusInner {
+        Self {
             lock_attempts,
             uncontended: 0,
-        }))
+        }
     }
 }
 
@@ -76,7 +73,7 @@ impl TaskStatus {
 pub struct TaskInner {
     unique_weight: UniqueWeight,
     tx: SanitizedTransaction, // actually should be Bundle
-    task_status: TaskStatus,
+    task_status: SchedulerCell<TaskStatus>,
 }
 
 impl SchedulingStateMachine {
@@ -89,7 +86,7 @@ impl SchedulingStateMachine {
         Task::new(TaskInner {
             unique_weight,
             tx,
-            task_status: TaskStatus::new(lock_attempts),
+            task_status: SchedulerCell::new(TaskStatus::new(lock_attempts)),
         })
     }
 }
