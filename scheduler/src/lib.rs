@@ -107,8 +107,8 @@ impl TaskInner {
         }
     }
 
-    fn lock_attempts_mut(&self) -> &mut Vec<LockAttempt> {
-        unsafe { &mut (*self.task_status.0.get()).lock_attempts }
+    fn lock_attempts_mut(&self, &mut Token) -> &mut Vec<LockAttempt> {
+        unsafe { &mut (*self.task_status.0.get(token)).lock_attempts }
     }
 
     fn uncontended(&self, token: &mut Token) -> &mut usize {
