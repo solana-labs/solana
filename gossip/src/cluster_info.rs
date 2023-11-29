@@ -2078,7 +2078,7 @@ impl ClusterInfo {
                     score
                 };
                 let score = match response.data {
-                    CrdsData::LegacyContactInfo(_) => 2 * score,
+                    CrdsData::LegacyContactInfo(_) | CrdsData::ContactInfo(_) => 2 * score,
                     _ => score,
                 };
                 ((addr, response), score)
