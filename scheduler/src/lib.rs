@@ -33,7 +33,7 @@ mod cell {
 
 fn aaa() {
     let a = SchedulerCellToken;
-    let () = std::thread::spawn(|| { a; }).join();
+    let () = std::thread::spawn(|| { a; }).join().unwrap();
 }
 
 impl TaskStatus {
