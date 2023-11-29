@@ -364,7 +364,7 @@ impl SchedulingStateMachine {
         attempt: &mut LockAttempt,
     ) -> LockStatus {
         let requested_usage = attempt.requested_usage;
-        let page = attempt.page_mut();
+        let page = attempt.page_mut(token);
 
         let mut lock_status = match page.current_usage {
             Usage::Unused => LockStatus::Succeded(Usage::renew(requested_usage)),
