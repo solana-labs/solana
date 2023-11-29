@@ -115,21 +115,21 @@ impl TaskInner {
         unsafe { &mut (*self.task_status.0.get(token)).uncontended }
     }
 
-    fn currently_contended(&self) -> bool {
-        *self.uncontended() == 1
+    fn currently_contended(&self, token: &mut Token) -> bool {
+        *self.uncontended(token) == 1
     }
 
-    fn has_contended(&self) -> bool {
-        *self.uncontended() > 0
+    fn has_contended(&self, token: &mut Token) -> bool {
+        *self.uncontended(token) > 0
     }
 
-    fn mark_as_contended(&self) {
-        *self.uncontended() = 1;
+    fn mark_as_contended(&self, token: &mut Token) {
+        *self.uncontended(token) = 1;
     }
 
-    fn mark_as_uncontended(&self) {
+    fn mark_as_uncontended(&self, token: &mut Token) {
         assert!(self.currently_contended());
-        *self.uncontended() = 2;
+        *self.uncontended(token) = 2;
     }
 
     pub fn task_index(&self) -> usize {
