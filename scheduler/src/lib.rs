@@ -483,7 +483,7 @@ impl SchedulingStateMachine {
 
     fn rollback_locking(token: &mut Token, lock_attempts: &mut [LockAttempt]) {
         for lock_attempt in lock_attempts {
-            Self::unlock(lock_attempt);
+            Self::unlock(token, lock_attempt);
         }
     }
 
