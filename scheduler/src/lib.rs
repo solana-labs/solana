@@ -121,7 +121,7 @@ impl TaskInner {
     }
 
     fn currently_contended(&self, token: &mut Token) -> bool {
-        *self.uncontended(token) == 1
+        *self.uncontended22(token) == 1
     }
 
     fn has_contended(&self, token: &mut Token) -> bool {
