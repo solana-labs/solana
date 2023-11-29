@@ -5057,7 +5057,7 @@ pub mod tests {
     fn test_rpc_request_processor_new() {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let genesis = create_genesis_config(100);
-        let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
+        let bank = Bank::new_with_bank_forks_for_tests(&genesis.genesis_config).0;
         bank.transfer(20, &genesis.mint_keypair, &bob_pubkey)
             .unwrap();
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
@@ -5227,7 +5227,7 @@ pub mod tests {
     fn test_rpc_get_tx_count() {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let genesis = create_genesis_config(10);
-        let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
+        let bank = Bank::new_with_bank_forks_for_tests(&genesis.genesis_config).0;
         // Add 4 transactions
         bank.transfer(1, &genesis.mint_keypair, &bob_pubkey)
             .unwrap();
