@@ -28,7 +28,7 @@ mod cell {
     use std::cell::UnsafeCell;
 
     pub(super) struct SchedulerCell<T>(UnsafeCell<T>);
-    pub(super) struct SchedulerCellToken;
+    pub(super) struct SchedulerCellToken();
 }
 
 fn aaa() {
