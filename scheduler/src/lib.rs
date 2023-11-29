@@ -496,7 +496,7 @@ impl SchedulingStateMachine {
                 unlock_attempt.page_mut(token).remove_blocked_task(unique_weight);
             }
 
-            let is_unused_now = Self::unlock(unlock_attempt);
+            let is_unused_now = Self::unlock(token, unlock_attempt);
             if !is_unused_now {
                 continue;
             }
