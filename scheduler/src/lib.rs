@@ -2,7 +2,7 @@ use {
     solana_sdk::transaction::SanitizedTransaction,
     std::{collections::BTreeMap, sync::Arc},
 };
-use crate::cell::{SchedulerCell, Token};
+use crate::cell::{SchedulerCell, Token, Token2};
 
 type UsageCount = u32;
 const SOLE_USE_COUNT: UsageCount = 1;
