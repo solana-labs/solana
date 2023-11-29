@@ -366,11 +366,12 @@ impl SchedulingStateMachine {
 
     fn attempt_lock_address(
         token: &mut Token,
+        token2: &mut Token2,
         this_unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) -> LockStatus {
         let requested_usage = attempt.requested_usage;
-        let page = attempt.page_mut(token);
+        let page = attempt.page_mut(token2);
 
         let mut lock_status = match page.current_usage {
             Usage::Unused => LockStatus::Succeded(Usage::renew(requested_usage)),
