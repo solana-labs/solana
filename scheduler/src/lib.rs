@@ -443,36 +443,36 @@ impl SchedulingStateMachine {
         let (lock_count, usages) = Self::attempt_lock_for_execution(
             self.token2,
             &task.unique_weight,
-            &mut task.lock_attempts_mut(self.token),
+            &mut task.lock_attempts_mut(&mut self.token),
             &task_source,
         );
 
-        if lock_count < task.lock_attempts_mut(self.token).len() {
+        if lock_count < task.lock_attempts_mut(&mut self.token).len() {
             if matches!(task_source, TaskSource::Runnable) {
-                Self::rollback_locking(self.token2, &mut task.lock_attempts_mut(self.token)[..lock_count]);
-                task.mark_as_contended(self.token);
-                task.index_with_pages(self.token, self.token2);
+                Self::rollback_locking(&mut self.token2, &mut task.lock_attempts_mut(&mut self.token)[..lock_count]);
+                task.mark_as_contended(&mut self.token);
+                task.index_with_pages(&mut self.token, self.token2);
             }
 
             return None;
         }
 
         if matches!(task_source, TaskSource::Retryable) {
-            for (usage, attempt) in usages.into_iter().zip(task.lock_attempts_mut(self.token)) {
+            for (usage, attempt) in usages.into_iter().zip(task.lock_attempts_mut(&mut self.token)) {
                 attempt.page_mut(self.token2).current_usage = usage;
             }
             // as soon as next tack is succeeded in locking, trigger re-checks on read only
             // addresses so that more readonly transactions can be executed
-            task.mark_as_uncontended(self.token);
+            task.mark_as_uncontended(&mut self.token);
 
             for read_only_lock_attempt in task
-                .lock_attempts(self.token)
+                .lock_attempts(&mut self.token)
                 .iter()
                 .filter(|l| matches!(l.requested_usage, RequestedUsage::Readonly))
             {
                 if let Some(heaviest_blocked_task) = read_only_lock_attempt
                     .page_mut(self.token2)
-                    .heaviest_still_blocked_task(self.token)
+                    .heaviest_still_blocked_task(&mut self.token)
                     .and_then(|(task, requested_usage)| {
                         matches!(requested_usage, RequestedUsage::Readonly).then_some(task)
                     })
