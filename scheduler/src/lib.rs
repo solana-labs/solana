@@ -31,7 +31,7 @@ mod cell {
     pub(super) struct SchedulerCell<T>(UnsafeCell<T>);
     pub(super) struct Token(PhantomData<*mut ()>);
     impl Token {
-        pub(super) unsafe fn new() -> Self {
+        pub(super) unsafe fn assume_on_the_scheduler_thread() -> Self {
             Self(PhantomData)
         }
     }
@@ -40,7 +40,7 @@ mod cell {
 }
 
 fn aaa() {
-    let a = unsafe { Token::new() };
+    let a = unsafe { Token::assume_on_the_scheduler_thread() };
     //let () = std::thread::spawn(move || { a; }).join().unwrap();
 }
 
