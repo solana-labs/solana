@@ -140,12 +140,6 @@ pub struct LockAttempt {
     requested_usage: RequestedUsage,
 }
 
-impl Page {
-    fn as_mut<'t>(&self, page_token: &'t mut PageToken) -> &'t mut PageInner {
-        self.0.get(page_token)
-    }
-}
-
 impl LockAttempt {
     pub fn readonly(page: Page) -> Self {
         Self {
