@@ -113,7 +113,7 @@ impl TaskInner {
     }
 
     fn uncontended<'t>(&self, token: &'t mut Token) -> &'t mut usize {
-        (*self.task_status.0.get(token)).uncontended
+        &mut self.task_status.0.get(token).uncontended
     }
 
     fn currently_contended(&self, token: &mut Token) -> bool {
