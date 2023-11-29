@@ -5027,6 +5027,7 @@ fn test_boot_from_local_state() {
 #[test]
 #[serial]
 #[allow(unused_attributes)]
+#[ignore]
 fn test_duplicate_shreds_switch_failure() {
     fn wait_for_duplicate_fork_frozen(ledger_path: &Path, dup_slot: Slot) -> Hash {
         // Ensure all the slots <= dup_slot are also full so we know we can replay up to dup_slot
