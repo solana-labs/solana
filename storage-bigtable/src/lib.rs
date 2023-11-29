@@ -1133,6 +1133,13 @@ impl LedgerStorage {
             vec![]
         };
 
+        let entries_exist = self
+            .connection
+            .client()
+            .row_key_exists("entries", slot_to_entries_key(slot))
+            .await
+            .is_ok_and(|x| x);
+
         if !dry_run {
             if !address_slot_rows.is_empty() {
                 self.connection
@@ -1146,17 +1153,24 @@ impl LedgerStorage {
                     .await?;
             }
 
+            if entries_exist {
+                self.connection
+                    .delete_rows_with_retry("entries", &[slot_to_entries_key(slot)])
+                    .await?;
+            }
+
             self.connection
                 .delete_rows_with_retry("blocks", &[slot_to_blocks_key(slot)])
                 .await?;
         }
 
         info!(
-            "{}deleted ledger data for slot {}: {} transaction rows, {} address slot rows",
+            "{}deleted ledger data for slot {}: {} transaction rows, {} address slot rows, {} entry row",
             if dry_run { "[dry run] " } else { "" },
             slot,
             tx_deletion_rows.len(),
-            address_slot_rows.len()
+            address_slot_rows.len(),
+            if entries_exist { "with" } else {"WITHOUT"}
         );
 
         Ok(())
