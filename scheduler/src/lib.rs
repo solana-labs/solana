@@ -45,6 +45,8 @@ mod cell {
     unsafe impl<V> Send for SchedulerCell<V> {}
     unsafe impl<V> Sync for SchedulerCell<V> {}
 
+    pub(super) struct TokenNew<T>(PhantomData<(T, *mut ())>);
+
     pub(super) struct Token2(PhantomData<*mut ()>);
 
     pub(super) struct Token(PhantomData<*mut ()>);
