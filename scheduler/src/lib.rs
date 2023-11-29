@@ -2,7 +2,7 @@ use {
     solana_sdk::transaction::SanitizedTransaction,
     std::{collections::BTreeMap, sync::Arc},
 };
-use crate::cell::{SchedulerCell, Token, Token2};
+use crate::cell::{SchedulerCell, Token, PageToken};
 
 type UsageCount = u32;
 const SOLE_USE_COUNT: UsageCount = 1;
@@ -57,7 +57,7 @@ mod cell {
         }
     }
 
-    pub(super) type Token2 = TokenNew<crate::PageInner>;
+    pub(super) type PageToken = TokenNew<crate::PageInner>;
 
     pub(super) type Token = TokenNew<crate::TaskStatusInner>;
     static_assertions::const_assert_eq!(std::mem::size_of::<Token>(), 0);
@@ -144,7 +144,7 @@ pub struct LockAttempt {
 }
 
 impl Page {
-    fn as_mut<'t>(&self, token: &'t mut Token2) -> &'t mut PageInner {
+    fn as_mut<'t>(&self, token: &'t mut PageToken) -> &'t mut PageInner {
         self.0.get(token)
     }
 }
@@ -164,7 +164,7 @@ impl LockAttempt {
         }
     }
 
-    fn page_mut<'t>(&self, token: &'t mut Token2) -> &'t mut PageInner {
+    fn page_mut<'t>(&self, token: &'t mut PageToken) -> &'t mut PageInner {
         self.page.as_mut(token)
     }
 }
@@ -248,7 +248,7 @@ pub struct SchedulingStateMachine {
     rescheduled_task_count: usize,
     total_task_count: usize,
     token: Token,
-    token2: Token2,
+    token2: PageToken,
 }
 
 impl SchedulingStateMachine {
@@ -261,7 +261,7 @@ impl SchedulingStateMachine {
             rescheduled_task_count: 0,
             total_task_count: 0,
             token: unsafe { Token::assume_on_the_scheduler_thread() },
-            token2: unsafe { Token2::assume_on_the_scheduler_thread() },
+            token2: unsafe { PageToken::assume_on_the_scheduler_thread() },
         }
     }
 
@@ -322,7 +322,7 @@ impl SchedulingStateMachine {
     }
 
     fn attempt_lock_for_execution(
-        token2: &mut Token2,
+        token2: &mut PageToken,
         unique_weight: &UniqueWeight,
         lock_attempts: &mut [LockAttempt],
         task_source: &TaskSource,
@@ -356,7 +356,7 @@ impl SchedulingStateMachine {
     }
 
     fn attempt_lock_address(
-        token2: &mut Token2,
+        token2: &mut PageToken,
         this_unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) -> LockStatus {
@@ -394,7 +394,7 @@ impl SchedulingStateMachine {
         lock_status
     }
 
-    fn unlock(token2: &mut Token2, attempt: &LockAttempt) -> bool {
+    fn unlock(token2: &mut PageToken, attempt: &LockAttempt) -> bool {
         let mut is_unused_now = false;
 
         let requested_usage = attempt.requested_usage;
