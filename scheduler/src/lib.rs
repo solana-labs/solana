@@ -35,6 +35,10 @@ mod cell {
         pub(super) fn new(value: T) -> Self {
             Self(UnsafeCell::new(value))
         }
+
+        fn get(&self, token: &mut Token) -> &mut T {
+            self.0.get()
+        }
     }
 
     unsafe impl<T> Send for SchedulerCell<T> {}
