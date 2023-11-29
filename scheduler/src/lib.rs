@@ -401,7 +401,7 @@ impl SchedulingStateMachine {
         let mut is_unused_now = false;
 
         let requested_usage = attempt.requested_usage;
-        let page = attempt.page_mut();
+        let page = attempt.page_mut(token);
 
         match &mut page.current_usage {
             Usage::Readonly(ref mut count) => match requested_usage {
