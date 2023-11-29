@@ -338,7 +338,6 @@ impl SchedulingStateMachine {
     }
 
     fn attempt_lock_for_execution(
-        token: &mut Token,
         token2: &mut Token2,
         unique_weight: &UniqueWeight,
         lock_attempts: &mut [LockAttempt],
@@ -354,7 +353,7 @@ impl SchedulingStateMachine {
         });
 
         for attempt in lock_attempts.iter_mut() {
-            match Self::attempt_lock_address(token, token2, unique_weight, attempt) {
+            match Self::attempt_lock_address(token2, unique_weight, attempt) {
                 LockStatus::Succeded(usage) => {
                     if rollback_on_failure {
                         attempt.page_mut(token2).current_usage = usage;
@@ -373,7 +372,6 @@ impl SchedulingStateMachine {
     }
 
     fn attempt_lock_address(
-        token: &mut Token,
         token2: &mut Token2,
         this_unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
@@ -452,7 +450,6 @@ impl SchedulingStateMachine {
         retryable_task_queue: &mut TaskQueue,
     ) -> Option<Task> {
         let (lock_count, usages) = Self::attempt_lock_for_execution(
-            token,
             token2,
             &task.unique_weight,
             &mut task.lock_attempts_mut(token),
