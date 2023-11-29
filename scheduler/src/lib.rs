@@ -438,7 +438,8 @@ impl SchedulingStateMachine {
 
     fn try_lock_for_task(
         &mut self,
-        (task_source, task): (TaskSource, Task),
+        task_source: TaskSource,
+        task: Task,
     ) -> Option<Task> {
         let (lock_count, usages) = Self::attempt_lock_for_execution(
             &mut self.token2,
