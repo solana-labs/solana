@@ -30,7 +30,7 @@ mod cell {
 
     pub(super) struct SchedulerCell<T>(UnsafeCell<T>);
     pub(super) struct Token(PhantomData<*mut ()>);
-    impl SchedulerCellToken {
+    impl Token {
         pub(super) unsafe fn new() -> Self {
             Self(PhantomData)
         }
