@@ -47,6 +47,12 @@ mod cell {
 
     pub(super) struct TokenNew<T>(PhantomData<(T, *mut ())>);
 
+    impl<T> Token<T> {
+        pub(super) unsafe fn assume_on_the_scheduler_thread() -> Self {
+            Self(PhantomData)
+        }
+    }
+
     pub(super) struct Token2(PhantomData<*mut ()>);
 
     pub(super) struct Token(PhantomData<*mut ()>);
