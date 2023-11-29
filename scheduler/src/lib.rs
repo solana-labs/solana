@@ -59,14 +59,6 @@ mod cell {
     static_assertions::const_assert_eq!(std::mem::size_of::<Token>(), 0);
 }
 
-pub fn aaa() {
-    let token = &mut unsafe { Token::assume_on_the_scheduler_thread() };
-
-    let cell = SchedulerCell::new(23);
-    let a = cell.get(token);
-    dbg!((a,));
-}
-
 impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
         Self(SchedulerCell::new(TaskStatusInner {
