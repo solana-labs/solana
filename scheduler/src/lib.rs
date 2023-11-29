@@ -60,7 +60,7 @@ pub fn aaa() {
     let cell = SchedulerCell::new(23);
     let a = cell.get(aa);
     let b = cell.get(aa);
-    dbg!((a));
+    dbg!((a,));
     //let () = std::thread::spawn(move || { a; }).join().unwrap();
 }
 
