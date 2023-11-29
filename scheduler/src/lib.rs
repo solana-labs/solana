@@ -99,15 +99,6 @@ impl TaskInner {
         &self.tx
     }
 
-    fn index_with_pages(self: &Arc<Self>, token: &mut Token, token2: &mut Token2) {
-        for lock_attempt in self.lock_attempts_mut(token) {
-            let requested_usage = lock_attempt.requested_usage;
-            lock_attempt
-                .page_mut(token2)
-                .insert_blocked_task(self.clone(), requested_usage);
-        }
-    }
-
     fn lock_attempts_mut<'t>(&self, token: &'t mut Token) -> &'t mut Vec<LockAttempt> {
         &mut self.task_status.0.get(token).lock_attempts
     }
@@ -452,7 +443,7 @@ impl SchedulingStateMachine {
             if matches!(task_source, TaskSource::Runnable) {
                 self.rollback_locking(&task, lock_count);
                 task.mark_as_contended(&mut self.token);
-                task.index_with_pages(&mut self.token, &mut self.token2);
+                self.index_task_with_pages(&task);
             }
 
             return None;
@@ -491,6 +482,15 @@ impl SchedulingStateMachine {
     fn rollback_locking(&mut self, task: &Task, lock_count: usize) {
         for lock_attempt in &task.lock_attempts_mut(&mut self.token)[..lock_count] {
             Self::unlock(&mut self.token2, lock_attempt);
+        }
+    }
+
+    fn index_task_with_pages(&mut self, task: &Task) {
+        for lock_attempt in self.lock_attempts_mut(&mut self.token) {
+            let requested_usage = lock_attempt.requested_usage;
+            lock_attempt
+                .page_mut(&mut self.token2)
+                .insert_blocked_task(self.clone(), requested_usage);
         }
     }
 
