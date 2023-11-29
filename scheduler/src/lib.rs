@@ -418,6 +418,7 @@ impl SchedulingStateMachine {
     }
 
     fn try_lock_for_task(
+        token: &mut Token,
         (task_source, task): (TaskSource, Task),
         retryable_task_queue: &mut TaskQueue,
     ) -> Option<Task> {
@@ -443,7 +444,7 @@ impl SchedulingStateMachine {
             }
             // as soon as next tack is succeeded in locking, trigger re-checks on read only
             // addresses so that more readonly transactions can be executed
-            task.mark_as_uncontended();
+            task.mark_as_uncontended(token);
 
             for read_only_lock_attempt in task
                 .lock_attempts_mut()
