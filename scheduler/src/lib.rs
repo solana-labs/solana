@@ -38,8 +38,8 @@ mod cell {
 }
 
 fn aaa() {
-    let a = &mut SchedulerCellToken::new();
-    let () = std::thread::spawn(move || { a; }).join().unwrap();
+    let a = SchedulerCellToken::new();
+    //let () = std::thread::spawn(move || { a; }).join().unwrap();
 }
 
 impl TaskStatus {
