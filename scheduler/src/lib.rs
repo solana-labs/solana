@@ -1,6 +1,6 @@
 use {
     solana_sdk::transaction::SanitizedTransaction,
-    std::{cell::UnsafeCell, collections::BTreeMap, sync::Arc},
+    std::{collections::BTreeMap, sync::Arc},
 };
 use crate::cell::{SchedulerCell, Token};
 
@@ -233,10 +233,10 @@ impl PageInner {
     }
 }
 
-static_assertions::const_assert_eq!(std::mem::size_of::<UnsafeCell<PageInner>>(), 32);
+static_assertions::const_assert_eq!(std::mem::size_of::<SchedulerCell<PageInner>>(), 32);
 
 #[derive(Debug, Clone, Default)]
-pub struct Page(Arc<UnsafeCell<PageInner>>);
+pub struct Page(Arc<SchedulerCell<PageInner>>);
 static_assertions::const_assert_eq!(std::mem::size_of::<Page>(), 8);
 unsafe impl Send for Page {}
 unsafe impl Sync for Page {}
