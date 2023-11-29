@@ -492,7 +492,7 @@ impl SchedulingStateMachine {
         let unique_weight = &task.unique_weight;
         let should_remove = task.has_contended(token);
 
-        for unlock_attempt in task.lock_attempts_mut() {
+        for unlock_attempt in task.lock_attempts_mut(token) {
             if should_remove {
                 unlock_attempt.page_mut().remove_blocked_task(unique_weight);
             }
