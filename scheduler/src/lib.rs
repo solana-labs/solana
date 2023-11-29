@@ -347,7 +347,7 @@ impl SchedulingStateMachine {
         });
 
         for attempt in lock_attempts.iter_mut() {
-            match Self::attempt_lock_address(token, unique_weight, attempt) {
+            match Self::attempt_lock_address(token, token2, unique_weight, attempt) {
                 LockStatus::Succeded(usage) => {
                     if rollback_on_failure {
                         attempt.page_mut(token2).current_usage = usage;
