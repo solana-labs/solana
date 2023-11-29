@@ -501,7 +501,7 @@ impl SchedulingStateMachine {
                 continue;
             }
 
-            let heaviest_uncontended_now = unlock_attempt.page_mut().heaviest_still_blocked_task(unsafe { &mut Token::assume_on_the_scheduler_thread() });
+            let heaviest_uncontended_now = unlock_attempt.page_mut(token).heaviest_still_blocked_task(unsafe { &mut Token::assume_on_the_scheduler_thread() });
             if let Some((uncontended_task, _ru)) = heaviest_uncontended_now {
                 retryable_task_queue
                     .entry(uncontended_task.unique_weight)
