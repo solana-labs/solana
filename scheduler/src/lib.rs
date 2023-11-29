@@ -1,8 +1,8 @@
 use {
+    crate::cell::{SchedulerCell, Token},
     solana_sdk::transaction::SanitizedTransaction,
     std::{collections::BTreeMap, sync::Arc},
 };
-use crate::cell::{SchedulerCell, Token};
 
 type UsageCount = u32;
 const SOLE_USE_COUNT: UsageCount = 1;
@@ -22,12 +22,11 @@ struct TaskStatus {
 }
 
 mod cell {
-    use std::cell::UnsafeCell;
-    use std::marker::PhantomData;
+    use std::{cell::UnsafeCell, marker::PhantomData};
 
     #[derive(Debug, Default)]
     pub(super) struct SchedulerCell<V>(UnsafeCell<V>);
-    
+
     impl<V> SchedulerCell<V> {
         // non-const to forbid unprotected sharing via static variables among threads.
         pub(super) fn new(value: V) -> Self {
@@ -216,7 +215,10 @@ impl PageInner {
         self.blocked_tasks.last_entry().map(|entry| *entry.key())
     }
 
-    fn heaviest_still_blocked_task(&self, task_token: &TaskToken) -> Option<&(Task, RequestedUsage)> {
+    fn heaviest_still_blocked_task(
+        &self,
+        task_token: &TaskToken,
+    ) -> Option<&(Task, RequestedUsage)> {
         self.blocked_tasks
             .values()
             .rev()
@@ -419,11 +421,7 @@ impl SchedulingStateMachine {
         is_unused_now
     }
 
-    fn try_lock_for_task(
-        &mut self,
-        task_source: TaskSource,
-        task: Task,
-    ) -> Option<Task> {
+    fn try_lock_for_task(&mut self, task_source: TaskSource, task: Task) -> Option<Task> {
         let (lock_count, usages) = Self::attempt_lock_for_execution(
             &mut self.page_token,
             &task.unique_weight,
@@ -442,7 +440,10 @@ impl SchedulingStateMachine {
         }
 
         if matches!(task_source, TaskSource::Retryable) {
-            for (usage, attempt) in usages.into_iter().zip(task.lock_attempts_mut(&mut self.task_token)) {
+            for (usage, attempt) in usages
+                .into_iter()
+                .zip(task.lock_attempts_mut(&mut self.task_token))
+            {
                 attempt.page_mut(&mut self.page_token).current_usage = usage;
             }
             // as soon as next tack is succeeded in locking, trigger re-checks on read only
@@ -492,7 +493,9 @@ impl SchedulingStateMachine {
 
         for unlock_attempt in task.lock_attempts(&self.task_token) {
             if should_remove {
-                unlock_attempt.page_mut(&mut self.page_token).remove_blocked_task(unique_weight);
+                unlock_attempt
+                    .page_mut(&mut self.page_token)
+                    .remove_blocked_task(unique_weight);
             }
 
             let is_unused_now = Self::unlock(&mut self.page_token, unlock_attempt);
@@ -500,7 +503,9 @@ impl SchedulingStateMachine {
                 continue;
             }
 
-            let heaviest_uncontended_now = unlock_attempt.page_mut(&mut self.page_token).heaviest_still_blocked_task(&self.task_token);
+            let heaviest_uncontended_now = unlock_attempt
+                .page_mut(&mut self.page_token)
+                .heaviest_still_blocked_task(&self.task_token);
             if let Some((uncontended_task, _ru)) = heaviest_uncontended_now {
                 self.retryable_task_queue
                     .entry(uncontended_task.unique_weight)

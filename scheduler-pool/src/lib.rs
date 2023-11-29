@@ -783,7 +783,8 @@ where
                     if end_session {
                         // or should also consider end_thread?
                         log_scheduler!("S:ended ");
-                        (state_machine, log_interval) = (SchedulingStateMachine::new(), <_>::default());
+                        (state_machine, log_interval) =
+                            (SchedulingStateMachine::new(), <_>::default());
                         drop_sender.send(SessionedMessage::EndSession).unwrap();
                         result_sender.send(drop_receiver2.recv().unwrap()).unwrap();
                         end_session = false;
