@@ -458,7 +458,7 @@ impl SchedulingStateMachine {
 
         if lock_count < task.lock_attempts_mut(token).len() {
             if matches!(task_source, TaskSource::Runnable) {
-                Self::rollback_locking(token, token2, &mut task.lock_attempts_mut(token)[..lock_count]);
+                Self::rollback_locking(token2, &mut task.lock_attempts_mut(token)[..lock_count]);
                 task.mark_as_contended(token);
                 task.index_with_pages(token, token2);
             }
@@ -496,7 +496,7 @@ impl SchedulingStateMachine {
         Some(task)
     }
 
-    fn rollback_locking(token: &mut Token, token2: &mut Token2, lock_attempts: &mut [LockAttempt]) {
+    fn rollback_locking(token2: &mut Token2, lock_attempts: &mut [LockAttempt]) {
         for lock_attempt in lock_attempts {
             Self::unlock(token2, lock_attempt);
         }
