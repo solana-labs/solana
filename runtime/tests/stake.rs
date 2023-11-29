@@ -5,12 +5,14 @@ use {
     solana_runtime::{
         bank::Bank,
         bank_client::BankClient,
+        bank_forks::BankForks,
         genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
     },
     solana_sdk::{
         account::from_account,
         account_utils::StateMut,
         client::SyncClient,
+        clock::Slot,
         epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
         hash::Hash,
         message::Message,
@@ -28,19 +30,37 @@ use {
         vote_instruction,
         vote_state::{Vote, VoteInit, VoteState, VoteStateVersions},
     },
-    std::sync::Arc,
+    std::sync::{Arc, RwLock},
 };
 
+fn new_bank_from_parent_with_bank_forks(
+    bank_forks: &RwLock<BankForks>,
+    parent: Arc<Bank>,
+    collector_id: &Pubkey,
+    slot: Slot,
+) -> Arc<Bank> {
+    let bank = Bank::new_from_parent(parent, collector_id, slot);
+    bank_forks
+        .write()
+        .unwrap()
+        .insert(bank)
+        .clone_without_scheduler()
+}
+
 /// get bank at next epoch + `n` slots
-fn next_epoch_and_n_slots(bank: Arc<Bank>, mut n: usize) -> Arc<Bank> {
+fn next_epoch_and_n_slots(
+    bank: Arc<Bank>,
+    bank_forks: &RwLock<BankForks>,
+    mut n: usize,
+) -> Arc<Bank> {
     bank.squash();
     let slot = bank.get_slots_in_epoch(bank.epoch()) + bank.slot();
-    let mut bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
+    let mut bank = new_bank_from_parent_with_bank_forks(bank_forks, bank, &Pubkey::default(), slot);
 
     while n > 0 {
         bank.squash();
         let slot = bank.slot() + 1;
-        bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
+        bank = new_bank_from_parent_with_bank_forks(bank_forks, bank, &Pubkey::default(), slot);
         n -= 1;
     }
 
@@ -49,6 +69,7 @@ fn next_epoch_and_n_slots(bank: Arc<Bank>, mut n: usize) -> Arc<Bank> {
 
 fn fill_epoch_with_votes(
     mut bank: Arc<Bank>,
+    bank_forks: &RwLock<BankForks>,
     vote_keypair: &Keypair,
     mint_keypair: &Keypair,
 ) -> Arc<Bank> {
@@ -58,7 +79,7 @@ fn fill_epoch_with_votes(
     while bank.epoch() != old_epoch + 1 {
         bank.squash();
         let slot = bank.slot() + 1;
-        bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
+        bank = new_bank_from_parent_with_bank_forks(bank_forks, bank, &Pubkey::default(), slot);
 
         let bank_client = BankClient::new_shared(bank.clone());
         let parent = bank.parent().unwrap();
@@ -125,7 +146,7 @@ fn test_stake_create_and_split_single_signature() {
 
     let staker_pubkey = staker_keypair.pubkey();
 
-    let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+    let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
     let bank_client = BankClient::new_shared(bank.clone());
 
     let stake_address =
@@ -201,7 +222,7 @@ fn test_stake_create_and_split_to_existing_system_account() {
 
     let staker_pubkey = staker_keypair.pubkey();
 
-    let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+    let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
     let bank_client = BankClient::new_shared(bank.clone());
 
     let stake_address =
@@ -288,9 +309,8 @@ fn test_stake_account_lifetime() {
     );
     genesis_config.epoch_schedule = EpochSchedule::new(MINIMUM_SLOTS_PER_EPOCH);
     genesis_config.rent = Rent::default();
-    let bank = Bank::new_for_tests(&genesis_config);
+    let (mut bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mint_pubkey = mint_keypair.pubkey();
-    let mut bank = Arc::new(bank);
     // Need to set the EAH to Valid so that `Bank::new_from_parent()` doesn't panic during freeze
     // when parent is in the EAH calculation window.
     bank.rc
@@ -392,12 +412,12 @@ fn test_stake_account_lifetime() {
             break;
         }
         // Cycle thru banks until we're fully warmed up
-        bank = next_epoch_and_n_slots(bank, 0);
+        bank = next_epoch_and_n_slots(bank, bank_forks.as_ref(), 0);
     }
 
     // Reward redemption
     // Submit enough votes to generate rewards
-    bank = fill_epoch_with_votes(bank, &vote_keypair, &mint_keypair);
+    bank = fill_epoch_with_votes(bank, bank_forks.as_ref(), &vote_keypair, &mint_keypair);
 
     // Test that votes and credits are there
     let account = bank.get_account(&vote_pubkey).expect("account not found");
@@ -410,13 +430,13 @@ fn test_stake_account_lifetime() {
     // one vote per slot, might be more slots than 32 in the epoch
     assert!(vote_state.credits() >= 1);
 
-    bank = fill_epoch_with_votes(bank, &vote_keypair, &mint_keypair);
+    bank = fill_epoch_with_votes(bank, bank_forks.as_ref(), &vote_keypair, &mint_keypair);
 
     let pre_staked = get_staked(&bank, &stake_pubkey);
     let pre_balance = bank.get_balance(&stake_pubkey);
 
     // next epoch bank plus one additional slot should pay rewards
-    bank = next_epoch_and_n_slots(bank, 1);
+    bank = next_epoch_and_n_slots(bank, bank_forks.as_ref(), 1);
 
     // Test that balance increased, and that the balance got staked
     let staked = get_staked(&bank, &stake_pubkey);
@@ -490,7 +510,7 @@ fn test_stake_account_lifetime() {
         .send_and_confirm_message(&[&mint_keypair, &stake_keypair], message)
         .is_err());
 
-    let mut bank = next_epoch_and_n_slots(bank, 1);
+    let mut bank = next_epoch_and_n_slots(bank, bank_forks.as_ref(), 1);
 
     let bank_client = BankClient::new_shared(bank.clone());
 
@@ -536,7 +556,7 @@ fn test_stake_account_lifetime() {
         if get_staked(&bank, &split_stake_pubkey) == 0 {
             break;
         }
-        bank = next_epoch_and_n_slots(bank, 1);
+        bank = next_epoch_and_n_slots(bank, bank_forks.as_ref(), 1);
     }
     let bank_client = BankClient::new_shared(bank.clone());
 
@@ -577,9 +597,8 @@ fn test_create_stake_account_from_seed() {
         &solana_sdk::pubkey::new_rand(),
         1_000_000,
     );
-    let bank = Bank::new_for_tests(&genesis_config);
+    let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
     let mint_pubkey = mint_keypair.pubkey();
-    let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(bank.clone());
 
     let seed = "test-string";
