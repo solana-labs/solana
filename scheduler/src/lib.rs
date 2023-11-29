@@ -253,7 +253,7 @@ pub struct SchedulingStateMachine {
     rescheduled_task_count: usize,
     total_task_count: usize,
     token: Token,
-    token: Token2,
+    token2: Token2,
 }
 
 impl SchedulingStateMachine {
