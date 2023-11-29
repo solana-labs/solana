@@ -128,7 +128,7 @@ impl TaskInner {
     }
 
     fn mark_as_uncontended(&self, token: &mut Token) {
-        assert!(self.currently_contended());
+        assert!(self.currently_contended(token));
         *self.uncontended(token) = 2;
     }
 
