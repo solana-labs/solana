@@ -27,10 +27,11 @@ mod cell {
     use std::cell::UnsafeCell;
 
     pub(super) struct SchedulerCell<T>(UnsafeCell<T>);
+    pub(super) struct SchedulerCellToken;
 }
 
 fn aaa() {
-    let a = SchedulerCell(3);
+    let a = SchedulerCellToken;
 }
 
 impl TaskStatus {
