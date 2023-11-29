@@ -108,7 +108,7 @@ impl TaskInner {
         }
     }
 
-    fn lock_attempts_mut(&self, token: &mut Token) -> &mut Vec<LockAttempt> {
+    fn lock_attempts_mut<'t>(&self, token: &'t mut Token) -> &'t mut Vec<LockAttempt> {
         unsafe { &mut (*self.task_status.0.get(token)).lock_attempts }
     }
 
