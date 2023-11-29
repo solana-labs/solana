@@ -57,6 +57,7 @@ mod cell {
 pub fn aaa() {
     let mut token = unsafe { Token::assume_on_the_scheduler_thread() };
     let aa = &mut token;
+    let bb = aa;
     let cell = SchedulerCell::new(23);
     let a = cell.get(aa);
     let b = cell.get(aa);
