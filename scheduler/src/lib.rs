@@ -29,7 +29,7 @@ mod cell {
     use std::marker::PhantomData;
 
     pub(super) struct SchedulerCell<T>(UnsafeCell<T>);
-    pub(super) struct SchedulerCellToken(PhantomData<*mut ()>);
+    pub(super) struct Token(PhantomData<*mut ()>);
     impl SchedulerCellToken {
         pub(super) unsafe fn new() -> Self {
             Self(PhantomData)
@@ -38,7 +38,7 @@ mod cell {
 }
 
 fn aaa() {
-    let a = unsafe { SchedulerCellToken::new() };
+    let a = unsafe { Token::new() };
     //let () = std::thread::spawn(move || { a; }).join().unwrap();
 }
 
