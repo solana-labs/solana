@@ -1206,6 +1206,17 @@ impl From<(usize, EntrySummary)> for entries::Entry {
     }
 }
 
+impl From<entries::Entry> for EntrySummary {
+    fn from(entry: entries::Entry) -> Self {
+        EntrySummary {
+            num_hashes: entry.num_hashes,
+            hash: Hash::new(&entry.hash),
+            num_transactions: entry.num_transactions,
+            starting_transaction_index: entry.starting_transaction_index as usize,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use {super::*, enum_iterator::all};
