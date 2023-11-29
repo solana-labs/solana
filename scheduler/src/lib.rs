@@ -466,7 +466,7 @@ impl SchedulingStateMachine {
             {
                 if let Some(heaviest_blocked_task) = read_only_lock_attempt
                     .page_mut()
-                    .heaviest_still_blocked_task()
+                    .heaviest_still_blocked_task(token)
                     .and_then(|(task, requested_usage)| {
                         matches!(requested_usage, RequestedUsage::Readonly).then_some(task)
                     })
