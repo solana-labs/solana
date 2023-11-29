@@ -441,7 +441,7 @@ impl SchedulingStateMachine {
         (task_source, task): (TaskSource, Task),
     ) -> Option<Task> {
         let (lock_count, usages) = Self::attempt_lock_for_execution(
-            self.token2,
+            &mut self.token2,
             &task.unique_weight,
             &mut task.lock_attempts_mut(&mut self.token),
             &task_source,
@@ -459,7 +459,7 @@ impl SchedulingStateMachine {
 
         if matches!(task_source, TaskSource::Retryable) {
             for (usage, attempt) in usages.into_iter().zip(task.lock_attempts_mut(&mut self.token)) {
-                attempt.page_mut(self.token2).current_usage = usage;
+                attempt.page_mut(&mut self.token2).current_usage = usage;
             }
             // as soon as next tack is succeeded in locking, trigger re-checks on read only
             // addresses so that more readonly transactions can be executed
@@ -471,7 +471,7 @@ impl SchedulingStateMachine {
                 .filter(|l| matches!(l.requested_usage, RequestedUsage::Readonly))
             {
                 if let Some(heaviest_blocked_task) = read_only_lock_attempt
-                    .page_mut(self.token2)
+                    .page_mut(&mut self.token2)
                     .heaviest_still_blocked_task(&mut self.token)
                     .and_then(|(task, requested_usage)| {
                         matches!(requested_usage, RequestedUsage::Readonly).then_some(task)
