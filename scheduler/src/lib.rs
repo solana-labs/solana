@@ -45,6 +45,7 @@ mod cell {
     unsafe impl<V> Sync for SchedulerCell<V> {}
 
     pub(super) struct Token(PhantomData<*mut ()>);
+    static_assertions::const_assert_eq!(std::mem::size_of::<Token>(), 0);
 
     impl Token {
         pub(super) unsafe fn assume_on_the_scheduler_thread() -> Self {
