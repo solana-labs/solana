@@ -56,11 +56,11 @@ mod cell {
 
 pub fn aaa() {
     let mut token = unsafe { Token::assume_on_the_scheduler_thread() };
-    let aa = token;
+    let aa = &mut token;
     let cell = SchedulerCell::new(23);
-    let a = cell.get(&mut aa);
-    let b = cell.get(&mut token);
-    dbg!((b));
+    let a = cell.get(aa);
+    //let b = cell.get(&mut token);
+    //dbg!((b));
     //let () = std::thread::spawn(move || { a; }).join().unwrap();
 }
 
