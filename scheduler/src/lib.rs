@@ -38,7 +38,7 @@ mod cell {
             unsafe { &mut *self.0.get() }
         }
 
-        pub(super) fn get22<'t>(&self, _token: &'t Token<V>) -> &'t V {
+        pub(super) fn borrow<'t>(&self, _token: &'t Token<V>) -> &'t V {
             unsafe { &*self.0.get() }
         }
     }
@@ -101,7 +101,7 @@ impl TaskInner {
     }
 
     fn lock_attempts<'t>(&self, task_token: &'t TaskToken) -> &'t Vec<LockAttempt> {
-        &self.task_status.get22(task_token).lock_attempts
+        &self.task_status.borrow(task_token).lock_attempts
     }
 
     fn uncontended<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut usize {
@@ -109,7 +109,7 @@ impl TaskInner {
     }
 
     fn uncontended22<'t>(&self, task_token: &'t TaskToken) -> &'t usize {
-        &self.task_status.get22(task_token).uncontended
+        &self.task_status.borrow(task_token).uncontended
     }
 
     fn currently_contended(&self, task_token: &TaskToken) -> bool {
