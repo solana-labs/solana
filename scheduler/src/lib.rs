@@ -55,7 +55,7 @@ mod cell {
 
     pub(super) type Token2 = TokenNew<crate::Page>;
 
-    pub(super) struct Token(PhantomData<*mut ()>);
+    pub(super) type Token = TokenNew<crate::TaskStatusInner>;
     static_assertions::const_assert_eq!(std::mem::size_of::<Token>(), 0);
 
     impl Token {
