@@ -107,11 +107,11 @@ impl TaskInner {
         &self.tx
     }
 
-    fn index_with_pages(self: &Arc<Self>, token: &mut Token) {
+    fn index_with_pages(self: &Arc<Self>, token2: &mut Token2) {
         for lock_attempt in self.lock_attempts_mut(token) {
             let requested_usage = lock_attempt.requested_usage;
             lock_attempt
-                .page_mut(token)
+                .page_mut(token2)
                 .insert_blocked_task(self.clone(), requested_usage);
         }
     }
@@ -463,7 +463,7 @@ impl SchedulingStateMachine {
             if matches!(task_source, TaskSource::Runnable) {
                 Self::rollback_locking(token, token2, &mut task.lock_attempts_mut(token)[..lock_count]);
                 task.mark_as_contended(token);
-                task.index_with_pages(token);
+                task.index_with_pages(token2);
             }
 
             return None;
