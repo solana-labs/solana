@@ -325,7 +325,7 @@ impl SchedulingStateMachine {
     pub fn deschedule_task(&mut self, task: &Task) {
         self.active_task_count -= 1;
         self.handled_task_count += 1;
-        Self::unlock_after_execution(&mut self.token, &task, &mut self.retryable_task_queue);
+        Self::unlock_after_execution(&mut self.token, &mut self.token2, &task, &mut self.retryable_task_queue);
     }
 
     fn attempt_lock_for_execution(
