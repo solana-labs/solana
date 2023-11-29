@@ -99,37 +99,37 @@ impl TaskInner {
         &self.tx
     }
 
-    fn lock_attempts_mut<'t>(&self, token: &'t mut TaskToken) -> &'t mut Vec<LockAttempt> {
-        &mut self.task_status.0.get(token).lock_attempts
+    fn lock_attempts_mut<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut Vec<LockAttempt> {
+        &mut self.task_status.0.get(task_token).lock_attempts
     }
 
-    fn lock_attempts<'t>(&self, token: &'t TaskToken) -> &'t Vec<LockAttempt> {
-        &self.task_status.0.get22(token).lock_attempts
+    fn lock_attempts<'t>(&self, task_token: &'t TaskToken) -> &'t Vec<LockAttempt> {
+        &self.task_status.0.get22(task_token).lock_attempts
     }
 
-    fn uncontended<'t>(&self, token: &'t mut TaskToken) -> &'t mut usize {
-        &mut self.task_status.0.get(token).uncontended
+    fn uncontended<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut usize {
+        &mut self.task_status.0.get(task_token).uncontended
     }
 
-    fn uncontended22<'t>(&self, token: &'t TaskToken) -> &'t usize {
-        &self.task_status.0.get22(token).uncontended
+    fn uncontended22<'t>(&self, task_token: &'t TaskToken) -> &'t usize {
+        &self.task_status.0.get22(task_token).uncontended
     }
 
-    fn currently_contended(&self, token: &TaskToken) -> bool {
-        *self.uncontended22(token) == 1
+    fn currently_contended(&self, task_token: &TaskToken) -> bool {
+        *self.uncontended22(task_token) == 1
     }
 
-    fn has_contended(&self, token: &mut TaskToken) -> bool {
-        *self.uncontended(token) > 0
+    fn has_contended(&self, task_token: &mut TaskToken) -> bool {
+        *self.uncontended(task_token) > 0
     }
 
-    fn mark_as_contended(&self, token: &mut TaskToken) {
-        *self.uncontended(token) = 1;
+    fn mark_as_contended(&self, task_token: &mut TaskToken) {
+        *self.uncontended(task_token) = 1;
     }
 
-    fn mark_as_uncontended(&self, token: &mut TaskToken) {
-        assert!(self.currently_contended(token));
-        *self.uncontended(token) = 2;
+    fn mark_as_uncontended(&self, task_token: &mut TaskToken) {
+        assert!(self.currently_contended(task_token));
+        *self.uncontended(task_token) = 2;
     }
 
     pub fn task_index(&self) -> usize {
@@ -144,8 +144,8 @@ pub struct LockAttempt {
 }
 
 impl Page {
-    fn as_mut<'t>(&self, token: &'t mut PageToken) -> &'t mut PageInner {
-        self.0.get(token)
+    fn as_mut<'t>(&self, page_token: &'t mut PageToken) -> &'t mut PageInner {
+        self.0.get(page_token)
     }
 }
 
@@ -164,8 +164,8 @@ impl LockAttempt {
         }
     }
 
-    fn page_mut<'t>(&self, token: &'t mut PageToken) -> &'t mut PageInner {
-        self.page.as_mut(token)
+    fn page_mut<'t>(&self, page_token: &'t mut PageToken) -> &'t mut PageInner {
+        self.page.as_mut(page_token)
     }
 }
 
@@ -224,11 +224,11 @@ impl PageInner {
         self.blocked_tasks.last_entry().map(|entry| *entry.key())
     }
 
-    fn heaviest_still_blocked_task(&self, token: &TaskToken) -> Option<&(Task, RequestedUsage)> {
+    fn heaviest_still_blocked_task(&self, task_token: &TaskToken) -> Option<&(Task, RequestedUsage)> {
         self.blocked_tasks
             .values()
             .rev()
-            .find(|(task, _)| task.currently_contended(token))
+            .find(|(task, _)| task.currently_contended(task_token))
     }
 }
 
@@ -247,7 +247,7 @@ pub struct SchedulingStateMachine {
     reschedule_count: usize,
     rescheduled_task_count: usize,
     total_task_count: usize,
-    token: TaskToken,
+    task_token: TaskToken,
     page_token: PageToken,
 }
 
@@ -260,7 +260,7 @@ impl SchedulingStateMachine {
             reschedule_count: 0,
             rescheduled_task_count: 0,
             total_task_count: 0,
-            token: unsafe { TaskToken::assume_on_the_scheduler_thread() },
+            task_token: unsafe { TaskToken::assume_on_the_scheduler_thread() },
             page_token: unsafe { PageToken::assume_on_the_scheduler_thread() },
         }
     }
@@ -435,14 +435,14 @@ impl SchedulingStateMachine {
         let (lock_count, usages) = Self::attempt_lock_for_execution(
             &mut self.page_token,
             &task.unique_weight,
-            &mut task.lock_attempts_mut(&mut self.token),
+            &mut task.lock_attempts_mut(&mut self.task_token),
             &task_source,
         );
 
-        if lock_count < task.lock_attempts_mut(&mut self.token).len() {
+        if lock_count < task.lock_attempts_mut(&mut self.task_token).len() {
             if matches!(task_source, TaskSource::Runnable) {
                 self.rollback_locking(&task, lock_count);
-                task.mark_as_contended(&mut self.token);
+                task.mark_as_contended(&mut self.task_token);
                 self.index_task_with_pages(&task);
             }
 
@@ -450,21 +450,21 @@ impl SchedulingStateMachine {
         }
 
         if matches!(task_source, TaskSource::Retryable) {
-            for (usage, attempt) in usages.into_iter().zip(task.lock_attempts_mut(&mut self.token)) {
+            for (usage, attempt) in usages.into_iter().zip(task.lock_attempts_mut(&mut self.task_token)) {
                 attempt.page_mut(&mut self.page_token).current_usage = usage;
             }
             // as soon as next tack is succeeded in locking, trigger re-checks on read only
             // addresses so that more readonly transactions can be executed
-            task.mark_as_uncontended(&mut self.token);
+            task.mark_as_uncontended(&mut self.task_token);
 
             for read_only_lock_attempt in task
-                .lock_attempts(&self.token)
+                .lock_attempts(&self.task_token)
                 .iter()
                 .filter(|l| matches!(l.requested_usage, RequestedUsage::Readonly))
             {
                 if let Some(heaviest_blocked_task) = read_only_lock_attempt
                     .page_mut(&mut self.page_token)
-                    .heaviest_still_blocked_task(&self.token)
+                    .heaviest_still_blocked_task(&self.task_token)
                     .and_then(|(task, requested_usage)| {
                         matches!(requested_usage, RequestedUsage::Readonly).then_some(task)
                     })
@@ -480,13 +480,13 @@ impl SchedulingStateMachine {
     }
 
     fn rollback_locking(&mut self, task: &Task, lock_count: usize) {
-        for lock_attempt in &task.lock_attempts_mut(&mut self.token)[..lock_count] {
+        for lock_attempt in &task.lock_attempts_mut(&mut self.task_token)[..lock_count] {
             Self::unlock(&mut self.page_token, lock_attempt);
         }
     }
 
     fn index_task_with_pages(&mut self, task: &Task) {
-        for lock_attempt in task.lock_attempts_mut(&mut self.token) {
+        for lock_attempt in task.lock_attempts_mut(&mut self.task_token) {
             let requested_usage = lock_attempt.requested_usage;
             lock_attempt
                 .page_mut(&mut self.page_token)
@@ -496,9 +496,9 @@ impl SchedulingStateMachine {
 
     fn unlock_after_execution(&mut self, task: &Task) {
         let unique_weight = &task.unique_weight;
-        let should_remove = task.has_contended(&mut self.token);
+        let should_remove = task.has_contended(&mut self.task_token);
 
-        for unlock_attempt in task.lock_attempts(&self.token) {
+        for unlock_attempt in task.lock_attempts(&self.task_token) {
             if should_remove {
                 unlock_attempt.page_mut(&mut self.page_token).remove_blocked_task(unique_weight);
             }
@@ -508,7 +508,7 @@ impl SchedulingStateMachine {
                 continue;
             }
 
-            let heaviest_uncontended_now = unlock_attempt.page_mut(&mut self.page_token).heaviest_still_blocked_task(&self.token);
+            let heaviest_uncontended_now = unlock_attempt.page_mut(&mut self.page_token).heaviest_still_blocked_task(&self.task_token);
             if let Some((uncontended_task, _ru)) = heaviest_uncontended_now {
                 self.retryable_task_queue
                     .entry(uncontended_task.unique_weight)
