@@ -145,8 +145,8 @@ pub struct LockAttempt {
 }
 
 impl Page {
-    fn as_mut(&mut self) -> &mut PageInner {
-        unsafe { &mut *self.0.get() }
+    fn as_mut<'t>(&mut self, token: &'t mut Token) -> &'t mut PageInner {
+        &mut self.0.get(token)
     }
 }
 
