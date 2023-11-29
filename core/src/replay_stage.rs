@@ -1351,11 +1351,15 @@ impl ReplayStage {
 
                     // Should not dump slots for which we were the leader
                     if Some(*my_pubkey) == leader_schedule_cache.slot_leader_at(*duplicate_slot, None) {
-                        if let Some(duplicate_bank) = bank_forks.read().unwrap().get(*duplicate_slot) {
-                            let _ = bank_hash_details::write_bank_hash_details_file(&duplicate_bank);
+                        if let Some(bank) = bank_forks.read().unwrap().get(*duplicate_slot) {
+                            bank_hash_details::write_bank_hash_details_file(&bank)
+                                .map_err(|err| {
+                                    warn!("Unable to write bank hash details file: {err}");
+                                })
+                                .ok();
                         } else {
                             warn!("Unable to get bank for slot {duplicate_slot} from bank forks");
-                        };
+                        }
                         panic!("We are attempting to dump a block that we produced. \
                             This indicates that we are producing duplicate blocks, \
                             or that there is a bug in our runtime/replay code which \
@@ -1511,7 +1515,11 @@ impl ReplayStage {
                     let bank = w_bank_forks
                         .remove(*slot)
                         .expect("BankForks should not have been purged yet");
-                    let _ = bank_hash_details::write_bank_hash_details_file(&bank);
+                    bank_hash_details::write_bank_hash_details_file(&bank)
+                        .map_err(|err| {
+                            warn!("Unable to write bank hash details file: {err}");
+                        })
+                        .ok();
                     ((*slot, bank.bank_id()), bank)
                 })
                 .unzip()
