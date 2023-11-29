@@ -112,6 +112,11 @@ impl TaskInner {
         &mut self.task_status.0.get(token).lock_attempts
     }
 
+    fn lock_attempts<'t>(&self, token: &'t Token) -> &'t Vec<LockAttempt> {
+        &self.task_status.0.get(token).lock_attempts
+    }
+
+
     fn uncontended<'t>(&self, token: &'t mut Token) -> &'t mut usize {
         &mut self.task_status.0.get(token).uncontended
     }
