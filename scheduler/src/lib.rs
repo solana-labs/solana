@@ -47,7 +47,7 @@ mod cell {
 
     pub(super) struct TokenNew<T>(PhantomData<(T, *mut ())>);
 
-    impl<T> Token<T> {
+    impl<T> TokenNew<T> {
         pub(super) unsafe fn assume_on_the_scheduler_thread() -> Self {
             Self(PhantomData)
         }
