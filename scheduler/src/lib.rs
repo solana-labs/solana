@@ -410,7 +410,7 @@ impl SchedulingStateMachine {
         lock_status
     }
 
-    fn unlock(token: &mut Token, token2: &mut Token2, attempt: &mut LockAttempt) -> bool {
+    fn unlock(token2: &mut Token2, attempt: &mut LockAttempt) -> bool {
         let mut is_unused_now = false;
 
         let requested_usage = attempt.requested_usage;
@@ -498,7 +498,7 @@ impl SchedulingStateMachine {
 
     fn rollback_locking(token: &mut Token, token2: &mut Token2, lock_attempts: &mut [LockAttempt]) {
         for lock_attempt in lock_attempts {
-            Self::unlock(token, token2, lock_attempt);
+            Self::unlock(token2, lock_attempt);
         }
     }
 
@@ -511,7 +511,7 @@ impl SchedulingStateMachine {
                 unlock_attempt.page_mut(token2).remove_blocked_task(unique_weight);
             }
 
-            let is_unused_now = Self::unlock(token, token2, unlock_attempt);
+            let is_unused_now = Self::unlock(token2, unlock_attempt);
             if !is_unused_now {
                 continue;
             }
