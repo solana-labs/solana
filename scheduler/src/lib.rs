@@ -40,6 +40,10 @@ mod cell {
         pub(super) fn get<'t>(&self, _token: &'t mut TokenNew<V>) -> &'t mut V {
             unsafe { &mut *self.0.get() }
         }
+
+        pub(super) fn get22<'t>(&self, _token: &'t TokenNew<V>) -> &'t V {
+            unsafe { &*self.0.get() }
+        }
     }
 
     unsafe impl<V> Send for SchedulerCell<V> {}
