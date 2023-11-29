@@ -318,7 +318,7 @@ impl SchedulingStateMachine {
     pub fn deschedule_task(&mut self, task: &Task) {
         self.active_task_count -= 1;
         self.handled_task_count += 1;
-        Self::unlock_after_execution(&mut self.token, &mut self.token2, &task, &mut self.retryable_task_queue);
+        self.unlock_after_execution(&task);
     }
 
     fn attempt_lock_for_execution(
@@ -494,13 +494,13 @@ impl SchedulingStateMachine {
         }
     }
 
-    fn unlock_after_execution(token: &mut Token, token2: &mut Token2, task: &Task, retryable_task_queue: &mut TaskQueue) {
+    fn unlock_after_execution(&mut self, task: &Task) {
         let unique_weight = &task.unique_weight;
-        let should_remove = task.has_contended(token);
+        let should_remove = task.has_contended(&mut self.token);
 
-        for unlock_attempt in task.lock_attempts(token) {
+        for unlock_attempt in task.lock_attempts(&mut self.token) {
             if should_remove {
-                unlock_attempt.page_mut(token2).remove_blocked_task(unique_weight);
+                unlock_attempt.page_mut(&mut self.token2).remove_blocked_task(unique_weight);
             }
 
             let is_unused_now = Self::unlock(token2, unlock_attempt);
@@ -508,7 +508,7 @@ impl SchedulingStateMachine {
                 continue;
             }
 
-            let heaviest_uncontended_now = unlock_attempt.page_mut(token2).heaviest_still_blocked_task(token);
+            let heaviest_uncontended_now = unlock_attempt.page_mut(&mut self.token2).heaviest_still_blocked_task(&mut self.token);
             if let Some((uncontended_task, _ru)) = heaviest_uncontended_now {
                 retryable_task_queue
                     .entry(uncontended_task.unique_weight)
