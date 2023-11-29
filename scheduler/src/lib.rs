@@ -120,7 +120,7 @@ impl TaskInner {
         &self.task_status.0.get22(token).uncontended
     }
 
-    fn currently_contended(&self, token: &Token) -> bool {
+    fn currently_contended(&self, token: &mut Token) -> bool {
         dbg!((self.uncontended22(token), self.uncontended22(token)));
         *self.uncontended22(token) == 1
     }
