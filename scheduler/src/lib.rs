@@ -442,7 +442,7 @@ impl SchedulingStateMachine {
             &task_source,
         );
 
-        if lock_count < task.lock_attempts_mut().len() {
+        if lock_count < task.lock_attempts_mut(token).len() {
             if matches!(task_source, TaskSource::Runnable) {
                 Self::rollback_locking(&mut task.lock_attempts_mut(token)[..lock_count]);
                 task.mark_as_contended(token);
