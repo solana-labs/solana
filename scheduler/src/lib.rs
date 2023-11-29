@@ -467,13 +467,13 @@ impl SchedulingStateMachine {
             task.mark_as_uncontended(&mut self.token);
 
             for read_only_lock_attempt in task
-                .lock_attempts(&mut self.token)
+                .lock_attempts(&self.token)
                 .iter()
                 .filter(|l| matches!(l.requested_usage, RequestedUsage::Readonly))
             {
                 if let Some(heaviest_blocked_task) = read_only_lock_attempt
                     .page_mut(&mut self.token2)
-                    .heaviest_still_blocked_task(&mut self.token)
+                    .heaviest_still_blocked_task(&self.token)
                     .and_then(|(task, requested_usage)| {
                         matches!(requested_usage, RequestedUsage::Readonly).then_some(task)
                     })
