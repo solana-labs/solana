@@ -342,7 +342,7 @@ impl SchedulingStateMachine {
         });
 
         for attempt in lock_attempts.iter_mut() {
-            match Self::attempt_lock_address(unique_weight, attempt) {
+            match Self::attempt_lock_address(token, unique_weight, attempt) {
                 LockStatus::Succeded(usage) => {
                     if rollback_on_failure {
                         attempt.page_mut(token).current_usage = usage;
@@ -361,6 +361,7 @@ impl SchedulingStateMachine {
     }
 
     fn attempt_lock_address(
+        token: &mut Token,
         this_unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) -> LockStatus {
