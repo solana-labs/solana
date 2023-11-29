@@ -28,22 +28,22 @@ mod cell {
     use std::cell::UnsafeCell;
     use std::marker::PhantomData;
 
-    pub(super) struct SchedulerCell<T>(UnsafeCell<T>);
+    pub(super) struct SchedulerCell<V>(UnsafeCell<V>);
     
-    impl<T> SchedulerCell<T> {
+    impl<V> SchedulerCell<V> {
         // non-const to forbid unprotected sharing via static variables among threads.
-        pub(super) fn new(value: T) -> Self {
+        pub(super) fn new(value: V) -> Self {
             Self(UnsafeCell::new(value))
         }
 
-        //pub(super) fn get<'token>(&self, _token: &'token mut Token) -> &'token mut T {
-        pub(super) fn get(&self, _token: &mut Token) -> &mut T {
+        //pub(super) fn get<'token>(&self, _token: &'token mut Token) -> &'token mut V {
+        pub(super) fn get(&self, _token: &'t mut Token) -> &'t mut V {
             unsafe { &mut *self.0.get() }
         }
     }
 
-    unsafe impl<T> Send for SchedulerCell<T> {}
-    unsafe impl<T> Sync for SchedulerCell<T> {}
+    unsafe impl<V> Send for SchedulerCell<V> {}
+    unsafe impl<V> Sync for SchedulerCell<V> {}
 
     pub(super) struct Token(PhantomData<*mut ()>);
 
