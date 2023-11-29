@@ -37,11 +37,11 @@ mod cell {
             Self(UnsafeCell::new(value))
         }
 
-        pub(super) fn get<'t>(&self, _token: &'t mut TokenNew<V>) -> &'t mut V {
+        pub(super) fn get<'t>(&self, _token: &'t mut Token<V>) -> &'t mut V {
             unsafe { &mut *self.0.get() }
         }
 
-        pub(super) fn get22<'t>(&self, _token: &'t TokenNew<V>) -> &'t V {
+        pub(super) fn get22<'t>(&self, _token: &'t Token<V>) -> &'t V {
             unsafe { &*self.0.get() }
         }
     }
@@ -49,17 +49,17 @@ mod cell {
     unsafe impl<V> Send for SchedulerCell<V> {}
     unsafe impl<V> Sync for SchedulerCell<V> {}
 
-    pub(super) struct TokenNew<T>(PhantomData<(T, *mut ())>);
+    pub(super) struct Token<T>(PhantomData<(T, *mut ())>);
 
-    impl<T> TokenNew<T> {
+    impl<T> Token<T> {
         pub(super) unsafe fn assume_on_the_scheduler_thread() -> Self {
             Self(PhantomData)
         }
     }
 
-    pub(super) type PageToken = TokenNew<crate::PageInner>;
+    pub(super) type PageToken = Token<crate::PageInner>;
 
-    pub(super) type TaskToken = TokenNew<crate::TaskStatusInner>;
+    pub(super) type TaskToken = Token<crate::TaskStatusInner>;
     static_assertions::const_assert_eq!(std::mem::size_of::<TaskToken>(), 0);
 }
 
