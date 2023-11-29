@@ -112,7 +112,7 @@ impl TaskInner {
         unsafe { &mut (*self.task_status.0.get(token)).lock_attempts }
     }
 
-    fn uncontended(&self, token: &mut Token) -> &mut usize {
+    fn uncontended<'t>(&self, token: &'t mut Token) -> &'t mut usize {
         unsafe { &mut (*self.task_status.0.get(token)).uncontended }
     }
 
