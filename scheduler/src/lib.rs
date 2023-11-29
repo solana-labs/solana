@@ -310,6 +310,7 @@ impl SchedulingStateMachine {
             .and_then(|(_, task)| {
                 self.reschedule_count += 1;
                 Self::try_lock_for_task(
+                    &mut self.token,
                     (TaskSource::Retryable, task),
                     &mut self.retryable_task_queue,
                 )
