@@ -35,8 +35,8 @@ mod cell {
             Self(PhantomData)
         }
     }
-    unsafe impl<T> Send for SchedulerCell<T> {};
-    unsafe impl<T> Sync for SchedulerCell<T> {};
+    unsafe impl<T> Send for SchedulerCell<T> {}
+    unsafe impl<T> Sync for SchedulerCell<T> {}
 }
 
 fn aaa() {
