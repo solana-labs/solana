@@ -165,8 +165,8 @@ impl LockAttempt {
         }
     }
 
-    fn page_mut(&mut self) -> &mut PageInner {
-        self.page.as_mut()
+    fn page_mut(&mut self, token: &'t mut Token) -> &mut PageInner {
+        self.page.as_mut(token)
     }
 }
 
