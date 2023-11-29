@@ -327,6 +327,7 @@ impl SchedulingStateMachine {
     }
 
     fn attempt_lock_for_execution(
+        token: &mut Token,
         unique_weight: &UniqueWeight,
         lock_attempts: &mut [LockAttempt],
         task_source: &TaskSource,
@@ -436,6 +437,7 @@ impl SchedulingStateMachine {
         retryable_task_queue: &mut TaskQueue,
     ) -> Option<Task> {
         let (lock_count, usages) = Self::attempt_lock_for_execution(
+            token,
             &task.unique_weight,
             &mut task.lock_attempts_mut(token),
             &task_source,
