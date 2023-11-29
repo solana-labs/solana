@@ -104,29 +104,29 @@ impl TaskInner {
         &self.task_status.borrow(task_token).lock_attempts
     }
 
-    fn uncontended<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut usize {
+    fn uncontended_mut<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut usize {
         &mut self.task_status.borrow_mut(task_token).uncontended
     }
 
-    fn uncontended22<'t>(&self, task_token: &'t TaskToken) -> &'t usize {
+    fn uncontended_ref<'t>(&self, task_token: &'t TaskToken) -> &'t usize {
         &self.task_status.borrow(task_token).uncontended
     }
 
     fn currently_contended(&self, task_token: &TaskToken) -> bool {
-        *self.uncontended22(task_token) == 1
+        *self.uncontended_ref(task_token) == 1
     }
 
-    fn has_contended(&self, task_token: &mut TaskToken) -> bool {
+    fn has_contended(&self, task_token: &TaskToken) -> bool {
         *self.uncontended(task_token) > 0
     }
 
     fn mark_as_contended(&self, task_token: &mut TaskToken) {
-        *self.uncontended(task_token) = 1;
+        *self.uncontended_mut(task_token) = 1;
     }
 
     fn mark_as_uncontended(&self, task_token: &mut TaskToken) {
         assert!(self.currently_contended(task_token));
-        *self.uncontended(task_token) = 2;
+        *self.uncontended_mut(task_token) = 2;
     }
 
     pub fn task_index(&self) -> usize {
