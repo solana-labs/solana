@@ -117,7 +117,7 @@ impl TaskInner {
     }
 
     fn has_contended(&self, task_token: &TaskToken) -> bool {
-        *self.uncontended(task_token) > 0
+        *self.uncontended_ref(task_token) > 0
     }
 
     fn mark_as_contended(&self, task_token: &mut TaskToken) {
