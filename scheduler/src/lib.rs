@@ -37,7 +37,7 @@ mod cell {
         }
 
         fn get(&self, token: &mut Token) -> &mut T {
-            self.0.get()
+            unsafe { *self.0.get() }
         }
     }
 
