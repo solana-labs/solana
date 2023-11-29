@@ -305,7 +305,7 @@ impl SchedulingStateMachine {
     pub fn schedule_new_task(&mut self, task: Task) -> Option<Task> {
         self.total_task_count += 1;
         self.active_task_count += 1;
-        Self::try_lock_for_task(&mut self.token, &mut self.token2, (TaskSource::Runnable, task), &mut self.retryable_task_queue)
+        self.try_lock_for_task(TaskSource::Runnable, task)
     }
 
     pub fn has_retryable_task(&self) -> bool {
@@ -317,12 +317,7 @@ impl SchedulingStateMachine {
             .pop_last()
             .and_then(|(_, task)| {
                 self.reschedule_count += 1;
-                Self::try_lock_for_task(
-                    &mut self.token,
-                    &mut self.token2,
-                    (TaskSource::Retryable, task),
-                    &mut self.retryable_task_queue,
-                )
+                self.try_lock_for_task(TaskSource::Retryable, task)
             })
             .inspect(|_| {
                 self.rescheduled_task_count += 1;
@@ -442,44 +437,42 @@ impl SchedulingStateMachine {
     }
 
     fn try_lock_for_task(
-        token: &mut Token,
-        token2: &mut Token2,
+        &mut self,
         (task_source, task): (TaskSource, Task),
-        retryable_task_queue: &mut TaskQueue,
     ) -> Option<Task> {
         let (lock_count, usages) = Self::attempt_lock_for_execution(
-            token2,
+            self.token2,
             &task.unique_weight,
-            &mut task.lock_attempts_mut(token),
+            &mut task.lock_attempts_mut(self.token),
             &task_source,
         );
 
-        if lock_count < task.lock_attempts_mut(token).len() {
+        if lock_count < task.lock_attempts_mut(self.token).len() {
             if matches!(task_source, TaskSource::Runnable) {
-                Self::rollback_locking(token2, &mut task.lock_attempts_mut(token)[..lock_count]);
-                task.mark_as_contended(token);
-                task.index_with_pages(token, token2);
+                Self::rollback_locking(self.token2, &mut task.lock_attempts_mut(self.token)[..lock_count]);
+                task.mark_as_contended(self.token);
+                task.index_with_pages(self.token, self.token2);
             }
 
             return None;
         }
 
         if matches!(task_source, TaskSource::Retryable) {
-            for (usage, attempt) in usages.into_iter().zip(task.lock_attempts_mut(token)) {
-                attempt.page_mut(token2).current_usage = usage;
+            for (usage, attempt) in usages.into_iter().zip(task.lock_attempts_mut(self.token)) {
+                attempt.page_mut(self.token2).current_usage = usage;
             }
             // as soon as next tack is succeeded in locking, trigger re-checks on read only
             // addresses so that more readonly transactions can be executed
-            task.mark_as_uncontended(token);
+            task.mark_as_uncontended(self.token);
 
             for read_only_lock_attempt in task
-                .lock_attempts(token)
+                .lock_attempts(self.token)
                 .iter()
                 .filter(|l| matches!(l.requested_usage, RequestedUsage::Readonly))
             {
                 if let Some(heaviest_blocked_task) = read_only_lock_attempt
-                    .page_mut(token2)
-                    .heaviest_still_blocked_task(token)
+                    .page_mut(self.token2)
+                    .heaviest_still_blocked_task(self.token)
                     .and_then(|(task, requested_usage)| {
                         matches!(requested_usage, RequestedUsage::Readonly).then_some(task)
                     })
