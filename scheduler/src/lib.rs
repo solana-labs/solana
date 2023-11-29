@@ -498,7 +498,7 @@ impl SchedulingStateMachine {
         let unique_weight = &task.unique_weight;
         let should_remove = task.has_contended(&mut self.token);
 
-        for unlock_attempt in task.lock_attempts(&mut self.token) {
+        for unlock_attempt in task.lock_attempts(&self.token) {
             if should_remove {
                 unlock_attempt.page_mut(&mut self.token2).remove_blocked_task(unique_weight);
             }
@@ -508,7 +508,7 @@ impl SchedulingStateMachine {
                 continue;
             }
 
-            let heaviest_uncontended_now = unlock_attempt.page_mut(&mut self.token2).heaviest_still_blocked_task(&mut self.token);
+            let heaviest_uncontended_now = unlock_attempt.page_mut(&mut self.token2).heaviest_still_blocked_task(&self.token);
             if let Some((uncontended_task, _ru)) = heaviest_uncontended_now {
                 self.retryable_task_queue
                     .entry(uncontended_task.unique_weight)
