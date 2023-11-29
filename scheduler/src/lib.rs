@@ -33,7 +33,7 @@ mod cell {
 }
 
 fn aaa() {
-    let a = &SchedulerCellToken;
+    let a = &SchedulerCellToken::new();
     let () = std::thread::spawn(move || { a; }).join().unwrap();
 }
 
