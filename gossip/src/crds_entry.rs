@@ -1,7 +1,6 @@
 use {
     crate::{
-        contact_info::ContactInfo,
-        crds::VersionedCrdsValue,
+2        crds::VersionedCrdsValue,
         crds_value::{
             CrdsData, CrdsValue, CrdsValueLabel, LegacyVersion, LowestSlot, SnapshotHashes, Version,
         },
@@ -54,7 +53,6 @@ impl_crds_entry!(VersionedCrdsValue, |entry| entry);
 
 // Lookup by Pubkey.
 impl_crds_entry!(LegacyContactInfo, CrdsData::LegacyContactInfo(node), node);
-impl_crds_entry!(ContactInfo, CrdsData::ContactInfo(node), node);
 impl_crds_entry!(LegacyVersion, CrdsData::LegacyVersion(version), version);
 impl_crds_entry!(LowestSlot, CrdsData::LowestSlot(_, slot), slot);
 impl_crds_entry!(Version, CrdsData::Version(version), version);
