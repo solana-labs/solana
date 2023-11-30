@@ -115,9 +115,11 @@ impl SchedulerController {
         match decision {
             BufferedPacketsDecision::Consume(bank_start) => {
                 let (scheduling_summary, schedule_time_us) =
-                    measure_us!(self.scheduler.schedule(&mut self.container, |tx| {
-                        Self::pre_scheduling_filter(tx, &bank_start.working_bank)
-                    })?);
+                    measure_us!(self
+                        .scheduler
+                        .schedule(&mut self.container, |txs, results| {
+                            Self::pre_scheduling_filter(txs, results, &bank_start.working_bank)
+                        })?);
                 saturating_add_assign!(
                     self.count_metrics.num_scheduled,
                     scheduling_summary.num_scheduled
@@ -150,16 +152,23 @@ impl SchedulerController {
         Ok(())
     }
 
-    fn pre_scheduling_filter(transaction: &SanitizedTransaction, bank: &Bank) -> bool {
+    fn pre_scheduling_filter(
+        transactions: &[&SanitizedTransaction],
+        results: &mut [bool],
+        bank: &Bank,
+    ) {
+        let lock_results = vec![Ok(()); transactions.len()];
         let mut error_counters = TransactionErrorMetrics::default();
-        bank.check_transactions(
-            &[transaction],
-            &[Ok(())],
+        let check_results = bank.check_transactions(
+            transactions,
+            &lock_results,
             MAX_PROCESSING_AGE,
             &mut error_counters,
-        )[0]
-        .0
-        .is_ok()
+        );
+
+        for ((check_result, _), result) in check_results.into_iter().zip(results.iter_mut()) {
+            *result = check_result.is_ok();
+        }
     }
 
     /// Clears the transaction state container.
