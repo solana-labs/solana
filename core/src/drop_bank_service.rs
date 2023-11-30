@@ -13,7 +13,7 @@ pub struct DropBankService {
 }
 
 impl DropBankService {
-    pub fn new(bank_receiver: Receiver<Vec<Arc<Bank>>>) -> Self {
+    pub fn new(bank_receiver: Receiver<Vec<BankWithScheduler>>) -> Self {
         let thread_hdl = Builder::new()
             .name("solDropBankSrvc".to_string())
             .spawn(move || {
