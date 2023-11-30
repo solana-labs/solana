@@ -799,7 +799,7 @@ where
                     (Ok(()), ExecuteTimings::default())
                 } else {
                     drop_sender.send(SessionedMessage::EndSession).unwrap();
-                    drop_receiver2.recv().unwrap();
+                    drop_receiver2.recv().unwrap()
                 };
                 trace!(
                     "solScheduler thread is ended at: {:?}",
