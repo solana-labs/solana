@@ -442,16 +442,18 @@ crossbeam-epoch = { git = "https://github.com/solana-labs/crossbeam", rev = "fd2
 #  * spl-token-2022
 #  * spl-token-metadata-interface
 #
-# They, in turn, depend on a number of crates that we also include directly using `path`
-# specifications.  For example, `spl-token` depends on `solana-program`.  And we explicitly specify
-# `solana-program` above as a local path dependency:
+# They, in turn, depend on a number of crates that we also include directly
+# using `path` specifications.  For example, `spl-token` depends on
+# `solana-program`.  And we explicitly specify `solana-program` above as a local
+# path dependency:
 #
 #     solana-program = { path = "../../sdk/program", version = "=1.16.0" }
 #
-# Unfortunately, Cargo will try to resolve the `spl-token` `solana-program` dependency only using
-# what is available on crates.io.  Crates.io normally contains a previous version of these crates,
-# and we end up with two versions of `solana-program` and `solana-zk-token-sdk` and all of their
-# dependencies in our build tree.
+# Unfortunately, Cargo will try to resolve the `spl-token` `solana-program`
+# dependency only using what is available on crates.io.  Crates.io normally
+# contains a previous version of these crates, and we end up with two versions
+# of `solana-program` and `solana-zk-token-sdk` and all of their dependencies in
+# our build tree.
 #
 # If you are developing downstream using non-crates-io solana-program (local or
 # forked repo, or from github rev, eg), duplicate the following patch statements
@@ -460,8 +462,8 @@ crossbeam-epoch = { git = "https://github.com/solana-labs/crossbeam", rev = "fd2
 # -p solana-zk-token-sdk` to remove extraneous versions from your Cargo.lock
 # file.
 #
-# There is a similar override in `programs/sbf/Cargo.toml`.  Please keep both comments and the
-# overrides in sync.
+# There is a similar override in `programs/sbf/Cargo.toml`.  Please keep both
+# comments and the overrides in sync.
 solana-program = { path = "sdk/program" }
 solana-zk-token-sdk = { path = "zk-token-sdk" }
 #
@@ -481,9 +483,8 @@ solana-zk-token-sdk = { path = "zk-token-sdk" }
 # newer versions, but we have not updated yet.  As we update, we need to remove
 # these patch requests.
 #
-# When our dependencies are upgraded, we can remove this patches.  Before that
-# we might need to maintain these patches in sync with our full dependency
-# tree.
+# When our dependencies are upgraded, we can remove these patches.  Before that
+# we might need to maintain these patches in sync with our full dependency tree.
 
 # Our dependency tree has `aes-gcm-siv` v0.10.3 and the `zeroize` restriction
 # was removed in the next commit just after the release.  So it seems safe to
@@ -506,17 +507,17 @@ git = "https://github.com/RustCrypto/AEADs"
 rev = "6105d7a5591aefa646a95d12b5e8d3f55a9214ef"
 
 # Our dependency tree has `curve25519-dalek` v3.2.1.  They have removed the
-# constrain in the next major release.  Commit that removes `zeroize` constrain
-# was added to multiple release branches.  Bot not to the 3.2 branch.
+# constraint in the next major release. The commit that removes the `zeroize`
+# constraint was added to multiple release branches, but not to the 3.2 branch.
 #
 # `curve25519-dalek` maintainers are saying they do not want to invest any more
 # time in the 3.2 release:
 #
 # https://github.com/dalek-cryptography/curve25519-dalek/issues/452#issuecomment-1749809428
 #
-# So we have to fork and create our own release, based on v3.2.1.  Commit that
-# removed `zeroize` constrain on the `main` branch cherry picked on top of the
-# v3.2.1 release.
+# So we have to fork and create our own release, based on v3.2.1, with the
+# commit that removed `zeroize` constraint on the `main` branch cherry-picked on
+# top.
 #
 # `curve25519-dalek` v3.2.1 release:
 #

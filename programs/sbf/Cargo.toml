@@ -186,15 +186,16 @@ targets = ["x86_64-unknown-linux-gnu"]
 #
 # in `../../Cargo.toml`.
 #
-# `spl-token`, in turn, depends on `solana-program`, which we explicitly specify above as a local
-# path dependency:
+# `spl-token`, in turn, depends on `solana-program`, which we explicitly specify
+# above as a local path dependency:
 #
 #     solana-program = { path = "../../sdk/program", version = "=1.16.0" }
 #
-# Unfortunately, Cargo will try to resolve the `spl-token` `solana-program` dependency only using
-# what is available on crates.io.  Crates.io normally contains a previous version of these crates,
-# and we end up with two versions of `solana-program` and `solana-zk-token-sdk` and all of their
-# dependencies in our build tree.
+# Unfortunately, Cargo will try to resolve the `spl-token` `solana-program`
+# dependency only using what is available on crates.io.  Crates.io normally
+# contains a previous version of these crates, and we end up with two versions
+# of `solana-program` and `solana-zk-token-sdk` and all of their dependencies in
+# our build tree.
 #
 # If you are developing downstream using non-crates-io solana-program (local or
 # forked repo, or from github rev, eg), duplicate the following patch statements
@@ -203,7 +204,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 # -p solana-zk-token-sdk` to remove extraneous versions from your Cargo.lock
 # file.
 #
-# There is a similar override in `../../Cargo.toml`.  Please keep both comments and the
-# overrides in sync.
+# There is a similar override in `../../Cargo.toml`.  Please keep both comments
+# and the overrides in sync.
 solana-program = { path = "../../sdk/program" }
 solana-zk-token-sdk = { path = "../../zk-token-sdk" }
