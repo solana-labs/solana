@@ -146,20 +146,20 @@ impl TaskInner {
 }
 
 #[derive(Debug)]
-pub struct LockAttempt {
+struct LockAttempt {
     page: Page,
     requested_usage: RequestedUsage,
 }
 
 impl LockAttempt {
-    pub fn readonly(page: Page) -> Self {
+    fn readonly(page: Page) -> Self {
         Self {
             page,
             requested_usage: RequestedUsage::Readonly,
         }
     }
 
-    pub fn writable(page: Page) -> Self {
+    fn writable(page: Page) -> Self {
         Self {
             page,
             requested_usage: RequestedUsage::Writable,
