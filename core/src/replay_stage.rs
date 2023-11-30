@@ -490,7 +490,7 @@ impl ReplayStage {
         cluster_slots_update_sender: ClusterSlotsUpdateSender,
         cost_update_sender: Sender<CostUpdate>,
         voting_sender: Sender<VoteOp>,
-        drop_bank_sender: Sender<Vec<Arc<Bank>>>,
+        drop_bank_sender: Sender<Vec<BankWithScheduler>>,
         block_metadata_notifier: Option<BlockMetadataNotifierArc>,
         log_messages_bytes_limit: Option<usize>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
