@@ -1,6 +1,6 @@
 //! The `bigtable` subcommand
 use {
-    crate::ledger_path::canonicalize_ledger_path,
+    crate::{ledger_path::canonicalize_ledger_path, output::CliEntries},
     clap::{
         value_t, value_t_or_exit, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
     },
@@ -13,8 +13,8 @@ use {
         input_validators::{is_slot, is_valid_pubkey},
     },
     solana_cli_output::{
-        display::println_transaction, CliBlock, CliEntries, CliTransaction,
-        CliTransactionConfirmation, OutputFormat,
+        display::println_transaction, CliBlock, CliTransaction, CliTransactionConfirmation,
+        OutputFormat,
     },
     solana_ledger::{
         bigtable_upload::ConfirmedBlockUploadConfig, blockstore::Blockstore,
