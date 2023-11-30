@@ -1649,7 +1649,7 @@ fn main() {
                         .long("skip-poh-verify")
                         .takes_value(false)
                         .help(
-                            "Deprecated, please use --skip-verification.\nSkip ledger PoH and \
+                            "Deprecated, please use --skip-verification. Skip ledger PoH and \
                              transaction verification.",
                         ),
                 )
