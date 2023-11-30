@@ -795,17 +795,17 @@ where
                 }
 
                 log_scheduler!("T:ended");
-                if end_session {
+                let result_with_timings = if end_session {
                     (Ok(()), ExecuteTimings::default())
                 } else {
                     drop_sender.send(SessionedMessage::EndSession).unwrap();
-                    let result_with_timings = drop_receiver2.recv().unwrap();
-                    trace!(
-                        "solScheduler thread is ended at: {:?}",
-                        std::thread::current()
-                    );
-                    result_with_timings
-                }
+                    drop_receiver2.recv().unwrap();
+                };
+                trace!(
+                    "solScheduler thread is ended at: {:?}",
+                    std::thread::current()
+                );
+                result_with_timings
             }
         };
 
