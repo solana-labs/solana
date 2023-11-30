@@ -376,19 +376,12 @@ impl Rocks {
         }
         let oldest_slot = OldestSlot::default();
         let column_options = options.column_options.clone();
-<<<<<<< HEAD
-=======
         let cf_descriptors = Self::cf_descriptors(path, &options, &oldest_slot);
->>>>>>> 71c1782c74 (Allow Blockstore to open unknown columns (#34174))
 
         // Open the database
         let db = match access_type {
             AccessType::Primary | AccessType::PrimaryForMaintenance => Rocks {
-                db: DB::open_cf_descriptors(
-                    &db_options,
-                    path,
-                    Self::cf_descriptors(&options, &oldest_slot),
-                )?,
+                db: DB::open_cf_descriptors(&db_options, path, cf_descriptors)?,
                 access_type,
                 oldest_slot,
                 column_options,
@@ -408,7 +401,7 @@ impl Rocks {
                         &db_options,
                         path,
                         &secondary_path,
-                        Self::cf_descriptors(&options, &oldest_slot),
+                        cf_descriptors,
                     )?,
                     access_type,
                     oldest_slot,
@@ -461,10 +454,6 @@ impl Rocks {
             new_cf_descriptor::<BlockHeight>(options, oldest_slot),
             new_cf_descriptor::<ProgramCosts>(options, oldest_slot),
             new_cf_descriptor::<OptimisticSlots>(options, oldest_slot),
-<<<<<<< HEAD
-        ]
-=======
-            new_cf_descriptor::<MerkleRootMeta>(options, oldest_slot),
         ];
 
         // If the access type is Secondary, we don't need to open all of the
@@ -511,7 +500,6 @@ impl Rocks {
         });
 
         cf_descriptors
->>>>>>> 71c1782c74 (Allow Blockstore to open unknown columns (#34174))
     }
 
     fn columns() -> Vec<&'static str> {
@@ -2132,8 +2120,6 @@ pub mod tests {
         });
         assert!(!should_enable_cf_compaction("something else"));
     }
-<<<<<<< HEAD
-=======
 
     #[test]
     fn test_open_unknown_columns() {
@@ -2177,45 +2163,4 @@ pub mod tests {
             let _ = Rocks::open(db_path, options).unwrap();
         }
     }
-
-    impl<C> LedgerColumn<C>
-    where
-        C: ColumnIndexDeprecation + ProtobufColumn + ColumnName,
-    {
-        pub fn put_deprecated_protobuf(
-            &self,
-            key: C::DeprecatedIndex,
-            value: &C::Type,
-        ) -> Result<()> {
-            let mut buf = Vec::with_capacity(value.encoded_len());
-            value.encode(&mut buf)?;
-            self.backend
-                .put_cf(self.handle(), &C::deprecated_key(key), &buf)
-        }
-    }
-
-    impl<C> LedgerColumn<C>
-    where
-        C: ColumnIndexDeprecation + TypedColumn + ColumnName,
-    {
-        pub fn put_deprecated(&self, key: C::DeprecatedIndex, value: &C::Type) -> Result<()> {
-            let serialized_value = serialize(value)?;
-            self.backend
-                .put_cf(self.handle(), &C::deprecated_key(key), &serialized_value)
-        }
-    }
-
-    impl<C> LedgerColumn<C>
-    where
-        C: ColumnIndexDeprecation + ColumnName,
-    {
-        pub(crate) fn iterator_cf_raw_key(
-            &self,
-            iterator_mode: IteratorMode<Vec<u8>>,
-        ) -> DBIterator {
-            let cf = self.handle();
-            self.backend.iterator_cf_raw_key(cf, iterator_mode)
-        }
-    }
->>>>>>> 71c1782c74 (Allow Blockstore to open unknown columns (#34174))
 }
