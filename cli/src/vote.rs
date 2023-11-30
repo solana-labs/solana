@@ -357,8 +357,8 @@ impl VoteSubCommands for App<'_, '_> {
                         .default_value_if("with_rewards", None, "1")
                         .requires("with_rewards")
                         .help(
-                            "Display rewards for NUM recent epochs, max 10 [default: latest epoch \
-                             only]",
+                            "Display rewards for NUM recent epochs, max 10 \
+                            [default: latest epoch only]",
                         ),
                 ),
         )
