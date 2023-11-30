@@ -164,7 +164,7 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("custodian")
                         .long("custodian")
                         .value_name("PUBKEY"),
-                    "Authority to modify lockups. "
+                    "Authority to modify lockups"
                 ))
                 .arg(
                     Arg::with_name("seed")
@@ -783,8 +783,8 @@ impl StakeSubCommands for App<'_, '_> {
                         .default_value_if("with_rewards", None, "1")
                         .requires("with_rewards")
                         .help(
-                            "Display rewards for NUM recent epochs, max 10 [default: latest epoch \
-                             only]",
+                            "Display rewards for NUM recent epochs, max 10 \
+                            [default: latest epoch only]",
                         ),
                 ),
         )
