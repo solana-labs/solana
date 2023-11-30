@@ -3,6 +3,7 @@ use {
     solana_sdk::transaction::SanitizedTransaction,
     std::{collections::BTreeMap, sync::Arc},
 };
+use solana_sdk::pubkey::Pubkey;
 
 type UsageCount = u32;
 const SOLE_USE_COUNT: UsageCount = 1;
