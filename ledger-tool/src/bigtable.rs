@@ -1095,7 +1095,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
         ("entries", Some(arg_matches)) => {
             let slot = value_t_or_exit!(arg_matches, "slot", Slot);
             let config = solana_storage_bigtable::LedgerStorageConfig {
-                read_only: false,
+                read_only: true,
                 instance_name,
                 app_profile_id,
                 ..solana_storage_bigtable::LedgerStorageConfig::default()
