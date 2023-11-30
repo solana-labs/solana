@@ -685,7 +685,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(false)
                                 .help(
                                     "Force reupload of any blocks already present in BigTable \
-                                     instance Note: reupload will *not* delete any data from the \
+                                     instance. Note: reupload will *not* delete any data from the \
                                      tx-by-addr table; Use with care.",
                                 ),
                         ),
@@ -821,7 +821,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(true)
                                 .index(1)
                                 .required(true),
-                        )
+                        ),
                 )
                 .subcommand(
                     SubCommand::with_name("confirm")
@@ -868,9 +868,9 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .validator(is_slot)
                                 .default_value("1000")
                                 .help(
-                                    "Number of transaction signatures to query at once. Smaller: \
-                                     more responsive/lower throughput. Larger: less \
-                                     responsive/higher throughput",
+                                    "Number of transaction signatures to query at once. \
+                                     Smaller: more responsive/lower throughput. \
+                                     Larger: less responsive/higher throughput",
                                 ),
                         )
                         .arg(
@@ -974,7 +974,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .value_name("START_SLOT")
                                 .takes_value(true)
                                 .required(true)
-                                .help("Start copying at this slot"),
+                                .help("Start copying at this slot (inclusive)"),
                         )
                         .arg(
                             Arg::with_name("ending_slot")
@@ -982,10 +982,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .validator(is_slot)
                                 .value_name("END_SLOT")
                                 .takes_value(true)
-                                .help(
-                                    "Stop copying at this slot (inclusive, START_SLOT ..= \
-                                     END_SLOT)",
-                                ),
+                                .help("Stop copying at this slot (inclusive)"),
                         )
                         .arg(
                             Arg::with_name("force")
