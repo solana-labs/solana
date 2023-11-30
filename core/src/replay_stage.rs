@@ -133,7 +133,7 @@ pub enum HeaviestForkFailures {
 
 #[derive(PartialEq, Eq, Debug)]
 enum ConfirmationType {
-    OptimisticallyConfirmed,
+    SupermajorityVoted,
     DuplicateConfirmed,
 }
 
@@ -145,11 +145,11 @@ struct ConfirmedSlot {
 }
 
 impl ConfirmedSlot {
-    fn new_optimistic_confirmed_slot(slot: Slot, frozen_hash: Hash) -> Self {
+    fn new_supermajority_voted(slot: Slot, frozen_hash: Hash) -> Self {
         Self {
             slot,
             frozen_hash,
-            confirmation_type: ConfirmationType::OptimisticallyConfirmed,
+            confirmation_type: ConfirmationType::SupermajorityVoted,
         }
     }
 
@@ -3885,7 +3885,7 @@ impl ReplayStage {
             confirmation_type,
         } in confirmed_slots.iter()
         {
-            if *confirmation_type == ConfirmationType::OptimisticallyConfirmed {
+            if *confirmation_type == ConfirmationType::SupermajorityVoted {
                 // This case should be guaranteed as false by confirm_forks()
                 if let Some(false) = progress.is_supermajority_confirmed(*slot) {
                     // Because supermajority confirmation will iterate through and update the
@@ -3900,7 +3900,16 @@ impl ReplayStage {
 
             if *slot <= root_slot {
                 continue;
-            } else if let Some(prev_hash) = duplicate_confirmed_slots.insert(*slot, *frozen_hash) {
+            }
+
+            match confirmation_type {
+                ConfirmationType::SupermajorityVoted => (),
+                ConfirmationType::DuplicateConfirmed => (),
+                #[allow(unreachable_patterns)]
+                _ => panic!("programmer error"),
+            }
+
+            if let Some(prev_hash) = duplicate_confirmed_slots.insert(*slot, *frozen_hash) {
                 assert_eq!(prev_hash, *frozen_hash);
                 // Already processed this signal
                 return;
@@ -3952,10 +3961,8 @@ impl ReplayStage {
                 if bank.is_frozen() && tower.is_slot_confirmed(*slot, voted_stakes, total_stake) {
                     info!("validator fork confirmed {} {}ms", *slot, duration);
                     datapoint_info!("validator-confirmation", ("duration_ms", duration, i64));
-                    confirmed_forks.push(ConfirmedSlot::new_optimistic_confirmed_slot(
-                        *slot,
-                        bank.hash(),
-                    ));
+                    confirmed_forks
+                        .push(ConfirmedSlot::new_supermajority_voted(*slot, bank.hash()));
                 } else if bank.is_frozen()
                     && tower.is_slot_duplicate_confirmed(*slot, voted_stakes, total_stake)
                 {
@@ -5281,10 +5288,7 @@ pub(crate) mod tests {
             // No new stats should have been computed
             assert_eq!(
                 confirmed_forks,
-                vec![ConfirmedSlot::new_optimistic_confirmed_slot(
-                    0,
-                    bank0.hash()
-                )]
+                vec![ConfirmedSlot::new_supermajority_voted(0, bank0.hash())]
             );
         }
 
