@@ -114,7 +114,10 @@ impl ProgramV4SubCommands for App<'_, '_> {
                                 .value_name("PROGRAM_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .help("Program account signer. The program data is written to the associated account.")
+                                .help(
+                                    "Program account signer. The program data is written to the \
+                                     associated account.",
+                                ),
                         )
                         .arg(
                             Arg::with_name("authority")
@@ -122,7 +125,9 @@ impl ProgramV4SubCommands for App<'_, '_> {
                                 .value_name("AUTHORITY_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .help("Program authority [default: the default configured keypair]")
+                                .help(
+                                    "Program authority [default: the default configured keypair]",
+                                ),
                         ),
                 )
                 .subcommand(
@@ -140,7 +145,7 @@ impl ProgramV4SubCommands for App<'_, '_> {
                                 .long("program-id")
                                 .value_name("PROGRAM_ID")
                                 .takes_value(true)
-                                .help("Executable program's address")
+                                .help("Executable program's address"),
                         )
                         .arg(
                             Arg::with_name("buffer")
@@ -148,7 +153,10 @@ impl ProgramV4SubCommands for App<'_, '_> {
                                 .value_name("BUFFER_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .help("Optional intermediate buffer account to write data to, which can be used to resume a failed deploy")
+                                .help(
+                                    "Optional intermediate buffer account to write data to, which \
+                                     can be used to resume a failed deploy",
+                                ),
                         )
                         .arg(
                             Arg::with_name("authority")
@@ -156,7 +164,9 @@ impl ProgramV4SubCommands for App<'_, '_> {
                                 .value_name("AUTHORITY_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .help("Program authority [default: the default configured keypair]")
+                                .help(
+                                    "Program authority [default: the default configured keypair]",
+                                ),
                         ),
                 )
                 .subcommand(
@@ -167,7 +177,7 @@ impl ProgramV4SubCommands for App<'_, '_> {
                                 .long("program-id")
                                 .value_name("PROGRAM_ID")
                                 .takes_value(true)
-                                .help("Executable program's address")
+                                .help("Executable program's address"),
                         )
                         .arg(
                             Arg::with_name("authority")
@@ -175,7 +185,9 @@ impl ProgramV4SubCommands for App<'_, '_> {
                                 .value_name("AUTHORITY_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .help("Program authority [default: the default configured keypair]")
+                                .help(
+                                    "Program authority [default: the default configured keypair]",
+                                ),
                         ),
                 )
                 .subcommand(
@@ -186,7 +198,7 @@ impl ProgramV4SubCommands for App<'_, '_> {
                                 .long("program-id")
                                 .value_name("PROGRAM_ID")
                                 .takes_value(true)
-                                .help("Executable program's address")
+                                .help("Executable program's address"),
                         )
                         .arg(
                             Arg::with_name("authority")
@@ -194,7 +206,9 @@ impl ProgramV4SubCommands for App<'_, '_> {
                                 .value_name("AUTHORITY_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .help("Program authority [default: the default configured keypair]")
+                                .help(
+                                    "Program authority [default: the default configured keypair]",
+                                ),
                         ),
                 )
                 .subcommand(
@@ -205,22 +219,22 @@ impl ProgramV4SubCommands for App<'_, '_> {
                                 .index(1)
                                 .value_name("ACCOUNT_ADDRESS")
                                 .takes_value(true)
-                                .help("Address of the program to show")
+                                .help("Address of the program to show"),
                         )
                         .arg(
                             Arg::with_name("all")
                                 .long("all")
                                 .conflicts_with("account")
                                 .conflicts_with("buffer_authority")
-                                .help("Show accounts for all authorities")
+                                .help("Show accounts for all authorities"),
                         )
-                        .arg(
-                            pubkey!(Arg::with_name("authority")
+                        .arg(pubkey!(
+                            Arg::with_name("authority")
                                 .long("authority")
                                 .value_name("AUTHORITY")
                                 .conflicts_with("all"),
-                                "Authority [default: the default configured keypair]"),
-                        ),
+                            "Authority [default: the default configured keypair]"
+                        )),
                 )
                 .subcommand(
                     SubCommand::with_name("dump")
@@ -231,7 +245,7 @@ impl ProgramV4SubCommands for App<'_, '_> {
                                 .value_name("ACCOUNT_ADDRESS")
                                 .takes_value(true)
                                 .required(true)
-                                .help("Address of the buffer or program")
+                                .help("Address of the buffer or program"),
                         )
                         .arg(
                             Arg::with_name("output_location")
@@ -241,7 +255,7 @@ impl ProgramV4SubCommands for App<'_, '_> {
                                 .required(true)
                                 .help("/path/to/program.so"),
                         ),
-                )
+                ),
         )
     }
 }
@@ -955,7 +969,11 @@ fn build_create_buffer_message(
 
         if account.lamports < lamports_required || account.data.len() != expected_account_data_len {
             if program_address == buffer_address {
-                return Err("Buffer account passed could be for a different deploy? It has different size/lamports".into());
+                return Err(
+                    "Buffer account passed could be for a different deploy? It has different \
+                     size/lamports"
+                        .into(),
+                );
             }
 
             let (truncate_instructions, balance_needed) = build_truncate_instructions(
