@@ -730,6 +730,7 @@ where
                             recv(schedulable_transaction_receiver) -> m => {
                                 match m {
                                     Ok(SessionedMessage::Payload(payload)) => {
+                                        assert!(!end_session);
                                         if let Some(task) = state_machine.schedule_new_task(payload) {
                                             idle_transaction_sender.send(task).unwrap();
                                         }
@@ -782,7 +783,7 @@ where
 
                     if end_session {
                         // or should also consider end_thread?
-                        log_scheduler!("S:ended ");
+                        log_scheduler!("S:ended");
                         (state_machine, log_interval) =
                             (SchedulingStateMachine::new(), <_>::default());
                         drop_sender.send(SessionedMessage::EndSession).unwrap();
@@ -790,7 +791,7 @@ where
                         end_session = false;
                     }
                 }
-                log_scheduler!("T:ended ");
+                log_scheduler!("T:ended");
 
                 drop_sender.send(SessionedMessage::EndSession).unwrap();
                 let result_with_timings = drop_receiver2.recv().unwrap();
