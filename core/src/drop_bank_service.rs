@@ -7,6 +7,7 @@ use {
         thread::{self, Builder, JoinHandle},
     },
 };
+use solana_runtime::installed_scheduler_pool::BankWithScheduler;
 
 pub struct DropBankService {
     thread_hdl: JoinHandle<()>,
