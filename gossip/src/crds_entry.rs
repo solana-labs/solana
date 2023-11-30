@@ -4,7 +4,7 @@ use {
         crds_value::{
             CrdsData, CrdsValue, CrdsValueLabel, LegacyVersion, LowestSlot, SnapshotHashes, Version,
         },
-        legacy_contact_info::LegacyContactInfo,
+        legacy_contact_info::LegacyContactInfo, contact_info::ContactInfo,
     },
     indexmap::IndexMap,
     solana_sdk::pubkey::Pubkey,
