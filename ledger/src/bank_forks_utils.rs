@@ -2,7 +2,8 @@ use {
     crate::{
         blockstore::Blockstore,
         blockstore_processor::{
-            self, CacheBlockMetaSender, ProcessOptions, TransactionStatusSender,
+            self, BlockstoreProcessorError, CacheBlockMetaSender, ProcessOptions,
+            TransactionStatusSender,
         },
         entry_notifier_service::EntryNotifierSender,
         leader_schedule_cache::LeaderScheduleCache,
@@ -27,7 +28,39 @@ use {
         result,
         sync::{atomic::AtomicBool, Arc, RwLock},
     },
+    thiserror::Error,
 };
+
+#[derive(Error, Debug)]
+pub enum BankForksUtilsError {
+    #[error("accounts path(s) not present when booting from snapshot")]
+    AccountPathsNotPresent,
+
+    #[error(
+        "failed to load bank: {source}, full snapshot archive: {full_snapshot_archive}, \
+        incremental snapshot archive {incremental_snapshot_archive}"
+    )]
+    BankFromSnapshotsArchiveError {
+        source: snapshot_utils::SnapshotError,
+        full_snapshot_archive: String,
+        incremental_snapshot_archive: String,
+    },
+
+    #[error(
+        "there is no local state to startup from. \
+        Ensure --{flag} is NOT set to \"{value}\" and restart"
+    )]
+    NoBankSnapshotDirectory { flag: String, value: String },
+
+    #[error("failed to load bank: {source}, snapshot {path}")]
+    BankFromSnapshotsDirectoryError {
+        source: snapshot_utils::SnapshotError,
+        path: PathBuf,
+    },
+
+    #[error("failed to process blockstore from root: {0}")]
+    ProcessBlockstoreFromRootError(#[source] BlockstoreProcessorError),
+}
 
 pub type LoadResult = result::Result<
     (
@@ -35,7 +68,7 @@ pub type LoadResult = result::Result<
         LeaderScheduleCache,
         Option<StartingSnapshotHashes>,
     ),
-    String,
+    BankForksUtilsError,
 >;
 
 /// Load the banks via genesis or a snapshot then processes all full blocks in blockstore
@@ -78,7 +111,7 @@ pub fn load(
         entry_notification_sender,
         &AbsRequestSender::default(),
     )
-    .map_err(|err| format!("Unable to process blockstore from root: {err}"))?;
+    .map_err(BankForksUtilsError::ProcessBlockstoreFromRootError)?;
 
     Ok((bank_forks, leader_schedule_cache, starting_snapshot_hashes))
 }
@@ -203,10 +236,10 @@ fn bank_forks_from_snapshot(
     process_options: &ProcessOptions,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: Arc<AtomicBool>,
-) -> Result<(Arc<RwLock<BankForks>>, StartingSnapshotHashes), String> {
+) -> Result<(Arc<RwLock<BankForks>>, StartingSnapshotHashes), BankForksUtilsError> {
     // Fail hard here if snapshot fails to load, don't silently continue
     if account_paths.is_empty() {
-        return Err("Account paths not present when booting from snapshot".to_string());
+        return Err(BankForksUtilsError::AccountPathsNotPresent);
     }
 
     let latest_snapshot_archive_slot = std::cmp::max(
@@ -256,27 +289,21 @@ fn bank_forks_from_snapshot(
             accounts_update_notifier,
             exit,
         )
-        .map_err(|err| {
-            format!(
-                "Failed to load bank: {err} \
-                \nfull snapshot archive: {} \
-                \nincremental snapshot archive: {}",
-                full_snapshot_archive_info.path().display(),
-                incremental_snapshot_archive_info
-                    .as_ref()
-                    .map(|archive| archive.path().display().to_string())
-                    .unwrap_or("none".to_string()),
-            )
+        .map_err(|err| BankForksUtilsError::BankFromSnapshotsArchiveError {
+            source: err,
+            full_snapshot_archive: full_snapshot_archive_info.path().display().to_string(),
+            incremental_snapshot_archive: incremental_snapshot_archive_info
+                .as_ref()
+                .map(|archive| archive.path().display().to_string())
+                .unwrap_or("none".to_string()),
         })?;
         bank
     } else {
-        let bank_snapshot = latest_bank_snapshot.ok_or_else(||
-            format!(
-                "There is no local state to startup from. Ensure --{} is *not* set to \"{}\" and restart.",
-                use_snapshot_archives_at_startup::cli::LONG_ARG,
-                UseSnapshotArchivesAtStartup::Never,
-            )
-        )?;
+        let bank_snapshot =
+            latest_bank_snapshot.ok_or_else(|| BankForksUtilsError::NoBankSnapshotDirectory {
+                flag: use_snapshot_archives_at_startup::cli::LONG_ARG.to_string(),
+                value: UseSnapshotArchivesAtStartup::Never.to_string(),
+            })?;
 
         // If a newer snapshot archive was downloaded, it is possible that its slot is
         // higher than the local bank we will load.  Did the user intend for this?
@@ -311,12 +338,9 @@ fn bank_forks_from_snapshot(
             accounts_update_notifier,
             exit,
         )
-        .map_err(|err| {
-            format!(
-                "Failed to load bank: {err} \
-                \nsnapshot: {}",
-                bank_snapshot.snapshot_path().display(),
-            )
+        .map_err(|err| BankForksUtilsError::BankFromSnapshotsDirectoryError {
+            source: err,
+            path: bank_snapshot.snapshot_path(),
         })?;
         bank
     };

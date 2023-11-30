@@ -243,7 +243,8 @@ pub fn load_and_process_ledger(
             None, // Maybe support this later, though
             accounts_update_notifier,
             exit.clone(),
-        )?;
+        )
+        .map_err(|err| err.to_string())?;
     let block_verification_method = value_t!(
         arg_matches,
         "block_verification_method",
