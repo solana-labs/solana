@@ -841,9 +841,7 @@ where
                                     bank = new_context.bank().clone();
                                     continue;
                                 }
-                                Err(_) => {
-                                    break;
-                                }
+                                Err(_) => break,
                             }
                         },
                         recv(idle_transaction_receiver) -> task => {
