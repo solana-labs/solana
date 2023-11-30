@@ -351,9 +351,7 @@ impl SchedulingStateMachine {
                     }
                     lock_count += 1;
                 }
-                LockStatus::Failed => {
-                    break;
-                }
+                LockStatus::Failed => break,
             }
         }
 
