@@ -28,7 +28,7 @@ use {
         },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
-    solana_scheduler::{LockAttempt, Page, SchedulingStateMachine, Task},
+    solana_scheduler::{Page, SchedulingStateMachine, Task},
     solana_sdk::{
         pubkey::Pubkey,
         slot_history::Slot,
