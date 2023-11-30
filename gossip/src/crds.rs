@@ -541,7 +541,7 @@ impl Crds {
         self.purged.push_back((value.value_hash, now));
         self.shards.remove(index, &value);
         match value.value.data {
-            CrdsData::LegacyContactInfo(_) | CrdsData::ContactInfo(_) => {
+            CrdsData::LegacyContactInfo(_) => {
                 self.nodes.swap_remove(&index);
             }
             CrdsData::Vote(_, _) => {
@@ -577,7 +577,7 @@ impl Crds {
             self.shards.remove(size, value);
             self.shards.insert(index, value);
             match value.value.data {
-                CrdsData::LegacyContactInfo(_) | CrdsData::ContactInfo(_) => {
+                CrdsData::LegacyContactInfo(_) => {
                     self.nodes.swap_remove(&size);
                     self.nodes.insert(index);
                 }
