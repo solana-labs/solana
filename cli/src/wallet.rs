@@ -140,10 +140,16 @@ impl WalletSubCommands for App<'_, '_> {
                 )
                 .after_help(
                     // Formatted specifically for the manually-indented heredoc string
-                    "Note: This will show more detailed information for finalized transactions \
-                     with verbose mode (-v/--verbose).\n\nAccount modes:\n  |srwx|\n    s: \
-                     signed\n    r: readable (always true)\n    w: writable\n    x: program \
-                     account (inner instructions excluded)",
+                    "Note: This will show more detailed information for finalized \
+                    transactions with verbose mode (-v/--verbose).\
+                    \n\
+                    \nAccount modes:\
+                    \n  |srwx|\
+                    \n    s: signed\
+                    \n    r: readable (always true)\
+                    \n    w: writable\
+                    \n    x: program account (inner instructions excluded)\
+                    ",
                 ),
         )
         .subcommand(
@@ -168,8 +174,8 @@ impl WalletSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .help(
-                            "The program_id that the address will ultimately be used for, \nor \
-                             one of NONCE, STAKE, and VOTE keywords",
+                            "The program_id that the address will ultimately be used for, \n\
+                             or one of NONCE, STAKE, and VOTE keywords",
                         ),
                 )
                 .arg(pubkey!(
@@ -190,8 +196,8 @@ impl WalletSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .help(
-                            "The program_id that the address will ultimately be used for, \nor \
-                             one of NONCE, STAKE, and VOTE keywords",
+                            "The program_id that the address will ultimately be used for, \n\
+                             or one of NONCE, STAKE, and VOTE keywords",
                         ),
                 )
                 .arg(
@@ -201,12 +207,14 @@ impl WalletSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .validator(is_structured_seed)
                         .help(
-                            "The seeds. \nEach one must match the pattern PREFIX:VALUE. \nPREFIX \
-                             can be one of [string, pubkey, hex, u8] \nor matches the pattern \
-                             [u,i][16,32,64,128][le,be] (for example u64le) for number values \
-                             \n[u,i] - represents whether the number is unsigned or signed, \
-                             \n[16,32,64,128] - represents the bit length, and \n[le,be] - \
-                             represents the byte order - little endian or big endian",
+                            "The seeds. \n\
+                            Each one must match the pattern PREFIX:VALUE. \n\
+                            PREFIX can be one of [string, pubkey, hex, u8] \n\
+                            or matches the pattern [u,i][16,32,64,128][le,be] \
+                            (for example u64le) for number values \n\
+                            [u,i] - represents whether the number is unsigned or signed, \n\
+                            [16,32,64,128] - represents the bit length, and \n\
+                            [le,be] - represents the byte order - little endian or big endian",
                         ),
                 ),
         )
