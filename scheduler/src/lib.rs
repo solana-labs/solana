@@ -79,7 +79,7 @@ pub struct TaskInner {
 
 impl SchedulingStateMachine {
     pub fn create_task(
-        tx: SanitizedTransaction,
+        transaction: SanitizedTransaction,
         index: usize,
         on_page_load: Fn(Pubkey) -> Page,
     ) -> Task {
@@ -96,7 +96,7 @@ impl SchedulingStateMachine {
         let unique_weight = UniqueWeight::max_value() - index as UniqueWeight;
         Task::new(TaskInner {
             unique_weight,
-            tx,
+            tx: transaction,
             task_status: SchedulerCell::new(TaskStatus::new(locks)),
         })
     }
