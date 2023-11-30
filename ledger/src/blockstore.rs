@@ -465,7 +465,7 @@ impl Blockstore {
 
     fn erasure_meta(&self, erasure_set: ErasureSetId) -> Result<Option<ErasureMeta>> {
         let (slot, fec_set_index) = erasure_set.store_key();
-        self.erasure_meta_cf.get((slot, fec_set_index as u64))
+        self.erasure_meta_cf.get((slot, u64::from(fec_set_index)))
     }
 
     fn merkle_root_meta(&self, erasure_set: ErasureSetId) -> Result<Option<MerkleRootMeta>> {
@@ -1020,7 +1020,7 @@ impl Blockstore {
 
         for (erasure_set, erasure_meta) in erasure_metas {
             let (slot, fec_set_index) = erasure_set.store_key();
-            write_batch.put::<cf::ErasureMeta>((slot, fec_set_index as u64), &erasure_meta)?;
+            write_batch.put::<cf::ErasureMeta>((slot, u64::from(fec_set_index)), &erasure_meta)?;
         }
 
         for (erasure_set, merkle_root_meta) in merkle_root_metas {

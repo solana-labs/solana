@@ -284,6 +284,7 @@ impl ErasureSetId {
     }
 
     // Storage key for ErasureMeta and MerkleRootMeta in blockstore db.
+    // Note: ErasureMeta column uses u64 so this will need to be typecast
     pub(crate) fn store_key(&self) -> (Slot, /*fec_set_index:*/ u32) {
         (self.0, self.1)
     }
