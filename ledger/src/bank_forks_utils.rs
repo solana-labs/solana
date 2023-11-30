@@ -40,7 +40,7 @@ pub enum BankForksUtilsError {
         "failed to load bank: {source}, full snapshot archive: {full_snapshot_archive}, \
         incremental snapshot archive: {incremental_snapshot_archive}"
     )]
-    BankFromSnapshotsArchiveError {
+    BankFromSnapshotsArchive {
         source: snapshot_utils::SnapshotError,
         full_snapshot_archive: String,
         incremental_snapshot_archive: String,
@@ -53,13 +53,13 @@ pub enum BankForksUtilsError {
     NoBankSnapshotDirectory { flag: String, value: String },
 
     #[error("failed to load bank: {source}, snapshot: {path}")]
-    BankFromSnapshotsDirectoryError {
+    BankFromSnapshotsDirectory {
         source: snapshot_utils::SnapshotError,
         path: PathBuf,
     },
 
     #[error("failed to process blockstore from root: {0}")]
-    ProcessBlockstoreFromRootError(#[source] BlockstoreProcessorError),
+    ProcessBlockstoreFromRoot(#[source] BlockstoreProcessorError),
 }
 
 pub type LoadResult = result::Result<
@@ -111,7 +111,7 @@ pub fn load(
         entry_notification_sender,
         &AbsRequestSender::default(),
     )
-    .map_err(BankForksUtilsError::ProcessBlockstoreFromRootError)?;
+    .map_err(BankForksUtilsError::ProcessBlockstoreFromRoot)?;
 
     Ok((bank_forks, leader_schedule_cache, starting_snapshot_hashes))
 }
@@ -289,7 +289,7 @@ fn bank_forks_from_snapshot(
             accounts_update_notifier,
             exit,
         )
-        .map_err(|err| BankForksUtilsError::BankFromSnapshotsArchiveError {
+        .map_err(|err| BankForksUtilsError::BankFromSnapshotsArchive {
             source: err,
             full_snapshot_archive: full_snapshot_archive_info.path().display().to_string(),
             incremental_snapshot_archive: incremental_snapshot_archive_info
@@ -338,7 +338,7 @@ fn bank_forks_from_snapshot(
             accounts_update_notifier,
             exit,
         )
-        .map_err(|err| BankForksUtilsError::BankFromSnapshotsDirectoryError {
+        .map_err(|err| BankForksUtilsError::BankFromSnapshotsDirectory {
             source: err,
             path: bank_snapshot.snapshot_path(),
         })?;
