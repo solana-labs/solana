@@ -80,6 +80,7 @@ impl SchedulingStateMachine {
     pub fn create_task(
         tx: SanitizedTransaction,
         index: usize,
+        on_page_load: Fn(Pubkey) -> Page,
     ) -> Task {
         let locks = transaction.get_account_locks_unchecked();
         let writable_locks = locks
