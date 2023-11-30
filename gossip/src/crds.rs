@@ -243,7 +243,8 @@ impl Crds {
                         self.duplicate_shreds.insert(value.ordinal, entry_index);
                     }
                     CrdsData::ContactInfo(node) => {
-                        self.nodes.insert(entry_index);
+                        // Can't insert into self.nodes since not all validators support ContactInfo yet
+                        // Querying self.nodes (get_nodes_contact_infos()) assumes we're pulling LegactContactInfo
                         self.shred_versions.insert(pubkey, node.shred_version());
                     }
                     _ => (),
