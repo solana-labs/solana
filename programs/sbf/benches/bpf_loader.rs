@@ -2,6 +2,7 @@
 #![cfg(feature = "sbf_c")]
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::arithmetic_side_effects)]
+#![cfg_attr(not(target_arch = "x86_64"), allow(dead_code, unused_imports))]
 
 use {
     solana_rbpf::memory_region::MemoryState,
@@ -101,6 +102,7 @@ fn bench_program_create_executable(bencher: &mut Bencher) {
 }
 
 #[bench]
+#[cfg(target_arch = "x86_64")]
 fn bench_program_alu(bencher: &mut Bencher) {
     let ns_per_s = 1000000000;
     let one_million = 1000000;
