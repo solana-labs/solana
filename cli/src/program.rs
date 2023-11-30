@@ -198,8 +198,8 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .takes_value(true)
                                 .required(false)
                                 .help(
-                                    "Maximum length of the upgradeable program [default: twice \
-                                     the length of the original deployed program]",
+                                    "Maximum length of the upgradeable program \
+                                    [default: twice the length of the original deployed program]",
                                 ),
                         )
                         .arg(
@@ -248,8 +248,8 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .takes_value(true)
                                 .required(false)
                                 .help(
-                                    "Maximum length of the upgradeable program [default: twice \
-                                     the length of the original deployed program]",
+                                    "Maximum length of the upgradeable program \
+                                    [default: twice the length of the original deployed program]",
                                 ),
                         ),
                 )
