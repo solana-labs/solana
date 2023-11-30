@@ -38,7 +38,7 @@ pub enum BankForksUtilsError {
 
     #[error(
         "failed to load bank: {source}, full snapshot archive: {full_snapshot_archive}, \
-        incremental snapshot archive {incremental_snapshot_archive}"
+        incremental snapshot archive: {incremental_snapshot_archive}"
     )]
     BankFromSnapshotsArchiveError {
         source: snapshot_utils::SnapshotError,
@@ -52,7 +52,7 @@ pub enum BankForksUtilsError {
     )]
     NoBankSnapshotDirectory { flag: String, value: String },
 
-    #[error("failed to load bank: {source}, snapshot {path}")]
+    #[error("failed to load bank: {source}, snapshot: {path}")]
     BankFromSnapshotsDirectoryError {
         source: snapshot_utils::SnapshotError,
         path: PathBuf,
