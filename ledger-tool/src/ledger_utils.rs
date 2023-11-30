@@ -107,8 +107,8 @@ pub fn load_and_process_ledger(
         })
     };
 
-    let start_slot_msg = "The starting slot will be the latest snapshot slot, or genesis if \
-        the --no-snapshot flag is specified or if no snapshots are found.";
+    let start_slot_msg = "The starting slot will be the latest snapshot slot, or genesis if the \
+                          --no-snapshot flag is specified or if no snapshots are found.";
     match process_options.halt_at_slot {
         // Skip the following checks for sentinel values of Some(0) and None.
         // For Some(0), no slots will be be replayed after starting_slot.
@@ -118,7 +118,7 @@ pub fn load_and_process_ledger(
             if halt_slot < starting_slot {
                 eprintln!(
                     "Unable to process blockstore from starting slot {starting_slot} to \
-                    {halt_slot}; the ending slot is less than the starting slot. {start_slot_msg}"
+                     {halt_slot}; the ending slot is less than the starting slot. {start_slot_msg}"
                 );
                 exit(1);
             }
@@ -126,8 +126,8 @@ pub fn load_and_process_ledger(
             if !blockstore.slot_range_connected(starting_slot, halt_slot) {
                 eprintln!(
                     "Unable to process blockstore from starting slot {starting_slot} to \
-                    {halt_slot}; the blockstore does not contain a replayable chain between these \
-                    slots. {start_slot_msg}"
+                     {halt_slot}; the blockstore does not contain a replayable chain between \
+                     these slots. {start_slot_msg}"
                 );
                 exit(1);
             }
@@ -367,8 +367,8 @@ pub fn open_blockstore(
     let shred_storage_type = get_shred_storage_type(
         ledger_path,
         &format!(
-            "Shred storage type cannot be inferred for ledger at {ledger_path:?}, \
-         using default RocksLevel",
+            "Shred storage type cannot be inferred for ledger at {ledger_path:?}, using default \
+             RocksLevel",
         ),
     );
 
@@ -401,13 +401,13 @@ pub fn open_blockstore(
 
             if missing_blockstore && is_secondary {
                 eprintln!(
-                    "Failed to open blockstore at {ledger_path:?}, it \
-                    is missing at least one critical file: {err:?}"
+                    "Failed to open blockstore at {ledger_path:?}, it is missing at least one \
+                     critical file: {err:?}"
                 );
             } else if missing_column && is_secondary {
                 eprintln!(
-                    "Failed to open blockstore at {ledger_path:?}, it \
-                    does not have all necessary columns: {err:?}"
+                    "Failed to open blockstore at {ledger_path:?}, it does not have all necessary \
+                     columns: {err:?}"
                 );
             } else {
                 eprintln!("Failed to open blockstore at {ledger_path:?}: {err:?}");
