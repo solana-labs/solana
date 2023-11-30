@@ -783,24 +783,29 @@ where
                     }
 
                     if end_session {
-                        // or should also consider end_thread?
                         log_scheduler!("S:ended");
                         (state_machine, log_interval) =
                             (SchedulingStateMachine::new(), <_>::default());
                         drop_sender.send(SessionedMessage::EndSession).unwrap();
                         result_sender.send(drop_receiver2.recv().unwrap()).unwrap();
-                        end_session = false;
+                        if !end_thread {
+                            end_session = false;
+                        }
                     }
                 }
-                log_scheduler!("T:ended");
 
-                drop_sender.send(SessionedMessage::EndSession).unwrap();
-                let result_with_timings = drop_receiver2.recv().unwrap();
-                trace!(
-                    "solScheduler thread is ended at: {:?}",
-                    std::thread::current()
-                );
-                result_with_timings
+                log_scheduler!("T:ended");
+                if end_session {
+                    (Ok(()), ExecuteTimings::default())
+                } else {
+                    drop_sender.send(SessionedMessage::EndSession).unwrap();
+                    let result_with_timings = drop_receiver2.recv().unwrap();
+                    trace!(
+                        "solScheduler thread is ended at: {:?}",
+                        std::thread::current()
+                    );
+                    result_with_timings
+                }
             }
         };
 
