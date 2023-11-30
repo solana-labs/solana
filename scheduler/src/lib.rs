@@ -71,6 +71,7 @@ impl TaskStatus {
 
 #[derive(Debug)]
 pub struct TaskInner {
+    // put this field out of this struct for maximum space efficiency?
     unique_weight: UniqueWeight,
     transaction: SanitizedTransaction, // actually should be Bundle
     task_status: SchedulerCell<TaskStatus>,
