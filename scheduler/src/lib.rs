@@ -78,9 +78,8 @@ pub struct TaskInner {
 
 impl SchedulingStateMachine {
     pub fn create_task(
-        index: usize,
         tx: SanitizedTransaction,
-        lock_attempts: Vec<LockAttempt>,
+        index: usize,
     ) -> Task {
         let locks = transaction.get_account_locks_unchecked();
         let writable_locks = locks
