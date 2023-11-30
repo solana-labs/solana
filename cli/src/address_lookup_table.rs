@@ -80,11 +80,11 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .takes_value(true)
                                 .validator(is_pubkey)
                                 .help(
-                                    "Lookup table authority address [default: the default \
-                                     configured keypair]. WARNING: Cannot be used for creating a \
-                                     lookup table for a cluster running v1.11
-                                    or earlier which requires the authority to sign for lookup \
-                                     table creation.",
+                                    "Lookup table authority address \
+                                    [default: the default configured keypair]. \
+                                    WARNING: Cannot be used for creating a lookup table for \
+                                    a cluster running v1.11 or earlier which requires the \
+                                    authority to sign for lookup table creation.",
                                 ),
                         )
                         .arg(
@@ -95,8 +95,8 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .conflicts_with("authority")
                                 .validator(is_valid_signer)
                                 .help(
-                                    "Lookup table authority keypair [default: the default \
-                                     configured keypair].",
+                                    "Lookup table authority keypair \
+                                    [default: the default configured keypair].",
                                 ),
                         )
                         .arg(
@@ -130,8 +130,8 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .takes_value(true)
                                 .validator(is_valid_signer)
                                 .help(
-                                    "Lookup table authority [default: the default configured \
-                                     keypair]",
+                                    "Lookup table authority \
+                                    [default: the default configured keypair]",
                                 ),
                         )
                         .arg(
@@ -160,8 +160,8 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .takes_value(true)
                                 .validator(is_valid_signer)
                                 .help(
-                                    "Lookup table authority [default: the default configured \
-                                     keypair]",
+                                    "Lookup table authority \
+                                    [default: the default configured keypair]",
                                 ),
                         )
                         .arg(
@@ -204,8 +204,8 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .takes_value(true)
                                 .validator(is_valid_signer)
                                 .help(
-                                    "Lookup table authority [default: the default configured \
-                                     keypair]",
+                                    "Lookup table authority \
+                                    [default: the default configured keypair]",
                                 ),
                         )
                         .arg(
@@ -244,8 +244,8 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .takes_value(true)
                                 .validator(is_valid_signer)
                                 .help(
-                                    "Lookup table authority [default: the default configured \
-                                     keypair]",
+                                    "Lookup table authority \
+                                    [default: the default configured keypair]",
                                 ),
                         ),
                 )
