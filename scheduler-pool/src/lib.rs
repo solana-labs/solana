@@ -1134,7 +1134,7 @@ where
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
         transaction_with_index.with_transaction_and_index(|transaction, index| {
-            let task = SchedulingStateMachine::create_task(transaction.clone(), index);
+            let task = SchedulingStateMachine::create_task(transaction.clone(), index, |pubkey| self.address_book.load(pubkey));
             self.ensure_thread_manager_started().send_task(task);
         });
     }
