@@ -39,12 +39,6 @@ pub struct RestartHeaviestFork {
     pub shred_version: u16,
 }
 
-#[derive(Debug, Error, PartialEq)]
-pub enum RestartHeaviestForkError {
-    #[error("Total stake of received heaviest fork cannot be zero")]
-    ZeroObservedStake,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample, AbiEnumVisitor)]
 enum SlotsOffsets {
     RunLengthEncoding(RunLengthEncoding),
@@ -141,10 +135,6 @@ impl RestartLastVotedForkSlots {
 
 impl Sanitize for RestartHeaviestFork {
     fn sanitize(&self) -> Result<(), SanitizeError> {
-        if self.observed_stake == 0 {
-            // this should at least include its own stake.
-            return Err(SanitizeError::ValueOutOfBounds);
-        }
         sanitize_wallclock(self.wallclock)?;
         self.last_slot_hash.sanitize()
     }
@@ -158,18 +148,15 @@ impl RestartHeaviestFork {
         last_slot_hash: Hash,
         observed_stake: u64,
         shred_version: u16,
-    ) -> Result<Self, RestartHeaviestForkError> {
-        if observed_stake == 0 {
-            return Err(RestartHeaviestForkError::ZeroObservedStake);
-        }
-        Ok(Self {
+    ) -> Self {
+        Self {
             from,
             wallclock: now,
             last_slot,
             last_slot_hash,
             observed_stake,
             shred_version,
-        })
+        }
     }
 
     pub fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
@@ -182,7 +169,6 @@ impl RestartHeaviestFork {
             rng.gen_range(1..u64::MAX),
             1,
         )
-        .unwrap()
     }
 }
 
@@ -386,11 +372,6 @@ mod test {
     fn test_restart_heaviest_fork() {
         let keypair = Keypair::new();
         let slot = 53;
-        // received_heaviest_fork_percent can never be 0.
-        assert_eq!(
-            RestartHeaviestFork::new(keypair.pubkey(), timestamp(), slot, Hash::default(), 0, 1,),
-            Err(RestartHeaviestForkError::ZeroObservedStake)
-        );
         let mut fork = RestartHeaviestFork::new(
             keypair.pubkey(),
             timestamp(),
@@ -398,11 +379,10 @@ mod test {
             Hash::default(),
             800_000,
             1,
-        )
-        .unwrap();
+        );
         assert_eq!(fork.sanitize(), Ok(()));
         assert_eq!(fork.observed_stake, 800_000);
-        fork.observed_stake = 0;
+        fork.wallclock = crate::crds_value::MAX_WALLCLOCK;
         assert_eq!(fork.sanitize(), Err(SanitizeError::ValueOutOfBounds));
     }
 }
