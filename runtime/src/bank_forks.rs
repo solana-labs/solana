@@ -635,7 +635,7 @@ impl BankForks {
         &mut self,
         root: Slot,
         highest_super_majority_root: Option<Slot>,
-    ) -> (Vec<Arc<Bank>>, u64, u64) {
+    ) -> (Vec<BankWithScheduler>, u64, u64) {
         // Clippy doesn't like separating the two collects below,
         // but we want to collect timing separately, and the 2nd requires
         // a unique borrow to self which is already borrowed by self.banks
