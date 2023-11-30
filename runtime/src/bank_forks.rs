@@ -474,7 +474,7 @@ impl BankForks {
         root: Slot,
         accounts_background_request_sender: &AbsRequestSender,
         highest_super_majority_root: Option<Slot>,
-    ) -> Vec<Arc<Bank>> {
+    ) -> Vec<BankWithScheduler> {
         let program_cache_prune_start = Instant::now();
         let set_root_start = Instant::now();
         let (removed_banks, set_root_metrics) = self.do_set_root_return_metrics(
