@@ -733,7 +733,7 @@ where
                             recv(schedulable_transaction_receiver) -> m => {
                                 match m {
                                     Ok(SessionedMessage::Payload(payload)) => {
-                                        assert!(!end_session);
+                                        assert!(!end_session && !end_thread);
                                         if let Some(task) = state_machine.schedule_new_task(payload) {
                                             idle_transaction_sender.send(task).unwrap();
                                         }
@@ -745,6 +745,7 @@ where
                                         "started"
                                     }
                                     Ok(SessionedMessage::EndSession) => {
+                                        assert!(!end_session && !end_thread);
                                         end_session = true;
                                         "S:ending"
                                     }
