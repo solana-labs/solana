@@ -20,6 +20,9 @@ pub enum TieredStorageError {
     #[error("invalid footer size: {0}, expected: {1}")]
     InvalidFooterSize(u64, u64),
 
+    #[error("invalid footer version: {0}")]
+    InvalidFooterVersion(u64),
+
     #[error("footer is unsanitary: {0}")]
     SanitizeFooter(#[from] SanitizeFooterError),
 }

@@ -219,8 +219,12 @@ impl TieredStorageFooter {
         }
 
         let mut footer_version: u64 = 0;
-        let mut magic_number = TieredStorageMagicNumber::zeroed();
         file.read_type(&mut footer_version)?;
+        if footer_version != FOOTER_FORMAT_VERSION {
+            return Err(TieredStorageError::InvalidFooterVersion(footer_version));
+        }
+
+        let mut magic_number = TieredStorageMagicNumber::zeroed();
         file.read_type(&mut magic_number)?;
         if magic_number != TieredStorageMagicNumber::default() {
             return Err(TieredStorageError::MagicNumberMismatch(
@@ -247,9 +251,12 @@ impl TieredStorageFooter {
             ));
         }
 
-        let (_footer_version, offset) = get_type::<u64>(mmap, offset)?;
-        let (magic_number, _offset) = get_type::<TieredStorageMagicNumber>(mmap, offset)?;
+        let (footer_version, offset) = get_type::<u64>(mmap, offset)?;
+        if *footer_version != FOOTER_FORMAT_VERSION {
+            return Err(TieredStorageError::InvalidFooterVersion(*footer_version));
+        }
 
+        let (magic_number, _offset) = get_type::<TieredStorageMagicNumber>(mmap, offset)?;
         if *magic_number != TieredStorageMagicNumber::default() {
             return Err(TieredStorageError::MagicNumberMismatch(
                 TieredStorageMagicNumber::default().0,
