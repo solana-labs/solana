@@ -16,9 +16,7 @@ use {
             AccessType, BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions,
             ShredStorageType,
         },
-        blockstore_processor::{
-            self, BlockstoreProcessorError, ProcessOptions, TransactionStatusSender,
-        },
+        blockstore_processor::{self, ProcessOptions, TransactionStatusSender},
     },
     solana_measure::measure,
     solana_rpc::transaction_status_service::TransactionStatusService,
@@ -71,7 +69,7 @@ pub fn load_and_process_ledger(
     process_options: ProcessOptions,
     snapshot_archive_path: Option<PathBuf>,
     incremental_snapshot_archive_path: Option<PathBuf>,
-) -> Result<(Arc<RwLock<BankForks>>, Option<StartingSnapshotHashes>), BlockstoreProcessorError> {
+) -> Result<(Arc<RwLock<BankForks>>, Option<StartingSnapshotHashes>), String> {
     let bank_snapshots_dir = if blockstore.is_primary_access() {
         blockstore.ledger_path().join("snapshot")
     } else {
@@ -245,7 +243,8 @@ pub fn load_and_process_ledger(
             None, // Maybe support this later, though
             accounts_update_notifier,
             exit.clone(),
-        );
+        )
+        .map_err(|err| err.to_string())?;
     let block_verification_method = value_t!(
         arg_matches,
         "block_verification_method",
@@ -345,7 +344,8 @@ pub fn load_and_process_ledger(
         None, // Maybe support this later, though
         &accounts_background_request_sender,
     )
-    .map(|_| (bank_forks, starting_snapshot_hashes));
+    .map(|_| (bank_forks, starting_snapshot_hashes))
+    .map_err(|err| err.to_string());
 
     exit.store(true, Ordering::Relaxed);
     accounts_background_service.join().unwrap();
