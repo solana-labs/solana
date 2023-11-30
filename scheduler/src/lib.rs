@@ -82,11 +82,21 @@ impl SchedulingStateMachine {
         tx: SanitizedTransaction,
         lock_attempts: Vec<LockAttempt>,
     ) -> Task {
+        let locks = transaction.get_account_locks_unchecked();
+        let writable_locks = locks
+            .writable
+            .iter()
+            .map(|address| LockAttempt::writable(self.address_book.load(**address)));
+        let readonly_locks = locks
+            .readonly
+            .iter()
+            .map(|address| LockAttempt::readonly(self.address_book.load(**address)));
+        let locks = writable_locks.chain(readonly_locks).collect();
         let unique_weight = UniqueWeight::max_value() - index as UniqueWeight;
         Task::new(TaskInner {
             unique_weight,
             tx,
-            task_status: SchedulerCell::new(TaskStatus::new(lock_attempts)),
+            task_status: SchedulerCell::new(TaskStatus::new(locks)),
         })
     }
 }
