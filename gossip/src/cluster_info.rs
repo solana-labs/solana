@@ -3109,6 +3109,11 @@ fn filter_on_shred_version(
             {
                 Some(msg)
             }
+            CrdsData::ContactInfo(node)
+                if node.shred_version() == 0 || node.shred_version() == self_shred_version =>
+            {
+                Some(msg)
+            }
             _ => {
                 stats.skip_pull_shred_version.add_relaxed(1);
                 None
