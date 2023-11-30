@@ -697,7 +697,9 @@ where
                         const BITS_PER_HEX_DIGIT: usize = 4;
                         info!(
                             "[sch_{:0width$x}]: slot: {}[{:8}]({}/{}): state_machine(({}(+{})=>{})/{}|{}/{}) channels(<{} >{}+{} <{}+{})",
-                            scheduler_id, slot, (if ($prefix) == "step" { "interval" } else { $prefix }), (if end_thread {"T"} else {"-"}), (if end_session {"S"} else {"-"}),
+                            scheduler_id, slot,
+                            (if ($prefix) == "step" { "interval" } else { $prefix }),
+                            (if end_thread {"T"} else {"-"}), (if end_session {"S"} else {"-"}),
                             state_machine.active_task_count(), state_machine.retryable_task_count(), state_machine.handled_task_count(),
                             state_machine.total_task_count(),
                             state_machine.reschedule_count(),
