@@ -1,9 +1,8 @@
 use {
     crate::cell::{SchedulerCell, Token},
-    solana_sdk::transaction::SanitizedTransaction,
+    solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
     std::{collections::BTreeMap, sync::Arc},
 };
-use solana_sdk::pubkey::Pubkey;
 
 type UsageCount = u32;
 const SOLE_USE_COUNT: UsageCount = 1;
