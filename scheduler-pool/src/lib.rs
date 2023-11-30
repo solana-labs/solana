@@ -717,7 +717,7 @@ where
                 tid_sender
                     .send(rustix::thread::gettid().as_raw_nonzero().get())
                     .unwrap();
-                let (ready_to_retry, never_to_retry) = (&ready(), &never());
+                let (ready_to_retry, never_retry) = (&ready(), &never());
 
                 while !end_thread {
                     loop {
@@ -754,7 +754,7 @@ where
                                     }
                                 }
                             },
-                            recv(if state_machine.has_retryable_task() { ready_to_retry } else { never_to_retry }) -> now => {
+                            recv(if state_machine.has_retryable_task() { ready_to_retry } else { never_retry }) -> now => {
                                 assert!(now.is_ok());
                                 if let Some(task) = state_machine.schedule_retryable_task() {
                                     blocked_transaction_sessioned_sender
