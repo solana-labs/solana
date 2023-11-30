@@ -102,7 +102,7 @@ The resultant response array will contain:
   - `owner: <string>` - base-58 encoded Pubkey of the program this account has been assigned to
   - `data: <[string,encoding]|object>` - data associated with the account, either as encoded binary data or JSON format `{<program>: <state>}` - depending on encoding parameter
   - `executable: <bool>` - boolean indicating if the account contains a program \(and is strictly read-only\)
-  - `rentEpoch: <u64>` - the epoch at which this account will next owe rent, as u64
+  - `rentEpoch: <u64>` - the epoch at which this account will next owe rent, as u64 (rent is no longer charged so this is practically speaking a deprecated field)
   - `size: <u64>` - the data size of the account
 
 </CodeParams>

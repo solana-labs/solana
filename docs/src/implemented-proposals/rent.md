@@ -2,6 +2,14 @@
 title: Rent
 ---
 
+## Rent is Deprecated
+
+Rent is no longer charged on Solana.  Originally any account which did not meet a minimum "rent-exempt minimum" balance would be regularly charged rent.  However, all accounts on Solana now already meet the rent-exempt minimum threshold, and it is not possible to create a new account that doesn't meet this threshold.  Therefore, there are no accounts that pay Rent on Solana, nor will there ever be again.
+
+The following documentation is retained to offer historical information about how Rent was originally designed and implemented.
+
+## Rent
+
 Accounts on Solana may have owner-controlled state \(`Account::data`\) that's separate from the account's balance \(`Account::lamports`\). Since validators on the network need to maintain a working copy of this state in memory, the network charges a time-and-space based fee for this resource consumption, also known as Rent.
 
 ## Two-tiered rent regime

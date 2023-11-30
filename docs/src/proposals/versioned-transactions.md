@@ -42,10 +42,10 @@ addresses from the on-chain lookup tables.
 
 #### State
 
-Address lookup tables must be rent-exempt when initialized and after
-each time new addresses are appended. Lookup tables can either be extended
-from an on-chain buffered list of addresses or directly by appending
-addresses through instruction data. Newly appended addresses require
+Address lookup tables must, like all accounts, hold a rent-exempt minimum balance
+when initialized and after each time new addresses are appended. Lookup tables
+can either be extended from an on-chain buffered list of addresses or directly
+by appending addresses through instruction data. Newly appended addresses require
 one slot to warmup before being available to transactions for lookups.
 
 Since transactions use a `u8` index to look up addresses, address tables can
@@ -80,7 +80,7 @@ pub struct LookupTableMeta {
 #### Cleanup
 
 Once an address lookup table is no longer needed, it can be deactivated and closed
-to have its rent balance reclaimed. Address lookup tables may not be recreated
+to have its balance reclaimed. Address lookup tables may not be recreated
 at the same address because each new lookup table must be initialized at an address
 derived from a recent slot.
 

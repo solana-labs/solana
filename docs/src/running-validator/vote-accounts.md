@@ -190,7 +190,7 @@ without providing the `--vote-account` argument, as well as with the `--no-wait-
 
 This temporary validator should be run for two full epochs. During this time it will:
 * Produce blocks for the remaining slots that are assigned to your old validator identity
-* Receive the transaction fees and rent rewards for your old validator identity
+* Receive the transaction fees for your old validator identity
 
 It is safe to stop this temporary validator when your old validator identity is
 no longer listed in the `solana leader-schedule` output.

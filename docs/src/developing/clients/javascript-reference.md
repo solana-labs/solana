@@ -535,7 +535,7 @@ let airdropSignature = await connection.requestAirdrop(
 
 await connection.confirmTransaction({ signature: airdropSignature });
 
-// Get Minimum amount for rent exemption
+// Get Minimum amount of SOL that must be held in the account
 let minimumAmount = await connection.getMinimumBalanceForRentExemption(
   web3.NONCE_ACCOUNT_LENGTH,
 );

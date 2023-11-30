@@ -24,14 +24,6 @@ confirmed as a global state transaction, this _transaction fee_ is paid to the
 network to help support the [economic design](#economic-design) of the Solana
 blockchain.
 
-> **NOTE:** Transaction fees are different from
-> [account rent](./terminology.md#rent)! While transaction fees are paid to
-> process instructions on the Solana network, rent is paid to store data on the
-> blockchain.
-
-> You can learn more about rent here:
-> [What is rent?](./developing/intro/rent.md)
-
 ## Why pay transaction fees?
 
 Transaction fees offer many benefits in the Solana

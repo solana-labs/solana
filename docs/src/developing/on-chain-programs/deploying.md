@@ -8,7 +8,7 @@ Solana on-chain programs (otherwise known as "smart contracts") are stored in "e
 - having the "executable" flag enabled, and
 - the owner being assigned to a BPF loader
 
-Besides those exceptions, they are governed by the same runtime rules as non-executable accounts, hold SOL tokens for rent fees, and store a data buffer which is managed by the BPF loader program. The latest BPF loader is called the "Upgradeable BPF Loader".
+Besides those exceptions, they are governed by the same runtime rules as non-executable accounts, hold SOL tokens to hold a balance no less than the rent-exempt minimum, and store a data buffer which is managed by the BPF loader program. The latest BPF loader is called the "Upgradeable BPF Loader".
 
 ## Overview of the Upgradeable BPF Loader
 
@@ -29,7 +29,7 @@ The state accounts listed above can only be modified with one of the following i
 3. [Deploy](https://github.com/solana-labs/solana/blob/7409d9d2687fba21078a745842c25df805cdf105/sdk/program/src/loader_upgradeable_instruction.rs#L77): Creates both a program account and a program data account. It fills the program data account by copying the byte-code stored in a buffer account. If the byte-code is valid, the program account will be set as executable, allowing it to be invoked. If the byte-code is invalid, the instruction will fail and all changes are reverted.
 4. [Upgrade](https://github.com/solana-labs/solana/blob/7409d9d2687fba21078a745842c25df805cdf105/sdk/program/src/loader_upgradeable_instruction.rs#L102): Fills an existing program data account by copying executable byte-code from a buffer account. Similar to the deploy instruction, it will only succeed if the byte-code is valid.
 5. [Set authority](https://github.com/solana-labs/solana/blob/7409d9d2687fba21078a745842c25df805cdf105/sdk/program/src/loader_upgradeable_instruction.rs#L114): Updates the authority of a program data or buffer account if the account's current authority has signed the transaction being processed. If the authority is deleted without replacement, it can never be set to a new address and the account can never be closed.
-6. [Close](https://github.com/solana-labs/solana/blob/7409d9d2687fba21078a745842c25df805cdf105/sdk/program/src/loader_upgradeable_instruction.rs#L127): Clears the data of a program data account or buffer account and reclaims the SOL used for the rent exemption deposit.
+6. [Close](https://github.com/solana-labs/solana/blob/7409d9d2687fba21078a745842c25df805cdf105/sdk/program/src/loader_upgradeable_instruction.rs#L127): Clears the data of a program data account or buffer account and reclaims the SOL used for the rent-exempt minimum balance.
 
 ## How `solana program deploy` works
 
@@ -39,11 +39,11 @@ Deploying a program on Solana requires hundreds, if not thousands of transaction
 2. [Buffer writes](https://github.com/solana-labs/solana/blob/7409d9d2687fba21078a745842c25df805cdf105/cli/src/program.rs#L2129): Once the buffer account is initialized, the CLI [breaks up the program byte-code](https://github.com/solana-labs/solana/blob/7409d9d2687fba21078a745842c25df805cdf105/cli/src/program.rs#L1940) into ~1KB chunks and [sends transactions at a rate of 100 transactions per second](https://github.com/solana-labs/solana/blob/7409d9d2687fba21078a745842c25df805cdf105/client/src/tpu_client.rs#L133) to write each chunk with [the write buffer instruction](https://github.com/solana-labs/solana/blob/7409d9d2687fba21078a745842c25df805cdf105/programs/bpf_loader/src/lib.rs#L334). These transactions are sent directly to the current leader's transaction processing (TPU) port and are processed in parallel with each other. Once all transactions have been sent, the CLI [polls the RPC API with batches of transaction signatures](https://github.com/solana-labs/solana/blob/7409d9d2687fba21078a745842c25df805cdf105/client/src/tpu_client.rs#L216) to ensure that every write was successful and confirmed.
 3. [Finalization](https://github.com/solana-labs/solana/blob/7409d9d2687fba21078a745842c25df805cdf105/cli/src/program.rs#L1807): Once writes are completed, the CLI [sends a final transaction](https://github.com/solana-labs/solana/blob/7409d9d2687fba21078a745842c25df805cdf105/cli/src/program.rs#L2150) to either [deploy a new program](https://github.com/solana-labs/solana/blob/7409d9d2687fba21078a745842c25df805cdf105/programs/bpf_loader/src/lib.rs#L362) or [upgrade an existing program](https://github.com/solana-labs/solana/blob/7409d9d2687fba21078a745842c25df805cdf105/programs/bpf_loader/src/lib.rs#L513). In either case, the byte-code written to the buffer account will be copied into a program data account and verified.
 
-## Reclaim rent from program accounts
+## Reclaim rent-exempt minimum balance from program accounts
 
-The storage of data on the Solana blockchain requires the payment of [rent](./../intro/rent.md), including for the byte-code for on-chain programs. Therefore as you deploy more or larger programs, the amount of rent paid to remain rent-exempt will also become larger.
+The storage of data on the Solana blockchain requires the deposit of a rent-exempt minimum amount of SOL, including for the byte-code for on-chain programs. Therefore as you deploy more or larger programs, the amount of SOL required to satisfy the required minimum rent-exempt balance will also become larger.
 
-Using the current rent cost model configuration, a rent-exempt account requires a deposit of ~0.7 SOL per 100KB stored. These costs can have an outsized impact on developers who deploy their own programs since [program accounts](./../programming-model/accounts.md#executable) are among the largest we typically see on Solana.
+Using the current rent-exempt minimum cost model configuration, a rent-exempt account requires a deposit of ~0.7 SOL per 100KB stored. These costs can have an outsized impact on developers who deploy their own programs since [program accounts](./../programming-model/accounts.md#executable) are among the largest we typically see on Solana.
 
 #### Example of how much data is used for programs
 
@@ -120,7 +120,7 @@ You may now realize that program data accounts (the accounts that store the exec
 
 While it would be uncommon for developers to need to close program data accounts since they can be rewritten during upgrades, one potential scenario is that since program data accounts can't be _resized_. You may wish to deploy your program at a new address to accommodate larger executables.
 
-The ability to reclaim program data account rent deposits also makes testing and experimentation on the `mainnet-beta` cluster a lot less costly since you could reclaim everything except the transaction fees and a small amount of rent for the program account. Lastly, this could help developers recover most of their funds if they mistakenly deploy a program at an unintended address or on the wrong cluster.
+The ability to reclaim program data account rent-exempt minimum balances also makes testing and experimentation on the `mainnet-beta` cluster a lot less costly since you could reclaim everything except the transaction fees and a small amount of rent-exempt minimum balance of the program account. Lastly, this could help developers recover most of their funds if they mistakenly deploy a program at an unintended address or on the wrong cluster.
 
 To view the programs which are owned by your wallet address, you can run:
 
@@ -140,4 +140,4 @@ solana program close --programs --keypair ~/.config/solana/MY_KEYPAIR.json
 
 You might be concerned about this feature allowing malicious actors to close a program in a way that negatively impacts end users. While this is a valid concern in general, closing program data accounts doesn't make this any more exploitable than was already possible.
 
-Even without the ability to close a program data account, any upgradeable program could be upgraded to a no-op implementation and then have its upgrade authority cleared to make it immutable forever. This new feature for closing program data accounts merely adds the ability to reclaim the rent deposit, disabling a program was already technically possible.
+Even without the ability to close a program data account, any upgradeable program could be upgraded to a no-op implementation and then have its upgrade authority cleared to make it immutable forever. This new feature for closing program data accounts merely adds the ability to reclaim the rent-exempt minimum deposit, disabling a program was already technically possible.

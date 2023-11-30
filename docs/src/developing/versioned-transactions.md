@@ -82,7 +82,7 @@ We then define the recent `blockhash` and `minRent` we will need for our transac
 ```js
 const web3 = require("@solana/web3.js");
 
-// connect to the cluster and get the minimum rent for rent exempt status
+// connect to the cluster and get the minimum balance for rent exempt status
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"));
 let minRent = await connection.getMinimumBalanceForRentExemption(0);
 let blockhash = await connection

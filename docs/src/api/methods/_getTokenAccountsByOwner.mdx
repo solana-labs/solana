@@ -91,7 +91,8 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
   - `owner: <string>` - base-58 encoded Pubkey of the program this account has been assigned to
   - `data: <object>` - Token state data associated with the account, either as encoded binary data or in JSON format `{<program>: <state>}`
   - `executable: <bool>` - boolean indicating if the account contains a program \(and is strictly read-only\)
-  - `rentEpoch: <u64>` - the epoch at which this account will next owe rent, as u64
+  - `rentEpoch: <u64>` - the epoch at which this account will next owe rent, as u64 (rent is no longer charged so this is practically speaking
+                         a deprecated field)
   - `size: <u64>` - the data size of the account
 
 When the data is requested with the `jsonParsed` encoding a format similar to that of the [Token Balances Structure](/api/http#token-balances-structure) can be expected inside the structure, both for the `tokenAmount` and the `delegatedAmount` - with the latter being an optional object.

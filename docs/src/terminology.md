@@ -260,15 +260,10 @@ Transactions should request the minimum amount of compute units required for exe
 
 The public key of a [keypair](#keypair).
 
-## rent
+## rent-exempt minimum
 
-Fee paid by [Accounts](#account) and [Programs](#program) to store data on the blockchain. When accounts do not have enough balance to pay rent, they may be Garbage Collected.
-
-See also [rent exempt](#rent-exempt) below. Learn more about rent here: [What is rent?](../src/developing/intro/rent.md).
-
-## rent exempt
-
-Accounts that maintain more than 2 years with of rent payments in their account are considered "_rent exempt_" and will not incur the [collection of rent](../src/developing/intro/rent.md#collecting-rent).
+All accounts must maintain a minimum balance called the "rent-exempt minimum".  This balance is calculated using a formula based on a deprecated "rent" mechanism.  The
+minimum balance is required for all accounts and no accounts ever pay "rent".  The rent exempt minimum balance is recoverable at the time that the account is closed.
 
 ## root
 

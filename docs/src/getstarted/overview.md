@@ -165,10 +165,9 @@ the account.
 
 Unlike a file, the account includes metadata for the lifetime of the file.
 Solana accounts have a unique lifecycle. When an account is created, it needs to
-be assigned some space, and tokens are required to rent this space. If an
-account doesn't have enough tokens to cover the rent, it will be removed.
-However, if the account does hold enough tokens to cover the rent for two years,
-it's considered "rent-exempt" and won't be deleted.
+be assigned some space, and tokens are required to rent this space.  These
+are provided as a "rent-exempt minimum balance" that all accounts must hold.
+This minimum balance is recovered when the account is closed.
 
 You can read more about accounts
 [here](../developing/programming-model/accounts.md).

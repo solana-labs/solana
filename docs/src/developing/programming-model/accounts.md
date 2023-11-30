@@ -12,11 +12,9 @@ tells the runtime who is allowed to access the data and how.
 
 Unlike a file, the account includes metadata for the lifetime of the file. That
 lifetime is expressed by a number of fractional native
-tokens called _lamports_. Accounts are held in validator memory and pay
-["rent"](#rent) to stay there. Each validator periodically scans all accounts
-and collects rent. Any account that drops to zero lamports is purged. Accounts
-can also be marked [rent-exempt](#rent-exemption) if they contain a sufficient
-number of lamports.
+tokens called _lamports_. Accounts are held in validator memory and must
+contain a sufficient number of lamports to satisfy the "rent-exempt minimum"
+balance for the account.
 
 In the same way that a Linux user uses a path to look up a file, a Solana client
 uses an _address_ to look up an account. The address is a 256-bit public key.
@@ -130,23 +128,9 @@ If the program always modifies the account in question, the address/owner check
 isn't required because modifying an unowned account will be rejected by the runtime,
 and the containing transaction will be thrown out.
 
-## Rent
+### Rent-exempt minimum balances
 
-Keeping accounts alive on Solana incurs a storage cost called _rent_ because the
-blockchain cluster must actively maintain the data to process any future transactions.
-This is different from Bitcoin and Ethereum, where storing accounts doesn't
-incur any costs.
-
-Currently, all new accounts are required to be rent-exempt.
-
-### Rent exemption
-
-An account is considered rent-exempt if it holds at least 2 years worth of rent.
-This is checked every time an account's balance is reduced, and transactions
-that would reduce the balance to below the minimum amount will fail.
-
-Program executable accounts are required by the runtime to be rent-exempt to
-avoid being purged.
+All accounts are required by the runtime to hold the rent-exempt minimum balance.
 
 :::info
 Use the [`getMinimumBalanceForRentExemption`](../../api/http#getminimumbalanceforrentexemption) RPC
@@ -156,21 +140,20 @@ illustrative only.
 :::
 
 For example, a program executable with the size of 15,000 bytes requires a
-balance of 105,290,880 lamports (=~ 0.105 SOL) to be rent-exempt:
+balance of 105,290,880 lamports (=~ 0.105 SOL) to satisfy the rent-exempt
+minimum balance:
 
 ```text
 105,290,880 = 19.055441478439427 (fee rate) * (128 + 15_000)(account size including metadata) * ((365.25/2) * 2)(epochs in 2 years)
 ```
 
-Rent can also be estimated via the [`solana rent` CLI subcommand](cli/usage.md#solana-rent)
+Rent-exempt minimum balances can also be estimated via the [`solana rent` CLI subcommand](cli/usage.md#solana-rent)
 
 ```text
 $ solana rent 15000
-Rent per byte-year: 0.00000348 SOL
-Rent per epoch: 0.000288276 SOL
 Rent-exempt minimum: 0.10529088 SOL
 ```
 
-Note: Rest assured that, should the storage rent rate need to be increased at some
+Note: Rest assured that, should the storage rent-exempt minimum balance rate need to be increased at some
 point in the future, steps will be taken to ensure that accounts that are rent-exempt
 before the increase will remain rent-exempt afterwards

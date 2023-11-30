@@ -12,7 +12,8 @@ import {
 
 ## getMinimumBalanceForRentExemption
 
-Returns minimum balance required to make account rent exempt.
+Returns minimum balance required to make account rent exempt.  All accounts
+must be "rent exempt" and thus this is the minimum balance for the account.
 
 <DocSideBySide>
 <CodeParams>
@@ -38,7 +39,7 @@ Configuration object containing the following fields:
 
 ### Result:
 
-`<u64>` - minimum lamports required in the Account to remain rent free
+`<u64>` - minimum lamports required in the Account
 
 </CodeParams>
 

@@ -209,7 +209,7 @@ encoding is little endian):
     - x bytes of account data
     - 10k bytes of padding, used for realloc
     - enough padding to align the offset to 8 bytes.
-    - 8 bytes rent epoch
+    - 8 bytes rent epoch (deprecated value)
 - 8 bytes of unsigned number of instruction data
 - x bytes of instruction data
 - 32 bytes of the program id
