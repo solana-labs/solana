@@ -106,3 +106,113 @@ impl RuntimeTransactionDynamic {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        solana_program::{
+            system_instruction,
+            vote::{self, state::Vote},
+        },
+        solana_sdk::{
+            compute_budget::ComputeBudgetInstruction,
+            message::Message,
+            signer::{keypair::Keypair, Signer},
+            transaction::{Transaction, VersionedTransaction},
+        },
+    };
+
+    fn vote_sanitized_versioned_transaction() -> SanitizedVersionedTransaction {
+        let bank_hash = Hash::new_unique();
+        let block_hash = Hash::new_unique();
+        let vote_keypair = Keypair::new();
+        let node_keypair = Keypair::new();
+        let auth_keypair = Keypair::new();
+        let votes = Vote::new(vec![1, 2, 3], bank_hash);
+        let vote_ix =
+            vote::instruction::vote(&vote_keypair.pubkey(), &auth_keypair.pubkey(), votes);
+        let mut vote_tx = Transaction::new_with_payer(&[vote_ix], Some(&node_keypair.pubkey()));
+        vote_tx.partial_sign(&[&node_keypair], block_hash);
+        vote_tx.partial_sign(&[&auth_keypair], block_hash);
+
+        SanitizedVersionedTransaction::try_from(VersionedTransaction::from(vote_tx)).unwrap()
+    }
+
+    fn non_vote_sanitized_versioned_transaction(
+        compute_unit_price: u64,
+    ) -> SanitizedVersionedTransaction {
+        let from_keypair = Keypair::new();
+        let ixs = vec![
+            system_instruction::transfer(
+                &from_keypair.pubkey(),
+                &solana_sdk::pubkey::new_rand(),
+                1,
+            ),
+            ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
+        ];
+        let message = Message::new(&ixs, Some(&from_keypair.pubkey()));
+        let tx = Transaction::new(&[&from_keypair], message, Hash::new_unique());
+        SanitizedVersionedTransaction::try_from(VersionedTransaction::from(tx)).unwrap()
+    }
+
+    fn get_transaction_meta(
+        svt: SanitizedVersionedTransaction,
+        hash: Option<Hash>,
+        is_simple_vote: Option<bool>,
+    ) -> TransactionMeta {
+        RuntimeTransactionStatic::try_from(svt, hash, is_simple_vote)
+            .unwrap()
+            .meta
+    }
+
+    #[test]
+    fn test_new_runtime_transaction_static() {
+        let hash = Hash::new_unique();
+        let compute_unit_price = 1_000;
+
+        assert_eq!(
+            TransactionMeta {
+                message_hash: hash,
+                is_simple_vote_tx: false,
+            },
+            get_transaction_meta(
+                non_vote_sanitized_versioned_transaction(compute_unit_price),
+                Some(hash),
+                None
+            )
+        );
+
+        assert_eq!(
+            TransactionMeta {
+                message_hash: hash,
+                is_simple_vote_tx: true,
+            },
+            get_transaction_meta(
+                non_vote_sanitized_versioned_transaction(compute_unit_price),
+                Some(hash),
+                Some(true), // override
+            )
+        );
+
+        assert_eq!(
+            TransactionMeta {
+                message_hash: hash,
+                is_simple_vote_tx: true,
+            },
+            get_transaction_meta(vote_sanitized_versioned_transaction(), Some(hash), None)
+        );
+
+        assert_eq!(
+            TransactionMeta {
+                message_hash: hash,
+                is_simple_vote_tx: false,
+            },
+            get_transaction_meta(
+                vote_sanitized_versioned_transaction(),
+                Some(hash),
+                Some(false), // override
+            )
+        );
+    }
+}

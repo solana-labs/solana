@@ -7074,6 +7074,7 @@ dependencies = [
  "log",
  "rand 0.8.5",
  "rustc_version 0.4.0",
+ "solana-program",
  "solana-program-runtime",
  "solana-sdk",
  "thiserror",
