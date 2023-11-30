@@ -72,7 +72,7 @@ impl TaskStatus {
 #[derive(Debug)]
 pub struct TaskInner {
     unique_weight: UniqueWeight,
-    tx: SanitizedTransaction, // actually should be Bundle
+    transaction: SanitizedTransaction, // actually should be Bundle
     task_status: SchedulerCell<TaskStatus>,
 }
 
@@ -95,7 +95,7 @@ impl SchedulingStateMachine {
         let unique_weight = UniqueWeight::max_value() - index as UniqueWeight;
         Task::new(TaskInner {
             unique_weight,
-            tx: transaction,
+            transaction,
             task_status: SchedulerCell::new(TaskStatus::new(locks)),
         })
     }
@@ -103,7 +103,7 @@ impl SchedulingStateMachine {
 
 impl TaskInner {
     pub fn transaction(&self) -> &SanitizedTransaction {
-        &self.tx
+        &self.transaction
     }
 
     fn lock_attempts_mut<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut Vec<LockAttempt> {
