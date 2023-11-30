@@ -685,8 +685,8 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(false)
                                 .help(
                                     "Force reupload of any blocks already present in BigTable \
-                                     instanceNote: reupload will *not* delete any data from the \
-                                     tx-by-addr table;Use with care.",
+                                     instance Note: reupload will *not* delete any data from the \
+                                     tx-by-addr table; Use with care.",
                                 ),
                         ),
                 )
