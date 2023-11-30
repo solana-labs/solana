@@ -16,6 +16,10 @@ on:
       - ".github/scripts/cargo-clippy-before-script.sh"
       - ".github/workflows/cargo.yml"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   SHELL: /bin/bash
   SCCACHE_GHA_ENABLED: "true"
