@@ -57,10 +57,10 @@ pub fn get_accounts_db_config(
 
     AccountsDbConfig {
         index: Some(accounts_index_config),
+        base_working_path: Some(ledger_path.to_path_buf()),
         accounts_hash_cache_path: Some(
             ledger_path.join(AccountsDb::DEFAULT_ACCOUNTS_HASH_CACHE_DIR),
         ),
-        base_working_path: Some(ledger_path.to_path_buf()),
         filler_accounts_config,
         ancient_append_vec_offset: value_t!(arg_matches, "accounts_db_ancient_append_vecs", i64)
             .ok(),

@@ -1404,7 +1404,7 @@ pub struct AccountsDb {
     // used by tests
     // holds this until we are dropped
     #[allow(dead_code)]
-    temp_base_working_path: Option<TempDir>,
+    base_working_temp_dir: Option<TempDir>,
     /// Directory for account hash calculations, within base_working_path
     accounts_hash_cache_path: PathBuf,
 
@@ -2375,7 +2375,7 @@ impl AccountsDb {
         let num_threads = get_thread_count();
         const MAX_READ_ONLY_CACHE_DATA_SIZE: usize = 400_000_000; // 400M bytes
 
-        let (base_working_path, temp_base_working_path) =
+        let (base_working_path, base_working_temp_dir) =
             if let Some(base_working_path) = base_working_path {
                 (base_working_path, None)
             } else {
@@ -2423,7 +2423,7 @@ impl AccountsDb {
             write_version: AtomicU64::new(0),
             paths: vec![],
             base_working_path,
-            temp_base_working_path,
+            base_working_temp_dir,
             accounts_hash_cache_path,
             shrink_paths: RwLock::new(None),
             temp_paths: None,
