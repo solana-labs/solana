@@ -21,6 +21,7 @@ use {
         transaction::Transaction,
     },
     solana_vote::vote_parser,
+    solana_vote_program::vote_state::VoteTransaction,
     std::{
         borrow::{Borrow, Cow},
         cmp::Ordering,
@@ -96,6 +97,7 @@ pub enum CrdsData {
     SnapshotHashes(SnapshotHashes),
     ContactInfo(ContactInfo),
     RestartLastVotedForkSlots(RestartLastVotedForkSlots),
+    DuplicateVote(DuplicateVote),
 }
 
 impl Sanitize for CrdsData {
@@ -135,6 +137,7 @@ impl Sanitize for CrdsData {
             CrdsData::SnapshotHashes(val) => val.sanitize(),
             CrdsData::ContactInfo(node) => node.sanitize(),
             CrdsData::RestartLastVotedForkSlots(slots) => slots.sanitize(),
+            CrdsData::DuplicateVote(duplicate_vote) => duplicate_vote.sanitize(),
         }
     }
 }
@@ -218,6 +221,26 @@ impl AccountsHashes {
 }
 
 type LegacySnapshotHashes = AccountsHashes;
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
+pub struct DuplicateVote {
+    pub from: Pubkey,
+    pub wallclock: u64,
+    pub vote_tx: VoteTransaction,
+    pub slot: Slot,
+    pub hash: Hash,
+}
+
+impl Sanitize for DuplicateVote {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        sanitize_wallclock(self.wallclock)?;
+        self.from.sanitize()?;
+        if self.slot >= MAX_SLOT {
+            return Err(SanitizeError::ValueOutOfBounds);
+        }
+        self.hash.sanitize()
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct SnapshotHashes {
@@ -508,6 +531,7 @@ pub enum CrdsValueLabel {
     SnapshotHashes(Pubkey),
     ContactInfo(Pubkey),
     RestartLastVotedForkSlots(Pubkey),
+    DuplicateVote(Pubkey),
 }
 
 impl fmt::Display for CrdsValueLabel {
@@ -534,6 +558,9 @@ impl fmt::Display for CrdsValueLabel {
             CrdsValueLabel::RestartLastVotedForkSlots(_) => {
                 write!(f, "RestartLastVotedForkSlots({})", self.pubkey())
             }
+            CrdsValueLabel::DuplicateVote(_) => {
+                write!(f, "DuplicateVote({})", self.pubkey())
+            }
         }
     }
 }
@@ -554,6 +581,7 @@ impl CrdsValueLabel {
             CrdsValueLabel::SnapshotHashes(p) => *p,
             CrdsValueLabel::ContactInfo(pubkey) => *pubkey,
             CrdsValueLabel::RestartLastVotedForkSlots(p) => *p,
+            CrdsValueLabel::DuplicateVote(p) => *p,
         }
     }
 }
@@ -605,6 +633,7 @@ impl CrdsValue {
             CrdsData::SnapshotHashes(hash) => hash.wallclock,
             CrdsData::ContactInfo(node) => node.wallclock(),
             CrdsData::RestartLastVotedForkSlots(slots) => slots.wallclock,
+            CrdsData::DuplicateVote(duplicate_vote) => duplicate_vote.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
@@ -622,6 +651,7 @@ impl CrdsValue {
             CrdsData::SnapshotHashes(hash) => hash.from,
             CrdsData::ContactInfo(node) => *node.pubkey(),
             CrdsData::RestartLastVotedForkSlots(slots) => slots.from,
+            CrdsData::DuplicateVote(duplicate_vote) => duplicate_vote.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -643,6 +673,7 @@ impl CrdsValue {
             CrdsData::RestartLastVotedForkSlots(_) => {
                 CrdsValueLabel::RestartLastVotedForkSlots(self.pubkey())
             }
+            CrdsData::DuplicateVote(_) => CrdsValueLabel::DuplicateVote(self.pubkey()),
         }
     }
     pub fn contact_info(&self) -> Option<&LegacyContactInfo> {
