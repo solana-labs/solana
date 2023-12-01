@@ -4,7 +4,7 @@ module.exports = {
   title: "Solana Validator",
   tagline:
     "Solana is an open source project implementing a new, high-performance, permissionless blockchain.",
-  url: "https://docs.solana.com",
+  url: "https://docs.solanalabs.com",
   baseUrl: "/",
   favicon: "img/favicon.ico",
   organizationName: "solana-labs", // Usually your GitHub org/user name.
