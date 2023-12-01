@@ -1,7 +1,7 @@
 const math = require("remark-math");
 const katex = require("rehype-katex");
 module.exports = {
-  title: "Solana Docs",
+  title: "Solana Validator",
   tagline:
     "Solana is an open source project implementing a new, high-performance, permissionless blockchain.",
   url: "https://docs.solana.com",

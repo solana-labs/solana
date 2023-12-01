@@ -78,7 +78,7 @@ your `solana-validator` binary to your specific hardware.
 
 If you build from source on the validator machine (or a machine with the same
 CPU), you can target your specific architecture using the `-march` flag. Refer
-to the Solana docs for
+to the following doc for
 [instructions on building from source](../../cli/install.md#build-from-source).
 
 ### solana-install

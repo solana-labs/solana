@@ -1,11 +1,11 @@
-# Solana Docs Readme
+# Solana Validator Docs Readme
 
-Solana's Docs are built using [Docusaurus v2](https://v2.docusaurus.io/) with `npm`.
+This validator's docs are built using [Docusaurus v2](https://v2.docusaurus.io/) with `npm`.
 Static content delivery is handled using `vercel`.
 
 ## Local Development
 
-To set up the Solana Docs site locally:
+To set up the Solana Validator Docs site locally:
 
 - install dependencies using `npm`
 - build locally via `./build.sh`

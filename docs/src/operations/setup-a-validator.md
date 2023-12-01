@@ -24,7 +24,7 @@ To start this guide, you will be running commands on your trusted computer, not 
 
 To create your validator vote account, you need to install the [Solana command line interface](../cli/index.md) on your local computer.
 
-You can either use [Solana's Install Tool](../cli/install.md#use-solanas-install-tool) section from the Solana docs to install the CLI, or alternatively, you can also [build from source](../cli/install.md#build-from-source).
+You can either use [Solana's Install Tool](../cli/install.md#use-solanas-install-tool) section from the within these docs to install the CLI, or alternatively, you can also [build from source](../cli/install.md#build-from-source).
 
 > Building from source is a great option for those that want a more secure and potentially more performant executable.
 
