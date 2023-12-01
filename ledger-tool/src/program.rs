@@ -143,8 +143,8 @@ impl ProgramSubCommand for App<'_, '_> {
     fn program_subcommand(self) -> Self {
         let program_arg = Arg::with_name("PROGRAM")
             .help(
-                "Program file to use. This is either an ELF shared-object file to be executed, \
-                 or an assembly file to be assembled and executed.",
+                "Program file to use. This is either an ELF shared-object file to be executed, or \
+                 an assembly file to be assembled and executed.",
             )
             .required(true)
             .index(1);

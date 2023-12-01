@@ -471,7 +471,10 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
                     debug!("worker {}: received slot {}", i, slot);
 
                     if !args.force {
-                        match destination_bigtable_clone.confirmed_block_exists(slot).await {
+                        match destination_bigtable_clone
+                            .confirmed_block_exists(slot)
+                            .await
+                        {
                             Ok(exist) => {
                                 if exist {
                                     skip_slots_clone.lock().unwrap().push(slot);
@@ -479,7 +482,11 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             }
                             Err(err) => {
-                                error!("confirmed_block_exists() failed from the destination Bigtable, slot: {}, err: {}", slot, err);
+                                error!(
+                                    "confirmed_block_exists() failed from the destination \
+                                     Bigtable, slot: {}, err: {}",
+                                    slot, err
+                                );
                                 failed_slots_clone.lock().unwrap().push(slot);
                                 continue;
                             }
@@ -499,33 +506,44 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             }
                             Err(err) => {
-                                error!("failed to get a confirmed block from the source Bigtable, slot: {}, err: {}", slot, err);
+                                error!(
+                                    "failed to get a confirmed block from the source Bigtable, \
+                                     slot: {}, err: {}",
+                                    slot, err
+                                );
                                 failed_slots_clone.lock().unwrap().push(slot);
                                 continue;
                             }
                         };
                     } else {
                         let confirmed_block =
-                        match source_bigtable_clone.get_confirmed_block(slot).await {
-                            Ok(block) => match VersionedConfirmedBlock::try_from(block) {
-                                Ok(block) => block,
+                            match source_bigtable_clone.get_confirmed_block(slot).await {
+                                Ok(block) => match VersionedConfirmedBlock::try_from(block) {
+                                    Ok(block) => block,
+                                    Err(err) => {
+                                        error!(
+                                            "failed to convert confirmed block to versioned \
+                                             confirmed block, slot: {}, err: {}",
+                                            slot, err
+                                        );
+                                        failed_slots_clone.lock().unwrap().push(slot);
+                                        continue;
+                                    }
+                                },
+                                Err(solana_storage_bigtable::Error::BlockNotFound(slot)) => {
+                                    debug!("block not found, slot: {}", slot);
+                                    block_not_found_slots_clone.lock().unwrap().push(slot);
+                                    continue;
+                                }
                                 Err(err) => {
-                                    error!("failed to convert confirmed block to versioned confirmed block, slot: {}, err: {}", slot, err);
+                                    error!(
+                                        "failed to get confirmed block, slot: {}, err: {}",
+                                        slot, err
+                                    );
                                     failed_slots_clone.lock().unwrap().push(slot);
                                     continue;
                                 }
-                            },
-                            Err(solana_storage_bigtable::Error::BlockNotFound(slot)) => {
-                                debug!("block not found, slot: {}", slot);
-                                block_not_found_slots_clone.lock().unwrap().push(slot);
-                                continue;
-                            }
-                            Err(err) => {
-                                error!("failed to get confirmed block, slot: {}, err: {}", slot, err);
-                                failed_slots_clone.lock().unwrap().push(slot);
-                                continue;
-                            }
-                        };
+                            };
 
                         match destination_bigtable_clone
                             .upload_confirmed_block(slot, confirmed_block)
@@ -627,7 +645,7 @@ impl BigTableSubCommand for App<'_, '_> {
                         .takes_value(true)
                         .value_name("INSTANCE_NAME")
                         .default_value(solana_storage_bigtable::DEFAULT_INSTANCE_NAME)
-                        .help("Name of the target Bigtable instance")
+                        .help("Name of the target Bigtable instance"),
                 )
                 .arg(
                     Arg::with_name("rpc_bigtable_app_profile_id")
@@ -636,7 +654,7 @@ impl BigTableSubCommand for App<'_, '_> {
                         .takes_value(true)
                         .value_name("APP_PROFILE_ID")
                         .default_value(solana_storage_bigtable::DEFAULT_APP_PROFILE_ID)
-                        .help("Bigtable application profile id to use in requests")
+                        .help("Bigtable application profile id to use in requests"),
                 )
                 .subcommand(
                     SubCommand::with_name("upload")
@@ -666,9 +684,9 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .long("force")
                                 .takes_value(false)
                                 .help(
-                                    "Force reupload of any blocks already present in BigTable instance\
-                                    Note: reupload will *not* delete any data from the tx-by-addr table;\
-                                    Use with care.",
+                                    "Force reupload of any blocks already present in BigTable \
+                                     instance. Note: reupload will *not* delete any data from the \
+                                     tx-by-addr table; Use with care.",
                                 ),
                         ),
                 )
@@ -676,24 +694,25 @@ impl BigTableSubCommand for App<'_, '_> {
                     SubCommand::with_name("delete-slots")
                         .about("Delete ledger information from BigTable")
                         .arg(
-                                Arg::with_name("slots")
-                                    .index(1)
-                                    .value_name("SLOTS")
-                                    .takes_value(true)
-                                    .multiple(true)
-                                    .required(true)
-                                    .help("Slots to delete"),
-                                )
-                            .arg(
-                                Arg::with_name("force")
-                                    .long("force")
-                                    .takes_value(false)
-                                    .help(
-                                        "Deletions are only performed when the force flag is enabled. \
-                                        If force is not enabled, show stats about what ledger data \
-                                        will be deleted in a real deletion. "),
-                            ),
+                            Arg::with_name("slots")
+                                .index(1)
+                                .value_name("SLOTS")
+                                .takes_value(true)
+                                .multiple(true)
+                                .required(true)
+                                .help("Slots to delete"),
                         )
+                        .arg(
+                            Arg::with_name("force")
+                                .long("force")
+                                .takes_value(false)
+                                .help(
+                                    "Deletions are only performed when the force flag is enabled. \
+                                     If force is not enabled, show stats about what ledger data \
+                                     will be deleted in a real deletion. ",
+                                ),
+                        ),
+                )
                 .subcommand(
                     SubCommand::with_name("first-available-block")
                         .about("Get the first available block in the storage"),
@@ -726,8 +745,10 @@ impl BigTableSubCommand for App<'_, '_> {
                 )
                 .subcommand(
                     SubCommand::with_name("compare-blocks")
-                        .about("Find the missing confirmed blocks of an owned bigtable for a given range \
-                                by comparing to a reference bigtable")
+                        .about(
+                            "Find the missing confirmed blocks of an owned bigtable for a given \
+                             range by comparing to a reference bigtable",
+                        )
                         .arg(
                             Arg::with_name("starting_slot")
                                 .validator(is_slot)
@@ -763,7 +784,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(true)
                                 .value_name("INSTANCE_NAME")
                                 .default_value(solana_storage_bigtable::DEFAULT_INSTANCE_NAME)
-                                .help("Name of the reference Bigtable instance to compare to")
+                                .help("Name of the reference Bigtable instance to compare to"),
                         )
                         .arg(
                             Arg::with_name("reference_app_profile_id")
@@ -771,7 +792,9 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(true)
                                 .value_name("APP_PROFILE_ID")
                                 .default_value(solana_storage_bigtable::DEFAULT_APP_PROFILE_ID)
-                                .help("Reference Bigtable application profile id to use in requests")
+                                .help(
+                                    "Reference Bigtable application profile id to use in requests",
+                                ),
                         ),
                 )
                 .subcommand(
@@ -798,7 +821,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(true)
                                 .index(1)
                                 .required(true),
-                        )
+                        ),
                 )
                 .subcommand(
                     SubCommand::with_name("confirm")
@@ -816,8 +839,8 @@ impl BigTableSubCommand for App<'_, '_> {
                 .subcommand(
                     SubCommand::with_name("transaction-history")
                         .about(
-                            "Show historical transactions affecting the given address \
-                             from newest to oldest",
+                            "Show historical transactions affecting the given address from newest \
+                             to oldest",
                         )
                         .arg(
                             Arg::with_name("address")
@@ -846,8 +869,8 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .default_value("1000")
                                 .help(
                                     "Number of transaction signatures to query at once. \
-                                       Smaller: more responsive/lower throughput. \
-                                       Larger: less responsive/higher throughput",
+                                     Smaller: more responsive/lower throughput. \
+                                     Larger: less responsive/higher throughput",
                                 ),
                         )
                         .arg(
@@ -881,7 +904,8 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(true)
                                 .conflicts_with("emulated_source")
                                 .help(
-                                    "Source Bigtable credential filepath (credential may be readonly)",
+                                    "Source Bigtable credential filepath (credential may be \
+                                     readonly)",
                                 ),
                         )
                         .arg(
@@ -890,9 +914,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .value_name("EMULATED_SOURCE")
                                 .takes_value(true)
                                 .conflicts_with("source_credential_path")
-                                .help(
-                                    "Source Bigtable emulated source",
-                                ),
+                                .help("Source Bigtable emulated source"),
                         )
                         .arg(
                             Arg::with_name("source_instance_name")
@@ -900,7 +922,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(true)
                                 .value_name("SOURCE_INSTANCE_NAME")
                                 .default_value(solana_storage_bigtable::DEFAULT_INSTANCE_NAME)
-                                .help("Source Bigtable instance name")
+                                .help("Source Bigtable instance name"),
                         )
                         .arg(
                             Arg::with_name("source_app_profile_id")
@@ -908,7 +930,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(true)
                                 .value_name("SOURCE_APP_PROFILE_ID")
                                 .default_value(solana_storage_bigtable::DEFAULT_APP_PROFILE_ID)
-                                .help("Source Bigtable app profile id")
+                                .help("Source Bigtable app profile id"),
                         )
                         .arg(
                             Arg::with_name("destination_credential_path")
@@ -917,7 +939,8 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(true)
                                 .conflicts_with("emulated_destination")
                                 .help(
-                                    "Destination Bigtable credential filepath (credential must have Bigtable write permissions)",
+                                    "Destination Bigtable credential filepath (credential must \
+                                     have Bigtable write permissions)",
                                 ),
                         )
                         .arg(
@@ -926,9 +949,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .value_name("EMULATED_DESTINATION")
                                 .takes_value(true)
                                 .conflicts_with("destination_credential_path")
-                                .help(
-                                    "Destination Bigtable emulated destination",
-                                ),
+                                .help("Destination Bigtable emulated destination"),
                         )
                         .arg(
                             Arg::with_name("destination_instance_name")
@@ -936,7 +957,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(true)
                                 .value_name("DESTINATION_INSTANCE_NAME")
                                 .default_value(solana_storage_bigtable::DEFAULT_INSTANCE_NAME)
-                                .help("Destination Bigtable instance name")
+                                .help("Destination Bigtable instance name"),
                         )
                         .arg(
                             Arg::with_name("destination_app_profile_id")
@@ -944,7 +965,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(true)
                                 .value_name("DESTINATION_APP_PROFILE_ID")
                                 .default_value(solana_storage_bigtable::DEFAULT_APP_PROFILE_ID)
-                                .help("Destination Bigtable app profile id")
+                                .help("Destination Bigtable app profile id"),
                         )
                         .arg(
                             Arg::with_name("starting_slot")
@@ -953,9 +974,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .value_name("START_SLOT")
                                 .takes_value(true)
                                 .required(true)
-                                .help(
-                                    "Start copying at this slot",
-                                ),
+                                .help("Start copying at this slot (inclusive)"),
                         )
                         .arg(
                             Arg::with_name("ending_slot")
@@ -963,26 +982,25 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .validator(is_slot)
                                 .value_name("END_SLOT")
                                 .takes_value(true)
-                                .help("Stop copying at this slot (inclusive, START_SLOT ..= END_SLOT)"),
+                                .help("Stop copying at this slot (inclusive)"),
                         )
                         .arg(
                             Arg::with_name("force")
-                            .long("force")
-                            .value_name("FORCE")
-                            .takes_value(false)
-                            .help(
-                                "Force copy of blocks already present in destination Bigtable instance",
-                            ),
+                                .long("force")
+                                .value_name("FORCE")
+                                .takes_value(false)
+                                .help(
+                                    "Force copy of blocks already present in destination Bigtable \
+                                     instance",
+                                ),
                         )
                         .arg(
                             Arg::with_name("dry_run")
-                            .long("dry-run")
-                            .value_name("DRY_RUN")
-                            .takes_value(false)
-                            .help(
-                                "Dry run. It won't upload any blocks",
-                            ),
-                        )
+                                .long("dry-run")
+                                .value_name("DRY_RUN")
+                                .takes_value(false)
+                                .help("Dry run. It won't upload any blocks"),
+                        ),
                 ),
         )
     }
