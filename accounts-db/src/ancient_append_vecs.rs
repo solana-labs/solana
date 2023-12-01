@@ -2064,6 +2064,8 @@ pub mod tests {
                 accounts_to_store.has_overflow()
             );
             assert!(accounts.is_empty());
+
+            assert_eq!(accounts_to_store.get_bytes(selector), account_size);
         }
     }
     fn get_opposite(selector: &StorageSelector) -> StorageSelector {
