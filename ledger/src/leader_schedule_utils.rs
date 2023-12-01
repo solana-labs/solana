@@ -8,14 +8,33 @@ use {
     std::collections::HashMap,
 };
 
+// Minimum stake set to 0.5%. Sufficiently high that it will be difficult for
+// rogue, malicious nodes to get leader slots, but low enough that large number
+// of nodes can still participate in the leader schedule (50-60 nodes on mainnet
+// at the time of this selection).
+const MIN_LEADER_STAKE_DIVISOR: u64 = 200;
+
 /// Return the leader schedule for the given epoch.
 pub fn leader_schedule(epoch: Epoch, bank: &Bank) -> Option<LeaderSchedule> {
     bank.epoch_staked_nodes(epoch).map(|stakes| {
         let mut seed = [0u8; 32];
         seed[0..8].copy_from_slice(&epoch.to_le_bytes());
+        let min_stake_for_leader_schedule_inclusion = bank
+            .total_epoch_stake()
+            .saturating_div(MIN_LEADER_STAKE_DIVISOR);
         let mut stakes: Vec<_> = stakes
             .iter()
-            .map(|(pubkey, stake)| (*pubkey, *stake))
+            .filter_map(|(pubkey, stake)| {
+                if *stake >= min_stake_for_leader_schedule_inclusion {
+                    Some((*pubkey, *stake))
+                } else {
+                    debug!(
+                        "excluding {} from leader schedule because stake {} less than min {}",
+                        *pubkey, *stake, min_stake_for_leader_schedule_inclusion
+                    );
+                    None
+                }
+            })
             .collect();
         sort_stakes(&mut stakes);
         LeaderSchedule::new(
