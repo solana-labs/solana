@@ -16,11 +16,10 @@ use {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         installed_scheduler_pool::{
             InstalledScheduler, ResultWithTimings, ScheduleExecutionArg, SchedulerId,
-            SchedulingContext, WaitReason, WithTransactionAndIndex,
+            SchedulingContext, SchedulingMode, WaitReason, WithTransactionAndIndex,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
-    solana_scheduler::SchedulingMode,
     solana_scheduler_pool::{
         InstallableScheduler, PooledScheduler, ScheduledTransactionHandler, SchedulerPool,
         SpawnableScheduler,
