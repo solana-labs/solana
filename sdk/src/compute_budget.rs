@@ -23,7 +23,7 @@ crate::declare_id!("ComputeBudget111111111111111111111111111111");
     Serialize,
 )]
 pub enum ComputeBudgetInstruction {
-    Unused,
+    Unused, // deprecated variant, reserved value.
     /// Request a specific transaction-wide program heap region size in bytes.
     /// The value requested must be a multiple of 1024. This new heap region
     /// size applies to each program executed in the transaction, including all
