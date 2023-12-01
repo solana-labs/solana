@@ -80,13 +80,13 @@ impl AsRef<[u8]> for Signature {
 
 impl fmt::Debug for Signature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", bs58::encode(self.0).into_string())
+        write!(f, "{}", fd_bs58::encode_64(self.0))
     }
 }
 
 impl fmt::Display for Signature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", bs58::encode(self.0).into_string())
+        write!(f, "{}", fd_bs58::encode_64(self.0))
     }
 }
 
@@ -136,9 +136,7 @@ impl FromStr for Signature {
         if s.len() > MAX_BASE58_SIGNATURE_LEN {
             return Err(ParseSignatureError::WrongSize);
         }
-        let bytes = bs58::decode(s)
-            .into_vec()
-            .map_err(|_| ParseSignatureError::Invalid)?;
+        let bytes = fd_bs58::decode_64(s).map_err(|_| ParseSignatureError::Invalid)?;
         Signature::try_from(bytes).map_err(|_| ParseSignatureError::WrongSize)
     }
 }
@@ -150,11 +148,11 @@ mod tests {
     fn test_signature_fromstr() {
         let signature = Keypair::new().sign_message(&[0u8]);
 
-        let mut signature_base58_str = bs58::encode(signature).into_string();
+        let mut signature_base58_str = fd_bs58::encode_64(signature);
 
         assert_eq!(signature_base58_str.parse::<Signature>(), Ok(signature));
 
-        signature_base58_str.push_str(&bs58::encode(signature.0).into_string());
+        signature_base58_str.push_str(&fd_bs58::encode_64(signature.0));
         assert_eq!(
             signature_base58_str.parse::<Signature>(),
             Err(ParseSignatureError::WrongSize)
@@ -166,10 +164,10 @@ mod tests {
         signature_base58_str.truncate(signature_base58_str.len() / 2);
         assert_eq!(
             signature_base58_str.parse::<Signature>(),
-            Err(ParseSignatureError::WrongSize)
+            Err(ParseSignatureError::Invalid)
         );
 
-        let mut signature_base58_str = bs58::encode(signature.0).into_string();
+        let mut signature_base58_str = fd_bs58::encode_64(signature.0);
         assert_eq!(signature_base58_str.parse::<Signature>(), Ok(signature));
 
         // throw some non-base58 stuff in there
@@ -181,7 +179,7 @@ mod tests {
 
         // too long input string
         // longest valid encoding
-        let mut too_long = bs58::encode(&[255u8; SIGNATURE_BYTES]).into_string();
+        let mut too_long = fd_bs58::encode_64(&[255u8; SIGNATURE_BYTES]);
         // and one to grow on
         too_long.push('1');
         assert_eq!(
@@ -193,9 +191,8 @@ mod tests {
     #[test]
     fn test_off_curve_pubkey_verify_fails() {
         // Golden point off the ed25519 curve
-        let off_curve_bytes = bs58::decode("9z5nJyQar1FUxVJxpBXzon6kHehbomeYiDaLi9WAMhCq")
-            .into_vec()
-            .unwrap();
+        let off_curve_bytes =
+            fd_bs58::decode_32("9z5nJyQar1FUxVJxpBXzon6kHehbomeYiDaLi9WAMhCq").unwrap();
 
         // Confirm golden's off-curvedness
         let mut off_curve_bits = [0u8; 32];

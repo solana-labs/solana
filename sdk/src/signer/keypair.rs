@@ -63,12 +63,12 @@ impl Keypair {
 
     /// Recovers a `Keypair` from a base58-encoded string
     pub fn from_base58_string(s: &str) -> Self {
-        Self::from_bytes(&bs58::decode(s).into_vec().unwrap()).unwrap()
+        Self::from_bytes(&fd_bs58::decode_64(s).unwrap()).unwrap()
     }
 
     /// Returns this `Keypair` as a base58-encoded string
     pub fn to_base58_string(&self) -> String {
-        bs58::encode(&self.0.to_bytes()).into_string()
+        fd_bs58::encode_64(&self.0.to_bytes())
     }
 
     /// Gets this `Keypair`'s SecretKey

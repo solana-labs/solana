@@ -171,7 +171,6 @@ macro_rules! saturating_add_assign {
 
 #[macro_use]
 extern crate serde_derive;
-pub extern crate bs58;
 extern crate log as logger;
 
 #[macro_use]

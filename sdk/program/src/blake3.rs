@@ -64,13 +64,13 @@ impl AsRef<[u8]> for Hash {
 
 impl fmt::Debug for Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", bs58::encode(self.0).into_string())
+        write!(f, "{}", fd_bs58::encode_32(self.0))
     }
 }
 
 impl fmt::Display for Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", bs58::encode(self.0).into_string())
+        write!(f, "{}", fd_bs58::encode_32(self.0))
     }
 }
 
@@ -89,9 +89,7 @@ impl FromStr for Hash {
         if s.len() > MAX_BASE58_LEN {
             return Err(ParseHashError::WrongSize);
         }
-        let bytes = bs58::decode(s)
-            .into_vec()
-            .map_err(|_| ParseHashError::Invalid)?;
+        let bytes = fd_bs58::decode_32(s).map_err(|_| ParseHashError::Invalid)?;
         if bytes.len() != mem::size_of::<Hash>() {
             Err(ParseHashError::WrongSize)
         } else {
@@ -175,11 +173,11 @@ mod tests {
     fn test_hash_fromstr() {
         let hash = hash(&[1u8]);
 
-        let mut hash_base58_str = bs58::encode(hash).into_string();
+        let mut hash_base58_str = fd_bs58::encode_32(hash);
 
         assert_eq!(hash_base58_str.parse::<Hash>(), Ok(hash));
 
-        hash_base58_str.push_str(&bs58::encode(hash.0).into_string());
+        hash_base58_str.push_str(&fd_bs58::encode_32(hash.0));
         assert_eq!(
             hash_base58_str.parse::<Hash>(),
             Err(ParseHashError::WrongSize)
@@ -191,17 +189,17 @@ mod tests {
         hash_base58_str.truncate(hash_base58_str.len() / 2);
         assert_eq!(
             hash_base58_str.parse::<Hash>(),
-            Err(ParseHashError::WrongSize)
+            Err(ParseHashError::Invalid)
         );
 
-        let input_too_big = bs58::encode(&[0xffu8; HASH_BYTES + 1]).into_string();
+        let input_too_big = "2K3n5t4wSaF5mj27Tw9vStXWLWyRjjiH5Cp3CFLpKVCr1c";
         assert!(input_too_big.len() > MAX_BASE58_LEN);
         assert_eq!(
             input_too_big.parse::<Hash>(),
             Err(ParseHashError::WrongSize)
         );
 
-        let mut hash_base58_str = bs58::encode(hash.0).into_string();
+        let mut hash_base58_str = fd_bs58::encode_32(hash.0);
         assert_eq!(hash_base58_str.parse::<Hash>(), Ok(hash));
 
         // throw some non-base58 stuff in there

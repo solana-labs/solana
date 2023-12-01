@@ -43,7 +43,6 @@ base64 = { workspace = true }
 bincode = { workspace = true }
 bitflags = { workspace = true }
 borsh = { workspace = true }
-bs58 = { workspace = true }
 bytemuck = { workspace = true, features = ["derive"] }
 byteorder = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["alloc"], optional = true }
@@ -52,6 +51,7 @@ derivation-path = { workspace = true }
 digest = { workspace = true, optional = true }
 ed25519-dalek = { workspace = true, optional = true }
 ed25519-dalek-bip32 = { workspace = true, optional = true }
+fd_bs58 = { workspace = true }
 generic-array = { workspace = true, features = ["serde", "more_lengths"], optional = true }
 hmac = { workspace = true }
 itertools =  { workspace = true }

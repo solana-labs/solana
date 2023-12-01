@@ -8,7 +8,7 @@ use {
     num_derive::{FromPrimitive, ToPrimitive},
     std::{
         convert::{Infallible, TryFrom},
-        fmt, mem,
+        fmt,
         str::FromStr,
     },
     thiserror::Error,
@@ -116,14 +116,8 @@ impl FromStr for Pubkey {
         if s.len() > MAX_BASE58_LEN {
             return Err(ParsePubkeyError::WrongSize);
         }
-        let pubkey_vec = bs58::decode(s)
-            .into_vec()
-            .map_err(|_| ParsePubkeyError::Invalid)?;
-        if pubkey_vec.len() != mem::size_of::<Pubkey>() {
-            Err(ParsePubkeyError::WrongSize)
-        } else {
-            Pubkey::try_from(pubkey_vec).map_err(|_| ParsePubkeyError::Invalid)
-        }
+        let pubkey_bytes = fd_bs58::decode_32(s).map_err(|_| ParsePubkeyError::Invalid)?;
+        Pubkey::try_from(pubkey_bytes).map_err(|_| ParsePubkeyError::Invalid)
     }
 }
 
@@ -661,13 +655,13 @@ impl AsMut<[u8]> for Pubkey {
 
 impl fmt::Debug for Pubkey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", bs58::encode(self.0).into_string())
+        write!(f, "{}", fd_bs58::encode_32(self.0))
     }
 }
 
 impl fmt::Display for Pubkey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", bs58::encode(self.0).into_string())
+        write!(f, "{}", fd_bs58::encode_32(self.0))
     }
 }
 
@@ -748,11 +742,11 @@ mod tests {
     #[test]
     fn pubkey_fromstr() {
         let pubkey = Pubkey::new_unique();
-        let mut pubkey_base58_str = bs58::encode(pubkey.0).into_string();
+        let mut pubkey_base58_str = fd_bs58::encode_32(pubkey.0);
 
         assert_eq!(pubkey_base58_str.parse::<Pubkey>(), Ok(pubkey));
 
-        pubkey_base58_str.push_str(&bs58::encode(pubkey.0).into_string());
+        pubkey_base58_str.push_str(&fd_bs58::encode_32(pubkey.0));
         assert_eq!(
             pubkey_base58_str.parse::<Pubkey>(),
             Err(ParsePubkeyError::WrongSize)
@@ -764,10 +758,10 @@ mod tests {
         pubkey_base58_str.truncate(pubkey_base58_str.len() / 2);
         assert_eq!(
             pubkey_base58_str.parse::<Pubkey>(),
-            Err(ParsePubkeyError::WrongSize)
+            Err(ParsePubkeyError::Invalid)
         );
 
-        let mut pubkey_base58_str = bs58::encode(pubkey.0).into_string();
+        let mut pubkey_base58_str = fd_bs58::encode_32(pubkey.0);
         assert_eq!(pubkey_base58_str.parse::<Pubkey>(), Ok(pubkey));
 
         // throw some non-base58 stuff in there
@@ -779,7 +773,7 @@ mod tests {
 
         // too long input string
         // longest valid encoding
-        let mut too_long = bs58::encode(&[255u8; PUBKEY_BYTES]).into_string();
+        let mut too_long = fd_bs58::encode_32(&[255u8; PUBKEY_BYTES]);
         // and one to grow on
         too_long.push('1');
         assert_eq!(too_long.parse::<Pubkey>(), Err(ParsePubkeyError::WrongSize));
