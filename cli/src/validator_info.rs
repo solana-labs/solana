@@ -229,7 +229,7 @@ impl ValidatorInfoSubCommands for App<'_, '_> {
                                 .validator(is_pubkey)
                                 .help(
                                     "The pubkey of the Validator info account; without this \
-                                     argument, returns all",
+                                     argument, returns all Validator info accounts",
                                 ),
                         ),
                 ),
