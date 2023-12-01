@@ -6394,7 +6394,6 @@ dependencies = [
  "solana-transaction-status",
  "solana-unified-scheduler-pool",
  "solana-version",
- "solana-vote",
  "solana-vote-program",
  "solana_rbpf",
  "tikv-jemallocator",

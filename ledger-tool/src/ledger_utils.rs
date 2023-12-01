@@ -40,7 +40,6 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_unified_scheduler_pool::DefaultSchedulerPool,
-    solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
         path::{Path, PathBuf},
         process::exit,
@@ -264,7 +263,7 @@ pub fn load_and_process_ledger(
         }
         BlockVerificationMethod::UnifiedScheduler => {
             let no_transaction_status_sender = None;
-            let no_replay_vote_sender = None::<ReplayVoteSender>;
+            let no_replay_vote_sender = None;
             let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
             bank_forks
                 .write()
