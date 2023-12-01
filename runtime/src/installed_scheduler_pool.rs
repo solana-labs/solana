@@ -24,7 +24,6 @@ use {
     crate::bank::Bank,
     log::*,
     solana_program_runtime::timings::ExecuteTimings,
-    solana_scheduler::WithSchedulingMode,
     solana_sdk::{
         hash::Hash,
         slot_history::Slot,
