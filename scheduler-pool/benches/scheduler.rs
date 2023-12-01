@@ -16,7 +16,7 @@ use {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         installed_scheduler_pool::{
             InstalledScheduler, ResultWithTimings, ScheduleExecutionArg, SchedulerId,
-            SchedulingContext, SchedulingMode, WaitReason, WithTransactionAndIndex,
+            SchedulingContext, WaitReason, WithTransactionAndIndex,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
@@ -36,6 +36,7 @@ use {
     },
     test::Bencher,
 };
+use solana_sdk::scheduling::SchedulingMode;
 
 const TX_COUNT: usize = 10_000;
 
