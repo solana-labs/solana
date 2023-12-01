@@ -11,6 +11,7 @@ edition = { workspace = true }
 
 [dependencies]
 arrayref = { workspace = true }
+base64 = { workspace = true }
 bincode = { workspace = true }
 blake3 = { workspace = true }
 bv = { workspace = true, features = ["serde"] }
@@ -43,6 +44,7 @@ rayon = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true }
+serde_json = { workspace = true }
 solana-address-lookup-table-program = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
 solana-bucket-map = { workspace = true }
@@ -59,6 +61,7 @@ solana-rayon-threadlimit = { workspace = true }
 solana-sdk = { workspace = true }
 solana-stake-program = { workspace = true }
 solana-system-program = { workspace = true }
+solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
 solana-zk-token-proof-program = { workspace = true }
 solana-zk-token-sdk = { workspace = true }
