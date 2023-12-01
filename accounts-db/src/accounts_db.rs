@@ -17382,7 +17382,7 @@ pub mod tests {
 
         // Combine normal append vec(s) into existing ancient append vec this
         // will overflow the original ancient append vec because of the oversized
-        // anacient append vec is full.
+        // ancient append vec is full.
         db.combine_ancient_slots(
             (ancient_slot..=max_slot_inclusive).collect(),
             CAN_RANDOMLY_SHRINK_FALSE,
@@ -17773,7 +17773,6 @@ pub mod tests {
         let (db, slot1) =
             create_db_with_storages_and_index(alive, num_normal_slots + 1, account_data_size);
         let storage = db.get_storage_for_slot(slot1).unwrap();
-        println!("slot storage {:?}", (slot1, &storage));
         let created_accounts = db.get_unique_accounts_from_storage(&storage);
 
         db.combine_ancient_slots(vec![slot1], CAN_RANDOMLY_SHRINK_FALSE);
