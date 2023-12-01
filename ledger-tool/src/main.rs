@@ -1806,8 +1806,8 @@ fn main() {
                         .value_name("DIR")
                         .takes_value(true)
                         .help(
-                            "Output directory for the snapshot [default: --snapshot-archive-path \
-                             if present else --ledger directory]",
+                            "Output directory for the snapshot \
+                            [default: --snapshot-archive-path if present else --ledger directory]",
                         ),
                 )
                 .arg(
@@ -1860,8 +1860,8 @@ fn main() {
                         .validator(is_pubkey_or_keypair)
                         .help(
                             "Path to file containing the pubkey authorized to manage the \
-                             bootstrap validator's stake [default: --bootstrap-validator \
-                             IDENTITY_PUBKEY]",
+                             bootstrap validator's stake
+                             [default: --bootstrap-validator IDENTITY_PUBKEY]",
                         ),
                 )
                 .arg(
@@ -2083,8 +2083,8 @@ fn main() {
                         .help("Start slot to purge from (inclusive)"),
                 )
                 .arg(Arg::with_name("end_slot").index(2).value_name("SLOT").help(
-                    "Ending slot to stop purging (inclusive) [default: the highest slot in the \
-                     ledger]",
+                    "Ending slot to stop purging (inclusive) \
+                    [default: the highest slot in the ledger]",
                 ))
                 .arg(
                     Arg::with_name("batch_size")
