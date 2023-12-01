@@ -6,14 +6,13 @@ use {
         bank::{epoch_accounts_hash_utils, Bank, SquashTiming},
         installed_scheduler_pool::{
             BankWithScheduler, DefaultScheduleExecutionArg, InstalledSchedulerPoolArc,
-            SchedulingContext,
+            SchedulingContext, SchedulingMode,
         },
         snapshot_config::SnapshotConfig,
     },
     log::*,
     solana_measure::measure::Measure,
     solana_program_runtime::loaded_programs::{BlockRelation, ForkGraph},
-    solana_scheduler::SchedulingMode,
     solana_sdk::{
         clock::{Epoch, Slot},
         feature_set,
