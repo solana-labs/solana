@@ -2939,8 +2939,9 @@ impl ReplayStage {
                     (bank.slot(), bank.hash()),
                     Some((bank.parent_slot(), bank.parent_hash())),
                 );
+
                 bank_progress.fork_stats.bank_hash = Some(bank.hash());
-                let bank_frozen_state = BankFrozenState::new_from_state(
+                let mut bank_frozen_state = BankFrozenState::new_from_state(
                     bank.slot(),
                     bank.hash(),
                     duplicate_slots_tracker,
@@ -2948,6 +2949,25 @@ impl ReplayStage {
                     heaviest_subtree_fork_choice,
                     epoch_slots_frozen_slots,
                 );
+
+                if bank
+                    .feature_set
+                    .is_active(&solana_sdk::feature_set::vote_only_full_fec_sets::id())
+                    && bank
+                        .feature_set
+                        .is_active(&solana_sdk::feature_set::drop_legacy_shreds::id())
+                {
+                    // If the block does not have at least DATA_SHREDS_PER_FEC_BLOCK shreds in the last FEC set,
+                    // process it like a duplicate, which allows us to continue replaying the fork but not vote on it.
+                    let is_last_fec_set_full = blockstore.is_last_fec_set_full(bank.slot());
+                    if let Err(e) = is_last_fec_set_full {
+                        warn!("Unable to determine if last fec set is full for slot {} {}, marking as duplicate: {e:?}", bank.slot(), bank.hash());
+                        bank_frozen_state.mark_duplicate();
+                    } else if !is_last_fec_set_full.unwrap() {
+                        bank_frozen_state.mark_duplicate();
+                    }
+                }
+
                 check_slot_agrees_with_cluster(
                     bank.slot(),
                     bank_forks.read().unwrap().root(),

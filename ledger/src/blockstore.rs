@@ -18,8 +18,9 @@ use {
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
         shred::{
-            self, max_ticks_per_n_shreds, ErasureSetId, ProcessShredsStats, ReedSolomonCache,
-            Shred, ShredData, ShredId, ShredType, Shredder,
+            self, max_ticks_per_n_shreds, ErasureSetId, Error as ShredError, ProcessShredsStats,
+            ReedSolomonCache, Shred, ShredData, ShredId, ShredType, Shredder,
+            DATA_SHREDS_PER_FEC_BLOCK,
         },
         slot_stats::{ShredSource, SlotsStats},
         transaction_address_lookup_table_scanner::scan_transaction,
@@ -3296,6 +3297,85 @@ impl Blockstore {
                 "could not reconstruct entries: {e:?}"
             ))))
         })
+    }
+
+    /// Returns the last `DATA_SHREDS_PER_FEC_BLOCK` data shreds of a slot.
+    /// Will fail if:
+    ///     - LAST_SHRED_IN_SLOT flag has not been received
+    ///     - The last shred is not connected
+    /// If there are fewer than `DATA_SHREDS_PER_FEC_BLOCK`
+    /// this will return all that are available.
+    fn get_last_data_shreds(&self, slot: Slot) -> Result<Vec<Shred>> {
+        let slot_meta = self
+            .meta_cf
+            .get(slot)?
+            .ok_or(BlockstoreError::SlotUnavailable)?;
+        let last_shred_index = slot_meta
+            .last_index
+            .ok_or(BlockstoreError::InvalidShredData(Box::new(
+                bincode::ErrorKind::Custom(format!(
+                    "last shred index is missing for {slot} {slot_meta:?}"
+                )),
+            )))?;
+        let num_shreds = u64::try_from(DATA_SHREDS_PER_FEC_BLOCK).map_err(|e| {
+            BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(format!(
+                "DATA_SHREDS_PER_FEC_BLOCK is too big for u64: {e:?}"
+            ))))
+        })?;
+        let start_index = last_shred_index.saturating_sub(num_shreds).saturating_sub(1);
+        let keys: Vec<(Slot, u64)> = (start_index..=last_shred_index)
+            .map(|index| (slot, index))
+            .collect();
+
+        self.data_shred_cf
+            .multi_get_bytes(keys)
+            .into_iter()
+            .enumerate()
+            .map(|(idx, shred_bytes)| {
+                let shred_bytes = shred_bytes.ok().flatten();
+                if shred_bytes.is_none() {
+                    return Err(BlockstoreError::InvalidShredData(Box::new(
+                        bincode::ErrorKind::Custom(format!(
+                            "Missing shred for slot {slot}, index {idx}"
+                        )),
+                    )));
+                }
+                Shred::new_from_serialized_shred(shred_bytes.unwrap()).map_err(|err| {
+                    BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
+                        format!("Could not reconstruct shred from shred payload: {err:?}"),
+                    )))
+                })
+            })
+            .collect()
+    }
+
+    /// Returns true if the last `DATA_SHREDS_PER_FEC_BLOCK` data shreds of a
+    /// slot have the same merkle root.
+    /// Will fail if:
+    ///     - LAST_SHRED_IN_SLOT flag has not been received
+    ///     - The last shred is not connected
+    ///     - The block contains legacy shreds
+    pub fn is_last_fec_set_full(&self, slot: Slot) -> Result<bool> {
+        // We need to check if the last FEC set index contains at least `DATA_SHREDS_PER_FEC_BLOCK` data shreds.
+        // We compare the merkle roots of the last `DATA_SHREDS_PER_FEC_BLOCK` shreds in this block.
+        // Since the merkle root contains the fec_set_index, if all of them match, we know that the last fec set has
+        // at least `DATA_SHREDS_PER_FEC_BLOCK` shreds.
+        let last_shreds = self.get_last_data_shreds(slot)?;
+        let last_merkle_roots: std::result::Result<Vec<Hash>, ShredError> =
+            last_shreds.iter().map(Shred::merkle_root).collect();
+        let last_merkle_roots = last_merkle_roots.map_err(|e| {
+            BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(format!(
+                "block contains legacy shreds: {e:?}"
+            ))))
+        })?;
+        if last_merkle_roots.len() < DATA_SHREDS_PER_FEC_BLOCK {
+            warn!("Slot {slot} has only {} shreds, fewer than the {DATA_SHREDS_PER_FEC_BLOCK} required", last_merkle_roots.len());
+            return Ok(false);
+        }
+        let expected_merkle_root = last_merkle_roots.first().unwrap();
+        Ok(last_merkle_roots
+            .iter()
+            .all(|merkle_root| merkle_root != expected_merkle_root))
     }
 
     fn get_any_valid_slot_entries(&self, slot: Slot, start_index: u64) -> Vec<Entry> {
