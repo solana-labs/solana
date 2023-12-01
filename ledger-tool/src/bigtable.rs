@@ -1225,8 +1225,6 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
 fn missing_blocks(reference: &[Slot], owned: &[Slot]) -> Vec<Slot> {
     if owned.is_empty() && !reference.is_empty() {
         return reference.to_owned();
-    } else if owned.is_empty() {
-        return vec![];
     }
 
     let owned_hashset: HashSet<_> = owned.iter().collect();
