@@ -404,6 +404,10 @@ impl ErasureMeta {
             StillNeed(num_needed)
         }
     }
+
+    pub fn total_shreds(&self) -> usize {
+        self.config.num_data.saturating_add(self.config.num_coding)
+    }
 }
 
 #[allow(dead_code)]

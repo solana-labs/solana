@@ -48,6 +48,7 @@ use {
         entry_notifier_service::EntryNotifierSender,
         leader_schedule_cache::LeaderScheduleCache,
         leader_schedule_utils::first_of_consecutive_leader_slots,
+        shred::ErasureSetId,
     },
     solana_measure::measure::Measure,
     solana_poh::poh_recorder::{PohLeaderStatus, PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
@@ -2897,6 +2898,34 @@ impl ReplayStage {
                     (bank.slot(), bank.hash()),
                     Some((bank.parent_slot(), bank.parent_hash())),
                 );
+                // If the block does not have at least 64 shreds in the last FEC set, mark
+                // it as duplicate, effectively removing it from fork choice.
+                let mut incomplete_last_fec_set = true;
+                let slot_meta = blockstore
+                    .meta(bank.slot())
+                    .expect("Slot meta get must succeed on frozen banks")
+                    .expect("Slot meta must exist during freeze");
+                if let Some(last_shred_index) = slot_meta.last_index {
+                    if let Ok(Some(erasure_meta)) = blockstore.erasure_meta(ErasureSetId::new(
+                        bank.slot(),
+                        u32::try_from(last_shred_index).expect("LAST_SHRED_IN_SLOT should be u32"),
+                    )) {
+                        if erasure_meta.total_shreds() >= 64 {
+                            incomplete_last_fec_set = false;
+                        }
+                    }
+                }
+                // If there is no erasure meta then we have not received a coding shred for this
+                // fec set. If there is no `slot_meta.last_index` then we should not be freezing
+                // the bank. There is already a duplicate check ensuring `LAST_SHRED_IN_SLOT` is
+                // consistent. At this point if `incomplete_last_fec_set` is `false`, then the
+                // leader has sent less than 64 shreds in the last fec set, meaning we can disregard
+                // this slot
+                if incomplete_last_fec_set {
+                    heaviest_subtree_fork_choice
+                        .mark_fork_invalid_candidate(&(bank.slot(), bank.hash()));
+                }
+
                 bank_progress.fork_stats.bank_hash = Some(bank.hash());
                 let bank_frozen_state = BankFrozenState::new_from_state(
                     bank.slot(),

@@ -463,7 +463,7 @@ impl Blockstore {
         false
     }
 
-    fn erasure_meta(&self, erasure_set: ErasureSetId) -> Result<Option<ErasureMeta>> {
+    pub fn erasure_meta(&self, erasure_set: ErasureSetId) -> Result<Option<ErasureMeta>> {
         let (slot, fec_set_index) = erasure_set.store_key();
         self.erasure_meta_cf.get((slot, u64::from(fec_set_index)))
     }
