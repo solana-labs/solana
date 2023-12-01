@@ -6037,7 +6037,7 @@ impl Bank {
             self.skipped_rewrites
                 .lock()
                 .unwrap()
-                .extend(&mut results.skipped_rewrites.into_iter());
+                .extend(results.skipped_rewrites);
 
             // We cannot assert here that we collected from all expected keys.
             // Some accounts may have been topped off or may have had all funds removed and gone to 0 lamports.
