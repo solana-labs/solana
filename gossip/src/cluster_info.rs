@@ -32,8 +32,9 @@ use {
             CrdsFilter, CrdsTimeouts, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
         },
         crds_value::{
-            self, AccountsHashes, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot,
-            NodeInstance, SnapshotHashes, Version, Vote, MAX_WALLCLOCK,
+            self, AccountsHashes, CrdsData, CrdsValue, CrdsValueLabel, DuplicateVote,
+            EpochSlotsIndex, LowestSlot, NodeInstance, SnapshotHashes, Version, Vote,
+            MAX_WALLCLOCK,
         },
         duplicate_shred::DuplicateShred,
         epoch_slots::EpochSlots,
@@ -78,7 +79,7 @@ use {
         streamer::{PacketBatchReceiver, PacketBatchSender},
     },
     solana_vote::vote_parser,
-    solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
+    solana_vote_program::vote_state::{VoteTransaction, MAX_LOCKOUT_HISTORY},
     std::{
         borrow::Cow,
         collections::{HashMap, HashSet, VecDeque},
@@ -268,7 +269,7 @@ pub fn make_accounts_hashes_message(
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "7a2P1GeQjyqCHMyBrhNPTKfPfG4iv32vki7XHahoN55z")]
+#[frozen_abi(digest = "BexMLz5Y8XfeBod9QXo3qnXLwD6A5E7pmWS9oeEiU2Gu")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
@@ -395,7 +396,8 @@ fn retain_staked(values: &mut Vec<CrdsValue>, stakes: &HashMap<Pubkey, u64>) {
             CrdsData::LowestSlot(_, _)
             | CrdsData::LegacyVersion(_)
             | CrdsData::DuplicateShred(_, _)
-            | CrdsData::RestartLastVotedForkSlots(_) => {
+            | CrdsData::RestartLastVotedForkSlots(_)
+            | CrdsData::DuplicateVote(_) => {
                 let stake = stakes.get(&value.pubkey()).copied();
                 stake.unwrap_or_default() >= MIN_STAKE_FOR_GOSSIP
             }
@@ -983,6 +985,21 @@ impl ClusterInfo {
         Ok(())
     }
 
+    pub fn push_duplicate_vote(&self, vote_tx: VoteTransaction, slot: Slot, hash: Hash) {
+        let now = timestamp();
+        let duplicate_vote = DuplicateVote {
+            from: self.id(),
+            wallclock: now,
+            vote_tx,
+            slot,
+            hash,
+        };
+        self.push_message(CrdsValue::new_signed(
+            CrdsData::DuplicateVote(duplicate_vote),
+            &self.keypair(),
+        ));
+    }
+
     fn time_gossip_read_lock<'a>(
         &'a self,
         label: &'static str,
@@ -1248,6 +1265,20 @@ impl ClusterInfo {
                     return None;
                 };
                 (slots.shred_version == self_shred_version).then_some(slots)
+            })
+            .cloned()
+            .collect()
+    }
+
+    pub fn get_duplicate_vote(&self, cursor: &mut Cursor) -> Vec<DuplicateVote> {
+        let gossip_crds = self.gossip.crds.read().unwrap();
+        gossip_crds
+            .get_entries(cursor)
+            .filter_map(|entry| {
+                let CrdsData::DuplicateVote(duplicate_vote) = &entry.value.data else {
+                    return None;
+                };
+                Some(duplicate_vote)
             })
             .cloned()
             .collect()
