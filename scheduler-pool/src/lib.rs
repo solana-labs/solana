@@ -23,7 +23,10 @@ use {
         },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
-    solana_sdk::transaction::{Result, SanitizedTransaction},
+    solana_sdk::{
+        scheduling::{SchedulingMode, WithSchedulingMode},
+        transaction::{Result, SanitizedTransaction},
+    },
     solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
         fmt::Debug,
@@ -31,8 +34,6 @@ use {
         sync::{Arc, Mutex, Weak},
     },
 };
-use solana_sdk::scheduling::SchedulingMode;
-use solana_sdk::scheduling::WithSchedulingMode;
 
 // SchedulerPool must be accessed via dyn by solana-runtime code, because of its internal fields'
 // types (currently TransactionStatusSender; also, PohRecorder in the future) aren't available

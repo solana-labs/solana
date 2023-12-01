@@ -25,6 +25,7 @@ use {
         SpawnableScheduler,
     },
     solana_sdk::{
+        scheduling::SchedulingMode,
         system_transaction,
         transaction::{Result, SanitizedTransaction},
     },
@@ -36,7 +37,6 @@ use {
     },
     test::Bencher,
 };
-use solana_sdk::scheduling::SchedulingMode;
 
 const TX_COUNT: usize = 10_000;
 

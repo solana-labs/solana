@@ -26,6 +26,7 @@ use {
     solana_program_runtime::timings::ExecuteTimings,
     solana_sdk::{
         hash::Hash,
+        scheduling::{SchedulingMode, WithSchedulingMode},
         slot_history::Slot,
         transaction::{Result, SanitizedTransaction},
     },
@@ -38,8 +39,6 @@ use {
 };
 #[cfg(feature = "dev-context-only-utils")]
 use {mockall::automock, qualifier_attr::qualifiers};
-use solana_sdk::scheduling::SchedulingMode;
-use solana_sdk::scheduling::WithSchedulingMode;
 
 pub trait InstalledSchedulerPool<SEA: ScheduleExecutionArg>: Send + Sync + Debug {
     fn take_scheduler(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler<SEA>>;

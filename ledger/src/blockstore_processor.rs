@@ -1947,9 +1947,7 @@ pub mod tests {
             genesis_utils::{
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
             },
-            installed_scheduler_pool::{
-                MockInstalledScheduler, SchedulingContext, WaitReason,
-            },
+            installed_scheduler_pool::{MockInstalledScheduler, SchedulingContext, WaitReason},
         },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
@@ -1958,6 +1956,7 @@ pub mod tests {
             instruction::{Instruction, InstructionError},
             native_token::LAMPORTS_PER_SOL,
             pubkey::Pubkey,
+            scheduling::SchedulingMode,
             signature::{Keypair, Signer},
             system_instruction::SystemError,
             system_transaction,
@@ -1972,7 +1971,6 @@ pub mod tests {
         std::{collections::BTreeSet, sync::RwLock},
         trees::tr,
     };
-    use solana_sdk::scheduling::SchedulingMode;
 
     // Convenience wrapper to optionally process blockstore with Secondary access.
     //

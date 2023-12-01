@@ -17,6 +17,7 @@ use {
         clock::{Epoch, Slot},
         feature_set,
         hash::Hash,
+        scheduling::SchedulingMode,
         timing,
     },
     std::{
@@ -29,7 +30,6 @@ use {
         time::Instant,
     },
 };
-use solana_sdk::scheduling::SchedulingMode;
 
 pub const MAX_ROOT_DISTANCE_FOR_VOTE_ONLY: Slot = 400;
 pub type AtomicSlot = AtomicU64;

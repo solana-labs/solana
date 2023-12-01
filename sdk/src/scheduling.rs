@@ -9,4 +9,3 @@ pub enum SchedulingMode {
 pub trait WithSchedulingMode {
     fn mode(&self) -> SchedulingMode;
 }
-
