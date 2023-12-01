@@ -5925,7 +5925,6 @@ dependencies = [
  "solana-rpc",
  "solana-rpc-client-api",
  "solana-runtime",
- "solana-scheduler-pool",
  "solana-sdk",
  "solana-send-transaction-service",
  "solana-stake-program",
@@ -5933,6 +5932,7 @@ dependencies = [
  "solana-tpu-client",
  "solana-transaction-status",
  "solana-turbine",
+ "solana-unified-scheduler-pool",
  "solana-version",
  "solana-vote",
  "solana-vote-program",
@@ -6387,12 +6387,12 @@ dependencies = [
  "solana-program-runtime",
  "solana-rpc",
  "solana-runtime",
- "solana-scheduler-pool",
  "solana-sdk",
  "solana-stake-program",
  "solana-storage-bigtable",
  "solana-streamer",
  "solana-transaction-status",
+ "solana-unified-scheduler-pool",
  "solana-version",
  "solana-vote",
  "solana-vote-program",
@@ -7084,30 +7084,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-scheduler"
-version = "1.18.0"
-
-[[package]]
-name = "solana-scheduler-pool"
-version = "1.18.0"
-dependencies = [
- "assert_matches",
- "bincode",
- "crossbeam-channel",
- "log",
- "rand 0.8.5",
- "solana-ledger",
- "solana-logger",
- "solana-nohash-hasher",
- "solana-program-runtime",
- "solana-runtime",
- "solana-scheduler",
- "solana-sdk",
- "solana-vote",
- "tikv-jemallocator",
-]
-
-[[package]]
 name = "solana-sdk"
 version = "1.18.0"
 dependencies = [
@@ -7527,6 +7503,30 @@ dependencies = [
  "solana-streamer",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "solana-unified-scheduler-logic"
+version = "1.18.0"
+
+[[package]]
+name = "solana-unified-scheduler-pool"
+version = "1.18.0"
+dependencies = [
+ "assert_matches",
+ "bincode",
+ "crossbeam-channel",
+ "log",
+ "rand 0.8.5",
+ "solana-ledger",
+ "solana-logger",
+ "solana-nohash-hasher",
+ "solana-program-runtime",
+ "solana-runtime",
+ "solana-sdk",
+ "solana-unified-scheduler-logic",
+ "solana-vote",
+ "tikv-jemallocator",
 ]
 
 [[package]]
