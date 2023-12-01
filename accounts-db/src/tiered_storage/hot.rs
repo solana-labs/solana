@@ -207,11 +207,11 @@ impl HotStorageReader {
     pub fn new_from_path(path: impl AsRef<Path>) -> TieredStorageResult<Self> {
         let file = OpenOptions::new().read(true).open(path)?;
         let mmap = unsafe { MmapOptions::new().map(&file)? };
-        // Here we are cloning the footer as accessing any data in a
+        // Here we are copying the footer, as accessing any data in a
         // TieredStorage instance requires accessing its Footer.
         // This can help improve cache locality and reduce the overhead
         // of indirection associated with memory-mapped accesses.
-        let footer = TieredStorageFooter::new_from_mmap(&mmap)?.clone();
+        let footer = *TieredStorageFooter::new_from_mmap(&mmap)?;
 
         Ok(Self { mmap, footer })
     }

@@ -3,9 +3,12 @@ use {
         error::TieredStorageError, file::TieredStorageFile, index::IndexBlockFormat,
         mmap_utils::get_type, TieredStorageResult,
     },
+    bytemuck::{Pod, Zeroable},
     memmap2::Mmap,
+    num_enum::TryFromPrimitiveError,
     solana_sdk::{hash::Hash, pubkey::Pubkey},
     std::{mem, path::Path},
+    thiserror::Error,
 };
 
 pub const FOOTER_FORMAT_VERSION: u64 = 1;
@@ -22,7 +25,7 @@ pub const FOOTER_TAIL_SIZE: usize = 24;
 /// The ending 8 bytes of a valid tiered account storage file.
 pub const FOOTER_MAGIC_NUMBER: u64 = 0x502A2AB5; // SOLALABS -> SOLANA LABS
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TieredStorageMagicNumber(pub u64);
 
@@ -86,7 +89,7 @@ pub enum OwnersBlockFormat {
     LocalIndex = 0,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[repr(C)]
 pub struct TieredStorageFooter {
     // formats
@@ -144,6 +147,30 @@ pub struct TieredStorageFooter {
     // pub magic_number: u64,
 }
 
+// It is undefined behavior to read/write uninitialized bytes.
+// The `Pod` marker trait indicates there are no uninitialized bytes.
+// In order to safely guarantee a type is POD, it cannot have any padding.
+const _: () = assert!(
+    std::mem::size_of::<TieredStorageFooter>()
+        == std::mem::size_of::<AccountMetaFormat>()
+         + std::mem::size_of::<OwnersBlockFormat>()
+         + std::mem::size_of::<IndexBlockFormat>()
+         + std::mem::size_of::<AccountBlockFormat>()
+         + std::mem::size_of::<u32>() // account_entry_count
+         + std::mem::size_of::<u32>() // account_meta_entry_size
+         + std::mem::size_of::<u64>() // account_block_size
+         + std::mem::size_of::<u32>() // owner_count
+         + std::mem::size_of::<u32>() // owner_entry_size
+         + std::mem::size_of::<u64>() // index_block_offset
+         + std::mem::size_of::<u64>() // owners_block_offset
+         + std::mem::size_of::<Pubkey>() // min_account_address
+         + std::mem::size_of::<Pubkey>() // max_account_address
+         + std::mem::size_of::<Hash>() // hash
+         + std::mem::size_of::<u64>() // footer_size
+         + std::mem::size_of::<u64>(), // format_version
+    "TieredStorageFooter cannot have any padding"
+);
+
 impl Default for TieredStorageFooter {
     fn default() -> Self {
         Self {
@@ -182,14 +209,23 @@ impl TieredStorageFooter {
 
     pub fn new_from_footer_block(file: &TieredStorageFile) -> TieredStorageResult<Self> {
         let mut footer_size: u64 = 0;
-        let mut footer_version: u64 = 0;
-        let mut magic_number = TieredStorageMagicNumber(0);
-
         file.seek_from_end(-(FOOTER_TAIL_SIZE as i64))?;
         file.read_type(&mut footer_size)?;
-        file.read_type(&mut footer_version)?;
-        file.read_type(&mut magic_number)?;
+        if footer_size != FOOTER_SIZE as u64 {
+            return Err(TieredStorageError::InvalidFooterSize(
+                footer_size,
+                FOOTER_SIZE as u64,
+            ));
+        }
 
+        let mut footer_version: u64 = 0;
+        file.read_type(&mut footer_version)?;
+        if footer_version != FOOTER_FORMAT_VERSION {
+            return Err(TieredStorageError::InvalidFooterVersion(footer_version));
+        }
+
+        let mut magic_number = TieredStorageMagicNumber::zeroed();
+        file.read_type(&mut magic_number)?;
         if magic_number != TieredStorageMagicNumber::default() {
             return Err(TieredStorageError::MagicNumberMismatch(
                 TieredStorageMagicNumber::default().0,
@@ -200,16 +236,27 @@ impl TieredStorageFooter {
         let mut footer = Self::default();
         file.seek_from_end(-(footer_size as i64))?;
         file.read_type(&mut footer)?;
+        Self::sanitize(&footer)?;
 
         Ok(footer)
     }
 
     pub fn new_from_mmap(mmap: &Mmap) -> TieredStorageResult<&TieredStorageFooter> {
         let offset = mmap.len().saturating_sub(FOOTER_TAIL_SIZE);
-        let (footer_size, offset) = get_type::<u64>(mmap, offset)?;
-        let (_footer_version, offset) = get_type::<u64>(mmap, offset)?;
-        let (magic_number, _offset) = get_type::<TieredStorageMagicNumber>(mmap, offset)?;
+        let (&footer_size, offset) = get_type::<u64>(mmap, offset)?;
+        if footer_size != FOOTER_SIZE as u64 {
+            return Err(TieredStorageError::InvalidFooterSize(
+                footer_size,
+                FOOTER_SIZE as u64,
+            ));
+        }
 
+        let (footer_version, offset) = get_type::<u64>(mmap, offset)?;
+        if *footer_version != FOOTER_FORMAT_VERSION {
+            return Err(TieredStorageError::InvalidFooterVersion(*footer_version));
+        }
+
+        let (magic_number, _offset) = get_type::<TieredStorageMagicNumber>(mmap, offset)?;
         if *magic_number != TieredStorageMagicNumber::default() {
             return Err(TieredStorageError::MagicNumberMismatch(
                 TieredStorageMagicNumber::default().0,
@@ -217,13 +264,64 @@ impl TieredStorageFooter {
             ));
         }
 
-        let (footer, _offset) = get_type::<TieredStorageFooter>(
-            mmap,
-            mmap.len().saturating_sub(*footer_size as usize),
-        )?;
+        let footer_offset = mmap.len().saturating_sub(footer_size as usize);
+        let (footer, _offset) = get_type::<TieredStorageFooter>(mmap, footer_offset)?;
+        Self::sanitize(footer)?;
 
         Ok(footer)
     }
+
+    /// Sanitizes the footer
+    ///
+    /// Since the various formats only have specific valid values, they must be sanitized
+    /// prior to use.  This ensures the formats are valid to interpret as (rust) enums.
+    fn sanitize(footer: &Self) -> Result<(), SanitizeFooterError> {
+        let account_meta_format_u16 =
+            unsafe { &*(&footer.account_meta_format as *const _ as *const u16) };
+        let owners_block_format_u16 =
+            unsafe { &*(&footer.owners_block_format as *const _ as *const u16) };
+        let index_block_format_u16 =
+            unsafe { &*(&footer.index_block_format as *const _ as *const u16) };
+        let account_block_format_u16 =
+            unsafe { &*(&footer.account_block_format as *const _ as *const u16) };
+
+        _ = AccountMetaFormat::try_from(*account_meta_format_u16)
+            .map_err(SanitizeFooterError::InvalidAccountMetaFormat)?;
+        _ = OwnersBlockFormat::try_from(*owners_block_format_u16)
+            .map_err(SanitizeFooterError::InvalidOwnersBlockFormat)?;
+        _ = IndexBlockFormat::try_from(*index_block_format_u16)
+            .map_err(SanitizeFooterError::InvalidIndexBlockFormat)?;
+        _ = AccountBlockFormat::try_from(*account_block_format_u16)
+            .map_err(SanitizeFooterError::InvalidAccountBlockFormat)?;
+
+        // Since we just sanitized the formats within the footer,
+        // it is now safe to read them as (rust) enums.
+        //
+        // from https://doc.rust-lang.org/reference/items/enumerations.html#casting:
+        // > If an enumeration is unit-only (with no tuple and struct variants),
+        // > then its discriminant can be directly accessed with a numeric cast;
+        //
+        // from https://doc.rust-lang.org/reference/items/enumerations.html#pointer-casting:
+        // > If the enumeration specifies a primitive representation,
+        // > then the discriminant may be reliably accessed via unsafe pointer casting
+        Ok(())
+    }
+}
+
+/// Errors that can happen while sanitizing the footer
+#[derive(Error, Debug)]
+pub enum SanitizeFooterError {
+    #[error("invalid account meta format: {0}")]
+    InvalidAccountMetaFormat(#[from] TryFromPrimitiveError<AccountMetaFormat>),
+
+    #[error("invalid owners block format: {0}")]
+    InvalidOwnersBlockFormat(#[from] TryFromPrimitiveError<OwnersBlockFormat>),
+
+    #[error("invalid index block format: {0}")]
+    InvalidIndexBlockFormat(#[from] TryFromPrimitiveError<IndexBlockFormat>),
+
+    #[error("invalid account block format: {0}")]
+    InvalidAccountBlockFormat(#[from] TryFromPrimitiveError<AccountBlockFormat>),
 }
 
 #[cfg(test)]
@@ -294,5 +392,76 @@ mod tests {
         assert_eq!(offset_of!(TieredStorageFooter, hash), 0x70);
         assert_eq!(offset_of!(TieredStorageFooter, footer_size), 0x90);
         assert_eq!(offset_of!(TieredStorageFooter, format_version), 0x98);
+    }
+
+    #[test]
+    fn test_sanitize() {
+        // test: all good
+        {
+            let footer = TieredStorageFooter::default();
+            let result = TieredStorageFooter::sanitize(&footer);
+            assert!(result.is_ok());
+        }
+
+        // test: bad account meta format
+        {
+            let mut footer = TieredStorageFooter::default();
+            unsafe {
+                std::ptr::write(
+                    &mut footer.account_meta_format as *mut _ as *mut u16,
+                    0xBAD0,
+                );
+            }
+            let result = TieredStorageFooter::sanitize(&footer);
+            assert!(matches!(
+                result,
+                Err(SanitizeFooterError::InvalidAccountMetaFormat(_))
+            ));
+        }
+
+        // test: bad owners block format
+        {
+            let mut footer = TieredStorageFooter::default();
+            unsafe {
+                std::ptr::write(
+                    &mut footer.owners_block_format as *mut _ as *mut u16,
+                    0xBAD0,
+                );
+            }
+            let result = TieredStorageFooter::sanitize(&footer);
+            assert!(matches!(
+                result,
+                Err(SanitizeFooterError::InvalidOwnersBlockFormat(_))
+            ));
+        }
+
+        // test: bad index block format
+        {
+            let mut footer = TieredStorageFooter::default();
+            unsafe {
+                std::ptr::write(&mut footer.index_block_format as *mut _ as *mut u16, 0xBAD0);
+            }
+            let result = TieredStorageFooter::sanitize(&footer);
+            assert!(matches!(
+                result,
+                Err(SanitizeFooterError::InvalidIndexBlockFormat(_))
+            ));
+        }
+
+        // test: bad account block format
+        {
+            let mut footer = TieredStorageFooter::default();
+            unsafe {
+                std::ptr::write(
+                    &mut footer.account_block_format as *mut _ as *mut u16,
+                    0xBAD0,
+                );
+            }
+            let result = TieredStorageFooter::sanitize(&footer);
+            assert!(matches!(
+                result,
+                Err(SanitizeFooterError::InvalidAccountBlockFormat(_))
+            ));
+        }
     }
 }
