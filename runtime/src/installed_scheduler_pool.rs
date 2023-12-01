@@ -39,15 +39,6 @@ use {
 #[cfg(feature = "dev-context-only-utils")]
 use {mockall::automock, qualifier_attr::qualifiers};
 
-#[derive(Debug, Clone, Copy)]
-pub enum SchedulingMode {
-    BlockVerification,
-}
-
-pub trait WithSchedulingMode {
-    fn mode(&self) -> SchedulingMode;
-}
-
 pub trait InstalledSchedulerPool<SEA: ScheduleExecutionArg>: Send + Sync + Debug {
     fn take_scheduler(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler<SEA>>;
 }
