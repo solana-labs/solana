@@ -1948,7 +1948,7 @@ pub mod tests {
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
             },
             installed_scheduler_pool::{
-                MockInstalledScheduler, SchedulingContext, SchedulingMode, WaitReason,
+                MockInstalledScheduler, SchedulingContext, WaitReason,
             },
         },
         solana_sdk::{
@@ -1972,6 +1972,7 @@ pub mod tests {
         std::{collections::BTreeSet, sync::RwLock},
         trees::tr,
     };
+    use solana_sdk::scheduling::SchedulingMode;
 
     // Convenience wrapper to optionally process blockstore with Secondary access.
     //
