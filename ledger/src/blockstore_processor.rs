@@ -4604,7 +4604,7 @@ pub mod tests {
         genesis_config.ticks_per_slot = TICKS_PER_SLOT;
         let genesis_hash = genesis_config.hash();
 
-        let slot_0_bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
+        let (slot_0_bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         assert_eq!(slot_0_bank.slot(), 0);
         assert_eq!(slot_0_bank.tick_height(), 0);
         assert_eq!(slot_0_bank.max_tick_height(), 2);
@@ -4619,7 +4619,12 @@ pub mod tests {
         assert_eq!(slot_0_bank.get_hash_age(&genesis_hash), Some(1));
         assert_eq!(slot_0_bank.get_hash_age(&slot_0_hash), Some(0));
 
-        let slot_2_bank = Arc::new(Bank::new_from_parent(slot_0_bank, &collector_id, 2));
+        let new_bank = Bank::new_from_parent(slot_0_bank, &collector_id, 2);
+        let slot_2_bank = bank_forks
+            .write()
+            .unwrap()
+            .insert(new_bank)
+            .clone_without_scheduler();
         assert_eq!(slot_2_bank.slot(), 2);
         assert_eq!(slot_2_bank.tick_height(), 2);
         assert_eq!(slot_2_bank.max_tick_height(), 6);
