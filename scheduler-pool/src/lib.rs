@@ -19,7 +19,8 @@ use {
         installed_scheduler_pool::{
             DefaultScheduleExecutionArg, InstalledScheduler, InstalledSchedulerPool,
             InstalledSchedulerPoolArc, ResultWithTimings, ScheduleExecutionArg, SchedulerId,
-            SchedulingContext, WaitReason, WithTransactionAndIndex,
+            SchedulingContext, SchedulingMode, WaitReason, WithSchedulingMode,
+            WithTransactionAndIndex,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
@@ -31,7 +32,6 @@ use {
         sync::{Arc, Mutex, Weak},
     },
 };
-use solana_runtime::installed_scheduler_pool::{SchedulingMode, WithSchedulingMode};
 
 // SchedulerPool must be accessed via dyn by solana-runtime code, because of its internal fields'
 // types (currently TransactionStatusSender; also, PohRecorder in the future) aren't available
