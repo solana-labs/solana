@@ -183,16 +183,6 @@ async fn compare_blocks(
     config: solana_storage_bigtable::LedgerStorageConfig,
     ref_config: solana_storage_bigtable::LedgerStorageConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let owned_bigtable = solana_storage_bigtable::LedgerStorage::new_with_config(config)
-        .await
-        .map_err(|err| format!("failed to connect to owned bigtable: {err:?}"))?;
-    let owned_bigtable_slots = owned_bigtable
-        .get_confirmed_blocks(starting_slot, limit)
-        .await?;
-    info!(
-        "owned bigtable {} blocks found ",
-        owned_bigtable_slots.len()
-    );
     let reference_bigtable = solana_storage_bigtable::LedgerStorage::new_with_config(ref_config)
         .await
         .map_err(|err| format!("failed to connect to reference bigtable: {err:?}"))?;
@@ -203,6 +193,22 @@ async fn compare_blocks(
     info!(
         "reference bigtable {} blocks found ",
         reference_bigtable_slots.len(),
+    );
+
+    if reference_bigtable_slots.is_empty() {
+        println!("Reference bigtable is empty after {starting_slot}. Aborting.");
+        return Ok(());
+    }
+
+    let owned_bigtable = solana_storage_bigtable::LedgerStorage::new_with_config(config)
+        .await
+        .map_err(|err| format!("failed to connect to owned bigtable: {err:?}"))?;
+    let owned_bigtable_slots = owned_bigtable
+        .get_confirmed_blocks(starting_slot, limit)
+        .await?;
+    info!(
+        "owned bigtable {} blocks found ",
+        owned_bigtable_slots.len()
     );
 
     println!(
