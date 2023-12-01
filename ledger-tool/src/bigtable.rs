@@ -222,7 +222,12 @@ async fn compare_blocks(
         .map(|last_owned_block| min(last_owned_block, last_reference_block))
         .unwrap_or(last_reference_block);
 
-    let missing_blocks = missing_blocks(
+    let MissingBlocksData {
+        missing_blocks,
+        superfluous_blocks,
+        num_reference_blocks,
+        num_owned_blocks,
+    } = missing_blocks(
         last_block_checked,
         &reference_bigtable_slots,
         &owned_bigtable_slots,
@@ -231,10 +236,11 @@ async fn compare_blocks(
     println!(
         "{}",
         json!({
-            "num_reference_slots": json!(reference_bigtable_slots.len()),
-            "num_owned_slots": json!(owned_bigtable_slots.len()),
+            "num_reference_slots": json!(num_reference_blocks),
+            "num_owned_slots": json!(num_owned_blocks),
             "reference_last_block": json!(last_block_checked),
             "missing_blocks":  json!(missing_blocks),
+            "superfluous_blocks":  json!(superfluous_blocks),
         })
     );
 
@@ -1239,22 +1245,53 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
     });
 }
 
-fn missing_blocks(last_block_checked: &Slot, reference: &[Slot], owned: &[Slot]) -> Vec<Slot> {
+struct MissingBlocksData {
+    missing_blocks: Vec<Slot>,
+    superfluous_blocks: Vec<Slot>,
+    num_reference_blocks: usize,
+    num_owned_blocks: usize,
+}
+
+fn missing_blocks(
+    last_block_checked: &Slot,
+    reference: &[Slot],
+    owned: &[Slot],
+) -> MissingBlocksData {
     if owned.is_empty() && !reference.is_empty() {
-        return reference.to_owned();
+        return MissingBlocksData {
+            missing_blocks: reference.to_owned(),
+            superfluous_blocks: vec![],
+            num_reference_blocks: reference.len(),
+            num_owned_blocks: 0,
+        };
     }
 
     let owned_hashset: HashSet<_> = owned
         .iter()
         .take_while(|&slot| slot <= last_block_checked)
+        .cloned()
         .collect();
-    let mut missing_slots = vec![];
-    for slot in reference {
-        if !owned_hashset.contains(slot) && slot <= last_block_checked {
-            missing_slots.push(slot.to_owned());
-        }
+    let reference_hashset: HashSet<_> = reference
+        .iter()
+        .take_while(|&slot| slot <= last_block_checked)
+        .cloned()
+        .collect();
+
+    let missing_blocks = reference_hashset
+        .difference(&owned_hashset)
+        .cloned()
+        .collect();
+    let superfluous_blocks = owned_hashset
+        .difference(&reference_hashset)
+        .cloned()
+        .collect();
+
+    MissingBlocksData {
+        missing_blocks,
+        superfluous_blocks,
+        num_reference_blocks: reference_hashset.len(),
+        num_owned_blocks: owned_hashset.len(),
     }
-    missing_slots
 }
 
 #[cfg(test)]
