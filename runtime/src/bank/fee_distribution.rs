@@ -102,14 +102,14 @@ impl Bank {
             return Err(DepositFeeError::InvalidAccountOwner);
         }
 
-        let rent = self.rent_collector().rent;
-        let recipient_pre_rent_state = RentState::from_account(&account, &rent);
+        let rent = &self.rent_collector().rent;
+        let recipient_pre_rent_state = RentState::from_account(&account, rent);
         let distribution = account.checked_add_lamports(fees);
         if distribution.is_err() {
             return Err(DepositFeeError::LamportOverflow);
         }
         if options.check_rent_paying {
-            let recipient_post_rent_state = RentState::from_account(&account, &rent);
+            let recipient_post_rent_state = RentState::from_account(&account, rent);
             let rent_state_transition_allowed =
                 recipient_post_rent_state.transition_allowed_from(&recipient_pre_rent_state);
             if !rent_state_transition_allowed {
@@ -572,10 +572,9 @@ pub mod tests {
         let genesis = create_genesis_config(initial_balance);
         let pubkey = genesis.mint_keypair.pubkey();
         let mut genesis_config = genesis.genesis_config;
-        let rent = Rent::default();
-        genesis_config.rent = rent; // Ensure rent is non-zero, as genesis_utils sets Rent::free by default
+        genesis_config.rent = Rent::default(); // Ensure rent is non-zero, as genesis_utils sets Rent::free by default
         let bank = Bank::new_for_tests(&genesis_config);
-        let min_rent_exempt_balance = rent.minimum_balance(0);
+        let min_rent_exempt_balance = genesis_config.rent.minimum_balance(0);
 
         let deposit_amount = 500;
         assert!(initial_balance + deposit_amount < min_rent_exempt_balance);
@@ -642,7 +641,7 @@ pub mod tests {
                     .unwrap();
             }
             let bank = Bank::new_for_tests(&genesis_config);
-            let rent = bank.rent_collector().rent;
+            let rent = &bank.rent_collector().rent;
             let rent_exempt_minimum = rent.minimum_balance(0);
 
             // Make one validator have an empty identity account
@@ -680,7 +679,7 @@ pub mod tests {
                 let account = bank
                     .get_account_with_fixed_root(address)
                     .unwrap_or_default();
-                RentState::from_account(&account, &rent)
+                RentState::from_account(&account, rent)
             };
 
             // Assert starting RentStates

@@ -1342,7 +1342,7 @@ impl Bank {
         parent.freeze();
         assert_ne!(slot, parent.slot());
 
-        let epoch_schedule = parent.epoch_schedule;
+        let epoch_schedule = parent.epoch_schedule().clone();
         let epoch = epoch_schedule.get_epoch(slot);
 
         let (rc, bank_rc_creation_time_us) = measure_us!({
@@ -1490,7 +1490,7 @@ impl Bank {
                 );
             } else {
                 // Save a snapshot of stakes for use in consensus and stake weighted networking
-                let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
+                let leader_schedule_epoch = new.epoch_schedule().get_leader_schedule_epoch(slot);
                 new.update_epoch_stakes(leader_schedule_epoch);
             }
             if new.is_partitioned_rewards_code_enabled() {
@@ -2051,7 +2051,7 @@ impl Bank {
             fee_rate_governor: self.fee_rate_governor.clone(),
             collected_rent: self.collected_rent.load(Relaxed),
             rent_collector: self.rent_collector.clone(),
-            epoch_schedule: self.epoch_schedule,
+            epoch_schedule: self.epoch_schedule.clone(),
             inflation: *self.inflation.read().unwrap(),
             stakes: &self.stakes_cache,
             epoch_stakes: &self.epoch_stakes,
@@ -3926,15 +3926,15 @@ impl Bank {
         self.max_tick_height = (self.slot + 1) * self.ticks_per_slot;
         self.slots_per_year = genesis_config.slots_per_year();
 
-        self.epoch_schedule = genesis_config.epoch_schedule;
+        self.epoch_schedule = genesis_config.epoch_schedule.clone();
 
         self.inflation = Arc::new(RwLock::new(genesis_config.inflation));
 
         self.rent_collector = RentCollector::new(
             self.epoch,
-            *self.epoch_schedule(),
+            self.epoch_schedule().clone(),
             self.slots_per_year,
-            genesis_config.rent,
+            genesis_config.rent.clone(),
         );
 
         // Add additional builtin programs specified in the genesis config
@@ -4929,7 +4929,7 @@ impl Bank {
 
         let mut transaction_context = TransactionContext::new(
             transaction_accounts,
-            self.rent_collector.rent,
+            self.rent_collector.rent.clone(),
             compute_budget.max_invoke_stack_height,
             compute_budget.max_instruction_trace_length,
         );
@@ -7184,7 +7184,7 @@ impl Bank {
         if config.run_in_background {
             let ancestors = ancestors.clone();
             let accounts = Arc::clone(accounts);
-            let epoch_schedule = *epoch_schedule;
+            let epoch_schedule = epoch_schedule.clone();
             let rent_collector = rent_collector.clone();
             let accounts_ = Arc::clone(&accounts);
             accounts.accounts_db.verify_accounts_hash_in_bg.start(|| {

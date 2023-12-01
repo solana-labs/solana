@@ -8989,17 +8989,17 @@ impl AccountsDb {
             slots.truncate(limit); // get rid of the newer slots and keep just the older
         }
         let max_slot = slots.last().cloned().unwrap_or_default();
-        let schedule = genesis_config.epoch_schedule;
+        let schedule = &genesis_config.epoch_schedule;
         let rent_collector = RentCollector::new(
             schedule.get_epoch(max_slot),
-            schedule,
+            schedule.clone(),
             genesis_config.slots_per_year(),
-            genesis_config.rent,
+            genesis_config.rent.clone(),
         );
         let accounts_data_len = AtomicU64::new(0);
 
         let rent_paying_accounts_by_partition =
-            Mutex::new(RentPayingAccountsByPartition::new(&schedule));
+            Mutex::new(RentPayingAccountsByPartition::new(schedule));
 
         // pass == 0 always runs and generates the index
         // pass == 1 only runs if verify == true.

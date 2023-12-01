@@ -3877,7 +3877,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        *bank.epoch_schedule()
+        bank.epoch_schedule().clone()
     }
 
     fn frozen_bank_slots(bank_forks: &BankForks) -> Vec<Slot> {
