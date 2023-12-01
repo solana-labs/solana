@@ -1017,29 +1017,29 @@ async fn main() {
 
 
         // wait for at least one non voting validator replicaset to deploy
-        // loop {
-        //     let mut one_nvv_ready = false;
-        //     for nvv in &non_voting_validators {
-        //         match kub_controller
-        //             .check_replica_set_ready(nvv.as_str())
-        //             .await {
-        //                 Ok(ready) => {
-        //                     if ready {
-        //                         one_nvv_ready = true;
-        //                         break;
-        //                     }
-        //                 }, // Continue the loop if replica set is not ready: Ok(false)
-        //                 Err(_) => panic!("Error occurred while checking faucet replica set readiness"),
-        //         }
-        //     }
+        loop {
+            let mut one_nvv_ready = false;
+            for nvv in &non_voting_validators {
+                match kub_controller
+                    .check_replica_set_ready(nvv.as_str())
+                    .await {
+                        Ok(ready) => {
+                            if ready {
+                                one_nvv_ready = true;
+                                break;
+                            }
+                        }, // Continue the loop if replica set is not ready: Ok(false)
+                        Err(_) => panic!("Error occurred while checking faucet replica set readiness"),
+                }
+            }
 
-        //     if one_nvv_ready { break; }
+            if one_nvv_ready { break; }
 
-        //     info!("no non voting validator replica sets ready");
-        //     thread::sleep(Duration::from_secs(1));
+            info!("no non voting validator replica sets ready");
+            thread::sleep(Duration::from_secs(10));
 
-        // }
-        // info!("faucet replica set ready");
+        }
+        info!("faucet replica set ready");
 
         // thread::sleep(Duration::from_secs(60));
     }
