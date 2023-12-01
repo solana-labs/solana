@@ -28,7 +28,7 @@ use {
     solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signer},
     solana_vote_program::vote_transaction,
     std::{
-        collections::{HashMap, HashSet},
+        collections::{BTreeMap, HashMap, HashSet},
         sync::{Arc, RwLock},
     },
     trees::{tr, Tree, TreeWalk},
@@ -188,6 +188,7 @@ impl VoteSimulator {
             tower,
             &self.latest_validator_votes_for_frozen_banks,
             &self.heaviest_subtree_fork_choice,
+            &BTreeMap::default(),
         );
 
         // Make sure this slot isn't locked out or failing threshold

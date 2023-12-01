@@ -29,6 +29,7 @@ use {
     solana_gossip::{
         cluster_info::ClusterInfo, duplicate_shred_handler::DuplicateShredHandler,
         duplicate_shred_listener::DuplicateShredListener,
+        duplicate_vote_listener::DuplicateVoteListener,
     },
     solana_ledger::{
         blockstore::Blockstore, blockstore_cleanup_service::BlockstoreCleanupService,
@@ -69,6 +70,7 @@ pub struct Tvu {
     warm_quic_cache_service: Option<WarmQuicCacheService>,
     drop_bank_service: DropBankService,
     duplicate_shred_listener: DuplicateShredListener,
+    duplicate_vote_listener: DuplicateVoteListener,
 }
 
 pub struct TvuSockets {
@@ -282,6 +284,7 @@ impl Tvu {
         let (drop_bank_sender, drop_bank_receiver) = unbounded();
 
         let drop_bank_service = DropBankService::new(drop_bank_receiver);
+        let (duplicate_vote_sender, duplicate_vote_receiver) = unbounded();
 
         let replay_stage = ReplayStage::new(
             replay_stage_config,
@@ -309,6 +312,7 @@ impl Tvu {
             dumped_slots_sender,
             banking_tracer,
             popular_pruned_forks_receiver,
+            duplicate_vote_receiver,
         )?;
 
         let blockstore_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -321,7 +325,7 @@ impl Tvu {
         });
 
         let duplicate_shred_listener = DuplicateShredListener::new(
-            exit,
+            exit.clone(),
             cluster_info.clone(),
             DuplicateShredHandler::new(
                 blockstore,
@@ -330,6 +334,9 @@ impl Tvu {
                 duplicate_slots_sender,
             ),
         );
+
+        let duplicate_vote_listener =
+            DuplicateVoteListener::new(exit, cluster_info.clone(), duplicate_vote_sender);
 
         Ok(Tvu {
             fetch_stage,
@@ -344,6 +351,7 @@ impl Tvu {
             warm_quic_cache_service,
             drop_bank_service,
             duplicate_shred_listener,
+            duplicate_vote_listener,
         })
     }
 
@@ -364,6 +372,7 @@ impl Tvu {
         }
         self.drop_bank_service.join()?;
         self.duplicate_shred_listener.join()?;
+        self.duplicate_vote_listener.join()?;
         Ok(())
     }
 }

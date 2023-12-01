@@ -78,7 +78,7 @@ use {
     solana_vote::vote_sender_types::ReplayVoteSender,
     solana_vote_program::vote_state::VoteTransaction,
     std::{
-        collections::{HashMap, HashSet},
+        collections::{BTreeMap, HashMap, HashSet},
         result,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
@@ -274,6 +274,7 @@ pub struct ReplayTiming {
     process_duplicate_slots_elapsed: u64,
     process_unfrozen_gossip_verified_vote_hashes_elapsed: u64,
     process_popular_pruned_forks_elapsed: u64,
+    process_duplicate_vote_elapsed: u64,
     repair_correct_slots_elapsed: u64,
     retransmit_not_propagated_elapsed: u64,
     generate_new_bank_forks_read_lock_us: u64,
@@ -303,6 +304,7 @@ impl ReplayTiming {
         process_duplicate_confirmed_slots_elapsed: u64,
         process_unfrozen_gossip_verified_vote_hashes_elapsed: u64,
         process_popular_pruned_forks_elapsed: u64,
+        process_duplicate_vote_elapsed: u64,
         process_duplicate_slots_elapsed: u64,
         repair_correct_slots_elapsed: u64,
         retransmit_not_propagated_elapsed: u64,
@@ -326,6 +328,7 @@ impl ReplayTiming {
         self.process_unfrozen_gossip_verified_vote_hashes_elapsed +=
             process_unfrozen_gossip_verified_vote_hashes_elapsed;
         self.process_popular_pruned_forks_elapsed += process_popular_pruned_forks_elapsed;
+        self.process_duplicate_vote_elapsed += process_duplicate_vote_elapsed;
         self.process_duplicate_slots_elapsed += process_duplicate_slots_elapsed;
         self.repair_correct_slots_elapsed += repair_correct_slots_elapsed;
         self.retransmit_not_propagated_elapsed += retransmit_not_propagated_elapsed;
@@ -404,6 +407,11 @@ impl ReplayTiming {
                 (
                     "process_popular_pruned_forks_elapsed",
                     self.process_popular_pruned_forks_elapsed as i64,
+                    i64
+                ),
+                (
+                    "process_duplicate_vote_elapsed",
+                    self.process_duplicate_vote_elapsed as i64,
                     i64
                 ),
                 (
@@ -497,6 +505,7 @@ impl ReplayStage {
         dumped_slots_sender: DumpedSlotsSender,
         banking_tracer: Arc<BankingTracer>,
         popular_pruned_forks_receiver: PopularPrunedForksReceiver,
+        duplicate_vote_receiver: Receiver<(Pubkey, VoteTransaction, Slot, Hash)>,
     ) -> Result<Self, String> {
         let ReplayStageConfig {
             vote_account,
@@ -554,6 +563,7 @@ impl ReplayStage {
                 UnfrozenGossipVerifiedVoteHashes::default();
             let mut latest_validator_votes_for_frozen_banks: LatestValidatorVotesForFrozenBanks =
                 LatestValidatorVotesForFrozenBanks::default();
+            let mut duplicate_votes = BTreeMap::new();
             let mut voted_signatures = Vec::new();
             let mut has_new_vote_been_rooted = !wait_for_vote_to_start_leader;
             let mut last_vote_refresh_time = LastVoteRefreshTime {
@@ -707,6 +717,9 @@ impl ReplayStage {
                     &mut purge_repair_slot_counter,
                 );
                 process_popular_pruned_forks_time.stop();
+                let mut process_duplicate_vote_time = Measure::start("process_duplicate_vote_time");
+                Self::process_duplicate_votes(&duplicate_vote_receiver, &mut duplicate_votes);
+                process_duplicate_vote_time.stop();
 
                 // Check to remove any duplicated slots from fork choice
                 let mut process_duplicate_slots_time = Measure::start("process_duplicate_slots");
@@ -814,6 +827,7 @@ impl ReplayStage {
                     &mut tower,
                     &latest_validator_votes_for_frozen_banks,
                     &heaviest_subtree_fork_choice,
+                    &duplicate_votes,
                 );
                 select_vote_and_reset_forks_time.stop();
 
@@ -1091,6 +1105,7 @@ impl ReplayStage {
                     process_duplicate_confirmed_slots_time.as_us(),
                     process_unfrozen_gossip_verified_vote_hashes_time.as_us(),
                     process_popular_pruned_forks_time.as_us(),
+                    process_duplicate_vote_time.as_us(),
                     process_duplicate_slots_time.as_us(),
                     dump_then_repair_correct_slots_time.as_us(),
                     retransmit_not_propagated_time.as_us(),
@@ -1653,6 +1668,21 @@ impl ReplayStage {
                     purge_repair_slot_counter,
                     SlotStateUpdate::PopularPrunedFork,
                 );
+            }
+        }
+    }
+
+    fn process_duplicate_votes(
+        duplicate_vote_receiver: &Receiver<(Pubkey, VoteTransaction, Slot, Hash)>,
+        duplicate_votes: &mut BTreeMap<Slot, Vec<(Pubkey, Hash, Slot)>>,
+    ) {
+        for (pubkey, vote_tx, slot, hash) in duplicate_vote_receiver.try_iter() {
+            if let Some(last_voted_slot) = vote_tx.last_voted_slot() {
+                let last_locked_out_slot = last_voted_slot.saturating_add(2);
+                duplicate_votes
+                    .entry(last_locked_out_slot)
+                    .or_default()
+                    .push((pubkey, hash, slot));
             }
         }
     }
@@ -3496,6 +3526,7 @@ impl ReplayStage {
         tower: &mut Tower,
         latest_validator_votes_for_frozen_banks: &LatestValidatorVotesForFrozenBanks,
         fork_choice: &HeaviestSubtreeForkChoice,
+        duplicate_votes: &BTreeMap<Slot, Vec<(Pubkey, Hash, Slot)>>,
     ) -> SelectVoteAndResetForkResult {
         // Try to vote on the actual heaviest fork. If the heaviest bank is
         // locked out or fails the threshold check, the validator will:
@@ -3532,6 +3563,7 @@ impl ReplayStage {
                     .expect("Bank epoch vote accounts must contain entry for the bank's own epoch"),
                 latest_validator_votes_for_frozen_banks,
                 fork_choice,
+                duplicate_votes,
             );
 
             match switch_fork_decision {
@@ -7078,6 +7110,7 @@ pub(crate) mod tests {
             &mut tower,
             &latest_validator_votes_for_frozen_banks,
             &heaviest_subtree_fork_choice,
+            &BTreeMap::default(),
         )
     }
 
@@ -7201,6 +7234,7 @@ pub(crate) mod tests {
             &mut tower,
             &latest_validator_votes_for_frozen_banks,
             &heaviest_subtree_fork_choice,
+            &BTreeMap::default(),
         )
     }
 
@@ -7811,6 +7845,7 @@ pub(crate) mod tests {
                 &mut tower,
                 &latest_validator_votes_for_frozen_banks,
                 &heaviest_subtree_fork_choice,
+                &BTreeMap::default(),
             );
         assert!(vote_bank.is_some());
         assert_eq!(vote_bank.unwrap().0.slot(), tip_of_voted_fork);
@@ -7828,6 +7863,7 @@ pub(crate) mod tests {
                 &mut tower,
                 &latest_validator_votes_for_frozen_banks,
                 &heaviest_subtree_fork_choice,
+                &BTreeMap::default(),
             );
         assert!(vote_bank.is_none());
 
@@ -7844,6 +7880,7 @@ pub(crate) mod tests {
                 &mut tower,
                 &latest_validator_votes_for_frozen_banks,
                 &heaviest_subtree_fork_choice,
+                &BTreeMap::default(),
             );
         assert!(vote_bank.is_none());
 
@@ -7862,6 +7899,7 @@ pub(crate) mod tests {
                 &mut tower,
                 &latest_validator_votes_for_frozen_banks,
                 &heaviest_subtree_fork_choice,
+                &BTreeMap::default(),
             );
         assert!(vote_bank.is_none());
     }
@@ -8217,6 +8255,7 @@ pub(crate) mod tests {
             tower,
             latest_validator_votes_for_frozen_banks,
             heaviest_subtree_fork_choice,
+            &BTreeMap::default(),
         );
         (
             vote_bank.map(|(b, _)| b.slot()),
