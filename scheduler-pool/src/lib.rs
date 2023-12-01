@@ -31,7 +31,7 @@ use {
         sync::{Arc, Mutex, Weak},
     },
 };
-use solana_runtime::{SchedulingMode, WithSchedulingMode};
+use solana_runtime::installed_scheduler_pool::{SchedulingMode, WithSchedulingMode};
 
 // SchedulerPool must be accessed via dyn by solana-runtime code, because of its internal fields'
 // types (currently TransactionStatusSender; also, PohRecorder in the future) aren't available
