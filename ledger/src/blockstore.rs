@@ -7003,10 +7003,10 @@ pub mod tests {
 
         // No insert, notify duplicate
         assert_eq!(duplicates.len(), 1);
-        assert_matches!(
-            duplicates[0],
-            PossibleDuplicateShred::MerkleRootConflict(_, _)
-        );
+        match &duplicates[0] {
+            PossibleDuplicateShred::MerkleRootConflict(shred, _) if shred.slot() == slot => (),
+            _ => panic!("No merkle root conflict"),
+        }
 
         // Verify that we still have the merkle root meta from the original shred
         assert_eq!(merkle_root_metas.len(), 1);
