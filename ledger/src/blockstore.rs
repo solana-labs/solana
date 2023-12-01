@@ -1261,6 +1261,9 @@ impl Blockstore {
             }
 
             if let Some(merkle_root_meta) = merkle_root_metas.get(&erasure_set) {
+                // A previous shred has been inserted in this batch or in blockstore
+                // Compare our current shred against the previous shred for potential
+                // conflicts
                 if !self.perform_merkle_check(
                     just_received_shreds,
                     slot,
@@ -1492,6 +1495,9 @@ impl Blockstore {
             }
 
             if let Some(merkle_root_meta) = merkle_root_metas.get(&erasure_set) {
+                // A previous shred has been inserted in this batch or in blockstore
+                // Compare our current shred against the previous shred for potential
+                // conflicts
                 if !self.perform_merkle_check(
                     just_inserted_shreds,
                     slot,
