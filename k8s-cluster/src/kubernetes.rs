@@ -129,7 +129,6 @@ pub struct Kubernetes<'a> {
     validator_config: &'a mut ValidatorConfig<'a>,
     client_config: ClientConfig,
     pub metrics: Option<Metrics>,
-    num_non_voting_validators: i32,
 }
 
 impl<'a> Kubernetes<'a> {
@@ -138,7 +137,6 @@ impl<'a> Kubernetes<'a> {
         validator_config: &'a mut ValidatorConfig<'a>,
         client_config: ClientConfig,
         metrics: Option<Metrics>,
-        num_non_voting_validators: i32,
     ) -> Kubernetes<'a> {
         Kubernetes {
             client: Client::try_default().await.unwrap(),
@@ -146,7 +144,6 @@ impl<'a> Kubernetes<'a> {
             validator_config,
             client_config,
             metrics,
-            num_non_voting_validators,
         }
     }
 
@@ -215,11 +212,6 @@ impl<'a> Kubernetes<'a> {
         if let Some(shred_version) = self.validator_config.shred_version {
             flags.push("--expected-shred-version".to_string());
             flags.push(shred_version.to_string());
-        }
-
-        for nvv_index in 0..self.num_non_voting_validators {
-            flags.push("--entrypoint".to_string());
-            flags.push(format!("non-voting-{}-service.{}.svc.cluster.local:8001", nvv_index, self.namespace));
         }
 
         flags
@@ -635,9 +627,7 @@ impl<'a> Kubernetes<'a> {
         if self.metrics.is_some() {
             env_vars.push(self.get_metrics_env_var_secret())
         }
-        if self.num_non_voting_validators > 0 {
-            env_vars.append(&mut self.set_environment_variables_to_find_load_balancer());
-        }
+        env_vars.append(&mut self.set_environment_variables_to_find_load_balancer());
 
         let accounts_volume = Some(vec![Volume {
             name: format!("validator-accounts-volume-{}", validator_index),
@@ -766,9 +756,8 @@ impl<'a> Kubernetes<'a> {
         if self.metrics.is_some() {
             env_vars.push(self.get_metrics_env_var_secret())
         }
-        if self.num_non_voting_validators > 0 {
-            env_vars.append(&mut self.set_environment_variables_to_find_load_balancer());
-        }
+        env_vars.append(&mut self.set_environment_variables_to_find_load_balancer());
+
 
         let accounts_volume = Some(vec![Volume {
             name: format!("client-accounts-volume-{}", client_index),

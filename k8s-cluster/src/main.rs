@@ -630,7 +630,6 @@ async fn main() {
         &mut validator_config,
         client_config.clone(),
         metrics,
-        num_non_voting_validators,
     )
     .await;
     match kub_controller.namespace_exists().await {

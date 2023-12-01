@@ -13,8 +13,8 @@ args=(
   --no-os-network-limits-test
 )
 airdrops_enabled=1
-node_sol=500 # 500 SOL: number of SOL to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
-stake_sol=10
+node_sol=5000 # 500 SOL: number of SOL to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
+stake_sol=1000
 identity=validator-accounts/identity.json
 vote_account=validator-accounts/vote.json
 no_restart=0
