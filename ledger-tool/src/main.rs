@@ -1246,7 +1246,7 @@ fn main() {
             .long(use_snapshot_archives_at_startup::cli::LONG_ARG)
             .takes_value(true)
             .possible_values(use_snapshot_archives_at_startup::cli::POSSIBLE_VALUES)
-            .default_value(use_snapshot_archives_at_startup::cli::default_value())
+            .default_value(use_snapshot_archives_at_startup::cli::default_value_for_ledger_tool())
             .help(use_snapshot_archives_at_startup::cli::HELP)
             .long_help(use_snapshot_archives_at_startup::cli::LONG_HELP);
 
@@ -2695,7 +2695,11 @@ fn main() {
                 }
                 if write_bank_file {
                     let working_bank = bank_forks.read().unwrap().working_bank();
-                    let _ = bank_hash_details::write_bank_hash_details_file(&working_bank);
+                    bank_hash_details::write_bank_hash_details_file(&working_bank)
+                        .map_err(|err| {
+                            warn!("Unable to write bank hash_details file: {err}");
+                        })
+                        .ok();
                 }
                 exit_signal.store(true, Ordering::Relaxed);
                 system_monitor_service.join().unwrap();

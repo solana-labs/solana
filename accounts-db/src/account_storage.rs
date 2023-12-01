@@ -75,7 +75,10 @@ impl AccountStorage {
     /// return the append vec for 'slot' if it exists
     /// This is only ever called when shrink is not possibly running and there is a max of 1 append vec per slot.
     pub fn get_slot_storage_entry(&self, slot: Slot) -> Option<Arc<AccountStorageEntry>> {
-        assert!(self.no_shrink_in_progress());
+        assert!(
+            self.no_shrink_in_progress(),
+            "self.no_shrink_in_progress(): {slot}"
+        );
         self.get_slot_storage_entry_shrinking_in_progress_ok(slot)
     }
 
@@ -95,7 +98,10 @@ impl AccountStorage {
     /// returns true if there is no entry for 'slot'
     #[cfg(test)]
     pub(crate) fn is_empty_entry(&self, slot: Slot) -> bool {
-        assert!(self.no_shrink_in_progress());
+        assert!(
+            self.no_shrink_in_progress(),
+            "self.no_shrink_in_progress(): {slot}"
+        );
         self.map.get(&slot).is_none()
     }
 
@@ -124,7 +130,10 @@ impl AccountStorage {
     }
 
     pub(crate) fn insert(&self, slot: Slot, store: Arc<AccountStorageEntry>) {
-        assert!(self.no_shrink_in_progress());
+        assert!(
+            self.no_shrink_in_progress(),
+            "self.no_shrink_in_progress(): {slot}"
+        );
         assert!(self
             .map
             .insert(

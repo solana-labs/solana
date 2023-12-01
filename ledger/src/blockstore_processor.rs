@@ -751,7 +751,8 @@ pub fn test_process_blockstore(
         None,
         None,
         exit,
-    );
+    )
+    .unwrap();
 
     process_blockstore_from_root(
         blockstore,

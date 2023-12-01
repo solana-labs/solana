@@ -1,6 +1,6 @@
 //! The `bigtable` subcommand
 use {
-    crate::ledger_path::canonicalize_ledger_path,
+    crate::{ledger_path::canonicalize_ledger_path, output::CliEntries},
     clap::{
         value_t, value_t_or_exit, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
     },
@@ -140,6 +140,24 @@ async fn block(
         slot,
     };
     println!("{}", output_format.formatted_string(&cli_block));
+    Ok(())
+}
+
+async fn entries(
+    slot: Slot,
+    output_format: OutputFormat,
+    config: solana_storage_bigtable::LedgerStorageConfig,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let bigtable = solana_storage_bigtable::LedgerStorage::new_with_config(config)
+        .await
+        .map_err(|err| format!("Failed to connect to storage: {err:?}"))?;
+
+    let entries = bigtable.get_entries(slot).await?;
+    let cli_entries = CliEntries {
+        entries: entries.map(Into::into).collect(),
+        slot,
+    };
+    println!("{}", output_format.formatted_string(&cli_entries));
     Ok(())
 }
 
@@ -770,6 +788,19 @@ impl BigTableSubCommand for App<'_, '_> {
                         ),
                 )
                 .subcommand(
+                    SubCommand::with_name("entries")
+                        .about("Get the entry data for a block")
+                        .arg(
+                            Arg::with_name("slot")
+                                .long("slot")
+                                .validator(is_slot)
+                                .value_name("SLOT")
+                                .takes_value(true)
+                                .index(1)
+                                .required(true),
+                        )
+                )
+                .subcommand(
                     SubCommand::with_name("confirm")
                         .about("Confirm transaction by signature")
                         .arg(
@@ -1060,6 +1091,16 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 ..solana_storage_bigtable::LedgerStorageConfig::default()
             };
             runtime.block_on(block(slot, output_format, config))
+        }
+        ("entries", Some(arg_matches)) => {
+            let slot = value_t_or_exit!(arg_matches, "slot", Slot);
+            let config = solana_storage_bigtable::LedgerStorageConfig {
+                read_only: true,
+                instance_name,
+                app_profile_id,
+                ..solana_storage_bigtable::LedgerStorageConfig::default()
+            };
+            runtime.block_on(entries(slot, output_format, config))
         }
         ("blocks", Some(arg_matches)) => {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);

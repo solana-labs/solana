@@ -216,14 +216,10 @@ pub fn write_bank_hash_details_file(bank: &Bank) -> std::result::Result<(), Stri
         // path does not exist. So, call std::fs_create_dir_all first.
         // https://doc.rust-lang.org/std/fs/fn.write.html
         _ = std::fs::create_dir_all(parent_dir);
-        let file = std::fs::File::create(&path).map_err(|err| {
-            format!(
-                "Unable to create bank hash file at {}: {err}",
-                path.display()
-            )
-        })?;
+        let file = std::fs::File::create(&path)
+            .map_err(|err| format!("Unable to create file at {}: {err}", path.display()))?;
         serde_json::to_writer_pretty(file, &details)
-            .map_err(|err| format!("Unable to write bank hash file contents: {err}"))?;
+            .map_err(|err| format!("Unable to write file at {}: {err}", path.display()))?;
     }
     Ok(())
 }
