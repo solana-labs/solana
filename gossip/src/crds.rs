@@ -242,11 +242,6 @@ impl Crds {
                     CrdsData::DuplicateShred(_, _) => {
                         self.duplicate_shreds.insert(value.ordinal, entry_index);
                     }
-                    CrdsData::ContactInfo(node) => {
-                        // Can't insert into self.nodes since not all validators support ContactInfo yet
-                        // Querying self.nodes (get_nodes_contact_infos()) assumes we're pulling LegactContactInfo
-                        self.shred_versions.insert(pubkey, node.shred_version());
-                    }
                     _ => (),
                 };
                 self.entries.insert(value.ordinal, entry_index);
@@ -281,10 +276,6 @@ impl Crds {
                     CrdsData::DuplicateShred(_, _) => {
                         self.duplicate_shreds.remove(&entry.get().ordinal);
                         self.duplicate_shreds.insert(value.ordinal, entry_index);
-                    }
-                    CrdsData::ContactInfo(node) => {
-                        self.shred_versions.insert(pubkey, node.shred_version());
-                        debug_assert_matches!(entry.get().value.data, CrdsData::ContactInfo(_));
                     }
                     _ => (),
                 }
