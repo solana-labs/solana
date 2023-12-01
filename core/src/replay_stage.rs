@@ -1358,7 +1358,8 @@ impl ReplayStage {
                                 })
                                 .ok();
                         } else {
-                            warn!("Unable to get bank for slot {duplicate_slot} from bank forks");
+                            warn!("Unable to get bank for slot {duplicate_slot} from bank forks \
+                                   while attempting to write bank hash details file");
                         }
                         panic!("We are attempting to dump a block that we produced. \
                             This indicates that we are producing duplicate blocks, \
