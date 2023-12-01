@@ -723,6 +723,8 @@ impl ReplayStage {
                         &mut duplicate_slots_to_repair,
                         &ancestor_hashes_replay_update_sender,
                         &mut purge_repair_slot_counter,
+                        &tower,
+                        &cluster_info,
                     );
                 }
                 process_duplicate_slots_time.stop();
@@ -1740,6 +1742,8 @@ impl ReplayStage {
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
         ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
         purge_repair_slot_counter: &mut PurgeRepairSlotCounter,
+        tower: &Tower,
+        cluster_info: &Arc<ClusterInfo>,
     ) {
         let new_duplicate_slots: Vec<Slot> = duplicate_slots_receiver.try_iter().collect();
         let (root_slot, bank_hashes) = {
@@ -1774,6 +1778,23 @@ impl ReplayStage {
                 purge_repair_slot_counter,
                 SlotStateUpdate::Duplicate(duplicate_state),
             );
+
+            if let Some(last_voted_slot) = tower.last_voted_slot() {
+                // If the last voted slot was for a descendant of this duplicate slot, let the cluster know
+                if let Some(ancestors) =
+                    bank_forks.read().unwrap().ancestors().get(&last_voted_slot)
+                {
+                    if ancestors.contains(&duplicate_slot) {
+                        if let Some(hash) = bank_forks.read().unwrap().bank_hash(duplicate_slot) {
+                            cluster_info.push_duplicate_vote(
+                                tower.last_vote(),
+                                duplicate_slot,
+                                hash,
+                            );
+                        }
+                    }
+                }
+            }
         }
     }
 
