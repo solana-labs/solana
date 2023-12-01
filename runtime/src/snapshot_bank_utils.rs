@@ -1193,6 +1193,7 @@ pub fn package_and_archive_incremental_snapshot(
     ))
 }
 
+#[cfg(feature = "dev-context-only-utils")]
 pub fn create_snapshot_dirs_for_tests(
     genesis_config: &GenesisConfig,
     bank_snapshots_dir: impl AsRef<Path>,
