@@ -189,7 +189,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .takes_value(true)
                         .value_name("EPOCH")
                         .validator(is_epoch)
-                        .help("Epoch to show leader schedule for. [default: current]"),
+                        .help("Epoch to show leader schedule for [default: current]"),
                 ),
         )
         .subcommand(
@@ -323,8 +323,8 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .long("slot-limit")
                         .takes_value(true)
                         .help(
-                            "Limit results to this many slots from the end of the epoch [default: \
-                             full epoch]",
+                            "Limit results to this many slots from the end of the epoch \
+                            [default: full epoch]",
                         ),
                 ),
         )
@@ -413,7 +413,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .validator(is_slot)
                         .help(concatcp!(
                             "Minimum slot distance from the tip to consider a validator \
-                             delinquent. [default: ",
+                             delinquent [default: ",
                             DELINQUENT_VALIDATOR_SLOT_DISTANCE,
                             "]",
                         )),
