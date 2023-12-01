@@ -211,12 +211,23 @@ async fn compare_blocks(
         owned_bigtable_slots.len()
     );
 
+    // Because the owned bigtable may include superfluous slots, stop checking
+    // the reference set at owned_bigtable_slots.last() or else the remaining
+    // reference slots will show up as missing.
+    let last_reference_block = reference_bigtable_slots
+        .last()
+        .expect("already returned if reference_bigtable_slots is empty");
+    let last_block_checked = owned_bigtable_slots
+        .last()
+        .map(|last_owned_block| min(last_owned_block, last_reference_block))
+        .unwrap_or(last_reference_block);
+
     println!(
         "{}",
         json!({
             "num_reference_slots": json!(reference_bigtable_slots.len()),
             "num_owned_slots": json!(owned_bigtable_slots.len()),
-            "reference_last_block": json!(reference_bigtable_slots.len().checked_sub(1).map(|i| reference_bigtable_slots[i])),
+            "reference_last_block": json!(last_block_checked),
             "missing_blocks":  json!(missing_blocks(&reference_bigtable_slots, &owned_bigtable_slots)),
         })
     );
