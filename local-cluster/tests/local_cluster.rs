@@ -4,6 +4,7 @@ use {
     crossbeam_channel::{unbounded, Receiver},
     gag::BufferRedirect,
     log::*,
+    rand::seq::IteratorRandom,
     serial_test::serial,
     solana_accounts_db::{
         accounts_db::create_accounts_run_and_snapshot_dirs, hardened_unpack::open_genesis_config,
@@ -15,7 +16,7 @@ use {
         },
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
-        validator::ValidatorConfig,
+        validator::{BlockVerificationMethod, ValidatorConfig},
     },
     solana_download_utils::download_snapshot_archive,
     solana_entry::entry::create_ticks,
@@ -5453,6 +5454,44 @@ fn test_duplicate_shreds_switch_failure() {
         16,
         "test_duplicate_shreds_switch_failure",
         SocketAddrSpace::Unspecified,
+    );
+}
+
+#[test]
+#[serial]
+fn test_randomly_mixed_block_verification_methods_between_bootstrap_and_not() {
+    // tailored logging just to see two block verification methods are working correctly
+    solana_logger::setup_with_default(
+        "solana_metrics::metrics=warn,\
+         solana_core=warn,\
+         solana_runtime::installed_scheduler_pool=trace,\
+         solana_ledger::blockstore_processor=debug,\
+         info",
+    );
+
+    let num_nodes = 2;
+    let mut config = ClusterConfig::new_with_equal_stakes(
+        num_nodes,
+        DEFAULT_CLUSTER_LAMPORTS,
+        DEFAULT_NODE_STAKE,
+    );
+
+    // Randomly switch to use unified scheduler
+    config
+        .validator_configs
+        .iter_mut()
+        .choose(&mut rand::thread_rng())
+        .unwrap()
+        .block_verification_method = BlockVerificationMethod::UnifiedScheduler;
+
+    let local = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
+    cluster_tests::spend_and_verify_all_nodes(
+        &local.entry_point_info,
+        &local.funding_keypair,
+        num_nodes,
+        HashSet::new(),
+        SocketAddrSpace::Unspecified,
+        &local.connection_cache,
     );
 }
 

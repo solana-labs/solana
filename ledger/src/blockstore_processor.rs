@@ -74,7 +74,7 @@ use {
     thiserror::Error,
 };
 
-struct TransactionBatchWithIndexes<'a, 'b> {
+pub struct TransactionBatchWithIndexes<'a, 'b> {
     pub batch: TransactionBatch<'a, 'b>,
     pub transaction_indexes: Vec<usize>,
 }
@@ -134,7 +134,7 @@ fn get_first_error(
     first_err
 }
 
-fn execute_batch(
+pub fn execute_batch(
     batch: &TransactionBatchWithIndexes,
     bank: &Arc<Bank>,
     transaction_status_sender: Option<&TransactionStatusSender>,
@@ -1832,7 +1832,7 @@ pub struct TransactionStatusBatch {
     pub transaction_indexes: Vec<usize>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TransactionStatusSender {
     pub sender: Sender<TransactionStatusMessage>,
 }

@@ -108,6 +108,8 @@ members = [
     "transaction-status",
     "turbine",
     "udp-client",
+    "unified-scheduler-logic",
+    "unified-scheduler-pool",
     "upload-perf",
     "validator",
     "version",
@@ -357,6 +359,8 @@ solana-pubsub-client = { path = "pubsub-client", version = "=1.18.0" }
 solana-quic-client = { path = "quic-client", version = "=1.18.0" }
 solana-rayon-threadlimit = { path = "rayon-threadlimit", version = "=1.18.0" }
 solana-remote-wallet = { path = "remote-wallet", version = "=1.18.0", default-features = false }
+solana-unified-scheduler-logic = { path = "unified-scheduler-logic", version = "=1.18.0" }
+solana-unified-scheduler-pool = { path = "unified-scheduler-pool", version = "=1.18.0" }
 solana-rpc = { path = "rpc", version = "=1.18.0" }
 solana-rpc-client = { path = "rpc-client", version = "=1.18.0", default-features = false }
 solana-rpc-client-api = { path = "rpc-client-api", version = "=1.18.0" }

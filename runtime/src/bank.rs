@@ -4290,7 +4290,7 @@ impl Bank {
     }
 
     /// Prepare a transaction batch from a single transaction without locking accounts
-    pub(crate) fn prepare_unlocked_batch_from_single_tx<'a>(
+    pub fn prepare_unlocked_batch_from_single_tx<'a>(
         &'a self,
         transaction: &'a SanitizedTransaction,
     ) -> TransactionBatch<'_, '_> {
