@@ -6,7 +6,7 @@ use {
         bank::{epoch_accounts_hash_utils, Bank, SquashTiming},
         installed_scheduler_pool::{
             BankWithScheduler, DefaultScheduleExecutionArg, InstalledSchedulerPoolArc,
-            SchedulingContext, SchedulingMode,
+            SchedulingContext,
         },
         snapshot_config::SnapshotConfig,
     },
@@ -29,6 +29,7 @@ use {
         time::Instant,
     },
 };
+use solana_sdk::scheduling::SchedulingMode;
 
 pub const MAX_ROOT_DISTANCE_FOR_VOTE_ONLY: Slot = 400;
 pub type AtomicSlot = AtomicU64;
