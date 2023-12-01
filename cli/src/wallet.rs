@@ -60,13 +60,13 @@ impl WalletSubCommands for App<'_, '_> {
             SubCommand::with_name("account")
                 .about("Show the contents of an account")
                 .alias("account")
-                .arg(
-                    pubkey!(Arg::with_name("account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("account_pubkey")
                         .index(1)
                         .value_name("ACCOUNT_ADDRESS")
                         .required(true),
-                        "Account key URI. ")
-                )
+                    "Account key URI. "
+                ))
                 .arg(
                     Arg::with_name("output_file")
                         .long("output-file")
@@ -104,22 +104,22 @@ impl WalletSubCommands for App<'_, '_> {
                         .required(true)
                         .help("The airdrop amount to request, in SOL"),
                 )
-                .arg(
-                    pubkey!(Arg::with_name("to")
+                .arg(pubkey!(
+                    Arg::with_name("to")
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS"),
-                        "The account address of airdrop recipient. "),
-                ),
+                    "The account address of airdrop recipient. "
+                )),
         )
         .subcommand(
             SubCommand::with_name("balance")
                 .about("Get your balance")
-                .arg(
-                    pubkey!(Arg::with_name("pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("pubkey")
                         .index(1)
                         .value_name("ACCOUNT_ADDRESS"),
-                        "The account address of the balance to check. ")
-                )
+                    "The account address of the balance to check. "
+                ))
                 .arg(
                     Arg::with_name("lamports")
                         .long("lamports")
@@ -138,23 +138,25 @@ impl WalletSubCommands for App<'_, '_> {
                         .required(true)
                         .help("The transaction signature to confirm"),
                 )
-                .after_help(// Formatted specifically for the manually-indented heredoc string
-                   "Note: This will show more detailed information for finalized transactions with verbose mode (-v/--verbose).\
-                  \n\
-                  \nAccount modes:\
-                  \n  |srwx|\
-                  \n    s: signed\
-                  \n    r: readable (always true)\
-                  \n    w: writable\
-                  \n    x: program account (inner instructions excluded)\
-                   "
+                .after_help(
+                    // Formatted specifically for the manually-indented heredoc string
+                    "Note: This will show more detailed information for finalized \
+                    transactions with verbose mode (-v/--verbose).\
+                    \n\
+                    \nAccount modes:\
+                    \n  |srwx|\
+                    \n    s: signed\
+                    \n    r: readable (always true)\
+                    \n    w: writable\
+                    \n    x: program account (inner instructions excluded)\
+                    ",
                 ),
         )
         .subcommand(
             SubCommand::with_name("create-address-with-seed")
                 .about(
-                    "Generate a derived account address with a seed. \
-                    For program derived addresses (PDAs), use the find-program-derived-address command instead"
+                    "Generate a derived account address with a seed. For program derived \
+                     addresses (PDAs), use the find-program-derived-address command instead",
                 )
                 .arg(
                     Arg::with_name("seed")
@@ -176,45 +178,46 @@ impl WalletSubCommands for App<'_, '_> {
                              or one of NONCE, STAKE, and VOTE keywords",
                         ),
                 )
-                .arg(
-                    pubkey!(Arg::with_name("from")
+                .arg(pubkey!(
+                    Arg::with_name("from")
                         .long("from")
                         .value_name("FROM_PUBKEY")
                         .required(false),
-                        "From (base) key, [default: cli config keypair]. "),
+                    "From (base) key, [default: cli config keypair]. "
+                )),
+        )
+        .subcommand(
+            SubCommand::with_name("find-program-derived-address")
+                .about("Generate a program derived account address with a seed")
+                .arg(
+                    Arg::with_name("program_id")
+                        .index(1)
+                        .value_name("PROGRAM_ID")
+                        .takes_value(true)
+                        .required(true)
+                        .help(
+                            "The program_id that the address will ultimately be used for, \n\
+                             or one of NONCE, STAKE, and VOTE keywords",
+                        ),
+                )
+                .arg(
+                    Arg::with_name("seeds")
+                        .min_values(0)
+                        .value_name("SEED")
+                        .takes_value(true)
+                        .validator(is_structured_seed)
+                        .help(
+                            "The seeds. \n\
+                            Each one must match the pattern PREFIX:VALUE. \n\
+                            PREFIX can be one of [string, pubkey, hex, u8] \n\
+                            or matches the pattern [u,i][16,32,64,128][le,be] \
+                            (for example u64le) for number values \n\
+                            [u,i] - represents whether the number is unsigned or signed, \n\
+                            [16,32,64,128] - represents the bit length, and \n\
+                            [le,be] - represents the byte order - little endian or big endian",
+                        ),
                 ),
         )
-            .subcommand(
-                SubCommand::with_name("find-program-derived-address")
-                    .about("Generate a program derived account address with a seed")
-                    .arg(
-                        Arg::with_name("program_id")
-                                .index(1)
-                                .value_name("PROGRAM_ID")
-                                .takes_value(true)
-                                .required(true)
-                                .help(
-                                    "The program_id that the address will ultimately be used for, \n\
-                                    or one of NONCE, STAKE, and VOTE keywords",
-                                ),
-                        )
-                    .arg(
-                        Arg::with_name("seeds")
-                            .min_values(0)
-                            .value_name("SEED")
-                            .takes_value(true)
-                            .validator(is_structured_seed)
-                            .help(
-                                "The seeds. \n\
-                                Each one must match the pattern PREFIX:VALUE. \n\
-                                PREFIX can be one of [string, pubkey, hex, u8] \n\
-                                or matches the pattern [u,i][16,32,64,128][le,be] (for example u64le) for number values \n\
-                                [u,i] - represents whether the number is unsigned or signed, \n\
-                                [16,32,64,128] - represents the bit length, and \n\
-                                [le,be] - represents the byte order - little endian or big endian"
-                            ),
-                    ),
-            )
         .subcommand(
             SubCommand::with_name("decode-transaction")
                 .about("Decode a serialized transaction")
@@ -239,7 +242,10 @@ impl WalletSubCommands for App<'_, '_> {
         )
         .subcommand(
             SubCommand::with_name("resolve-signer")
-                .about("Checks that a signer is valid, and returns its specific path; useful for signers that may be specified generally, eg. usb://ledger")
+                .about(
+                    "Checks that a signer is valid, and returns its specific path; useful for \
+                     signers that may be specified generally, eg. usb://ledger",
+                )
                 .arg(
                     Arg::with_name("signer")
                         .index(1)
@@ -247,20 +253,20 @@ impl WalletSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_signer)
-                        .help("The signer path to resolve")
-                )
+                        .help("The signer path to resolve"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("transfer")
                 .about("Transfer funds between system accounts")
                 .alias("pay")
-                .arg(
-                    pubkey!(Arg::with_name("to")
+                .arg(pubkey!(
+                    Arg::with_name("to")
                         .index(1)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
-                        "The account address of recipient. "),
-                )
+                    "The account address of recipient. "
+                ))
                 .arg(
                     Arg::with_name("amount")
                         .index(2)
@@ -270,17 +276,20 @@ impl WalletSubCommands for App<'_, '_> {
                         .required(true)
                         .help("The amount to send, in SOL; accepts keyword ALL"),
                 )
-                .arg(
-                    pubkey!(Arg::with_name("from")
+                .arg(pubkey!(
+                    Arg::with_name("from")
                         .long("from")
                         .value_name("FROM_ADDRESS"),
-                        "Source account of funds (if different from client local account). "),
-                )
+                    "Source account of funds (if different from client local account). "
+                ))
                 .arg(
                     Arg::with_name("no_wait")
                         .long("no-wait")
                         .takes_value(false)
-                        .help("Return signature immediately after submitting the transaction, instead of waiting for confirmations"),
+                        .help(
+                            "Return signature immediately after submitting the transaction, \
+                             instead of waiting for confirmations",
+                        ),
                 )
                 .arg(
                     Arg::with_name("derived_address_seed")
@@ -289,7 +298,7 @@ impl WalletSubCommands for App<'_, '_> {
                         .value_name("SEED_STRING")
                         .requires("derived_address_program_id")
                         .validator(is_derived_address_seed)
-                        .hidden(hidden_unless_forced())
+                        .hidden(hidden_unless_forced()),
                 )
                 .arg(
                     Arg::with_name("derived_address_program_id")
@@ -297,13 +306,13 @@ impl WalletSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .value_name("PROGRAM_ID")
                         .requires("derived_address_seed")
-                        .hidden(hidden_unless_forced())
+                        .hidden(hidden_unless_forced()),
                 )
                 .arg(
                     Arg::with_name("allow_unfunded_recipient")
                         .long("allow-unfunded-recipient")
                         .takes_value(false)
-                        .help("Complete the transfer even if the recipient address is not funded")
+                        .help("Complete the transfer even if the recipient address is not funded"),
                 )
                 .offline_args()
                 .nonce_args(false)
@@ -320,7 +329,7 @@ impl WalletSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .value_name("STRING")
                         .required(true)
-                        .help("The message text to be signed")
+                        .help("The message text to be signed"),
                 )
                 .arg(
                     Arg::with_name("version")
@@ -331,10 +340,10 @@ impl WalletSubCommands for App<'_, '_> {
                         .default_value("0")
                         .validator(|p| match p.parse::<u8>() {
                             Err(_) => Err(String::from("Must be unsigned integer")),
-                            Ok(_) => { Ok(()) }
+                            Ok(_) => Ok(()),
                         })
-                        .help("The off-chain message version")
-                )
+                        .help("The off-chain message version"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("verify-offchain-signature")
@@ -345,7 +354,7 @@ impl WalletSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .value_name("STRING")
                         .required(true)
-                        .help("The text of the original message")
+                        .help("The text of the original message"),
                 )
                 .arg(
                     Arg::with_name("signature")
@@ -353,7 +362,7 @@ impl WalletSubCommands for App<'_, '_> {
                         .value_name("SIGNATURE")
                         .takes_value(true)
                         .required(true)
-                        .help("The message signature to verify")
+                        .help("The message signature to verify"),
                 )
                 .arg(
                     Arg::with_name("version")
@@ -364,17 +373,17 @@ impl WalletSubCommands for App<'_, '_> {
                         .default_value("0")
                         .validator(|p| match p.parse::<u8>() {
                             Err(_) => Err(String::from("Must be unsigned integer")),
-                            Ok(_) => { Ok(()) }
+                            Ok(_) => Ok(()),
                         })
-                        .help("The off-chain message version")
+                        .help("The off-chain message version"),
                 )
-                .arg(
-                    pubkey!(Arg::with_name("signer")
+                .arg(pubkey!(
+                    Arg::with_name("signer")
                         .long("signer")
                         .value_name("PUBKEY")
                         .required(false),
-                        "The pubkey of the message signer (if different from config default)")
-                )
+                    "The pubkey of the message signer (if different from config default)"
+                )),
         )
     }
 }
@@ -889,9 +898,8 @@ pub fn process_transfer(
             .value;
         if recipient_balance == 0 {
             return Err(format!(
-                "The recipient address ({to}) is not funded. \
-                                Add `--allow-unfunded-recipient` to complete the transfer \
-                               "
+                "The recipient address ({to}) is not funded. Add `--allow-unfunded-recipient` to \
+                 complete the transfer "
             )
             .into());
         }

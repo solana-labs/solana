@@ -63,10 +63,10 @@ use {
     },
 };
 
-pub const CLOSE_PROGRAM_WARNING: &str = "WARNING! \
-Closed programs cannot be recreated at the same program id. \
-Once a program is closed, it can never be invoked again. \
-To proceed with closing, rerun the `close` command with the `--bypass-warning` flag";
+pub const CLOSE_PROGRAM_WARNING: &str = "WARNING! Closed programs cannot be recreated at the same \
+                                         program id. Once a program is closed, it can never be \
+                                         invoked again. To proceed with closing, rerun the \
+                                         `close` command with the `--bypass-warning` flag";
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ProgramCliCommand {
@@ -145,7 +145,7 @@ impl ProgramSubCommands for App<'_, '_> {
                         .long("skip-fee-check")
                         .hidden(hidden_unless_forced())
                         .takes_value(false)
-                        .global(true)
+                        .global(true),
                 )
                 .subcommand(
                     SubCommand::with_name("deploy")
@@ -163,8 +163,10 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("BUFFER_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .help("Intermediate buffer account to write data to, which can be used to resume a failed deploy \
-                                      [default: random address]")
+                                .help(
+                                    "Intermediate buffer account to write data to, which can be \
+                                     used to resume a failed deploy [default: random address]",
+                                ),
                         )
                         .arg(
                             Arg::with_name("upgrade_authority")
@@ -172,19 +174,22 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("UPGRADE_AUTHORITY_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .help("Upgrade authority [default: the default configured keypair]")
+                                .help(
+                                    "Upgrade authority [default: the default configured keypair]",
+                                ),
                         )
-                        .arg(
-                            pubkey!(Arg::with_name("program_id")
+                        .arg(pubkey!(
+                            Arg::with_name("program_id")
                                 .long("program-id")
                                 .value_name("PROGRAM_ID"),
-                                "Executable program's address, must be a keypair for initial deploys, can be a pubkey for upgrades \
-                                [default: address of keypair at /path/to/program-keypair.json if present, otherwise a random address]"),
-                        )
+                            "Executable program's address, must be a keypair for initial deploys, \
+                             can be a pubkey for upgrades [default: address of keypair at \
+                             /path/to/program-keypair.json if present, otherwise a random address]"
+                        ))
                         .arg(
                             Arg::with_name("final")
                                 .long("final")
-                                .help("The program will not be upgradeable")
+                                .help("The program will not be upgradeable"),
                         )
                         .arg(
                             Arg::with_name("max_len")
@@ -192,14 +197,19 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("max_len")
                                 .takes_value(true)
                                 .required(false)
-                                .help("Maximum length of the upgradeable program \
-                                      [default: twice the length of the original deployed program]")
+                                .help(
+                                    "Maximum length of the upgradeable program \
+                                    [default: twice the length of the original deployed program]",
+                                ),
                         )
                         .arg(
                             Arg::with_name("allow_excessive_balance")
                                 .long("allow-excessive-deploy-account-balance")
                                 .takes_value(false)
-                                .help("Use the designated program id even if the account already holds a large balance of SOL")
+                                .help(
+                                    "Use the designated program id even if the account already \
+                                     holds a large balance of SOL",
+                                ),
                         ),
                 )
                 .subcommand(
@@ -219,7 +229,9 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("BUFFER_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .help("Buffer account to write data into [default: random address]")
+                                .help(
+                                    "Buffer account to write data into [default: random address]",
+                                ),
                         )
                         .arg(
                             Arg::with_name("buffer_authority")
@@ -227,7 +239,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("BUFFER_AUTHORITY_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .help("Buffer authority [default: the default configured keypair]")
+                                .help("Buffer authority [default: the default configured keypair]"),
                         )
                         .arg(
                             Arg::with_name("max_len")
@@ -235,8 +247,10 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("max_len")
                                 .takes_value(true)
                                 .required(false)
-                                .help("Maximum length of the upgradeable program \
-                                      [default: twice the length of the original deployed program]")
+                                .help(
+                                    "Maximum length of the upgradeable program \
+                                    [default: twice the length of the original deployed program]",
+                                ),
                         ),
                 )
                 .subcommand(
@@ -248,7 +262,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("BUFFER_PUBKEY")
                                 .takes_value(true)
                                 .required(true)
-                                .help("Public key of the buffer")
+                                .help("Public key of the buffer"),
                         )
                         .arg(
                             Arg::with_name("buffer_authority")
@@ -256,15 +270,15 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("BUFFER_AUTHORITY_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .help("Buffer authority [default: the default configured keypair]")
+                                .help("Buffer authority [default: the default configured keypair]"),
                         )
-                        .arg(
-                            pubkey!(Arg::with_name("new_buffer_authority")
+                        .arg(pubkey!(
+                            Arg::with_name("new_buffer_authority")
                                 .long("new-buffer-authority")
                                 .value_name("NEW_BUFFER_AUTHORITY")
                                 .required(true),
-                                "Address of the new buffer authority"),
-                        )
+                            "Address of the new buffer authority"
+                        )),
                 )
                 .subcommand(
                     SubCommand::with_name("set-upgrade-authority")
@@ -275,7 +289,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("PROGRAM_ADDRESS")
                                 .takes_value(true)
                                 .required(true)
-                                .help("Address of the program to upgrade")
+                                .help("Address of the program to upgrade"),
                         )
                         .arg(
                             Arg::with_name("upgrade_authority")
@@ -283,7 +297,9 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("UPGRADE_AUTHORITY_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .help("Upgrade authority [default: the default configured keypair]")
+                                .help(
+                                    "Upgrade authority [default: the default configured keypair]",
+                                ),
                         )
                         .arg(
                             Arg::with_name("new_upgrade_authority")
@@ -291,21 +307,32 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("NEW_UPGRADE_AUTHORITY")
                                 .required_unless("final")
                                 .takes_value(true)
-                                .help("New upgrade authority (keypair or pubkey). It is strongly recommended to pass in a keypair to prevent mistakes in setting the upgrade authority. You can opt out of this behavior by passing --skip-new-upgrade-authority-signer-check if you are really confident that you are setting the correct authority. Alternatively, If you wish to make the program immutable, you should ignore this arg and pass the --final flag."
-                        )
+                                .help(
+                                    "New upgrade authority (keypair or pubkey). It is strongly \
+                                     recommended to pass in a keypair to prevent mistakes in \
+                                     setting the upgrade authority. You can opt out of this \
+                                     behavior by passing \
+                                     --skip-new-upgrade-authority-signer-check if you are really \
+                                     confident that you are setting the correct authority. \
+                                     Alternatively, If you wish to make the program immutable, \
+                                     you should ignore this arg and pass the --final flag.",
+                                ),
                         )
                         .arg(
                             Arg::with_name("final")
                                 .long("final")
                                 .conflicts_with("new_upgrade_authority")
-                                .help("The program will not be upgradeable")
+                                .help("The program will not be upgradeable"),
                         )
                         .arg(
                             Arg::with_name("skip_new_upgrade_authority_signer_check")
                                 .long("skip-new-upgrade-authority-signer-check")
                                 .requires("new_upgrade_authority")
                                 .takes_value(false)
-                                .help("Set this flag if you don't want the new authority to sign the set-upgrade-authority transaction."),
+                                .help(
+                                    "Set this flag if you don't want the new authority to sign \
+                                     the set-upgrade-authority transaction.",
+                                ),
                         ),
                 )
                 .subcommand(
@@ -316,7 +343,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .index(1)
                                 .value_name("ACCOUNT_ADDRESS")
                                 .takes_value(true)
-                                .help("Address of the buffer or program to show")
+                                .help("Address of the buffer or program to show"),
                         )
                         .arg(
                             Arg::with_name("programs")
@@ -324,7 +351,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .conflicts_with("account")
                                 .conflicts_with("buffers")
                                 .required_unless_one(&["account", "buffers"])
-                                .help("Show every upgradeable program that matches the authority")
+                                .help("Show every upgradeable program that matches the authority"),
                         )
                         .arg(
                             Arg::with_name("buffers")
@@ -332,22 +359,22 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .conflicts_with("account")
                                 .conflicts_with("programs")
                                 .required_unless_one(&["account", "programs"])
-                                .help("Show every upgradeable buffer that matches the authority")
+                                .help("Show every upgradeable buffer that matches the authority"),
                         )
                         .arg(
                             Arg::with_name("all")
                                 .long("all")
                                 .conflicts_with("account")
                                 .conflicts_with("buffer_authority")
-                                .help("Show accounts for all authorities")
+                                .help("Show accounts for all authorities"),
                         )
-                        .arg(
-                            pubkey!(Arg::with_name("buffer_authority")
+                        .arg(pubkey!(
+                            Arg::with_name("buffer_authority")
                                 .long("buffer-authority")
                                 .value_name("AUTHORITY")
                                 .conflicts_with("all"),
-                                "Authority [default: the default configured keypair]"),
-                        )
+                            "Authority [default: the default configured keypair]"
+                        ))
                         .arg(
                             Arg::with_name("lamports")
                                 .long("lamports")
@@ -364,7 +391,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("ACCOUNT_ADDRESS")
                                 .takes_value(true)
                                 .required(true)
-                                .help("Address of the buffer or program")
+                                .help("Address of the buffer or program"),
                         )
                         .arg(
                             Arg::with_name("output_location")
@@ -390,7 +417,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .long("buffers")
                                 .conflicts_with("account")
                                 .required_unless("account")
-                                .help("Close all buffer accounts that match the authority")
+                                .help("Close all buffer accounts that match the authority"),
                         )
                         .arg(
                             Arg::with_name("authority")
@@ -399,15 +426,18 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("AUTHORITY_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .help("Upgrade or buffer authority [default: the default configured keypair]")
+                                .help(
+                                    "Upgrade or buffer authority [default: the default configured \
+                                     keypair]",
+                                ),
                         )
-
-                        .arg(
-                            pubkey!(Arg::with_name("recipient_account")
+                        .arg(pubkey!(
+                            Arg::with_name("recipient_account")
                                 .long("recipient")
                                 .value_name("RECIPIENT_ADDRESS"),
-                                "Address of the account to deposit the closed account's lamports [default: the default configured keypair]"),
-                        )
+                            "Address of the account to deposit the closed account's lamports \
+                             [default: the default configured keypair]"
+                        ))
                         .arg(
                             Arg::with_name("lamports")
                                 .long("lamports")
@@ -423,7 +453,9 @@ impl ProgramSubCommands for App<'_, '_> {
                 )
                 .subcommand(
                     SubCommand::with_name("extend")
-                        .about("Extend the length of an upgradeable program to deploy larger programs")
+                        .about(
+                            "Extend the length of an upgradeable program to deploy larger programs",
+                        )
                         .arg(
                             Arg::with_name("program_id")
                                 .index(1)
@@ -440,14 +472,20 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .takes_value(true)
                                 .required(true)
                                 .validator(is_parsable::<u32>)
-                                .help("Number of bytes that will be allocated for the program's data account")
-                        )
-                )
+                                .help(
+                                    "Number of bytes that will be allocated for the program's \
+                                     data account",
+                                ),
+                        ),
+                ),
         )
         .subcommand(
             SubCommand::with_name("deploy")
-                .about("Deploy has been removed. Use `solana program deploy` instead to deploy upgradeable programs")
-                .setting(AppSettings::Hidden)
+                .about(
+                    "Deploy has been removed. Use `solana program deploy` instead to deploy \
+                     upgradeable programs",
+                )
+                .setting(AppSettings::Hidden),
         )
     }
 }
@@ -1381,7 +1419,8 @@ fn get_programs(
             let results = get_accounts_with_filter(rpc_client, filters, 0)?;
             if results.len() != 1 {
                 return Err(format!(
-                    "Error: More than one Program associated with ProgramData account {programdata_address}"
+                    "Error: More than one Program associated with ProgramData account \
+                     {programdata_address}"
                 )
                 .into());
             }
