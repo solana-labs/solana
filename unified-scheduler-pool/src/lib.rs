@@ -62,7 +62,7 @@ pub struct SchedulerPool<S: SpawnableScheduler<TH>, TH: TaskHandler> {
 }
 
 pub type DefaultSchedulerPool =
-    SchedulerPool<PooledScheduler<DefaultTaskRunner>, DefaultTaskRunner>;
+    SchedulerPool<PooledScheduler<DefaultTaskHandler>, DefaultTaskHandler>;
 
 impl<S: SpawnableScheduler<TH>, TH: TaskHandler> SchedulerPool<S, TH> {
     fn new(
@@ -156,9 +156,9 @@ pub trait TaskHandler: Send + Sync + Debug + Sized + 'static {
 }
 
 #[derive(Debug)]
-pub struct DefaultTaskRunner;
+pub struct DefaultTaskHandler;
 
-impl TaskHandler for DefaultTaskRunner {
+impl TaskHandler for DefaultTaskHandler {
     fn recreate_handler_with_pool<S: SpawnableScheduler<Self>>(
         _pool: &SchedulerPool<S, Self>,
     ) -> Self {
@@ -572,7 +572,7 @@ mod tests {
 
     #[derive(Debug)]
     struct AsyncScheduler<const TRIGGER_RACE_CONDITION: bool>(
-        PooledScheduler<DefaultTaskRunner>,
+        PooledScheduler<DefaultTaskHandler>,
         Mutex<Vec<JoinHandle<ResultWithTimings>>>,
     );
 
@@ -603,8 +603,8 @@ mod tests {
                 let mut result = Ok(());
                 let mut timings = ExecuteTimings::default();
 
-                <DefaultTaskRunner as TaskHandler>::handle(
-                    &DefaultTaskRunner,
+                <DefaultTaskHandler as TaskHandler>::handle(
+                    &DefaultTaskHandler,
                     &mut result,
                     &mut timings,
                     context.bank(),
@@ -643,7 +643,7 @@ mod tests {
         }
     }
 
-    impl<const TRIGGER_RACE_CONDITION: bool> SpawnableScheduler<DefaultTaskRunner>
+    impl<const TRIGGER_RACE_CONDITION: bool> SpawnableScheduler<DefaultTaskHandler>
         for AsyncScheduler<TRIGGER_RACE_CONDITION>
     {
         fn has_context(&self) -> bool {
@@ -655,12 +655,12 @@ mod tests {
         }
 
         fn spawn(
-            pool: Arc<SchedulerPool<Self, DefaultTaskRunner>>,
+            pool: Arc<SchedulerPool<Self, DefaultTaskHandler>>,
             initial_context: SchedulingContext,
-            handler: DefaultTaskRunner,
+            handler: DefaultTaskHandler,
         ) -> Self {
             AsyncScheduler::<TRIGGER_RACE_CONDITION>(
-                PooledScheduler::<DefaultTaskRunner> {
+                PooledScheduler::<DefaultTaskHandler> {
                     id: pool.new_scheduler_id(),
                     pool: SchedulerPool::new(
                         pool.log_messages_bytes_limit,
@@ -708,7 +708,7 @@ mod tests {
 
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
-            SchedulerPool::<AsyncScheduler<TRIGGER_RACE_CONDITION>, DefaultTaskRunner>::new_dyn(
+            SchedulerPool::<AsyncScheduler<TRIGGER_RACE_CONDITION>, DefaultTaskHandler>::new_dyn(
                 None,
                 None,
                 None,
