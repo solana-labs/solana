@@ -174,7 +174,7 @@ impl TaskHandler for DefaultTaskRunner {
         index: usize,
         pool: &SchedulerPool<S, Self>,
     ) {
-        // scheduler must properly prevent conflicting tx executions, task handler isn't
+        // scheduler must properly prevent conflicting tx executions. thus, task handler isn't
         // responsible for locking.
         let batch = bank.prepare_unlocked_batch_from_single_tx(transaction);
         let batch_with_indexes = TransactionBatchWithIndexes {
