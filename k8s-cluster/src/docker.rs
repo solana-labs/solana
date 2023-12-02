@@ -125,7 +125,7 @@ COPY --chown=solana:solana ./config-k8s/client-accounts.yml /home/solana
             r#"
 FROM {}
 RUN apt-get update
-RUN apt-get install -y iputils-ping curl vim bzip2 tmux
+RUN apt-get install -y iputils-ping curl vim bzip2
 
 RUN useradd -ms /bin/bash solana
 RUN adduser solana sudo
@@ -142,7 +142,7 @@ COPY --chown=solana:solana ./config-k8s/bootstrap-validator  /home/solana/ledger
 
 RUN mkdir -p /home/solana/.cargo/bin
 
-COPY ./{solana_build_directory}/bin/* /home/solana/.cargo/bin/
+COPY ./{solana_build_directory}/bin/ /home/solana/.cargo/bin/
 COPY ./{solana_build_directory}/version.yml /home/solana/
 
 RUN mkdir -p /home/solana/config
