@@ -17812,7 +17812,7 @@ pub mod tests {
             .map(|storage| storage.1.append_vec_id())
             .max()
             .unwrap_or(999);
-        for i in 0..num_slots {
+        for (i, account_data_size) in account_data_sizes.iter().enumerate().take(num_slots) {
             let id = starting_id + (i as AppendVecId);
             let pubkey1 = solana_sdk::pubkey::new_rand();
             let storage = sample_storage_with_entries_id_fill_percentage(
@@ -17822,7 +17822,7 @@ pub mod tests {
                 &pubkey1,
                 id,
                 alive,
-                Some(account_data_sizes[i]),
+                Some(*account_data_size),
                 50,
             );
             insert_store(db, Arc::clone(&storage));
