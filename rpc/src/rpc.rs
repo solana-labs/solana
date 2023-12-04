@@ -3724,6 +3724,7 @@ pub mod rpc_full {
                 encoding,
                 accounts: config_accounts,
                 min_context_slot,
+                inner_instructions: _,
             } = config.unwrap_or_default();
             let tx_encoding = encoding.unwrap_or(UiTransactionEncoding::Base58);
             let binary_encoding = tx_encoding.into_binary_encoding().ok_or_else(|| {
