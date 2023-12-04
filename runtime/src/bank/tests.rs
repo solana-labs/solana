@@ -13905,3 +13905,64 @@ fn test_filter_executable_program_accounts_invalid_blockhash() {
     );
     assert_eq!(lock_results[1].0, Err(TransactionError::BlockhashNotFound));
 }
+
+/// Test that rehashing works with skipped rewrites
+///
+/// Since `bank_to_xxx_snapshot_archive()` calls `Bank::rehash()`, we must ensure that rehashing
+/// works properly when also using `test_skip_rewrites_but_include_in_bank_hash`.
+#[test]
+fn test_rehash_with_skipped_rewrites() {
+    let accounts_db_config = AccountsDbConfig {
+        test_skip_rewrites_but_include_in_bank_hash: true,
+        ..ACCOUNTS_DB_CONFIG_FOR_TESTING
+    };
+    let bank = Arc::new(Bank::new_with_paths(
+        &GenesisConfig::default(),
+        Arc::new(RuntimeConfig::default()),
+        Vec::default(),
+        None,
+        None,
+        AccountSecondaryIndexes::default(),
+        AccountShrinkThreshold::default(),
+        false,
+        Some(accounts_db_config),
+        None,
+        Arc::new(AtomicBool::new(false)),
+    ));
+    // This test is only meaningful while the bank hash contains rewrites.
+    // Once this feature is enabled, it may be possible to remove this test entirely.
+    assert!(!bank.bank_hash_skips_rent_rewrites());
+
+    // Store an account *in this bank* that will be checked for rent collection *in the next bank*
+    let pubkey = {
+        let rent_collection_partition = bank
+            .variable_cycle_partitions_between_slots(bank.slot(), bank.slot() + 1)
+            .last()
+            .copied()
+            .unwrap();
+        let pubkey_range =
+            accounts_partition::pubkey_range_from_partition(rent_collection_partition);
+        *pubkey_range.end()
+    };
+    let mut account = AccountSharedData::new(123_456_789, 0, &Pubkey::default());
+    // The account's rent epoch must be set to EXEMPT
+    // in order for its rewrite to be skipped by rent collection.
+    account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
+    bank.store_account_and_update_capitalization(&pubkey, &account);
+
+    // Create a new bank that will do rent collection on the account stored in the previous slot
+    let bank = Arc::new(Bank::new_from_parent(
+        bank.clone(),
+        &Pubkey::new_unique(),
+        bank.slot() + 1,
+    ));
+
+    // Freeze the bank to trigger rent collection and hash calculation
+    bank.freeze();
+
+    // Ensure the bank hash is the same before and after rehashing
+    let bank_hash = bank.hash();
+    bank.rehash();
+    let bank_rehash = bank.hash();
+    assert_eq!(bank_rehash, bank_hash);
+}
