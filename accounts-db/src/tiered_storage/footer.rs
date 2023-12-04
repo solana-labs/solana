@@ -136,12 +136,12 @@ pub struct TieredStorageFooter {
     /// A hash that represents a tiered accounts file for consistency check.
     pub hash: Hash,
 
+    /// The format version of the tiered accounts file.
+    pub format_version: u64,
     // The below fields belong to footer tail.
     // The sum of their sizes should match FOOTER_TAIL_SIZE.
     /// The size of the footer including the magic number.
     pub footer_size: u64,
-    /// The format version of the tiered accounts file.
-    pub format_version: u64,
     // This field is persisted in the storage but not in this struct.
     // The number should match FOOTER_MAGIC_NUMBER.
     // pub magic_number: u64,
@@ -166,8 +166,8 @@ const _: () = assert!(
          + std::mem::size_of::<Pubkey>() // min_account_address
          + std::mem::size_of::<Pubkey>() // max_account_address
          + std::mem::size_of::<Hash>() // hash
-         + std::mem::size_of::<u64>() // footer_size
-         + std::mem::size_of::<u64>(), // format_version
+         + std::mem::size_of::<u64>() // format_version
+         + std::mem::size_of::<u64>(), // footer_size
     "TieredStorageFooter cannot have any padding"
 );
 
@@ -188,8 +188,8 @@ impl Default for TieredStorageFooter {
             hash: Hash::new_unique(),
             min_account_address: Pubkey::default(),
             max_account_address: Pubkey::default(),
-            footer_size: FOOTER_SIZE as u64,
             format_version: FOOTER_FORMAT_VERSION,
+            footer_size: FOOTER_SIZE as u64,
         }
     }
 }
@@ -208,20 +208,21 @@ impl TieredStorageFooter {
     }
 
     pub fn new_from_footer_block(file: &TieredStorageFile) -> TieredStorageResult<Self> {
-        let mut footer_size: u64 = 0;
         file.seek_from_end(-(FOOTER_TAIL_SIZE as i64))?;
+
+        let mut footer_version: u64 = 0;
+        file.read_type(&mut footer_version)?;
+        if footer_version != FOOTER_FORMAT_VERSION {
+            return Err(TieredStorageError::InvalidFooterVersion(footer_version));
+        }
+
+        let mut footer_size: u64 = 0;
         file.read_type(&mut footer_size)?;
         if footer_size != FOOTER_SIZE as u64 {
             return Err(TieredStorageError::InvalidFooterSize(
                 footer_size,
                 FOOTER_SIZE as u64,
             ));
-        }
-
-        let mut footer_version: u64 = 0;
-        file.read_type(&mut footer_version)?;
-        if footer_version != FOOTER_FORMAT_VERSION {
-            return Err(TieredStorageError::InvalidFooterVersion(footer_version));
         }
 
         let mut magic_number = TieredStorageMagicNumber::zeroed();
@@ -243,17 +244,18 @@ impl TieredStorageFooter {
 
     pub fn new_from_mmap(mmap: &Mmap) -> TieredStorageResult<&TieredStorageFooter> {
         let offset = mmap.len().saturating_sub(FOOTER_TAIL_SIZE);
+
+        let (footer_version, offset) = get_type::<u64>(mmap, offset)?;
+        if *footer_version != FOOTER_FORMAT_VERSION {
+            return Err(TieredStorageError::InvalidFooterVersion(*footer_version));
+        }
+
         let (&footer_size, offset) = get_type::<u64>(mmap, offset)?;
         if footer_size != FOOTER_SIZE as u64 {
             return Err(TieredStorageError::InvalidFooterSize(
                 footer_size,
                 FOOTER_SIZE as u64,
             ));
-        }
-
-        let (footer_version, offset) = get_type::<u64>(mmap, offset)?;
-        if *footer_version != FOOTER_FORMAT_VERSION {
-            return Err(TieredStorageError::InvalidFooterVersion(*footer_version));
         }
 
         let (magic_number, _offset) = get_type::<TieredStorageMagicNumber>(mmap, offset)?;
@@ -353,8 +355,8 @@ mod tests {
             hash: Hash::new_unique(),
             min_account_address: Pubkey::default(),
             max_account_address: Pubkey::new_unique(),
-            footer_size: FOOTER_SIZE as u64,
             format_version: FOOTER_FORMAT_VERSION,
+            footer_size: FOOTER_SIZE as u64,
         };
 
         // Persist the expected footer.
@@ -390,8 +392,8 @@ mod tests {
         assert_eq!(offset_of!(TieredStorageFooter, min_account_address), 0x30);
         assert_eq!(offset_of!(TieredStorageFooter, max_account_address), 0x50);
         assert_eq!(offset_of!(TieredStorageFooter, hash), 0x70);
-        assert_eq!(offset_of!(TieredStorageFooter, footer_size), 0x90);
-        assert_eq!(offset_of!(TieredStorageFooter, format_version), 0x98);
+        assert_eq!(offset_of!(TieredStorageFooter, format_version), 0x90);
+        assert_eq!(offset_of!(TieredStorageFooter, footer_size), 0x98);
     }
 
     #[test]
