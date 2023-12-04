@@ -6909,7 +6909,7 @@ impl Bank {
             .calculate_accounts_delta_hash_internal(
                 slot,
                 ignore,
-                std::mem::take(&mut self.skipped_rewrites.lock().unwrap()),
+                self.skipped_rewrites.lock().unwrap().clone(),
             );
 
         let mut signature_count_buf = [0u8; 8];
