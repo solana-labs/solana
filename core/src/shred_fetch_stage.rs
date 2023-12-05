@@ -10,7 +10,9 @@ use {
     solana_perf::packet::{PacketBatch, PacketBatchRecycler, PacketFlags, PACKETS_PER_BATCH},
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
-        clock::DEFAULT_MS_PER_SLOT,
+        clock::{Slot, DEFAULT_MS_PER_SLOT},
+        epoch_schedule::EpochSchedule,
+        feature_set::{self, FeatureSet},
         packet::{Meta, PACKET_DATA_SIZE},
         pubkey::Pubkey,
     },
@@ -50,12 +52,20 @@ impl ShredFetchStage {
             .as_ref()
             .map(|(_, cluster_info)| cluster_info.keypair().clone());
 
-        let (mut last_root, mut slots_per_epoch, mut last_slot) = {
+        let (
+            mut last_root,
+            mut slots_per_epoch,
+            mut feature_set,
+            mut epoch_schedule,
+            mut last_slot,
+        ) = {
             let bank_forks_r = bank_forks.read().unwrap();
             let root_bank = bank_forks_r.root_bank();
             (
                 root_bank.slot(),
                 root_bank.get_slots_in_epoch(root_bank.epoch()),
+                root_bank.feature_set.clone(),
+                root_bank.epoch_schedule().clone(),
                 bank_forks_r.highest_slot(),
             )
         };
@@ -69,6 +79,8 @@ impl ShredFetchStage {
                     last_slot = bank_forks_r.highest_slot();
                     bank_forks_r.root_bank()
                 };
+                feature_set = root_bank.feature_set.clone();
+                epoch_schedule = root_bank.epoch_schedule().clone();
                 last_root = root_bank.slot();
                 slots_per_epoch = root_bank.get_slots_in_epoch(root_bank.epoch());
                 keypair = repair_context
@@ -92,10 +104,19 @@ impl ShredFetchStage {
 
             // Limit shreds to 2 epochs away.
             let max_slot = last_slot + 2 * slots_per_epoch;
+            let should_drop_legacy_shreds =
+                |shred_slot| should_drop_legacy_shreds(shred_slot, &feature_set, &epoch_schedule);
             let turbine_disabled = turbine_disabled.load(Ordering::Relaxed);
             for packet in packet_batch.iter_mut().filter(|p| !p.meta().discard()) {
                 if turbine_disabled
-                    || should_discard_shred(packet, last_root, max_slot, shred_version, &mut stats)
+                    || should_discard_shred(
+                        packet,
+                        last_root,
+                        max_slot,
+                        shred_version,
+                        should_drop_legacy_shreds,
+                        &mut stats,
+                    )
                 {
                     packet.meta_mut().set_discard(true);
                 } else {
@@ -373,6 +394,22 @@ pub(crate) fn receive_repair_quic_packets(
     }
 }
 
+#[must_use]
+fn should_drop_legacy_shreds(
+    shred_slot: Slot,
+    feature_set: &FeatureSet,
+    epoch_schedule: &EpochSchedule,
+) -> bool {
+    match feature_set.activated_slot(&feature_set::drop_legacy_shreds::id()) {
+        None => false,
+        Some(feature_slot) => {
+            let feature_epoch = epoch_schedule.get_epoch(feature_slot);
+            let shred_epoch = epoch_schedule.get_epoch(shred_slot);
+            feature_epoch < shred_epoch
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use {
@@ -413,6 +450,7 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
+            |_| false, // should_drop_legacy_shreds
             &mut stats,
         ));
         let coding = solana_ledger::shred::Shredder::generate_coding_shreds(
@@ -426,6 +464,7 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
+            |_| false, // should_drop_legacy_shreds
             &mut stats,
         ));
     }
@@ -447,6 +486,7 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
+            |_| false, // should_drop_legacy_shreds
             &mut stats,
         ));
         assert_eq!(stats.index_overrun, 1);
@@ -468,12 +508,18 @@ mod tests {
             3,
             max_slot,
             shred_version,
+            |_| false, // should_drop_legacy_shreds
             &mut stats,
         ));
         assert_eq!(stats.slot_out_of_range, 1);
 
         assert!(should_discard_shred(
-            &packet, last_root, max_slot, /*shred_version:*/ 345, &mut stats,
+            &packet,
+            last_root,
+            max_slot,
+            345,       // shred_version
+            |_| false, // should_drop_legacy_shreds
+            &mut stats,
         ));
         assert_eq!(stats.shred_version_mismatch, 1);
 
@@ -483,6 +529,7 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
+            |_| false, // should_drop_legacy_shreds
             &mut stats,
         ));
 
@@ -504,6 +551,7 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
+            |_| false, // should_drop_legacy_shreds
             &mut stats,
         ));
 
@@ -515,6 +563,7 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
+            |_| false, // should_drop_legacy_shreds
             &mut stats,
         ));
     }
