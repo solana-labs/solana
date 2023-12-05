@@ -404,7 +404,7 @@ impl<'a> Kubernetes<'a> {
         let secret_name = format!("validator-accounts-secret-{}", validator_index);
         let key_path = SOLANA_ROOT.join("config-k8s");
 
-        let accounts = vec!["identity", "vote", "stake"];
+        let accounts = ["identity", "vote", "stake"];
         let key_files: Vec<(PathBuf, &str)> = accounts
             .iter()
             .map(|&account| {
@@ -413,7 +413,7 @@ impl<'a> Kubernetes<'a> {
                 } else {
                     format!("validator-{}-account-{}.json", account, validator_index)
                 };
-                (key_path.join(&file_name), account)
+                (key_path.join(file_name), account)
             })
             .collect();
 
@@ -433,7 +433,7 @@ impl<'a> Kubernetes<'a> {
         let secret_name = format!("non-voting-validator-accounts-secret-{}", nvv_index);
         let config_path = SOLANA_ROOT.join("config-k8s");
 
-        let accounts = vec!["identity", "stake"];
+        let accounts = ["identity", "stake"];
         let mut key_files: Vec<(PathBuf, &str)> = accounts
             .iter()
             .map(|&account| {
@@ -445,7 +445,7 @@ impl<'a> Kubernetes<'a> {
                         account, nvv_index
                     )
                 };
-                (config_path.join(&file_name), account)
+                (config_path.join(file_name), account)
             })
             .collect();
 
@@ -550,7 +550,7 @@ impl<'a> Kubernetes<'a> {
         if let Some(nodes) = &self.nodes {
             return nodes.len();
         }
-        return 0;
+        0
     }
 
     pub fn nodes(&self) -> Option<Vec<String>> {
