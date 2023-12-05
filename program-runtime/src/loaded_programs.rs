@@ -648,14 +648,13 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
     }
 
     pub fn prune_by_deployment_slot(&mut self, slot: Slot) {
-        self.entries.retain(|_key, second_level| {
+        for second_level in self.entries.values_mut() {
             *second_level = second_level
                 .iter()
                 .filter(|entry| entry.deployment_slot != slot)
                 .cloned()
                 .collect();
-            !second_level.is_empty()
-        });
+        }
         self.remove_programs_with_no_entries();
     }
 
