@@ -600,13 +600,11 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                 if matches!(existing.program, LoadedProgramType::Unloaded(_)) {
                     // The unloaded program is getting reloaded
                     // Copy over the usage counter to the new entry
-                    let mut usage_count = existing.tx_usage_counter.load(Ordering::Relaxed);
-                    saturating_add_assign!(
-                        usage_count,
-                        entry.tx_usage_counter.load(Ordering::Relaxed)
+                    entry.tx_usage_counter.fetch_add(
+                        existing.tx_usage_counter.load(Ordering::Relaxed),
+                        Ordering::Relaxed,
                     );
-                    entry.tx_usage_counter.store(usage_count, Ordering::Relaxed);
-                    entry.ix_usage_counter.store(
+                    entry.ix_usage_counter.fetch_add(
                         existing.ix_usage_counter.load(Ordering::Relaxed),
                         Ordering::Relaxed,
                     );
@@ -791,7 +789,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         let mut unloaded = Vec::new();
         let current_slot = working_slot.current_slot();
         let found = keys
-            .filter_map(|(key, (match_criteria, count))| {
+            .filter_map(|(key, (match_criteria, usage_count))| {
                 if let Some(second_level) = self.entries.get(&key) {
                     for entry in second_level.iter().rev() {
                         let is_ancestor = if let Some(fork_graph) = &self.fork_graph {
@@ -815,41 +813,41 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                         {
                             if current_slot >= entry.effective_slot {
                                 if !Self::is_entry_usable(entry, current_slot, &match_criteria) {
-                                    missing.push((key, count));
+                                    missing.push((key, usage_count));
                                     return None;
                                 }
 
                                 if !Self::matches_environment(entry, environments) {
-                                    missing.push((key, count));
+                                    missing.push((key, usage_count));
                                     return None;
                                 }
 
                                 if let LoadedProgramType::Unloaded(_environment) = &entry.program {
-                                    unloaded.push((key, count));
+                                    unloaded.push((key, usage_count));
                                     return None;
                                 }
 
-                                let mut usage_count =
-                                    entry.tx_usage_counter.load(Ordering::Relaxed);
-                                saturating_add_assign!(usage_count, count);
-                                entry.tx_usage_counter.store(usage_count, Ordering::Relaxed);
+                                entry
+                                    .tx_usage_counter
+                                    .fetch_add(usage_count, Ordering::Relaxed);
                                 return Some((key, entry.clone()));
                             } else if entry.is_implicit_delay_visibility_tombstone(current_slot) {
                                 // Found a program entry on the current fork, but it's not effective
                                 // yet. It indicates that the program has delayed visibility. Return
                                 // the tombstone to reflect that.
-                                return Some((
-                                    key,
-                                    Arc::new(LoadedProgram::new_tombstone(
-                                        entry.deployment_slot,
-                                        LoadedProgramType::DelayVisibility,
-                                    )),
+                                let entry_to_return = Arc::new(LoadedProgram::new_tombstone(
+                                    entry.deployment_slot,
+                                    LoadedProgramType::DelayVisibility,
                                 ));
+                                entry_to_return
+                                    .tx_usage_counter
+                                    .fetch_add(usage_count, Ordering::Relaxed);
+                                return Some((key, entry_to_return));
                             }
                         }
                     }
                 }
-                missing.push((key, count));
+                missing.push((key, usage_count));
                 None
             })
             .collect::<HashMap<Pubkey, Arc<LoadedProgram>>>();
