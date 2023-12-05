@@ -34,7 +34,8 @@ use {
         clock::Slot,
         entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
-            bpf_account_data_direct_mapping, enable_bpf_loader_extend_program_ix,
+            bpf_account_data_direct_mapping, deprecate_executable_meta_update_in_bpf_loader,
+            disable_bpf_loader_instructions, enable_bpf_loader_extend_program_ix,
             enable_bpf_loader_set_authority_checked_ix, native_programs_consume_cu,
             remove_bpf_loader_incorrect_program_id, FeatureSet,
         },
@@ -785,7 +786,15 @@ fn process_loader_upgradeable_instruction(
                 },
                 &invoke_context.feature_set,
             )?;
-            program.set_executable(true)?;
+
+            // Skip writing true to executable meta after bpf program deployment when
+            // `deprecate_executable_meta_update_in_bpf_loader` feature is activated.
+            if !invoke_context
+                .feature_set
+                .is_active(&deprecate_executable_meta_update_in_bpf_loader::id())
+            {
+                program.set_executable(true)?;
+            }
             drop(program);
 
             ic_logger_msg!(log_collector, "Deployed program {:?}", new_program_id);
@@ -1469,6 +1478,20 @@ fn process_loader_instruction(invoke_context: &mut InvokeContext) -> Result<(), 
         );
         return Err(InstructionError::IncorrectProgramId);
     }
+
+    // Return `UnsupportedProgramId` error for bpf_loader when
+    // `disable_bpf_loader_instruction` feature is activated.
+    if invoke_context
+        .feature_set
+        .is_active(&disable_bpf_loader_instructions::id())
+    {
+        ic_msg!(
+            invoke_context,
+            "BPF loader management instructions are no longer supported"
+        );
+        return Err(InstructionError::UnsupportedProgramId);
+    }
+
     let is_program_signer = program.is_signer();
     match limited_deserialize(instruction_data)? {
         LoaderInstruction::Write { offset, bytes } => {
@@ -1493,6 +1516,13 @@ fn process_loader_instruction(invoke_context: &mut InvokeContext) -> Result<(), 
                 {},
                 program.get_data(),
             );
+
+            // `deprecate_executable_meta_update_in_bpf_loader` feature doesn't
+            // apply to  bpf_loader v2. Instead, the deployment by bpf_loader
+            // will be deprecated by its own feature
+            // `disable_bpf_loader_instructions`. Before we activate
+            // deprecate_executable_meta_update_in_bpf_loader, we should
+            // activate `disable_bpf_loader_instructions` first.
             program.set_executable(true)?;
             ic_msg!(invoke_context, "Finalized account {:?}", program.get_key());
         }
@@ -1818,7 +1848,7 @@ mod tests {
             Err(InstructionError::NotEnoughAccountKeys),
         );
 
-        // Case: Not signed
+        // Case: Not signed (Write instruction is no longer supported!)
         process_instruction(
             &loader_id,
             &[],
@@ -1829,10 +1859,10 @@ mod tests {
                 is_signer: false,
                 is_writable: true,
             }],
-            Err(InstructionError::MissingRequiredSignature),
+            Err(InstructionError::UnsupportedProgramId),
         );
 
-        // Case: Write bytes to an offset
+        // Case: Write bytes to an offset (Write instruction is no longer supported!)
         program_account.set_data(vec![0; 6]);
         let accounts = process_instruction(
             &loader_id,
@@ -1844,11 +1874,11 @@ mod tests {
                 is_signer: true,
                 is_writable: true,
             }],
-            Ok(()),
+            Err(InstructionError::UnsupportedProgramId),
         );
-        assert_eq!(&vec![0, 0, 0, 1, 2, 3], accounts.first().unwrap().data());
+        assert_eq!(&vec![0, 0, 0, 0, 0, 0], accounts.first().unwrap().data());
 
-        // Case: Overflow
+        // Case: Overflow (Write instruction is no longer supported!)
         program_account.set_data(vec![0; 5]);
         process_instruction(
             &loader_id,
@@ -1860,7 +1890,7 @@ mod tests {
                 is_signer: true,
                 is_writable: true,
             }],
-            Err(InstructionError::AccountDataTooSmall),
+            Err(InstructionError::UnsupportedProgramId),
         );
     }
 
@@ -1883,7 +1913,7 @@ mod tests {
             Err(InstructionError::NotEnoughAccountKeys),
         );
 
-        // Case: Not signed
+        // Case: Not signed (Finalize instruction is no longer supported!)
         process_instruction(
             &loader_id,
             &[],
@@ -1894,10 +1924,10 @@ mod tests {
                 is_signer: false,
                 is_writable: true,
             }],
-            Err(InstructionError::MissingRequiredSignature),
+            Err(InstructionError::UnsupportedProgramId),
         );
 
-        // Case: Finalize
+        // Case: Finalize (Finalize instruction is no longer supported!)
         let accounts = process_instruction(
             &loader_id,
             &[],
@@ -1908,11 +1938,11 @@ mod tests {
                 is_signer: true,
                 is_writable: true,
             }],
-            Ok(()),
+            Err(InstructionError::UnsupportedProgramId),
         );
-        assert!(accounts.first().unwrap().executable());
+        assert!(!accounts.first().unwrap().executable());
 
-        // Case: Finalize bad ELF
+        // Case: Finalize bad ELF (Finalize instruction is no longer supported!)
         *program_account.data_as_mut_slice().get_mut(0).unwrap() = 0;
         process_instruction(
             &loader_id,
@@ -1924,7 +1954,7 @@ mod tests {
                 is_signer: true,
                 is_writable: true,
             }],
-            Err(InstructionError::InvalidAccountData),
+            Err(InstructionError::UnsupportedProgramId),
         );
     }
 
@@ -1932,7 +1962,7 @@ mod tests {
     fn test_bpf_loader_invoke_main() {
         let loader_id = bpf_loader::id();
         let program_id = Pubkey::new_unique();
-        let mut program_account =
+        let program_account =
             load_program_account_from_elf(&loader_id, "test_elfs/out/noop_aligned.so");
         let parameter_id = Pubkey::new_unique();
         let parameter_account = AccountSharedData::new(1, 0, &loader_id);
@@ -2002,17 +2032,6 @@ mod tests {
                 test_utils::load_all_invoked_programs(invoke_context);
             },
             |_invoke_context| {},
-        );
-
-        // Case: Account not a program
-        program_account.set_executable(false);
-        process_instruction(
-            &loader_id,
-            &[0],
-            &[],
-            vec![(program_id, program_account)],
-            Vec::new(),
-            Err(InstructionError::IncorrectProgramId),
         );
     }
 
@@ -2682,34 +2701,11 @@ mod tests {
             &elf_orig,
             &elf_new,
         );
-        transaction_accounts
-            .get_mut(1)
-            .unwrap()
-            .1
-            .set_executable(false);
+        transaction_accounts.get_mut(1).unwrap().1.set_data(vec![]); // set the account data empty to make it not executable
         process_instruction(
             transaction_accounts,
             instruction_accounts,
             Err(InstructionError::AccountNotExecutable),
-        );
-
-        // Case: Program account now owned by loader
-        let (mut transaction_accounts, instruction_accounts) = get_accounts(
-            &buffer_address,
-            &upgrade_authority_address,
-            &upgrade_authority_address,
-            &elf_orig,
-            &elf_new,
-        );
-        transaction_accounts
-            .get_mut(1)
-            .unwrap()
-            .1
-            .set_owner(Pubkey::new_unique());
-        process_instruction(
-            transaction_accounts,
-            instruction_accounts,
-            Err(InstructionError::IncorrectProgramId),
         );
 
         // Case: Program account not writable
@@ -2725,26 +2721,6 @@ mod tests {
             transaction_accounts,
             instruction_accounts,
             Err(InstructionError::InvalidArgument),
-        );
-
-        // Case: Program account not initialized
-        let (mut transaction_accounts, instruction_accounts) = get_accounts(
-            &buffer_address,
-            &upgrade_authority_address,
-            &upgrade_authority_address,
-            &elf_orig,
-            &elf_new,
-        );
-        transaction_accounts
-            .get_mut(1)
-            .unwrap()
-            .1
-            .set_state(&UpgradeableLoaderState::Uninitialized)
-            .unwrap();
-        process_instruction(
-            transaction_accounts,
-            instruction_accounts,
-            Err(InstructionError::InvalidAccountData),
         );
 
         // Case: Program ProgramData account mismatch
