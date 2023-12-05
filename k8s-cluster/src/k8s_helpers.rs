@@ -47,7 +47,7 @@ pub fn create_replica_set(
     readiness_probe: Option<Probe>,
     nodes: Option<Vec<String>>,
 ) -> Result<ReplicaSet, Box<dyn Error>> {
-    let node_affinity = nodes.map(|_| NodeAffinity {
+    let node_affinity = nodes.clone().map(|_| NodeAffinity {
         required_during_scheduling_ignored_during_execution: Some(NodeSelector {
             node_selector_terms: vec![NodeSelectorTerm {
                 match_expressions: Some(vec![NodeSelectorRequirement {
