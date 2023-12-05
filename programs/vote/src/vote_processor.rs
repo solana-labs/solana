@@ -219,30 +219,23 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
             )
         }
         VoteInstruction::AuthorizeChecked(vote_authorize) => {
-            if invoke_context
-                .feature_set
-                .is_active(&feature_set::vote_stake_checked_instructions::id())
-            {
-                instruction_context.check_number_of_instruction_accounts(4)?;
-                let voter_pubkey = transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_of_instruction_account_in_transaction(3)?,
-                )?;
-                if !instruction_context.is_instruction_account_signer(3)? {
-                    return Err(InstructionError::MissingRequiredSignature);
-                }
-                let clock =
-                    get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
-                vote_state::authorize(
-                    &mut me,
-                    voter_pubkey,
-                    vote_authorize,
-                    &signers,
-                    &clock,
-                    &invoke_context.feature_set,
-                )
-            } else {
-                Err(InstructionError::InvalidInstructionData)
+            instruction_context.check_number_of_instruction_accounts(4)?;
+            let voter_pubkey = transaction_context.get_key_of_account_at_index(
+                instruction_context.get_index_of_instruction_account_in_transaction(3)?,
+            )?;
+            if !instruction_context.is_instruction_account_signer(3)? {
+                return Err(InstructionError::MissingRequiredSignature);
             }
+            let clock =
+                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
+            vote_state::authorize(
+                &mut me,
+                voter_pubkey,
+                vote_authorize,
+                &signers,
+                &clock,
+                &invoke_context.feature_set,
+            )
         }
     }
 });

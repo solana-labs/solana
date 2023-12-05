@@ -12,7 +12,7 @@ use {
             elgamal::{ElGamalCiphertext, ElGamalKeypair},
             pedersen::{PedersenCommitment, PedersenOpening},
         },
-        errors::ProofError,
+        errors::{ProofGenerationError, ProofVerificationError},
         sigma_proofs::ciphertext_commitment_equality_proof::CiphertextCommitmentEqualityProof,
         transcript::TranscriptProtocol,
     },
@@ -60,7 +60,7 @@ impl CiphertextCommitmentEqualityProofData {
         commitment: &PedersenCommitment,
         opening: &PedersenOpening,
         amount: u64,
-    ) -> Result<Self, ProofError> {
+    ) -> Result<Self, ProofGenerationError> {
         let context = CiphertextCommitmentEqualityProofContext {
             pubkey: pod::ElGamalPubkey(keypair.pubkey().to_bytes()),
             ciphertext: pod::ElGamalCiphertext(ciphertext.to_bytes()),
@@ -91,7 +91,7 @@ impl ZkProofData<CiphertextCommitmentEqualityProofContext>
     }
 
     #[cfg(not(target_os = "solana"))]
-    fn verify_proof(&self) -> Result<(), ProofError> {
+    fn verify_proof(&self) -> Result<(), ProofVerificationError> {
         let mut transcript = self.context.new_transcript();
 
         let pubkey = self.context.pubkey.try_into()?;

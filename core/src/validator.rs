@@ -748,13 +748,7 @@ impl Validator {
 
         let (snapshot_package_sender, snapshot_packager_service) =
             if config.snapshot_config.should_generate_snapshots() {
-                // filler accounts make snapshots invalid for use
-                // so, do not publish that we have snapshots
-                let enable_gossip_push = config
-                    .accounts_db_config
-                    .as_ref()
-                    .map(|config| config.filler_accounts_config.count == 0)
-                    .unwrap_or(true);
+                let enable_gossip_push = true;
                 let (snapshot_package_sender, snapshot_package_receiver) =
                     crossbeam_channel::unbounded();
                 let snapshot_packager_service = SnapshotPackagerService::new(
@@ -1807,7 +1801,8 @@ fn load_blockstore(
                 .map(|service| service.sender()),
             accounts_update_notifier,
             exit,
-        );
+        )
+        .map_err(|err| err.to_string())?;
 
     // Before replay starts, set the callbacks in each of the banks in BankForks so that
     // all dropped banks come through the `pruned_banks_receiver` channel. This way all bank

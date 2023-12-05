@@ -306,9 +306,7 @@ mod tests {
             create_slow_genesis_config_with_leader(10_000, &validator_keypair.pubkey());
         let GenesisConfigInfo { genesis_config, .. } = &genesis_config_info;
 
-        let bank: Bank = Bank::new_no_wallclock_throttle_for_tests(genesis_config);
-        let bank_forks = BankForks::new_rw_arc(bank);
-        let bank = bank_forks.read().unwrap().working_bank();
+        let (bank, bank_forks) = Bank::new_no_wallclock_throttle_for_tests(genesis_config);
 
         let ledger_path = TempDir::new().unwrap();
         let blockstore = Arc::new(

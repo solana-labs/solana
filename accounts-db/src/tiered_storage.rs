@@ -8,6 +8,7 @@ pub mod hot;
 pub mod index;
 pub mod meta;
 pub mod mmap_utils;
+pub mod owners;
 pub mod readable;
 pub mod writer;
 

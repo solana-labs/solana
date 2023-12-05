@@ -35,7 +35,7 @@ use {
     },
     solana_storage_proto::convert::generated,
     std::{
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         ffi::{CStr, CString},
         fs,
         marker::PhantomData,
@@ -419,49 +419,52 @@ impl Rocks {
         }
         let oldest_slot = OldestSlot::default();
         let column_options = options.column_options.clone();
+        let cf_descriptors = Self::cf_descriptors(path, &options, &oldest_slot);
 
         // Open the database
         let db = match access_type {
-            AccessType::Primary | AccessType::PrimaryForMaintenance => Rocks {
-                db: DB::open_cf_descriptors(
-                    &db_options,
-                    path,
-                    Self::cf_descriptors(&options, &oldest_slot),
-                )?,
-                access_type,
-                oldest_slot,
-                column_options,
-                write_batch_perf_status: PerfSamplingStatus::default(),
-            },
+            AccessType::Primary | AccessType::PrimaryForMaintenance => {
+                DB::open_cf_descriptors(&db_options, path, cf_descriptors)?
+            }
             AccessType::Secondary => {
                 let secondary_path = path.join("solana-secondary");
-
                 info!(
-                    "Opening Rocks with secondary (read only) access at: {:?}",
-                    secondary_path
+                    "Opening Rocks with secondary (read only) access at: {secondary_path:?}. \
+                    This secondary access could temporarily degrade other accesses, such as \
+                    by solana-validator"
                 );
-                info!("This secondary access could temporarily degrade other accesses, such as by solana-validator");
-
-                Rocks {
-                    db: DB::open_cf_descriptors_as_secondary(
-                        &db_options,
-                        path,
-                        &secondary_path,
-                        Self::cf_descriptors(&options, &oldest_slot),
-                    )?,
-                    access_type,
-                    oldest_slot,
-                    column_options,
-                    write_batch_perf_status: PerfSamplingStatus::default(),
-                }
+                DB::open_cf_descriptors_as_secondary(
+                    &db_options,
+                    path,
+                    &secondary_path,
+                    cf_descriptors,
+                )?
             }
         };
-        db.configure_compaction();
+        let rocks = Rocks {
+            db,
+            access_type,
+            oldest_slot,
+            column_options,
+            write_batch_perf_status: PerfSamplingStatus::default(),
+        };
 
-        Ok(db)
+        rocks.configure_compaction();
+
+        Ok(rocks)
     }
 
+    /// Create the column family (CF) descriptors necessary to open the database.
+    ///
+    /// In order to open a RocksDB database with Primary access, all columns must be opened. So,
+    /// in addition to creating descriptors for all of the expected columns, also create
+    /// descriptors for columns that were discovered but are otherwise unknown to the software.
+    ///
+    /// One case where columns could be unknown is if a RocksDB database is modified with a newer
+    /// software version that adds a new column, and then also opened with an older version that
+    /// did not have knowledge of that new column.
     fn cf_descriptors(
+        path: &Path,
         options: &BlockstoreOptions,
         oldest_slot: &OldestSlot,
     ) -> Vec<ColumnFamilyDescriptor> {
@@ -469,7 +472,7 @@ impl Rocks {
 
         let (cf_descriptor_shred_data, cf_descriptor_shred_code) =
             new_cf_descriptor_pair_shreds::<ShredData, ShredCode>(options, oldest_slot);
-        vec![
+        let mut cf_descriptors = vec![
             new_cf_descriptor::<SlotMeta>(options, oldest_slot),
             new_cf_descriptor::<DeadSlots>(options, oldest_slot),
             new_cf_descriptor::<DuplicateSlots>(options, oldest_slot),
@@ -491,7 +494,52 @@ impl Rocks {
             new_cf_descriptor::<ProgramCosts>(options, oldest_slot),
             new_cf_descriptor::<OptimisticSlots>(options, oldest_slot),
             new_cf_descriptor::<MerkleRootMeta>(options, oldest_slot),
-        ]
+        ];
+
+        // If the access type is Secondary, we don't need to open all of the
+        // columns so we can just return immediately.
+        match options.access_type {
+            AccessType::Secondary => {
+                return cf_descriptors;
+            }
+            AccessType::Primary | AccessType::PrimaryForMaintenance => {}
+        }
+
+        // Attempt to detect the column families that are present. It is not a
+        // fatal error if we cannot, for example, if the Blockstore is brand
+        // new and will be created by the call to Rocks::open().
+        let detected_cfs = match DB::list_cf(&Options::default(), path) {
+            Ok(detected_cfs) => detected_cfs,
+            Err(err) => {
+                warn!("Unable to detect Rocks columns: {err:?}");
+                vec![]
+            }
+        };
+        // The default column is handled automatically, we don't need to create
+        // a descriptor for it
+        const DEFAULT_COLUMN_NAME: &str = "default";
+        let known_cfs: HashSet<_> = cf_descriptors
+            .iter()
+            .map(|cf_descriptor| cf_descriptor.name().to_string())
+            .chain(std::iter::once(DEFAULT_COLUMN_NAME.to_string()))
+            .collect();
+        detected_cfs.iter().for_each(|cf_name| {
+            if known_cfs.get(cf_name.as_str()).is_none() {
+                info!("Detected unknown column {cf_name}, opening column with basic options");
+                // This version of the software was unaware of the column, so
+                // it is fair to assume that we will not attempt to read or
+                // write the column. So, set some bare bones settings to avoid
+                // using extra resources on this unknown column.
+                let mut options = Options::default();
+                // Lower the default to avoid unnecessary allocations
+                options.set_write_buffer_size(1024 * 1024);
+                // Disable compactions to avoid any modifications to the column
+                options.set_disable_auto_compactions(true);
+                cf_descriptors.push(ColumnFamilyDescriptor::new(cf_name, options));
+            }
+        });
+
+        cf_descriptors
     }
 
     fn columns() -> Vec<&'static str> {
@@ -718,10 +766,6 @@ impl Rocks {
 
 pub trait Column {
     type Index;
-
-    fn key_size() -> usize {
-        std::mem::size_of::<Self::Index>()
-    }
 
     fn key(index: Self::Index) -> Vec<u8>;
     fn index(key: &[u8]) -> Self::Index;
@@ -2175,7 +2219,9 @@ fn should_enable_compression<C: 'static + Column + ColumnName>() -> bool {
 
 #[cfg(test)]
 pub mod tests {
-    use {super::*, crate::blockstore_db::columns::ShredData};
+    use {
+        super::*, crate::blockstore_db::columns::ShredData, std::path::PathBuf, tempfile::tempdir,
+    };
 
     #[test]
     fn test_compaction_filter() {
@@ -2228,6 +2274,7 @@ pub mod tests {
 
     #[test]
     fn test_cf_names_and_descriptors_equal_length() {
+        let path = PathBuf::default();
         let options = BlockstoreOptions::default();
         let oldest_slot = OldestSlot::default();
         // The names and descriptors don't need to be in the same order for our use cases;
@@ -2235,7 +2282,7 @@ pub mod tests {
         // should update both lists.
         assert_eq!(
             Rocks::columns().len(),
-            Rocks::cf_descriptors(&options, &oldest_slot).len()
+            Rocks::cf_descriptors(&path, &options, &oldest_slot).len()
         );
     }
 
@@ -2258,6 +2305,49 @@ pub mod tests {
             assert!(should_enable_cf_compaction(cf_name));
         });
         assert!(!should_enable_cf_compaction("something else"));
+    }
+
+    #[test]
+    fn test_open_unknown_columns() {
+        solana_logger::setup();
+
+        let temp_dir = tempdir().unwrap();
+        let db_path = temp_dir.path();
+
+        // Open with Primary to create the new database
+        {
+            let options = BlockstoreOptions {
+                access_type: AccessType::Primary,
+                enforce_ulimit_nofile: false,
+                ..BlockstoreOptions::default()
+            };
+            let mut rocks = Rocks::open(db_path, options).unwrap();
+
+            // Introduce a new column that will not be known
+            rocks
+                .db
+                .create_cf("new_column", &Options::default())
+                .unwrap();
+        }
+
+        // Opening with either Secondary or Primary access should succeed,
+        // even though the Rocks code is unaware of "new_column"
+        {
+            let options = BlockstoreOptions {
+                access_type: AccessType::Secondary,
+                enforce_ulimit_nofile: false,
+                ..BlockstoreOptions::default()
+            };
+            let _ = Rocks::open(db_path, options).unwrap();
+        }
+        {
+            let options = BlockstoreOptions {
+                access_type: AccessType::Primary,
+                enforce_ulimit_nofile: false,
+                ..BlockstoreOptions::default()
+            };
+            let _ = Rocks::open(db_path, options).unwrap();
+        }
     }
 
     impl<C> LedgerColumn<C>

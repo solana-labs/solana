@@ -11,20 +11,20 @@ impl VecPoly1 {
         VecPoly1(vec![Scalar::zero(); n], vec![Scalar::zero(); n])
     }
 
-    pub fn inner_product(&self, rhs: &VecPoly1) -> Poly2 {
+    pub fn inner_product(&self, rhs: &VecPoly1) -> Option<Poly2> {
         // Uses Karatsuba's method
         let l = self;
         let r = rhs;
 
-        let t0 = inner_product(&l.0, &r.0);
-        let t2 = inner_product(&l.1, &r.1);
+        let t0 = inner_product(&l.0, &r.0)?;
+        let t2 = inner_product(&l.1, &r.1)?;
 
         let l0_plus_l1 = add_vec(&l.0, &l.1);
         let r0_plus_r1 = add_vec(&r.0, &r.1);
 
-        let t1 = inner_product(&l0_plus_l1, &r0_plus_r1) - t0 - t2;
+        let t1 = inner_product(&l0_plus_l1, &r0_plus_r1)? - t0 - t2;
 
-        Poly2(t0, t1, t2)
+        Some(Poly2(t0, t1, t2))
     }
 
     pub fn eval(&self, x: Scalar) -> Vec<Scalar> {
@@ -98,16 +98,16 @@ pub fn read32(data: &[u8]) -> [u8; 32] {
 /// \\[
 ///    {\langle {\mathbf{a}}, {\mathbf{b}} \rangle} = \sum\_{i=0}^{n-1} a\_i \cdot b\_i.
 /// \\]
-/// Panics if the lengths of \\(\mathbf{a}\\) and \\(\mathbf{b}\\) are not equal.
-pub fn inner_product(a: &[Scalar], b: &[Scalar]) -> Scalar {
+/// Errors if the lengths of \\(\mathbf{a}\\) and \\(\mathbf{b}\\) are not equal.
+pub fn inner_product(a: &[Scalar], b: &[Scalar]) -> Option<Scalar> {
     let mut out = Scalar::zero();
     if a.len() != b.len() {
-        panic!("inner_product(a,b): lengths of vectors do not match");
+        return None;
     }
     for i in 0..a.len() {
         out += a[i] * b[i];
     }
-    out
+    Some(out)
 }
 
 /// Takes the sum of all the powers of `x`, up to `n`

@@ -631,7 +631,7 @@ impl JsonRpcRequestProcessor {
         // Since epoch schedule data comes from the genesis config, any commitment level should be
         // fine
         let bank = self.bank(Some(CommitmentConfig::finalized()));
-        *bank.epoch_schedule()
+        bank.epoch_schedule().clone()
     }
 
     pub fn get_balance(

@@ -1,7 +1,7 @@
 //! Plain Old Data types for the Grouped ElGamal encryption scheme.
 
 #[cfg(not(target_os = "solana"))]
-use crate::{encryption::grouped_elgamal::GroupedElGamalCiphertext, errors::ProofError};
+use crate::encryption::{elgamal::ElGamalError, grouped_elgamal::GroupedElGamalCiphertext};
 use {
     crate::zk_token_elgamal::pod::{
         elgamal::DECRYPT_HANDLE_LEN, pedersen::PEDERSEN_COMMITMENT_LEN, Pod, Zeroable,
@@ -42,10 +42,10 @@ impl From<GroupedElGamalCiphertext<2>> for GroupedElGamalCiphertext2Handles {
 
 #[cfg(not(target_os = "solana"))]
 impl TryFrom<GroupedElGamalCiphertext2Handles> for GroupedElGamalCiphertext<2> {
-    type Error = ProofError;
+    type Error = ElGamalError;
 
     fn try_from(pod_ciphertext: GroupedElGamalCiphertext2Handles) -> Result<Self, Self::Error> {
-        Self::from_bytes(&pod_ciphertext.0).ok_or(ProofError::CiphertextDeserialization)
+        Self::from_bytes(&pod_ciphertext.0).ok_or(ElGamalError::CiphertextDeserialization)
     }
 }
 
@@ -75,9 +75,9 @@ impl From<GroupedElGamalCiphertext<3>> for GroupedElGamalCiphertext3Handles {
 
 #[cfg(not(target_os = "solana"))]
 impl TryFrom<GroupedElGamalCiphertext3Handles> for GroupedElGamalCiphertext<3> {
-    type Error = ProofError;
+    type Error = ElGamalError;
 
     fn try_from(pod_ciphertext: GroupedElGamalCiphertext3Handles) -> Result<Self, Self::Error> {
-        Self::from_bytes(&pod_ciphertext.0).ok_or(ProofError::CiphertextDeserialization)
+        Self::from_bytes(&pod_ciphertext.0).ok_or(ElGamalError::CiphertextDeserialization)
     }
 }

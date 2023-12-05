@@ -95,4 +95,4 @@ with a fixed prefix: `\xffsolana offchain`, where first byte is chosen such
 that it is implicitly illegal as the first byte in a transaction
 `MessageHeader` today. More details about the payload format and other
 considerations are available in the
-[proposal](https://github.com/solana-labs/solana/blob/e80f67dd58b7fa3901168055211f346164efa43a/docs/src/proposals/off-chain-message-signing.md).
+[proposal](https://github.com/solana-labs/solana/blob/master/docs/src/proposals/off-chain-message-signing.md).

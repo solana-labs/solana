@@ -1349,14 +1349,23 @@ impl ReplayStage {
                         );
                     }
 
-
                     // Should not dump slots for which we were the leader
                     if Some(*my_pubkey) == leader_schedule_cache.slot_leader_at(*duplicate_slot, None) {
-                            panic!("We are attempting to dump a block that we produced. \
-                                This indicates that we are producing duplicate blocks, \
-                                or that there is a bug in our runtime/replay code which \
-                                causes us to compute different bank hashes than the rest of the cluster. \
-                                We froze slot {duplicate_slot} with hash {frozen_hash:?} while the cluster hash is {correct_hash}");
+                        if let Some(bank) = bank_forks.read().unwrap().get(*duplicate_slot) {
+                            bank_hash_details::write_bank_hash_details_file(&bank)
+                                .map_err(|err| {
+                                    warn!("Unable to write bank hash details file: {err}");
+                                })
+                                .ok();
+                        } else {
+                            warn!("Unable to get bank for slot {duplicate_slot} from bank forks \
+                                   while attempting to write bank hash details file");
+                        }
+                        panic!("We are attempting to dump a block that we produced. \
+                            This indicates that we are producing duplicate blocks, \
+                            or that there is a bug in our runtime/replay code which \
+                            causes us to compute different bank hashes than the rest of the cluster. \
+                            We froze slot {duplicate_slot} with hash {frozen_hash:?} while the cluster hash is {correct_hash}");
                     }
 
                     let attempt_no = purge_repair_slot_counter
@@ -1507,7 +1516,11 @@ impl ReplayStage {
                     let bank = w_bank_forks
                         .remove(*slot)
                         .expect("BankForks should not have been purged yet");
-                    let _ = bank_hash_details::write_bank_hash_details_file(&bank);
+                    bank_hash_details::write_bank_hash_details_file(&bank)
+                        .map_err(|err| {
+                            warn!("Unable to write bank hash details file: {err}");
+                        })
+                        .ok();
                     ((*slot, bank.bank_id()), bank)
                 })
                 .unzip()
@@ -5006,7 +5019,7 @@ pub(crate) mod tests {
             let keypair2 = Keypair::new();
             let keypair3 = Keypair::new();
 
-            let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+            let (bank0, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
             bank0
                 .transfer(
                     bank0.get_minimum_balance_for_rent_exemption(0),
@@ -5015,7 +5028,11 @@ pub(crate) mod tests {
                 )
                 .unwrap();
 
-            let bank1 = Arc::new(Bank::new_from_parent(bank0, &Pubkey::default(), 1));
+            let bank1 = bank_forks
+                .write()
+                .unwrap()
+                .insert(Bank::new_from_parent(bank0, &Pubkey::default(), 1))
+                .clone_without_scheduler();
             let slot = bank1.slot();
 
             let (entries, test_signatures) = create_test_transaction_entries(
@@ -6512,8 +6529,9 @@ pub(crate) mod tests {
         );
 
         // 4 should be the heaviest slot, but should not be votable
-        // because of lockout. 5 is no longer valid due to it being a duplicate.
-        let (vote_fork, reset_fork, _) = run_compute_and_select_forks(
+        // because of lockout. 5 is no longer valid due to it being a duplicate, however we still
+        // reset onto 5.
+        let (vote_fork, reset_fork, heaviest_fork_failures) = run_compute_and_select_forks(
             &bank_forks,
             &mut progress,
             &mut tower,
@@ -6522,7 +6540,41 @@ pub(crate) mod tests {
             None,
         );
         assert!(vote_fork.is_none());
-        assert!(reset_fork.is_none());
+        assert_eq!(reset_fork, Some(5));
+        assert_eq!(
+            heaviest_fork_failures,
+            vec![
+                HeaviestForkFailures::FailedSwitchThreshold(4, 0, 10000),
+                HeaviestForkFailures::LockedOut(4)
+            ]
+        );
+
+        // Continue building on 5
+        let forks = tr(5) / (tr(6) / (tr(7) / (tr(8) / (tr(9)))) / tr(10));
+        vote_simulator.bank_forks = bank_forks;
+        vote_simulator.progress = progress;
+        vote_simulator.fill_bank_forks(forks, &HashMap::<Pubkey, Vec<u64>>::new(), true);
+        let (bank_forks, mut progress) = (vote_simulator.bank_forks, vote_simulator.progress);
+        // 4 is still the heaviest slot, but not votable beecause of lockout.
+        // 9 is the deepest slot from our last voted fork (5), so it is what we should
+        // reset to.
+        let (vote_fork, reset_fork, heaviest_fork_failures) = run_compute_and_select_forks(
+            &bank_forks,
+            &mut progress,
+            &mut tower,
+            &mut vote_simulator.heaviest_subtree_fork_choice,
+            &mut vote_simulator.latest_validator_votes_for_frozen_banks,
+            None,
+        );
+        assert!(vote_fork.is_none());
+        assert_eq!(reset_fork, Some(9));
+        assert_eq!(
+            heaviest_fork_failures,
+            vec![
+                HeaviestForkFailures::FailedSwitchThreshold(4, 0, 10000),
+                HeaviestForkFailures::LockedOut(4)
+            ]
+        );
 
         // If slot 5 is marked as confirmed, it becomes the heaviest bank on same slot again
         let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
@@ -6544,12 +6596,16 @@ pub(crate) mod tests {
             &mut purge_repair_slot_counter,
             SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
         );
+
         // The confirmed hash is detected in `progress`, which means
         // it's confirmation on the replayed block. This means we have
         // the right version of the block, so `duplicate_slots_to_repair`
         // should be empty
         assert!(duplicate_slots_to_repair.is_empty());
-        let (vote_fork, reset_fork, _) = run_compute_and_select_forks(
+
+        // We should still reset to slot 9 as it's the heaviest on the now valid
+        // fork.
+        let (vote_fork, reset_fork, heaviest_fork_failures) = run_compute_and_select_forks(
             &bank_forks,
             &mut progress,
             &mut tower,
@@ -6557,9 +6613,40 @@ pub(crate) mod tests {
             &mut vote_simulator.latest_validator_votes_for_frozen_banks,
             None,
         );
+        assert!(vote_fork.is_none());
+        assert_eq!(reset_fork.unwrap(), 9);
+        assert_eq!(
+            heaviest_fork_failures,
+            vec![
+                HeaviestForkFailures::FailedSwitchThreshold(4, 0, 10000),
+                HeaviestForkFailures::LockedOut(4)
+            ]
+        );
+
+        // Resetting our forks back to how it was should allow us to reset to our
+        // last vote which was previously marked as invalid and now duplicate confirmed
+        let bank6_hash = bank_forks.read().unwrap().bank_hash(6).unwrap();
+        let _ = vote_simulator
+            .heaviest_subtree_fork_choice
+            .split_off(&(6, bank6_hash));
         // Should now pick 5 as the heaviest fork from last vote again.
+        let (vote_fork, reset_fork, heaviest_fork_failures) = run_compute_and_select_forks(
+            &bank_forks,
+            &mut progress,
+            &mut tower,
+            &mut vote_simulator.heaviest_subtree_fork_choice,
+            &mut vote_simulator.latest_validator_votes_for_frozen_banks,
+            None,
+        );
         assert!(vote_fork.is_none());
         assert_eq!(reset_fork.unwrap(), 5);
+        assert_eq!(
+            heaviest_fork_failures,
+            vec![
+                HeaviestForkFailures::FailedSwitchThreshold(4, 0, 10000),
+                HeaviestForkFailures::LockedOut(4)
+            ]
+        );
     }
 
     #[test]

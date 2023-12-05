@@ -1,7 +1,6 @@
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 
 /// Additional flags for stake state.
-#[allow(dead_code)]
 #[derive(
     Serialize,
     Deserialize,
@@ -23,7 +22,6 @@ pub struct StakeFlags {
 }
 
 /// Currently, only bit 1 is used. The other 7 bits are reserved for future usage.
-#[allow(dead_code)]
 impl StakeFlags {
     ///  Stake must be fully activated before deactivation is allowed (bit 1).
     pub const MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED: Self =
@@ -52,7 +50,6 @@ impl StakeFlags {
     }
 }
 
-#[allow(dead_code)]
 impl Default for StakeFlags {
     fn default() -> Self {
         StakeFlags::empty()

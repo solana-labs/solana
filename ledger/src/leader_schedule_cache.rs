@@ -40,7 +40,7 @@ pub struct LeaderScheduleCache {
 
 impl LeaderScheduleCache {
     pub fn new_from_bank(bank: &Bank) -> Self {
-        Self::new(*bank.epoch_schedule(), bank)
+        Self::new(bank.epoch_schedule().clone(), bank)
     }
 
     pub fn new(epoch_schedule: EpochSchedule, root_bank: &Bank) -> Self {
@@ -56,9 +56,11 @@ impl LeaderScheduleCache {
         cache.set_root(root_bank);
 
         // Calculate the schedule for all epochs between 0 and leader_schedule_epoch(root)
-        let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(root_bank.slot());
+        let leader_schedule_epoch = cache
+            .epoch_schedule
+            .get_leader_schedule_epoch(root_bank.slot());
         for epoch in 0..leader_schedule_epoch {
-            let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch);
+            let first_slot_in_epoch = cache.epoch_schedule.get_first_slot_in_epoch(epoch);
             cache.slot_leader_at(first_slot_in_epoch, Some(root_bank));
         }
         cache

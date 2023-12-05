@@ -727,6 +727,90 @@ fn test_cli_program_close_program() {
 }
 
 #[test]
+fn test_cli_program_extend_program() {
+    solana_logger::setup();
+
+    let mut noop_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    noop_path.push("tests");
+    noop_path.push("fixtures");
+    noop_path.push("noop");
+    noop_path.set_extension("so");
+
+    let mint_keypair = Keypair::new();
+    let mint_pubkey = mint_keypair.pubkey();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator =
+        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
+
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
+
+    let mut file = File::open(noop_path.to_str().unwrap()).unwrap();
+    let mut program_data = Vec::new();
+    file.read_to_end(&mut program_data).unwrap();
+    let max_len = program_data.len();
+    let minimum_balance_for_programdata = rpc_client
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_programdata(
+            max_len,
+        ))
+        .unwrap();
+    let minimum_balance_for_program = rpc_client
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_program())
+        .unwrap();
+    let upgrade_authority = Keypair::new();
+
+    let mut config = CliConfig::recent_for_tests();
+    let keypair = Keypair::new();
+    config.json_rpc_url = test_validator.rpc_url();
+    config.signers = vec![&keypair];
+    config.command = CliCommand::Airdrop {
+        pubkey: None,
+        lamports: 100 * minimum_balance_for_programdata + minimum_balance_for_program,
+    };
+    process_command(&config).unwrap();
+
+    // Deploy the upgradeable program
+    let program_keypair = Keypair::new();
+    config.signers = vec![&keypair, &upgrade_authority, &program_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
+        program_signer_index: Some(2),
+        program_pubkey: Some(program_keypair.pubkey()),
+        buffer_signer_index: None,
+        buffer_pubkey: None,
+        allow_excessive_balance: false,
+        upgrade_authority_signer_index: 1,
+        is_final: false,
+        max_len: Some(max_len),
+        skip_fee_check: false,
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    process_command(&config).unwrap();
+
+    let (programdata_pubkey, _) = Pubkey::find_program_address(
+        &[program_keypair.pubkey().as_ref()],
+        &bpf_loader_upgradeable::id(),
+    );
+
+    // Wait one slot to avoid "Program was deployed in this block already" error
+    wait_n_slots(&rpc_client, 1);
+
+    // Extend program
+    let additional_bytes = 100;
+    config.signers = vec![&keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::ExtendProgram {
+        program_pubkey: program_keypair.pubkey(),
+        additional_bytes,
+    });
+    process_command(&config).unwrap();
+
+    let programdata_account = rpc_client.get_account(&programdata_pubkey).unwrap();
+    let expected_len =
+        UpgradeableLoaderState::size_of_programdata(max_len + additional_bytes as usize);
+    assert_eq!(expected_len, programdata_account.data.len());
+}
+
+#[test]
 fn test_cli_program_write_buffer() {
     solana_logger::setup();
 
@@ -1116,7 +1200,7 @@ fn test_cli_program_set_buffer_authority() {
         panic!("not a buffer account");
     }
 
-    // Set new authority
+    // Set new buffer authority
     let new_buffer_authority = Keypair::new();
     config.signers = vec![&keypair, &buffer_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::SetBufferAuthority {
@@ -1145,7 +1229,24 @@ fn test_cli_program_set_buffer_authority() {
         panic!("not a buffer account");
     }
 
-    // Set authority to buffer
+    // Attempt to deploy program from buffer using previous authority (should fail)
+    config.signers = vec![&keypair, &buffer_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
+        program_signer_index: None,
+        program_pubkey: None,
+        buffer_signer_index: None,
+        buffer_pubkey: Some(buffer_keypair.pubkey()),
+        allow_excessive_balance: false,
+        upgrade_authority_signer_index: 0,
+        is_final: false,
+        max_len: None,
+        skip_fee_check: false,
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    process_command(&config).unwrap_err();
+
+    // Set buffer authority to the buffer identity (it's a common way for program devs to do so)
     config.signers = vec![&keypair, &new_buffer_authority];
     config.command = CliCommand::Program(ProgramCliCommand::SetBufferAuthority {
         buffer_pubkey: buffer_keypair.pubkey(),
@@ -1171,6 +1272,23 @@ fn test_cli_program_set_buffer_authority() {
     } else {
         panic!("not a buffer account");
     }
+
+    // Deploy from buffer using proper(new) buffer authority
+    config.signers = vec![&keypair, &buffer_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
+        program_signer_index: None,
+        program_pubkey: None,
+        buffer_signer_index: None,
+        buffer_pubkey: Some(buffer_keypair.pubkey()),
+        allow_excessive_balance: false,
+        upgrade_authority_signer_index: 1,
+        is_final: false,
+        max_len: None,
+        skip_fee_check: false,
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    process_command(&config).unwrap();
 }
 
 #[test]
