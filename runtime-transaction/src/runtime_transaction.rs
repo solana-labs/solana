@@ -4,11 +4,11 @@
 //! It has two states:
 //! 1. Statically Loaded: after receiving `packet` from sigverify and deserializing
 //!    it into `solana_sdk::VersionedTransaction`, then sanitizing into
-//!    `solana_sdk::SanitizedVersionedTransaction`, `RuntimeTransactionStatic`
-//!    can be created from it with static transaction metadata extracted.
+//!    `solana_sdk::SanitizedVersionedTransaction`, which can be wrapped into
+//!    `RuntimeTransaction` with static transaction metadata extracted.
 //! 2. Dynamically Loaded: after successfully loaded account addresses from onchain
-//!    ALT, RuntimeTransaction transits into Dynamically Loaded state, with
-//!    its dynamic metadata loaded.
+//!    ALT, RuntimeTransaction<SanitizedMessage> transits into Dynamically Loaded state,
+//!    with its dynamic metadata loaded.
 use {
     crate::transaction_meta::{DynamicMeta, StaticMeta, TransactionMeta},
     solana_sdk::{
@@ -50,11 +50,7 @@ impl<M: StaticMetaAccess> StaticMeta for RuntimeTransaction<M> {
     }
 }
 
-impl<M: DynamicMetaAccess> DynamicMeta for RuntimeTransaction<M> {
-    fn i_am_dynamic(&self) -> bool {
-        true
-    }
-}
+impl<M: DynamicMetaAccess> DynamicMeta for RuntimeTransaction<M> {}
 
 impl RuntimeTransaction<SanitizedVersionedMessage> {
     pub fn try_from(
@@ -227,9 +223,6 @@ mod tests {
 
         assert_eq!(hash, *statically_loaded_transaction.message_hash());
         assert!(!statically_loaded_transaction.is_simple_vote_tx());
-        // DynamicMeta::i_am_dynamic() is not implemented for RuntimeTransaction<SanitizedVersionedMessage>.
-        // Below line won't compile
-        // assert_eq!(false, statically_loaded_transaction.i_am_dynamic());
 
         let dynamically_loaded_transaction = RuntimeTransaction::<SanitizedMessage>::try_from(
             statically_loaded_transaction,
@@ -240,6 +233,5 @@ mod tests {
 
         assert_eq!(hash, *dynamically_loaded_transaction.message_hash());
         assert!(!dynamically_loaded_transaction.is_simple_vote_tx());
-        assert!(dynamically_loaded_transaction.i_am_dynamic());
     }
 }
