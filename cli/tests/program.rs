@@ -1200,7 +1200,7 @@ fn test_cli_program_set_buffer_authority() {
         panic!("not a buffer account");
     }
 
-    // Set new authority
+    // Set new buffer authority
     let new_buffer_authority = Keypair::new();
     config.signers = vec![&keypair, &buffer_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::SetBufferAuthority {
@@ -1229,12 +1229,29 @@ fn test_cli_program_set_buffer_authority() {
         panic!("not a buffer account");
     }
 
-    // Set authority to buffer
+    // Attempt to deploy program from buffer using previous authority (should fail)
+    config.signers = vec![&keypair, &buffer_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
+        program_signer_index: None,
+        program_pubkey: None,
+        buffer_signer_index: None,
+        buffer_pubkey: Some(buffer_keypair.pubkey()),
+        allow_excessive_balance: false,
+        upgrade_authority_signer_index: 0,
+        is_final: false,
+        max_len: None,
+        skip_fee_check: false,
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    process_command(&config).unwrap_err();
+
+    // Set buffer authority back to original authority
     config.signers = vec![&keypair, &new_buffer_authority];
     config.command = CliCommand::Program(ProgramCliCommand::SetBufferAuthority {
         buffer_pubkey: buffer_keypair.pubkey(),
         buffer_authority_index: Some(1),
-        new_buffer_authority: buffer_keypair.pubkey(),
+        new_buffer_authority: keypair.pubkey(),
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -1247,14 +1264,31 @@ fn test_cli_program_set_buffer_authority() {
         .unwrap();
     assert_eq!(
         Pubkey::from_str(buffer_authority_str).unwrap(),
-        buffer_keypair.pubkey()
+        keypair.pubkey()
     );
     let buffer_account = rpc_client.get_account(&buffer_keypair.pubkey()).unwrap();
     if let UpgradeableLoaderState::Buffer { authority_address } = buffer_account.state().unwrap() {
-        assert_eq!(authority_address, Some(buffer_keypair.pubkey()));
+        assert_eq!(authority_address, Some(keypair.pubkey()));
     } else {
         panic!("not a buffer account");
     }
+
+    // Deploy from buffer using proper(original) buffer authority
+    config.signers = vec![&keypair, &buffer_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
+        program_signer_index: None,
+        program_pubkey: None,
+        buffer_signer_index: None,
+        buffer_pubkey: Some(buffer_keypair.pubkey()),
+        allow_excessive_balance: false,
+        upgrade_authority_signer_index: 0,
+        is_final: false,
+        max_len: None,
+        skip_fee_check: false,
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    process_command(&config).unwrap();
 }
 
 #[test]
