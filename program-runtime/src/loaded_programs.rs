@@ -609,13 +609,11 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                 if matches!(existing.program, LoadedProgramType::Unloaded(_)) {
                     // The unloaded program is getting reloaded
                     // Copy over the usage counter to the new entry
-                    let mut usage_count = existing.tx_usage_counter.load(Ordering::Relaxed);
-                    saturating_add_assign!(
-                        usage_count,
-                        entry.tx_usage_counter.load(Ordering::Relaxed)
+                    entry.tx_usage_counter.fetch_add(
+                        existing.tx_usage_counter.load(Ordering::Relaxed),
+                        Ordering::Relaxed,
                     );
-                    entry.tx_usage_counter.store(usage_count, Ordering::Relaxed);
-                    entry.ix_usage_counter.store(
+                    entry.ix_usage_counter.fetch_add(
                         existing.ix_usage_counter.load(Ordering::Relaxed),
                         Ordering::Relaxed,
                     );
@@ -807,7 +805,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         }));
         let mut extracting = extracted.lock().unwrap();
         extracting.loaded.entries = keys
-            .filter_map(|(key, (match_criteria, count))| {
+            .filter_map(|(key, (match_criteria, usage_count))| {
                 let mut reloading = false;
                 if let Some(second_level) = self.entries.get(&key) {
                     for entry in second_level.iter().rev() {
@@ -830,7 +828,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                             || entry.deployment_slot == current_slot
                             || is_ancestor
                         {
-                            if current_slot >= entry.effective_slot {
+                            let entry_to_return = if current_slot >= entry.effective_slot {
                                 if !Self::is_entry_usable(entry, current_slot, &match_criteria)
                                     || !Self::matches_environment(entry, environments)
                                 {
@@ -842,27 +840,26 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                                     break;
                                 }
 
-                                let mut usage_count =
-                                    entry.tx_usage_counter.load(Ordering::Relaxed);
-                                saturating_add_assign!(usage_count, count);
-                                entry.tx_usage_counter.store(usage_count, Ordering::Relaxed);
-                                return Some((key, entry.clone()));
+                                entry.clone()
                             } else if entry.is_implicit_delay_visibility_tombstone(current_slot) {
                                 // Found a program entry on the current fork, but it's not effective
                                 // yet. It indicates that the program has delayed visibility. Return
                                 // the tombstone to reflect that.
-                                return Some((
-                                    key,
-                                    Arc::new(LoadedProgram::new_tombstone(
-                                        entry.deployment_slot,
-                                        LoadedProgramType::DelayVisibility,
-                                    )),
-                                ));
-                            }
+                                Arc::new(LoadedProgram::new_tombstone(
+                                    entry.deployment_slot,
+                                    LoadedProgramType::DelayVisibility,
+                                ))
+                            } else {
+                                continue;
+                            };
+                            entry_to_return
+                                .tx_usage_counter
+                                .fetch_add(usage_count, Ordering::Relaxed);
+                            return Some((key, entry_to_return));
                         }
                     }
                 }
-                extracting.missing.insert(key, (count, reloading));
+                extracting.missing.insert(key, (usage_count, reloading));
                 None
             })
             .collect::<HashMap<Pubkey, Arc<LoadedProgram>>>();
