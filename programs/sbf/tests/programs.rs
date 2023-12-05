@@ -421,7 +421,7 @@ fn test_sol_alloc_free_no_longer_deployable() {
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let mut bank = Bank::new_for_tests(&genesis_config);
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
 
     // Populate loader account with elf that depends on _sol_alloc_free syscall
     let elf = load_program_from_file("solana_sbf_rust_deprecated_loader");
@@ -465,21 +465,41 @@ fn test_sol_alloc_free_no_longer_deployable() {
     );
 
     // Enable _sol_alloc_free syscall
+    let slot = bank.slot();
+    drop(bank);
+    let mut bank = Arc::into_inner(bank_forks.write().unwrap().remove(slot).unwrap()).unwrap();
     bank.deactivate_feature(&solana_sdk::feature_set::disable_deploy_of_alloc_free_syscall::id());
     bank.clear_signatures();
     bank.clear_program_cache();
+    let bank = bank_forks
+        .write()
+        .unwrap()
+        .insert(bank)
+        .clone_without_scheduler();
 
     // Try and finalize the program now that sol_alloc_free is re-enabled
     assert!(bank.process_transaction(&finalize_tx).is_ok());
     let new_slot = bank.slot() + 1;
-    let mut bank = Bank::new_from_parent(Arc::new(bank), &Pubkey::default(), new_slot);
+    let bank = bank_forks
+        .write()
+        .unwrap()
+        .insert(Bank::new_from_parent(bank, &Pubkey::default(), new_slot))
+        .clone_without_scheduler();
 
     // invoke the program
     assert!(bank.process_transaction(&invoke_tx).is_ok());
 
     // disable _sol_alloc_free
+    let slot = bank.slot();
+    drop(bank);
+    let mut bank = Arc::try_unwrap(bank_forks.write().unwrap().remove(slot).unwrap()).unwrap();
     bank.activate_feature(&solana_sdk::feature_set::disable_deploy_of_alloc_free_syscall::id());
     bank.clear_signatures();
+    let bank = bank_forks
+        .write()
+        .unwrap()
+        .insert(bank)
+        .clone_without_scheduler();
 
     // invoke should still succeed because cached
     assert!(bank.process_transaction(&invoke_tx).is_ok());
@@ -2374,7 +2394,8 @@ fn test_program_sbf_disguised_as_sbf_loader() {
         bank.deactivate_feature(
             &solana_sdk::feature_set::remove_bpf_loader_incorrect_program_id::id(),
         );
-        let bank_client = BankClient::new(bank);
+        let bank = bank.wrap_with_bank_forks_for_tests().0;
+        let bank_client = BankClient::new_shared(bank);
 
         let program_id = load_program(&bank_client, &bpf_loader::id(), &mint_keypair, program);
         let account_metas = vec![AccountMeta::new_readonly(program_id, false)];
