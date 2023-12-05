@@ -25,7 +25,9 @@ pub trait StaticMeta {
 /// have both meta data populated and available.
 /// Dynamic metadata available after accounts addresses are loaded from
 /// on-chain ALT, examples are: transaction usage costs, nonce account.
-pub trait DynamicMeta: StaticMeta {}
+pub trait DynamicMeta: StaticMeta {
+    fn i_am_dynamic(&self) -> bool;
+}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TransactionMeta {

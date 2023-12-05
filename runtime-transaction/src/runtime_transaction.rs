@@ -29,7 +29,7 @@ pub struct RuntimeTransaction<M> {
     meta: TransactionMeta,
 }
 
-impl<M> StaticMeta for RuntimeTransaction<M> {
+impl StaticMeta for RuntimeTransaction<SanitizedVersionedMessage> {
     fn message_hash(&self) -> &Hash {
         &self.meta.message_hash
     }
@@ -38,7 +38,20 @@ impl<M> StaticMeta for RuntimeTransaction<M> {
     }
 }
 
-impl<M> DynamicMeta for RuntimeTransaction<M> {}
+impl StaticMeta for RuntimeTransaction<SanitizedMessage> {
+    fn message_hash(&self) -> &Hash {
+        &self.meta.message_hash
+    }
+    fn is_simple_vote_tx(&self) -> bool {
+        self.meta.is_simple_vote_tx
+    }
+}
+
+impl DynamicMeta for RuntimeTransaction<SanitizedMessage> {
+    fn i_am_dynamic(&self) -> bool {
+        true
+    }
+}
 
 impl RuntimeTransaction<SanitizedVersionedMessage> {
     pub fn try_from(
@@ -209,10 +222,21 @@ mod tests {
             )
             .unwrap();
 
+        assert_eq!(hash, *statically_loaded_transaction.message_hash());
+        assert!(!statically_loaded_transaction.is_simple_vote_tx());
+        // DynamicMeta::i_am_dynamic() is not implemented for RuntimeTransaction<SanitizedVersionedMessage>.
+        // Below line won't compile
+        // assert_eq!(false, statically_loaded_transaction.i_am_dynamic());
+
         let dynamically_loaded_transaction = RuntimeTransaction::<SanitizedMessage>::try_from(
             statically_loaded_transaction,
             SimpleAddressLoader::Disabled,
         );
-        assert!(dynamically_loaded_transaction.is_ok());
+        let dynamically_loaded_transaction =
+            dynamically_loaded_transaction.expect("created from statically loaded tx");
+
+        assert_eq!(hash, *dynamically_loaded_transaction.message_hash());
+        assert!(!dynamically_loaded_transaction.is_simple_vote_tx());
+        assert!(dynamically_loaded_transaction.i_am_dynamic());
     }
 }
