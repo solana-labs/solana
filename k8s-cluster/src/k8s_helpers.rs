@@ -46,20 +46,23 @@ pub fn create_replica_set(
     readiness_probe: Option<Probe>,
     nodes: Option<Vec<String>>,
 ) -> Result<ReplicaSet, Box<dyn Error>> {
-    let node_affinity = NodeAffinity {
-        required_during_scheduling_ignored_during_execution: Some(NodeSelector {
-            node_selector_terms: vec![NodeSelectorTerm {
-                match_expressions: Some(vec![
-                    NodeSelectorRequirement {
-                        key: "kubernetes.io/hostname".to_string(),
-                        operator: "In".to_string(),
-                        values: nodes,
-                    },
-                ]),
-                ..Default::default()
-            }],
+    let node_affinity = match nodes {
+        Some(_) => Some(NodeAffinity {
+            required_during_scheduling_ignored_during_execution: Some(NodeSelector {
+                node_selector_terms: vec![NodeSelectorTerm {
+                    match_expressions: Some(vec![
+                        NodeSelectorRequirement {
+                            key: "kubernetes.io/hostname".to_string(),
+                            operator: "In".to_string(),
+                            values: nodes,
+                        },
+                    ]),
+                    ..Default::default()
+                }],
+            }),
+            ..Default::default()
         }),
-        ..Default::default()
+        None => None,
     };
 
     let pod_spec = PodTemplateSpec {
@@ -85,7 +88,7 @@ pub fn create_replica_set(
                 ..Default::default()
             }),
             affinity: Some(Affinity {
-                node_affinity: Some(node_affinity),
+                node_affinity,
                 ..Default::default()
             }),
             ..Default::default()

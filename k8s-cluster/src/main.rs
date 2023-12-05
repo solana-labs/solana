@@ -8,7 +8,7 @@ use {
             DEFAULT_INTERNAL_NODE_SOL, DEFAULT_INTERNAL_NODE_STAKE_SOL,
         },
         get_solana_root, initialize_globals,
-        kubernetes::{ClientConfig, Kubernetes, Metrics, ValidatorConfig},
+        kubernetes::{ClientConfig, Kubernetes, Metrics, ValidatorConfig, NodeAffinityType},
         ledger_helper::LedgerHelper,
         k8s_helpers,
         release::{BuildConfig, Deploy},
@@ -408,6 +408,18 @@ fn parse_matches() -> ArgMatches<'static> {
                     _ => Err(String::from("number_of_non_voting_validators should be >= 0")),
                 }),
         )
+        //Kubernetes Config
+        .arg(
+            Arg::with_name("node_type")
+                .long("node-type")
+                .possible_values(&["equinix", "lumen", "mixed"])
+                .takes_value(true)
+                .default_value("equinix")
+                .help(
+                    "Select the type of node you want to deploy your cluster on. Equinix is default.
+                    Note: Lumen nodes are acting funky, so any other choice besides equinix is unstable"
+                ),
+        )
         .get_matches()
 }
 
@@ -624,12 +636,23 @@ async fn main() {
         None
     };
 
+    // Get the user-defined node_type
+    let node_type = match matches.value_of("node_type").unwrap_or_default() {
+        "equinix" => NodeAffinityType::Equinix,
+        "lumen" => NodeAffinityType::Lumen,
+        "mixed" => NodeAffinityType::Mixed,
+        _ => unreachable!(),
+    };
+
+    info!("Node Type: {}", node_type);
+
     // Check if namespace exists
     let mut kub_controller = Kubernetes::new(
         setup_config.namespace,
         &mut validator_config,
         client_config.clone(),
         metrics,
+        node_type,
     )
     .await;
     match kub_controller.namespace_exists().await {
@@ -649,14 +672,17 @@ async fn main() {
     }
 
     match kub_controller.set_nodes().await {
-        Ok(_) => (),
+        Ok(_) => {
+            match kub_controller.nodes() {
+                Some(_) => info!("{} nodes available for deployment", kub_controller.node_count()),
+                None => info!("Deploying to mixed set of kubernetes nodes"),
+            }
+        },
         Err(err) => {
             error!("{}", err);
             return;
         }
     }
-
-    info!("{} nodes available for deployment", kub_controller.node_count());
 
     if !setup_config.skip_genesis_build {
         info!("Creating Genesis");

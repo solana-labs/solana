@@ -123,6 +123,24 @@ impl Metrics {
         )
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum NodeAffinityType {
+    Equinix,
+    Lumen,
+    Mixed,
+}
+
+impl std::fmt::Display for NodeAffinityType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NodeAffinityType::Equinix => write!(f, "Equinix"),
+            NodeAffinityType::Lumen => write!(f, "Lumen"),
+            NodeAffinityType::Mixed => write!(f, "Mixed"),
+        }
+    }
+}
+
 pub struct Kubernetes<'a> {
     client: Client,
     namespace: &'a str,
@@ -130,6 +148,7 @@ pub struct Kubernetes<'a> {
     client_config: ClientConfig,
     pub metrics: Option<Metrics>,
     nodes: Option<Vec<String>>,
+    node_affinity: NodeAffinityType,
 }
 
 impl<'a> Kubernetes<'a> {
@@ -138,6 +157,7 @@ impl<'a> Kubernetes<'a> {
         validator_config: &'a mut ValidatorConfig<'a>,
         client_config: ClientConfig,
         metrics: Option<Metrics>,
+        node_affinity: NodeAffinityType,
     ) -> Kubernetes<'a> {
         Kubernetes {
             client: Client::try_default().await.unwrap(),
@@ -146,6 +166,7 @@ impl<'a> Kubernetes<'a> {
             client_config,
             metrics,
             nodes: None,
+            node_affinity,
         }
     }
 
@@ -627,19 +648,39 @@ impl<'a> Kubernetes<'a> {
         return 0;
     }
 
+    pub fn nodes(
+        &self,
+    ) -> Option<Vec<String>> {
+        self.nodes.clone()
+    }
+
     pub async fn set_nodes(
         &mut self,
     ) -> Result<(), Box<dyn Error>> {
-        match self.get_equinix_nodes().await {
-            Ok(nodes) => self.nodes = Some(nodes),
-            Err(err) => return Err(boxed_error!(format!("Failed to get equinix nodes: {}", err))),
-        }
+        match self.node_affinity {
+            NodeAffinityType::Equinix | NodeAffinityType::Lumen => {
+                match self.get_nodes_by_type().await {
+                    Ok(nodes) => self.nodes = nodes,
+                    Err(err) => return Err(boxed_error!(format!("Failed to get {} nodes", err))),
+                }
+            },
+            _ => return Ok(()),
+        };
         Ok(())
     }
 
-    async fn get_equinix_nodes(
+    async fn get_nodes_by_type(
         &self,
-    ) -> Result<Vec<String>, kube::Error> {
+    ) -> Result<Option<Vec<String>>, Box<dyn Error>> {
+        let matching_arm = match self.node_affinity {
+            NodeAffinityType::Equinix => "eq-",
+            NodeAffinityType::Lumen => "lum-",
+            NodeAffinityType::Mixed => {
+                warn!("NodeAffinityType::Mixed node valid in context of get_nodes_by_type()");
+                return Ok(None);
+            },
+        };
+
         let nodes: Api<Node> = Api::all(self.client.clone());
         let lp = ListParams::default();
         let node_list = nodes.list(&lp).await?;
@@ -649,7 +690,7 @@ impl<'a> Kubernetes<'a> {
         for node in node_list {
             if let Some(labels) = node.metadata.labels {
                 for (key, value) in labels.iter() {
-                    if key == "topology.kubernetes.io/region" && value.starts_with("eq-") {
+                    if key == "topology.kubernetes.io/region" && value.starts_with(matching_arm) {
                         if let Some(name) = &node.metadata.name {
                             matching_nodes.push(name.clone());
                         }
@@ -657,7 +698,7 @@ impl<'a> Kubernetes<'a> {
                 }
             }
         }
-        Ok(matching_nodes)
+        Ok(Some(matching_nodes))
     }
 
     pub fn create_validator_replica_set(
