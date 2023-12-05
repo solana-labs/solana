@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e
 
-# /home/solana/k8s-cluster-scripts/decode-accounts.sh -t "bootstrap"
 mkdir -p /home/solana/logs
 
 # start faucet

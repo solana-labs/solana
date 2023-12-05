@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# /home/solana/k8s-cluster-scripts/decode-accounts.sh -t "validator"
 mkdir -p /home/solana/logs
 
 # Start Validator
@@ -20,9 +19,7 @@ identity=validator-accounts/identity.json
 vote_account=validator-accounts/vote.json
 no_restart=0
 gossip_entrypoint=$BOOTSTRAP_GOSSIP_ADDRESS
-# gossip_entrypoint=$LOAD_BALANCER_GOSSIP_ADDRESS
 ledger_dir=/home/solana/ledger
-# faucet_address=$BOOTSTRAP_FAUCET_ADDRESS
 faucet_address=$LOAD_BALANCER_FAUCET_ADDRESS
 
 args+=("--entrypoint" "$gossip_entrypoint") # add in bootstrap entrypoint
@@ -291,9 +288,6 @@ MAX_RETRIES=30
 
 # Delay between retries (in seconds)
 RETRY_DELAY=5
-
-# Bootstrap validator RPC URL
-BOOTSTRAP_RPC_URL="http://$BOOTSTRAP_RPC_ADDRESS"
 
 # Load balancer RPC URL
 LOAD_BALANCER_RPC_URL="http://$LOAD_BALANCER_RPC_ADDRESS"

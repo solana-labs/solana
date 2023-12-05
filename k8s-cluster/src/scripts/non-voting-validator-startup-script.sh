@@ -23,7 +23,6 @@ args=(
 )
 airdrops_enabled=1
 node_sol=500 # 500 SOL: number of SOL to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
-stake_sol=10
 identity=non-voting-validator-accounts/identity.json
 no_restart=0
 gossip_entrypoint=$BOOTSTRAP_GOSSIP_ADDRESS
@@ -65,9 +64,6 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --no-airdrop ]]; then
       airdrops_enabled=0
       shift
-    elif [[ $1 == --internal-node-stake-sol ]]; then
-      stake_sol=$2
-      shift 2
     elif [[ $1 == --internal-node-sol ]]; then
       node_sol=$2
       shift 2
