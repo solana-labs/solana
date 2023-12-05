@@ -371,7 +371,7 @@ impl LoadedProgram {
             effective_slot: self.effective_slot,
             maybe_expiration_slot: self.maybe_expiration_slot,
             tx_usage_counter: AtomicU64::new(self.tx_usage_counter.load(Ordering::Relaxed)),
-            ix_usage_counter: AtomicU64::new(self.tx_usage_counter.load(Ordering::Relaxed)),
+            ix_usage_counter: AtomicU64::new(self.ix_usage_counter.load(Ordering::Relaxed)),
         })
     }
 
