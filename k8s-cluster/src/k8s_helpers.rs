@@ -3,11 +3,11 @@ use {
         api::{
             apps::v1::{ReplicaSet, ReplicaSetSpec},
             core::v1::{
-                Container, Secret, Volume, VolumeMount, Probe, EnvVar, PodTemplateSpec,
-                PodSecurityContext, PodSpec, NodeAffinity, NodeSelector, NodeSelectorTerm,
-                NodeSelectorRequirement, Affinity, ServiceSpec, Service, ServicePort,
-                EnvVarSource, ObjectFieldSelector,
-            }
+                Affinity, Container, EnvVar, EnvVarSource, NodeAffinity, NodeSelector,
+                NodeSelectorRequirement, NodeSelectorTerm, ObjectFieldSelector, PodSecurityContext,
+                PodSpec, PodTemplateSpec, Probe, Secret, Service, ServicePort, ServiceSpec, Volume,
+                VolumeMount,
+            },
         },
         apimachinery::pkg::apis::meta::v1::LabelSelector,
         ByteString,
@@ -51,13 +51,11 @@ pub fn create_replica_set(
         Some(_) => Some(NodeAffinity {
             required_during_scheduling_ignored_during_execution: Some(NodeSelector {
                 node_selector_terms: vec![NodeSelectorTerm {
-                    match_expressions: Some(vec![
-                        NodeSelectorRequirement {
-                            key: "kubernetes.io/hostname".to_string(),
-                            operator: "In".to_string(),
-                            values: nodes,
-                        },
-                    ]),
+                    match_expressions: Some(vec![NodeSelectorRequirement {
+                        key: "kubernetes.io/hostname".to_string(),
+                        operator: "In".to_string(),
+                        values: nodes,
+                    }]),
                     ..Default::default()
                 }],
             }),
@@ -131,8 +129,16 @@ pub fn create_service(
         },
         spec: Some(ServiceSpec {
             selector: Some(label_selector.clone()),
-            type_: if is_load_balancer { Some("LoadBalancer".to_string()) } else { None },
-            cluster_ip: if is_load_balancer { None } else { Some("None".to_string()) },
+            type_: if is_load_balancer {
+                Some("LoadBalancer".to_string())
+            } else {
+                None
+            },
+            cluster_ip: if is_load_balancer {
+                None
+            } else {
+                Some("None".to_string())
+            },
             ports: Some(vec![
                 ServicePort {
                     port: 8899, // RPC Port
@@ -159,7 +165,7 @@ pub fn create_service(
 pub fn create_environment_variable(
     name: &str,
     value: Option<String>,
-    field_path: Option<String>
+    field_path: Option<String>,
 ) -> EnvVar {
     match field_path {
         Some(path) => EnvVar {

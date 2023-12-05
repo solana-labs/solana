@@ -8,7 +8,7 @@ use {
             DEFAULT_INTERNAL_NODE_SOL, DEFAULT_INTERNAL_NODE_STAKE_SOL,
         },
         get_solana_root, initialize_globals,
-        kubernetes::{ClientConfig, Kubernetes, Metrics, ValidatorConfig, NodeAffinityType},
+        kubernetes::{ClientConfig, Kubernetes, Metrics, NodeAffinityType, ValidatorConfig},
         ledger_helper::LedgerHelper,
         release::{BuildConfig, Deploy},
         ValidatorType,
@@ -452,7 +452,8 @@ async fn main() {
         error!("Skipping genesis build but there is not previous genesis to use. exiting...");
     }
 
-    let num_non_voting_validators = value_t_or_exit!(matches, "number_of_non_voting_validators", i32);
+    let num_non_voting_validators =
+        value_t_or_exit!(matches, "number_of_non_voting_validators", i32);
 
     let client_config = ClientConfig {
         num_clients: value_t_or_exit!(matches, "number_of_clients", i32),
@@ -672,11 +673,12 @@ async fn main() {
     }
 
     match kub_controller.set_nodes().await {
-        Ok(_) => {
-            match kub_controller.nodes() {
-                Some(_) => info!("{} nodes available for deployment", kub_controller.node_count()),
-                None => info!("Deploying to mixed set of kubernetes nodes"),
-            }
+        Ok(_) => match kub_controller.nodes() {
+            Some(_) => info!(
+                "{} nodes available for deployment",
+                kub_controller.node_count()
+            ),
+            None => info!("Deploying to mixed set of kubernetes nodes"),
         },
         Err(err) => {
             error!("{}", err);
@@ -799,7 +801,11 @@ async fn main() {
 
     if let Some(config) = docker_image_config {
         let docker = DockerConfig::new(config, build_config.deploy_method);
-        let image_types = vec![ValidatorType::Bootstrap, ValidatorType::Standard, ValidatorType::NonVoting];
+        let image_types = vec![
+            ValidatorType::Bootstrap,
+            ValidatorType::Standard,
+            ValidatorType::NonVoting,
+        ];
         for image_type in &image_types {
             match docker.build_image(image_type) {
                 Ok(_) => info!("Docker image built successfully"),
@@ -894,16 +900,17 @@ async fn main() {
     // Bootstrap needs two labels. Because it is going to have two services. One via LB, one direct
     let mut bootstrap_rs_labels =
         kub_controller.create_selector("app.kubernetes.io/lb", "load-balancer-selector");
-    bootstrap_rs_labels.insert("app.kubernetes.io/name".to_string(), "bootstrap-validator-selector".to_string());
+    bootstrap_rs_labels.insert(
+        "app.kubernetes.io/name".to_string(),
+        "bootstrap-validator-selector".to_string(),
+    );
 
-    let bootstrap_replica_set = match kub_controller
-        .create_bootstrap_validator_replica_set(
-            bootstrap_container_name,
-            bootstrap_image_name,
-            bootstrap_secret.metadata.name.clone(),
-            &bootstrap_rs_labels,
-        )
-    {
+    let bootstrap_replica_set = match kub_controller.create_bootstrap_validator_replica_set(
+        bootstrap_container_name,
+        bootstrap_image_name,
+        bootstrap_secret.metadata.name.clone(),
+        &bootstrap_rs_labels,
+    ) {
         Ok(replica_set) => replica_set,
         Err(err) => {
             error!("Error creating bootstrap validator replicas_set: {}", err);
@@ -927,9 +934,10 @@ async fn main() {
         }
     };
 
-    let bootstrap_service_label = kub_controller.create_selector("app.kubernetes.io/name", "bootstrap-validator-selector");
-    let bootstrap_service =
-        kub_controller.create_validator_service("bootstrap-validator-service", &bootstrap_service_label);
+    let bootstrap_service_label =
+        kub_controller.create_selector("app.kubernetes.io/name", "bootstrap-validator-selector");
+    let bootstrap_service = kub_controller
+        .create_validator_service("bootstrap-validator-service", &bootstrap_service_label);
     match kub_controller.deploy_service(&bootstrap_service).await {
         Ok(_) => info!("bootstrap validator service deployed successfully"),
         Err(err) => error!(
@@ -939,7 +947,8 @@ async fn main() {
     }
 
     //load balancer service
-    let load_balancer_label = kub_controller.create_selector("app.kubernetes.io/lb", "load-balancer-selector");
+    let load_balancer_label =
+        kub_controller.create_selector("app.kubernetes.io/lb", "load-balancer-selector");
     //create load balancer
     let load_balancer = kub_controller.create_validator_load_balancer(
         "bootstrap-and-non-voting-lb-service",
@@ -949,7 +958,10 @@ async fn main() {
     //deploy load balancer
     match kub_controller.deploy_service(&load_balancer).await {
         Ok(_) => info!("load balancer service deployed successfully"),
-        Err(err) => error!("Error! Failed to deploy load balancer service. err: {:?}", err),
+        Err(err) => error!(
+            "Error! Failed to deploy load balancer service. err: {:?}",
+            err
+        ),
     }
 
     // wait for bootstrap replicaset to deploy
@@ -978,9 +990,11 @@ async fn main() {
                 "app.kubernetes.io/name",
                 format!("non-voting-selector-{}", nvv_index).as_str(),
             );
-            nvv_rs_labels.insert("app.kubernetes.io/lb".to_string(), "load-balancer-selector".to_string());
-            let nvv_secret = match kub_controller.create_non_voting_secret(nvv_index)
-            {
+            nvv_rs_labels.insert(
+                "app.kubernetes.io/lb".to_string(),
+                "load-balancer-selector".to_string(),
+            );
+            let nvv_secret = match kub_controller.create_non_voting_secret(nvv_index) {
                 Ok(secret) => secret,
                 Err(err) => {
                     error!("Failed to create nvv secret! {}", err);
@@ -995,15 +1009,13 @@ async fn main() {
                 }
             }
 
-            let nvv_replica_set = match kub_controller
-                .create_non_voting_validator_replica_set(
-                    nvv_container_name,
-                    nvv_index,
-                    nvv_image_name,
-                    nvv_secret.metadata.name.clone(),
-                    &nvv_rs_labels,
-                )
-            {
+            let nvv_replica_set = match kub_controller.create_non_voting_validator_replica_set(
+                nvv_container_name,
+                nvv_index,
+                nvv_image_name,
+                nvv_secret.metadata.name.clone(),
+                &nvv_rs_labels,
+            ) {
                 Ok(replica_set) => replica_set,
                 Err(err) => {
                     error!("Error creating non voting validator replicas_set: {}", err);
@@ -1012,9 +1024,8 @@ async fn main() {
             };
 
             // deploy replica set
-            let nvv_replica_set_name = match kub_controller
-                .deploy_replicas_set(&nvv_replica_set)
-                .await {
+            let nvv_replica_set_name =
+                match kub_controller.deploy_replicas_set(&nvv_replica_set).await {
                     Ok(rs) => {
                         info!(
                             "non voting validator replica set ({}) deployed successfully",
@@ -1024,12 +1035,12 @@ async fn main() {
                     }
                     Err(err) => {
                         error!(
-                            "Error! Failed to deploy non voting validator replica set: {}. err: {:?}",
-                            nvv_index, err
-                        );
+                        "Error! Failed to deploy non voting validator replica set: {}. err: {:?}",
+                        nvv_index, err
+                    );
                         return;
                     }
-            };
+                };
             non_voting_validators.push(nvv_replica_set_name);
 
             //create nvv service
@@ -1045,33 +1056,34 @@ async fn main() {
             //deploy nvv service
             match kub_controller.deploy_service(&nvv_service).await {
                 Ok(_) => info!("nvv service deployed successfully"),
-                Err(err) => error!("Error! Failed to deploy non voting validator service. err: {:?}", err),
+                Err(err) => error!(
+                    "Error! Failed to deploy non voting validator service. err: {:?}",
+                    err
+                ),
             }
-
         }
 
         // wait for at least one non voting validator replicaset to deploy
         loop {
             let mut one_nvv_ready = false;
             for nvv in &non_voting_validators {
-                match kub_controller
-                    .check_replica_set_ready(nvv.as_str())
-                    .await {
-                        Ok(ready) => {
-                            if ready {
-                                one_nvv_ready = true;
-                                break;
-                            }
-                        }, // Continue the loop if replica set is not ready: Ok(false)
-                        Err(_) => panic!("Error occurred while checking faucet replica set readiness"),
+                match kub_controller.check_replica_set_ready(nvv.as_str()).await {
+                    Ok(ready) => {
+                        if ready {
+                            one_nvv_ready = true;
+                            break;
+                        }
+                    } // Continue the loop if replica set is not ready: Ok(false)
+                    Err(_) => panic!("Error occurred while checking faucet replica set readiness"),
                 }
             }
 
-            if one_nvv_ready { break; }
+            if one_nvv_ready {
+                break;
+            }
 
             info!("no non voting validator replica sets ready");
             thread::sleep(Duration::from_secs(10));
-
         }
         info!(">= 1 non voting validator ready");
     }
@@ -1105,8 +1117,7 @@ async fn main() {
                 validator_image_name,
                 validator_secret.metadata.name.clone(),
                 &label_selector,
-            )
-        {
+            ) {
             Ok(replica_set) => replica_set,
             Err(err) => {
                 error!("Error creating validator replicas_set: {}", err);
@@ -1185,15 +1196,13 @@ async fn main() {
             format!("client-{}", client_index).as_str(),
         );
 
-        let client_replica_set = match kub_controller
-            .create_client_replica_set(
-                client_container_name,
-                client_index,
-                client_image_name,
-                client_secret.metadata.name.clone(),
-                &label_selector,
-            )
-        {
+        let client_replica_set = match kub_controller.create_client_replica_set(
+            client_container_name,
+            client_index,
+            client_image_name,
+            client_secret.metadata.name.clone(),
+            &label_selector,
+        ) {
             Ok(replica_set) => replica_set,
             Err(err) => {
                 error!("Error creating client replicas_set: {}", err);
@@ -1221,8 +1230,10 @@ async fn main() {
             }
         };
 
-        let client_service = kub_controller
-            .create_validator_service(format!("client-{}-service", client_index).as_str(), &label_selector);
+        let client_service = kub_controller.create_validator_service(
+            format!("client-{}-service", client_index).as_str(),
+            &label_selector,
+        );
         match kub_controller.deploy_service(&client_service).await {
             Ok(_) => info!("client service ({}) deployed successfully", client_index),
             Err(err) => error!(

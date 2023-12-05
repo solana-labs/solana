@@ -1,14 +1,11 @@
 use {
-    crate::{
-        boxed_error, SOLANA_ROOT, k8s_helpers,
-    },
+    crate::{boxed_error, k8s_helpers, SOLANA_ROOT},
     k8s_openapi::{
         api::{
             apps::v1::ReplicaSet,
             core::v1::{
-                EnvVar, EnvVarSource, Namespace, ObjectFieldSelector,
-                Secret, SecretVolumeSource, Service, Node,
-                Volume, VolumeMount, Probe, ExecAction,
+                EnvVar, EnvVarSource, ExecAction, Namespace, Node, ObjectFieldSelector, Probe,
+                Secret, SecretVolumeSource, Service, Volume, VolumeMount,
             },
         },
         ByteString,
@@ -408,14 +405,17 @@ impl<'a> Kubernetes<'a> {
         let key_path = SOLANA_ROOT.join("config-k8s");
 
         let accounts = vec!["identity", "vote", "stake"];
-        let key_files: Vec<(PathBuf, &str)> = accounts.iter().map(|&account| {
-            let file_name = if account == "identity" {
-                format!("validator-{}-{}.json", account, validator_index)
-            } else {
-                format!("validator-{}-account-{}.json", account, validator_index)
-            };
-            (key_path.join(&file_name), account)
-        }).collect();
+        let key_files: Vec<(PathBuf, &str)> = accounts
+            .iter()
+            .map(|&account| {
+                let file_name = if account == "identity" {
+                    format!("validator-{}-{}.json", account, validator_index)
+                } else {
+                    format!("validator-{}-account-{}.json", account, validator_index)
+                };
+                (key_path.join(&file_name), account)
+            })
+            .collect();
 
         k8s_helpers::create_secret_from_files(&secret_name, &key_files)
     }
@@ -424,9 +424,7 @@ impl<'a> Kubernetes<'a> {
         let secret_name = format!("client-accounts-secret-{}", client_index);
         let faucet_key_path = SOLANA_ROOT.join("config-k8s/faucet.json");
 
-        let key_files = vec![
-            (faucet_key_path, "faucet"),
-        ];
+        let key_files = vec![(faucet_key_path, "faucet")];
 
         k8s_helpers::create_secret_from_files(&secret_name, &key_files)
     }
@@ -436,14 +434,20 @@ impl<'a> Kubernetes<'a> {
         let config_path = SOLANA_ROOT.join("config-k8s");
 
         let accounts = vec!["identity", "stake"];
-        let mut key_files: Vec<(PathBuf, &str)> = accounts.iter().map(|&account| {
-            let file_name = if account == "identity" {
-                format!("non-voting-validator-{}-{}.json", account, nvv_index)
-            } else {
-                format!("non-voting-validator-{}-account-{}.json", account, nvv_index)
-            };
-            (config_path.join(&file_name), account)
-        }).collect();
+        let mut key_files: Vec<(PathBuf, &str)> = accounts
+            .iter()
+            .map(|&account| {
+                let file_name = if account == "identity" {
+                    format!("non-voting-validator-{}-{}.json", account, nvv_index)
+                } else {
+                    format!(
+                        "non-voting-validator-{}-account-{}.json",
+                        account, nvv_index
+                    )
+                };
+                (config_path.join(&file_name), account)
+            })
+            .collect();
 
         key_files.push((config_path.join("faucet.json"), "faucet"));
 
@@ -493,7 +497,7 @@ impl<'a> Kubernetes<'a> {
             k8s_helpers::create_environment_variable(
                 "NAMESPACE",
                 None,
-                Some("metadata.namespace".to_string())
+                Some("metadata.namespace".to_string()),
             ),
             k8s_helpers::create_environment_variable(
                 "BOOTSTRAP_RPC_ADDRESS",
@@ -517,62 +521,63 @@ impl<'a> Kubernetes<'a> {
         vec![
             k8s_helpers::create_environment_variable(
                 "LOAD_BALANCER_RPC_ADDRESS",
-                Some("bootstrap-and-non-voting-lb-service.$(NAMESPACE).svc.cluster.local:8899".to_string()),
+                Some(
+                    "bootstrap-and-non-voting-lb-service.$(NAMESPACE).svc.cluster.local:8899"
+                        .to_string(),
+                ),
                 None,
             ),
             k8s_helpers::create_environment_variable(
                 "LOAD_BALANCER_GOSSIP_ADDRESS",
-                Some("bootstrap-and-non-voting-lb-service.$(NAMESPACE).svc.cluster.local:8001".to_string()),
+                Some(
+                    "bootstrap-and-non-voting-lb-service.$(NAMESPACE).svc.cluster.local:8001"
+                        .to_string(),
+                ),
                 None,
             ),
             k8s_helpers::create_environment_variable(
                 "LOAD_BALANCER_FAUCET_ADDRESS",
-                Some("bootstrap-and-non-voting-lb-service.$(NAMESPACE).svc.cluster.local:9900".to_string()),
+                Some(
+                    "bootstrap-and-non-voting-lb-service.$(NAMESPACE).svc.cluster.local:9900"
+                        .to_string(),
+                ),
                 None,
             ),
         ]
     }
 
-    pub fn node_count(
-        &self,
-    ) -> usize {
+    pub fn node_count(&self) -> usize {
         if let Some(nodes) = &self.nodes {
             return nodes.len();
         }
         return 0;
     }
 
-    pub fn nodes(
-        &self,
-    ) -> Option<Vec<String>> {
+    pub fn nodes(&self) -> Option<Vec<String>> {
         self.nodes.clone()
     }
 
-    pub async fn set_nodes(
-        &mut self,
-    ) -> Result<(), Box<dyn Error>> {
+    pub async fn set_nodes(&mut self) -> Result<(), Box<dyn Error>> {
         match self.node_affinity {
             NodeAffinityType::Equinix | NodeAffinityType::Lumen => {
                 match self.get_nodes_by_type().await {
                     Ok(nodes) => self.nodes = nodes,
                     Err(err) => return Err(boxed_error!(format!("Failed to get {} nodes", err))),
                 }
-            },
+            }
             _ => return Ok(()),
         };
         Ok(())
     }
 
-    async fn get_nodes_by_type(
-        &self,
-    ) -> Result<Option<Vec<String>>, Box<dyn Error>> {
+    async fn get_nodes_by_type(&self) -> Result<Option<Vec<String>>, Box<dyn Error>> {
         let matching_arm = match self.node_affinity {
             NodeAffinityType::Equinix => "eq-",
             NodeAffinityType::Lumen => "lum-",
             NodeAffinityType::Mixed => {
                 warn!("NodeAffinityType::Mixed node valid in context of get_nodes_by_type()");
                 return Ok(None);
-            },
+            }
         };
 
         let nodes: Api<Node> = Api::all(self.client.clone());
@@ -688,8 +693,9 @@ impl<'a> Kubernetes<'a> {
             ..Default::default()
         }]);
 
-        let mut command =
-        vec!["/home/solana/k8s-cluster-scripts/non-voting-validator-startup-script.sh".to_string()];
+        let mut command = vec![
+            "/home/solana/k8s-cluster-scripts/non-voting-validator-startup-script.sh".to_string(),
+        ];
         command.extend(self.generate_non_voting_command_flags());
 
         for c in command.iter() {
@@ -739,7 +745,6 @@ impl<'a> Kubernetes<'a> {
             env_vars.push(self.get_metrics_env_var_secret())
         }
         env_vars.append(&mut self.set_load_balancer_environment_variables());
-
 
         let accounts_volume = Some(vec![Volume {
             name: format!("client-accounts-volume-{}", client_index),
@@ -795,12 +800,7 @@ impl<'a> Kubernetes<'a> {
         k8s_helpers::create_service(service_name, self.namespace, label_selector, true)
     }
 
-    pub fn create_selector(
-        &self,
-        key: &str,
-        value: &str,
-    ) -> BTreeMap<String, String> {
+    pub fn create_selector(&self, key: &str, value: &str) -> BTreeMap<String, String> {
         k8s_helpers::create_selector(key, value)
     }
-
 }
