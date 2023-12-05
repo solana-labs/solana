@@ -88,9 +88,9 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     solana_transaction_status::{
         BlockEncodingOptions, ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
-        ConfirmedTransactionWithStatusMeta, EncodedConfirmedTransactionWithStatusMeta, Reward,
-        RewardType, TransactionBinaryEncoding, TransactionConfirmationStatus, TransactionStatus,
-        UiConfirmedBlock, UiTransactionEncoding,
+        ConfirmedTransactionWithStatusMeta, EncodedConfirmedTransactionWithStatusMeta,
+        InnerInstruction, InnerInstructions, Reward, RewardType, TransactionBinaryEncoding,
+        TransactionConfirmationStatus, TransactionStatus, UiConfirmedBlock, UiTransactionEncoding,
     },
     solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY},
     spl_token_2022::{
@@ -3676,7 +3676,7 @@ pub mod rpc_full {
                     post_simulation_accounts: _,
                     units_consumed,
                     return_data,
-                    inner_instructions: _,
+                    inner_instructions: _, // Always `None` due to `enable_cpi_recording = false`
                 } = preflight_bank.simulate_transaction(transaction, false)
                 {
                     match err {
@@ -3695,6 +3695,7 @@ pub mod rpc_full {
                             accounts: None,
                             units_consumed: Some(units_consumed),
                             return_data: return_data.map(|return_data| return_data.into()),
+                            inner_instructions: None,
                         },
                     }
                     .into());
@@ -3763,7 +3764,7 @@ pub mod rpc_full {
                 post_simulation_accounts,
                 units_consumed,
                 return_data,
-                inner_instructions: _,
+                inner_instructions,
             } = bank.simulate_transaction(transaction, enable_cpi_recording);
 
             let accounts = if let Some(config_accounts) = config_accounts {
@@ -3807,6 +3808,23 @@ pub mod rpc_full {
                 None
             };
 
+            let inner_instructions = inner_instructions.map(|info| {
+                info.into_iter()
+                    .enumerate()
+                    .map(|(index, instructions)| InnerInstructions {
+                        index: index as u8,
+                        instructions: instructions
+                            .into_iter()
+                            .map(|info| InnerInstruction {
+                                stack_height: Some(u32::from(info.stack_height)),
+                                instruction: info.instruction,
+                            })
+                            .collect(),
+                    })
+                    .filter(|i| !i.instructions.is_empty())
+                    .collect()
+            });
+
             Ok(new_response(
                 bank,
                 RpcSimulateTransactionResult {
@@ -3815,6 +3833,7 @@ pub mod rpc_full {
                     accounts,
                     units_consumed: Some(units_consumed),
                     return_data: return_data.map(|return_data| return_data.into()),
+                    inner_instructions,
                 },
             ))
         }
@@ -5916,6 +5935,7 @@ pub mod tests {
                         }
                     ],
                     "err":null,
+                    "innerInstructions": null,
                     "logs":[
                         "Program 11111111111111111111111111111111 invoke [1]",
                         "Program 11111111111111111111111111111111 success"
@@ -6000,6 +6020,7 @@ pub mod tests {
                 "value":{
                     "accounts":null,
                     "err":null,
+                    "innerInstructions":null,
                     "logs":[
                         "Program 11111111111111111111111111111111 invoke [1]",
                         "Program 11111111111111111111111111111111 success"
@@ -6028,6 +6049,7 @@ pub mod tests {
                 "value":{
                     "accounts":null,
                     "err":null,
+                    "innerInstructions":null,
                     "logs":[
                         "Program 11111111111111111111111111111111 invoke [1]",
                         "Program 11111111111111111111111111111111 success"
@@ -6080,6 +6102,7 @@ pub mod tests {
                 "value":{
                     "err":"BlockhashNotFound",
                     "accounts":null,
+                    "innerInstructions":null,
                     "logs":[],
                     "returnData":null,
                     "unitsConsumed":0,
@@ -6106,6 +6129,7 @@ pub mod tests {
                 "value":{
                     "accounts":null,
                     "err":null,
+                    "innerInstructions":null,
                     "logs":[
                         "Program 11111111111111111111111111111111 invoke [1]",
                         "Program 11111111111111111111111111111111 success"
@@ -6486,7 +6510,7 @@ pub mod tests {
         assert_eq!(
             res,
             Some(
-                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Blockhash not found","data":{"accounts":null,"err":"BlockhashNotFound","logs":[],"returnData":null,"unitsConsumed":0}},"id":1}"#.to_string(),
+                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Blockhash not found","data":{"accounts":null,"err":"BlockhashNotFound","innerInstructions":null,"logs":[],"returnData":null,"unitsConsumed":0}},"id":1}"#.to_string(),
             )
         );
 

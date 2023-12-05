@@ -10,8 +10,8 @@ use {
         transaction::{Result, TransactionError},
     },
     solana_transaction_status::{
-        ConfirmedTransactionStatusWithSignature, TransactionConfirmationStatus, UiConfirmedBlock,
-        UiTransactionReturnData,
+        ConfirmedTransactionStatusWithSignature, InnerInstructions, TransactionConfirmationStatus,
+        UiConfirmedBlock, UiTransactionReturnData,
     },
     std::{collections::HashMap, fmt, net::SocketAddr, str::FromStr},
     thiserror::Error,
@@ -423,6 +423,7 @@ pub struct RpcSimulateTransactionResult {
     pub accounts: Option<Vec<Option<UiAccount>>>,
     pub units_consumed: Option<u64>,
     pub return_data: Option<UiTransactionReturnData>,
+    pub inner_instructions: Option<Vec<InnerInstructions>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
