@@ -3266,6 +3266,7 @@ pub mod rpc_full {
     use {
         super::*,
         solana_sdk::message::{SanitizedVersionedMessage, VersionedMessage},
+        solana_transaction_status::UiInnerInstructions,
     };
     #[rpc]
     pub trait Full {
@@ -3677,7 +3678,7 @@ pub mod rpc_full {
                     units_consumed,
                     return_data,
                     inner_instructions: _, // Always `None` due to `enable_cpi_recording = false`
-                } = preflight_bank.simulate_transaction(transaction, false)
+                } = preflight_bank.simulate_transaction(&transaction, false)
                 {
                     match err {
                         TransactionError::BlockhashNotFound => {
@@ -3756,7 +3757,6 @@ pub mod rpc_full {
             if sig_verify {
                 verify_transaction(&transaction, &bank.feature_set)?;
             }
-            let number_of_accounts = transaction.message().account_keys().len();
 
             let TransactionSimulationResult {
                 result,
@@ -3765,7 +3765,10 @@ pub mod rpc_full {
                 units_consumed,
                 return_data,
                 inner_instructions,
-            } = bank.simulate_transaction(transaction, enable_cpi_recording);
+            } = bank.simulate_transaction(&transaction, enable_cpi_recording);
+
+            let account_keys = transaction.message().account_keys();
+            let number_of_accounts = account_keys.len();
 
             let accounts = if let Some(config_accounts) = config_accounts {
                 let accounts_encoding = config_accounts
@@ -3822,6 +3825,7 @@ pub mod rpc_full {
                             .collect(),
                     })
                     .filter(|i| !i.instructions.is_empty())
+                    .map(|converted| UiInnerInstructions::parse(converted, &account_keys))
                     .collect()
             });
 

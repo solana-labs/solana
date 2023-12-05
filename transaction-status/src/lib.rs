@@ -240,7 +240,7 @@ pub struct UiInnerInstructions {
 }
 
 impl UiInnerInstructions {
-    fn parse(inner_instructions: InnerInstructions, account_keys: &AccountKeys) -> Self {
+    pub fn parse(inner_instructions: InnerInstructions, account_keys: &AccountKeys) -> Self {
         Self {
             index: inner_instructions.index,
             instructions: inner_instructions
