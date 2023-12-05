@@ -58,6 +58,7 @@ use {
         transaction_batch::TransactionBatch,
     },
     byteorder::{ByteOrder, LittleEndian},
+    core::borrow::Borrow,
     dashmap::{DashMap, DashSet},
     itertools::izip,
     log::*,
@@ -184,7 +185,6 @@ use {
     solana_vote::vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
     solana_vote_program::vote_state::VoteState,
     std::{
-        borrow::Cow,
         cell::RefCell,
         collections::{hash_map::Entry, HashMap, HashSet},
         convert::TryFrom,
@@ -4131,13 +4131,14 @@ impl Bank {
 
     fn update_transaction_statuses(
         &self,
-        sanitized_txs: &[SanitizedTransaction],
+        sanitized_txs: &[impl Borrow<SanitizedTransaction>],
         execution_results: &[TransactionExecutionResult],
     ) {
         let mut status_cache = self.status_cache.write().unwrap();
         assert_eq!(sanitized_txs.len(), execution_results.len());
         for (tx, execution_result) in sanitized_txs.iter().zip(execution_results) {
             if let Some(details) = execution_result.details() {
+                let tx = tx.borrow();
                 // Add the message hash to the status cache to ensure that this message
                 // won't be processed again with a different signature.
                 status_cache.insert(
@@ -4249,7 +4250,10 @@ impl Bank {
 
     /// Prepare a transaction batch from a list of versioned transactions from
     /// an entry. Used for tests only.
-    pub fn prepare_entry_batch(&self, txs: Vec<VersionedTransaction>) -> Result<TransactionBatch> {
+    pub fn prepare_entry_batch(
+        &self,
+        txs: Vec<VersionedTransaction>,
+    ) -> Result<TransactionBatch<SanitizedTransaction, Vec<SanitizedTransaction>>> {
         let sanitized_txs = txs
             .into_iter()
             .map(|tx| SanitizedTransaction::try_create(tx, MessageHash::Compute, None, self))
@@ -4259,24 +4263,20 @@ impl Bank {
             .rc
             .accounts
             .lock_accounts(sanitized_txs.iter(), tx_account_lock_limit);
-        Ok(TransactionBatch::new(
-            lock_results,
-            self,
-            Cow::Owned(sanitized_txs),
-        ))
+        Ok(TransactionBatch::new(lock_results, self, sanitized_txs))
     }
 
     /// Prepare a locked transaction batch from a list of sanitized transactions.
     pub fn prepare_sanitized_batch<'a, 'b>(
         &'a self,
         txs: &'b [SanitizedTransaction],
-    ) -> TransactionBatch<'a, 'b> {
+    ) -> TransactionBatch<'a, 'b, SanitizedTransaction, &'b [SanitizedTransaction]> {
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
         let lock_results = self
             .rc
             .accounts
             .lock_accounts(txs.iter(), tx_account_lock_limit);
-        TransactionBatch::new(lock_results, self, Cow::Borrowed(txs))
+        TransactionBatch::new(lock_results, self, txs)
     }
 
     /// Prepare a locked transaction batch from a list of sanitized transactions, and their cost
@@ -4285,7 +4285,7 @@ impl Bank {
         &'a self,
         transactions: &'b [SanitizedTransaction],
         transaction_results: impl Iterator<Item = Result<()>>,
-    ) -> TransactionBatch<'a, 'b> {
+    ) -> TransactionBatch<'a, 'b, SanitizedTransaction, &'b [SanitizedTransaction]> {
         // this lock_results could be: Ok, AccountInUse, WouldExceedBlockMaxLimit or WouldExceedAccountMaxLimit
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
         let lock_results = self.rc.accounts.lock_accounts_with_results(
@@ -4293,23 +4293,20 @@ impl Bank {
             transaction_results,
             tx_account_lock_limit,
         );
-        TransactionBatch::new(lock_results, self, Cow::Borrowed(transactions))
+        TransactionBatch::new(lock_results, self, transactions)
     }
 
     /// Prepare a transaction batch from a single transaction without locking accounts
     pub(crate) fn prepare_unlocked_batch_from_single_tx<'a>(
         &'a self,
         transaction: &'a SanitizedTransaction,
-    ) -> TransactionBatch<'_, '_> {
+    ) -> TransactionBatch<'_, '_, SanitizedTransaction, &[SanitizedTransaction]> {
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
         let lock_result = transaction
             .get_account_locks(tx_account_lock_limit)
             .map(|_| ());
-        let mut batch = TransactionBatch::new(
-            vec![lock_result],
-            self,
-            Cow::Borrowed(slice::from_ref(transaction)),
-        );
+        let mut batch =
+            TransactionBatch::new(vec![lock_result], self, slice::from_ref(transaction));
         batch.set_needs_unlock(false);
         batch
     }
@@ -4419,7 +4416,10 @@ impl Bank {
         account_overrides
     }
 
-    pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
+    pub fn unlock_accounts<Tx: Borrow<SanitizedTransaction>>(
+        &self,
+        batch: &mut TransactionBatch<Tx, impl Borrow<[Tx]>>,
+    ) {
         if batch.needs_unlock() {
             batch.set_needs_unlock(false);
             self.rc
@@ -4570,11 +4570,14 @@ impl Bank {
         self.check_status_cache(sanitized_txs, age_results, error_counters)
     }
 
-    pub fn collect_balances(&self, batch: &TransactionBatch) -> TransactionBalances {
+    pub fn collect_balances<Tx: Borrow<SanitizedTransaction>>(
+        &self,
+        batch: &TransactionBatch<Tx, impl Borrow<[Tx]>>,
+    ) -> TransactionBalances {
         let mut balances: TransactionBalances = vec![];
         for transaction in batch.sanitized_transactions() {
             let mut transaction_balances: Vec<u64> = vec![];
-            for account_key in transaction.message().account_keys().iter() {
+            for account_key in transaction.borrow().message().account_keys().iter() {
                 transaction_balances.push(self.get_balance(account_key));
             }
             balances.push(transaction_balances);
@@ -5057,7 +5060,7 @@ impl Bank {
     fn filter_executable_program_accounts<'a>(
         &self,
         ancestors: &Ancestors,
-        txs: &[SanitizedTransaction],
+        txs: &[impl Borrow<SanitizedTransaction>],
         lock_results: &mut [TransactionCheckResult],
         program_owners: &'a [Pubkey],
         hash_queue: &BlockhashQueue,
@@ -5069,14 +5072,13 @@ impl Bank {
                     .as_ref()
                     .map(|nonce| nonce.lamports_per_signature())
                     .unwrap_or_else(|| {
-                        hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
+                        hash_queue
+                            .get_lamports_per_signature(tx.borrow().message().recent_blockhash())
                     })
                     .is_some()
                 {
-                    tx.message()
-                        .account_keys()
-                        .iter()
-                        .for_each(|key| match result.entry(*key) {
+                    tx.borrow().message().account_keys().iter().for_each(|key| {
+                        match result.entry(*key) {
                             Entry::Occupied(mut entry) => {
                                 let (_, count) = entry.get_mut();
                                 saturating_add_assign!(*count, 1);
@@ -5093,7 +5095,8 @@ impl Bank {
                                         .map(|owner| entry.insert((owner, 1)));
                                 }
                             }
-                        });
+                        }
+                    });
                 } else {
                     // If the transaction's nonce account was not valid, and blockhash is not found,
                     // the transaction will fail to process. Let's not load any programs from the
@@ -5106,9 +5109,9 @@ impl Bank {
     }
 
     #[allow(clippy::type_complexity)]
-    pub fn load_and_execute_transactions(
+    pub fn load_and_execute_transactions<Tx: Borrow<SanitizedTransaction>>(
         &self,
-        batch: &TransactionBatch,
+        batch: &TransactionBatch<Tx, impl Borrow<[Tx]>>,
         max_age: usize,
         enable_cpi_recording: bool,
         enable_log_recording: bool,
@@ -5196,7 +5199,7 @@ impl Bank {
             account_overrides,
             self.get_reward_interval(),
             &program_accounts_map,
-            &programs_loaded_for_tx_batch.borrow(),
+            &RefCell::borrow(&programs_loaded_for_tx_batch),
             self.should_collect_rent(),
         );
         load_time.stop();
@@ -5217,7 +5220,7 @@ impl Bank {
                             let mut compute_budget_process_transaction_time =
                                 Measure::start("compute_budget_process_transaction_time");
                             let maybe_compute_budget = ComputeBudget::try_from_instructions(
-                                tx.message().program_instructions_iter(),
+                                tx.borrow().message().program_instructions_iter(),
                                 &self.feature_set,
                             );
                             compute_budget_process_transaction_time.stop();
@@ -5234,7 +5237,7 @@ impl Bank {
                         };
 
                     let result = self.execute_loaded_transaction(
-                        tx,
+                        tx.borrow(),
                         loaded_transaction,
                         compute_budget,
                         nonce.as_ref().map(DurableNonceFee::from),
@@ -5244,7 +5247,7 @@ impl Bank {
                         timings,
                         &mut error_counters,
                         log_messages_bytes_limit,
-                        &programs_loaded_for_tx_batch.borrow(),
+                        &RefCell::borrow(&programs_loaded_for_tx_batch),
                     );
 
                     if let TransactionExecutionResult::Executed {
@@ -5295,6 +5298,7 @@ impl Bank {
 
         let mut collect_logs_time = Measure::start("collect_logs_time");
         for (execution_result, tx) in execution_results.iter().zip(sanitized_txs) {
+            let tx = tx.borrow();
             if let Some(debug_keys) = &self.transaction_debug_keys {
                 for key in tx.message().account_keys().iter() {
                     if debug_keys.contains(key) {
@@ -5482,7 +5486,7 @@ impl Bank {
 
     fn filter_program_errors_and_collect_fee(
         &self,
-        txs: &[SanitizedTransaction],
+        txs: &[impl Borrow<SanitizedTransaction>],
         execution_results: &[TransactionExecutionResult],
     ) -> Vec<Result<()>> {
         let hash_queue = self.blockhash_queue.read().unwrap();
@@ -5492,6 +5496,7 @@ impl Bank {
             .iter()
             .zip(execution_results)
             .map(|(tx, execution_result)| {
+                let tx = tx.borrow();
                 let (execution_status, durable_nonce_fee) = match &execution_result {
                     TransactionExecutionResult::Executed { details, .. } => {
                         Ok((&details.status, details.durable_nonce_fee.as_ref()))
@@ -5542,7 +5547,7 @@ impl Bank {
     /// a failure result.
     pub fn commit_transactions(
         &self,
-        sanitized_txs: &[SanitizedTransaction],
+        sanitized_txs: &[impl Borrow<SanitizedTransaction>],
         loaded_txs: &mut [TransactionLoadResult],
         execution_results: Vec<TransactionExecutionResult>,
         last_blockhash: Hash,
@@ -6304,9 +6309,9 @@ impl Bank {
 
     /// Process a batch of transactions.
     #[must_use]
-    pub fn load_execute_and_commit_transactions(
+    pub fn load_execute_and_commit_transactions<Tx: Borrow<SanitizedTransaction>>(
         &self,
-        batch: &TransactionBatch,
+        batch: &TransactionBatch<Tx, impl Borrow<[Tx]>>,
         max_age: usize,
         collect_balances: bool,
         enable_cpi_recording: bool,
@@ -6434,7 +6439,10 @@ impl Bank {
     }
 
     #[must_use]
-    fn process_transaction_batch(&self, batch: &TransactionBatch) -> Vec<Result<()>> {
+    fn process_transaction_batch<Tx: Borrow<SanitizedTransaction>>(
+        &self,
+        batch: &TransactionBatch<Tx, impl Borrow<[Tx]>>,
+    ) -> Vec<Result<()>> {
         self.load_execute_and_commit_transactions(
             batch,
             MAX_PROCESSING_AGE,
@@ -7601,7 +7609,7 @@ impl Bank {
     /// a bank-level cache of vote accounts and stake delegation info
     fn update_stakes_cache(
         &self,
-        txs: &[SanitizedTransaction],
+        txs: &[impl Borrow<SanitizedTransaction>],
         execution_results: &[TransactionExecutionResult],
         loaded_txs: &[TransactionLoadResult],
     ) {
@@ -7612,7 +7620,7 @@ impl Bank {
             .filter(|(_, execution_result, _)| execution_result.was_executed_successfully())
             .flat_map(|(tx, _, (load_result, _))| {
                 load_result.iter().flat_map(|loaded_transaction| {
-                    let num_account_keys = tx.message().account_keys().len();
+                    let num_account_keys = tx.borrow().message().account_keys().len();
                     loaded_transaction.accounts.iter().take(num_account_keys)
                 })
             })
@@ -8257,7 +8265,10 @@ impl Bank {
     }
 
     /// Prepare a transaction batch from a list of legacy transactions. Used for tests only.
-    pub fn prepare_batch_for_tests(&self, txs: Vec<Transaction>) -> TransactionBatch {
+    pub fn prepare_batch_for_tests(
+        &self,
+        txs: Vec<Transaction>,
+    ) -> TransactionBatch<SanitizedTransaction, Vec<SanitizedTransaction>> {
         let transaction_account_lock_limit = self.get_transaction_account_lock_limit();
         let sanitized_txs = txs
             .into_iter()
@@ -8267,7 +8278,7 @@ impl Bank {
             .rc
             .accounts
             .lock_accounts(sanitized_txs.iter(), transaction_account_lock_limit);
-        TransactionBatch::new(lock_results, self, Cow::Owned(sanitized_txs))
+        TransactionBatch::new(lock_results, self, sanitized_txs)
     }
 
     /// Set the initial accounts data size

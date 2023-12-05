@@ -1,11 +1,12 @@
 use {
+    core::borrow::Borrow,
     solana_account_decoder::parse_token::{
         is_known_spl_token_id, token_amount_to_ui_amount, UiTokenAmount,
     },
     solana_measure::measure::Measure,
     solana_metrics::datapoint_debug,
     solana_runtime::{bank::Bank, transaction_batch::TransactionBatch},
-    solana_sdk::{account::ReadableAccount, pubkey::Pubkey},
+    solana_sdk::{account::ReadableAccount, pubkey::Pubkey, transaction::SanitizedTransaction},
     solana_transaction_status::{
         token_balances::TransactionTokenBalances, TransactionTokenBalance,
     },
@@ -34,22 +35,24 @@ fn get_mint_decimals(bank: &Bank, mint: &Pubkey) -> Option<u8> {
     }
 }
 
-pub fn collect_token_balances(
+pub fn collect_token_balances<Tx: Borrow<SanitizedTransaction>>(
     bank: &Bank,
-    batch: &TransactionBatch,
+    batch: &TransactionBatch<Tx, impl Borrow<[Tx]>>,
     mint_decimals: &mut HashMap<Pubkey, u8>,
 ) -> TransactionTokenBalances {
     let mut balances: TransactionTokenBalances = vec![];
     let mut collect_time = Measure::start("collect_token_balances");
 
     for transaction in batch.sanitized_transactions() {
-        let account_keys = transaction.message().account_keys();
+        let account_keys = transaction.borrow().message().account_keys();
         let has_token_program = account_keys.iter().any(is_known_spl_token_id);
 
         let mut transaction_balances: Vec<TransactionTokenBalance> = vec![];
         if has_token_program {
             for (index, account_id) in account_keys.iter().enumerate() {
-                if transaction.message().is_invoked(index) || is_known_spl_token_id(account_id) {
+                if transaction.borrow().message().is_invoked(index)
+                    || is_known_spl_token_id(account_id)
+                {
                     continue;
                 }
 

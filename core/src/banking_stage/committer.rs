@@ -1,5 +1,6 @@
 use {
     super::leader_slot_timing_metrics::LeaderExecuteAndCommitTimings,
+    core::borrow::Borrow,
     itertools::Itertools,
     solana_accounts_db::{
         accounts::TransactionLoadResult,
@@ -15,7 +16,7 @@ use {
         prioritization_fee_cache::PrioritizationFeeCache,
         transaction_batch::TransactionBatch,
     },
-    solana_sdk::{pubkey::Pubkey, saturating_add_assign},
+    solana_sdk::{pubkey::Pubkey, saturating_add_assign, transaction::SanitizedTransaction},
     solana_transaction_status::{
         token_balances::TransactionTokenBalancesSet, TransactionTokenBalance,
     },
@@ -61,9 +62,9 @@ impl Committer {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn commit_transactions(
+    pub(super) fn commit_transactions<Tx: Borrow<SanitizedTransaction>>(
         &self,
-        batch: &TransactionBatch,
+        batch: &TransactionBatch<Tx, impl Borrow<[Tx]>>,
         loaded_transactions: &mut [TransactionLoadResult],
         execution_results: Vec<TransactionExecutionResult>,
         starting_transaction_index: Option<usize>,
@@ -126,23 +127,29 @@ impl Committer {
                 pre_balance_info,
                 starting_transaction_index,
             );
-            self.prioritization_fee_cache
-                .update(bank, executed_transactions.into_iter());
+            self.prioritization_fee_cache.update(
+                bank,
+                executed_transactions.into_iter().map(|tx| tx.borrow()),
+            );
         });
         execute_and_commit_timings.find_and_send_votes_us = find_and_send_votes_us;
         (commit_time_us, commit_transaction_statuses)
     }
 
-    fn collect_balances_and_send_status_batch(
+    fn collect_balances_and_send_status_batch<Tx: Borrow<SanitizedTransaction>>(
         &self,
         tx_results: TransactionResults,
         bank: &Arc<Bank>,
-        batch: &TransactionBatch,
+        batch: &TransactionBatch<Tx, impl Borrow<[Tx]>>,
         pre_balance_info: &mut PreBalanceInfo,
         starting_transaction_index: Option<usize>,
     ) {
         if let Some(transaction_status_sender) = &self.transaction_status_sender {
-            let txs = batch.sanitized_transactions().to_vec();
+            let txs = batch
+                .sanitized_transactions()
+                .iter()
+                .map(|tx| tx.borrow().clone())
+                .collect();
             let post_balances = bank.collect_balances(batch);
             let post_token_balances =
                 collect_token_balances(bank, batch, &mut pre_balance_info.mint_decimals);

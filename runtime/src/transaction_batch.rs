@@ -1,29 +1,30 @@
 use {
     crate::bank::Bank,
+    core::{borrow::Borrow, marker::PhantomData},
     solana_sdk::transaction::{Result, SanitizedTransaction},
-    std::borrow::Cow,
 };
 
 // Represents the results of trying to lock a set of accounts
-pub struct TransactionBatch<'a, 'b> {
+pub struct TransactionBatch<'a, 'b, Tx, C: Borrow<[Tx]>>
+where
+    Tx: Borrow<SanitizedTransaction>,
+{
     lock_results: Vec<Result<()>>,
     bank: &'a Bank,
-    sanitized_txs: Cow<'b, [SanitizedTransaction]>,
+    sanitized_txs: C,
     needs_unlock: bool,
+    _marker: PhantomData<&'b Tx>,
 }
 
-impl<'a, 'b> TransactionBatch<'a, 'b> {
-    pub fn new(
-        lock_results: Vec<Result<()>>,
-        bank: &'a Bank,
-        sanitized_txs: Cow<'b, [SanitizedTransaction]>,
-    ) -> Self {
-        assert_eq!(lock_results.len(), sanitized_txs.len());
+impl<'a, 'b, Tx: Borrow<SanitizedTransaction>, C: Borrow<[Tx]>> TransactionBatch<'a, 'b, Tx, C> {
+    pub fn new(lock_results: Vec<Result<()>>, bank: &'a Bank, sanitized_txs: C) -> Self {
+        assert_eq!(lock_results.len(), sanitized_txs.borrow().len());
         Self {
             lock_results,
             bank,
             sanitized_txs,
             needs_unlock: true,
+            _marker: PhantomData,
         }
     }
 
@@ -31,8 +32,8 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
         &self.lock_results
     }
 
-    pub fn sanitized_transactions(&self) -> &[SanitizedTransaction] {
-        &self.sanitized_txs
+    pub fn sanitized_transactions(&self) -> &[Tx] {
+        self.sanitized_txs.borrow()
     }
 
     pub fn bank(&self) -> &Bank {
@@ -49,7 +50,9 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
 }
 
 // Unlock all locked accounts in destructor.
-impl<'a, 'b> Drop for TransactionBatch<'a, 'b> {
+impl<'a, 'b, Tx: Borrow<SanitizedTransaction>, C: Borrow<[Tx]>> Drop
+    for TransactionBatch<'a, 'b, Tx, C>
+{
     fn drop(&mut self) {
         self.bank.unlock_accounts(self)
     }

@@ -16,6 +16,7 @@ use {
         storable_accounts::StorableAccounts,
         transaction_results::TransactionExecutionResult,
     },
+    core::borrow::Borrow,
     dashmap::DashMap,
     log::*,
     solana_sdk::{
@@ -699,7 +700,7 @@ impl Accounts {
     #[allow(clippy::needless_collect)]
     pub fn unlock_accounts<'a>(
         &self,
-        txs: impl Iterator<Item = &'a SanitizedTransaction>,
+        txs: impl Iterator<Item = &'a (impl Borrow<SanitizedTransaction> + 'a)>,
         results: &[Result<()>],
     ) {
         let keys: Vec<_> = txs
@@ -714,7 +715,7 @@ impl Accounts {
                 | Err(TransactionError::WouldExceedMaxAccountCostLimit)
                 | Err(TransactionError::WouldExceedAccountDataBlockLimit)
                 | Err(TransactionError::WouldExceedAccountDataTotalLimit) => None,
-                _ => Some(tx.get_account_locks_unchecked()),
+                _ => Some(tx.borrow().get_account_locks_unchecked()),
             })
             .collect();
         let mut account_locks = self.account_locks.lock().unwrap();
@@ -730,7 +731,7 @@ impl Accounts {
     pub fn store_cached(
         &self,
         slot: Slot,
-        txs: &[SanitizedTransaction],
+        txs: &[impl Borrow<SanitizedTransaction>],
         res: &[TransactionExecutionResult],
         loaded: &mut [TransactionLoadResult],
         rent_collector: &RentCollector,
@@ -764,7 +765,7 @@ impl Accounts {
     #[allow(clippy::too_many_arguments)]
     fn collect_accounts_to_store<'a>(
         &self,
-        txs: &'a [SanitizedTransaction],
+        txs: &'a [impl Borrow<SanitizedTransaction>],
         execution_results: &'a [TransactionExecutionResult],
         load_results: &'a mut [TransactionLoadResult],
         _rent_collector: &RentCollector,
@@ -800,6 +801,7 @@ impl Accounts {
                 }
             };
 
+            let tx = tx.borrow();
             let message = tx.message();
             let loaded_transaction = tx_load_result.as_mut().unwrap();
             let mut fee_payer_index = None;

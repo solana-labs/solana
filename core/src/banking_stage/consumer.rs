@@ -8,6 +8,7 @@ use {
         unprocessed_transaction_storage::{ConsumeScannerPayload, UnprocessedTransactionStorage},
         BankingStageStats,
     },
+    core::borrow::Borrow,
     itertools::Itertools,
     solana_accounts_db::{
         transaction_error_metrics::TransactionErrorMetrics,
@@ -525,10 +526,10 @@ impl Consumer {
         }
     }
 
-    fn execute_and_commit_transactions_locked(
+    fn execute_and_commit_transactions_locked<Tx: Borrow<SanitizedTransaction>>(
         &self,
         bank: &Arc<Bank>,
-        batch: &TransactionBatch,
+        batch: &TransactionBatch<Tx, impl Borrow<[Tx]>>,
     ) -> ExecuteAndCommitTransactionsOutput {
         let transaction_status_sender_enabled = self.committer.transaction_status_sender_enabled();
         let mut execute_and_commit_timings = LeaderExecuteAndCommitTimings::default();
@@ -577,7 +578,7 @@ impl Consumer {
                 .zip(batch.sanitized_transactions())
                 .filter_map(|(execution_result, tx)| {
                     if execution_result.was_executed() {
-                        Some(tx.to_versioned_transaction())
+                        Some(tx.borrow().to_versioned_transaction())
                     } else {
                         None
                     }

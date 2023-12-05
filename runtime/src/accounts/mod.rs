@@ -5,6 +5,7 @@ use {
         accounts::account_rent_state::{check_rent_state_with_account, RentState},
         bank::RewardInterval,
     },
+    core::borrow::Borrow,
     itertools::Itertools,
     log::warn,
     solana_accounts_db::{
@@ -51,7 +52,7 @@ use {
 pub(super) fn load_accounts(
     accounts_db: &AccountsDb,
     ancestors: &Ancestors,
-    txs: &[SanitizedTransaction],
+    txs: &[impl Borrow<SanitizedTransaction>],
     lock_results: Vec<TransactionCheckResult>,
     hash_queue: &BlockhashQueue,
     error_counters: &mut TransactionErrorMetrics,
@@ -68,6 +69,7 @@ pub(super) fn load_accounts(
         .zip(lock_results)
         .map(|etx| match etx {
             (tx, (Ok(()), nonce)) => {
+                let tx = tx.borrow();
                 let lamports_per_signature = nonce
                     .as_ref()
                     .map(|nonce| nonce.lamports_per_signature())

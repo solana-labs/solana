@@ -10,6 +10,7 @@ use {
         use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
     chrono_humanize::{Accuracy, HumanTime, Tense},
+    core::borrow::Borrow,
     crossbeam_channel::Sender,
     itertools::Itertools,
     log::*,
@@ -61,7 +62,6 @@ use {
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     solana_vote::{vote_account::VoteAccountsHashMap, vote_sender_types::ReplayVoteSender},
     std::{
-        borrow::Cow,
         collections::{HashMap, HashSet},
         path::PathBuf,
         result,
@@ -75,7 +75,7 @@ use {
 };
 
 struct TransactionBatchWithIndexes<'a, 'b> {
-    pub batch: TransactionBatch<'a, 'b>,
+    pub batch: TransactionBatch<'a, 'b, SanitizedTransaction, &'b [SanitizedTransaction]>,
     pub transaction_indexes: Vec<usize>,
 }
 
@@ -104,8 +104,8 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
 }
 
 // Includes transaction signature for unit-testing
-fn get_first_error(
-    batch: &TransactionBatch,
+fn get_first_error<Tx: Borrow<SanitizedTransaction>>(
+    batch: &TransactionBatch<Tx, impl Borrow<[Tx]>>,
     fee_collection_results: Vec<Result<()>>,
 ) -> Option<(Result<()>, Signature)> {
     let mut first_err = None;
@@ -113,6 +113,7 @@ fn get_first_error(
         .iter()
         .zip(batch.sanitized_transactions())
     {
+        let transaction = transaction.borrow();
         if let Err(ref err) = result {
             if first_err.is_none() {
                 first_err = Some((result.clone(), *transaction.signature()));
@@ -383,7 +384,7 @@ fn rebatch_transactions<'a>(
 ) -> TransactionBatchWithIndexes<'a, 'a> {
     let txs = &sanitized_txs[start..=end];
     let results = &lock_results[start..=end];
-    let mut tx_batch = TransactionBatch::new(results.to_vec(), bank, Cow::from(txs));
+    let mut tx_batch = TransactionBatch::new(results.to_vec(), bank, txs);
     tx_batch.set_needs_unlock(false);
 
     let transaction_indexes = transaction_indexes[start..=end].to_vec();
