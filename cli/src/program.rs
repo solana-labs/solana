@@ -1020,55 +1020,10 @@ fn process_program_deploy(
         let program_len = program_data.len();
         (program_data, program_len)
     } else if buffer_provided {
-        // Check supplied buffer account
-        if let Some(account) = rpc_client
-            .get_account_with_commitment(&buffer_pubkey, config.commitment)?
-            .value
-        {
-            if !bpf_loader_upgradeable::check_id(&account.owner) {
-                return Err(format!(
-                    "Buffer account {buffer_pubkey} is not owned by the BPF Upgradeable Loader",
-                )
-                .into());
-            }
-
-            match account.state() {
-                Ok(UpgradeableLoaderState::Buffer { .. }) => {
-                    // continue if buffer is initialized
-                }
-                Ok(UpgradeableLoaderState::Program { .. }) => {
-                    return Err(
-                        format!("Cannot use program account {buffer_pubkey} as buffer").into(),
-                    );
-                }
-                Ok(UpgradeableLoaderState::ProgramData { .. }) => {
-                    return Err(format!(
-                        "Cannot use program data account {buffer_pubkey} as buffer",
-                    )
-                    .into())
-                }
-                Ok(UpgradeableLoaderState::Uninitialized) => {
-                    return Err(format!("Buffer account {buffer_pubkey} is not initialized").into());
-                }
-                Err(_) => {
-                    return Err(
-                        format!("Buffer account {buffer_pubkey} could not be deserialized").into(),
-                    )
-                }
-            };
-
-            let program_len = account
-                .data
-                .len()
-                .saturating_sub(UpgradeableLoaderState::size_of_buffer_metadata());
-
-            (vec![], program_len)
-        } else {
-            return Err(format!(
-                "Buffer account {buffer_pubkey} not found, was it already consumed?",
-            )
-            .into());
-        }
+        (
+            vec![],
+            fetch_buffer_len(&rpc_client, config, buffer_pubkey)?,
+        )
     } else {
         return Err("Program location required if buffer not supplied".into());
     };
@@ -1133,6 +1088,56 @@ fn process_program_deploy(
         report_ephemeral_mnemonic(words, mnemonic);
     }
     result
+}
+
+fn fetch_buffer_len(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    buffer_pubkey: Pubkey,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    // Check supplied buffer account
+    if let Some(account) = rpc_client
+        .get_account_with_commitment(&buffer_pubkey, config.commitment)?
+        .value
+    {
+        if !bpf_loader_upgradeable::check_id(&account.owner) {
+            return Err(format!(
+                "Buffer account {buffer_pubkey} is not owned by the BPF Upgradeable Loader",
+            )
+            .into());
+        }
+
+        match account.state() {
+            Ok(UpgradeableLoaderState::Buffer { .. }) => {
+                // continue if buffer is initialized
+            }
+            Ok(UpgradeableLoaderState::Program { .. }) => {
+                return Err(format!("Cannot use program account {buffer_pubkey} as buffer").into());
+            }
+            Ok(UpgradeableLoaderState::ProgramData { .. }) => {
+                return Err(
+                    format!("Cannot use program data account {buffer_pubkey} as buffer",).into(),
+                )
+            }
+            Ok(UpgradeableLoaderState::Uninitialized) => {
+                return Err(format!("Buffer account {buffer_pubkey} is not initialized").into());
+            }
+            Err(_) => {
+                return Err(
+                    format!("Buffer account {buffer_pubkey} could not be deserialized").into(),
+                )
+            }
+        };
+
+        let program_len = account
+            .data
+            .len()
+            .saturating_sub(UpgradeableLoaderState::size_of_buffer_metadata());
+
+        Ok(program_len)
+    } else {
+        Err(format!("Buffer account {buffer_pubkey} not found, was it already consumed?",).into())
+    }
 }
 
 fn process_write_buffer(
