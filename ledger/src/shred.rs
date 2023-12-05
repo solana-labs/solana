@@ -283,9 +283,10 @@ impl ErasureSetId {
         self.0
     }
 
-    // Storage key for ErasureMeta in blockstore db.
-    pub(crate) fn store_key(&self) -> (Slot, /*fec_set_index:*/ u64) {
-        (self.0, u64::from(self.1))
+    // Storage key for ErasureMeta and MerkleRootMeta in blockstore db.
+    // Note: ErasureMeta column uses u64 so this will need to be typecast
+    pub(crate) fn store_key(&self) -> (Slot, /*fec_set_index:*/ u32) {
+        (self.0, self.1)
     }
 }
 
@@ -334,6 +335,7 @@ impl Shred {
     dispatch!(pub(crate) fn erasure_shard_index(&self) -> Result<usize, Error>);
 
     dispatch!(pub fn into_payload(self) -> Vec<u8>);
+    dispatch!(pub fn merkle_root(&self) -> Result<Hash, Error>);
     dispatch!(pub fn payload(&self) -> &Vec<u8>);
     dispatch!(pub fn sanitize(&self) -> Result<(), Error>);
 

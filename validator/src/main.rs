@@ -8,10 +8,7 @@ use {
     log::*,
     rand::{seq::SliceRandom, thread_rng},
     solana_accounts_db::{
-        accounts_db::{
-            AccountShrinkThreshold, AccountsDb, AccountsDbConfig, CreateAncientStorage,
-            FillerAccountsConfig,
-        },
+        accounts_db::{AccountShrinkThreshold, AccountsDb, AccountsDbConfig, CreateAncientStorage},
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
             AccountsIndexConfig, IndexLimitMb,
@@ -244,7 +241,7 @@ fn wait_for_restart_window(
                     Err("Current epoch is almost complete".to_string())
                 } else {
                     while leader_schedule
-                        .get(0)
+                        .front()
                         .map(|slot| *slot < epoch_info.absolute_slot)
                         .unwrap_or(false)
                     {
@@ -258,7 +255,7 @@ fn wait_for_restart_window(
                         upcoming_idle_windows.pop();
                     }
 
-                    match leader_schedule.get(0) {
+                    match leader_schedule.front() {
                         None => {
                             Ok(()) // Validator has no leader slots
                         }
@@ -1186,16 +1183,10 @@ pub fn main() {
             .ok()
             .map(|mb| mb * MB);
 
-    let filler_accounts_config = FillerAccountsConfig {
-        count: value_t_or_exit!(matches, "accounts_filler_count", usize),
-        size: value_t_or_exit!(matches, "accounts_filler_size", usize),
-    };
-
     let accounts_db_config = AccountsDbConfig {
         index: Some(accounts_index_config),
         base_working_path: Some(ledger_path.clone()),
         accounts_hash_cache_path: Some(accounts_hash_cache_path),
-        filler_accounts_config,
         write_cache_limit_bytes: value_t!(matches, "accounts_db_cache_limit_mb", u64)
             .ok()
             .map(|mb| mb * MB as u64),

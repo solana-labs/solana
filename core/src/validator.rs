@@ -168,6 +168,7 @@ impl BlockVerificationMethod {
 pub enum BlockProductionMethod {
     #[default]
     ThreadLocalMultiIterator,
+    CentralScheduler,
 }
 
 impl BlockProductionMethod {
@@ -747,13 +748,7 @@ impl Validator {
 
         let (snapshot_package_sender, snapshot_packager_service) =
             if config.snapshot_config.should_generate_snapshots() {
-                // filler accounts make snapshots invalid for use
-                // so, do not publish that we have snapshots
-                let enable_gossip_push = config
-                    .accounts_db_config
-                    .as_ref()
-                    .map(|config| config.filler_accounts_config.count == 0)
-                    .unwrap_or(true);
+                let enable_gossip_push = true;
                 let (snapshot_package_sender, snapshot_package_receiver) =
                     crossbeam_channel::unbounded();
                 let snapshot_packager_service = SnapshotPackagerService::new(
@@ -1128,7 +1123,7 @@ impl Validator {
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
         let (gossip_verified_vote_hash_sender, gossip_verified_vote_hash_receiver) = unbounded();
-        let (cluster_confirmed_slot_sender, cluster_confirmed_slot_receiver) = unbounded();
+        let (duplicate_confirmed_slot_sender, duplicate_confirmed_slots_receiver) = unbounded();
 
         let rpc_completed_slots_service = RpcCompletedSlotsService::spawn(
             completed_slots_receiver,
@@ -1263,7 +1258,7 @@ impl Validator {
             replay_vote_sender.clone(),
             completed_data_sets_sender,
             bank_notification_sender.clone(),
-            cluster_confirmed_slot_receiver,
+            duplicate_confirmed_slots_receiver,
             TvuConfig {
                 max_ledger_shreds: config.max_ledger_shreds,
                 shred_version: node.info.shred_version(),
@@ -1328,7 +1323,7 @@ impl Validator {
             replay_vote_sender,
             bank_notification_sender.map(|sender| sender.sender),
             config.tpu_coalesce,
-            cluster_confirmed_slot_sender,
+            duplicate_confirmed_slot_sender,
             &connection_cache,
             turbine_quic_endpoint_sender,
             &identity_keypair,
@@ -1747,7 +1742,7 @@ fn load_blockstore(
     blockstore.shred_timing_point_sender = poh_timing_point_sender;
     // following boot sequence (esp BankForks) could set root. so stash the original value
     // of blockstore root away here as soon as possible.
-    let original_blockstore_root = blockstore.last_root();
+    let original_blockstore_root = blockstore.max_root();
 
     let blockstore = Arc::new(blockstore);
     let blockstore_root_scan = BlockstoreRootScan::new(config, blockstore.clone(), exit.clone());
@@ -1806,7 +1801,8 @@ fn load_blockstore(
                 .map(|service| service.sender()),
             accounts_update_notifier,
             exit,
-        );
+        )
+        .map_err(|err| err.to_string())?;
 
     // Before replay starts, set the callbacks in each of the banks in BankForks so that
     // all dropped banks come through the `pruned_banks_receiver` channel. This way all bank

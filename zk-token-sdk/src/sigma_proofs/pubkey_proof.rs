@@ -18,7 +18,7 @@ use {
 };
 use {
     crate::{
-        errors::ProofVerificationError, sigma_proofs::errors::PubkeyValidityProofError,
+        sigma_proofs::errors::{PubkeyValidityProofVerificationError, SigmaProofVerificationError},
         transcript::TranscriptProtocol,
     },
     curve25519_dalek::{
@@ -92,7 +92,7 @@ impl PubkeyValidityProof {
         self,
         elgamal_pubkey: &ElGamalPubkey,
         transcript: &mut Transcript,
-    ) -> Result<(), PubkeyValidityProofError> {
+    ) -> Result<(), PubkeyValidityProofVerificationError> {
         transcript.pubkey_proof_domain_separator();
 
         // extract the relvant scalar and Ristretto points from the input
@@ -106,7 +106,7 @@ impl PubkeyValidityProof {
         let Y = self
             .Y
             .decompress()
-            .ok_or(ProofVerificationError::Deserialization)?;
+            .ok_or(SigmaProofVerificationError::Deserialization)?;
 
         let check = RistrettoPoint::vartime_multiscalar_mul(
             vec![&self.z, &(-&c), &(-&Scalar::one())],
@@ -116,7 +116,7 @@ impl PubkeyValidityProof {
         if check.is_identity() {
             Ok(())
         } else {
-            Err(ProofVerificationError::AlgebraicRelation.into())
+            Err(SigmaProofVerificationError::AlgebraicRelation.into())
         }
     }
 
@@ -128,7 +128,7 @@ impl PubkeyValidityProof {
         buf
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, PubkeyValidityProofError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, PubkeyValidityProofVerificationError> {
         let mut chunks = bytes.chunks(UNIT_LEN);
         let Y = ristretto_point_from_optional_slice(chunks.next())?;
         let z = canonical_scalar_from_optional_slice(chunks.next())?;

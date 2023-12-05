@@ -6,8 +6,8 @@ use {
         banking_trace::BankingTracer,
         cache_block_meta_service::CacheBlockMetaSender,
         cluster_info_vote_listener::{
-            GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver,
-            VerifiedVoteReceiver, VoteTracker,
+            DuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VerifiedVoteReceiver,
+            VoteTracker,
         },
         cluster_slots_service::{cluster_slots::ClusterSlots, ClusterSlotsService},
         completed_data_sets_service::CompletedDataSetsSender,
@@ -125,7 +125,7 @@ impl Tvu {
         replay_vote_sender: ReplayVoteSender,
         completed_data_sets_sender: CompletedDataSetsSender,
         bank_notification_sender: Option<BankNotificationSenderConfig>,
-        gossip_confirmed_slots_receiver: GossipDuplicateConfirmedSlotsReceiver,
+        duplicate_confirmed_slots_receiver: DuplicateConfirmedSlotsReceiver,
         tvu_config: TvuConfig,
         max_slots: &Arc<MaxSlots>,
         block_metadata_notifier: Option<BlockMetadataNotifierArc>,
@@ -196,7 +196,12 @@ impl Tvu {
         let (dumped_slots_sender, dumped_slots_receiver) = unbounded();
         let (popular_pruned_forks_sender, popular_pruned_forks_receiver) = unbounded();
         let window_service = {
-            let epoch_schedule = *bank_forks.read().unwrap().working_bank().epoch_schedule();
+            let epoch_schedule = bank_forks
+                .read()
+                .unwrap()
+                .working_bank()
+                .epoch_schedule()
+                .clone();
             let repair_info = RepairInfo {
                 bank_forks: bank_forks.clone(),
                 epoch_schedule,
@@ -297,7 +302,7 @@ impl Tvu {
             retransmit_slots_sender,
             ancestor_duplicate_slots_receiver,
             replay_vote_sender,
-            gossip_confirmed_slots_receiver,
+            duplicate_confirmed_slots_receiver,
             gossip_verified_vote_hash_receiver,
             cluster_slots_update_sender,
             cost_update_sender,

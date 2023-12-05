@@ -19,9 +19,7 @@ use {
     regex::Regex,
     solana_accounts_db::{
         account_storage::AccountStorageMap,
-        accounts_db::{
-            self, create_accounts_run_and_snapshot_dirs, AccountStorageEntry, AtomicAppendVecId,
-        },
+        accounts_db::{self, AccountStorageEntry, AtomicAppendVecId},
         accounts_file::AccountsFileError,
         append_vec::AppendVec,
         hardened_unpack::{self, ParallelSelector, UnpackError},
@@ -38,7 +36,7 @@ use {
         path::{Path, PathBuf},
         process::ExitStatus,
         str::FromStr,
-        sync::{atomic::AtomicU32, Arc, Mutex},
+        sync::{Arc, Mutex},
         thread::{Builder, JoinHandle},
     },
     tar::{self, Archive},
@@ -1213,29 +1211,20 @@ pub(crate) fn get_storages_to_serialize(
         .collect::<Vec<_>>()
 }
 
-#[derive(Debug, Default)]
-pub struct BankFromArchiveTimings {
-    pub rebuild_bank_from_snapshots_us: u64,
-    pub full_snapshot_untar_us: u64,
-    pub incremental_snapshot_untar_us: u64,
-    pub verify_snapshot_bank_us: u64,
-}
-
-#[derive(Debug, Default)]
-pub struct BankFromDirTimings {
-    pub rebuild_bank_from_snapshot_us: u64,
-    pub build_storage_us: u64,
-}
-
 // From testing, 4 seems to be a sweet spot for ranges of 60M-360M accounts and 16-64 cores. This may need to be tuned later.
 const PARALLEL_UNTAR_READERS_DEFAULT: usize = 4;
 
+/// Unarchives the given full and incremental snapshot archives, as long as they are compatible.
 pub fn verify_and_unarchive_snapshots(
     bank_snapshots_dir: impl AsRef<Path>,
     full_snapshot_archive_info: &FullSnapshotArchiveInfo,
     incremental_snapshot_archive_info: Option<&IncrementalSnapshotArchiveInfo>,
     account_paths: &[PathBuf],
-) -> Result<(UnarchivedSnapshot, Option<UnarchivedSnapshot>, AtomicU32)> {
+) -> Result<(
+    UnarchivedSnapshot,
+    Option<UnarchivedSnapshot>,
+    AtomicAppendVecId,
+)> {
     check_are_snapshots_compatible(
         full_snapshot_archive_info,
         incremental_snapshot_archive_info,
@@ -1458,9 +1447,11 @@ fn streaming_snapshot_dir_files(
     Ok(())
 }
 
-/// Perform the common tasks when deserialize a snapshot.  Handles reading snapshot file, reading the version file,
-/// and then returning those fields plus the rebuilt storage
-pub fn build_storage_from_snapshot_dir(
+/// Performs the common tasks when deserializing a snapshot
+///
+/// Handles reading the snapshot file and version file,
+/// then returning those fields plus the rebuilt storages.
+pub fn rebuild_storages_from_snapshot_dir(
     snapshot_info: &BankSnapshotInfo,
     account_paths: &[PathBuf],
     next_append_vec_id: Arc<AtomicAppendVecId>,
@@ -1998,7 +1989,9 @@ pub fn verify_snapshot_archive(
 ) {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let unpack_dir = temp_dir.path();
-    let unpack_account_dir = create_accounts_run_and_snapshot_dirs(unpack_dir).unwrap().0;
+    let unpack_account_dir = accounts_db::create_accounts_run_and_snapshot_dirs(unpack_dir)
+        .unwrap()
+        .0;
     untar_snapshot_in(
         snapshot_archive,
         unpack_dir,
@@ -2169,9 +2162,16 @@ pub fn should_take_incremental_snapshot(
         && last_full_snapshot_slot.is_some()
 }
 
+/// Creates an "accounts path" directory for tests
+///
+/// This temporary directory will contain the "run" and "snapshot"
+/// sub-directories required by a validator.
+#[cfg(feature = "dev-context-only-utils")]
 pub fn create_tmp_accounts_dir_for_tests() -> (TempDir, PathBuf) {
     let tmp_dir = tempfile::TempDir::new().unwrap();
-    let account_dir = create_accounts_run_and_snapshot_dirs(&tmp_dir).unwrap().0;
+    let account_dir = accounts_db::create_accounts_run_and_snapshot_dirs(&tmp_dir)
+        .unwrap()
+        .0;
     (tmp_dir, account_dir)
 }
 

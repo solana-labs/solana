@@ -1452,7 +1452,7 @@ impl ExternalRootSource {
 pub fn reconcile_blockstore_roots_with_external_source(
     external_source: ExternalRootSource,
     blockstore: &Blockstore,
-    // blockstore.last_root() might have been updated already.
+    // blockstore.max_root() might have been updated already.
     // so take a &mut param both to input (and output iff we update root)
     last_blockstore_root: &mut Slot,
 ) -> blockstore_db::Result<()> {
@@ -1489,7 +1489,7 @@ pub fn reconcile_blockstore_roots_with_external_source(
             // Update the caller-managed state of last root in blockstore.
             // Repeated calls of this function should result in a no-op for
             // the range of `new_roots`.
-            *last_blockstore_root = blockstore.last_root();
+            *last_blockstore_root = blockstore.max_root();
         } else {
             // This indicates we're in bad state; but still don't panic here.
             // That's because we might have a chance of recovering properly with
@@ -2947,7 +2947,7 @@ pub mod test {
         reconcile_blockstore_roots_with_external_source(
             ExternalRootSource::Tower(tower.root()),
             &blockstore,
-            &mut blockstore.last_root(),
+            &mut blockstore.max_root(),
         )
         .unwrap();
 
@@ -2983,7 +2983,7 @@ pub mod test {
         reconcile_blockstore_roots_with_external_source(
             ExternalRootSource::Tower(tower.root()),
             &blockstore,
-            &mut blockstore.last_root(),
+            &mut blockstore.max_root(),
         )
         .unwrap();
     }
@@ -3004,14 +3004,14 @@ pub mod test {
 
         let mut tower = Tower::default();
         tower.vote_state.root_slot = Some(4);
-        assert_eq!(blockstore.last_root(), 0);
+        assert_eq!(blockstore.max_root(), 0);
         reconcile_blockstore_roots_with_external_source(
             ExternalRootSource::Tower(tower.root()),
             &blockstore,
-            &mut blockstore.last_root(),
+            &mut blockstore.max_root(),
         )
         .unwrap();
-        assert_eq!(blockstore.last_root(), 0);
+        assert_eq!(blockstore.max_root(), 0);
     }
 
     #[test]

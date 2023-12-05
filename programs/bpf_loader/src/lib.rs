@@ -34,16 +34,14 @@ use {
         clock::Slot,
         entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
-            bpf_account_data_direct_mapping, delay_visibility_of_program_deployment,
-            enable_bpf_loader_extend_program_ix, enable_bpf_loader_set_authority_checked_ix,
-            enable_program_redeployment_cooldown, limit_max_instruction_trace_length,
-            native_programs_consume_cu, remove_bpf_loader_incorrect_program_id,
+            bpf_account_data_direct_mapping, enable_bpf_loader_extend_program_ix,
+            enable_bpf_loader_set_authority_checked_ix, native_programs_consume_cu,
+            remove_bpf_loader_incorrect_program_id,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
         loader_upgradeable_instruction::UpgradeableLoaderInstruction,
         native_loader,
-        program_error::MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         saturating_add_assign,
@@ -67,7 +65,6 @@ pub const UPGRADEABLE_LOADER_COMPUTE_UNITS: u64 = 2_370;
 
 #[allow(clippy::too_many_arguments)]
 pub fn load_program_from_bytes(
-    delay_visibility_of_program_deployment: bool,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     load_program_metrics: &mut LoadProgramMetrics,
     programdata: &[u8],
@@ -77,11 +74,7 @@ pub fn load_program_from_bytes(
     program_runtime_environment: Arc<BuiltinProgram<InvokeContext<'static>>>,
     reloading: bool,
 ) -> Result<LoadedProgram, InstructionError> {
-    let effective_slot = if delay_visibility_of_program_deployment {
-        deployment_slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET)
-    } else {
-        deployment_slot
-    };
+    let effective_slot = deployment_slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET);
     let loaded_program = if reloading {
         // Safety: this is safe because the program is being reloaded in the cache.
         unsafe {
@@ -151,7 +144,6 @@ macro_rules! deploy_program {
         load_program_metrics.verify_code_us = verify_code_time.as_us();
         // Reload but with environments.program_runtime_v1
         let executor = load_program_from_bytes(
-            $invoke_context.feature_set.is_active(&delay_visibility_of_program_deployment::id()),
             $invoke_context.get_log_collector(),
             &mut load_program_metrics,
             $new_programdata,
@@ -779,12 +771,7 @@ fn process_loader_upgradeable_instruction(
                     .get(buffer_data_offset..)
                     .ok_or(InstructionError::AccountDataTooSmall)?;
                 dst_slice.copy_from_slice(src_slice);
-                if invoke_context
-                    .feature_set
-                    .is_active(&enable_program_redeployment_cooldown::id())
-                {
-                    buffer.set_data_length(UpgradeableLoaderState::size_of_buffer(0))?;
-                }
+                buffer.set_data_length(UpgradeableLoaderState::size_of_buffer(0))?;
             }
 
             // Update the Program account
@@ -897,11 +884,7 @@ fn process_loader_upgradeable_instruction(
                 upgrade_authority_address,
             } = programdata.get_state()?
             {
-                if invoke_context
-                    .feature_set
-                    .is_active(&enable_program_redeployment_cooldown::id())
-                    && clock.slot == slot
-                {
+                if clock.slot == slot {
                     ic_logger_msg!(log_collector, "Program was deployed in this block already");
                     return Err(InstructionError::InvalidArgument);
                 }
@@ -988,12 +971,7 @@ fn process_loader_upgradeable_instruction(
             )?;
             buffer.set_lamports(0)?;
             programdata.set_lamports(programdata_balance_required)?;
-            if invoke_context
-                .feature_set
-                .is_active(&enable_program_redeployment_cooldown::id())
-            {
-                buffer.set_data_length(UpgradeableLoaderState::size_of_buffer(0))?;
-            }
+            buffer.set_data_length(UpgradeableLoaderState::size_of_buffer(0))?;
 
             ic_logger_msg!(log_collector, "Upgraded program {:?}", new_program_id);
         }
@@ -1150,12 +1128,7 @@ fn process_loader_upgradeable_instruction(
                 instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             let close_key = *close_account.get_key();
             let close_account_state = close_account.get_state()?;
-            if invoke_context
-                .feature_set
-                .is_active(&enable_program_redeployment_cooldown::id())
-            {
-                close_account.set_data_length(UpgradeableLoaderState::size_of_uninitialized())?;
-            }
+            close_account.set_data_length(UpgradeableLoaderState::size_of_uninitialized())?;
             match close_account_state {
                 UpgradeableLoaderState::Uninitialized => {
                     let mut recipient_account = instruction_context
@@ -1195,18 +1168,10 @@ fn process_loader_upgradeable_instruction(
                         ic_logger_msg!(log_collector, "Program account not owned by loader");
                         return Err(InstructionError::IncorrectProgramId);
                     }
-                    if invoke_context
-                        .feature_set
-                        .is_active(&enable_program_redeployment_cooldown::id())
-                    {
-                        let clock = invoke_context.get_sysvar_cache().get_clock()?;
-                        if clock.slot == slot {
-                            ic_logger_msg!(
-                                log_collector,
-                                "Program was deployed in this block already"
-                            );
-                            return Err(InstructionError::InvalidArgument);
-                        }
+                    let clock = invoke_context.get_sysvar_cache().get_clock()?;
+                    if clock.slot == slot {
+                        ic_logger_msg!(log_collector, "Program was deployed in this block already");
+                        return Err(InstructionError::InvalidArgument);
                     }
 
                     match program_account.get_state()? {
@@ -1229,28 +1194,13 @@ fn process_loader_upgradeable_instruction(
                                 &log_collector,
                             )?;
                             let clock = invoke_context.get_sysvar_cache().get_clock()?;
-                            if invoke_context
-                                .feature_set
-                                .is_active(&delay_visibility_of_program_deployment::id())
-                            {
-                                invoke_context.programs_modified_by_tx.replenish(
-                                    program_key,
-                                    Arc::new(LoadedProgram::new_tombstone(
-                                        clock.slot,
-                                        LoadedProgramType::Closed,
-                                    )),
-                                );
-                            } else {
-                                invoke_context
-                                    .programs_updated_only_for_global_cache
-                                    .replenish(
-                                        program_key,
-                                        Arc::new(LoadedProgram::new_tombstone(
-                                            clock.slot,
-                                            LoadedProgramType::Closed,
-                                        )),
-                                    );
-                            }
+                            invoke_context.programs_modified_by_tx.replenish(
+                                program_key,
+                                Arc::new(LoadedProgram::new_tombstone(
+                                    clock.slot,
+                                    LoadedProgramType::Closed,
+                                )),
+                            );
                         }
                         _ => {
                             ic_logger_msg!(log_collector, "Invalid Program account");
@@ -1596,17 +1546,7 @@ fn execute<'a, 'b: 'a>(
         }
         match result {
             ProgramResult::Ok(status) if status != SUCCESS => {
-                let error: InstructionError = if status == MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED
-                    && !invoke_context
-                        .feature_set
-                        .is_active(&limit_max_instruction_trace_length::id())
-                {
-                    // Until the limit_max_instruction_trace_length feature is
-                    // enabled, map the `MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED` error to `InvalidError`.
-                    InstructionError::InvalidError
-                } else {
-                    status.into()
-                };
+                let error: InstructionError = status.into();
                 Err(Box::new(error) as Box<dyn std::error::Error>)
             }
             ProgramResult::Err(mut error) => {
@@ -1722,7 +1662,6 @@ pub mod test_utils {
                     .expect("Failed to get account key");
 
                 if let Ok(loaded_program) = load_program_from_bytes(
-                    true,
                     None,
                     &mut load_program_metrics,
                     account.data(),
@@ -2687,7 +2626,7 @@ mod tests {
             &elf_orig,
             &elf_new,
         );
-        *instruction_accounts.get_mut(3).unwrap() = instruction_accounts.get(0).unwrap().clone();
+        *instruction_accounts.get_mut(3).unwrap() = instruction_accounts.first().unwrap().clone();
         process_instruction(
             transaction_accounts,
             instruction_accounts,

@@ -751,7 +751,8 @@ pub fn test_process_blockstore(
         None,
         None,
         exit,
-    );
+    )
+    .unwrap();
 
     process_blockstore_from_root(
         blockstore,
@@ -1221,6 +1222,7 @@ fn confirm_slot_entries(
                     slot,
                     index: entry_index,
                     entry: entry.into(),
+                    starting_transaction_index: entry_tx_starting_index,
                 }) {
                     warn!(
                         "Slot {}, entry {} entry_notification_sender send failed: {:?}",
@@ -3875,7 +3877,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        *bank.epoch_schedule()
+        bank.epoch_schedule().clone()
     }
 
     fn frozen_bank_slots(bank_forks: &BankForks) -> Vec<Slot> {

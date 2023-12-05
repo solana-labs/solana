@@ -148,7 +148,7 @@ impl AccountsPackage {
             expected_capitalization: bank.capitalization(),
             accounts_hash_for_testing,
             accounts: bank.accounts(),
-            epoch_schedule: *bank.epoch_schedule(),
+            epoch_schedule: bank.epoch_schedule().clone(),
             rent_collector: bank.rent_collector().clone(),
             is_incremental_accounts_hash_feature_enabled,
             snapshot_info,

@@ -43,6 +43,7 @@ tokio = { workspace = true }
 [dev-dependencies]
 assert_matches = { workspace = true }
 solana-logger = { workspace = true }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 
 [[bench]]
 name = "cluster_info"

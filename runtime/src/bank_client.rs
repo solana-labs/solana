@@ -44,7 +44,7 @@ impl AsyncClient for BankClient {
         &self,
         transaction: VersionedTransaction,
     ) -> Result<Signature> {
-        let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
+        let signature = transaction.signatures.first().cloned().unwrap_or_default();
         let transaction_sender = self.transaction_sender.lock().unwrap();
         transaction_sender.send(transaction).unwrap();
         Ok(signature)
@@ -60,7 +60,7 @@ impl SyncClient for BankClient {
         let blockhash = self.bank.last_blockhash();
         let transaction = Transaction::new(keypairs, message, blockhash);
         self.bank.process_transaction(&transaction)?;
-        Ok(transaction.signatures.get(0).cloned().unwrap_or_default())
+        Ok(transaction.signatures.first().cloned().unwrap_or_default())
     }
 
     /// Create and process a transaction from a single instruction.
@@ -361,8 +361,8 @@ mod tests {
         let jane_doe_keypair = Keypair::new();
         let jane_pubkey = jane_doe_keypair.pubkey();
         let doe_keypairs = vec![&john_doe_keypair, &jane_doe_keypair];
-        let bank = Bank::new_for_tests(&genesis_config);
-        let bank_client = BankClient::new(bank);
+        let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
+        let bank_client = BankClient::new_shared(bank);
         let amount = genesis_config.rent.minimum_balance(0);
 
         // Create 2-2 Multisig Transfer instruction.
