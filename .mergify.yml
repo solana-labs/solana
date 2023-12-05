@@ -58,6 +58,9 @@ pull_request_rules:
           # only require docs checks if docs files changed
           - -files~=^docs/
           - status-success=build & deploy docs
+        - or:
+          - -files~=(\.rs|Cargo\.toml|Cargo\.lock)$
+          - check-success=clippy (macos-latest)
     actions:
       merge:
         method: squash
