@@ -4,7 +4,8 @@ use {
             apps::v1::{ReplicaSet, ReplicaSetSpec},
             core::v1::{
                 Container, Secret, Volume, VolumeMount, Probe, EnvVar, PodTemplateSpec,
-                PodSecurityContext, PodSpec,
+                PodSecurityContext, PodSpec, NodeAffinity, NodeSelector, NodeSelectorTerm,
+                NodeSelectorRequirement, Affinity
             }
         },
         apimachinery::pkg::apis::meta::v1::LabelSelector,
@@ -43,8 +44,24 @@ pub fn create_replica_set(
     volumes: Option<Vec<Volume>>,
     volume_mounts: Option<Vec<VolumeMount>>,
     readiness_probe: Option<Probe>,
+    nodes: Option<Vec<String>>,
 ) -> Result<ReplicaSet, Box<dyn Error>> {
-    // Define the pod spec
+    let node_affinity = NodeAffinity {
+        required_during_scheduling_ignored_during_execution: Some(NodeSelector {
+            node_selector_terms: vec![NodeSelectorTerm {
+                match_expressions: Some(vec![
+                    NodeSelectorRequirement {
+                        key: "kubernetes.io/hostname".to_string(),
+                        operator: "In".to_string(),
+                        values: nodes,
+                    },
+                ]),
+                ..Default::default()
+            }],
+        }),
+        ..Default::default()
+    };
+
     let pod_spec = PodTemplateSpec {
         metadata: Some(ObjectMeta {
             labels: Some(label_selector.clone()),
@@ -65,6 +82,10 @@ pub fn create_replica_set(
             security_context: Some(PodSecurityContext {
                 run_as_user: Some(1000),
                 run_as_group: Some(1000),
+                ..Default::default()
+            }),
+            affinity: Some(Affinity {
+                node_affinity: Some(node_affinity),
                 ..Default::default()
             }),
             ..Default::default()

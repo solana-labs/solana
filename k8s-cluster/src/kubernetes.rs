@@ -7,7 +7,7 @@ use {
             apps::v1::ReplicaSet,
             core::v1::{
                 EnvVar, EnvVarSource, Namespace, ObjectFieldSelector,
-                Secret, SecretVolumeSource, Service,
+                Secret, SecretVolumeSource, Service, Node,
                 ServicePort, ServiceSpec, Volume, VolumeMount, Probe, ExecAction,
             },
         },
@@ -129,6 +129,7 @@ pub struct Kubernetes<'a> {
     validator_config: &'a mut ValidatorConfig<'a>,
     client_config: ClientConfig,
     pub metrics: Option<Metrics>,
+    nodes: Option<Vec<String>>,
 }
 
 impl<'a> Kubernetes<'a> {
@@ -144,6 +145,7 @@ impl<'a> Kubernetes<'a> {
             validator_config,
             client_config,
             metrics,
+            nodes: None,
         }
     }
 
@@ -324,6 +326,7 @@ impl<'a> Kubernetes<'a> {
             accounts_volume,
             accounts_volume_mount,
             None,
+            self.nodes.clone(),
         )
     }
 
@@ -615,6 +618,48 @@ impl<'a> Kubernetes<'a> {
         ]
     }
 
+    pub fn node_count(
+        &self,
+    ) -> usize {
+        if let Some(nodes) = &self.nodes {
+            return nodes.len();
+        }
+        return 0;
+    }
+
+    pub async fn set_nodes(
+        &mut self,
+    ) -> Result<(), Box<dyn Error>> {
+        match self.get_equinix_nodes().await {
+            Ok(nodes) => self.nodes = Some(nodes),
+            Err(err) => return Err(boxed_error!(format!("Failed to get equinix nodes: {}", err))),
+        }
+        Ok(())
+    }
+
+    async fn get_equinix_nodes(
+        &self,
+    ) -> Result<Vec<String>, kube::Error> {
+        let nodes: Api<Node> = Api::all(self.client.clone());
+        let lp = ListParams::default();
+        let node_list = nodes.list(&lp).await?;
+
+        // Filter nodes by label value pattern
+        let mut matching_nodes = Vec::new();
+        for node in node_list {
+            if let Some(labels) = node.metadata.labels {
+                for (key, value) in labels.iter() {
+                    if key == "topology.kubernetes.io/region" && value.starts_with("eq-") {
+                        if let Some(name) = &node.metadata.name {
+                            matching_nodes.push(name.clone());
+                        }
+                    }
+                }
+            }
+        }
+        Ok(matching_nodes)
+    }
+
     pub fn create_validator_replica_set(
         &mut self,
         container_name: &str,
@@ -663,6 +708,7 @@ impl<'a> Kubernetes<'a> {
             accounts_volume,
             accounts_volume_mount,
             None,
+            self.nodes.clone(),
         )
     }
 
@@ -741,6 +787,7 @@ impl<'a> Kubernetes<'a> {
             accounts_volume,
             accounts_volume_mount,
             Some(readiness_probe),
+            self.nodes.clone(),
         )
     }
 
@@ -793,6 +840,7 @@ impl<'a> Kubernetes<'a> {
             accounts_volume,
             accounts_volume_mount,
             None,
+            self.nodes.clone(),
         )
     }
 

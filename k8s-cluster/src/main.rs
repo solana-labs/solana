@@ -648,6 +648,16 @@ async fn main() {
         }
     }
 
+    match kub_controller.set_nodes().await {
+        Ok(_) => (),
+        Err(err) => {
+            error!("{}", err);
+            return;
+        }
+    }
+
+    info!("{} nodes available for deployment", kub_controller.node_count());
+
     if !setup_config.skip_genesis_build {
         info!("Creating Genesis");
         let mut genesis = Genesis::new(genesis_flags);
