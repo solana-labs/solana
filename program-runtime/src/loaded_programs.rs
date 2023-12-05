@@ -139,7 +139,7 @@ pub struct LoadedProgram {
     pub maybe_expiration_slot: Option<Slot>,
     /// How often this entry was used by a transaction
     pub tx_usage_counter: AtomicU64,
-    /// How often this entry was used by a transaction
+    /// How often this entry was used by an instruction
     pub ix_usage_counter: AtomicU64,
 }
 
