@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! The account meta and related structs for hot accounts.
 
 use {
