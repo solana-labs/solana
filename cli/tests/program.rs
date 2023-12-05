@@ -1246,12 +1246,12 @@ fn test_cli_program_set_buffer_authority() {
     config.output_format = OutputFormat::JsonCompact;
     process_command(&config).unwrap_err();
 
-    // Set buffer authority back to original authority
+    // Set buffer authority to the buffer identity (it's a common way for program devs to do so)
     config.signers = vec![&keypair, &new_buffer_authority];
     config.command = CliCommand::Program(ProgramCliCommand::SetBufferAuthority {
         buffer_pubkey: buffer_keypair.pubkey(),
         buffer_authority_index: Some(1),
-        new_buffer_authority: keypair.pubkey(),
+        new_buffer_authority: buffer_keypair.pubkey(),
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -1264,16 +1264,16 @@ fn test_cli_program_set_buffer_authority() {
         .unwrap();
     assert_eq!(
         Pubkey::from_str(buffer_authority_str).unwrap(),
-        keypair.pubkey()
+        buffer_keypair.pubkey()
     );
     let buffer_account = rpc_client.get_account(&buffer_keypair.pubkey()).unwrap();
     if let UpgradeableLoaderState::Buffer { authority_address } = buffer_account.state().unwrap() {
-        assert_eq!(authority_address, Some(keypair.pubkey()));
+        assert_eq!(authority_address, Some(buffer_keypair.pubkey()));
     } else {
         panic!("not a buffer account");
     }
 
-    // Deploy from buffer using proper(original) buffer authority
+    // Deploy from buffer using proper(new) buffer authority
     config.signers = vec![&keypair, &buffer_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
@@ -1282,7 +1282,7 @@ fn test_cli_program_set_buffer_authority() {
         buffer_signer_index: None,
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         allow_excessive_balance: false,
-        upgrade_authority_signer_index: 0,
+        upgrade_authority_signer_index: 1,
         is_final: false,
         max_len: None,
         skip_fee_check: false,
