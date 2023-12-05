@@ -766,7 +766,7 @@ fn test_return_data_and_log_data_syscall() {
         let transaction = Transaction::new(&[&mint_keypair], message, blockhash);
         let sanitized_tx = SanitizedTransaction::from_transaction_for_tests(transaction);
 
-        let result = bank.simulate_transaction(sanitized_tx);
+        let result = bank.simulate_transaction(sanitized_tx, false);
 
         assert!(result.result.is_ok());
 

@@ -4309,10 +4309,11 @@ impl Bank {
     pub fn simulate_transaction(
         &self,
         transaction: SanitizedTransaction,
+        enable_cpi_recording: bool,
     ) -> TransactionSimulationResult {
         assert!(self.is_frozen(), "simulation bank must be frozen");
 
-        self.simulate_transaction_unchecked(transaction)
+        self.simulate_transaction_unchecked(transaction, enable_cpi_recording)
     }
 
     /// Run transactions against a bank without committing the results; does not check if the bank
@@ -4320,6 +4321,7 @@ impl Bank {
     pub fn simulate_transaction_unchecked(
         &self,
         transaction: SanitizedTransaction,
+        enable_cpi_recording: bool,
     ) -> TransactionSimulationResult {
         let account_keys = transaction.message().account_keys();
         let number_of_accounts = account_keys.len();
@@ -4337,7 +4339,7 @@ impl Bank {
             // for processing. During forwarding, the transaction could expire if the
             // delay is not accounted for.
             MAX_PROCESSING_AGE - MAX_TRANSACTION_FORWARDING_DELAY,
-            false,
+            enable_cpi_recording,
             true,
             true,
             &mut timings,

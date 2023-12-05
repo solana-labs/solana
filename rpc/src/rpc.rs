@@ -3676,7 +3676,7 @@ pub mod rpc_full {
                     post_simulation_accounts: _,
                     units_consumed,
                     return_data,
-                } = preflight_bank.simulate_transaction(transaction)
+                } = preflight_bank.simulate_transaction(transaction, false)
                 {
                     match err {
                         TransactionError::BlockhashNotFound => {
@@ -3724,7 +3724,7 @@ pub mod rpc_full {
                 encoding,
                 accounts: config_accounts,
                 min_context_slot,
-                inner_instructions: _,
+                inner_instructions: enable_cpi_recording,
             } = config.unwrap_or_default();
             let tx_encoding = encoding.unwrap_or(UiTransactionEncoding::Base58);
             let binary_encoding = tx_encoding.into_binary_encoding().ok_or_else(|| {
@@ -3762,7 +3762,7 @@ pub mod rpc_full {
                 post_simulation_accounts,
                 units_consumed,
                 return_data,
-            } = bank.simulate_transaction(transaction);
+            } = bank.simulate_transaction(transaction, enable_cpi_recording);
 
             let accounts = if let Some(config_accounts) = config_accounts {
                 let accounts_encoding = config_accounts
