@@ -918,7 +918,6 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
             .len()
             .saturating_sub(shrink_to.apply_to(MAX_LOADED_ENTRY_COUNT));
         self.unload_program_entries(sorted_candidates.iter().take(num_to_unload));
-        self.remove_programs_with_no_entries();
     }
 
     /// Removes all the entries at the given keys, if they exist
