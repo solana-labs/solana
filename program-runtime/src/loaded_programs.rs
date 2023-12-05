@@ -929,7 +929,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
 
     fn unload_program(&mut self, id: &Pubkey) {
         if let Some(entries) = self.entries.get_mut(id) {
-            entries.iter_mut().for_each(|entry| {
+            for entry in entries.iter_mut() {
                 if let Some(unloaded) = entry.to_unloaded() {
                     *entry = Arc::new(unloaded);
                     self.stats
@@ -938,7 +938,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                         .and_modify(|c| saturating_add_assign!(*c, 1))
                         .or_insert(1);
                 }
-            });
+            }
         }
     }
 
