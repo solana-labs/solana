@@ -29,7 +29,19 @@ pub struct RuntimeTransaction<M> {
     meta: TransactionMeta,
 }
 
-impl StaticMeta for RuntimeTransaction<SanitizedVersionedMessage> {
+// These traits gate access to static and dynamic metadata
+// so that only transactions with supporting message types
+// can access them.
+trait StaticMetaAccess {}
+trait DynamicMetaAccess: StaticMetaAccess {}
+
+// Implement the gate traits for the message types that should
+// have access to the static and dynamic metadata.
+impl StaticMetaAccess for SanitizedVersionedMessage {}
+impl StaticMetaAccess for SanitizedMessage {}
+impl DynamicMetaAccess for SanitizedMessage {}
+
+impl<M: StaticMetaAccess> StaticMeta for RuntimeTransaction<M> {
     fn message_hash(&self) -> &Hash {
         &self.meta.message_hash
     }
@@ -38,16 +50,7 @@ impl StaticMeta for RuntimeTransaction<SanitizedVersionedMessage> {
     }
 }
 
-impl StaticMeta for RuntimeTransaction<SanitizedMessage> {
-    fn message_hash(&self) -> &Hash {
-        &self.meta.message_hash
-    }
-    fn is_simple_vote_tx(&self) -> bool {
-        self.meta.is_simple_vote_tx
-    }
-}
-
-impl DynamicMeta for RuntimeTransaction<SanitizedMessage> {
+impl<M: DynamicMetaAccess> DynamicMeta for RuntimeTransaction<M> {
     fn i_am_dynamic(&self) -> bool {
         true
     }
