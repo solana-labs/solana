@@ -8,13 +8,13 @@ use {
             core::v1::{
                 EnvVar, EnvVarSource, Namespace, ObjectFieldSelector,
                 Secret, SecretVolumeSource, Service, Node,
-                ServicePort, ServiceSpec, Volume, VolumeMount, Probe, ExecAction,
+                Volume, VolumeMount, Probe, ExecAction,
             },
         },
         ByteString,
     },
     kube::{
-        api::{Api, ListParams, ObjectMeta, PostParams},
+        api::{Api, ListParams, PostParams},
         Client,
     },
     log::*,
@@ -511,44 +511,6 @@ impl<'a> Kubernetes<'a> {
         api.create(&post_params, replica_set).await
     }
 
-    fn create_service(
-        &self,
-        service_name: &str,
-        label_selector: &BTreeMap<String, String>,
-    ) -> Service {
-        Service {
-            metadata: ObjectMeta {
-                name: Some(format!("{}-service", service_name).to_string()),
-                namespace: Some(self.namespace.to_string()),
-                ..Default::default()
-            },
-            spec: Some(ServiceSpec {
-                selector: Some(label_selector.clone()),
-                cluster_ip: Some("None".into()),
-                // cluster_ips: None,
-                ports: Some(vec![
-                    ServicePort {
-                        port: 8899, // RPC Port
-                        name: Some("rpc-port".to_string()),
-                        ..Default::default()
-                    },
-                    ServicePort {
-                        port: 8001, //Gossip Port
-                        name: Some("gossip-port".to_string()),
-                        ..Default::default()
-                    },
-                    ServicePort {
-                        port: 9900, //Faucet Port
-                        name: Some("faucet-port".to_string()),
-                        ..Default::default()
-                    },
-                ]),
-                ..Default::default()
-            }),
-            ..Default::default()
-        }
-    }
-
     pub async fn deploy_service(&self, service: &Service) -> Result<Service, kube::Error> {
         let post_params = PostParams::default();
         // Create an API instance for Services in the specified namespace
@@ -578,64 +540,46 @@ impl<'a> Kubernetes<'a> {
 
     fn set_non_bootstrap_environment_variables(&self) -> Vec<EnvVar> {
         vec![
-            EnvVar {
-                name: "NAMESPACE".to_string(),
-                value_from: Some(EnvVarSource {
-                    field_ref: Some(ObjectFieldSelector {
-                        field_path: "metadata.namespace".to_string(),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            },
-            EnvVar {
-                name: "BOOTSTRAP_RPC_ADDRESS".to_string(),
-                value: Some(
-                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8899".to_string(),
-                ),
-                ..Default::default()
-            },
-            EnvVar {
-                name: "BOOTSTRAP_GOSSIP_ADDRESS".to_string(),
-                value: Some(
-                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8001".to_string(),
-                ),
-                ..Default::default()
-            },
-            EnvVar {
-                name: "BOOTSTRAP_FAUCET_ADDRESS".to_string(),
-                value: Some(
-                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:9900".to_string(),
-                ),
-                ..Default::default()
-            },
+            k8s_helpers::create_environment_variable(
+                "NAMESPACE",
+                None,
+                Some("metadata.namespace".to_string())
+            ),
+            k8s_helpers::create_environment_variable(
+                "BOOTSTRAP_RPC_ADDRESS",
+                Some("bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8899".to_string()),
+                None,
+            ),
+            k8s_helpers::create_environment_variable(
+                "BOOTSTRAP_GOSSIP_ADDRESS",
+                Some("bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8001".to_string()),
+                None,
+            ),
+            k8s_helpers::create_environment_variable(
+                "BOOTSTRAP_FAUCET_ADDRESS",
+                Some("bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:9900".to_string()),
+                None,
+            ),
         ]
     }
 
-    fn set_environment_variables_to_find_load_balancer(&self) -> Vec<EnvVar> {
+    fn set_load_balancer_environment_variables(&self) -> Vec<EnvVar> {
         vec![
-            EnvVar {
-                name: "LOAD_BALANCER_RPC_ADDRESS".to_string(),
-                value: Some(
-                    "bootstrap-and-non-voting-lb-service.$(NAMESPACE).svc.cluster.local:8899".to_string(),
-                ),
-                ..Default::default()
-            },
-            EnvVar {
-                name: "LOAD_BALANCER_GOSSIP_ADDRESS".to_string(),
-                value: Some(
-                    "bootstrap-and-non-voting-lb-service.$(NAMESPACE).svc.cluster.local:8001".to_string(),
-                ),
-                ..Default::default()
-            },
-            EnvVar {
-                name: "LOAD_BALANCER_FAUCET_ADDRESS".to_string(),
-                value: Some(
-                    "bootstrap-and-non-voting-lb-service.$(NAMESPACE).svc.cluster.local:9900".to_string(),
-                ),
-                ..Default::default()
-            },
+            k8s_helpers::create_environment_variable(
+                "LOAD_BALANCER_RPC_ADDRESS",
+                Some("bootstrap-and-non-voting-lb-service.$(NAMESPACE).svc.cluster.local:8899".to_string()),
+                None,
+            ),
+            k8s_helpers::create_environment_variable(
+                "LOAD_BALANCER_GOSSIP_ADDRESS",
+                Some("bootstrap-and-non-voting-lb-service.$(NAMESPACE).svc.cluster.local:8001".to_string()),
+                None,
+            ),
+            k8s_helpers::create_environment_variable(
+                "LOAD_BALANCER_FAUCET_ADDRESS",
+                Some("bootstrap-and-non-voting-lb-service.$(NAMESPACE).svc.cluster.local:9900".to_string()),
+                None,
+            ),
         ]
     }
 
@@ -713,7 +657,7 @@ impl<'a> Kubernetes<'a> {
         if self.metrics.is_some() {
             env_vars.push(self.get_metrics_env_var_secret())
         }
-        env_vars.append(&mut self.set_environment_variables_to_find_load_balancer());
+        env_vars.append(&mut self.set_load_balancer_environment_variables());
 
         let accounts_volume = Some(vec![Volume {
             name: format!("validator-accounts-volume-{}", validator_index),
@@ -773,7 +717,7 @@ impl<'a> Kubernetes<'a> {
             ..Default::default()
         }];
         env_vars.append(&mut self.set_non_bootstrap_environment_variables());
-        env_vars.append(&mut self.set_environment_variables_to_find_load_balancer());
+        env_vars.append(&mut self.set_load_balancer_environment_variables());
 
         if self.metrics.is_some() {
             env_vars.push(self.get_metrics_env_var_secret())
@@ -844,7 +788,7 @@ impl<'a> Kubernetes<'a> {
         if self.metrics.is_some() {
             env_vars.push(self.get_metrics_env_var_secret())
         }
-        env_vars.append(&mut self.set_environment_variables_to_find_load_balancer());
+        env_vars.append(&mut self.set_load_balancer_environment_variables());
 
 
         let accounts_volume = Some(vec![Volume {
@@ -890,43 +834,23 @@ impl<'a> Kubernetes<'a> {
         service_name: &str,
         label_selector: &BTreeMap<String, String>,
     ) -> Service {
-        self.create_service(service_name, label_selector)
+        k8s_helpers::create_service(service_name, self.namespace, label_selector, false)
     }
 
-    pub fn create_load_balancer(
+    pub fn create_validator_load_balancer(
         &self,
         service_name: &str,
-        label_selector: &BTreeMap<String, String>
+        label_selector: &BTreeMap<String, String>,
     ) -> Service {
-        Service {
-            metadata: ObjectMeta {
-                name: Some(service_name.to_string()),
-                namespace: Some(self.namespace.to_string()),
-                ..Default::default()
-            },
-            spec: Some(ServiceSpec {
-                selector: Some(label_selector.clone()),
-                type_: Some("LoadBalancer".to_string()),
-                ports: Some(vec![
-                    ServicePort {
-                        port: 8899, // RPC Port
-                        name: Some("rpc-port".to_string()),
-                        ..Default::default()
-                    },
-                    ServicePort {
-                        port: 8001, // Gossip Port
-                        name: Some("gossip-port".to_string()),
-                        ..Default::default()
-                    },
-                    ServicePort {
-                        port: 9900, //Faucet Port
-                        name: Some("faucet-port".to_string()),
-                        ..Default::default()
-                    },
-                ]),
-                ..Default::default()
-            }),
-            ..Default::default()
-        }
+        k8s_helpers::create_service(service_name, self.namespace, label_selector, true)
     }
+
+    pub fn create_selector(
+        &self,
+        key: &str,
+        value: &str,
+    ) -> BTreeMap<String, String> {
+        k8s_helpers::create_selector(key, value)
+    }
+
 }

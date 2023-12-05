@@ -5,7 +5,8 @@ use {
             core::v1::{
                 Container, Secret, Volume, VolumeMount, Probe, EnvVar, PodTemplateSpec,
                 PodSecurityContext, PodSpec, NodeAffinity, NodeSelector, NodeSelectorTerm,
-                NodeSelectorRequirement, Affinity
+                NodeSelectorRequirement, Affinity, ServiceSpec, Service, ServicePort,
+                EnvVarSource, ObjectFieldSelector,
             }
         },
         apimachinery::pkg::apis::meta::v1::LabelSelector,
@@ -114,4 +115,68 @@ pub fn create_replica_set(
         spec: Some(replicas_set_spec),
         ..Default::default()
     })
+}
+
+pub fn create_service(
+    service_name: &str,
+    namespace: &str,
+    label_selector: &BTreeMap<String, String>,
+    is_load_balancer: bool,
+) -> Service {
+    Service {
+        metadata: ObjectMeta {
+            name: Some(service_name.to_string()),
+            namespace: Some(namespace.to_string()),
+            ..Default::default()
+        },
+        spec: Some(ServiceSpec {
+            selector: Some(label_selector.clone()),
+            type_: if is_load_balancer { Some("LoadBalancer".to_string()) } else { None },
+            cluster_ip: if is_load_balancer { None } else { Some("None".to_string()) },
+            ports: Some(vec![
+                ServicePort {
+                    port: 8899, // RPC Port
+                    name: Some("rpc-port".to_string()),
+                    ..Default::default()
+                },
+                ServicePort {
+                    port: 8001, //Gossip Port
+                    name: Some("gossip-port".to_string()),
+                    ..Default::default()
+                },
+                ServicePort {
+                    port: 9900, //Faucet Port
+                    name: Some("faucet-port".to_string()),
+                    ..Default::default()
+                },
+            ]),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+}
+
+pub fn create_environment_variable(
+    name: &str,
+    value: Option<String>,
+    field_path: Option<String>
+) -> EnvVar {
+    match field_path {
+        Some(path) => EnvVar {
+            name: name.to_string(),
+            value_from: Some(EnvVarSource {
+                field_ref: Some(ObjectFieldSelector {
+                    field_path: path,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        None => EnvVar {
+            name: name.to_string(),
+            value,
+            ..Default::default()
+        },
+    }
 }

@@ -10,7 +10,6 @@ use {
         get_solana_root, initialize_globals,
         kubernetes::{ClientConfig, Kubernetes, Metrics, ValidatorConfig, NodeAffinityType},
         ledger_helper::LedgerHelper,
-        k8s_helpers,
         release::{BuildConfig, Deploy},
         ValidatorType,
     },
@@ -414,10 +413,11 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("node-type")
                 .possible_values(&["equinix", "lumen", "mixed"])
                 .takes_value(true)
-                .default_value("equinix")
+                .default_value("mixed")
                 .help(
-                    "Select the type of node you want to deploy your cluster on. Equinix is default.
-                    Note: Lumen nodes are acting funky, so any other choice besides equinix is unstable"
+                    "Select the type of node you want to deploy your cluster on. Mixed is default.
+                    Note: Lumen nodes have been known to act funky. If seeing issues, try deploying
+                    to equinix nodes only."
                 ),
         )
         .get_matches()
@@ -893,7 +893,7 @@ async fn main() {
 
     // Bootstrap needs two labels. Because it is going to have two services. One via LB, one direct
     let mut bootstrap_rs_labels =
-        k8s_helpers::create_selector("app.kubernetes.io/lb", "load-balancer-selector");
+        kub_controller.create_selector("app.kubernetes.io/lb", "load-balancer-selector");
     bootstrap_rs_labels.insert("app.kubernetes.io/name".to_string(), "bootstrap-validator-selector".to_string());
 
     let bootstrap_replica_set = match kub_controller
@@ -927,9 +927,9 @@ async fn main() {
         }
     };
 
-    let bootstrap_service_label = k8s_helpers::create_selector("app.kubernetes.io/name", "bootstrap-validator-selector");
+    let bootstrap_service_label = kub_controller.create_selector("app.kubernetes.io/name", "bootstrap-validator-selector");
     let bootstrap_service =
-        kub_controller.create_validator_service("bootstrap-validator", &bootstrap_service_label);
+        kub_controller.create_validator_service("bootstrap-validator-service", &bootstrap_service_label);
     match kub_controller.deploy_service(&bootstrap_service).await {
         Ok(_) => info!("bootstrap validator service deployed successfully"),
         Err(err) => error!(
@@ -939,9 +939,9 @@ async fn main() {
     }
 
     //load balancer service
-    let load_balancer_label = k8s_helpers::create_selector("app.kubernetes.io/lb", "load-balancer-selector");
+    let load_balancer_label = kub_controller.create_selector("app.kubernetes.io/lb", "load-balancer-selector");
     //create load balancer
-    let load_balancer = kub_controller.create_load_balancer(
+    let load_balancer = kub_controller.create_validator_load_balancer(
         "bootstrap-and-non-voting-lb-service",
         &load_balancer_label,
     );
@@ -974,7 +974,7 @@ async fn main() {
         // we need one load balancer for all of these nv validators...
         let mut non_voting_validators = vec![];
         for nvv_index in 0..num_non_voting_validators {
-            let mut nvv_rs_labels = k8s_helpers::create_selector(
+            let mut nvv_rs_labels = kub_controller.create_selector(
                 "app.kubernetes.io/name",
                 format!("non-voting-selector-{}", nvv_index).as_str(),
             );
@@ -1033,12 +1033,12 @@ async fn main() {
             non_voting_validators.push(nvv_replica_set_name);
 
             //create nvv service
-            let non_voting_label = k8s_helpers::create_selector(
+            let non_voting_label = kub_controller.create_selector(
                 "app.kubernetes.io/name",
                 format!("non-voting-selector-{}", nvv_index).as_str(),
             );
             let nvv_service = kub_controller.create_validator_service(
-                format!("non-voting-{}", nvv_index).as_str(),
+                format!("non-voting-{}-service", nvv_index).as_str(),
                 &non_voting_label,
             );
 
@@ -1049,8 +1049,6 @@ async fn main() {
             }
 
         }
-
-
 
         // wait for at least one non voting validator replicaset to deploy
         loop {
@@ -1075,13 +1073,8 @@ async fn main() {
             thread::sleep(Duration::from_secs(10));
 
         }
-        info!("faucet replica set ready");
-
-        // thread::sleep(Duration::from_secs(60));
+        info!(">= 1 non voting validator ready");
     }
-
-
-
 
     // Create and deploy validators
     for validator_index in 0..setup_config.num_validators {
@@ -1100,7 +1093,7 @@ async fn main() {
             }
         }
 
-        let label_selector = k8s_helpers::create_selector(
+        let label_selector = kub_controller.create_selector(
             "app.kubernetes.io/name",
             format!("validator-{}", validator_index).as_str(),
         );
@@ -1142,7 +1135,7 @@ async fn main() {
         };
 
         let validator_service = kub_controller.create_validator_service(
-            format!("validator-{}", validator_index).as_str(),
+            format!("validator-{}-service", validator_index).as_str(),
             &label_selector,
         );
         match kub_controller.deploy_service(&validator_service).await {
@@ -1187,7 +1180,7 @@ async fn main() {
             }
         }
 
-        let label_selector = k8s_helpers::create_selector(
+        let label_selector = kub_controller.create_selector(
             "app.kubernetes.io/name",
             format!("client-{}", client_index).as_str(),
         );
@@ -1229,7 +1222,7 @@ async fn main() {
         };
 
         let client_service = kub_controller
-            .create_validator_service(format!("client-{}", client_index).as_str(), &label_selector);
+            .create_validator_service(format!("client-{}-service", client_index).as_str(), &label_selector);
         match kub_controller.deploy_service(&client_service).await {
             Ok(_) => info!("client service ({}) deployed successfully", client_index),
             Err(err) => error!(
