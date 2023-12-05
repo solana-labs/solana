@@ -219,8 +219,6 @@ impl<O: BucketOccupied> BucketStorage<O> {
         offset
     }
 
-    // temporary tag
-    #[allow(dead_code)]
     /// load and mmap the file that is this disk bucket if possible
     pub(crate) fn load_on_restart(
         path: PathBuf,
