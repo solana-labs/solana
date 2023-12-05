@@ -41,6 +41,8 @@ use {
 const MAX_FEE_BASIS_POINTS: u64 = 10_000;
 #[cfg(not(target_os = "solana"))]
 const ONE_IN_BASIS_POINTS: u128 = MAX_FEE_BASIS_POINTS as u128;
+#[cfg(not(target_os = "solana"))]
+const MAX_DELTA_RANGE: u64 = MAX_FEE_BASIS_POINTS - 1;
 
 #[cfg(not(target_os = "solana"))]
 const TRANSFER_SOURCE_AMOUNT_BITS: usize = 64;
@@ -62,6 +64,7 @@ lazy_static::lazy_static! {
     pub static ref COMMITMENT_MAX: PedersenCommitment = Pedersen::encode((1_u64 <<
                                                                          TRANSFER_AMOUNT_LO_NEGATED_BITS) - 1);
     pub static ref COMMITMENT_MAX_FEE_BASIS_POINTS: PedersenCommitment = Pedersen::encode(MAX_FEE_BASIS_POINTS);
+    pub static ref COMMITMENT_MAX_DELTA_RANGE: PedersenCommitment = Pedersen::encode(MAX_DELTA_RANGE);
 }
 
 /// The instruction data that is needed for the `ProofInstruction::TransferWithFee` instruction.
@@ -563,7 +566,7 @@ impl TransferWithFeeProof {
                 transfer_amount_lo,
                 transfer_amount_hi,
                 delta_fee,
-                MAX_FEE_BASIS_POINTS - delta_fee,
+                MAX_DELTA_RANGE - delta_fee,
                 fee_amount_lo,
                 fee_amount_hi,
             ],
@@ -708,7 +711,7 @@ impl TransferWithFeeProof {
 
         // verify range proof
         let new_source_commitment = self.new_source_commitment.try_into()?;
-        let claimed_commitment_negated = &(*COMMITMENT_MAX_FEE_BASIS_POINTS) - &claimed_commitment;
+        let claimed_commitment_negated = &(*COMMITMENT_MAX_DELTA_RANGE) - &claimed_commitment;
 
         range_proof.verify(
             vec![
