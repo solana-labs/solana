@@ -1022,7 +1022,7 @@ fn process_program_deploy(
     } else if buffer_provided {
         (
             vec![],
-            fetch_buffer_len(&rpc_client, config, buffer_pubkey).unwrap(),
+            fetch_buffer_len(&rpc_client, config, buffer_pubkey)?,
         )
     } else {
         return Err("Program location required if buffer not supplied".into());
@@ -1136,9 +1136,7 @@ fn fetch_buffer_len(
 
         Ok(program_len)
     } else {
-        Err(
-            format!("Buffer account {buffer_pubkey} not found, was it already consumed?",).into(),
-        )
+        Err(format!("Buffer account {buffer_pubkey} not found, was it already consumed?",).into())
     }
 }
 
