@@ -1131,7 +1131,6 @@ mod tests {
     #[test]
     fn test_eviction() {
         let mut programs = vec![];
-        let mut num_total_programs: usize = 0;
 
         let mut cache = new_mock_cache::<TestForkGraph>();
 
@@ -1151,7 +1150,6 @@ mod tests {
                         AtomicU64::new(usage_counter),
                     ),
                 );
-                num_total_programs += 1;
                 programs.push((program1, *deployment_slot, usage_counter));
             });
 
@@ -1185,7 +1183,6 @@ mod tests {
                         AtomicU64::new(usage_counter),
                     ),
                 );
-                num_total_programs += 1;
                 programs.push((program2, *deployment_slot, usage_counter));
             });
 
@@ -1218,7 +1215,6 @@ mod tests {
                         AtomicU64::new(usage_counter),
                     ),
                 );
-                num_total_programs += 1;
                 programs.push((program3, *deployment_slot, usage_counter));
             });
 
