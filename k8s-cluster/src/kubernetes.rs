@@ -19,7 +19,7 @@ use {
     },
     log::*,
     solana_sdk::{hash::Hash, pubkey::Pubkey},
-    std::{collections::BTreeMap, error::Error},
+    std::{collections::BTreeMap, error::Error, path::PathBuf},
 };
 
 pub struct ValidatorConfig<'a> {
@@ -388,116 +388,66 @@ impl<'a> Kubernetes<'a> {
     }
 
     pub fn create_bootstrap_secret(&self, secret_name: &str) -> Result<Secret, Box<dyn Error>> {
-        let faucet_key_path = SOLANA_ROOT.join("config-k8s");
-        let faucet_keypair =
-            std::fs::read(faucet_key_path.join("faucet.json")).unwrap_or_else(|_| {
-                panic!("Failed to read faucet.json file! at: {:?}", faucet_key_path)
-            });
+        let faucet_key_path = SOLANA_ROOT.join("config-k8s/faucet.json");
+        let identity_key_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator/identity.json");
+        let vote_key_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator/vote-account.json");
+        let stake_key_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator/stake-account.json");
 
-        let key_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator");
+        let key_files = vec![
+            (faucet_key_path, "faucet"),
+            (identity_key_path, "identity"),
+            (vote_key_path, "vote"),
+            (stake_key_path, "stake"),
+        ];
 
-        let identity_keypair = std::fs::read(key_path.join("identity.json"))
-            .unwrap_or_else(|_| panic!("Failed to read identity.json file! at: {:?}", key_path));
-        let vote_keypair = std::fs::read(key_path.join("vote-account.json")).unwrap_or_else(|_| {
-            panic!("Failed to read vote-account.json file! at: {:?}", key_path)
-        });
-        let stake_keypair =
-            std::fs::read(key_path.join("stake-account.json")).unwrap_or_else(|_| {
-                panic!("Failed to read stake-account.json file! at: {:?}", key_path)
-            });
-
-        let mut data = BTreeMap::new();
-        data.insert(
-            "identity.json".to_string(),
-            ByteString(identity_keypair),
-        );
-        data.insert(
-            "vote.json".to_string(),
-            ByteString(vote_keypair),
-        );
-        data.insert(
-            "stake.json".to_string(),
-            ByteString(stake_keypair),
-        );
-        data.insert(
-            "faucet.json".to_string(),
-            ByteString(faucet_keypair),
-        );
-
-        Ok(k8s_helpers::create_secret(secret_name, data))
+        k8s_helpers::create_secret_from_files(secret_name, &key_files)
     }
 
     pub fn create_validator_secret(&self, validator_index: i32) -> Result<Secret, Box<dyn Error>> {
         let secret_name = format!("validator-accounts-secret-{}", validator_index);
         let key_path = SOLANA_ROOT.join("config-k8s");
 
-        let mut data: BTreeMap<String, ByteString> = BTreeMap::new();
         let accounts = vec!["identity", "vote", "stake"];
-        for account in accounts {
-            let file_name: String = if account == "identity" {
+        let key_files: Vec<(PathBuf, &str)> = accounts.iter().map(|&account| {
+            let file_name = if account == "identity" {
                 format!("validator-{}-{}.json", account, validator_index)
             } else {
                 format!("validator-{}-account-{}.json", account, validator_index)
             };
-            let keypair = std::fs::read(key_path.join(file_name.clone())).unwrap_or_else(|_| {
-                panic!("Failed to read {} file! at: {:?}", file_name, key_path)
-            });
-            data.insert(
-                format!("{}.json", account),
-                ByteString(keypair),
-            );
-        }
+            (key_path.join(&file_name), account)
+        }).collect();
 
-        Ok(k8s_helpers::create_secret(secret_name.as_str(), data))
+        k8s_helpers::create_secret_from_files(&secret_name, &key_files)
     }
 
     pub fn create_client_secret(&self, client_index: i32) -> Result<Secret, Box<dyn Error>> {
         let secret_name = format!("client-accounts-secret-{}", client_index);
-        let faucet_key_path = SOLANA_ROOT.join("config-k8s");
-        let faucet_keypair =
-            std::fs::read(faucet_key_path.join("faucet.json")).unwrap_or_else(|_| {
-                panic!("Failed to read faucet.json file! at: {:?}", faucet_key_path)
-            });
+        let faucet_key_path = SOLANA_ROOT.join("config-k8s/faucet.json");
 
-        let mut data = BTreeMap::new();
-        data.insert(
-            "faucet.json".to_string(),
-            ByteString(faucet_keypair),
-        );
+        let key_files = vec![
+            (faucet_key_path, "faucet"),
+        ];
 
-        Ok(k8s_helpers::create_secret(secret_name.as_str(), data))
+        k8s_helpers::create_secret_from_files(&secret_name, &key_files)
     }
 
     pub fn create_non_voting_secret(&self, nvv_index: i32) -> Result<Secret, Box<dyn Error>> {
         let secret_name = format!("non-voting-validator-accounts-secret-{}", nvv_index);
-        let faucet_key_path = SOLANA_ROOT.join("config-k8s");
-        let faucet_keypair =
-            std::fs::read(faucet_key_path.join("faucet.json")).unwrap_or_else(|_| {
-                panic!("Failed to read faucet.json file! at: {:?}", faucet_key_path)
-            });
+        let config_path = SOLANA_ROOT.join("config-k8s");
 
-        let mut data = BTreeMap::new();
         let accounts = vec!["identity", "stake"];
-        for account in accounts {
-            let file_name: String = if account == "identity" {
+        let mut key_files: Vec<(PathBuf, &str)> = accounts.iter().map(|&account| {
+            let file_name = if account == "identity" {
                 format!("non-voting-validator-{}-{}.json", account, nvv_index)
             } else {
                 format!("non-voting-validator-{}-account-{}.json", account, nvv_index)
             };
-            let keypair = std::fs::read(faucet_key_path.join(file_name.clone())).unwrap_or_else(|_| {
-                panic!("Failed to read {} file! at: {:?}", file_name, faucet_key_path)
-            });
-            data.insert(
-                format!("{}.json", account),
-                ByteString(keypair),
-            );
-        }
-        data.insert(
-            "faucet.json".to_string(),
-            ByteString(faucet_keypair),
-        );
+            (config_path.join(&file_name), account)
+        }).collect();
 
-        Ok(k8s_helpers::create_secret(secret_name.as_str(), data))
+        key_files.push((config_path.join("faucet.json"), "faucet"));
+
+        k8s_helpers::create_secret_from_files(&secret_name, &key_files)
     }
 
     pub async fn deploy_replicas_set(
