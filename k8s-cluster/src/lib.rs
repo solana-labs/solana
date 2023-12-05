@@ -29,6 +29,7 @@ pub fn initialize_globals() {
 
 pub mod docker;
 pub mod genesis;
+pub mod k8s_helpers;
 pub mod kubernetes;
 pub mod ledger_helper;
 pub mod release;
@@ -37,6 +38,7 @@ pub mod release;
 pub enum ValidatorType {
     Bootstrap,
     Standard,
+    NonVoting,
 }
 
 impl std::fmt::Display for ValidatorType {
@@ -44,6 +46,7 @@ impl std::fmt::Display for ValidatorType {
         match *self {
             ValidatorType::Bootstrap => write!(f, "bootstrap"),
             ValidatorType::Standard => write!(f, "validator"),
+            ValidatorType::NonVoting => write!(f, "non-voting"),
         }
     }
 }

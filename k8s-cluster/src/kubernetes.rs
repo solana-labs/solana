@@ -1,25 +1,22 @@
 use {
-    crate::{boxed_error, SOLANA_ROOT},
-    base64::{engine::general_purpose, Engine as _},
+    crate::{boxed_error, k8s_helpers, SOLANA_ROOT},
     k8s_openapi::{
         api::{
-            apps::v1::{ReplicaSet, ReplicaSetSpec},
+            apps::v1::ReplicaSet,
             core::v1::{
-                Container, EnvVar, EnvVarSource, Namespace, ObjectFieldSelector,
-                PodSecurityContext, PodSpec, PodTemplateSpec, Secret, SecretVolumeSource, Service,
-                ServicePort, ServiceSpec, Volume, VolumeMount,
+                EnvVar, EnvVarSource, ExecAction, Namespace, Node, ObjectFieldSelector, Probe,
+                Secret, SecretVolumeSource, Service, Volume, VolumeMount,
             },
         },
-        apimachinery::pkg::apis::meta::v1::LabelSelector,
         ByteString,
     },
     kube::{
-        api::{Api, ListParams, ObjectMeta, PostParams},
+        api::{Api, ListParams, PostParams},
         Client,
     },
     log::*,
     solana_sdk::{hash::Hash, pubkey::Pubkey},
-    std::{collections::BTreeMap, error::Error},
+    std::{collections::BTreeMap, error::Error, path::PathBuf},
 };
 
 pub struct ValidatorConfig<'a> {
@@ -37,6 +34,7 @@ pub struct ValidatorConfig<'a> {
     pub no_snapshot_fetch: bool,
     pub require_tower: bool,
     pub enable_full_rpc: bool,
+    pub entrypoints: Vec<String>,
 }
 
 impl<'a> std::fmt::Display for ValidatorConfig<'a> {
@@ -57,7 +55,8 @@ impl<'a> std::fmt::Display for ValidatorConfig<'a> {
              skip_poh_verify: {}\n\
              no_snapshot_fetch: {}\n\
              require_tower: {}\n\
-             enable_full_rpc: {}",
+             enable_full_rpc: {}\n\
+             entrypoints: {:?}",
             self.tpu_enable_udp,
             self.tpu_disable_quic,
             self.gpu_mode,
@@ -72,6 +71,7 @@ impl<'a> std::fmt::Display for ValidatorConfig<'a> {
             self.no_snapshot_fetch,
             self.require_tower,
             self.enable_full_rpc,
+            self.entrypoints.join(", "),
         )
     }
 }
@@ -121,12 +121,31 @@ impl Metrics {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum NodeAffinityType {
+    Equinix,
+    Lumen,
+    Mixed,
+}
+
+impl std::fmt::Display for NodeAffinityType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NodeAffinityType::Equinix => write!(f, "Equinix"),
+            NodeAffinityType::Lumen => write!(f, "Lumen"),
+            NodeAffinityType::Mixed => write!(f, "Mixed"),
+        }
+    }
+}
+
 pub struct Kubernetes<'a> {
     client: Client,
     namespace: &'a str,
     validator_config: &'a mut ValidatorConfig<'a>,
     client_config: ClientConfig,
     pub metrics: Option<Metrics>,
+    nodes: Option<Vec<String>>,
+    node_affinity: NodeAffinityType,
 }
 
 impl<'a> Kubernetes<'a> {
@@ -135,6 +154,7 @@ impl<'a> Kubernetes<'a> {
         validator_config: &'a mut ValidatorConfig<'a>,
         client_config: ClientConfig,
         metrics: Option<Metrics>,
+        node_affinity: NodeAffinityType,
     ) -> Kubernetes<'a> {
         Kubernetes {
             client: Client::try_default().await.unwrap(),
@@ -142,6 +162,8 @@ impl<'a> Kubernetes<'a> {
             validator_config,
             client_config,
             metrics,
+            nodes: None,
+            node_affinity,
         }
     }
 
@@ -215,6 +237,16 @@ impl<'a> Kubernetes<'a> {
         flags
     }
 
+    fn generate_non_voting_command_flags(&mut self) -> Vec<String> {
+        let mut flags = self.generate_command_flags();
+        if let Some(shred_version) = self.validator_config.shred_version {
+            flags.push("--expected-shred-version".to_string());
+            flags.push(shred_version.to_string());
+        }
+
+        flags
+    }
+
     fn generate_client_command_flags(&self) -> Vec<String> {
         let mut flags = vec![];
 
@@ -255,21 +287,14 @@ impl<'a> Kubernetes<'a> {
         Ok(false)
     }
 
-    pub fn create_selector(&mut self, key: &str, value: &str) -> BTreeMap<String, String> {
-        let mut btree = BTreeMap::new();
-        btree.insert(key.to_string(), value.to_string());
-        btree
-    }
-
-    pub async fn create_bootstrap_validator_replicas_set(
+    pub fn create_bootstrap_validator_replica_set(
         &mut self,
         container_name: &str,
         image_name: &str,
-        num_bootstrap_validators: i32,
         secret_name: Option<String>,
         label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
-        let mut env_var = vec![EnvVar {
+        let mut env_vars = vec![EnvVar {
             name: "MY_POD_IP".to_string(),
             value_from: Some(EnvVarSource {
                 field_ref: Some(ObjectFieldSelector {
@@ -282,7 +307,7 @@ impl<'a> Kubernetes<'a> {
         }];
 
         if self.metrics.is_some() {
-            env_var.push(self.get_metrics_env_var_secret())
+            env_vars.push(self.get_metrics_env_var_secret())
         }
 
         let accounts_volume = Some(vec![Volume {
@@ -308,80 +333,19 @@ impl<'a> Kubernetes<'a> {
             debug!("bootstrap command: {}", c);
         }
 
-        self.create_replicas_set(
+        k8s_helpers::create_replica_set(
             "bootstrap-validator",
+            self.namespace,
             label_selector,
             container_name,
             image_name,
-            num_bootstrap_validators,
-            env_var,
+            env_vars,
             &command,
             accounts_volume,
             accounts_volume_mount,
+            None,
+            self.nodes.clone(),
         )
-        .await
-    }
-
-    // mount genesis in bootstrap. validators will pull
-    // genesis from bootstrap
-    #[allow(clippy::too_many_arguments)]
-    async fn create_replicas_set(
-        &self,
-        app_name: &str,
-        label_selector: &BTreeMap<String, String>,
-        container_name: &str,
-        image_name: &str,
-        num_validators: i32,
-        env_vars: Vec<EnvVar>,
-        command: &[String],
-        volumes: Option<Vec<Volume>>,
-        volume_mounts: Option<Vec<VolumeMount>>,
-    ) -> Result<ReplicaSet, Box<dyn Error>> {
-        // Define the pod spec
-        let pod_spec = PodTemplateSpec {
-            metadata: Some(ObjectMeta {
-                labels: Some(label_selector.clone()),
-                ..Default::default()
-            }),
-            spec: Some(PodSpec {
-                containers: vec![Container {
-                    name: container_name.to_string(),
-                    image: Some(image_name.to_string()),
-                    image_pull_policy: Some("Always".to_string()),
-                    env: Some(env_vars),
-                    command: Some(command.to_owned()),
-                    volume_mounts,
-                    ..Default::default()
-                }],
-                volumes,
-                security_context: Some(PodSecurityContext {
-                    run_as_user: Some(1000),
-                    run_as_group: Some(1000),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            }),
-        };
-
-        let replicas_set_spec = ReplicaSetSpec {
-            replicas: Some(num_validators),
-            selector: LabelSelector {
-                match_labels: Some(label_selector.clone()),
-                ..Default::default()
-            },
-            template: Some(pod_spec),
-            ..Default::default()
-        };
-
-        Ok(ReplicaSet {
-            metadata: ObjectMeta {
-                name: Some(format!("{}-replicaset", app_name)),
-                namespace: Some(self.namespace.to_string()),
-                ..Default::default()
-            },
-            spec: Some(replicas_set_spec),
-            ..Default::default()
-        })
     }
 
     pub async fn deploy_secret(&self, secret: &Secret) -> Result<Secret, kube::Error> {
@@ -402,16 +366,7 @@ impl<'a> Kubernetes<'a> {
             )));
         }
 
-        let secret = Secret {
-            metadata: ObjectMeta {
-                name: Some("solana-metrics-secret".to_string()),
-                ..Default::default()
-            },
-            data: Some(data),
-            ..Default::default()
-        };
-
-        Ok(secret)
+        Ok(k8s_helpers::create_secret("solana-metrics-secret", data))
     }
 
     pub fn get_metrics_env_var_secret(&self) -> EnvVar {
@@ -430,140 +385,73 @@ impl<'a> Kubernetes<'a> {
     }
 
     pub fn create_bootstrap_secret(&self, secret_name: &str) -> Result<Secret, Box<dyn Error>> {
-        let faucet_key_path = SOLANA_ROOT.join("config-k8s");
-        let faucet_keypair =
-            std::fs::read(faucet_key_path.join("faucet.json")).unwrap_or_else(|_| {
-                panic!("Failed to read faucet.json file! at: {:?}", faucet_key_path)
-            });
+        let faucet_key_path = SOLANA_ROOT.join("config-k8s/faucet.json");
+        let identity_key_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator/identity.json");
+        let vote_key_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator/vote-account.json");
+        let stake_key_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator/stake-account.json");
 
-        let key_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator");
+        let key_files = vec![
+            (faucet_key_path, "faucet"),
+            (identity_key_path, "identity"),
+            (vote_key_path, "vote"),
+            (stake_key_path, "stake"),
+        ];
 
-        let identity_keypair = std::fs::read(key_path.join("identity.json"))
-            .unwrap_or_else(|_| panic!("Failed to read identity.json file! at: {:?}", key_path));
-        let vote_keypair = std::fs::read(key_path.join("vote-account.json")).unwrap_or_else(|_| {
-            panic!("Failed to read vote-account.json file! at: {:?}", key_path)
-        });
-        let stake_keypair =
-            std::fs::read(key_path.join("stake-account.json")).unwrap_or_else(|_| {
-                panic!("Failed to read stake-account.json file! at: {:?}", key_path)
-            });
-
-        let mut data = BTreeMap::new();
-        data.insert(
-            "identity.base64".to_string(),
-            ByteString(
-                general_purpose::STANDARD
-                    .encode(identity_keypair)
-                    .as_bytes()
-                    .to_vec(),
-            ),
-        );
-        data.insert(
-            "vote.base64".to_string(),
-            ByteString(
-                general_purpose::STANDARD
-                    .encode(vote_keypair)
-                    .as_bytes()
-                    .to_vec(),
-            ),
-        );
-        data.insert(
-            "stake.base64".to_string(),
-            ByteString(
-                general_purpose::STANDARD
-                    .encode(stake_keypair)
-                    .as_bytes()
-                    .to_vec(),
-            ),
-        );
-        data.insert(
-            "faucet.base64".to_string(),
-            ByteString(
-                general_purpose::STANDARD
-                    .encode(faucet_keypair)
-                    .as_bytes()
-                    .to_vec(),
-            ),
-        );
-
-        let secret = Secret {
-            metadata: ObjectMeta {
-                name: Some(secret_name.to_string()),
-                ..Default::default()
-            },
-            data: Some(data),
-            ..Default::default()
-        };
-
-        Ok(secret)
+        k8s_helpers::create_secret_from_files(secret_name, &key_files)
     }
 
     pub fn create_validator_secret(&self, validator_index: i32) -> Result<Secret, Box<dyn Error>> {
         let secret_name = format!("validator-accounts-secret-{}", validator_index);
         let key_path = SOLANA_ROOT.join("config-k8s");
 
-        let mut data: BTreeMap<String, ByteString> = BTreeMap::new();
-        let accounts = vec!["identity", "vote", "stake"];
-        for account in accounts {
-            let file_name: String = if account == "identity" {
-                format!("validator-{}-{}.json", account, validator_index)
-            } else {
-                format!("validator-{}-account-{}.json", account, validator_index)
-            };
-            let keypair = std::fs::read(key_path.join(file_name.clone())).unwrap_or_else(|_| {
-                panic!("Failed to read {} file! at: {:?}", file_name, key_path)
-            });
-            data.insert(
-                format!("{}.base64", account),
-                ByteString(
-                    general_purpose::STANDARD
-                        .encode(keypair)
-                        .as_bytes()
-                        .to_vec(),
-                ),
-            );
-        }
-        let secret = Secret {
-            metadata: ObjectMeta {
-                name: Some(secret_name.to_string()),
-                ..Default::default()
-            },
-            data: Some(data),
-            ..Default::default()
-        };
+        let accounts = ["identity", "vote", "stake"];
+        let key_files: Vec<(PathBuf, &str)> = accounts
+            .iter()
+            .map(|&account| {
+                let file_name = if account == "identity" {
+                    format!("validator-{}-{}.json", account, validator_index)
+                } else {
+                    format!("validator-{}-account-{}.json", account, validator_index)
+                };
+                (key_path.join(file_name), account)
+            })
+            .collect();
 
-        Ok(secret)
+        k8s_helpers::create_secret_from_files(&secret_name, &key_files)
     }
 
     pub fn create_client_secret(&self, client_index: i32) -> Result<Secret, Box<dyn Error>> {
         let secret_name = format!("client-accounts-secret-{}", client_index);
-        let faucet_key_path = SOLANA_ROOT.join("config-k8s");
-        let faucet_keypair =
-            std::fs::read(faucet_key_path.join("faucet.json")).unwrap_or_else(|_| {
-                panic!("Failed to read faucet.json file! at: {:?}", faucet_key_path)
-            });
+        let faucet_key_path = SOLANA_ROOT.join("config-k8s/faucet.json");
 
-        let mut data = BTreeMap::new();
-        data.insert(
-            "faucet.base64".to_string(),
-            ByteString(
-                general_purpose::STANDARD
-                    .encode(faucet_keypair)
-                    .as_bytes()
-                    .to_vec(),
-            ),
-        );
+        let key_files = vec![(faucet_key_path, "faucet")];
 
-        let secret = Secret {
-            metadata: ObjectMeta {
-                name: Some(secret_name.to_string()),
-                ..Default::default()
-            },
-            data: Some(data),
-            ..Default::default()
-        };
+        k8s_helpers::create_secret_from_files(&secret_name, &key_files)
+    }
 
-        Ok(secret)
+    pub fn create_non_voting_secret(&self, nvv_index: i32) -> Result<Secret, Box<dyn Error>> {
+        let secret_name = format!("non-voting-validator-accounts-secret-{}", nvv_index);
+        let config_path = SOLANA_ROOT.join("config-k8s");
+
+        let accounts = ["identity", "stake"];
+        let mut key_files: Vec<(PathBuf, &str)> = accounts
+            .iter()
+            .map(|&account| {
+                let file_name = if account == "identity" {
+                    format!("non-voting-validator-{}-{}.json", account, nvv_index)
+                } else {
+                    format!(
+                        "non-voting-validator-{}-account-{}.json",
+                        account, nvv_index
+                    )
+                };
+                (config_path.join(file_name), account)
+            })
+            .collect();
+
+        key_files.push((config_path.join("faucet.json"), "faucet"));
+
+        k8s_helpers::create_secret_from_files(&secret_name, &key_files)
     }
 
     pub async fn deploy_replicas_set(
@@ -575,44 +463,6 @@ impl<'a> Kubernetes<'a> {
         info!("creating replica set!");
         // Apply the ReplicaSet
         api.create(&post_params, replica_set).await
-    }
-
-    fn create_service(
-        &self,
-        service_name: &str,
-        label_selector: &BTreeMap<String, String>,
-    ) -> Service {
-        Service {
-            metadata: ObjectMeta {
-                name: Some(format!("{}-service", service_name).to_string()),
-                namespace: Some(self.namespace.to_string()),
-                ..Default::default()
-            },
-            spec: Some(ServiceSpec {
-                selector: Some(label_selector.clone()),
-                cluster_ip: Some("None".into()),
-                // cluster_ips: None,
-                ports: Some(vec![
-                    ServicePort {
-                        port: 8899, // RPC Port
-                        name: Some("rpc-port".to_string()),
-                        ..Default::default()
-                    },
-                    ServicePort {
-                        port: 8001, //Gossip Port
-                        name: Some("gossip-port".to_string()),
-                        ..Default::default()
-                    },
-                    ServicePort {
-                        port: 9900, //Faucet Port
-                        name: Some("faucet-port".to_string()),
-                        ..Default::default()
-                    },
-                ]),
-                ..Default::default()
-            }),
-            ..Default::default()
-        }
     }
 
     pub async fn deploy_service(&self, service: &Service) -> Result<Service, kube::Error> {
@@ -644,47 +494,117 @@ impl<'a> Kubernetes<'a> {
 
     fn set_non_bootstrap_environment_variables(&self) -> Vec<EnvVar> {
         vec![
-            EnvVar {
-                name: "NAMESPACE".to_string(),
-                value_from: Some(EnvVarSource {
-                    field_ref: Some(ObjectFieldSelector {
-                        field_path: "metadata.namespace".to_string(),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            },
-            EnvVar {
-                name: "BOOTSTRAP_RPC_ADDRESS".to_string(),
-                value: Some(
-                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8899".to_string(),
-                ),
-                ..Default::default()
-            },
-            EnvVar {
-                name: "BOOTSTRAP_GOSSIP_ADDRESS".to_string(),
-                value: Some(
-                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8001".to_string(),
-                ),
-                ..Default::default()
-            },
-            EnvVar {
-                name: "BOOTSTRAP_FAUCET_ADDRESS".to_string(),
-                value: Some(
-                    "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:9900".to_string(),
-                ),
-                ..Default::default()
-            },
+            k8s_helpers::create_environment_variable(
+                "NAMESPACE",
+                None,
+                Some("metadata.namespace".to_string()),
+            ),
+            k8s_helpers::create_environment_variable(
+                "BOOTSTRAP_RPC_ADDRESS",
+                Some("bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8899".to_string()),
+                None,
+            ),
+            k8s_helpers::create_environment_variable(
+                "BOOTSTRAP_GOSSIP_ADDRESS",
+                Some("bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8001".to_string()),
+                None,
+            ),
+            k8s_helpers::create_environment_variable(
+                "BOOTSTRAP_FAUCET_ADDRESS",
+                Some("bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:9900".to_string()),
+                None,
+            ),
         ]
     }
 
-    pub async fn create_validator_replica_set(
+    fn set_load_balancer_environment_variables(&self) -> Vec<EnvVar> {
+        vec![
+            k8s_helpers::create_environment_variable(
+                "LOAD_BALANCER_RPC_ADDRESS",
+                Some(
+                    "bootstrap-and-non-voting-lb-service.$(NAMESPACE).svc.cluster.local:8899"
+                        .to_string(),
+                ),
+                None,
+            ),
+            k8s_helpers::create_environment_variable(
+                "LOAD_BALANCER_GOSSIP_ADDRESS",
+                Some(
+                    "bootstrap-and-non-voting-lb-service.$(NAMESPACE).svc.cluster.local:8001"
+                        .to_string(),
+                ),
+                None,
+            ),
+            k8s_helpers::create_environment_variable(
+                "LOAD_BALANCER_FAUCET_ADDRESS",
+                Some(
+                    "bootstrap-and-non-voting-lb-service.$(NAMESPACE).svc.cluster.local:9900"
+                        .to_string(),
+                ),
+                None,
+            ),
+        ]
+    }
+
+    pub fn node_count(&self) -> usize {
+        if let Some(nodes) = &self.nodes {
+            return nodes.len();
+        }
+        0
+    }
+
+    pub fn nodes(&self) -> Option<Vec<String>> {
+        self.nodes.clone()
+    }
+
+    pub async fn set_nodes(&mut self) -> Result<(), Box<dyn Error>> {
+        match self.node_affinity {
+            NodeAffinityType::Equinix | NodeAffinityType::Lumen => {
+                match self.get_nodes_by_type().await {
+                    Ok(nodes) => self.nodes = nodes,
+                    Err(err) => return Err(boxed_error!(format!("Failed to get {} nodes", err))),
+                }
+            }
+            _ => return Ok(()),
+        };
+        Ok(())
+    }
+
+    async fn get_nodes_by_type(&self) -> Result<Option<Vec<String>>, Box<dyn Error>> {
+        let matching_arm = match self.node_affinity {
+            NodeAffinityType::Equinix => "eq-",
+            NodeAffinityType::Lumen => "lum-",
+            NodeAffinityType::Mixed => {
+                warn!("NodeAffinityType::Mixed node valid in context of get_nodes_by_type()");
+                return Ok(None);
+            }
+        };
+
+        let nodes: Api<Node> = Api::all(self.client.clone());
+        let lp = ListParams::default();
+        let node_list = nodes.list(&lp).await?;
+
+        // Filter nodes by label value pattern
+        let mut matching_nodes = Vec::new();
+        for node in node_list {
+            if let Some(labels) = node.metadata.labels {
+                for (key, value) in labels.iter() {
+                    if key == "topology.kubernetes.io/region" && value.starts_with(matching_arm) {
+                        if let Some(name) = &node.metadata.name {
+                            matching_nodes.push(name.clone());
+                        }
+                    }
+                }
+            }
+        }
+        Ok(Some(matching_nodes))
+    }
+
+    pub fn create_validator_replica_set(
         &mut self,
         container_name: &str,
         validator_index: i32,
         image_name: &str,
-        num_validators: i32,
         secret_name: Option<String>,
         label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
@@ -692,6 +612,7 @@ impl<'a> Kubernetes<'a> {
         if self.metrics.is_some() {
             env_vars.push(self.get_metrics_env_var_secret())
         }
+        env_vars.append(&mut self.set_load_balancer_environment_variables());
 
         let accounts_volume = Some(vec![Volume {
             name: format!("validator-accounts-volume-{}", validator_index),
@@ -716,26 +637,106 @@ impl<'a> Kubernetes<'a> {
             debug!("validator command: {}", c);
         }
 
-        self.create_replicas_set(
+        k8s_helpers::create_replica_set(
             format!("validator-{}", validator_index).as_str(),
+            self.namespace,
             label_selector,
             container_name,
             image_name,
-            num_validators,
             env_vars,
             &command,
             accounts_volume,
             accounts_volume_mount,
+            None,
+            self.nodes.clone(),
         )
-        .await
     }
 
-    pub async fn create_client_replica_set(
+    pub fn create_non_voting_validator_replica_set(
+        &mut self,
+        container_name: &str,
+        nvv_index: i32,
+        image_name: &str,
+        secret_name: Option<String>,
+        label_selector: &BTreeMap<String, String>,
+    ) -> Result<ReplicaSet, Box<dyn Error>> {
+        let mut env_vars = vec![EnvVar {
+            name: "MY_POD_IP".to_string(),
+            value_from: Some(EnvVarSource {
+                field_ref: Some(ObjectFieldSelector {
+                    field_path: "status.podIP".to_string(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }];
+        env_vars.append(&mut self.set_non_bootstrap_environment_variables());
+        env_vars.append(&mut self.set_load_balancer_environment_variables());
+
+        if self.metrics.is_some() {
+            env_vars.push(self.get_metrics_env_var_secret())
+        }
+
+        let accounts_volume = Some(vec![Volume {
+            name: format!("non-voting-validator-accounts-volume-{}", nvv_index),
+            secret: Some(SecretVolumeSource {
+                secret_name,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }]);
+
+        let accounts_volume_mount = Some(vec![VolumeMount {
+            name: format!("non-voting-validator-accounts-volume-{}", nvv_index),
+            mount_path: "/home/solana/non-voting-validator-accounts".to_string(),
+            ..Default::default()
+        }]);
+
+        let mut command = vec![
+            "/home/solana/k8s-cluster-scripts/non-voting-validator-startup-script.sh".to_string(),
+        ];
+        command.extend(self.generate_non_voting_command_flags());
+
+        for c in command.iter() {
+            debug!("validator command: {}", c);
+        }
+
+        let exec_action = ExecAction {
+            command: Some(vec![
+                String::from("/bin/bash"),
+                String::from("-c"),
+                String::from("solana -u http://$MY_POD_IP:8899 balance -k non-voting-validator-accounts/identity.json"),
+            ]),
+        };
+
+        let readiness_probe = Probe {
+            exec: Some(exec_action),
+            initial_delay_seconds: Some(20),
+            period_seconds: Some(20),
+            ..Default::default()
+        };
+
+        k8s_helpers::create_replica_set(
+            format!("non-voting-{}", nvv_index).as_str(),
+            self.namespace,
+            label_selector,
+            container_name,
+            image_name,
+            env_vars,
+            &command,
+            accounts_volume,
+            accounts_volume_mount,
+            Some(readiness_probe),
+            self.nodes.clone(),
+        )
+    }
+
+    pub fn create_client_replica_set(
         &mut self,
         container_name: &str,
         client_index: i32,
         image_name: &str,
-        num_clients: i32,
         secret_name: Option<String>,
         label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
@@ -743,6 +744,7 @@ impl<'a> Kubernetes<'a> {
         if self.metrics.is_some() {
             env_vars.push(self.get_metrics_env_var_secret())
         }
+        env_vars.append(&mut self.set_load_balancer_environment_variables());
 
         let accounts_volume = Some(vec![Volume {
             name: format!("client-accounts-volume-{}", client_index),
@@ -767,18 +769,19 @@ impl<'a> Kubernetes<'a> {
             debug!("client command: {}", c);
         }
 
-        self.create_replicas_set(
+        k8s_helpers::create_replica_set(
             format!("client-{}", client_index).as_str(),
+            self.namespace,
             label_selector,
             container_name,
             image_name,
-            num_clients,
             env_vars,
             &command,
             accounts_volume,
             accounts_volume_mount,
+            None,
+            self.nodes.clone(),
         )
-        .await
     }
 
     pub fn create_validator_service(
@@ -786,58 +789,18 @@ impl<'a> Kubernetes<'a> {
         service_name: &str,
         label_selector: &BTreeMap<String, String>,
     ) -> Service {
-        self.create_service(service_name, label_selector)
+        k8s_helpers::create_service(service_name, self.namespace, label_selector, false)
     }
 
-    pub async fn check_service_matching_replica_set(
+    pub fn create_validator_load_balancer(
         &self,
-        app_name: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        // Get the replica_set
-        let replica_set_api: Api<ReplicaSet> = Api::namespaced(self.client.clone(), self.namespace);
-        let replica_set = replica_set_api
-            .get(format!("{}-replicaset", app_name).as_str())
-            .await?;
+        service_name: &str,
+        label_selector: &BTreeMap<String, String>,
+    ) -> Service {
+        k8s_helpers::create_service(service_name, self.namespace, label_selector, true)
+    }
 
-        // Get the Service
-        let service_api: Api<Service> = Api::namespaced(self.client.clone(), self.namespace);
-        let service = service_api
-            .get(format!("{}-service", app_name).as_str())
-            .await?;
-
-        let replica_set_labels = replica_set
-            .spec
-            .and_then(|spec| {
-                Some(spec.selector).and_then(|selector| {
-                    selector
-                        .match_labels
-                        .and_then(|val| val.get("app.kubernetes.io/name").cloned())
-                })
-            })
-            .clone();
-
-        let service_labels = service
-            .spec
-            .and_then(|spec| {
-                spec.selector
-                    .and_then(|val| val.get("app.kubernetes.io/name").cloned())
-            })
-            .clone();
-
-        info!(
-            "ReplicaSet, Service labels: {:?}, {:?}",
-            replica_set_labels, service_labels
-        );
-
-        let are_equal = match (replica_set_labels, service_labels) {
-            (Some(rs_label), Some(serv_label)) => rs_label == serv_label,
-            _ => false,
-        };
-
-        if !are_equal {
-            error!("ReplicaSet and Service labels are not the same!");
-        }
-
-        Ok(())
+    pub fn create_selector(&self, key: &str, value: &str) -> BTreeMap<String, String> {
+        k8s_helpers::create_selector(key, value)
     }
 }

@@ -1,14 +1,16 @@
 #!/bin/bash
 set -e
 
-/home/solana/k8s-cluster-scripts/decode-accounts.sh -t "bootstrap"
+mkdir -p /home/solana/logs
 
 # start faucet
-nohup solana-faucet --keypair faucet.json >logs/faucet.log 2>&1 &
+nohup solana-faucet --keypair bootstrap-accounts/faucet.json >logs/faucet.log 2>&1 &
 
 # Start the bootstrap validator node
 # shellcheck disable=SC1091
 source /home/solana/k8s-cluster-scripts/common.sh
+
+# solana-ledger-tool -l ledger/ create-snapshot 0 -l ledger/
 
 if [[ "$SOLANA_GPU_MISSING" -eq 1 ]]; then
   echo "Testnet requires GPUs, but none were found!  Aborting..."
@@ -119,8 +121,8 @@ while [[ -n $1 ]]; do
 done
 
 # These keypairs are created by ./setup.sh and included in the genesis config
-identity=identity.json
-vote_account=vote.json
+identity=bootstrap-accounts/identity.json
+vote_account=bootstrap-accounts/vote.json
 
 ledger_dir=/home/solana/ledger
 [[ -d "$ledger_dir" ]] || {

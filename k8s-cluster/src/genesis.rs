@@ -26,8 +26,8 @@ pub const DEFAULT_WORD_COUNT: usize = 12;
 pub const DEFAULT_FAUCET_LAMPORTS: u64 = 500000000000000000;
 pub const DEFAULT_MAX_GENESIS_ARCHIVE_UNPACKED_SIZE: u64 = 1073741824;
 pub const DEFAULT_COMMISSION: u8 = 100;
-pub const DEFAULT_INTERNAL_NODE_STAKE_SOL: f64 = 10.0; // 10000000000 lamports
-pub const DEFAULT_INTERNAL_NODE_SOL: f64 = 500.0; // 500000000000 lamports
+pub const DEFAULT_INTERNAL_NODE_STAKE_SOL: f64 = 100.0; // 10000000000 lamports
+pub const DEFAULT_INTERNAL_NODE_SOL: f64 = 1000.0; // 500000000000 lamports
 pub const DEFAULT_BOOTSTRAP_NODE_STAKE_SOL: f64 = 10.0;
 pub const DEFAULT_BOOTSTRAP_NODE_SOL: f64 = 500.0;
 pub const DEFAULT_CLIENT_LAMPORTS_PER_SIGNATURE: u64 = 42;
@@ -223,6 +223,7 @@ impl Genesis {
         let filename_prefix = match validator_type {
             ValidatorType::Bootstrap => format!("{}-validator", validator_type),
             ValidatorType::Standard => "validator".to_string(),
+            ValidatorType::NonVoting => format!("{}-validator", validator_type),
         };
 
         for i in 0..number_of_accounts {
@@ -289,14 +290,20 @@ impl Genesis {
         let log_msg = match validator_type {
             ValidatorType::Bootstrap => format!("generating {} account", validator_type),
             ValidatorType::Standard => format!("generating {} account: {}", validator_type, i),
+            ValidatorType::NonVoting => format!("generating {} account: {}", validator_type, i),
         };
         info!("{}", log_msg);
 
         let account_types = vec!["identity", "vote-account", "stake-account"];
         for account in account_types {
+            if validator_type == ValidatorType::NonVoting && account == "vote-account" {
+                continue;
+            }
+
             let filename = match validator_type {
                 ValidatorType::Bootstrap => format!("{}/{}.json", filename_prefix, account),
                 ValidatorType::Standard => format!("{}-{}-{}.json", filename_prefix, account, i),
+                ValidatorType::NonVoting => format!("{}-{}-{}.json", filename_prefix, account, i),
             };
 
             let outfile = self.config_dir.join(&filename);

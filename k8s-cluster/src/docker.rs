@@ -101,7 +101,8 @@ COPY --chown=solana:solana ./config-k8s/client-accounts.yml /home/solana
         content: Option<&str>,
     ) -> Result<PathBuf, Box<dyn std::error::Error>> {
         if !(validator_type != &ValidatorType::Bootstrap
-            || validator_type != &ValidatorType::Standard)
+            || validator_type != &ValidatorType::Standard
+            || validator_type != &ValidatorType::NonVoting)
         {
             return Err(boxed_error!(format!(
                 "Invalid validator type: {}. Exiting...",
