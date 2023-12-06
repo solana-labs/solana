@@ -64,6 +64,8 @@ impl VoteSimulator {
             latest_validator_votes_for_frozen_banks: LatestValidatorVotesForFrozenBanks::default(),
         }
     }
+
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn fill_bank_forks(
         &mut self,
         forks: Tree<u64>,
@@ -84,6 +86,12 @@ impl VoteSimulator {
             let parent = *walk.get_parent().unwrap().data();
             let parent_bank = self.bank_forks.read().unwrap().get(parent).unwrap();
             let new_bank = Bank::new_from_parent(parent_bank.clone(), &Pubkey::default(), slot);
+            let new_bank = self
+                .bank_forks
+                .write()
+                .unwrap()
+                .insert(new_bank)
+                .clone_without_scheduler();
             self.progress
                 .entry(slot)
                 .or_insert_with(|| ForkProgress::new(Hash::default(), None, None, 0, 0));
@@ -131,7 +139,6 @@ impl VoteSimulator {
                     Some((new_bank.parent_slot(), new_bank.parent_hash())),
                 );
             }
-            self.bank_forks.write().unwrap().insert(new_bank);
 
             walk.forward();
         }

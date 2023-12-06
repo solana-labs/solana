@@ -292,15 +292,14 @@ pub(crate) fn create_simple_test_bank(lamports: u64) -> Bank {
     Bank::new_for_tests(&genesis_config)
 }
 
-fn create_simple_test_arc_bank(lamports: u64) -> Arc<Bank> {
+fn create_simple_test_arc_bank(lamports: u64) -> (Arc<Bank>, Arc<RwLock<BankForks>>) {
     let bank = create_simple_test_bank(lamports);
-    let (bank, _) = bank.wrap_with_bank_forks_for_tests();
-    bank
+    bank.wrap_with_bank_forks_for_tests()
 }
 
 #[test]
 fn test_bank_block_height() {
-    let bank0 = create_simple_test_arc_bank(1);
+    let bank0 = create_simple_test_arc_bank(1).0;
     assert_eq!(bank0.block_height(), 0);
     let bank1 = Arc::new(new_from_parent(bank0));
     assert_eq!(bank1.block_height(), 1);
@@ -1276,7 +1275,7 @@ fn test_rent_collection_partitions(bank: &Bank) -> Vec<Partition> {
 
 #[test]
 fn test_rent_eager_across_epoch_without_gap() {
-    let mut bank = create_simple_test_arc_bank(1);
+    let mut bank = create_simple_test_arc_bank(1).0;
     assert_eq!(bank.rent_collection_partitions(), vec![(0, 0, 32)]);
 
     bank = Arc::new(new_from_parent(bank));
@@ -1731,7 +1730,11 @@ fn test_rent_eager_collect_rent_in_partition(should_collect_rent: bool) {
     );
 }
 
-fn new_from_parent_next_epoch(parent: Arc<Bank>, epochs: Epoch) -> Bank {
+fn new_from_parent_next_epoch(
+    parent: Arc<Bank>,
+    bank_forks: &RwLock<BankForks>,
+    epochs: Epoch,
+) -> Arc<Bank> {
     let mut slot = parent.slot();
     let mut epoch = parent.epoch();
     for _ in 0..epochs {
@@ -1739,7 +1742,7 @@ fn new_from_parent_next_epoch(parent: Arc<Bank>, epochs: Epoch) -> Bank {
         epoch = parent.epoch_schedule().get_epoch(slot);
     }
 
-    Bank::new_from_parent(parent, &Pubkey::default(), slot)
+    new_bank_from_parent_with_bank_forks(bank_forks, parent, &Pubkey::default(), slot)
 }
 
 #[test]
@@ -1750,17 +1753,21 @@ fn test_collect_rent_from_accounts() {
     for skip_rewrites in [false, true] {
         let zero_lamport_pubkey = Pubkey::from([0; 32]);
 
-        let genesis_bank = create_simple_test_arc_bank(100000);
+        let (genesis_bank, bank_forks) = create_simple_test_arc_bank(100000);
         let mut first_bank = new_from_parent(genesis_bank.clone());
         if skip_rewrites {
             first_bank.activate_feature(&feature_set::skip_rent_rewrites::id());
         }
-        let first_bank = Arc::new(first_bank);
+        let first_bank = bank_forks
+            .write()
+            .unwrap()
+            .insert(first_bank)
+            .clone_without_scheduler();
 
         let first_slot = 1;
         assert_eq!(first_slot, first_bank.slot());
         let epoch_delta = 4;
-        let later_bank = Arc::new(new_from_parent_next_epoch(first_bank, epoch_delta)); // a bank a few epochs in the future
+        let later_bank = new_from_parent_next_epoch(first_bank, bank_forks.as_ref(), epoch_delta); // a bank a few epochs in the future
         let later_slot = later_bank.slot();
         assert!(later_bank.epoch() == genesis_bank.epoch() + epoch_delta);
 
@@ -2748,19 +2755,19 @@ fn test_bank_blockhash_fee_structure() {
         .target_lamports_per_signature = 5000;
     genesis_config.fee_rate_governor.target_signatures_per_slot = 0;
 
-    let (bank, _) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     goto_end_of_slot(bank.clone());
     let cheap_blockhash = bank.last_blockhash();
     let cheap_lamports_per_signature = bank.get_lamports_per_signature();
     assert_eq!(cheap_lamports_per_signature, 0);
 
-    let bank = Arc::new(Bank::new_from_parent(bank, &leader, 1));
+    let bank = new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank, &leader, 1);
     goto_end_of_slot(bank.clone());
     let expensive_blockhash = bank.last_blockhash();
     let expensive_lamports_per_signature = bank.get_lamports_per_signature();
     assert!(cheap_lamports_per_signature < expensive_lamports_per_signature);
 
-    let bank = Bank::new_from_parent(bank, &leader, 2);
+    let bank = new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank, &leader, 2);
 
     // Send a transfer using cheap_blockhash
     let key = solana_sdk::pubkey::new_rand();
@@ -4531,7 +4538,7 @@ fn test_get_filtered_indexed_accounts() {
 #[test]
 fn test_status_cache_ancestors() {
     solana_logger::setup();
-    let parent = create_simple_test_arc_bank(500);
+    let parent = create_simple_test_arc_bank(500).0;
     let bank1 = Arc::new(new_from_parent(parent));
     let mut bank = bank1;
     for _ in 0..MAX_CACHE_ENTRIES * 2 {
@@ -4609,7 +4616,7 @@ fn test_add_duplicate_static_program() {
         mint_keypair,
         ..
     } = create_genesis_config_with_leader(500, &solana_sdk::pubkey::new_rand(), 0);
-    let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
 
     declare_process_instruction!(MockBuiltin, 1, |_invoke_context| {
         Err(InstructionError::Custom(42))
@@ -4640,9 +4647,14 @@ fn test_add_duplicate_static_program() {
 
     let slot = bank.slot().saturating_add(1);
     let mut bank = Bank::new_from_parent(bank, &Pubkey::default(), slot);
+    bank.add_mockup_builtin(solana_vote_program::id(), MockBuiltin::vm);
+    let bank = bank_forks
+        .write()
+        .unwrap()
+        .insert(bank)
+        .clone_without_scheduler();
 
     let vote_loader_account = bank.get_account(&solana_vote_program::id()).unwrap();
-    bank.add_mockup_builtin(solana_vote_program::id(), MockBuiltin::vm);
     let new_vote_loader_account = bank.get_account(&solana_vote_program::id()).unwrap();
     // Vote loader account should not be updated since it was included in the genesis config.
     assert_eq!(vote_loader_account.data(), new_vote_loader_account.data());
@@ -4751,7 +4763,7 @@ fn test_add_instruction_processor_for_existing_unrelated_accounts() {
 #[allow(deprecated)]
 #[test]
 fn test_recent_blockhashes_sysvar() {
-    let mut bank = create_simple_test_arc_bank(500);
+    let mut bank = create_simple_test_arc_bank(500).0;
     for i in 1..5 {
         let bhq_account = bank.get_account(&sysvar::recent_blockhashes::id()).unwrap();
         let recent_blockhashes =
@@ -4769,7 +4781,7 @@ fn test_recent_blockhashes_sysvar() {
 #[allow(deprecated)]
 #[test]
 fn test_blockhash_queue_sysvar_consistency() {
-    let bank = create_simple_test_arc_bank(100_000);
+    let bank = create_simple_test_arc_bank(100_000).0;
     goto_end_of_slot(bank.clone());
 
     let bhq_account = bank.get_account(&sysvar::recent_blockhashes::id()).unwrap();
@@ -4908,6 +4920,8 @@ fn nonce_setup(
     Ok((custodian_keypair, nonce_keypair))
 }
 
+type NonceSetup = (Arc<Bank>, Keypair, Keypair, Keypair, Arc<RwLock<BankForks>>);
+
 fn setup_nonce_with_bank<F>(
     supply_lamports: u64,
     mut genesis_cfg_fn: F,
@@ -4915,7 +4929,7 @@ fn setup_nonce_with_bank<F>(
     nonce_lamports: u64,
     nonce_authority: Option<Pubkey>,
     feature_set: FeatureSet,
-) -> Result<(Arc<Bank>, Keypair, Keypair, Keypair)>
+) -> Result<NonceSetup>
 where
     F: FnMut(&mut GenesisConfig),
 {
@@ -4946,7 +4960,13 @@ where
     goto_end_of_slot(bank.clone());
     bank = new_from_parent_with_fork_next_slot(bank, bank_forks.as_ref());
 
-    Ok((bank, mint_keypair, custodian_keypair, nonce_keypair))
+    Ok((
+        bank,
+        mint_keypair,
+        custodian_keypair,
+        nonce_keypair,
+        bank_forks,
+    ))
 }
 
 impl Bank {
@@ -4959,7 +4979,7 @@ impl Bank {
 
 #[test]
 fn test_check_transaction_for_nonce_ok() {
-    let (bank, _mint_keypair, custodian_keypair, nonce_keypair) = setup_nonce_with_bank(
+    let (bank, _mint_keypair, custodian_keypair, nonce_keypair, _) = setup_nonce_with_bank(
         10_000_000,
         |_| {},
         5_000_000,
@@ -4993,7 +5013,7 @@ fn test_check_transaction_for_nonce_ok() {
 
 #[test]
 fn test_check_transaction_for_nonce_not_nonce_fail() {
-    let (bank, _mint_keypair, custodian_keypair, nonce_keypair) = setup_nonce_with_bank(
+    let (bank, _mint_keypair, custodian_keypair, nonce_keypair, _) = setup_nonce_with_bank(
         10_000_000,
         |_| {},
         5_000_000,
@@ -5025,7 +5045,7 @@ fn test_check_transaction_for_nonce_not_nonce_fail() {
 
 #[test]
 fn test_check_transaction_for_nonce_missing_ix_pubkey_fail() {
-    let (bank, _mint_keypair, custodian_keypair, nonce_keypair) = setup_nonce_with_bank(
+    let (bank, _mint_keypair, custodian_keypair, nonce_keypair, _) = setup_nonce_with_bank(
         10_000_000,
         |_| {},
         5_000_000,
@@ -5058,7 +5078,7 @@ fn test_check_transaction_for_nonce_missing_ix_pubkey_fail() {
 
 #[test]
 fn test_check_transaction_for_nonce_nonce_acc_does_not_exist_fail() {
-    let (bank, _mint_keypair, custodian_keypair, nonce_keypair) = setup_nonce_with_bank(
+    let (bank, _mint_keypair, custodian_keypair, nonce_keypair, _) = setup_nonce_with_bank(
         10_000_000,
         |_| {},
         5_000_000,
@@ -5092,7 +5112,7 @@ fn test_check_transaction_for_nonce_nonce_acc_does_not_exist_fail() {
 
 #[test]
 fn test_check_transaction_for_nonce_bad_tx_hash_fail() {
-    let (bank, _mint_keypair, custodian_keypair, nonce_keypair) = setup_nonce_with_bank(
+    let (bank, _mint_keypair, custodian_keypair, nonce_keypair, _) = setup_nonce_with_bank(
         10_000_000,
         |_| {},
         5_000_000,
@@ -5123,7 +5143,7 @@ fn test_check_transaction_for_nonce_bad_tx_hash_fail() {
 
 #[test]
 fn test_assign_from_nonce_account_fail() {
-    let bank = create_simple_test_arc_bank(100_000_000);
+    let bank = create_simple_test_arc_bank(100_000_000).0;
     let nonce = Keypair::new();
     let nonce_account = AccountSharedData::new_data(
         42_424_242,
@@ -5176,15 +5196,16 @@ fn test_nonce_must_be_advanceable() {
 
 #[test]
 fn test_nonce_transaction() {
-    let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair) = setup_nonce_with_bank(
-        10_000_000,
-        |_| {},
-        5_000_000,
-        250_000,
-        None,
-        FeatureSet::all_enabled(),
-    )
-    .unwrap();
+    let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair, bank_forks) =
+        setup_nonce_with_bank(
+            10_000_000,
+            |_| {},
+            5_000_000,
+            250_000,
+            None,
+            FeatureSet::all_enabled(),
+        )
+        .unwrap();
     let alice_keypair = Keypair::new();
     let alice_pubkey = alice_keypair.pubkey();
     let custodian_pubkey = custodian_keypair.pubkey();
@@ -5199,7 +5220,7 @@ fn test_nonce_transaction() {
     /* Kick nonce hash off the blockhash_queue */
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
         goto_end_of_slot(bank.clone());
-        bank = Arc::new(new_from_parent(bank));
+        bank = new_from_parent_with_fork_next_slot(bank, bank_forks.as_ref());
     }
 
     /* Expect a non-Nonce transfer to fail */
@@ -5268,7 +5289,7 @@ fn test_nonce_transaction() {
     /* Kick nonce hash off the blockhash_queue */
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
         goto_end_of_slot(bank.clone());
-        bank = Arc::new(new_from_parent(bank));
+        bank = new_from_parent_with_fork_next_slot(bank, bank_forks.as_ref());
     }
 
     let nonce_tx = Transaction::new_signed_with_payer(
@@ -5310,7 +5331,7 @@ fn test_nonce_transaction() {
 #[test]
 fn test_nonce_transaction_with_tx_wide_caps() {
     let feature_set = FeatureSet::all_enabled();
-    let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair) =
+    let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair, bank_forks) =
         setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000, None, feature_set).unwrap();
     let alice_keypair = Keypair::new();
     let alice_pubkey = alice_keypair.pubkey();
@@ -5326,7 +5347,7 @@ fn test_nonce_transaction_with_tx_wide_caps() {
     /* Kick nonce hash off the blockhash_queue */
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
         goto_end_of_slot(bank.clone());
-        bank = Arc::new(new_from_parent(bank));
+        bank = new_from_parent_with_fork_next_slot(bank, bank_forks.as_ref());
     }
 
     /* Expect a non-Nonce transfer to fail */
@@ -5395,7 +5416,7 @@ fn test_nonce_transaction_with_tx_wide_caps() {
     /* Kick nonce hash off the blockhash_queue */
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
         goto_end_of_slot(bank.clone());
-        bank = Arc::new(new_from_parent(bank));
+        bank = new_from_parent_with_fork_next_slot(bank, bank_forks.as_ref());
     }
 
     let nonce_tx = Transaction::new_signed_with_payer(
@@ -5437,15 +5458,16 @@ fn test_nonce_transaction_with_tx_wide_caps() {
 #[test]
 fn test_nonce_authority() {
     solana_logger::setup();
-    let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair) = setup_nonce_with_bank(
-        10_000_000,
-        |_| {},
-        5_000_000,
-        250_000,
-        None,
-        FeatureSet::all_enabled(),
-    )
-    .unwrap();
+    let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair, bank_forks) =
+        setup_nonce_with_bank(
+            10_000_000,
+            |_| {},
+            5_000_000,
+            250_000,
+            None,
+            FeatureSet::all_enabled(),
+        )
+        .unwrap();
     let alice_keypair = Keypair::new();
     let alice_pubkey = alice_keypair.pubkey();
     let custodian_pubkey = custodian_keypair.pubkey();
@@ -5463,7 +5485,7 @@ fn test_nonce_authority() {
 
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
         goto_end_of_slot(bank.clone());
-        bank = Arc::new(new_from_parent(bank));
+        bank = new_from_parent_with_fork_next_slot(bank, bank_forks.as_ref());
     }
 
     let nonce_tx = Transaction::new_signed_with_payer(
@@ -5498,15 +5520,16 @@ fn test_nonce_authority() {
 fn test_nonce_payer() {
     solana_logger::setup();
     let nonce_starting_balance = 250_000;
-    let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair) = setup_nonce_with_bank(
-        10_000_000,
-        |_| {},
-        5_000_000,
-        nonce_starting_balance,
-        None,
-        FeatureSet::all_enabled(),
-    )
-    .unwrap();
+    let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair, bank_forks) =
+        setup_nonce_with_bank(
+            10_000_000,
+            |_| {},
+            5_000_000,
+            nonce_starting_balance,
+            None,
+            FeatureSet::all_enabled(),
+        )
+        .unwrap();
     let alice_keypair = Keypair::new();
     let alice_pubkey = alice_keypair.pubkey();
     let custodian_pubkey = custodian_keypair.pubkey();
@@ -5521,7 +5544,7 @@ fn test_nonce_payer() {
 
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
         goto_end_of_slot(bank.clone());
-        bank = Arc::new(new_from_parent(bank));
+        bank = new_from_parent_with_fork_next_slot(bank, bank_forks.as_ref());
     }
 
     let nonce_tx = Transaction::new_signed_with_payer(
@@ -5563,15 +5586,16 @@ fn test_nonce_payer_tx_wide_cap() {
     let nonce_starting_balance =
         250_000 + FeeStructure::default().compute_fee_bins.last().unwrap().fee;
     let feature_set = FeatureSet::all_enabled();
-    let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair) = setup_nonce_with_bank(
-        10_000_000,
-        |_| {},
-        5_000_000,
-        nonce_starting_balance,
-        None,
-        feature_set,
-    )
-    .unwrap();
+    let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair, bank_forks) =
+        setup_nonce_with_bank(
+            10_000_000,
+            |_| {},
+            5_000_000,
+            nonce_starting_balance,
+            None,
+            feature_set,
+        )
+        .unwrap();
     let alice_keypair = Keypair::new();
     let alice_pubkey = alice_keypair.pubkey();
     let custodian_pubkey = custodian_keypair.pubkey();
@@ -5586,7 +5610,7 @@ fn test_nonce_payer_tx_wide_cap() {
 
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
         goto_end_of_slot(bank.clone());
-        bank = Arc::new(new_from_parent(bank));
+        bank = new_from_parent_with_fork_next_slot(bank, bank_forks.as_ref());
     }
 
     let nonce_tx = Transaction::new_signed_with_payer(
@@ -5761,15 +5785,16 @@ fn test_nonce_fee_calculator_updates_tx_wide_cap() {
 
 #[test]
 fn test_check_ro_durable_nonce_fails() {
-    let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair) = setup_nonce_with_bank(
-        10_000_000,
-        |_| {},
-        5_000_000,
-        250_000,
-        None,
-        FeatureSet::all_enabled(),
-    )
-    .unwrap();
+    let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair, bank_forks) =
+        setup_nonce_with_bank(
+            10_000_000,
+            |_| {},
+            5_000_000,
+            250_000,
+            None,
+            FeatureSet::all_enabled(),
+        )
+        .unwrap();
     let custodian_pubkey = custodian_keypair.pubkey();
     let nonce_pubkey = nonce_keypair.pubkey();
 
@@ -5802,7 +5827,7 @@ fn test_check_ro_durable_nonce_fails() {
     // Kick nonce hash off the blockhash_queue
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
         goto_end_of_slot(bank.clone());
-        bank = Arc::new(new_from_parent(bank));
+        bank = new_from_parent_with_fork_next_slot(bank, bank_forks.as_ref())
     }
     // Caught by the runtime because it is a nonce transaction
     assert_eq!(
@@ -5820,7 +5845,7 @@ fn test_check_ro_durable_nonce_fails() {
 
 #[test]
 fn test_collect_balances() {
-    let parent = create_simple_test_arc_bank(500);
+    let parent = create_simple_test_arc_bank(500).0;
     let bank0 = Arc::new(new_from_parent(parent));
 
     let keypair = Keypair::new();
@@ -6048,7 +6073,7 @@ fn test_transaction_with_program_ids_passed_to_programs() {
 fn test_account_ids_after_program_ids() {
     solana_logger::setup();
     let (genesis_config, mint_keypair) = create_genesis_config(500);
-    let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
 
     let from_pubkey = solana_sdk::pubkey::new_rand();
     let to_pubkey = solana_sdk::pubkey::new_rand();
@@ -6070,8 +6095,13 @@ fn test_account_ids_after_program_ids() {
 
     let slot = bank.slot().saturating_add(1);
     let mut bank = Bank::new_from_parent(bank, &Pubkey::default(), slot);
-
     bank.add_mockup_builtin(solana_vote_program::id(), MockBuiltin::vm);
+    let bank = bank_forks
+        .write()
+        .unwrap()
+        .insert(bank)
+        .clone_without_scheduler();
+
     let result = bank.process_transaction(&tx);
     assert_eq!(result, Ok(()));
     let account = bank.get_account(&solana_vote_program::id()).unwrap();
@@ -6690,7 +6720,7 @@ fn test_add_builtin_no_overwrite() {
     let program_id = solana_sdk::pubkey::new_rand();
 
     let mut bank = Arc::new(Bank::new_from_parent(
-        create_simple_test_arc_bank(100_000),
+        create_simple_test_arc_bank(100_000).0,
         &Pubkey::default(),
         slot,
     ));
@@ -6714,7 +6744,7 @@ fn test_add_builtin_loader_no_overwrite() {
     let loader_id = solana_sdk::pubkey::new_rand();
 
     let mut bank = Arc::new(Bank::new_from_parent(
-        create_simple_test_arc_bank(100_000),
+        create_simple_test_arc_bank(100_000).0,
         &Pubkey::default(),
         slot,
     ));
@@ -6901,7 +6931,7 @@ fn test_add_builtin_account_after_frozen() {
     let program_id = Pubkey::from_str("CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre").unwrap();
 
     let bank = Bank::new_from_parent(
-        create_simple_test_arc_bank(100_000),
+        create_simple_test_arc_bank(100_000).0,
         &Pubkey::default(),
         slot,
     );
@@ -6920,7 +6950,7 @@ fn test_add_builtin_account_replace_none() {
     let program_id = Pubkey::from_str("CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre").unwrap();
 
     let bank = Bank::new_from_parent(
-        create_simple_test_arc_bank(100_000),
+        create_simple_test_arc_bank(100_000).0,
         &Pubkey::default(),
         slot,
     );
@@ -7053,7 +7083,7 @@ fn test_add_precompiled_account_after_frozen() {
     let program_id = Pubkey::from_str("CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre").unwrap();
 
     let bank = Bank::new_from_parent(
-        create_simple_test_arc_bank(100_000),
+        create_simple_test_arc_bank(100_000).0,
         &Pubkey::default(),
         slot,
     );
@@ -7132,7 +7162,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
     let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000);
     let mut bank = Bank::new_for_tests(&genesis_config);
     bank.feature_set = Arc::new(FeatureSet::all_enabled());
-    let bank = bank.wrap_with_bank_forks_for_tests().0;
+    let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
     let mut bank_client = BankClient::new_shared(bank.clone());
 
     // Setup keypairs and addresses
@@ -7302,7 +7332,9 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
     // Test initialized program account
     bank.clear_signatures();
     bank.store_account(&buffer_address, &buffer_account);
-    let bank = bank_client.advance_slot(1, &mint_keypair.pubkey()).unwrap();
+    let bank = bank_client
+        .advance_slot(1, bank_forks.as_ref(), &mint_keypair.pubkey())
+        .unwrap();
     let message = Message::new(
         &[Instruction::new_with_bincode(
             bpf_loader_upgradeable::id(),
@@ -7849,7 +7881,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
 
 #[test]
 fn test_compute_active_feature_set() {
-    let bank0 = create_simple_test_arc_bank(100_000);
+    let bank0 = create_simple_test_arc_bank(100_000).0;
     let mut bank = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
 
     let test_feature = "TestFeature11111111111111111111111111111111"
@@ -11698,7 +11730,7 @@ fn test_accounts_data_size_from_genesis() {
     genesis_config.rent = Rent::default();
     genesis_config.ticks_per_slot = 3;
 
-    let mut bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
+    let (mut bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     assert_eq!(
         bank.load_accounts_data_size() as usize,
         bank.get_total_accounts_stats().unwrap().data_len
@@ -11707,7 +11739,12 @@ fn test_accounts_data_size_from_genesis() {
     // Create accounts over a number of banks and ensure the accounts data size remains correct
     for _ in 0..10 {
         let slot = bank.slot() + 1;
-        bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
+        bank = new_bank_from_parent_with_bank_forks(
+            bank_forks.as_ref(),
+            bank,
+            &Pubkey::default(),
+            slot,
+        );
 
         // Store an account into the bank that is rent-exempt and has data
         let data_size = rand::thread_rng().gen_range(3333..4444);
@@ -12050,7 +12087,7 @@ fn test_calculate_fee_with_request_heap_frame_flag() {
 fn test_is_in_slot_hashes_history() {
     use solana_sdk::slot_hashes::MAX_ENTRIES;
 
-    let bank0 = create_simple_test_arc_bank(1);
+    let bank0 = create_simple_test_arc_bank(1).0;
     assert!(!bank0.is_in_slot_hashes_history(&0));
     assert!(!bank0.is_in_slot_hashes_history(&1));
     let mut last_bank = bank0;
@@ -12072,8 +12109,7 @@ fn test_feature_activation_loaded_programs_recompilation_phase() {
     genesis_config
         .accounts
         .remove(&feature_set::reject_callx_r10::id());
-    let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests(&genesis_config));
-    let root_bank = bank_forks.read().unwrap().root_bank();
+    let (root_bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
 
     // Test a basic transfer
     let amount = genesis_config.rent.minimum_balance(0);
@@ -12103,7 +12139,7 @@ fn test_feature_activation_loaded_programs_recompilation_phase() {
 
     // Advance the bank so the next transaction can be submitted.
     goto_end_of_slot(root_bank.clone());
-    let bank = Arc::new(new_from_parent(root_bank));
+    let bank = new_from_parent_with_fork_next_slot(root_bank, bank_forks.as_ref());
 
     // Compose second instruction using the same program with a different block hash
     let instruction2 = Instruction::new_with_bytes(program_keypair.pubkey(), &[], Vec::new());
@@ -12132,7 +12168,7 @@ fn test_feature_activation_loaded_programs_recompilation_phase() {
 
     goto_end_of_slot(bank.clone());
     // Advance to next epoch, which starts the recompilation phase
-    let bank = new_from_parent_next_epoch(bank, 1);
+    let bank = new_from_parent_next_epoch(bank, bank_forks.as_ref(), 1);
 
     // Execute after feature is enabled to check it was filtered out and reverified.
     let result_with_feature_enabled = bank.process_transaction(&transaction2);

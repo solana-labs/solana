@@ -793,6 +793,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         working_slot: &S,
         keys: impl Iterator<Item = (Pubkey, (LoadedProgramMatchCriteria, u64))>,
     ) -> Arc<Mutex<ExtractedPrograms>> {
+        debug_assert!(self.fork_graph.is_some());
         let environments = self.get_environments_for_epoch(working_slot.current_epoch());
         let current_slot = working_slot.current_slot();
         let extracted = Arc::new(Mutex::new(ExtractedPrograms {

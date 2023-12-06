@@ -2693,7 +2693,7 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(2);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
         let keypair = Keypair::new();
         let slot_entries = create_ticks(genesis_config.ticks_per_slot, 1, genesis_config.hash());
         let tx = system_transaction::transfer(
@@ -2858,7 +2858,7 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(1000);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
 
@@ -2895,7 +2895,7 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(1000);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
@@ -2955,7 +2955,7 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(1000);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
@@ -3105,8 +3105,12 @@ pub mod tests {
 
         let mock_program_id = solana_sdk::pubkey::new_rand();
 
-        let mut bank = Bank::new_for_tests(&genesis_config);
-        bank.add_mockup_builtin(mock_program_id, MockBuiltinOk::vm);
+        let bank = Bank::new_with_mockup_builtin_for_tests(
+            &genesis_config,
+            mock_program_id,
+            MockBuiltinOk::vm,
+        )
+        .0;
 
         let tx = Transaction::new_signed_with_payer(
             &[Instruction::new_with_bincode(
@@ -3120,7 +3124,6 @@ pub mod tests {
         );
 
         let entry = next_entry(&bank.last_blockhash(), 1, vec![tx]);
-        let bank = Arc::new(bank);
         let result = process_entries_for_tests_without_scheduler(&bank, vec![entry]);
         bank.freeze();
         let blockhash_ok = bank.last_blockhash();
@@ -3146,8 +3149,12 @@ pub mod tests {
         let mut bankhash_err = None;
 
         (0..get_instruction_errors().len()).for_each(|err| {
-            let mut bank = Bank::new_for_tests(&genesis_config);
-            bank.add_mockup_builtin(mock_program_id, MockBuiltinErr::vm);
+            let bank = Bank::new_with_mockup_builtin_for_tests(
+                &genesis_config,
+                mock_program_id,
+                MockBuiltinErr::vm,
+            )
+            .0;
 
             let tx = Transaction::new_signed_with_payer(
                 &[Instruction::new_with_bincode(
@@ -3183,7 +3190,7 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(1000);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
@@ -3277,7 +3284,7 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(1000);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
@@ -3323,7 +3330,7 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(1_000_000_000);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
 
         const NUM_TRANSFERS_PER_ENTRY: usize = 8;
         const NUM_TRANSFERS: usize = NUM_TRANSFERS_PER_ENTRY * 32;
@@ -3390,7 +3397,7 @@ pub mod tests {
             ..
         } = create_genesis_config((num_accounts + 1) as u64 * initial_lamports);
 
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
 
         let mut keypairs: Vec<Keypair> = vec![];
 
@@ -3457,7 +3464,7 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(1000);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
@@ -3519,7 +3526,7 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(11_000);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
         let pubkey = solana_sdk::pubkey::new_rand();
         bank.transfer(1_000, &mint_keypair, &pubkey).unwrap();
         assert_eq!(bank.transaction_count(), 1);
@@ -3560,7 +3567,7 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(11_000);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let success_tx = system_transaction::transfer(
@@ -3846,7 +3853,7 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
-        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank0 = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
         let genesis_hash = genesis_config.hash();
         let keypair = Keypair::new();
 
@@ -3910,7 +3917,7 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(1_000_000_000);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
 
         let present_account_key = Keypair::new();
         let present_account = AccountSharedData::new(1, 10, &Pubkey::default());
@@ -3968,14 +3975,18 @@ pub mod tests {
             &validator_keypairs,
             vec![100; validator_keypairs.len()],
         );
-        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+        let (bank0, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         bank0.freeze();
 
-        let bank1 = Arc::new(Bank::new_from_parent(
-            bank0.clone(),
-            &solana_sdk::pubkey::new_rand(),
-            1,
-        ));
+        let bank1 = bank_forks
+            .write()
+            .unwrap()
+            .insert(Bank::new_from_parent(
+                bank0.clone(),
+                &solana_sdk::pubkey::new_rand(),
+                1,
+            ))
+            .clone_without_scheduler();
 
         // The new blockhash is going to be the hash of the last tick in the block
         let bank_1_blockhash = bank1.last_blockhash();
@@ -4375,9 +4386,9 @@ pub mod tests {
             ..
         } = create_genesis_config(100 * LAMPORTS_PER_SOL);
         let genesis_hash = genesis_config.hash();
-        let bank = BankWithScheduler::new_without_scheduler(Arc::new(Bank::new_for_tests(
-            &genesis_config,
-        )));
+        let bank = BankWithScheduler::new_without_scheduler(
+            Bank::new_with_bank_forks_for_tests(&genesis_config).0,
+        );
         let mut timing = ConfirmationTiming::default();
         let mut progress = ConfirmationProgress::new(genesis_hash);
         let amount = genesis_config.rent.minimum_balance(0);
@@ -4593,7 +4604,7 @@ pub mod tests {
         genesis_config.ticks_per_slot = TICKS_PER_SLOT;
         let genesis_hash = genesis_config.hash();
 
-        let slot_0_bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let (slot_0_bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         assert_eq!(slot_0_bank.slot(), 0);
         assert_eq!(slot_0_bank.tick_height(), 0);
         assert_eq!(slot_0_bank.max_tick_height(), 2);
@@ -4608,7 +4619,12 @@ pub mod tests {
         assert_eq!(slot_0_bank.get_hash_age(&genesis_hash), Some(1));
         assert_eq!(slot_0_bank.get_hash_age(&slot_0_hash), Some(0));
 
-        let slot_2_bank = Arc::new(Bank::new_from_parent(slot_0_bank, &collector_id, 2));
+        let new_bank = Bank::new_from_parent(slot_0_bank, &collector_id, 2);
+        let slot_2_bank = bank_forks
+            .write()
+            .unwrap()
+            .insert(new_bank)
+            .clone_without_scheduler();
         assert_eq!(slot_2_bank.slot(), 2);
         assert_eq!(slot_2_bank.tick_height(), 2);
         assert_eq!(slot_2_bank.max_tick_height(), 6);
