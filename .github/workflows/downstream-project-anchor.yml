@@ -1,4 +1,4 @@
-name: Downstream Project - SPL
+name: Downstream Project - Anchor
 
 on:
   push:

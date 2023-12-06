@@ -58,7 +58,7 @@ anchor() {
   update_solana_dependencies . "$solana_ver"
   patch_crates_io_solana Cargo.toml "$solana_dir"
 
-  cargo test
+  $cargo test
 
   anchor_dir=$PWD
   anchor_ver=$(readCargoVariable version "$anchor_dir"/lang/Cargo.toml)
@@ -81,7 +81,8 @@ mango() {
     patch_crates_io_anchor Cargo.toml "$anchor_dir"
 
     cd program
-    cargo build
+    $cargo build
+    $cargo test
     $cargo_build_sbf
     $cargo_test_sbf
   )
@@ -99,8 +100,8 @@ metaplex() {
     update_solana_dependencies . "$solana_ver"
     patch_crates_io_solana Cargo.toml "$solana_dir"
 
-    cargo build
-    cargo test
+    $cargo build
+    $cargo test
     $cargo_build_sbf
     $cargo_test_sbf
   )
