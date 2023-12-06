@@ -566,8 +566,14 @@ impl TransferWithFeeProof {
             transfer_amount_hi,
             TRANSFER_AMOUNT_LO_BITS,
         );
-        let amount_sub_fee = combined_amount - combined_fee_amount;
+        let amount_sub_fee = combined_amount
+            .checked_sub(combined_fee_amount)
+            .ok_or(ProofGenerationError::FeeCalculation)?;
         let amount_sub_fee_opening = combined_opening - combined_fee_opening;
+
+        let delta_negated = MAX_DELTA_RANGE
+            .checked_sub(delta_fee)
+            .ok_or(ProofGenerationError::FeeCalculation)?;
 
         let range_proof = RangeProof::new(
             vec![
@@ -575,7 +581,7 @@ impl TransferWithFeeProof {
                 transfer_amount_lo,
                 transfer_amount_hi,
                 delta_fee,
-                MAX_DELTA_RANGE - delta_fee,
+                delta_negated,
                 fee_amount_lo,
                 fee_amount_hi,
                 amount_sub_fee,
