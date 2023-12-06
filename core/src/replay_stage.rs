@@ -48,7 +48,7 @@ use {
         entry_notifier_service::EntryNotifierSender,
         leader_schedule_cache::LeaderScheduleCache,
         leader_schedule_utils::first_of_consecutive_leader_slots,
-        shred::ErasureSetId,
+        shred::{ErasureSetId, DATA_SHREDS_PER_FEC_BLOCK},
     },
     solana_measure::measure::Measure,
     solana_poh::poh_recorder::{PohLeaderStatus, PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
@@ -2899,8 +2899,8 @@ impl ReplayStage {
                     Some((bank.parent_slot(), bank.parent_hash())),
                 );
                 // If the block does not have at least 64 shreds in the last FEC set, mark
-                // it as duplicate, effectively removing it from fork choice.
-                let mut incomplete_last_fec_set = true;
+                // it as invalid, effectively removing it from fork choice.
+                let mut last_fec_set_too_small = true;
                 let slot_meta = blockstore
                     .meta(bank.slot())
                     .expect("Slot meta get must succeed on frozen banks")
@@ -2910,8 +2910,8 @@ impl ReplayStage {
                         bank.slot(),
                         u32::try_from(last_shred_index).expect("LAST_SHRED_IN_SLOT should be u32"),
                     )) {
-                        if erasure_meta.total_shreds() >= 64 {
-                            incomplete_last_fec_set = false;
+                        if erasure_meta.total_shreds() >= 2 * DATA_SHREDS_PER_FEC_BLOCK {
+                            last_fec_set_too_small = false;
                         }
                     }
                 }
@@ -2919,9 +2919,9 @@ impl ReplayStage {
                 // fec set. If there is no `slot_meta.last_index` then we should not be freezing
                 // the bank. There is already a duplicate check ensuring `LAST_SHRED_IN_SLOT` is
                 // consistent. At this point if `incomplete_last_fec_set` is `false`, then the
-                // leader has sent less than 64 shreds in the last fec set, meaning we can disregard
-                // this slot
-                if incomplete_last_fec_set {
+                // leader has sent less than 2 * DATA_SHREDS_PER_FEC_BLOCK shreds in the last fec set,
+                // meaning we can disregard this slot
+                if last_fec_set_too_small {
                     heaviest_subtree_fork_choice
                         .mark_fork_invalid_candidate(&(bank.slot(), bank.hash()));
                 }
