@@ -1564,34 +1564,32 @@ impl Blockstore {
         shred_index < slot_meta.consumed || data_index.contains(shred_index)
     }
 
+    /// Finds the corresponding shred at `shred_id` in the just inserted
+    /// shreds or the backing store. Panics if there is no shred.
     fn get_shred_from_just_inserted_or_db<'a>(
         &'a self,
         just_inserted_shreds: &'a HashMap<ShredId, Shred>,
-        slot: Slot,
-        index: u32,
-        shred_type: ShredType,
+        shred_id: ShredId,
     ) -> Cow<'a, Vec<u8>> {
-        let key = ShredId::new(slot, index, shred_type);
-        if let Some(shred) = just_inserted_shreds.get(&key) {
-            Cow::Borrowed(shred.payload())
-        } else if shred_type == ShredType::Data {
+        let (slot, index, shred_type) = shred_id.unpack();
+        match (just_inserted_shreds.get(&shred_id), shred_type) {
+            (Some(shred), _) => Cow::Borrowed(shred.payload()),
             // If it doesn't exist in the just inserted set, it must exist in
             // the backing store
-            Cow::Owned(
+            (_, ShredType::Data) => Cow::Owned(
                 self.get_data_shred(slot, u64::from(index))
                     .unwrap()
                     .unwrap_or_else(|| {
                         panic!("{} {} {:?} must be present!", slot, index, shred_type)
                     }),
-            )
-        } else {
-            Cow::Owned(
+            ),
+            (_, ShredType::Code) => Cow::Owned(
                 self.get_coding_shred(slot, u64::from(index))
                     .unwrap()
                     .unwrap_or_else(|| {
                         panic!("{} {} {:?} must be present!", slot, index, shred_type)
                     }),
-            )
+            ),
         }
     }
 
@@ -1630,13 +1628,13 @@ impl Blockstore {
         );
 
         if !self.has_duplicate_shreds_in_slot(slot) {
+            let shred_id = ShredId::new(
+                slot,
+                merkle_root_meta.first_received_shred_index(),
+                merkle_root_meta.first_received_shred_type(),
+            );
             let conflicting_shred = self
-                .get_shred_from_just_inserted_or_db(
-                    just_inserted_shreds,
-                    slot,
-                    merkle_root_meta.first_received_shred_index(),
-                    merkle_root_meta.first_received_shred_type(),
-                )
+                .get_shred_from_just_inserted_or_db(just_inserted_shreds, shred_id)
                 .into_owned();
             if self
                 .store_duplicate_slot(slot, conflicting_shred.clone(), shred.payload().clone())
@@ -1679,13 +1677,13 @@ impl Blockstore {
                 .and_then(|leader_schedule| leader_schedule.slot_leader_at(slot, None));
 
             if !self.has_duplicate_shreds_in_slot(slot) {
+                let shred_id = ShredId::new(
+                    slot,
+                    u32::try_from(last_index.unwrap()).unwrap(),
+                    ShredType::Data,
+                );
                 let ending_shred: Vec<u8> = self
-                    .get_shred_from_just_inserted_or_db(
-                        just_inserted_shreds,
-                        slot,
-                        u32::try_from(last_index.unwrap()).unwrap(),
-                        ShredType::Data,
-                    )
+                    .get_shred_from_just_inserted_or_db(just_inserted_shreds, shred_id)
                     .into_owned();
 
                 if self
@@ -1719,13 +1717,13 @@ impl Blockstore {
                 .and_then(|leader_schedule| leader_schedule.slot_leader_at(slot, None));
 
             if !self.has_duplicate_shreds_in_slot(slot) {
+                let shred_id = ShredId::new(
+                    slot,
+                    u32::try_from(slot_meta.received - 1).unwrap(),
+                    ShredType::Data,
+                );
                 let ending_shred: Vec<u8> = self
-                    .get_shred_from_just_inserted_or_db(
-                        just_inserted_shreds,
-                        slot,
-                        u32::try_from(slot_meta.received - 1).unwrap(),
-                        ShredType::Data,
-                    )
+                    .get_shred_from_just_inserted_or_db(just_inserted_shreds, shred_id)
                     .into_owned();
 
                 if self
