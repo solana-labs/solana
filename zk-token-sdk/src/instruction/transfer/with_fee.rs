@@ -53,7 +53,7 @@ const TRANSFER_AMOUNT_LO_NEGATED_BITS: usize = 16;
 #[cfg(not(target_os = "solana"))]
 const TRANSFER_AMOUNT_HI_BITS: usize = 32;
 #[cfg(not(target_os = "solana"))]
-const TRANSFER_DELTA_BITS: usize = 48;
+const TRANSFER_DELTA_BITS: usize = 16;
 #[cfg(not(target_os = "solana"))]
 const FEE_AMOUNT_LO_BITS: usize = 16;
 #[cfg(not(target_os = "solana"))]
@@ -560,6 +560,15 @@ impl TransferWithFeeProof {
 
         // generate the range proof
         let opening_claimed_negated = &PedersenOpening::default() - &opening_claimed;
+
+        let combined_amount = combine_lo_hi_u64(
+            transfer_amount_lo,
+            transfer_amount_hi,
+            TRANSFER_AMOUNT_LO_BITS,
+        );
+        let amount_sub_fee = combined_amount - combined_fee_amount;
+        let amount_sub_fee_opening = combined_opening - combined_fee_opening;
+
         let range_proof = RangeProof::new(
             vec![
                 source_new_balance,
@@ -569,15 +578,17 @@ impl TransferWithFeeProof {
                 MAX_DELTA_RANGE - delta_fee,
                 fee_amount_lo,
                 fee_amount_hi,
+                amount_sub_fee,
             ],
             vec![
                 TRANSFER_SOURCE_AMOUNT_BITS, // 64
                 TRANSFER_AMOUNT_LO_BITS,     // 16
                 TRANSFER_AMOUNT_HI_BITS,     // 32
-                TRANSFER_DELTA_BITS,         // 48
-                TRANSFER_DELTA_BITS,         // 48
+                TRANSFER_DELTA_BITS,         // 16
+                TRANSFER_DELTA_BITS,         // 16
                 FEE_AMOUNT_LO_BITS,          // 16
                 FEE_AMOUNT_HI_BITS,          // 32
+                TRANSFER_SOURCE_AMOUNT_BITS, // 64
             ],
             vec![
                 &opening_source,
@@ -587,6 +598,7 @@ impl TransferWithFeeProof {
                 &opening_claimed_negated,
                 opening_fee_lo,
                 opening_fee_hi,
+                &amount_sub_fee_opening,
             ],
             transcript,
         )?;
@@ -712,6 +724,7 @@ impl TransferWithFeeProof {
         // verify range proof
         let new_source_commitment = self.new_source_commitment.try_into()?;
         let claimed_commitment_negated = &(*COMMITMENT_MAX_DELTA_RANGE) - &claimed_commitment;
+        let amount_sub_fee_commitment = combined_commitment - combined_fee_commitment;
 
         range_proof.verify(
             vec![
@@ -722,15 +735,17 @@ impl TransferWithFeeProof {
                 &claimed_commitment_negated,
                 fee_ciphertext_lo.get_commitment(),
                 fee_ciphertext_hi.get_commitment(),
+                &amount_sub_fee_commitment,
             ],
             vec![
                 TRANSFER_SOURCE_AMOUNT_BITS, // 64
                 TRANSFER_AMOUNT_LO_BITS,     // 16
                 TRANSFER_AMOUNT_HI_BITS,     // 32
-                TRANSFER_DELTA_BITS,         // 48
-                TRANSFER_DELTA_BITS,         // 48
+                TRANSFER_DELTA_BITS,         // 16
+                TRANSFER_DELTA_BITS,         // 16
                 FEE_AMOUNT_LO_BITS,          // 16
                 FEE_AMOUNT_HI_BITS,          // 32
+                TRANSFER_SOURCE_AMOUNT_BITS, // 64
             ],
             transcript,
         )?;
