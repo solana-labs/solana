@@ -17,6 +17,7 @@ use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
     Hash,
     Debug,
 )]
+#[borsh(crate = "borsh")]
 pub struct StakeFlags {
     bits: u8,
 }

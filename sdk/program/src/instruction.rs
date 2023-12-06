@@ -364,6 +364,7 @@ impl Instruction {
     /// # use borsh::{BorshSerialize, BorshDeserialize};
     /// #
     /// #[derive(BorshSerialize, BorshDeserialize)]
+    /// # #[borsh(crate = "borsh")]
     /// pub struct MyInstruction {
     ///     pub lamports: u64,
     /// }
@@ -469,6 +470,7 @@ impl Instruction {
     /// # use borsh::{io::Error, BorshSerialize, BorshDeserialize};
     /// #
     /// #[derive(BorshSerialize, BorshDeserialize)]
+    /// # #[borsh(crate = "borsh")]
     /// pub struct MyInstruction {
     ///     pub lamports: u64,
     /// }
@@ -557,6 +559,7 @@ impl AccountMeta {
     /// # use borsh::{BorshSerialize, BorshDeserialize};
     /// #
     /// # #[derive(BorshSerialize, BorshDeserialize)]
+    /// # #[borsh(crate = "borsh")]
     /// # pub struct MyInstruction;
     /// #
     /// # let instruction = MyInstruction;
@@ -592,6 +595,7 @@ impl AccountMeta {
     /// # use borsh::{BorshSerialize, BorshDeserialize};
     /// #
     /// # #[derive(BorshSerialize, BorshDeserialize)]
+    /// # #[borsh(crate = "borsh")]
     /// # pub struct MyInstruction;
     /// #
     /// # let instruction = MyInstruction;

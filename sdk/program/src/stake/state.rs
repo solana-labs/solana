@@ -241,6 +241,7 @@ pub enum StakeAuthorize {
     BorshSchema,
     BorshSerialize,
 )]
+#[borsh(crate = "borsh")]
 pub struct Lockup {
     /// UnixTimestamp at which this stake will allow withdrawal, unless the
     ///   transaction is signed by the custodian
@@ -276,6 +277,7 @@ impl Lockup {
     BorshSchema,
     BorshSerialize,
 )]
+#[borsh(crate = "borsh")]
 pub struct Authorized {
     pub staker: Pubkey,
     pub withdrawer: Pubkey,
@@ -356,6 +358,7 @@ impl Authorized {
     BorshSchema,
     BorshSerialize,
 )]
+#[borsh(crate = "borsh")]
 pub struct Meta {
     pub rent_exempt_reserve: u64,
     pub authorized: Authorized,
@@ -411,6 +414,7 @@ impl Meta {
     BorshSchema,
     BorshSerialize,
 )]
+#[borsh(crate = "borsh")]
 pub struct Delegation {
     /// to whom the stake is delegated
     pub voter_pubkey: Pubkey,
@@ -658,6 +662,7 @@ impl Delegation {
     BorshSchema,
     BorshSerialize,
 )]
+#[borsh(crate = "borsh")]
 pub struct Stake {
     pub delegation: Delegation,
     /// credits observed is credits from vote account state when delegated or redeemed
