@@ -1,5 +1,5 @@
-#![allow(dead_code)]
 //! The account meta and related structs for the tiered storage.
+
 use {
     crate::{accounts_hash::AccountHash, tiered_storage::owners::OwnerOffset},
     modular_bitfield::prelude::*,
