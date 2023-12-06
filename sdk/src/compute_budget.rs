@@ -64,8 +64,8 @@ impl ComputeBudgetInstruction {
     /// Serialize Instruction using borsh, this is only used in runtime::cost_model::tests but compilation
     /// can't be restricted as it's used across packages
     // #[cfg(test)]
-    pub fn pack(self) -> Result<Vec<u8>, std::io::Error> {
-        self.try_to_vec()
+    pub fn pack(self) -> Result<Vec<u8>, borsh::io::Error> {
+        borsh::to_vec(&self)
     }
 
     /// Create a `ComputeBudgetInstruction::SetLoadedAccountsDataSizeLimit` `Instruction`

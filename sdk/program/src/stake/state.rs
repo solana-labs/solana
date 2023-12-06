@@ -14,7 +14,7 @@ use {
         },
         stake_history::{StakeHistory, StakeHistoryEntry},
     },
-    borsh::{maybestd::io, BorshDeserialize, BorshSchema, BorshSerialize},
+    borsh::{io, BorshDeserialize, BorshSchema, BorshSerialize},
     std::collections::HashSet,
 };
 
@@ -707,7 +707,7 @@ impl Stake {
 #[cfg(test)]
 mod test {
     use {
-        super::*, crate::borsh0_10::try_from_slice_unchecked, assert_matches::assert_matches,
+        super::*, crate::borsh1::try_from_slice_unchecked, assert_matches::assert_matches,
         bincode::serialize,
     };
 
@@ -719,7 +719,7 @@ mod test {
 
     fn check_borsh_serialization(stake: StakeStateV2) {
         let bincode_serialized = serialize(&stake).unwrap();
-        let borsh_serialized = StakeStateV2::try_to_vec(&stake).unwrap();
+        let borsh_serialized = borsh::to_vec(&stake).unwrap();
         assert_eq!(bincode_serialized, borsh_serialized);
     }
 
@@ -850,7 +850,7 @@ mod test {
             );
 
             let bincode_serialized = serialize(&stake).unwrap();
-            let borsh_serialized = StakeStateV2::try_to_vec(&stake).unwrap();
+            let borsh_serialized = borsh::to_vec(&stake).unwrap();
 
             assert_eq!(bincode_serialized[FLAG_OFFSET], expected);
             assert_eq!(borsh_serialized[FLAG_OFFSET], expected);
@@ -872,7 +872,7 @@ mod test {
 
         fn check_borsh_serialization(stake: StakeState) {
             let bincode_serialized = serialize(&stake).unwrap();
-            let borsh_serialized = StakeState::try_to_vec(&stake).unwrap();
+            let borsh_serialized = borsh::to_vec(&stake).unwrap();
             assert_eq!(bincode_serialized, borsh_serialized);
         }
 

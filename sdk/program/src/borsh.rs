@@ -8,7 +8,8 @@
 //! be removed in a future release
 //!
 //! [borsh]: https://borsh.io/
-use borsh::{maybestd::io::Error, BorshDeserialize, BorshSchema, BorshSerialize};
+/*
+use borsh0_10::{maybestd::io::Error, BorshDeserialize, BorshSchema, BorshSerialize};
 
 /// Get the worst-case packed length for the given BorshSchema
 ///
@@ -19,6 +20,7 @@ use borsh::{maybestd::io::Error, BorshDeserialize, BorshSchema, BorshSerialize};
     note = "Please use `borsh0_10::get_packed_len` instead"
 )]
 pub fn get_packed_len<S: BorshSchema>() -> usize {
+    #[allow(deprecated)]
     crate::borsh0_10::get_packed_len::<S>()
 }
 
@@ -36,6 +38,7 @@ pub fn get_packed_len<S: BorshSchema>() -> usize {
     note = "Please use `borsh0_10::try_from_slice_unchecked` instead"
 )]
 pub fn try_from_slice_unchecked<T: BorshDeserialize>(data: &[u8]) -> Result<T, Error> {
+    #[allow(deprecated)]
     crate::borsh0_10::try_from_slice_unchecked::<T>(data)
 }
 
@@ -50,8 +53,10 @@ pub fn try_from_slice_unchecked<T: BorshDeserialize>(data: &[u8]) -> Result<T, E
     note = "Please use `borsh0_10::get_instance_packed_len` instead"
 )]
 pub fn get_instance_packed_len<T: BorshSerialize>(instance: &T) -> Result<usize, Error> {
+    #[allow(deprecated)]
     crate::borsh0_10::get_instance_packed_len(instance)
 }
+*/
 
 macro_rules! impl_get_packed_len {
     ($borsh:ident $(,#[$meta:meta])?) => {
@@ -61,45 +66,45 @@ macro_rules! impl_get_packed_len {
         /// be used on-chain in the Solana SBF execution environment.
         $(#[$meta])?
         pub fn get_packed_len<S: $borsh::BorshSchema>() -> usize {
-            let $borsh::schema::BorshSchemaContainer { declaration, definitions } =
-                &S::schema_container();
-            get_declaration_packed_len(declaration, definitions)
+            let container = $borsh::schema_container_of::<S>();
+            get_declaration_packed_len(container.declaration(), &container)
         }
 
         /// Get packed length for the given BorshSchema Declaration
         fn get_declaration_packed_len(
             declaration: &str,
-            definitions: &std::collections::HashMap<$borsh::schema::Declaration, $borsh::schema::Definition>,
+            container: &$borsh::schema::BorshSchemaContainer,
         ) -> usize {
-            match definitions.get(declaration) {
-                Some($borsh::schema::Definition::Array { length, elements }) => {
-                    *length as usize * get_declaration_packed_len(elements, definitions)
+            match container.get_definition(declaration) {
+                Some($borsh::schema::Definition::Sequence { length_width, length_range, elements }) if *length_width == 0 => {
+                    *length_range.end() as usize * get_declaration_packed_len(elements, container)
                 }
-                Some($borsh::schema::Definition::Enum { variants }) => {
-                    1 + variants
+                Some($borsh::schema::Definition::Enum { tag_width, variants }) => {
+                    (*tag_width as usize) + variants
                         .iter()
-                        .map(|(_, declaration)| get_declaration_packed_len(declaration, definitions))
+                        .map(|(_, _, declaration)| get_declaration_packed_len(declaration, container))
                         .max()
                         .unwrap_or(0)
                 }
                 Some($borsh::schema::Definition::Struct { fields }) => match fields {
                     $borsh::schema::Fields::NamedFields(named_fields) => named_fields
                         .iter()
-                        .map(|(_, declaration)| get_declaration_packed_len(declaration, definitions))
+                        .map(|(_, declaration)| get_declaration_packed_len(declaration, container))
                         .sum(),
                     $borsh::schema::Fields::UnnamedFields(declarations) => declarations
                         .iter()
-                        .map(|declaration| get_declaration_packed_len(declaration, definitions))
+                        .map(|declaration| get_declaration_packed_len(declaration, container))
                         .sum(),
                     $borsh::schema::Fields::Empty => 0,
                 },
                 Some($borsh::schema::Definition::Sequence {
-                    elements: _elements,
+                    ..
                 }) => panic!("Missing support for Definition::Sequence"),
                 Some($borsh::schema::Definition::Tuple { elements }) => elements
                     .iter()
-                    .map(|element| get_declaration_packed_len(element, definitions))
+                    .map(|element| get_declaration_packed_len(element, container))
                     .sum(),
+                Some($borsh::schema::Definition::Primitive(size)) => *size as usize,
                 None => match declaration {
                     "bool" | "u8" | "i8" => 1,
                     "u16" | "i16" => 2,
@@ -116,7 +121,7 @@ macro_rules! impl_get_packed_len {
 pub(crate) use impl_get_packed_len;
 
 macro_rules! impl_try_from_slice_unchecked {
-    ($borsh:ident $(,#[$meta:meta])?) => {
+    ($borsh:ident, $borsh_io:ident $(,#[$meta:meta])?) => {
         /// Deserializes without checking that the entire slice has been consumed
         ///
         /// Normally, `try_from_slice` checks the length of the final slice to ensure
@@ -127,7 +132,7 @@ macro_rules! impl_try_from_slice_unchecked {
         /// user passes a buffer destined for a different type, the error won't get caught
         /// as easily.
         $(#[$meta])?
-        pub fn try_from_slice_unchecked<T: $borsh::BorshDeserialize>(data: &[u8]) -> Result<T, $borsh::maybestd::io::Error> {
+        pub fn try_from_slice_unchecked<T: $borsh::BorshDeserialize>(data: &[u8]) -> Result<T, $borsh_io::Error> {
             let mut data_mut = data;
             let result = T::deserialize(&mut data_mut)?;
             Ok(result)
@@ -137,21 +142,21 @@ macro_rules! impl_try_from_slice_unchecked {
 pub(crate) use impl_try_from_slice_unchecked;
 
 macro_rules! impl_get_instance_packed_len {
-    ($borsh:ident $(,#[$meta:meta])?) => {
+    ($borsh:ident, $borsh_io:ident $(,#[$meta:meta])?) => {
         /// Helper struct which to count how much data would be written during serialization
         #[derive(Default)]
         struct WriteCounter {
             count: usize,
         }
 
-        impl $borsh::maybestd::io::Write for WriteCounter {
-            fn write(&mut self, data: &[u8]) -> Result<usize, $borsh::maybestd::io::Error> {
+        impl $borsh_io::Write for WriteCounter {
+            fn write(&mut self, data: &[u8]) -> Result<usize, $borsh_io::Error> {
                 let amount = data.len();
                 self.count += amount;
                 Ok(amount)
             }
 
-            fn flush(&mut self) -> Result<(), $borsh::maybestd::io::Error> {
+            fn flush(&mut self) -> Result<(), $borsh_io::Error> {
                 Ok(())
             }
         }
@@ -163,7 +168,7 @@ macro_rules! impl_get_instance_packed_len {
         /// length only from the type's schema, this can be used when an instance already
         /// exists, to figure out how much space to allocate in an account.
         $(#[$meta])?
-        pub fn get_instance_packed_len<T: $borsh::BorshSerialize>(instance: &T) -> Result<usize, $borsh::maybestd::io::Error> {
+        pub fn get_instance_packed_len<T: $borsh::BorshSerialize>(instance: &T) -> Result<usize, $borsh_io::Error> {
             let mut counter = WriteCounter::default();
             instance.serialize(&mut counter)?;
             Ok(counter.count)
@@ -174,11 +179,14 @@ pub(crate) use impl_get_instance_packed_len;
 
 #[cfg(test)]
 macro_rules! impl_tests {
-    ($borsh:ident) => {
+    ($borsh:ident, $borsh_io:ident) => {
+        extern crate alloc;
         use {
             super::*,
-            std::{collections::HashMap, mem::size_of},
-            $borsh::{maybestd::io::ErrorKind, BorshDeserialize, BorshSerialize},
+            alloc::{collections::BTreeMap, vec::Vec},
+            std::mem::size_of,
+            $borsh::{BorshDeserialize, BorshSerialize},
+            $borsh_io::ErrorKind,
         };
 
         type Child = [u8; 64];
@@ -264,13 +272,13 @@ macro_rules! impl_tests {
 
         #[test]
         fn instance_packed_len_with_varying_sizes_in_hashmap() {
-            let mut data = HashMap::new();
-            let key1 = "the first string, it's actually really really long".to_string();
-            let value1 = "".to_string();
-            let key2 = "second string, shorter".to_string();
-            let value2 = "a real value".to_string();
-            let key3 = "third".to_string();
-            let value3 = "an even longer value".to_string();
+            let mut data = BTreeMap::new();
+            let key1 = Vec::from("the first string, it's actually really really long");
+            let value1 = Vec::from("");
+            let key2 = Vec::from("second string, shorter");
+            let value2 = Vec::from("a real value");
+            let key3 = Vec::from("third");
+            let value3 = Vec::from("an even longer value");
             data.insert(key1.clone(), value1.clone());
             data.insert(key2.clone(), value2.clone());
             data.insert(key3.clone(), value3.clone());

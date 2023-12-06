@@ -391,7 +391,7 @@ impl Instruction {
         data: &T,
         accounts: Vec<AccountMeta>,
     ) -> Self {
-        let data = data.try_to_vec().unwrap();
+        let data = borsh::to_vec(data).unwrap();
         Self {
             program_id,
             accounts,
@@ -466,8 +466,7 @@ impl Instruction {
     /// #     pubkey::Pubkey,
     /// #     instruction::{AccountMeta, Instruction},
     /// # };
-    /// # use borsh::{BorshSerialize, BorshDeserialize};
-    /// # use anyhow::Result;
+    /// # use borsh::{io::Error, BorshSerialize, BorshDeserialize};
     /// #
     /// #[derive(BorshSerialize, BorshDeserialize)]
     /// pub struct MyInstruction {
@@ -479,7 +478,7 @@ impl Instruction {
     ///     from: &Pubkey,
     ///     to: &Pubkey,
     ///     lamports: u64,
-    /// ) -> Result<Instruction> {
+    /// ) -> Result<Instruction, Error> {
     ///     let instr = MyInstruction { lamports };
     ///
     ///     let mut instr_in_bytes: Vec<u8> = Vec::new();
