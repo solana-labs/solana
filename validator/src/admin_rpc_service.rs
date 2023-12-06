@@ -22,7 +22,6 @@ use {
     solana_sdk::{
         exit::Exit,
         pubkey::Pubkey,
-        quic::NotifyKeyUpdate,
         signature::{read_keypair_file, Keypair, Signer},
     },
     std::{
@@ -48,7 +47,6 @@ pub struct AdminRpcRequestMetadata {
     pub staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     pub post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
     pub rpc_to_plugin_manager_sender: Option<Sender<GeyserPluginManagerRequest>>,
-    pub notifies: Vec<Arc<dyn NotifyKeyUpdate + Sync + Send>>,
 }
 
 impl Metadata for AdminRpcRequestMetadata {}
@@ -64,14 +62,6 @@ impl AdminRpcRequestMetadata {
             Err(jsonrpc_core::error::Error::invalid_params(
                 "Retry once validator start up is complete",
             ))
-        }
-    }
-
-    fn update_keypair(&self, key: &Keypair) {
-        for n in self.notifies.iter() {
-            if let Err(err) = n.update_key(key) {
-                error!("Error updating network layer keypair: {err}");
-            }
         }
     }
 }
@@ -692,7 +682,11 @@ impl AdminRpcImpl {
                     })?;
             }
 
-            meta.update_keypair(&identity_keypair);
+            for n in post_init.notifies.iter() {
+                if let Err(err) = n.update_key(&identity_keypair) {
+                    error!("Error updating network layer keypair: {err}");
+                }
+            }
 
             solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
             post_init
@@ -900,10 +894,10 @@ mod tests {
                     bank_forks: bank_forks.clone(),
                     vote_account,
                     repair_whitelist,
+                    notifies: Vec::new(),
                 }))),
                 staked_nodes_overrides: Arc::new(RwLock::new(HashMap::new())),
                 rpc_to_plugin_manager_sender: None,
-                notifies: Vec::new(),
             };
             let mut io = MetaIoHandler::default();
             io.extend_with(AdminRpcImpl.to_delegate());

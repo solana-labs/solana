@@ -1690,6 +1690,20 @@ pub fn main() {
         } else {
             (None, None)
         };
+    admin_rpc_service::run(
+        &ledger_path,
+        admin_rpc_service::AdminRpcRequestMetadata {
+            rpc_addr: validator_config.rpc_addrs.map(|(rpc_addr, _)| rpc_addr),
+            start_time: std::time::SystemTime::now(),
+            validator_exit: validator_config.validator_exit.clone(),
+            start_progress: start_progress.clone(),
+            authorized_voter_keypairs: authorized_voter_keypairs.clone(),
+            post_init: admin_service_post_init.clone(),
+            tower_storage: validator_config.tower_storage.clone(),
+            staked_nodes_overrides,
+            rpc_to_plugin_manager_sender,
+        },
+    );
 
     let gossip_host: IpAddr = matches
         .value_of("gossip_host")
@@ -1847,7 +1861,7 @@ pub fn main() {
         return;
     }
 
-    let (validator, notifies) = Validator::new(
+    let validator = Validator::new(
         node,
         identity_keypair,
         &ledger_path,
@@ -1868,22 +1882,6 @@ pub fn main() {
         error!("Failed to start validator: {:?}", e);
         exit(1);
     });
-
-    admin_rpc_service::run(
-        &ledger_path,
-        admin_rpc_service::AdminRpcRequestMetadata {
-            rpc_addr: validator_config.rpc_addrs.map(|(rpc_addr, _)| rpc_addr),
-            start_time: std::time::SystemTime::now(),
-            validator_exit: validator_config.validator_exit.clone(),
-            start_progress: start_progress.clone(),
-            authorized_voter_keypairs: authorized_voter_keypairs.clone(),
-            post_init: admin_service_post_init.clone(),
-            tower_storage: validator_config.tower_storage.clone(),
-            staked_nodes_overrides,
-            rpc_to_plugin_manager_sender,
-            notifies,
-        },
-    );
 
     if let Some(filename) = init_complete_file {
         File::create(filename).unwrap_or_else(|_| {

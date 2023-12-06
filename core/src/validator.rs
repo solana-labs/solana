@@ -111,7 +111,6 @@ use {
         genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,
-        quic::NotifyKeyUpdate,
         shred_version::compute_shred_version,
         signature::{Keypair, Signer},
         timing::timestamp,
@@ -496,7 +495,7 @@ impl Validator {
         tpu_connection_pool_size: usize,
         tpu_enable_udp: bool,
         admin_rpc_service_post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
-    ) -> Result<(Self, Vec<Arc<dyn NotifyKeyUpdate + Sync + Send>>), String> {
+    ) -> Result<Self, String> {
         let id = identity_keypair.pubkey();
         assert_eq!(&id, node.info.pubkey());
 
@@ -1081,13 +1080,6 @@ impl Validator {
             exit.clone(),
         );
 
-        *admin_rpc_service_post_init.write().unwrap() = Some(AdminRpcRequestMetadataPostInit {
-            bank_forks: bank_forks.clone(),
-            cluster_info: cluster_info.clone(),
-            vote_account: *vote_account,
-            repair_whitelist: config.repair_whitelist.clone(),
-        });
-
         let waited_for_supermajority = wait_for_supermajority(
             config,
             Some(&mut process_blockstore),
@@ -1348,46 +1340,52 @@ impl Validator {
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
         key_notifies.push(connection_cache);
-        Ok((
-            Self {
-                stats_reporter_service,
-                gossip_service,
-                serve_repair_service,
-                json_rpc_service,
-                pubsub_service,
-                rpc_completed_slots_service,
-                optimistically_confirmed_bank_tracker,
-                transaction_status_service,
-                rewards_recorder_service,
-                cache_block_meta_service,
-                entry_notifier_service,
-                system_monitor_service,
-                sample_performance_service,
-                poh_timing_report_service,
-                snapshot_packager_service,
-                completed_data_sets_service,
-                tpu,
-                tvu,
-                poh_service,
-                poh_recorder,
-                ip_echo_server,
-                validator_exit: config.validator_exit.clone(),
-                cluster_info,
-                bank_forks,
-                blockstore,
-                geyser_plugin_service,
-                blockstore_metric_report_service,
-                accounts_background_service,
-                accounts_hash_verifier,
-                turbine_quic_endpoint,
-                turbine_quic_endpoint_runtime,
-                turbine_quic_endpoint_join_handle,
-                repair_quic_endpoint,
-                repair_quic_endpoint_runtime,
-                repair_quic_endpoint_join_handle,
-            },
-            key_notifies,
-        ))
+
+        *admin_rpc_service_post_init.write().unwrap() = Some(AdminRpcRequestMetadataPostInit {
+            bank_forks: bank_forks.clone(),
+            cluster_info: cluster_info.clone(),
+            vote_account: *vote_account,
+            repair_whitelist: config.repair_whitelist.clone(),
+            notifies: key_notifies,
+        });
+
+        Ok(Self {
+            stats_reporter_service,
+            gossip_service,
+            serve_repair_service,
+            json_rpc_service,
+            pubsub_service,
+            rpc_completed_slots_service,
+            optimistically_confirmed_bank_tracker,
+            transaction_status_service,
+            rewards_recorder_service,
+            cache_block_meta_service,
+            entry_notifier_service,
+            system_monitor_service,
+            sample_performance_service,
+            poh_timing_report_service,
+            snapshot_packager_service,
+            completed_data_sets_service,
+            tpu,
+            tvu,
+            poh_service,
+            poh_recorder,
+            ip_echo_server,
+            validator_exit: config.validator_exit.clone(),
+            cluster_info,
+            bank_forks,
+            blockstore,
+            geyser_plugin_service,
+            blockstore_metric_report_service,
+            accounts_background_service,
+            accounts_hash_verifier,
+            turbine_quic_endpoint,
+            turbine_quic_endpoint_runtime,
+            turbine_quic_endpoint_join_handle,
+            repair_quic_endpoint,
+            repair_quic_endpoint_runtime,
+            repair_quic_endpoint_join_handle,
+        })
     }
 
     // Used for notifying many nodes in parallel to exit
@@ -2482,7 +2480,7 @@ mod tests {
             ..ValidatorConfig::default_for_test()
         };
         let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
-        let (validator, _) = Validator::new(
+        let validator = Validator::new(
             validator_node,
             Arc::new(validator_keypair),
             &validator_ledger_path,
@@ -2585,7 +2583,6 @@ mod tests {
                     Arc::new(RwLock::new(None)),
                 )
                 .expect("assume successful validator start")
-                .0
             })
             .collect();
 

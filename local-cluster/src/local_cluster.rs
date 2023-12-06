@@ -279,7 +279,7 @@ impl LocalCluster {
         let leader_keypair = Arc::new(leader_keypair.insecure_clone());
         let leader_vote_keypair = Arc::new(leader_vote_keypair.insecure_clone());
 
-        let (leader_server, _) = Validator::new(
+        let leader_server = Validator::new(
             leader_node,
             leader_keypair.clone(),
             &leader_ledger_path,
@@ -494,7 +494,7 @@ impl LocalCluster {
         ));
         Self::sync_ledger_path_across_nested_config_fields(&mut config, &ledger_path);
         let voting_keypair = voting_keypair.unwrap();
-        let (validator_server, _) = Validator::new(
+        let validator_server = Validator::new(
             validator_node,
             validator_keypair.clone(),
             &ledger_path,
@@ -887,7 +887,7 @@ impl Cluster for LocalCluster {
             &mut cluster_validator_info.config,
             &validator_info.ledger_path,
         );
-        let (restarted_node, _) = Validator::new(
+        let restarted_node = Validator::new(
             node,
             validator_info.keypair.clone(),
             &validator_info.ledger_path,
