@@ -48,7 +48,7 @@ use {
         entry_notifier_service::EntryNotifierSender,
         leader_schedule_cache::LeaderScheduleCache,
         leader_schedule_utils::first_of_consecutive_leader_slots,
-        shred::{ErasureSetId, DATA_SHREDS_PER_FEC_BLOCK},
+        shred::DATA_SHREDS_PER_FEC_BLOCK,
     },
     solana_measure::measure::Measure,
     solana_poh::poh_recorder::{PohLeaderStatus, PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
@@ -2898,36 +2898,9 @@ impl ReplayStage {
                     (bank.slot(), bank.hash()),
                     Some((bank.parent_slot(), bank.parent_hash())),
                 );
-                // If the block does not have at least 64 shreds in the last FEC set, mark
-                // it as invalid, effectively removing it from fork choice.
-                let mut last_fec_set_too_small = true;
-                let slot_meta = blockstore
-                    .meta(bank.slot())
-                    .expect("Slot meta get must succeed on frozen banks")
-                    .expect("Slot meta must exist during freeze");
-                if let Some(last_shred_index) = slot_meta.last_index {
-                    if let Ok(Some(erasure_meta)) = blockstore.erasure_meta(ErasureSetId::new(
-                        bank.slot(),
-                        u32::try_from(last_shred_index).expect("LAST_SHRED_IN_SLOT should be u32"),
-                    )) {
-                        if erasure_meta.total_shreds() >= 2 * DATA_SHREDS_PER_FEC_BLOCK {
-                            last_fec_set_too_small = false;
-                        }
-                    }
-                }
-                // If there is no erasure meta then we have not received a coding shred for this
-                // fec set. If there is no `slot_meta.last_index` then we should not be freezing
-                // the bank. There is already a duplicate check ensuring `LAST_SHRED_IN_SLOT` is
-                // consistent. At this point if `incomplete_last_fec_set` is `false`, then the
-                // leader has sent less than 2 * DATA_SHREDS_PER_FEC_BLOCK shreds in the last fec set,
-                // meaning we can disregard this slot
-                if last_fec_set_too_small {
-                    heaviest_subtree_fork_choice
-                        .mark_fork_invalid_candidate(&(bank.slot(), bank.hash()));
-                }
 
                 bank_progress.fork_stats.bank_hash = Some(bank.hash());
-                let bank_frozen_state = BankFrozenState::new_from_state(
+                let mut bank_frozen_state = BankFrozenState::new_from_state(
                     bank.slot(),
                     bank.hash(),
                     duplicate_slots_tracker,
@@ -2935,6 +2908,50 @@ impl ReplayStage {
                     heaviest_subtree_fork_choice,
                     epoch_slots_frozen_slots,
                 );
+
+                if bank
+                    .feature_set
+                    .is_active(&solana_sdk::feature_set::vote_only_full_fec_sets::id())
+                {
+                    let mut last_fec_set_too_small = true;
+                    if let Some((fec_set_index, shred_index)) =
+                        blockstore.get_last_shred_indices(bank.slot())
+                    {
+                        // We need to check if the last FEC set index contains at least `DATA_SHREDS_PER_FEC_BLOCK` data shreds.
+                        // Since we froze the slot we know that the data shreds are connected. We can offset from the
+                        // last data shred index to compare the size of the last FEC set.
+                        // offset_index = shred_index - (DATA_SHREDS_PER_FEC_BLOCK - 1)
+                        let offset_index = u32::try_from(DATA_SHREDS_PER_FEC_BLOCK)
+                            .unwrap()
+                            .checked_sub(1)
+                            .and_then(|offset| shred_index.checked_sub(offset));
+                        if let Some(offset_index) = offset_index {
+                            if let Some(data_shred_fec_set_index) =
+                                blockstore.get_data_shred_fec_set_index(bank.slot(), offset_index)
+                            {
+                                if fec_set_index == data_shred_fec_set_index {
+                                    // This implies that the last fec set contains at least `DATA_SHREDS_PER_FEC_BLOCK`.
+                                    // Since we have reached the max tick height if there are more data shreds not yet received
+                                    // this block will be marked dead/invalid once they are received.
+                                    //
+                                    // Under this assumption, we must have recovered the remaining `DATA_SHREDS_PER_FEC_BLOCK+` coding
+                                    // shreds as well, and the FEC set contains at least `DATA_SHREDS_PER_FEC_BLOCK`.
+                                    // TODO: Recovery is only possible if we receive at least 1 coding shred. for the 32 data 0 coding
+                                    // case we need to wait to continue until 1 coding shred has been received. We can add a separate
+                                    // check here or address this as part of the IP verification which also needs a wait for 33/64.
+                                    last_fec_set_too_small = false;
+                                }
+                            }
+                        }
+                    }
+
+                    if last_fec_set_too_small {
+                        // If the block does not have at least 2 * DATA_SHREDS_PER_FEC_BLOCK shreds in the last FEC set, treat it
+                        // as duplicate, effectively removing it from fork choice.
+                        bank_frozen_state.mark_duplicate();
+                    }
+                }
+
                 check_slot_agrees_with_cluster(
                     bank.slot(),
                     bank_forks.read().unwrap().root(),

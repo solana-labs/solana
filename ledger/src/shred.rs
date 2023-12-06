@@ -276,13 +276,9 @@ impl ShredId {
 
 /// Tuple which identifies erasure coding set that the shred belongs to.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct ErasureSetId(Slot, /*fec_set_index:*/ u32);
+pub(crate) struct ErasureSetId(Slot, /*fec_set_index:*/ u32);
 
 impl ErasureSetId {
-    pub fn new(slot: Slot, fec_set_index: u32) -> Self {
-        Self(slot, fec_set_index)
-    }
-
     pub(crate) fn slot(&self) -> Slot {
         self.0
     }

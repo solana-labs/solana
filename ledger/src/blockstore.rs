@@ -463,7 +463,7 @@ impl Blockstore {
         false
     }
 
-    pub fn erasure_meta(&self, erasure_set: ErasureSetId) -> Result<Option<ErasureMeta>> {
+    fn erasure_meta(&self, erasure_set: ErasureSetId) -> Result<Option<ErasureMeta>> {
         let (slot, fec_set_index) = erasure_set.store_key();
         self.erasure_meta_cf.get((slot, u64::from(fec_set_index)))
     }
@@ -1463,6 +1463,29 @@ impl Blockstore {
     fn should_insert_coding_shred(shred: &Shred, max_root: Slot) -> bool {
         debug_assert_matches!(shred.sanitize(), Ok(()));
         shred.is_code() && shred.slot() > max_root
+    }
+
+    /// If slot is present in blockstore, get the fec_set_index and shred index
+    /// of the last shred.
+    ///
+    /// Returns `None` if
+    /// - No slot meta
+    /// - No LAST_SHRED_IN_SLOT flag (incomplete block)
+    pub fn get_last_shred_indices(&self, slot: Slot) -> Option<(u32, u32)> {
+        let slot_meta = self.meta(slot).ok()??;
+        let shred_index = u32::try_from(slot_meta.last_index?)
+            .expect("last_index should be a shred index of size u32");
+        Some((
+            self.get_data_shred_fec_set_index(slot, shred_index)?,
+            shred_index,
+        ))
+    }
+
+    /// If the shred is present in blockstore, get the fec_set_index
+    pub fn get_data_shred_fec_set_index(&self, slot: Slot, shred_index: u32) -> Option<u32> {
+        let raw_shred = self.get_data_shred(slot, u64::from(shred_index)).ok()??;
+        let shred = Shred::new_from_serialized_shred(raw_shred).ok()?;
+        Some(shred.fec_set_index())
     }
 
     fn insert_coding_shred(

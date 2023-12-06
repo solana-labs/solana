@@ -736,6 +736,10 @@ pub mod drop_legacy_shreds {
     solana_sdk::declare_id!("GV49KKQdBNaiv2pgqhS2Dy3GWYJGXMTVYbYkdk91orRy");
 }
 
+pub mod vote_only_full_fec_sets {
+    solana_sdk::declare_id!("ffecLRhhakKSGhMuc6Fz2Lnfq4uT9q3iu9ZsNaPLxPc");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -915,6 +919,7 @@ lazy_static! {
         (disable_rent_fees_collection::id(), "Disable rent fees collection #33945"),
         (enable_zk_transfer_with_fee::id(), "enable Zk Token proof program transfer with fee"),
         (drop_legacy_shreds::id(), "drops legacy shreds #34328"),
+        (vote_only_full_fec_sets::id(), "vote only full fec sets #34294"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
