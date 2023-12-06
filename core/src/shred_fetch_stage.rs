@@ -50,7 +50,7 @@ impl ShredFetchStage {
             .as_ref()
             .map(|(_, cluster_info)| cluster_info.keypair().clone());
 
-        let (mut last_root, mut last_slot, mut slots_per_epoch) = {
+        let (mut last_root, mut slots_per_epoch, mut last_slot) = {
             let bank_forks_r = bank_forks.read().unwrap();
             let root_bank = bank_forks_r.root_bank();
             (
