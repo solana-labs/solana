@@ -12,7 +12,7 @@ use {
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
             mmap_utils::get_type,
             owners::{OwnerOffset, OwnersBlock},
-            TieredStorageFormat, TieredStorageResult,
+            TieredStorageError, TieredStorageFormat, TieredStorageResult,
         },
     },
     memmap2::{Mmap, MmapOptions},
@@ -35,9 +35,12 @@ const MAX_HOT_PADDING: u8 = 7;
 /// The maximum allowed value for the owner index of a hot account.
 const MAX_HOT_OWNER_OFFSET: OwnerOffset = OwnerOffset((1 << 29) - 1);
 
-/// The multiplier for converting AccountOffset to the internal hot account
+/// The multiplier for converting HotAccountOffset to the internal hot account
 /// offset.  This increases the maximum size of a hot accounts file.
-const HOT_ACCOUNT_OFFSET_MULTIPLIER: usize = 8;
+pub(crate) const HOT_ACCOUNT_OFFSET_MULTIPLIER: usize = 8;
+
+/// The maximum supported offset for hot accounts storage.
+const MAX_HOT_ACCOUNT_OFFSET: usize = u32::MAX as usize * HOT_ACCOUNT_OFFSET_MULTIPLIER;
 
 #[bitfield(bits = 32)]
 #[repr(C)]
@@ -55,6 +58,56 @@ struct HotMetaPackedFields {
     padding: B3,
     /// The index to the owner of a hot account inside an AccountsFile.
     owner_offset: B29,
+}
+
+/// The offset to access a hot account.
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
+pub struct HotAccountOffset(u32);
+
+impl AccountOffset for HotAccountOffset {
+    /// Creates a new AccountOffset instance given the block offset and the
+    /// intra-block offset.
+    fn new(block_offset: usize, intra_block_offset: usize) -> TieredStorageResult<Self> {
+        if block_offset >= MAX_HOT_ACCOUNT_OFFSET {
+            return Err(TieredStorageError::OffsetOutOfBounds(
+                block_offset,
+                MAX_HOT_ACCOUNT_OFFSET,
+            ));
+        }
+
+        // Hot accounts are aligned based on HOT_ACCOUNT_OFFSET_MULTIPLIER.
+        if block_offset % HOT_ACCOUNT_OFFSET_MULTIPLIER != 0 {
+            return Err(TieredStorageError::OffsetAlignmentError(
+                block_offset,
+                HOT_ACCOUNT_OFFSET_MULTIPLIER,
+            ));
+        }
+
+        // Each hot account has its own account block.  As a result, its
+        // intra-block offset is always 0.  Any intra-block offset that is
+        // greater than 0 is invalid.
+        if intra_block_offset > 0 {
+            return Err(TieredStorageError::IntraBlockOffsetOutOfBounds(
+                block_offset,
+                0,
+            ));
+        }
+
+        Ok(HotAccountOffset(
+            (block_offset / HOT_ACCOUNT_OFFSET_MULTIPLIER) as u32,
+        ))
+    }
+
+    /// The offset to the block that contains the account.
+    fn block_offset(&self) -> usize {
+        self.0 as usize * HOT_ACCOUNT_OFFSET_MULTIPLIER
+    }
+
+    /// The offset to the account inside the account block.
+    fn intra_block_offset(&self) -> usize {
+        0
+    }
 }
 
 /// The storage and in-memory representation of the metadata entry for a
@@ -229,19 +282,22 @@ impl HotStorageReader {
     /// Returns the account meta located at the specified offset.
     fn get_account_meta_from_offset(
         &self,
-        account_offset: AccountOffset,
+        account_offset: HotAccountOffset,
     ) -> TieredStorageResult<&HotAccountMeta> {
-        let internal_account_offset = account_offset.block as usize * HOT_ACCOUNT_OFFSET_MULTIPLIER;
+        let internal_account_offset = account_offset.block_offset();
 
         let (meta, _) = get_type::<HotAccountMeta>(&self.mmap, internal_account_offset)?;
         Ok(meta)
     }
 
     /// Returns the offset to the account given the specified index.
-    fn get_account_offset(&self, index_offset: IndexOffset) -> TieredStorageResult<AccountOffset> {
+    fn get_account_offset(
+        &self,
+        index_offset: IndexOffset,
+    ) -> TieredStorageResult<&HotAccountOffset> {
         self.footer
             .index_block_format
-            .get_account_offset(&self.mmap, &self.footer, index_offset)
+            .get_account_offset::<HotAccountOffset>(&self.mmap, &self.footer, index_offset)
     }
 
     /// Returns the address of the account associated with the specified index.
@@ -270,7 +326,7 @@ pub mod tests {
                 FOOTER_SIZE,
             },
             hot::{HotAccountMeta, HotStorageReader},
-            index::{AccountIndexWriterEntry, AccountOffset, IndexBlockFormat, IndexOffset},
+            index::{AccountIndexWriterEntry, IndexBlockFormat, IndexOffset},
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
         },
         memoffset::offset_of,
@@ -472,11 +528,8 @@ pub mod tests {
                 .iter()
                 .map(|meta| {
                     let prev_offset = current_offset;
-                    current_offset += file.write_type(meta).unwrap() as u32;
-                    assert_eq!(prev_offset % HOT_ACCOUNT_OFFSET_MULTIPLIER as u32, 0);
-                    AccountOffset {
-                        block: prev_offset / HOT_ACCOUNT_OFFSET_MULTIPLIER as u32,
-                    }
+                    current_offset += file.write_type(meta).unwrap();
+                    HotAccountOffset::new(prev_offset, 0).unwrap()
                 })
                 .collect();
             // while the test only focuses on account metas, writing a footer
@@ -511,8 +564,8 @@ pub mod tests {
             .iter()
             .map(|address| AccountIndexWriterEntry {
                 address,
-                block_offset: rng.gen_range(0..u32::MAX),
-                intra_block_offset: rng.gen_range(0..4096),
+                block_offset: rng.gen_range(0..u32::MAX) as usize * HOT_ACCOUNT_OFFSET_MULTIPLIER,
+                intra_block_offset: 0,
             })
             .collect();
 
@@ -529,7 +582,7 @@ pub mod tests {
 
             footer
                 .index_block_format
-                .write_index_block(&file, &index_writer_entries)
+                .write_index_block::<HotAccountOffset>(&file, &index_writer_entries)
                 .unwrap();
 
             // while the test only focuses on account metas, writing a footer
@@ -542,7 +595,10 @@ pub mod tests {
             let account_offset = hot_storage
                 .get_account_offset(IndexOffset(i as u32))
                 .unwrap();
-            assert_eq!(account_offset.block, index_writer_entry.block_offset);
+            assert_eq!(
+                account_offset.block_offset(),
+                index_writer_entry.block_offset
+            );
 
             let account_address = hot_storage
                 .get_account_address(IndexOffset(i as u32))

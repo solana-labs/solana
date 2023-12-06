@@ -25,4 +25,13 @@ pub enum TieredStorageError {
 
     #[error("footer is unsanitary: {0}")]
     SanitizeFooter(#[from] SanitizeFooterError),
+
+    #[error("OffsetOutOfBounds: offset {0} is larger than the supported size {1}")]
+    OffsetOutOfBounds(usize, usize),
+
+    #[error("OffsetAlignmentError: offset {0} must be multiple of {1}")]
+    OffsetAlignmentError(usize, usize),
+
+    #[error("IntraBlockOffsetOutOfBounds: offset {0} is larger than the supported size {1}")]
+    IntraBlockOffsetOutOfBounds(usize, usize),
 }

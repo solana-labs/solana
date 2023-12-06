@@ -13,17 +13,27 @@ use {
 #[derive(Debug)]
 pub struct AccountIndexWriterEntry<'a> {
     pub address: &'a Pubkey,
-    pub block_offset: u32,
-    pub intra_block_offset: u32,
+    /// The offset to the block that contains the account.
+    pub block_offset: usize,
+    /// The offset to the account inside the account block.
+    pub intra_block_offset: usize,
 }
 
 /// The offset to an account stored inside its accounts block.
 /// This struct is used to access the meta and data of an account by looking through
 /// its accounts block.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct AccountOffset {
-    /// The offset to the accounts block that contains the account meta/data.
-    pub block: u32,
+pub trait AccountOffset {
+    /// Creates a new AccountOffset instance given the block offset and the
+    /// intra-block offset.
+    fn new(block_offset: usize, intra_block_offset: usize) -> TieredStorageResult<Self>
+    where
+        Self: Sized;
+
+    /// The offset to the block that contains the account.
+    fn block_offset(&self) -> usize;
+
+    /// The offset to the account inside the account block.
+    fn intra_block_offset(&self) -> usize;
 }
 
 /// The offset to an account/address entry in the accounts index block.
@@ -56,7 +66,7 @@ pub enum IndexBlockFormat {
 impl IndexBlockFormat {
     /// Persists the specified index_entries to the specified file and returns
     /// the total number of bytes written.
-    pub fn write_index_block(
+    pub fn write_index_block<T: AccountOffset>(
         &self,
         file: &TieredStorageFile,
         index_entries: &[AccountIndexWriterEntry],
@@ -68,7 +78,10 @@ impl IndexBlockFormat {
                     bytes_written += file.write_type(index_entry.address)?;
                 }
                 for index_entry in index_entries {
-                    bytes_written += file.write_type(&index_entry.block_offset)?;
+                    bytes_written += file.write_type(&T::new(
+                        index_entry.block_offset,
+                        index_entry.intra_block_offset,
+                    )?)?;
                 }
                 Ok(bytes_written)
             }
@@ -93,22 +106,20 @@ impl IndexBlockFormat {
     }
 
     /// Returns the offset to the account given the specified index.
-    pub fn get_account_offset(
+    pub fn get_account_offset<'a, T: AccountOffset>(
         &self,
-        mmap: &Mmap,
+        mmap: &'a Mmap,
         footer: &TieredStorageFooter,
         index_offset: IndexOffset,
-    ) -> TieredStorageResult<AccountOffset> {
+    ) -> TieredStorageResult<&'a T> {
         match self {
             Self::AddressAndBlockOffsetOnly => {
-                let account_offset = footer.index_block_offset as usize
+                let offset = footer.index_block_offset as usize
                     + std::mem::size_of::<Pubkey>() * footer.account_entry_count as usize
                     + std::mem::size_of::<u32>() * index_offset.0 as usize;
-                let (block_offset, _) = get_type(mmap, account_offset)?;
+                let (account_offset, _) = get_type::<T>(mmap, offset)?;
 
-                Ok(AccountOffset {
-                    block: *block_offset,
-                })
+                Ok(account_offset)
             }
         }
     }
@@ -126,8 +137,15 @@ impl IndexBlockFormat {
 #[cfg(test)]
 mod tests {
     use {
-        super::*, crate::tiered_storage::file::TieredStorageFile, memmap2::MmapOptions, rand::Rng,
-        std::fs::OpenOptions, tempfile::TempDir,
+        super::*,
+        crate::tiered_storage::{
+            file::TieredStorageFile,
+            hot::{HotAccountOffset, HOT_ACCOUNT_OFFSET_MULTIPLIER},
+        },
+        memmap2::MmapOptions,
+        rand::Rng,
+        std::fs::OpenOptions,
+        tempfile::TempDir,
     };
 
     #[test]
@@ -147,7 +165,7 @@ mod tests {
             .iter()
             .map(|address| AccountIndexWriterEntry {
                 address,
-                block_offset: rng.gen_range(128..2048),
+                block_offset: rng.gen_range(0..u32::MAX) as usize * HOT_ACCOUNT_OFFSET_MULTIPLIER,
                 intra_block_offset: 0,
             })
             .collect();
@@ -155,7 +173,9 @@ mod tests {
         {
             let file = TieredStorageFile::new_writable(&path).unwrap();
             let indexer = IndexBlockFormat::AddressAndBlockOffsetOnly;
-            indexer.write_index_block(&file, &index_entries).unwrap();
+            indexer
+                .write_index_block::<HotAccountOffset>(&file, &index_entries)
+                .unwrap();
         }
 
         let indexer = IndexBlockFormat::AddressAndBlockOffsetOnly;
@@ -167,9 +187,9 @@ mod tests {
         let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
         for (i, index_entry) in index_entries.iter().enumerate() {
             let account_offset = indexer
-                .get_account_offset(&mmap, &footer, IndexOffset(i as u32))
+                .get_account_offset::<HotAccountOffset>(&mmap, &footer, IndexOffset(i as u32))
                 .unwrap();
-            assert_eq!(index_entry.block_offset, account_offset.block);
+            assert_eq!(index_entry.block_offset, account_offset.block_offset());
             let address = indexer
                 .get_account_address(&mmap, &footer, IndexOffset(i as u32))
                 .unwrap();
