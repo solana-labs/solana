@@ -65,7 +65,7 @@ impl ShredFetchStage {
                 root_bank.slot(),
                 root_bank.get_slots_in_epoch(root_bank.epoch()),
                 root_bank.feature_set.clone(),
-                root_bank.epoch_schedule().clone(),
+                *root_bank.epoch_schedule(),
                 bank_forks_r.highest_slot(),
             )
         };
@@ -80,7 +80,7 @@ impl ShredFetchStage {
                     bank_forks_r.root_bank()
                 };
                 feature_set = root_bank.feature_set.clone();
-                epoch_schedule = root_bank.epoch_schedule().clone();
+                epoch_schedule = *root_bank.epoch_schedule();
                 last_root = root_bank.slot();
                 slots_per_epoch = root_bank.get_slots_in_epoch(root_bank.epoch());
                 keypair = repair_context
