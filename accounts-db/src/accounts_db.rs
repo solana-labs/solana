@@ -6912,7 +6912,6 @@ impl AccountsDb {
         max_slot: Slot,
         config: &CalcAccountsHashConfig<'_>,
     ) -> Result<(AccountsHash, u64), AccountsHashVerificationError> {
-        use AccountsHashVerificationError::*;
         let mut collect = Measure::start("collect");
         let keys: Vec<_> = self
             .accounts_index
@@ -7008,7 +7007,7 @@ impl AccountsDb {
                 "{} mismatched account hash(es) found",
                 mismatch_found.load(Ordering::Relaxed)
             );
-            return Err(MismatchedAccountsHash);
+            return Err(AccountsHashVerificationError::MismatchedAccountsHash);
         }
 
         scan.stop();
@@ -7788,7 +7787,6 @@ impl AccountsDb {
         base: Option<(Slot, /*capitalization*/ u64)>,
         config: VerifyAccountsHashAndLamportsConfig,
     ) -> Result<(), AccountsHashVerificationError> {
-        use AccountsHashVerificationError::*;
         let calc_config = CalcAccountsHashConfig {
             use_bg_thread_pool: config.use_bg_thread_pool,
             check_hash: false,
@@ -7812,14 +7810,14 @@ impl AccountsDb {
             )?;
             let found_incremental_accounts_hash = self
                 .get_incremental_accounts_hash(slot)
-                .ok_or(MissingAccountsHash)?;
+                .ok_or(AccountsHashVerificationError::MissingAccountsHash)?;
             if calculated_incremental_accounts_hash != found_incremental_accounts_hash {
                 warn!(
                     "mismatched incremental accounts hash for slot {slot}: \
                     {calculated_incremental_accounts_hash:?} (calculated) != {found_incremental_accounts_hash:?} (expected)"
                 );
                 if hash_mismatch_is_error {
-                    return Err(MismatchedAccountsHash);
+                    return Err(AccountsHashVerificationError::MismatchedAccountsHash);
                 }
             }
         } else {
@@ -7837,18 +7835,22 @@ impl AccountsDb {
                     "Mismatched total lamports: {} calculated: {}",
                     total_lamports, calculated_lamports
                 );
-                return Err(MismatchedTotalLamports(calculated_lamports, total_lamports));
+                return Err(AccountsHashVerificationError::MismatchedTotalLamports(
+                    calculated_lamports,
+                    total_lamports,
+                ));
             }
 
-            let (found_accounts_hash, _) =
-                self.get_accounts_hash(slot).ok_or(MissingAccountsHash)?;
+            let (found_accounts_hash, _) = self
+                .get_accounts_hash(slot)
+                .ok_or(AccountsHashVerificationError::MissingAccountsHash)?;
             if calculated_accounts_hash != found_accounts_hash {
                 warn!(
                     "Mismatched accounts hash for slot {slot}: \
                     {calculated_accounts_hash:?} (calculated) != {found_accounts_hash:?} (expected)"
                 );
                 if hash_mismatch_is_error {
-                    return Err(MismatchedAccountsHash);
+                    return Err(AccountsHashVerificationError::MismatchedAccountsHash);
                 }
             }
         }
@@ -12717,7 +12719,6 @@ pub mod tests {
 
     #[test]
     fn test_verify_accounts_hash() {
-        use AccountsHashVerificationError::*;
         solana_logger::setup();
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
 
@@ -12749,7 +12750,7 @@ pub mod tests {
 
         assert_matches!(
             db.verify_accounts_hash_and_lamports(some_slot, 1, None, config.clone()),
-            Err(MissingAccountsHash)
+            Err(AccountsHashVerificationError::MissingAccountsHash)
         );
 
         db.set_accounts_hash(
@@ -12759,14 +12760,13 @@ pub mod tests {
 
         assert_matches!(
             db.verify_accounts_hash_and_lamports(some_slot, 1, None, config),
-            Err(MismatchedAccountsHash)
+            Err(AccountsHashVerificationError::MismatchedAccountsHash)
         );
     }
 
     #[test]
     fn test_verify_bank_capitalization() {
         for pass in 0..2 {
-            use AccountsHashVerificationError::*;
             solana_logger::setup();
             let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
 
@@ -12813,7 +12813,7 @@ pub mod tests {
 
             assert_matches!(
                 db.verify_accounts_hash_and_lamports(some_slot, 10, None, config),
-                Err(MismatchedTotalLamports(expected, actual)) if expected == 2 && actual == 10
+                Err(AccountsHashVerificationError::MismatchedTotalLamports(expected, actual)) if expected == 2 && actual == 10
             );
         }
     }
@@ -12845,7 +12845,6 @@ pub mod tests {
 
     #[test]
     fn test_verify_accounts_hash_bad_account_hash() {
-        use AccountsHashVerificationError::*;
         solana_logger::setup();
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
 
@@ -12880,7 +12879,7 @@ pub mod tests {
 
         assert_matches!(
             db.verify_accounts_hash_and_lamports(some_slot, 1, None, config),
-            Err(MismatchedAccountsHash)
+            Err(AccountsHashVerificationError::MismatchedAccountsHash)
         );
     }
 
