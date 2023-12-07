@@ -2074,10 +2074,9 @@ fn test_program_sbf_invoke_in_same_tx_as_redeployment() {
     );
 
     // load_upgradeable_program sets clock sysvar to 1, which causes the program to be effective
-    // after 2 slots. So we need to advance the bank client by 2 slots here.
-    let bank = bank_client
-        .advance_slot(2, &Pubkey::default())
-        .expect("Failed to advance slot");
+    // after 2 slots. They need to be called individually to create the correct fork graph in between.
+    bank_client.advance_slot(1, &Pubkey::default()).unwrap();
+    let bank = bank_client.advance_slot(1, &Pubkey::default()).unwrap();
 
     // Prepare redeployment
     let buffer_keypair = Keypair::new();
@@ -2171,10 +2170,9 @@ fn test_program_sbf_invoke_in_same_tx_as_undeployment() {
     );
 
     // load_upgradeable_program sets clock sysvar to 1, which causes the program to be effective
-    // after 2 slots. So we need to advance the bank client by 2 slots here.
-    let bank = bank_client
-        .advance_slot(2, &Pubkey::default())
-        .expect("Failed to advance slot");
+    // after 2 slots. They need to be called individually to create the correct fork graph in between.
+    bank_client.advance_slot(1, &Pubkey::default()).unwrap();
+    let bank = bank_client.advance_slot(1, &Pubkey::default()).unwrap();
 
     // Prepare undeployment
     let (programdata_address, _) = Pubkey::find_program_address(
