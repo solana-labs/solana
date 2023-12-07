@@ -367,9 +367,14 @@ impl AddressBook {
 pub struct ExecutedTask {
     task: Task,
     result_with_timings: ResultWithTimings,
-    finish_time: Option<SystemTime>,
     slot: Slot,
     thx: usize,
+    handler_timings: Option<HandlerTimings>,
+}
+
+#[derive(Debug)]
+pub struct HandlerTimings {
+    finish_time: SystemTime,
     execution_us: u64,
     execution_cpu_us: u128,
 }
@@ -877,13 +882,13 @@ where
                                 Ok(()) => {}
                                 Err(e) => session_result = Err(e.clone()),
                             }
-                            if send_metrics {
+                            if Some(handler_timings) = task.handler_timings {
                                 use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
 
                                 let sig = task.task.transaction().signature().to_string();
 
                                 solana_metrics::datapoint_info_at!(
-                                    task.finish_time.unwrap(),
+                                    handler_timings.finish_time.unwrap(),
                                     "transaction_timings",
                                     ("slot", task.slot, i64),
                                     ("index", task.task.task_index(), i64),
@@ -902,8 +907,8 @@ where
                                         format!("{:?}", task.result_with_timings.0),
                                         String
                                     ),
-                                    ("duration", task.execution_us, i64),
-                                    ("cpu_duration", task.execution_cpu_us, i64),
+                                    ("duration", handler_timings.execution_us, i64),
+                                    ("cpu_duration", handler_timings.execution_cpu_us, i64),
                                     ("compute_units", 0 /*task.cu*/, i64),
                                     (
                                         "priority",
