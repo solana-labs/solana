@@ -69,7 +69,7 @@ macro_rules! impl_get_packed_len_v0 {
             get_declaration_packed_len(declaration, definitions)
         }
 
-                /// Get packed length for the given BorshSchema Declaration
+        /// Get packed length for the given BorshSchema Declaration
         fn get_declaration_packed_len(
             declaration: &str,
             definitions: &std::collections::HashMap<$borsh::schema::Declaration, $borsh::schema::Definition>,
