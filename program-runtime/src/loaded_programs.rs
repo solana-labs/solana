@@ -420,7 +420,7 @@ impl LoadedProgramsForTxBatch {
     pub fn merge(&mut self, other: &Self) {
         other.entries.iter().for_each(|(key, entry)| {
             self.replenish(*key, entry.clone());
-        })
+        });
     }
 
     pub fn merge_consuming(&mut self, other: Self) {

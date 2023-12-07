@@ -4339,24 +4339,25 @@ impl Bank {
                     .merge_consuming(loaded_programs_cache.extract(self, &mut missing_programs));
             }
 
-        // Load missing programs while global cache is unlocked
-        let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing_programs
-            .iter()
-            .map(|(key, (_match_criteria, count))| {
-                let program = self.load_program(key);
-                program.tx_usage_counter.store(*count, Ordering::Relaxed);
-                (*key, program)
-            })
-            .collect();
+            // Load missing programs while global cache is unlocked
+            let loaded_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing_programs
+                .iter()
+                .map(|(key, (_match_criteria, count))| {
+                    let program = self.load_program(key);
+                    program.tx_usage_counter.store(*count, Ordering::Relaxed);
+                    (*key, program)
+                })
+                .collect();
+            missing_programs.clear();
 
-        // Lock the global cache again to replenish the missing programs
-        let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
-        for (key, program) in missing_programs {
-            let (_was_occupied, entry) = loaded_programs_cache.replenish(key, program);
-            // Use the returned entry as that might have been deduplicated globally
-            loaded_programs_for_txs.replenish(key, entry);
+            // Lock the global cache again to replenish the missing programs
+            let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
+            for (key, program) in loaded_programs {
+                let (_was_occupied, entry) = loaded_programs_cache.replenish(key, program);
+                // Use the returned entry as that might have been deduplicated globally
+                loaded_programs_for_txs.replenish(key, entry);
+            }
         }
-
         loaded_programs_for_txs
     }
 
