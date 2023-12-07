@@ -621,26 +621,28 @@ impl LoadedPrograms {
                             || working_slot.is_ancestor(entry.deployment_slot)
                         {
                             if !Self::is_entry_usable(entry, current_slot, &match_criteria) {
-                                missing.push((key, count));
-                                return None;
+                                // At this point it is clear that what we are looking for does not exist.
+                                // So break here which does continue at the push into missing below.
+                                break;
                             }
-
-                            if current_slot >= entry.effective_slot {
-                                entry.tx_usage_counter.fetch_add(count, Ordering::Relaxed);
-                                return Some((key, entry.clone()));
+                            let entry_to_return = if current_slot >= entry.effective_slot {
+                                entry.clone()
                             } else if entry.is_implicit_delay_visibility_tombstone(current_slot) {
                                 // Found a program entry on the current fork, but it's not effective
                                 // yet. It indicates that the program has delayed visibility. Return
                                 // the tombstone to reflect that.
-                                let entry_to_return = Arc::new(LoadedProgram::new_tombstone(
+                                Arc::new(LoadedProgram::new_tombstone(
                                     entry.deployment_slot,
                                     LoadedProgramType::DelayVisibility,
-                                ));
-                                entry_to_return
-                                    .tx_usage_counter
-                                    .fetch_add(count, Ordering::Relaxed);
-                                return Some((key, entry_to_return));
-                            }
+                                ))
+                            } else {
+                                // Keep going to find an entry which is effective already.
+                                continue;
+                            };
+                            entry_to_return
+                                .tx_usage_counter
+                                .fetch_add(count, Ordering::Relaxed);
+                            return Some((key, entry_to_return));
                         }
                     }
                 }
