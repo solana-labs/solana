@@ -380,12 +380,12 @@ pub struct HandlerTimings {
 }
 
 impl ExecutedTask {
-    fn new_boxed(task: Task, thx: usize) -> Box<Self> {
+    fn new_boxed(task: Task, thx: usize, slot: Slot) -> Box<Self> {
         Box::new(Self {
             task,
             result_with_timings: (Ok(()), Default::default()),
             finish_time: None,
-            slot: 0,
+            slot,
             thx,
             execution_us: 0,
             execution_cpu_us: 0,
@@ -602,9 +602,10 @@ where
         bank: &Arc<Bank>,
         task: &mut Box<ExecutedTask>,
         pool: &Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
+        send_metrics: bool,
     ) {
         use solana_measure::measure::Measure;
-        let (mut wall_time, cpu_time) = (
+        let handler_timings = send_metrics.then_some(
             Measure::start("process_message_time"),
             cpu_time::ThreadTime::now(),
         );
@@ -618,12 +619,16 @@ where
             task.task.task_index(),
             pool,
         );
-        task.slot = bank.slot();
-        task.finish_time = Some(SystemTime::now());
-        task.execution_cpu_us = cpu_time.elapsed().as_micros();
-        // make wall time is longer than cpu time, always
-        wall_time.stop();
-        task.execution_us = wall_time.as_us();
+        if Some(wall_time, cpu_time) = handler_timings {
+            task.handler_timings = HandlerTimings {
+                finish_time: SystemTime::now(),
+                execution_cpu_us: cpu_time.elapsed().as_micros();
+                execution_us: { wall_time.as_us();
+                    // make wall time is longer than cpu time, always
+                    wall_time.stop();
+                },
+            }
+        }
     }
 
     fn propagate_context(
@@ -858,8 +863,8 @@ where
                             }
                         },
                     };
-                    let mut task = ExecutedTask::new_boxed(task, thx);
-                    Self::receive_scheduled_transaction(&handler, &bank, &mut task, &pool);
+                    let mut task = ExecutedTask::new_boxed(task, thx, bank.slot());
+                    Self::receive_scheduled_transaction(&handler, &bank, &mut task, &pool, send_metrics);
                     sender.send(task).unwrap();
                 }
                 trace!(
