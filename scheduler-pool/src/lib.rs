@@ -10,7 +10,7 @@
 
 use {
     crossbeam_channel::{
-        after, bounded, never, select_biased, unbounded, Receiver, RecvTimeoutError, Sender,
+        bounded, never, select_biased, tick, unbounded, Receiver, RecvTimeoutError, Sender,
         TryRecvError,
     },
     log::*,
@@ -540,7 +540,7 @@ impl<T1: Send + Sync + 'static, T2: Send + Sync + 'static> ChainedChannel<T1, T2
 }
 
 fn ready() -> Receiver<Instant> {
-    after(Duration::default())
+    tick(Duration::default())
 }
 
 #[derive(Default)]
