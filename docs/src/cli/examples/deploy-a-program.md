@@ -15,8 +15,9 @@ To deploy a program, use the Solana tools to interact with the on-chain loader
 to:
 
 - Initialize a program account
-- Upload the program's shared object to the program account's data buffer
-- Verify the uploaded program
+- Upload the program's shared object (the program binary `.so`) to the program
+  account's data buffer
+- (optional) Verify the uploaded program
 - Finalize the program by marking the program account executable.
 
 Once deployed, anyone can execute the program by sending transactions that
@@ -27,7 +28,7 @@ reference it to the cluster.
 ### Deploy a program
 
 To deploy a program, you will need the location of the program's shared object
-(the program binary .so)
+(the program binary `.so`):
 
 ```bash
 solana program deploy <PROGRAM_FILEPATH>
@@ -91,8 +92,9 @@ Data Length: 5216 (0x1460) bytes
 ### Redeploy a program
 
 A program can be redeployed to the same address to facilitate rapid development,
-bug fixes, or upgrades. Matching keypair files are generated once so that
-redeployments will be to the same program address.
+bug fixes, or upgrades. If a program id is not provided, the program will be
+deployed to the default address at `<PROGRAM_NAME>-keypair.json`. This default
+keypair is generated during the first program compilation.
 
 The command looks the same as the deployment command:
 
@@ -110,11 +112,6 @@ become (plus some wiggle room).
 ```bash
 solana program deploy --max-len 200000 <PROGRAM_FILEPATH>
 ```
-
-Note that program accounts are required to be
-[rent-exempt](https://solana.com/docs/core/accounts#rent-exemption), and the
-`max-len` is fixed after initial deployment, so any SOL in the program accounts
-is locked up permanently.
 
 ### Resuming a failed deploy
 
@@ -159,7 +156,7 @@ solana program deploy --buffer <KEYPAIR_PATH> <PROGRAM_FILEPATH>
 Both program and buffer accounts can be closed and their lamport balances
 transferred to a recipient's account.
 
-If deployment fails there will be a left over buffer account that holds
+If deployment fails there will be a left-over buffer account that holds
 lamports. The buffer account can either be used to
 [resume a deploy](#resuming-a-failed-deploy) or closed.
 
@@ -211,7 +208,7 @@ solana program show --buffers --all
 
 ### Set a program's upgrade authority
 
-The program's upgrade authority must to be present to deploy a program. If no
+The program's upgrade authority must be present to deploy a program. If no
 authority is specified during program deployment, the default keypair is used as
 the authority. This is why redeploying a program in the steps above didn't
 require an authority to be explicitly specified.
@@ -233,6 +230,12 @@ Or after deployment and specifying the current authority:
 ```bash
 solana program set-upgrade-authority <PROGRAM_ADDRESS> --upgrade-authority <UPGRADE_AUTHORITY_SIGNER> --new-upgrade-authority <NEW_UPGRADE_AUTHORITY>
 ```
+
+By default, `set-upgrade-authority` requires a signature from the new authority.
+This behavior prevents a developer from giving upgrade authority to a key that
+they do not have access to. The `--skip-new-upgrade-authority-signer-check`
+option relaxes the signer check. This can be useful for situations where the new
+upgrade authority is an offline signer or a multisig.
 
 ### Immutable programs
 
@@ -258,12 +261,12 @@ solana program dump <ACCOUNT_ADDRESS> <OUTPUT_FILEPATH>
 ```
 
 The dumped file will be in the same as what was deployed, so in the case of a
-shared object, the dumped file will be a fully functional shared object. Note
-that the `dump` command dumps the entire data space, which means the output file
-will have trailing zeros after the shared object's data up to `max_len`.
-Sometimes it is useful to dump and compare a program to ensure it matches a
-known program binary. The original program file can be zero-extended, hashed,
-and compared to the hash of the dumped file.
+shared object (the program binary `.so`), the dumped file will be a fully
+functional shared object. Note that the `dump` command dumps the entire data
+space, which means the output file will have trailing zeros after the shared
+object's data up to `max_len`. Sometimes it is useful to dump and compare a
+program to ensure it matches a known program binary. The dumped file can be
+zero-truncated, hashed, and compared to the hash of the original program file.
 
 ```bash
 $ solana dump <ACCOUNT_ADDRESS> dump.so
@@ -300,6 +303,9 @@ the program:
 solana program deploy --program-id <PROGRAM_ADDRESS> --buffer <BUFFER_ADDRESS>
 ```
 
-Note, the buffer's authority must match the program's upgrade authority.
+Note, the buffer's authority must match the program's upgrade authority. During
+deployment, the buffer account's contents are copied into the program-data
+account and the buffer account is set to zero. The lamports from the buffer
+account are refunded to a spill account.
 
 Buffers also support `show` and `dump` just like programs do.
