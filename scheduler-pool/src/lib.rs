@@ -605,10 +605,10 @@ where
         send_metrics: bool,
     ) {
         use solana_measure::measure::Measure;
-        let handler_timings = send_metrics.then_some(
+        let handler_timings = send_metrics.then_some((
             Measure::start("process_message_time"),
             cpu_time::ThreadTime::now(),
-        );
+        ));
         debug!("handling task at {:?}", std::thread::current());
         TH::handle(
             handler,
