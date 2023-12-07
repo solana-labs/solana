@@ -243,8 +243,7 @@ macro_rules! impl_tests {
         extern crate alloc;
         use {
             super::*,
-            alloc::{collections::BTreeMap, vec::Vec},
-            std::mem::size_of,
+            std::{collections::HashMap, mem::size_of},
             $borsh::{BorshDeserialize, BorshSerialize},
             $borsh_io::ErrorKind,
         };
@@ -332,13 +331,13 @@ macro_rules! impl_tests {
 
         #[test]
         fn instance_packed_len_with_varying_sizes_in_hashmap() {
-            let mut data = BTreeMap::new();
-            let key1 = Vec::from("the first string, it's actually really really long");
-            let value1 = Vec::from("");
-            let key2 = Vec::from("second string, shorter");
-            let value2 = Vec::from("a real value");
-            let key3 = Vec::from("third");
-            let value3 = Vec::from("an even longer value");
+            let mut data = HashMap::new();
+            let key1 = "the first string, it's actually really really long".to_string();
+            let value1 = "".to_string();
+            let key2 = "second string, shorter".to_string();
+            let value2 = "a real value".to_string();
+            let key3 = "third".to_string();
+            let value3 = "an even longer value".to_string();
             data.insert(key1.clone(), value1.clone());
             data.insert(key2.clone(), value2.clone());
             data.insert(key3.clone(), value3.clone());
