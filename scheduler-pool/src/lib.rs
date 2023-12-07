@@ -384,11 +384,9 @@ impl ExecutedTask {
         Box::new(Self {
             task,
             result_with_timings: (Ok(()), Default::default()),
-            finish_time: None,
             slot,
             thx,
-            execution_us: 0,
-            execution_cpu_us: 0,
+            handler_timings: None,
         })
     }
 }
