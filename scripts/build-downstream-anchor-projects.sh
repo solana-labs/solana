@@ -9,8 +9,10 @@ source ci/_
 source scripts/patch-crates.sh
 source scripts/read-cargo-variable.sh
 
+anchor_version=$1
 solana_ver=$(readCargoVariable version Cargo.toml)
 solana_dir=$PWD
+cargo="$solana_dir"/cargo
 cargo_build_sbf="$solana_dir"/cargo-build-sbf
 cargo_test_sbf="$solana_dir"/cargo-test-sbf
 
@@ -43,15 +45,20 @@ anchor() {
   set -x
   rm -rf anchor
   git clone https://github.com/coral-xyz/anchor.git
+  cd anchor || exit 1
+
+  # checkout tag
+  if [[ -n "$anchor_version" ]]; then
+    git checkout "$anchor_version"
+  fi
+
   # copy toolchain file to use solana's rust version
-  cp "$solana_dir"/rust-toolchain.toml anchor/
-  cd anchor
+  cp "$solana_dir"/rust-toolchain.toml .
 
   update_solana_dependencies . "$solana_ver"
   patch_crates_io_solana Cargo.toml "$solana_dir"
 
-  cargo build
-  cargo test
+  $cargo test
 
   anchor_dir=$PWD
   anchor_ver=$(readCargoVariable version "$anchor_dir"/lang/Cargo.toml)
@@ -73,8 +80,9 @@ mango() {
     patch_crates_io_solana Cargo.toml "$solana_dir"
     patch_crates_io_anchor Cargo.toml "$anchor_dir"
 
-    cargo build
-    cargo test
+    cd program
+    $cargo build
+    $cargo test
     $cargo_build_sbf
     $cargo_test_sbf
   )
@@ -83,19 +91,17 @@ mango() {
 metaplex() {
   (
     set -x
-    rm -rf metaplex-program-library
-    git clone https://github.com/metaplex-foundation/metaplex-program-library
-     # copy toolchain file to use solana's rust version
-     cp "$solana_dir"/rust-toolchain.toml metaplex-program-library/
-    cd metaplex-program-library
+    rm -rf mpl-token-metadata
+    git clone https://github.com/metaplex-foundation/mpl-token-metadata
+    # copy toolchain file to use solana's rust version
+    cp "$solana_dir"/rust-toolchain.toml mpl-token-metadata/
+    cd mpl-token-metadata/programs/token-metadata/program
 
     update_solana_dependencies . "$solana_ver"
-    update_anchor_dependencies . "$anchor_ver"
     patch_crates_io_solana Cargo.toml "$solana_dir"
-    patch_crates_io_anchor Cargo.toml "$anchor_dir"
 
-    cargo build
-    cargo test
+    $cargo build
+    $cargo test
     $cargo_build_sbf
     $cargo_test_sbf
   )
