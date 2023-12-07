@@ -91,8 +91,7 @@ Data Length: 5216 (0x1460) bytes
 A program can be redeployed to the same address to facilitate rapid development,
 bug fixes, or upgrades.
 
-The command looks the same as the deployment command (same keypair file that resides from file directory corresponding
-to <PROGRAM_FILEPATH>, this keypair file will be generated once and then reused):
+The command looks the same as the deployment command:
 
 ```bash
 solana program deploy <PROGRAM_FILEPATH>
