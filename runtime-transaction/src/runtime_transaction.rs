@@ -4,11 +4,11 @@
 //! It has two states:
 //! 1. Statically Loaded: after receiving `packet` from sigverify and deserializing
 //!    it into `solana_sdk::VersionedTransaction`, then sanitizing into
-//!    `solana_sdk::SanitizedVersionedTransaction`, `RuntimeTransactionStatic`
-//!    can be created from it with static transaction metadata extracted.
+//!    `solana_sdk::SanitizedVersionedTransaction`, which can be wrapped into
+//!    `RuntimeTransaction` with static transaction metadata extracted.
 //! 2. Dynamically Loaded: after successfully loaded account addresses from onchain
-//!    ALT, RuntimeTransaction transits into Dynamically Loaded state, with
-//!    its dynamic metadata loaded.
+//!    ALT, RuntimeTransaction<SanitizedMessage> transits into Dynamically Loaded state,
+//!    with its dynamic metadata loaded.
 use {
     crate::transaction_meta::{DynamicMeta, StaticMeta, TransactionMeta},
     solana_sdk::{
@@ -21,15 +21,27 @@ use {
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct RuntimeTransactionStatic {
+pub struct RuntimeTransaction<M> {
     signatures: Vec<Signature>,
-    message: SanitizedVersionedMessage,
+    message: M,
     // transaction meta is a collection of fields, it is updated
     // during message state transition
     meta: TransactionMeta,
 }
 
-impl StaticMeta for RuntimeTransactionStatic {
+// These traits gate access to static and dynamic metadata
+// so that only transactions with supporting message types
+// can access them.
+trait StaticMetaAccess {}
+trait DynamicMetaAccess: StaticMetaAccess {}
+
+// Implement the gate traits for the message types that should
+// have access to the static and dynamic metadata.
+impl StaticMetaAccess for SanitizedVersionedMessage {}
+impl StaticMetaAccess for SanitizedMessage {}
+impl DynamicMetaAccess for SanitizedMessage {}
+
+impl<M: StaticMetaAccess> StaticMeta for RuntimeTransaction<M> {
     fn message_hash(&self) -> &Hash {
         &self.meta.message_hash
     }
@@ -38,7 +50,9 @@ impl StaticMeta for RuntimeTransactionStatic {
     }
 }
 
-impl RuntimeTransactionStatic {
+impl<M: DynamicMetaAccess> DynamicMeta for RuntimeTransaction<M> {}
+
+impl RuntimeTransaction<SanitizedVersionedMessage> {
     pub fn try_from(
         sanitized_versioned_tx: SanitizedVersionedTransaction,
         message_hash: Option<Hash>,
@@ -62,31 +76,9 @@ impl RuntimeTransactionStatic {
     }
 }
 
-/// Statically Loaded transaction can transit to Dynamically Loaded with supplied
-/// address_loader, to load accounts from on-chain ALT, then resolve dynamic metadata
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct RuntimeTransactionDynamic {
-    signatures: Vec<Signature>,
-    message: SanitizedMessage,
-    // transaction meta is a collection of fields, it is updated
-    // during message state transition
-    meta: TransactionMeta,
-}
-
-impl DynamicMeta for RuntimeTransactionDynamic {}
-
-impl StaticMeta for RuntimeTransactionDynamic {
-    fn message_hash(&self) -> &Hash {
-        &self.meta.message_hash
-    }
-    fn is_simple_vote_tx(&self) -> bool {
-        self.meta.is_simple_vote_tx
-    }
-}
-
-impl RuntimeTransactionDynamic {
+impl RuntimeTransaction<SanitizedMessage> {
     pub fn try_from(
-        statically_loaded_runtime_tx: RuntimeTransactionStatic,
+        statically_loaded_runtime_tx: RuntimeTransaction<SanitizedVersionedMessage>,
         address_loader: impl AddressLoader,
     ) -> Result<Self> {
         let mut tx = Self {
@@ -119,7 +111,7 @@ mod tests {
             compute_budget::ComputeBudgetInstruction,
             message::Message,
             signer::{keypair::Keypair, Signer},
-            transaction::{Transaction, VersionedTransaction},
+            transaction::{SimpleAddressLoader, Transaction, VersionedTransaction},
         },
     };
 
@@ -161,7 +153,7 @@ mod tests {
         hash: Option<Hash>,
         is_simple_vote: Option<bool>,
     ) -> TransactionMeta {
-        RuntimeTransactionStatic::try_from(svt, hash, is_simple_vote)
+        RuntimeTransaction::<SanitizedVersionedMessage>::try_from(svt, hash, is_simple_vote)
             .unwrap()
             .meta
     }
@@ -214,5 +206,32 @@ mod tests {
                 Some(false), // override
             )
         );
+    }
+
+    #[test]
+    fn test_advance_transaction_type() {
+        let hash = Hash::new_unique();
+        let compute_unit_price = 999;
+
+        let statically_loaded_transaction =
+            RuntimeTransaction::<SanitizedVersionedMessage>::try_from(
+                non_vote_sanitized_versioned_transaction(compute_unit_price),
+                Some(hash),
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(hash, *statically_loaded_transaction.message_hash());
+        assert!(!statically_loaded_transaction.is_simple_vote_tx());
+
+        let dynamically_loaded_transaction = RuntimeTransaction::<SanitizedMessage>::try_from(
+            statically_loaded_transaction,
+            SimpleAddressLoader::Disabled,
+        );
+        let dynamically_loaded_transaction =
+            dynamically_loaded_transaction.expect("created from statically loaded tx");
+
+        assert_eq!(hash, *dynamically_loaded_transaction.message_hash());
+        assert!(!dynamically_loaded_transaction.is_simple_vote_tx());
     }
 }
