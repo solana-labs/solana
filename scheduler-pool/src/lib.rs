@@ -619,7 +619,7 @@ where
             task.task.task_index(),
             pool,
         );
-        if let Some(wall_time, cpu_time) = handler_timings {
+        if let Some((wall_time, cpu_time)) = handler_timings {
             task.handler_timings = Some(HandlerTimings {
                 finish_time: SystemTime::now(),
                 execution_cpu_us: cpu_time.elapsed().as_micros(),
