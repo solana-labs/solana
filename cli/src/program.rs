@@ -1066,13 +1066,9 @@ fn process_program_deploy(
         program_len * 2
     };
 
-    let (min_rent_exempt_program_balance, min_rent_exempt_program_data_balance) = (
-        rpc_client
-            .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_program())?,
-        rpc_client.get_minimum_balance_for_rent_exemption(
-            UpgradeableLoaderState::size_of_programdata(program_data_max_len),
-        )?,
-    );
+    let min_rent_exempt_program_data_balance = rpc_client.get_minimum_balance_for_rent_exemption(
+        UpgradeableLoaderState::size_of_programdata(program_data_max_len),
+    )?;
 
     let result = if do_initial_deploy {
         if program_signer.is_none() {
@@ -1085,7 +1081,6 @@ fn process_program_deploy(
             config,
             &program_data,
             program_len,
-            min_rent_exempt_program_balance,
             program_data_max_len,
             min_rent_exempt_program_data_balance,
             &bpf_loader_upgradeable::id(),
@@ -1236,8 +1231,6 @@ fn process_write_buffer(
     } else {
         program_data.len()
     };
-    let min_rent_exempt_program_balance = rpc_client
-        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_program())?;
     let min_rent_exempt_program_data_balance = rpc_client.get_minimum_balance_for_rent_exemption(
         UpgradeableLoaderState::size_of_programdata(buffer_data_max_len),
     )?;
@@ -1247,7 +1240,6 @@ fn process_write_buffer(
         config,
         &program_data,
         program_data.len(),
-        min_rent_exempt_program_balance,
         buffer_data_max_len,
         min_rent_exempt_program_data_balance,
         &bpf_loader_upgradeable::id(),
@@ -1973,7 +1965,6 @@ fn do_process_program_write_and_deploy(
     config: &CliConfig,
     program_data: &[u8], // can be empty, hence we have program_len
     program_len: usize,
-    min_rent_exempt_program_balance: u64,
     program_data_max_len: usize,
     min_rent_exempt_program_data_balance: u64,
     loader_id: &Pubkey,
@@ -2021,11 +2012,11 @@ fn do_process_program_write_and_deploy(
             vec![system_instruction::create_account(
                 &fee_payer_signer.pubkey(),
                 buffer_pubkey,
-                min_rent_exempt_program_balance,
+                min_rent_exempt_program_data_balance,
                 program_len as u64,
                 loader_id,
             )],
-            min_rent_exempt_program_balance,
+            min_rent_exempt_program_data_balance,
         )
     };
     let initial_message = if !initial_instructions.is_empty() {
@@ -2068,7 +2059,9 @@ fn do_process_program_write_and_deploy(
                     &program_signers[0].pubkey(),
                     buffer_pubkey,
                     &program_signers[1].pubkey(),
-                    min_rent_exempt_program_balance,
+                    rpc_client.get_minimum_balance_for_rent_exemption(
+                        UpgradeableLoaderState::size_of_program(),
+                    )?,
                     program_data_max_len,
                 )?,
                 Some(&fee_payer_signer.pubkey()),
