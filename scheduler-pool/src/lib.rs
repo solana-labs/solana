@@ -894,7 +894,7 @@ where
                                 let sig = task.task.transaction().signature().to_string();
 
                                 solana_metrics::datapoint_info_at!(
-                                    handler_timings.finish_time.unwrap(),
+                                    handler_timings.finish_time,
                                     "transaction_timings",
                                     ("slot", task.slot, i64),
                                     ("index", task.task.task_index(), i64),
