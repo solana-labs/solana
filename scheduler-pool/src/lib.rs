@@ -621,7 +621,7 @@ where
             task.handler_timings = Some(HandlerTimings {
                 finish_time: SystemTime::now(),
                 execution_cpu_us: cpu_time.elapsed().as_micros(),
-                execution_us: { 
+                execution_us: {
                     // make wall time is longer than cpu time, always
                     wall_time.stop();
                     wall_time.as_us()
@@ -863,7 +863,13 @@ where
                         },
                     };
                     let mut task = ExecutedTask::new_boxed(task, thx, bank.slot());
-                    Self::receive_scheduled_transaction(&handler, &bank, &mut task, &pool, send_metrics);
+                    Self::receive_scheduled_transaction(
+                        &handler,
+                        &bank,
+                        &mut task,
+                        &pool,
+                        send_metrics,
+                    );
                     sender.send(task).unwrap();
                 }
                 trace!(
