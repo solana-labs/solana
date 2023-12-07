@@ -886,7 +886,7 @@ where
                                 Ok(()) => {}
                                 Err(e) => session_result = Err(e.clone()),
                             }
-                            if let Some(handler_timings) = task.handler_timings {
+                            if let Some(handler_timings) = &task.handler_timings {
                                 use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
 
                                 let sig = task.task.transaction().signature().to_string();
