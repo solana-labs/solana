@@ -10,12 +10,14 @@
 //!    ALT, RuntimeTransaction<SanitizedMessage> transits into Dynamically Loaded state,
 //!    with its dynamic metadata loaded.
 use {
-    crate::transaction_meta::{DynamicMeta, StaticMeta, TransactionMeta},
+    crate::transaction_meta::{DynamicMeta, RequestedLimits, StaticMeta, TransactionMeta},
+    solana_program_runtime::compute_budget_processor::ComputeBudgetLimits,
     solana_sdk::{
         hash::Hash,
         message::{AddressLoader, SanitizedMessage, SanitizedVersionedMessage},
         signature::Signature,
         simple_vote_transaction_checker::is_simple_vote_transaction,
+        slot_history::Slot,
         transaction::{Result, SanitizedVersionedTransaction},
     },
 };
@@ -41,12 +43,35 @@ impl StaticMetaAccess for SanitizedVersionedMessage {}
 impl StaticMetaAccess for SanitizedMessage {}
 impl DynamicMetaAccess for SanitizedMessage {}
 
+impl<M: StaticMetaAccess> RequestedLimits for RuntimeTransaction<M> {
+    fn requested_limits(&self, current_slot: Option<Slot>) -> Option<&ComputeBudgetLimits> {
+        if let Some(current_slot) = current_slot {
+            (current_slot <= self.meta.requested_limits.expiry)
+                .then_some(&self.meta.requested_limits.compute_budget_limits)
+        } else {
+            Some(&self.meta.requested_limits.compute_budget_limits)
+        }
+    }
+}
+
 impl<M: StaticMetaAccess> StaticMeta for RuntimeTransaction<M> {
     fn message_hash(&self) -> &Hash {
         &self.meta.message_hash
     }
     fn is_simple_vote_tx(&self) -> bool {
         self.meta.is_simple_vote_tx
+    }
+    fn compute_unit_limit(&self, current_slot: Option<Slot>) -> Option<u32> {
+        self.requested_limits(current_slot)
+            .map(|requested_limits| requested_limits.compute_unit_limit)
+    }
+    fn compute_unit_price(&self, current_slot: Option<Slot>) -> Option<u64> {
+        self.requested_limits(current_slot)
+            .map(|requested_limits| requested_limits.compute_unit_price)
+    }
+    fn loaded_accounts_bytes(&self, current_slot: Option<Slot>) -> Option<u32> {
+        self.requested_limits(current_slot)
+            .map(|requested_limits| requested_limits.loaded_accounts_bytes)
     }
 }
 
@@ -103,6 +128,7 @@ impl RuntimeTransaction<SanitizedMessage> {
 mod tests {
     use {
         super::*,
+        crate::transaction_meta::RequestedLimitsWithExpiry,
         solana_program::{
             system_instruction,
             vote::{self, state::Vote},
@@ -162,11 +188,13 @@ mod tests {
     fn test_new_runtime_transaction_static() {
         let hash = Hash::new_unique();
         let compute_unit_price = 1_000;
+        let requested_limits = RequestedLimitsWithExpiry::default();
 
         assert_eq!(
             TransactionMeta {
                 message_hash: hash,
                 is_simple_vote_tx: false,
+                requested_limits: requested_limits.clone(),
             },
             get_transaction_meta(
                 non_vote_sanitized_versioned_transaction(compute_unit_price),
@@ -179,6 +207,7 @@ mod tests {
             TransactionMeta {
                 message_hash: hash,
                 is_simple_vote_tx: true,
+                requested_limits: requested_limits.clone(),
             },
             get_transaction_meta(
                 non_vote_sanitized_versioned_transaction(compute_unit_price),
@@ -191,6 +220,7 @@ mod tests {
             TransactionMeta {
                 message_hash: hash,
                 is_simple_vote_tx: true,
+                requested_limits: requested_limits.clone(),
             },
             get_transaction_meta(vote_sanitized_versioned_transaction(), Some(hash), None)
         );
@@ -199,6 +229,7 @@ mod tests {
             TransactionMeta {
                 message_hash: hash,
                 is_simple_vote_tx: false,
+                requested_limits,
             },
             get_transaction_meta(
                 vote_sanitized_versioned_transaction(),

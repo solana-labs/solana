@@ -11,13 +11,29 @@
 //! The StaticMeta and DynamicMeta traits are accessor traits on the
 //! RuntimeTransaction types, not the TransactionMeta itself.
 //!
-use solana_sdk::hash::Hash;
+use {
+    solana_program_runtime::compute_budget_processor::ComputeBudgetLimits,
+    solana_sdk::{hash::Hash, slot_history::Slot},
+};
+
+/// private trait to avoid exposing `ComputeBudgetLimits` to callsite of RuntimeTransaction.
+pub(crate) trait RequestedLimits {
+    fn requested_limits(&self, current_slot: Option<Slot>) -> Option<&ComputeBudgetLimits>;
+}
 
 /// metadata can be extracted statically from sanitized transaction,
-/// for example: message hash, simple-vote-tx flag, compute budget limits,
-pub trait StaticMeta {
+/// for example: message hash, simple-vote-tx flag, limits set by instructions
+#[allow(private_bounds)]
+pub trait StaticMeta: RequestedLimits {
     fn message_hash(&self) -> &Hash;
     fn is_simple_vote_tx(&self) -> bool;
+
+    // get fields' value from RequestedLimitsWithExpiry,
+    // `current_slot`, sets to None to skip expiry check, otherwise if current_slot is
+    // before expiry, Some(value) is returned, otherwise return None.
+    fn compute_unit_limit(&self, current_slot: Option<Slot>) -> Option<u32>;
+    fn compute_unit_price(&self, current_slot: Option<Slot>) -> Option<u64>;
+    fn loaded_accounts_bytes(&self, current_slot: Option<Slot>) -> Option<u32>;
 }
 
 /// Statically loaded meta is a supertrait of Dynamically loaded meta, when
@@ -31,6 +47,16 @@ pub trait DynamicMeta: StaticMeta {}
 pub struct TransactionMeta {
     pub(crate) message_hash: Hash,
     pub(crate) is_simple_vote_tx: bool,
+    pub(crate) requested_limits: RequestedLimitsWithExpiry,
+}
+
+/// Processing compute_budget_instructions with feature_set resolves RequestedLimits,
+/// and the resolved values expire at the end of the current epoch, as feature_set
+/// may change between epochs.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct RequestedLimitsWithExpiry {
+    pub(crate) expiry: Slot,
+    pub(crate) compute_budget_limits: ComputeBudgetLimits,
 }
 
 impl TransactionMeta {
