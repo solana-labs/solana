@@ -210,10 +210,9 @@ impl BankForks {
         }));
 
         for bank in bank_forks.read().unwrap().banks.values() {
-            bank.loaded_programs_cache
-                .write()
-                .unwrap()
-                .set_fork_graph(bank_forks.clone());
+            let mut loaded_programs_cache = bank.loaded_programs_cache.write().unwrap();
+            loaded_programs_cache.set_fork_graph(bank_forks.clone());
+            loaded_programs_cache.latest_root_slot = root;
         }
 
         bank_forks
