@@ -12,7 +12,12 @@ use {
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
     solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1,
     solana_clap_utils::{
-        self, hidden_unless_forced, input_parsers::*, input_validators::*, keypair::*,
+        self,
+        fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
+        hidden_unless_forced,
+        input_parsers::*,
+        input_validators::*,
+        keypair::*,
     },
     solana_cli_output::{
         CliProgram, CliProgramAccountType, CliProgramAuthority, CliProgramBuffer, CliProgramId,
@@ -72,6 +77,7 @@ pub const CLOSE_PROGRAM_WARNING: &str = "WARNING! Closed programs cannot be recr
 pub enum ProgramCliCommand {
     Deploy {
         program_location: Option<String>,
+        fee_payer_signer_index: SignerIndex,
         program_signer_index: Option<SignerIndex>,
         program_pubkey: Option<Pubkey>,
         buffer_signer_index: Option<SignerIndex>,
@@ -84,6 +90,7 @@ pub enum ProgramCliCommand {
     },
     WriteBuffer {
         program_location: String,
+        fee_payer_signer_index: SignerIndex,
         buffer_signer_index: Option<SignerIndex>,
         buffer_pubkey: Option<Pubkey>,
         buffer_authority_signer_index: SignerIndex,
@@ -157,6 +164,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .takes_value(true)
                                 .help("/path/to/program.so"),
                         )
+                        .arg(fee_payer_arg())
                         .arg(
                             Arg::with_name("buffer")
                                 .long("buffer")
@@ -223,6 +231,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .required(true)
                                 .help("/path/to/program.so"),
                         )
+                        .arg(fee_payer_arg())
                         .arg(
                             Arg::with_name("buffer")
                                 .long("buffer")
@@ -504,9 +513,13 @@ pub fn parse_program_subcommand(
 
     let response = match (subcommand, sub_matches) {
         ("deploy", Some(matches)) => {
-            let mut bulk_signers = vec![Some(
-                default_signer.signer_from_path(matches, wallet_manager)?,
-            )];
+            let (fee_payer, fee_payer_pubkey) =
+                signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
+
+            let mut bulk_signers = vec![
+                Some(default_signer.signer_from_path(matches, wallet_manager)?),
+                fee_payer, // if None, default signer will be supplied
+            ];
 
             let program_location = matches
                 .value_of("program_location")
@@ -542,6 +555,7 @@ pub fn parse_program_subcommand(
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::Deploy {
                     program_location,
+                    fee_payer_signer_index: signer_info.index_of(fee_payer_pubkey).unwrap(),
                     program_signer_index: signer_info.index_of_or_none(program_pubkey),
                     program_pubkey,
                     buffer_signer_index: signer_info.index_of_or_none(buffer_pubkey),
@@ -558,9 +572,13 @@ pub fn parse_program_subcommand(
             }
         }
         ("write-buffer", Some(matches)) => {
-            let mut bulk_signers = vec![Some(
-                default_signer.signer_from_path(matches, wallet_manager)?,
-            )];
+            let (fee_payer, fee_payer_pubkey) =
+                signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
+
+            let mut bulk_signers = vec![
+                Some(default_signer.signer_from_path(matches, wallet_manager)?),
+                fee_payer, // if None, default signer will be supplied
+            ];
 
             let buffer_pubkey = if let Ok((buffer_signer, Some(buffer_pubkey))) =
                 signer_of(matches, "buffer", wallet_manager)
@@ -583,6 +601,7 @@ pub fn parse_program_subcommand(
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::WriteBuffer {
                     program_location: matches.value_of("program_location").unwrap().to_string(),
+                    fee_payer_signer_index: signer_info.index_of(fee_payer_pubkey).unwrap(),
                     buffer_signer_index: signer_info.index_of_or_none(buffer_pubkey),
                     buffer_pubkey,
                     buffer_authority_signer_index: signer_info
@@ -772,6 +791,7 @@ pub fn process_program_subcommand(
     match program_subcommand {
         ProgramCliCommand::Deploy {
             program_location,
+            fee_payer_signer_index,
             program_signer_index,
             program_pubkey,
             buffer_signer_index,
@@ -785,6 +805,7 @@ pub fn process_program_subcommand(
             rpc_client,
             config,
             program_location,
+            *fee_payer_signer_index,
             *program_signer_index,
             *program_pubkey,
             *buffer_signer_index,
@@ -797,6 +818,7 @@ pub fn process_program_subcommand(
         ),
         ProgramCliCommand::WriteBuffer {
             program_location,
+            fee_payer_signer_index,
             buffer_signer_index,
             buffer_pubkey,
             buffer_authority_signer_index,
@@ -806,6 +828,7 @@ pub fn process_program_subcommand(
             rpc_client,
             config,
             program_location,
+            *fee_payer_signer_index,
             *buffer_signer_index,
             *buffer_pubkey,
             *buffer_authority_signer_index,
@@ -911,12 +934,13 @@ fn get_default_program_keypair(program_location: &Option<String>) -> Keypair {
     program_keypair
 }
 
-/// Deploy using upgradeable loader
+/// Deploy program using upgradeable loader. It also can process program upgrades
 #[allow(clippy::too_many_arguments)]
 fn process_program_deploy(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
     program_location: &Option<String>,
+    fee_payer_signer_index: SignerIndex,
     program_signer_index: Option<SignerIndex>,
     program_pubkey: Option<Pubkey>,
     buffer_signer_index: Option<SignerIndex>,
@@ -927,7 +951,10 @@ fn process_program_deploy(
     allow_excessive_balance: bool,
     skip_fee_check: bool,
 ) -> ProcessResult {
-    let (words, mnemonic, buffer_keypair) = create_ephemeral_keypair()?;
+    let fee_payer_signer = config.signers[fee_payer_signer_index];
+    let upgrade_authority_signer = config.signers[upgrade_authority_signer_index];
+
+    let (buffer_words, buffer_mnemonic, buffer_keypair) = create_ephemeral_keypair()?;
     let (buffer_provided, buffer_signer, buffer_pubkey) = if let Some(i) = buffer_signer_index {
         (true, Some(config.signers[i]), config.signers[i].pubkey())
     } else if let Some(pubkey) = buffer_pubkey {
@@ -939,7 +966,6 @@ fn process_program_deploy(
             buffer_keypair.pubkey(),
         )
     };
-    let upgrade_authority_signer = config.signers[upgrade_authority_signer_index];
 
     let default_program_keypair = get_default_program_keypair(program_location);
     let (program_signer, program_pubkey) = if let Some(i) = program_signer_index {
@@ -953,7 +979,7 @@ fn process_program_deploy(
         )
     };
 
-    let do_deploy = if let Some(account) = rpc_client
+    let do_initial_deploy = if let Some(account) = rpc_client
         .get_account_with_commitment(&program_pubkey, config.commitment)?
         .value
     {
@@ -1027,9 +1053,11 @@ fn process_program_deploy(
     } else {
         return Err("Program location required if buffer not supplied".into());
     };
-    let programdata_len = if let Some(len) = max_len {
+    let program_data_max_len = if let Some(len) = max_len {
         if program_len > len {
-            return Err("Max length specified not large enough".into());
+            return Err(
+                "Max length specified not large enough to accommodate desired program".into(),
+            );
         }
         len
     } else if is_final {
@@ -1037,11 +1065,12 @@ fn process_program_deploy(
     } else {
         program_len * 2
     };
-    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(
-        UpgradeableLoaderState::size_of_programdata(programdata_len),
+
+    let min_rent_exempt_program_data_balance = rpc_client.get_minimum_balance_for_rent_exemption(
+        UpgradeableLoaderState::size_of_programdata(program_data_max_len),
     )?;
 
-    let result = if do_deploy {
+    let result = if do_initial_deploy {
         if program_signer.is_none() {
             return Err(
                 "Initial deployments require a keypair be provided for the program id".into(),
@@ -1052,9 +1081,10 @@ fn process_program_deploy(
             config,
             &program_data,
             program_len,
-            programdata_len,
-            minimum_balance,
+            program_data_max_len,
+            min_rent_exempt_program_data_balance,
             &bpf_loader_upgradeable::id(),
+            fee_payer_signer,
             Some(&[program_signer.unwrap(), upgrade_authority_signer]),
             buffer_signer,
             &buffer_pubkey,
@@ -1067,8 +1097,11 @@ fn process_program_deploy(
             rpc_client.clone(),
             config,
             &program_data,
+            program_len,
+            min_rent_exempt_program_data_balance,
+            fee_payer_signer,
             &program_pubkey,
-            config.signers[upgrade_authority_signer_index],
+            upgrade_authority_signer,
             &buffer_pubkey,
             buffer_signer,
             skip_fee_check,
@@ -1084,8 +1117,10 @@ fn process_program_deploy(
             None,
         )?;
     }
-    if result.is_err() && buffer_signer_index.is_none() {
-        report_ephemeral_mnemonic(words, mnemonic);
+    if result.is_err() && !buffer_provided {
+        // We might have deployed "temporary" buffer but failed to deploy our program from this
+        // buffer, reporting this to the user - so he can retry deploying re-using same buffer.
+        report_ephemeral_mnemonic(buffer_words, buffer_mnemonic);
     }
     result
 }
@@ -1144,12 +1179,16 @@ fn process_write_buffer(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
     program_location: &str,
+    fee_payer_signer_index: SignerIndex,
     buffer_signer_index: Option<SignerIndex>,
     buffer_pubkey: Option<Pubkey>,
     buffer_authority_signer_index: SignerIndex,
     max_len: Option<usize>,
     skip_fee_check: bool,
 ) -> ProcessResult {
+    let fee_payer_signer = config.signers[fee_payer_signer_index];
+    let buffer_authority = config.signers[buffer_authority_signer_index];
+
     // Create ephemeral keypair to use for Buffer account, if not provided
     let (words, mnemonic, buffer_keypair) = create_ephemeral_keypair()?;
     let (buffer_signer, buffer_pubkey) = if let Some(i) = buffer_signer_index {
@@ -1162,7 +1201,6 @@ fn process_write_buffer(
             buffer_keypair.pubkey(),
         )
     };
-    let buffer_authority = config.signers[buffer_authority_signer_index];
 
     if let Some(account) = rpc_client
         .get_account_with_commitment(&buffer_pubkey, config.commitment)?
@@ -1188,13 +1226,13 @@ fn process_write_buffer(
     }
 
     let program_data = read_and_verify_elf(program_location)?;
-    let buffer_data_len = if let Some(len) = max_len {
+    let buffer_data_max_len = if let Some(len) = max_len {
         len
     } else {
         program_data.len()
     };
-    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(
-        UpgradeableLoaderState::size_of_programdata(buffer_data_len),
+    let min_rent_exempt_program_data_balance = rpc_client.get_minimum_balance_for_rent_exemption(
+        UpgradeableLoaderState::size_of_programdata(buffer_data_max_len),
     )?;
 
     let result = do_process_program_write_and_deploy(
@@ -1202,9 +1240,10 @@ fn process_write_buffer(
         config,
         &program_data,
         program_data.len(),
-        program_data.len(),
-        minimum_balance,
+        buffer_data_max_len,
+        min_rent_exempt_program_data_balance,
         &bpf_loader_upgradeable::id(),
+        fee_payer_signer,
         None,
         buffer_signer,
         &buffer_pubkey,
@@ -1212,7 +1251,6 @@ fn process_write_buffer(
         true,
         skip_fee_check,
     );
-
     if result.is_err() && buffer_signer_index.is_none() && buffer_signer.is_some() {
         report_ephemeral_mnemonic(words, mnemonic);
     }
@@ -1925,11 +1963,12 @@ where
 fn do_process_program_write_and_deploy(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
-    program_data: &[u8],
+    program_data: &[u8], // can be empty, hence we have program_len
     program_len: usize,
-    programdata_len: usize,
-    minimum_balance: u64,
+    program_data_max_len: usize,
+    min_rent_exempt_program_data_balance: u64,
     loader_id: &Pubkey,
+    fee_payer_signer: &dyn Signer,
     program_signers: Option<&[&dyn Signer]>,
     buffer_signer: Option<&dyn Signer>,
     buffer_pubkey: &Pubkey,
@@ -1946,7 +1985,7 @@ fn do_process_program_write_and_deploy(
     {
         complete_partial_program_init(
             loader_id,
-            &config.signers[0].pubkey(),
+            &fee_payer_signer.pubkey(),
             buffer_pubkey,
             &account,
             if loader_id == &bpf_loader_upgradeable::id() {
@@ -1954,36 +1993,36 @@ fn do_process_program_write_and_deploy(
             } else {
                 program_len
             },
-            minimum_balance,
+            min_rent_exempt_program_data_balance,
             allow_excessive_balance,
         )?
     } else if loader_id == &bpf_loader_upgradeable::id() {
         (
             bpf_loader_upgradeable::create_buffer(
-                &config.signers[0].pubkey(),
+                &fee_payer_signer.pubkey(),
                 buffer_pubkey,
                 &buffer_authority_signer.pubkey(),
-                minimum_balance,
+                min_rent_exempt_program_data_balance,
                 program_len,
             )?,
-            minimum_balance,
+            min_rent_exempt_program_data_balance,
         )
     } else {
         (
             vec![system_instruction::create_account(
-                &config.signers[0].pubkey(),
+                &fee_payer_signer.pubkey(),
                 buffer_pubkey,
-                minimum_balance,
+                min_rent_exempt_program_data_balance,
                 program_len as u64,
                 loader_id,
             )],
-            minimum_balance,
+            min_rent_exempt_program_data_balance,
         )
     };
     let initial_message = if !initial_instructions.is_empty() {
         Some(Message::new_with_blockhash(
             &initial_instructions,
-            Some(&config.signers[0].pubkey()),
+            Some(&fee_payer_signer.pubkey()),
             &blockhash,
         ))
     } else {
@@ -1991,7 +2030,6 @@ fn do_process_program_write_and_deploy(
     };
 
     // Create and add write messages
-    let payer_pubkey = config.signers[0].pubkey();
     let create_msg = |offset: u32, bytes: Vec<u8>| {
         let instruction = if loader_id == &bpf_loader_upgradeable::id() {
             bpf_loader_upgradeable::write(
@@ -2003,7 +2041,7 @@ fn do_process_program_write_and_deploy(
         } else {
             loader_instruction::write(buffer_pubkey, loader_id, offset, bytes)
         };
-        Message::new_with_blockhash(&[instruction], Some(&payer_pubkey), &blockhash)
+        Message::new_with_blockhash(&[instruction], Some(&fee_payer_signer.pubkey()), &blockhash)
     };
 
     let mut write_messages = vec![];
@@ -2017,22 +2055,22 @@ fn do_process_program_write_and_deploy(
         let message = if loader_id == &bpf_loader_upgradeable::id() {
             Message::new_with_blockhash(
                 &bpf_loader_upgradeable::deploy_with_max_program_len(
-                    &config.signers[0].pubkey(),
+                    &fee_payer_signer.pubkey(),
                     &program_signers[0].pubkey(),
                     buffer_pubkey,
                     &program_signers[1].pubkey(),
                     rpc_client.get_minimum_balance_for_rent_exemption(
                         UpgradeableLoaderState::size_of_program(),
                     )?,
-                    programdata_len,
+                    program_data_max_len,
                 )?,
-                Some(&config.signers[0].pubkey()),
+                Some(&fee_payer_signer.pubkey()),
                 &blockhash,
             )
         } else {
             Message::new_with_blockhash(
                 &[loader_instruction::finalize(buffer_pubkey, loader_id)],
-                Some(&config.signers[0].pubkey()),
+                Some(&fee_payer_signer.pubkey()),
                 &blockhash,
             )
         };
@@ -2045,6 +2083,7 @@ fn do_process_program_write_and_deploy(
         check_payer(
             &rpc_client,
             config,
+            fee_payer_signer.pubkey(),
             balance_needed,
             &initial_message,
             &write_messages,
@@ -2058,6 +2097,7 @@ fn do_process_program_write_and_deploy(
         &initial_message,
         &write_messages,
         &final_message,
+        fee_payer_signer,
         buffer_signer,
         Some(buffer_authority_signer),
         program_signers,
@@ -2076,23 +2116,20 @@ fn do_process_program_write_and_deploy(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn do_process_program_upgrade(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
-    program_data: &[u8],
+    program_data: &[u8], // can be empty, hence we have program_len
+    program_len: usize,
+    min_rent_exempt_program_data_balance: u64,
+    fee_payer_signer: &dyn Signer,
     program_id: &Pubkey,
     upgrade_authority: &dyn Signer,
     buffer_pubkey: &Pubkey,
     buffer_signer: Option<&dyn Signer>,
     skip_fee_check: bool,
 ) -> ProcessResult {
-    let loader_id = bpf_loader_upgradeable::id();
-    let data_len = program_data.len();
-    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(
-        UpgradeableLoaderState::size_of_programdata(data_len),
-    )?;
-
-    // Build messages to calculate fees
     let blockhash = rpc_client.get_latest_blockhash()?;
 
     let (initial_message, write_messages, balance_needed) =
@@ -2103,31 +2140,31 @@ fn do_process_program_upgrade(
                 .value
             {
                 complete_partial_program_init(
-                    &loader_id,
-                    &config.signers[0].pubkey(),
+                    &bpf_loader_upgradeable::id(),
+                    &fee_payer_signer.pubkey(),
                     &buffer_signer.pubkey(),
                     &account,
-                    UpgradeableLoaderState::size_of_buffer(data_len),
-                    minimum_balance,
+                    UpgradeableLoaderState::size_of_buffer(program_len),
+                    min_rent_exempt_program_data_balance,
                     true,
                 )?
             } else {
                 (
                     bpf_loader_upgradeable::create_buffer(
-                        &config.signers[0].pubkey(),
+                        &fee_payer_signer.pubkey(),
                         buffer_pubkey,
                         &upgrade_authority.pubkey(),
-                        minimum_balance,
-                        data_len,
+                        min_rent_exempt_program_data_balance,
+                        program_len,
                     )?,
-                    minimum_balance,
+                    min_rent_exempt_program_data_balance,
                 )
             };
 
             let initial_message = if !initial_instructions.is_empty() {
                 Some(Message::new_with_blockhash(
                     &initial_instructions,
-                    Some(&config.signers[0].pubkey()),
+                    Some(&fee_payer_signer.pubkey()),
                     &blockhash,
                 ))
             } else {
@@ -2136,7 +2173,6 @@ fn do_process_program_upgrade(
 
             let buffer_signer_pubkey = buffer_signer.pubkey();
             let upgrade_authority_pubkey = upgrade_authority.pubkey();
-            let payer_pubkey = config.signers[0].pubkey();
             let create_msg = |offset: u32, bytes: Vec<u8>| {
                 let instruction = bpf_loader_upgradeable::write(
                     &buffer_signer_pubkey,
@@ -2144,7 +2180,11 @@ fn do_process_program_upgrade(
                     offset,
                     bytes,
                 );
-                Message::new_with_blockhash(&[instruction], Some(&payer_pubkey), &blockhash)
+                Message::new_with_blockhash(
+                    &[instruction],
+                    Some(&fee_payer_signer.pubkey()),
+                    &blockhash,
+                )
             };
 
             // Create and add write messages
@@ -2165,9 +2205,9 @@ fn do_process_program_upgrade(
             program_id,
             buffer_pubkey,
             &upgrade_authority.pubkey(),
-            &config.signers[0].pubkey(),
+            &fee_payer_signer.pubkey(),
         )],
-        Some(&config.signers[0].pubkey()),
+        Some(&fee_payer_signer.pubkey()),
         &blockhash,
     );
     let final_message = Some(final_message);
@@ -2176,6 +2216,7 @@ fn do_process_program_upgrade(
         check_payer(
             &rpc_client,
             config,
+            fee_payer_signer.pubkey(),
             balance_needed,
             &initial_message,
             &write_messages,
@@ -2189,6 +2230,7 @@ fn do_process_program_upgrade(
         &initial_message,
         &write_messages,
         &final_message,
+        fee_payer_signer,
         buffer_signer,
         Some(upgrade_authority),
         Some(&[upgrade_authority]),
@@ -2281,6 +2323,7 @@ fn complete_partial_program_init(
 fn check_payer(
     rpc_client: &RpcClient,
     config: &CliConfig,
+    fee_payer_pubkey: Pubkey,
     balance_needed: u64,
     initial_message: &Option<Message>,
     write_messages: &[Message],
@@ -2301,7 +2344,7 @@ fn check_payer(
     }
     check_account_for_spend_and_fee_with_commitment(
         rpc_client,
-        &config.signers[0].pubkey(),
+        &fee_payer_pubkey,
         balance_needed,
         fee,
         config.commitment,
@@ -2315,12 +2358,11 @@ fn send_deploy_messages(
     initial_message: &Option<Message>,
     write_messages: &[Message],
     final_message: &Option<Message>,
+    fee_payer_signer: &dyn Signer,
     initial_signer: Option<&dyn Signer>,
     write_signer: Option<&dyn Signer>,
     final_signers: Option<&[&dyn Signer]>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let payer_signer = config.signers[0];
-
     if let Some(message) = initial_message {
         if let Some(initial_signer) = initial_signer {
             trace!("Preparing the required accounts");
@@ -2332,9 +2374,9 @@ fn send_deploy_messages(
             // This check is to ensure signing does not fail on a KeypairPubkeyMismatch error from an
             // extraneous signature.
             if message.header.num_required_signatures == 2 {
-                initial_transaction.try_sign(&[payer_signer, initial_signer], blockhash)?;
+                initial_transaction.try_sign(&[fee_payer_signer, initial_signer], blockhash)?;
             } else {
-                initial_transaction.try_sign(&[payer_signer], blockhash)?;
+                initial_transaction.try_sign(&[fee_payer_signer], blockhash)?;
             }
             let result = rpc_client.send_and_confirm_transaction_with_spinner(&initial_transaction);
             log_instruction_custom_error::<SystemError>(result, config)
@@ -2361,7 +2403,7 @@ fn send_deploy_messages(
                 )?
                 .send_and_confirm_messages_with_spinner(
                     write_messages,
-                    &[payer_signer, write_signer],
+                    &[fee_payer_signer, write_signer],
                 ),
                 ConnectionCache::Quic(cache) => {
                     let tpu_client_fut = solana_client::nonblocking::tpu_client::TpuClient::new_with_connection_cache(
@@ -2379,7 +2421,7 @@ fn send_deploy_messages(
                         rpc_client.clone(),
                         Some(tpu_client),
                         write_messages,
-                        &[payer_signer, write_signer],
+                        &[fee_payer_signer, write_signer],
                         SendAndConfirmConfig {
                             resign_txs_count: Some(5),
                             with_spinner: true,
@@ -2410,7 +2452,7 @@ fn send_deploy_messages(
 
             let mut final_tx = Transaction::new_unsigned(message.clone());
             let mut signers = final_signers.to_vec();
-            signers.push(payer_signer);
+            signers.push(fee_payer_signer);
             final_tx.try_sign(&signers, blockhash)?;
             rpc_client
                 .send_and_confirm_transaction_with_spinner_and_config(
@@ -2498,6 +2540,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::Deploy {
                     program_location: Some("/Users/test/program.so".to_string()),
+                    fee_payer_signer_index: 0,
                     buffer_signer_index: None,
                     buffer_pubkey: None,
                     program_signer_index: None,
@@ -2525,6 +2568,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::Deploy {
                     program_location: Some("/Users/test/program.so".to_string()),
+                    fee_payer_signer_index: 0,
                     buffer_signer_index: None,
                     buffer_pubkey: None,
                     program_signer_index: None,
@@ -2554,6 +2598,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::Deploy {
                     program_location: None,
+                    fee_payer_signer_index: 0,
                     buffer_signer_index: Some(1),
                     buffer_pubkey: Some(buffer_keypair.pubkey()),
                     program_signer_index: None,
@@ -2585,6 +2630,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::Deploy {
                     program_location: Some("/Users/test/program.so".to_string()),
+                    fee_payer_signer_index: 0,
                     buffer_signer_index: None,
                     buffer_pubkey: None,
                     program_signer_index: None,
@@ -2615,6 +2661,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::Deploy {
                     program_location: Some("/Users/test/program.so".to_string()),
+                    fee_payer_signer_index: 0,
                     buffer_signer_index: None,
                     buffer_pubkey: None,
                     program_signer_index: Some(1),
@@ -2648,6 +2695,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::Deploy {
                     program_location: Some("/Users/test/program.so".to_string()),
+                    fee_payer_signer_index: 0,
                     buffer_signer_index: None,
                     buffer_pubkey: None,
                     program_signer_index: None,
@@ -2677,6 +2725,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::Deploy {
                     program_location: Some("/Users/test/program.so".to_string()),
+                    fee_payer_signer_index: 0,
                     buffer_signer_index: None,
                     buffer_pubkey: None,
                     program_signer_index: None,
@@ -2714,6 +2763,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::WriteBuffer {
                     program_location: "/Users/test/program.so".to_string(),
+                    fee_payer_signer_index: 0,
                     buffer_signer_index: None,
                     buffer_pubkey: None,
                     buffer_authority_signer_index: 0,
@@ -2738,6 +2788,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::WriteBuffer {
                     program_location: "/Users/test/program.so".to_string(),
+                    fee_payer_signer_index: 0,
                     buffer_signer_index: None,
                     buffer_pubkey: None,
                     buffer_authority_signer_index: 0,
@@ -2765,6 +2816,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::WriteBuffer {
                     program_location: "/Users/test/program.so".to_string(),
+                    fee_payer_signer_index: 0,
                     buffer_signer_index: Some(1),
                     buffer_pubkey: Some(buffer_keypair.pubkey()),
                     buffer_authority_signer_index: 0,
@@ -2795,6 +2847,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::WriteBuffer {
                     program_location: "/Users/test/program.so".to_string(),
+                    fee_payer_signer_index: 0,
                     buffer_signer_index: None,
                     buffer_pubkey: None,
                     buffer_authority_signer_index: 1,
@@ -2830,6 +2883,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::WriteBuffer {
                     program_location: "/Users/test/program.so".to_string(),
+                    fee_payer_signer_index: 0,
                     buffer_signer_index: Some(1),
                     buffer_pubkey: Some(buffer_keypair.pubkey()),
                     buffer_authority_signer_index: 2,
@@ -3359,6 +3413,7 @@ mod tests {
             rpc_client: Some(Arc::new(RpcClient::new_mock("".to_string()))),
             command: CliCommand::Program(ProgramCliCommand::Deploy {
                 program_location: Some(program_location.to_str().unwrap().to_string()),
+                fee_payer_signer_index: 0,
                 buffer_signer_index: None,
                 buffer_pubkey: None,
                 program_signer_index: None,
