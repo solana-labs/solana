@@ -89,7 +89,9 @@ Data Length: 5216 (0x1460) bytes
 ### Redeploy a program
 
 A program can be redeployed to the same address to facilitate rapid development,
-bug fixes, or upgrades.
+bug fixes, or upgrades. If a program id is not provided, the program will be 
+deployed to the default address at `<PROGRAM_NAME>-keypair.json`. This default 
+keypair is generated during the first program compilation.
 
 The command looks the same as the deployment command:
 
