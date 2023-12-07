@@ -620,14 +620,14 @@ where
             pool,
         );
         if Some(wall_time, cpu_time) = handler_timings {
-            task.handler_timings = HandlerTimings {
+            task.handler_timings = Some(HandlerTimings {
                 finish_time: SystemTime::now(),
                 execution_cpu_us: cpu_time.elapsed().as_micros();
                 execution_us: { wall_time.as_us();
                     // make wall time is longer than cpu time, always
                     wall_time.stop();
                 },
-            }
+            });
         }
     }
 
