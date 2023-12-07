@@ -2131,7 +2131,7 @@ fn do_process_program_upgrade(
     program_len: usize,
     min_rent_exempt_program_data_balance: u64,
     fee_payer_signer: &dyn Signer,
-    program_pubkey: &Pubkey,
+    program_id: &Pubkey,
     upgrade_authority: &dyn Signer,
     buffer_pubkey: &Pubkey,
     buffer_signer: Option<&dyn Signer>,
@@ -2209,7 +2209,7 @@ fn do_process_program_upgrade(
     // Create and add final message
     let final_message = Message::new_with_blockhash(
         &[bpf_loader_upgradeable::upgrade(
-            program_pubkey,
+            program_id,
             buffer_pubkey,
             &upgrade_authority.pubkey(),
             &fee_payer_signer.pubkey(),
@@ -2244,7 +2244,7 @@ fn do_process_program_upgrade(
     )?;
 
     let program_id = CliProgramId {
-        program_id: program_pubkey.to_string(),
+        program_id: program_id.to_string(),
     };
     Ok(config.output_format.formatted_string(&program_id))
 }
