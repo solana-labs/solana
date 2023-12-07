@@ -625,7 +625,7 @@ where
                 execution_cpu_us: cpu_time.elapsed().as_micros(),
                 execution_us: { 
                     // make wall time is longer than cpu time, always
-                    wall_time.stop()
+                    wall_time.stop();
                     wall_time.as_us()
                 },
             });
