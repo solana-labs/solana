@@ -160,11 +160,7 @@ pub fn new_bank_from_parent_for_tests(
     slot: Slot,
 ) -> Arc<Bank> {
     let bank = Bank::new_from_parent(parent, collector_id, slot);
-    bank_forks
-        .write()
-        .unwrap()
-        .insert(bank)
-        .clone_without_scheduler()
+    bank_forks.write().unwrap().insert(bank)
 }
 
 #[test]
@@ -2499,11 +2495,7 @@ fn test_bank_tx_fee() {
     let (expected_fee_collected, expected_fee_burned) =
         genesis_config.fee_rate_governor.burn(expected_fee_paid);
 
-<<<<<<< HEAD
-    let bank = Bank::new_for_tests(&genesis_config);
-=======
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
->>>>>>> e83276522a (Use `BankForks` on tests - Part 1 (#34206))
 
     let capitalization = bank.capitalization();
 
@@ -2552,11 +2544,7 @@ fn test_bank_tx_fee() {
     );
 
     // Verify that an InstructionError collects fees, too
-<<<<<<< HEAD
-    let bank = Bank::new_from_parent(Arc::new(bank), &leader, 1);
-=======
     let bank = new_bank_from_parent_for_tests(bank_forks.as_ref(), bank, &leader, 1);
->>>>>>> e83276522a (Use `BankForks` on tests - Part 1 (#34206))
     let mut tx = system_transaction::transfer(&mint_keypair, &key, 1, bank.last_blockhash());
     // Create a bogus instruction to system_program to cause an instruction error
     tx.message.instructions[0].data[0] = 40;
@@ -2620,11 +2608,7 @@ fn test_bank_tx_compute_unit_fee() {
     let (expected_fee_collected, expected_fee_burned) =
         genesis_config.fee_rate_governor.burn(expected_fee_paid);
 
-<<<<<<< HEAD
-    let bank = Bank::new_for_tests(&genesis_config);
-=======
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
->>>>>>> e83276522a (Use `BankForks` on tests - Part 1 (#34206))
 
     let capitalization = bank.capitalization();
 
@@ -2672,11 +2656,7 @@ fn test_bank_tx_compute_unit_fee() {
     );
 
     // Verify that an InstructionError collects fees, too
-<<<<<<< HEAD
-    let bank = Bank::new_from_parent(Arc::new(bank), &leader, 1);
-=======
     let bank = new_bank_from_parent_for_tests(bank_forks.as_ref(), bank, &leader, 1);
->>>>>>> e83276522a (Use `BankForks` on tests - Part 1 (#34206))
     let mut tx = system_transaction::transfer(&mint_keypair, &key, 1, bank.last_blockhash());
     // Create a bogus instruction to system_program to cause an instruction error
     tx.message.instructions[0].data[0] = 40;
@@ -2726,18 +2706,13 @@ fn test_bank_blockhash_fee_structure() {
         .target_lamports_per_signature = 5000;
     genesis_config.fee_rate_governor.target_signatures_per_slot = 0;
 
-<<<<<<< HEAD
-    let bank = Bank::new_for_tests(&genesis_config);
-    goto_end_of_slot(&bank);
-=======
     let (bank, _) = Bank::new_with_bank_forks_for_tests(&genesis_config);
-    goto_end_of_slot(bank.clone());
->>>>>>> e83276522a (Use `BankForks` on tests - Part 1 (#34206))
+    goto_end_of_slot(&bank);
     let cheap_blockhash = bank.last_blockhash();
     let cheap_lamports_per_signature = bank.get_lamports_per_signature();
     assert_eq!(cheap_lamports_per_signature, 0);
 
-    let bank = Bank::new_from_parent(Arc::new(bank), &leader, 1);
+    let bank = Bank::new_from_parent(bank, &leader, 1);
     goto_end_of_slot(&bank);
     let expensive_blockhash = bank.last_blockhash();
     let expensive_lamports_per_signature = bank.get_lamports_per_signature();
@@ -2783,33 +2758,19 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
         .target_lamports_per_signature = 1000;
     genesis_config.fee_rate_governor.target_signatures_per_slot = 1;
 
-<<<<<<< HEAD
-    let bank = Bank::new_for_tests(&genesis_config);
-    goto_end_of_slot(&bank);
-=======
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
-    goto_end_of_slot(bank.clone());
->>>>>>> e83276522a (Use `BankForks` on tests - Part 1 (#34206))
+    goto_end_of_slot(&bank);
     let cheap_blockhash = bank.last_blockhash();
     let cheap_lamports_per_signature = bank.get_lamports_per_signature();
     assert_eq!(cheap_lamports_per_signature, 0);
 
-<<<<<<< HEAD
-    let bank = Bank::new_from_parent(Arc::new(bank), &leader, 1);
-    goto_end_of_slot(&bank);
-=======
     let bank = new_bank_from_parent_for_tests(bank_forks.as_ref(), bank, &leader, 1);
-    goto_end_of_slot(bank.clone());
->>>>>>> e83276522a (Use `BankForks` on tests - Part 1 (#34206))
+    goto_end_of_slot(&bank);
     let expensive_blockhash = bank.last_blockhash();
     let expensive_lamports_per_signature = bank.get_lamports_per_signature();
     assert!(cheap_lamports_per_signature < expensive_lamports_per_signature);
 
-<<<<<<< HEAD
-    let bank = Bank::new_from_parent(Arc::new(bank), &leader, 2);
-=======
     let bank = new_bank_from_parent_for_tests(bank_forks.as_ref(), bank, &leader, 2);
->>>>>>> e83276522a (Use `BankForks` on tests - Part 1 (#34206))
 
     // Send a transfer using cheap_blockhash
     let key = solana_sdk::pubkey::new_rand();
@@ -4727,7 +4688,7 @@ fn test_recent_blockhashes_sysvar() {
         let most_recent_hash = recent_blockhashes.iter().next().unwrap().blockhash;
         // Check order
         assert!(bank.is_hash_valid_for_age(&most_recent_hash, 0));
-        goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+        goto_end_of_slot(&bank);
         bank = Arc::new(new_from_parent(bank));
     }
 }
@@ -4735,8 +4696,8 @@ fn test_recent_blockhashes_sysvar() {
 #[allow(deprecated)]
 #[test]
 fn test_blockhash_queue_sysvar_consistency() {
-    let mut bank = create_simple_test_arc_bank(100_000);
-    goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+    let bank = create_simple_test_arc_bank(100_000);
+    goto_end_of_slot(&bank);
 
     let bhq_account = bank.get_account(&sysvar::recent_blockhashes::id()).unwrap();
     let recent_blockhashes =
@@ -4895,13 +4856,8 @@ where
     // Banks 0 and 1 have no fees, wait two blocks before
     // initializing our nonce accounts
     for _ in 0..2 {
-<<<<<<< HEAD
-        goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
-        bank = Arc::new(new_from_parent(bank));
-=======
-        goto_end_of_slot(bank.clone());
+        goto_end_of_slot(&bank);
         bank = new_from_parent_with_fork_next_slot(bank, bank_forks.as_ref());
->>>>>>> e83276522a (Use `BankForks` on tests - Part 1 (#34206))
     }
 
     let (custodian_keypair, nonce_keypair) = nonce_setup(
@@ -4914,13 +4870,8 @@ where
 
     // The setup nonce is not valid to be used until the next bank
     // so wait one more block
-<<<<<<< HEAD
-    goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
-    bank = Arc::new(new_from_parent(bank));
-=======
-    goto_end_of_slot(bank.clone());
+    goto_end_of_slot(&bank);
     bank = new_from_parent_with_fork_next_slot(bank, bank_forks.as_ref());
->>>>>>> e83276522a (Use `BankForks` on tests - Part 1 (#34206))
 
     Ok((bank, mint_keypair, custodian_keypair, nonce_keypair))
 }
@@ -5174,7 +5125,7 @@ fn test_nonce_transaction() {
 
     /* Kick nonce hash off the blockhash_queue */
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
-        goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+        goto_end_of_slot(&bank);
         bank = Arc::new(new_from_parent(bank));
     }
 
@@ -5243,7 +5194,7 @@ fn test_nonce_transaction() {
 
     /* Kick nonce hash off the blockhash_queue */
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
-        goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+        goto_end_of_slot(&bank);
         bank = Arc::new(new_from_parent(bank));
     }
 
@@ -5301,7 +5252,7 @@ fn test_nonce_transaction_with_tx_wide_caps() {
 
     /* Kick nonce hash off the blockhash_queue */
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
-        goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+        goto_end_of_slot(&bank);
         bank = Arc::new(new_from_parent(bank));
     }
 
@@ -5370,7 +5321,7 @@ fn test_nonce_transaction_with_tx_wide_caps() {
 
     /* Kick nonce hash off the blockhash_queue */
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
-        goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+        goto_end_of_slot(&bank);
         bank = Arc::new(new_from_parent(bank));
     }
 
@@ -5438,7 +5389,7 @@ fn test_nonce_authority() {
     let nonce_hash = get_nonce_blockhash(&bank, &nonce_pubkey).unwrap();
 
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
-        goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+        goto_end_of_slot(&bank);
         bank = Arc::new(new_from_parent(bank));
     }
 
@@ -5496,7 +5447,7 @@ fn test_nonce_payer() {
     let nonce_hash = get_nonce_blockhash(&bank, &nonce_pubkey).unwrap();
 
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
-        goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+        goto_end_of_slot(&bank);
         bank = Arc::new(new_from_parent(bank));
     }
 
@@ -5561,7 +5512,7 @@ fn test_nonce_payer_tx_wide_cap() {
     let nonce_hash = get_nonce_blockhash(&bank, &nonce_pubkey).unwrap();
 
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
-        goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+        goto_end_of_slot(&bank);
         bank = Arc::new(new_from_parent(bank));
     }
 
@@ -5629,7 +5580,7 @@ fn test_nonce_fee_calculator_updates() {
 
     // Kick nonce hash off the blockhash_queue
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
-        goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+        goto_end_of_slot(&bank);
         bank = Arc::new(new_from_parent(bank));
     }
 
@@ -5697,7 +5648,7 @@ fn test_nonce_fee_calculator_updates_tx_wide_cap() {
 
     // Kick nonce hash off the blockhash_queue
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
-        goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+        goto_end_of_slot(&bank);
         bank = Arc::new(new_from_parent(bank));
     }
 
@@ -5777,7 +5728,7 @@ fn test_check_ro_durable_nonce_fails() {
     );
     // Kick nonce hash off the blockhash_queue
     for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
-        goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+        goto_end_of_slot(&bank);
         bank = Arc::new(new_from_parent(bank));
     }
     // Caught by the runtime because it is a nonce transaction
@@ -6398,7 +6349,7 @@ fn test_bank_hash_consistency() {
     // Check a few slots, cross an epoch boundary
     assert_eq!(bank.get_slots_in_epoch(0), 32);
     loop {
-        goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+        goto_end_of_slot(&bank);
         if bank.slot == 0 {
             assert_eq!(
                 bank.hash().to_string(),
@@ -6468,13 +6419,13 @@ fn get_shrink_account_size() -> usize {
 
     // Set root for bank 0, with caching disabled so we can get the size
     // of the storage for this slot
-    let mut bank0 = Arc::new(Bank::new_with_config_for_tests(
+    let bank0 = Arc::new(Bank::new_with_config_for_tests(
         &genesis_config,
         AccountSecondaryIndexes::default(),
         AccountShrinkThreshold::default(),
     ));
     bank0.restore_old_behavior_for_fragile_tests();
-    goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank0).unwrap());
+    goto_end_of_slot(&bank0);
     bank0.freeze();
     bank0.squash();
     add_root_and_flush_write_cache(&bank0);
@@ -6507,7 +6458,7 @@ fn test_clean_nonrooted() {
     info!("pubkey1: {}", pubkey1);
 
     // Set root for bank 0, with caching enabled
-    let mut bank0 = Arc::new(Bank::new_with_config_for_tests(
+    let bank0 = Arc::new(Bank::new_with_config_for_tests(
         &genesis_config,
         AccountSecondaryIndexes::default(),
         AccountShrinkThreshold::default(),
@@ -6515,7 +6466,7 @@ fn test_clean_nonrooted() {
 
     let account_zero = AccountSharedData::new(0, 0, &Pubkey::new_unique());
 
-    goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank0).unwrap());
+    goto_end_of_slot(&bank0);
     bank0.freeze();
     bank0.squash();
     // Flush now so that accounts cache cleaning doesn't clean up bank 0 when later
@@ -6524,9 +6475,9 @@ fn test_clean_nonrooted() {
 
     // Store some lamports in bank 1
     let some_lamports = 123;
-    let mut bank1 = Arc::new(Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1));
+    let bank1 = Arc::new(Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1));
     test_utils::deposit(&bank1, &pubkey0, some_lamports).unwrap();
-    goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank1).unwrap());
+    goto_end_of_slot(&bank1);
     bank1.freeze();
     bank1.flush_accounts_cache_slot_for_tests();
 
@@ -6534,10 +6485,10 @@ fn test_clean_nonrooted() {
 
     // Store some lamports for pubkey1 in bank 2, root bank 2
     // bank2's parent is bank0
-    let mut bank2 = Arc::new(Bank::new_from_parent(bank0, &Pubkey::default(), 2));
+    let bank2 = Arc::new(Bank::new_from_parent(bank0, &Pubkey::default(), 2));
     test_utils::deposit(&bank2, &pubkey1, some_lamports).unwrap();
     bank2.store_account(&pubkey0, &account_zero);
-    goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank2).unwrap());
+    goto_end_of_slot(&bank2);
     bank2.freeze();
     bank2.squash();
     bank2.force_flush_accounts_cache();
@@ -6549,9 +6500,9 @@ fn test_clean_nonrooted() {
     // candidate set
     bank2.clean_accounts_for_tests();
 
-    let mut bank3 = Arc::new(Bank::new_from_parent(bank2, &Pubkey::default(), 3));
+    let bank3 = Arc::new(Bank::new_from_parent(bank2, &Pubkey::default(), 3));
     test_utils::deposit(&bank3, &pubkey1, some_lamports + 1).unwrap();
-    goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank3).unwrap());
+    goto_end_of_slot(&bank3);
     bank3.freeze();
     bank3.squash();
     bank3.force_flush_accounts_cache();
@@ -6582,7 +6533,7 @@ fn test_shrink_candidate_slots_cached() {
     let pubkey2 = solana_sdk::pubkey::new_rand();
 
     // Set root for bank 0, with caching enabled
-    let mut bank0 = Arc::new(Bank::new_with_config_for_tests(
+    let bank0 = Arc::new(Bank::new_with_config_for_tests(
         &genesis_config,
         AccountSecondaryIndexes::default(),
         AccountShrinkThreshold::default(),
@@ -6594,7 +6545,7 @@ fn test_shrink_candidate_slots_cached() {
     let account0 = AccountSharedData::new(1000, pubkey0_size, &Pubkey::new_unique());
     bank0.store_account(&pubkey0, &account0);
 
-    goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank0).unwrap());
+    goto_end_of_slot(&bank0);
     bank0.freeze();
     bank0.squash();
     // Flush now so that accounts cache cleaning doesn't clean up bank 0 when later
@@ -6603,10 +6554,10 @@ fn test_shrink_candidate_slots_cached() {
 
     // Store some lamports in bank 1
     let some_lamports = 123;
-    let mut bank1 = Arc::new(new_from_parent(bank0));
+    let bank1 = Arc::new(new_from_parent(bank0));
     test_utils::deposit(&bank1, &pubkey1, some_lamports).unwrap();
     test_utils::deposit(&bank1, &pubkey2, some_lamports).unwrap();
-    goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank1).unwrap());
+    goto_end_of_slot(&bank1);
     bank1.freeze();
     bank1.squash();
     // Flush now so that accounts cache cleaning doesn't clean up bank 0 when later
@@ -6614,10 +6565,10 @@ fn test_shrink_candidate_slots_cached() {
     bank1.force_flush_accounts_cache();
 
     // Store some lamports for pubkey1 in bank 2, root bank 2
-    let mut bank2 = Arc::new(new_from_parent(bank1));
+    let bank2 = Arc::new(new_from_parent(bank1));
     test_utils::deposit(&bank2, &pubkey1, some_lamports).unwrap();
     bank2.store_account(&pubkey0, &account0);
-    goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank2).unwrap());
+    goto_end_of_slot(&bank2);
     bank2.freeze();
     bank2.squash();
     bank2.force_flush_accounts_cache();
@@ -11664,13 +11615,11 @@ fn test_cap_accounts_data_allocations_per_transaction() {
             / MAX_PERMITTED_DATA_LENGTH as usize;
 
     let (genesis_config, mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
-<<<<<<< HEAD
     let mut bank = Bank::new_for_tests(&genesis_config);
     bank.activate_feature(&feature_set::enable_early_verification_of_account_modifications::id());
     bank.activate_feature(&feature_set::cap_accounts_data_allocations_per_transaction::id());
-=======
-    let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
->>>>>>> e83276522a (Use `BankForks` on tests - Part 1 (#34206))
+
+    let bank = Bank::wrap_with_bank_forks_for_tests(bank).0;
 
     let mut instructions = Vec::new();
     let mut keypairs = vec![mint_keypair.insecure_clone()];
