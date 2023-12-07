@@ -5021,7 +5021,7 @@ impl Bank {
             missing,
         } = {
             // Lock the global cache to figure out which programs need to be loaded
-            let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
+            let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
             Mutex::into_inner(
                 Arc::into_inner(
                     loaded_programs_cache.extract(self, programs_and_slots.into_iter()),
@@ -5034,9 +5034,12 @@ impl Bank {
         // Load missing programs while global cache is unlocked
         let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing
             .iter()
-            .map(|(key, (count, reloading))| {
+            .map(|(key, (entry, reloading))| {
                 let program = self.load_program(key, *reloading, None);
-                program.tx_usage_counter.store(*count, Ordering::Relaxed);
+                program.tx_usage_counter.store(
+                    entry.tx_usage_counter.load(Ordering::Relaxed),
+                    Ordering::Relaxed,
+                );
                 (*key, program)
             })
             .collect();

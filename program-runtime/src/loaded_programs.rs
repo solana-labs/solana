@@ -79,6 +79,8 @@ pub enum LoadedProgramType {
     #[default]
     Closed,
     DelayVisibility,
+    /// Currently enqueued in the cooperative loading phase
+    Loading(Mutex<(bool, Vec<Arc<Mutex<ExtractedPrograms>>>)>),
     /// Successfully verified but not currently compiled, used to track usage statistics when a compiled program is evicted from memory.
     Unloaded(ProgramRuntimeEnvironment),
     LegacyV0(Executable<InvokeContext<'static>>),
@@ -97,6 +99,7 @@ impl Debug for LoadedProgramType {
             }
             LoadedProgramType::Closed => write!(f, "LoadedProgramType::Closed"),
             LoadedProgramType::DelayVisibility => write!(f, "LoadedProgramType::DelayVisibility"),
+            LoadedProgramType::Loading(_) => write!(f, "LoadedProgramType::Loading"),
             LoadedProgramType::Unloaded(_) => write!(f, "LoadedProgramType::Unloaded"),
             LoadedProgramType::LegacyV0(_) => write!(f, "LoadedProgramType::LegacyV0"),
             LoadedProgramType::LegacyV1(_) => write!(f, "LoadedProgramType::LegacyV1"),
@@ -273,6 +276,18 @@ impl LoadedProgram {
             metrics,
             false, /* reloading */
         )
+    }
+
+    fn new_loading() -> Self {
+        Self {
+            program: LoadedProgramType::Loading(Mutex::new((false, vec![]))),
+            account_size: 0,
+            deployment_slot: 0,
+            effective_slot: 0,
+            maybe_expiration_slot: None,
+            tx_usage_counter: AtomicU64::new(0),
+            ix_usage_counter: AtomicU64::new(0),
+        }
     }
 
     /// Reloads a user program, *without* running the verifier.
@@ -511,7 +526,7 @@ pub struct LoadedProgramsForTxBatch {
 
 pub struct ExtractedPrograms {
     pub loaded: LoadedProgramsForTxBatch,
-    pub missing: HashMap<Pubkey, (u64, bool)>,
+    pub missing: HashMap<Pubkey, (Arc<LoadedProgram>, bool)>,
 }
 
 impl LoadedProgramsForTxBatch {
@@ -784,7 +799,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
     /// Extracts a subset of the programs relevant to a transaction batch
     /// and returns which program accounts the accounts DB needs to load.
     pub fn extract<S: WorkingSlot>(
-        &self,
+        &mut self,
         working_slot: &S,
         keys: impl Iterator<Item = (Pubkey, (LoadedProgramMatchCriteria, u64))>,
     ) -> Arc<Mutex<ExtractedPrograms>> {
@@ -802,9 +817,13 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         let mut extracting = extracted.lock().unwrap();
         extracting.loaded.entries = keys
             .filter_map(|(key, (match_criteria, usage_count))| {
+                let mut missing_entry = None;
                 let mut reloading = false;
                 if let Some(second_level) = self.entries.get(&key) {
                     for entry in second_level.iter().rev() {
+                        if let LoadedProgramType::Loading(_) = &entry.program {
+                            continue;
+                        }
                         let is_ancestor = if let Some(fork_graph) = &self.fork_graph {
                             fork_graph
                                 .read()
@@ -819,7 +838,6 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                         } else {
                             working_slot.is_ancestor(entry.deployment_slot)
                         };
-
                         if entry.deployment_slot <= self.latest_root_slot
                             || entry.deployment_slot == current_slot
                             || is_ancestor
@@ -854,8 +872,18 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                             return Some((key, entry_to_return));
                         }
                     }
+                    if let Some(entry) = second_level.first() {
+                        if let LoadedProgramType::Loading(_) = &entry.program {
+                            missing_entry = Some(entry.clone());
+                        }
+                    }
                 }
-                extracting.missing.insert(key, (usage_count, reloading));
+                let missing_entry =
+                    missing_entry.unwrap_or_else(|| Arc::new(LoadedProgram::new_loading()));
+                missing_entry
+                    .tx_usage_counter
+                    .fetch_add(usage_count, Ordering::Relaxed);
+                extracting.missing.insert(key, (missing_entry, reloading));
                 None
             })
             .collect::<HashMap<Pubkey, Arc<LoadedProgram>>>();
@@ -865,6 +893,23 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         self.stats
             .hits
             .fetch_add(extracting.loaded.entries.len() as u64, Ordering::Relaxed);
+        for (key, (entry, _reloading)) in extracting.missing.iter() {
+            if let LoadedProgramType::Loading(mutex) = &entry.program {
+                // The Mutex around `waiting_list` is strictly speaking unnecessary
+                // because the entire `LoadedPrograms` cache is already locked here.
+                let waiting_list = &mut mutex.lock().unwrap().1;
+                if waiting_list.is_empty() {
+                    self.assign_program(*key, entry.clone());
+                }
+                let index = match waiting_list.binary_search_by(|tx_batch| {
+                    tx_batch.lock().unwrap().loaded.slot.cmp(&current_slot)
+                }) {
+                    Ok(index) => index,
+                    Err(index) => index,
+                };
+                waiting_list.insert(index, extracted.clone());
+            }
+        }
         drop(extracting);
         extracted
     }
@@ -1636,7 +1681,7 @@ mod tests {
         extracted
             .missing
             .get(key)
-            .filter(|(_count, reloading)| *reloading == reload)
+            .filter(|(_entry, reloading)| *reloading == reload)
             .is_some()
     }
 
@@ -2245,7 +2290,7 @@ mod tests {
                 .get(&program1)
                 .expect("Didn't find program1")
                 .len(),
-            3
+            4
         );
 
         // New root 5 should not evict the expired entry for program1
@@ -2256,7 +2301,7 @@ mod tests {
                 .get(&program1)
                 .expect("Didn't find program1")
                 .len(),
-            1
+            2
         );
 
         // New root 15 should evict the expired entry for program1
