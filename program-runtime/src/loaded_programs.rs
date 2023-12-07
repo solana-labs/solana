@@ -422,8 +422,13 @@ impl LoadedProgramsForTxBatch {
             self.replenish(*key, entry.clone());
         })
     }
+
+    pub fn merge_consuming(&mut self, other: Self) {
+        self.entries.extend(other.entries);
+    }
 }
 
+#[derive(PartialEq)]
 pub enum LoadedProgramMatchCriteria {
     DeployedOnOrAfterSlot(Slot),
     Tombstone,
@@ -608,62 +613,56 @@ impl LoadedPrograms {
     pub fn extract<S: WorkingSlot>(
         &self,
         working_slot: &S,
-        keys: impl Iterator<Item = (Pubkey, (LoadedProgramMatchCriteria, u64))>,
-    ) -> (LoadedProgramsForTxBatch, Vec<(Pubkey, u64)>) {
-        let mut missing = Vec::new();
-        let found = keys
-            .filter_map(|(key, (match_criteria, count))| {
-                if let Some(second_level) = self.entries.get(&key) {
-                    for entry in second_level.fork_versions.iter().rev() {
-                        let current_slot = working_slot.current_slot();
-                        if entry.deployment_slot <= self.latest_root
-                            || entry.deployment_slot == current_slot
-                            || working_slot.is_ancestor(entry.deployment_slot)
-                        {
-                            if !Self::is_entry_usable(entry, current_slot, &match_criteria) {
-                                // At this point it is clear that what we are looking for does not exist.
-                                // So break here which does continue at the push into missing below.
-                                break;
-                            }
-                            let entry_to_return = if current_slot >= entry.effective_slot {
-                                entry.clone()
-                            } else if entry.is_implicit_delay_visibility_tombstone(current_slot) {
-                                // Found a program entry on the current fork, but it's not effective
-                                // yet. It indicates that the program has delayed visibility. Return
-                                // the tombstone to reflect that.
-                                Arc::new(LoadedProgram::new_tombstone(
-                                    entry.deployment_slot,
-                                    LoadedProgramType::DelayVisibility,
-                                ))
-                            } else {
-                                // Keep going to find an entry which is effective already.
-                                continue;
-                            };
-                            entry_to_return
-                                .tx_usage_counter
-                                .fetch_add(count, Ordering::Relaxed);
-                            return Some((key, entry_to_return));
+        search_for: &mut Vec<(Pubkey, (LoadedProgramMatchCriteria, u64))>,
+    ) -> LoadedProgramsForTxBatch {
+        let mut found = HashMap::new();
+        search_for.retain(|(key, (match_criteria, count))| {
+            if let Some(second_level) = self.entries.get(key) {
+                for entry in second_level.fork_versions.iter().rev() {
+                    let current_slot = working_slot.current_slot();
+                    if entry.deployment_slot <= self.latest_root
+                        || entry.deployment_slot == current_slot
+                        || working_slot.is_ancestor(entry.deployment_slot)
+                    {
+                        if !Self::is_entry_usable(entry, current_slot, match_criteria) {
+                            // We're iterating in reverse. If the most recent entry isn't usable,
+                            // neither are the older ones so stop looking.
+                            break;
                         }
+                        let entry_to_return = if current_slot >= entry.effective_slot {
+                            entry.clone()
+                        } else if entry.is_implicit_delay_visibility_tombstone(current_slot) {
+                            // Found a program entry on the current fork, but it's not effective
+                            // yet. It indicates that the program has delayed visibility. Return
+                            // the tombstone to reflect that.
+                            Arc::new(LoadedProgram::new_tombstone(
+                                entry.deployment_slot,
+                                LoadedProgramType::DelayVisibility,
+                            ))
+                        } else {
+                            // Keep looking for an effective entry.
+                            continue;
+                        };
+                        entry_to_return
+                            .tx_usage_counter
+                            .fetch_add(*count, Ordering::Relaxed);
+                        found.insert(*key, entry_to_return);
+                        return false;
                     }
                 }
-                missing.push((key, count));
-                None
-            })
-            .collect::<HashMap<Pubkey, Arc<LoadedProgram>>>();
-
+            }
+            true
+        });
         self.stats
             .misses
-            .fetch_add(missing.len() as u64, Ordering::Relaxed);
+            .fetch_add(search_for.len() as u64, Ordering::Relaxed);
         self.stats
             .hits
             .fetch_add(found.len() as u64, Ordering::Relaxed);
-        (
-            LoadedProgramsForTxBatch {
-                entries: found,
-                slot: working_slot.current_slot(),
-            },
-            missing,
-        )
+        LoadedProgramsForTxBatch {
+            entries: found,
+            slot: working_slot.current_slot(),
+        }
     }
 
     pub fn merge(&mut self, tx_batch_cache: &LoadedProgramsForTxBatch) {
@@ -1445,35 +1444,29 @@ mod tests {
 
         // Testing fork 0 - 10 - 12 - 22 with current slot at 22
         let working_slot = TestWorkingSlot::new(22, &[0, 10, 20, 22]);
-        let (found, missing) = cache.extract(
-            &working_slot,
-            vec![
-                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program2, (LoadedProgramMatchCriteria::NoCriteria, 2)),
-                (program3, (LoadedProgramMatchCriteria::NoCriteria, 3)),
-                (program4, (LoadedProgramMatchCriteria::NoCriteria, 4)),
-            ]
-            .into_iter(),
-        );
+        let mut missing = vec![
+            (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program2, (LoadedProgramMatchCriteria::NoCriteria, 2)),
+            (program3, (LoadedProgramMatchCriteria::NoCriteria, 3)),
+            (program4, (LoadedProgramMatchCriteria::NoCriteria, 4)),
+        ];
+        let found = cache.extract(&working_slot, &mut missing);
 
         assert!(match_slot(&found, &program1, 20, 22));
         assert!(match_slot(&found, &program4, 0, 22));
 
-        assert!(missing.contains(&(program2, 2)));
-        assert!(missing.contains(&(program3, 3)));
+        assert!(missing.contains(&(program2, (LoadedProgramMatchCriteria::NoCriteria, 2))));
+        assert!(missing.contains(&(program3, (LoadedProgramMatchCriteria::NoCriteria, 3))));
 
         // Testing fork 0 - 5 - 11 - 15 - 16 with current slot at 16
         let mut working_slot = TestWorkingSlot::new(15, &[0, 5, 11, 15, 16, 18, 19, 23]);
-        let (found, missing) = cache.extract(
-            &working_slot,
-            vec![
-                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-            ]
-            .into_iter(),
-        );
+        let mut missing = vec![
+            (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+        ];
+        let found = cache.extract(&working_slot, &mut missing);
 
         assert!(match_slot(&found, &program1, 0, 15));
         assert!(match_slot(&found, &program2, 11, 15));
@@ -1487,20 +1480,17 @@ mod tests {
         ));
         assert_eq!(tombstone.deployment_slot, 15);
 
-        assert!(missing.contains(&(program3, 1)));
+        assert!(missing.contains(&(program3, (LoadedProgramMatchCriteria::NoCriteria, 1))));
 
         // Testing the same fork above, but current slot is now 18 (equal to effective slot of program4).
         working_slot.update_slot(18);
-        let (found, missing) = cache.extract(
-            &working_slot,
-            vec![
-                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-            ]
-            .into_iter(),
-        );
+        let mut missing = vec![
+            (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+        ];
+        let found = cache.extract(&working_slot, &mut missing);
 
         assert!(match_slot(&found, &program1, 0, 18));
         assert!(match_slot(&found, &program2, 11, 18));
@@ -1508,20 +1498,17 @@ mod tests {
         // The effective slot of program4 deployed in slot 15 is 18. So it should be usable in slot 18.
         assert!(match_slot(&found, &program4, 15, 18));
 
-        assert!(missing.contains(&(program3, 1)));
+        assert!(missing.contains(&(program3, (LoadedProgramMatchCriteria::NoCriteria, 1))));
 
         // Testing the same fork above, but current slot is now 23 (future slot than effective slot of program4).
         working_slot.update_slot(23);
-        let (found, missing) = cache.extract(
-            &working_slot,
-            vec![
-                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-            ]
-            .into_iter(),
-        );
+        let mut missing = vec![
+            (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+        ];
+        let found = cache.extract(&working_slot, &mut missing);
 
         assert!(match_slot(&found, &program1, 0, 23));
         assert!(match_slot(&found, &program2, 11, 23));
@@ -1529,20 +1516,17 @@ mod tests {
         // The effective slot of program4 deployed in slot 15 is 19. So it should be usable in slot 23.
         assert!(match_slot(&found, &program4, 15, 23));
 
-        assert!(missing.contains(&(program3, 1)));
+        assert!(missing.contains(&(program3, (LoadedProgramMatchCriteria::NoCriteria, 1))));
 
         // Testing fork 0 - 5 - 11 - 15 - 16 with current slot at 11
         let working_slot = TestWorkingSlot::new(11, &[0, 5, 11, 15, 16]);
-        let (found, missing) = cache.extract(
-            &working_slot,
-            vec![
-                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-            ]
-            .into_iter(),
-        );
+        let mut missing = vec![
+            (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+        ];
+        let found = cache.extract(&working_slot, &mut missing);
 
         assert!(match_slot(&found, &program1, 0, 11));
         // program2 was updated at slot 11, but is not effective till slot 12. The result should contain a tombstone.
@@ -1554,7 +1538,7 @@ mod tests {
         assert_eq!(tombstone.deployment_slot, 11);
         assert!(match_slot(&found, &program4, 5, 11));
 
-        assert!(missing.contains(&(program3, 1)));
+        assert!(missing.contains(&(program3, (LoadedProgramMatchCriteria::NoCriteria, 1))));
 
         // The following is a special case, where there's an expiration slot
         let test_program = Arc::new(LoadedProgram {
@@ -1570,43 +1554,37 @@ mod tests {
 
         // Testing fork 0 - 5 - 11 - 15 - 16 - 19 - 21 - 23 with current slot at 19
         let working_slot = TestWorkingSlot::new(19, &[0, 5, 11, 15, 16, 18, 19, 21, 23]);
-        let (found, missing) = cache.extract(
-            &working_slot,
-            vec![
-                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-            ]
-            .into_iter(),
-        );
+        let mut missing = vec![
+            (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+        ];
+        let found = cache.extract(&working_slot, &mut missing);
 
         assert!(match_slot(&found, &program1, 0, 19));
         assert!(match_slot(&found, &program2, 11, 19));
         // Program4 deployed at slot 19 should not be expired yet
         assert!(match_slot(&found, &program4, 19, 19));
 
-        assert!(missing.contains(&(program3, 1)));
+        assert!(missing.contains(&(program3, (LoadedProgramMatchCriteria::NoCriteria, 1))));
 
         // Testing fork 0 - 5 - 11 - 15 - 16 - 19 - 21 - 23 with current slot at 21
         // This would cause program4 deployed at slot 19 to be expired.
         let working_slot = TestWorkingSlot::new(21, &[0, 5, 11, 15, 16, 18, 19, 21, 23]);
-        let (found, missing) = cache.extract(
-            &working_slot,
-            vec![
-                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-            ]
-            .into_iter(),
-        );
+        let mut missing = vec![
+            (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+        ];
+        let found = cache.extract(&working_slot, &mut missing);
 
         assert!(match_slot(&found, &program1, 0, 21));
         assert!(match_slot(&found, &program2, 11, 21));
 
-        assert!(missing.contains(&(program3, 1)));
-        assert!(missing.contains(&(program4, 1)));
+        assert!(missing.contains(&(program3, (LoadedProgramMatchCriteria::NoCriteria, 1))));
+        assert!(missing.contains(&(program4, (LoadedProgramMatchCriteria::NoCriteria, 1))));
 
         // Remove the expired entry to let the rest of the test continue
         if let Some(second_level) = cache.entries.get_mut(&program4) {
@@ -1632,36 +1610,30 @@ mod tests {
 
         // Testing fork 11 - 15 - 16- 19 - 22 with root at 5 and current slot at 22
         let working_slot = TestWorkingSlot::new(22, &[5, 11, 15, 16, 19, 22, 23]);
-        let (found, missing) = cache.extract(
-            &working_slot,
-            vec![
-                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-            ]
-            .into_iter(),
-        );
+        let mut missing = vec![
+            (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+        ];
+        let found = cache.extract(&working_slot, &mut missing);
 
         // Since the fork was pruned, we should not find the entry deployed at slot 20.
         assert!(match_slot(&found, &program1, 0, 22));
         assert!(match_slot(&found, &program2, 11, 22));
         assert!(match_slot(&found, &program4, 15, 22));
 
-        assert!(missing.contains(&(program3, 1)));
+        assert!(missing.contains(&(program3, (LoadedProgramMatchCriteria::NoCriteria, 1))));
 
         // Testing fork 0 - 5 - 11 - 25 - 27 with current slot at 27
         let working_slot = TestWorkingSlot::new(27, &[11, 25, 27]);
-        let (found, _missing) = cache.extract(
-            &working_slot,
-            vec![
-                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-            ]
-            .into_iter(),
-        );
+        let mut missing = vec![
+            (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+        ];
+        let found = cache.extract(&working_slot, &mut missing);
 
         assert!(match_slot(&found, &program1, 0, 27));
         assert!(match_slot(&found, &program2, 11, 27));
@@ -1687,23 +1659,20 @@ mod tests {
 
         // Testing fork 16, 19, 23, with root at 15, current slot at 23
         let working_slot = TestWorkingSlot::new(23, &[16, 19, 23]);
-        let (found, missing) = cache.extract(
-            &working_slot,
-            vec![
-                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-            ]
-            .into_iter(),
-        );
+        let mut missing = vec![
+            (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+        ];
+        let found = cache.extract(&working_slot, &mut missing);
 
         assert!(match_slot(&found, &program1, 0, 23));
         assert!(match_slot(&found, &program2, 11, 23));
         assert!(match_slot(&found, &program4, 15, 23));
 
         // program3 was deployed on slot 25, which has been pruned
-        assert!(missing.contains(&(program3, 1)));
+        assert!(missing.contains(&(program3, (LoadedProgramMatchCriteria::NoCriteria, 1))));
     }
 
     #[test]
@@ -1743,42 +1712,39 @@ mod tests {
 
         // Testing fork 0 - 5 - 11 - 15 - 16 - 19 - 21 - 23 with current slot at 19
         let working_slot = TestWorkingSlot::new(12, &[0, 5, 11, 12, 15, 16, 18, 19, 21, 23]);
-        let (found, missing) = cache.extract(
-            &working_slot,
-            vec![
-                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-            ]
-            .into_iter(),
-        );
+        let mut missing = vec![
+            (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+        ];
+        let found = cache.extract(&working_slot, &mut missing);
 
         assert!(match_slot(&found, &program1, 0, 12));
         assert!(match_slot(&found, &program2, 11, 12));
 
-        assert!(missing.contains(&(program3, 1)));
+        assert!(missing.contains(&(program3, (LoadedProgramMatchCriteria::NoCriteria, 1))));
 
         // Test the same fork, but request the program modified at a later slot than what's in the cache.
-        let (found, missing) = cache.extract(
-            &working_slot,
-            vec![
-                (
-                    program1,
-                    (LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(5), 1),
-                ),
-                (
-                    program2,
-                    (LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(5), 1),
-                ),
-                (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-            ]
-            .into_iter(),
-        );
+        let mut missing = vec![
+            (
+                program1,
+                (LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(5), 1),
+            ),
+            (
+                program2,
+                (LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(5), 1),
+            ),
+            (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+        ];
+        let found = cache.extract(&working_slot, &mut missing);
 
         assert!(match_slot(&found, &program2, 11, 12));
 
-        assert!(missing.contains(&(program1, 1)));
-        assert!(missing.contains(&(program3, 1)));
+        assert!(missing.contains(&(
+            program1,
+            (LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(5), 1)
+        )));
+        assert!(missing.contains(&(program3, (LoadedProgramMatchCriteria::NoCriteria, 1))));
     }
 
     #[test]
@@ -1830,39 +1796,33 @@ mod tests {
 
         // Testing fork 0 - 5 - 11 - 15 - 16 - 19 - 21 - 23 with current slot at 19
         let working_slot = TestWorkingSlot::new(12, &[0, 5, 11, 12, 15, 16, 18, 19, 21, 23]);
-        let (found, missing) = cache.extract(
-            &working_slot,
-            vec![
-                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-            ]
-            .into_iter(),
-        );
+        let mut missing = vec![
+            (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+        ];
+        let found = cache.extract(&working_slot, &mut missing);
 
         // Program1 deployed at slot 11 should not be expired yet
         assert!(match_slot(&found, &program1, 11, 12));
         assert!(match_slot(&found, &program2, 11, 12));
 
-        assert!(missing.contains(&(program3, 1)));
+        assert!(missing.contains(&(program3, (LoadedProgramMatchCriteria::NoCriteria, 1))));
 
         // Testing fork 0 - 5 - 11 - 12 - 15 - 16 - 19 - 21 - 23 with current slot at 15
         // This would cause program4 deployed at slot 15 to be expired.
         let working_slot = TestWorkingSlot::new(15, &[0, 5, 11, 15, 16, 18, 19, 21, 23]);
-        let (found, missing) = cache.extract(
-            &working_slot,
-            vec![
-                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-            ]
-            .into_iter(),
-        );
+        let mut missing = vec![
+            (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+        ];
+        let found = cache.extract(&working_slot, &mut missing);
 
         assert!(match_slot(&found, &program2, 11, 15));
 
-        assert!(missing.contains(&(program1, 1)));
-        assert!(missing.contains(&(program3, 1)));
+        assert!(missing.contains(&(program1, (LoadedProgramMatchCriteria::NoCriteria, 1))));
+        assert!(missing.contains(&(program3, (LoadedProgramMatchCriteria::NoCriteria, 1))));
 
         // Test that the program still exists in the cache, even though it is expired.
         assert_eq!(
@@ -1917,10 +1877,8 @@ mod tests {
         cache.prune(&fork_graph, 10);
 
         let working_slot = TestWorkingSlot::new(20, &[0, 10, 20]);
-        let (found, _missing) = cache.extract(
-            &working_slot,
-            vec![(program1, (LoadedProgramMatchCriteria::NoCriteria, 1))].into_iter(),
-        );
+        let mut missing = vec![(program1, (LoadedProgramMatchCriteria::NoCriteria, 1))];
+        let found = cache.extract(&working_slot, &mut missing);
 
         // The cache should have the program deployed at slot 0
         assert_eq!(
@@ -1959,77 +1917,62 @@ mod tests {
         assert!(!cache.replenish(program2, new_test_loaded_program(10, 11)).0);
 
         let working_slot = TestWorkingSlot::new(20, &[0, 10, 20]);
-        let (found, _missing) = cache.extract(
-            &working_slot,
-            vec![
-                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-            ]
-            .into_iter(),
-        );
+        let mut missing = vec![
+            (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+        ];
+        let found = cache.extract(&working_slot, &mut missing);
 
         assert!(match_slot(&found, &program1, 0, 20));
         assert!(match_slot(&found, &program2, 10, 20));
 
         let working_slot = TestWorkingSlot::new(6, &[0, 5, 6]);
-        let (found, missing) = cache.extract(
-            &working_slot,
-            vec![
-                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-            ]
-            .into_iter(),
-        );
+        let mut missing = vec![
+            (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+        ];
+        let found = cache.extract(&working_slot, &mut missing);
 
         assert!(match_slot(&found, &program1, 5, 6));
-        assert!(missing.contains(&(program2, 1)));
+        assert!(missing.contains(&(program2, (LoadedProgramMatchCriteria::NoCriteria, 1))));
 
         // Pruning slot 5 will remove program1 entry deployed at slot 5.
         // On fork chaining from slot 5, the entry deployed at slot 0 will become visible.
         cache.prune_by_deployment_slot(5);
 
         let working_slot = TestWorkingSlot::new(20, &[0, 10, 20]);
-        let (found, _missing) = cache.extract(
-            &working_slot,
-            vec![
-                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-            ]
-            .into_iter(),
-        );
+        let mut missing = vec![
+            (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+        ];
+        let found = cache.extract(&working_slot, &mut missing);
 
         assert!(match_slot(&found, &program1, 0, 20));
         assert!(match_slot(&found, &program2, 10, 20));
 
         let working_slot = TestWorkingSlot::new(6, &[0, 5, 6]);
-        let (found, missing) = cache.extract(
-            &working_slot,
-            vec![
-                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-            ]
-            .into_iter(),
-        );
+        let mut missing = vec![
+            (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+        ];
+        let found = cache.extract(&working_slot, &mut missing);
 
         assert!(match_slot(&found, &program1, 0, 6));
-        assert!(missing.contains(&(program2, 1)));
+        assert!(missing.contains(&(program2, (LoadedProgramMatchCriteria::NoCriteria, 1))));
 
         // Pruning slot 10 will remove program2 entry deployed at slot 10.
         // As there is no other entry for program2, extract() will return it as missing.
         cache.prune_by_deployment_slot(10);
 
         let working_slot = TestWorkingSlot::new(20, &[0, 10, 20]);
-        let (found, _missing) = cache.extract(
-            &working_slot,
-            vec![
-                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
-            ]
-            .into_iter(),
-        );
+        let mut missing = vec![
+            (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+        ];
+        let found = cache.extract(&working_slot, &mut missing);
 
         assert!(match_slot(&found, &program1, 0, 20));
-        assert!(missing.contains(&(program2, 1)));
+        assert!(missing.contains(&(program2, (LoadedProgramMatchCriteria::NoCriteria, 1))));
     }
 
     #[test]

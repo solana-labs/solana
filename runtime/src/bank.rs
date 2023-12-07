@@ -4304,7 +4304,7 @@ impl Bank {
         &self,
         program_accounts_map: &HashMap<Pubkey, (&Pubkey, u64)>,
     ) -> LoadedProgramsForTxBatch {
-        let programs_and_slots: Vec<(Pubkey, (LoadedProgramMatchCriteria, u64))> =
+        let mut missing_programs: Vec<(Pubkey, (LoadedProgramMatchCriteria, u64))> =
             if self.check_program_modification_slot {
                 program_accounts_map
                     .iter()
@@ -4330,16 +4330,19 @@ impl Bank {
                     .collect()
             };
 
-        let (mut loaded_programs_for_txs, missing_programs) = {
-            // Lock the global cache to figure out which programs need to be loaded
-            let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
-            loaded_programs_cache.extract(self, programs_and_slots.into_iter())
-        };
+        let mut loaded_programs_for_txs = LoadedProgramsForTxBatch::new(self.slot());
+        while !missing_programs.is_empty() {
+            {
+                // Lock the global cache to figure out which programs need to be loaded
+                let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
+                loaded_programs_for_txs
+                    .merge_consuming(loaded_programs_cache.extract(self, &mut missing_programs));
+            }
 
         // Load missing programs while global cache is unlocked
         let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing_programs
             .iter()
-            .map(|(key, count)| {
+            .map(|(key, (_match_criteria, count))| {
                 let program = self.load_program(key);
                 program.tx_usage_counter.store(*count, Ordering::Relaxed);
                 (*key, program)
