@@ -348,11 +348,16 @@ impl LoadedProgram {
 }
 
 #[derive(Debug, Default)]
+struct SecondLevel {
+    fork_versions: Vec<Arc<LoadedProgram>>,
+}
+
+#[derive(Debug, Default)]
 pub struct LoadedPrograms {
     /// A two level index:
     ///
     /// Pubkey is the address of a program, multiple versions can coexists simultaneously under the same address (in different slots).
-    entries: HashMap<Pubkey, Vec<Arc<LoadedProgram>>>,
+    entries: HashMap<Pubkey, SecondLevel>,
     /// Globally shared RBPF config and syscall registry
     pub program_runtime_environment_v1: Arc<BuiltinProgram<InvokeContext<'static>>>,
     latest_root: Slot,
@@ -434,12 +439,16 @@ impl LoadedPrograms {
         key: Pubkey,
         entry: Arc<LoadedProgram>,
     ) -> (bool, Arc<LoadedProgram>) {
-        let second_level = self.entries.entry(key).or_insert_with(Vec::new);
-        let index = second_level
+        let fork_versions = &mut self
+            .entries
+            .entry(key)
+            .or_insert_with(SecondLevel::default)
+            .fork_versions;
+        let index = fork_versions
             .iter()
             .position(|at| at.effective_slot >= entry.effective_slot);
         if let Some((existing, entry_index)) =
-            index.and_then(|index| second_level.get(index).map(|value| (value, index)))
+            index.and_then(|index| fork_versions.get(index).map(|value| (value, index)))
         {
             if existing.deployment_slot == entry.deployment_slot
                 && existing.effective_slot == entry.effective_slot
@@ -457,13 +466,13 @@ impl LoadedPrograms {
                         existing.ix_usage_counter.load(Ordering::Relaxed),
                         Ordering::Relaxed,
                     );
-                    second_level.remove(entry_index);
+                    fork_versions.remove(entry_index);
                 } else if existing.is_tombstone() != entry.is_tombstone() {
                     // Either the old entry is tombstone and the new one is not.
                     // (Let's give the new entry a chance).
                     // Or, the old entry is not a tombstone and the new one is a tombstone.
                     // (Remove the old entry, as the tombstone makes it obsolete).
-                    second_level.remove(entry_index);
+                    fork_versions.remove(entry_index);
                 } else {
                     self.stats.replacements.fetch_add(1, Ordering::Relaxed);
                     return (true, existing.clone());
@@ -471,7 +480,7 @@ impl LoadedPrograms {
             }
         }
         self.stats.insertions.fetch_add(1, Ordering::Relaxed);
-        second_level.insert(index.unwrap_or(second_level.len()), entry.clone());
+        fork_versions.insert(index.unwrap_or(fork_versions.len()), entry.clone());
         (false, entry)
     }
 
@@ -488,7 +497,7 @@ impl LoadedPrograms {
     /// On the epoch boundary this removes all programs of the outdated feature set
     pub fn prune_feature_set_transition(&mut self) {
         for second_level in self.entries.values_mut() {
-            second_level.retain(|entry| {
+            second_level.fork_versions.retain(|entry| {
                 let retain = match &entry.program {
                     LoadedProgramType::Builtin(_)
                     | LoadedProgramType::DelayVisibility
@@ -520,7 +529,9 @@ impl LoadedPrograms {
 
     pub fn prune_by_deployment_slot(&mut self, slot: Slot) {
         for second_level in self.entries.values_mut() {
-            second_level.retain(|entry| entry.deployment_slot != slot);
+            second_level
+                .fork_versions
+                .retain(|entry| entry.deployment_slot != slot);
         }
         self.remove_programs_with_no_entries();
     }
@@ -530,7 +541,8 @@ impl LoadedPrograms {
         let previous_root = self.latest_root;
         for second_level in self.entries.values_mut() {
             let mut first_ancestor_found = false;
-            *second_level = second_level
+            second_level.fork_versions = second_level
+                .fork_versions
                 .iter()
                 .rev()
                 .filter(|entry| {
@@ -550,7 +562,7 @@ impl LoadedPrograms {
                 })
                 .cloned()
                 .collect();
-            second_level.reverse();
+            second_level.fork_versions.reverse();
         }
 
         self.remove_expired_entries(new_root);
@@ -604,7 +616,7 @@ impl LoadedPrograms {
         let found = keys
             .filter_map(|(key, (match_criteria, count))| {
                 if let Some(second_level) = self.entries.get(&key) {
-                    for entry in second_level.iter().rev() {
+                    for entry in second_level.fork_versions.iter().rev() {
                         let current_slot = working_slot.current_slot();
                         if entry.deployment_slot <= self.latest_root
                             || entry.deployment_slot == current_slot
@@ -667,8 +679,10 @@ impl LoadedPrograms {
         let sorted_candidates: Vec<(Pubkey, Arc<LoadedProgram>)> = self
             .entries
             .iter()
-            .flat_map(|(id, list)| {
-                list.iter()
+            .flat_map(|(id, second_level)| {
+                second_level
+                    .fork_versions
+                    .iter()
                     .filter_map(move |program| match program.program {
                         LoadedProgramType::LegacyV0(_)
                         | LoadedProgramType::LegacyV1(_)
@@ -700,8 +714,8 @@ impl LoadedPrograms {
     }
 
     fn remove_expired_entries(&mut self, current_slot: Slot) {
-        for entry in self.entries.values_mut() {
-            entry.retain(|program| {
+        for second_level in self.entries.values_mut() {
+            second_level.fork_versions.retain(|program| {
                 program
                     .maybe_expiration_slot
                     .map(|expiration| {
@@ -718,8 +732,8 @@ impl LoadedPrograms {
     }
 
     fn unload_program(&mut self, id: &Pubkey) {
-        if let Some(entries) = self.entries.get_mut(id) {
-            entries.iter_mut().for_each(|entry| {
+        if let Some(second_level) = self.entries.get_mut(id) {
+            second_level.fork_versions.iter_mut().for_each(|entry| {
                 if let Some(unloaded) = entry.to_unloaded() {
                     *entry = Arc::new(unloaded);
                     self.stats
@@ -742,8 +756,12 @@ impl LoadedPrograms {
         remove: impl Iterator<Item = &'a (Pubkey, Arc<LoadedProgram>)>,
     ) {
         for (id, program) in remove {
-            if let Some(entries) = self.entries.get_mut(id) {
-                if let Some(candidate) = entries.iter_mut().find(|entry| entry == &program) {
+            if let Some(second_level) = self.entries.get_mut(id) {
+                if let Some(candidate) = second_level
+                    .fork_versions
+                    .iter_mut()
+                    .find(|entry| entry == &program)
+                {
                     if let Some(unloaded) = candidate.to_unloaded() {
                         if candidate.tx_usage_counter.load(Ordering::Relaxed) == 1 {
                             self.stats.one_hit_wonders.fetch_add(1, Ordering::Relaxed);
@@ -762,7 +780,8 @@ impl LoadedPrograms {
 
     fn remove_programs_with_no_entries(&mut self) {
         let num_programs_before_removal = self.entries.len();
-        self.entries.retain(|_, programs| !programs.is_empty());
+        self.entries
+            .retain(|_, second_level| !second_level.fork_versions.is_empty());
         if self.entries.len() < num_programs_before_removal {
             self.stats.empty_entries.fetch_add(
                 num_programs_before_removal.saturating_sub(self.entries.len()) as u64,
@@ -848,8 +867,9 @@ mod tests {
         cache
             .entries
             .values()
-            .map(|programs| {
-                programs
+            .map(|second_level| {
+                second_level
+                    .fork_versions
                     .iter()
                     .filter(|program| predicate(&program.program))
                     .count()
@@ -993,8 +1013,8 @@ mod tests {
         let unloaded = cache
             .entries
             .iter()
-            .flat_map(|(id, cached_programs)| {
-                cached_programs.iter().filter_map(|program| {
+            .flat_map(|(id, second_level)| {
+                second_level.fork_versions.iter().filter_map(|program| {
                     matches!(program.program, LoadedProgramType::Unloaded(_))
                         .then_some((*id, program.tx_usage_counter.load(Ordering::Relaxed)))
                 })
@@ -1047,8 +1067,8 @@ mod tests {
         });
         assert_eq!(num_unloaded, 1);
 
-        cache.entries.values().for_each(|programs| {
-            programs.iter().for_each(|program| {
+        cache.entries.values().for_each(|second_level| {
+            second_level.fork_versions.iter().for_each(|program| {
                 if matches!(program.program, LoadedProgramType::Unloaded(_)) {
                     // Test that the usage counter is retained for the unloaded program
                     assert_eq!(program.tx_usage_counter.load(Ordering::Relaxed), 10);
@@ -1065,8 +1085,8 @@ mod tests {
             new_test_loaded_program_with_usage(0, 2, AtomicU64::new(0)),
         );
 
-        cache.entries.values().for_each(|programs| {
-            programs.iter().for_each(|program| {
+        cache.entries.values().for_each(|second_level| {
+            second_level.fork_versions.iter().for_each(|program| {
                 if matches!(program.program, LoadedProgramType::Unloaded(_))
                     && program.deployment_slot == 0
                     && program.effective_slot == 2
@@ -1127,8 +1147,8 @@ mod tests {
             .entries
             .get(&program1)
             .expect("Failed to find the entry");
-        assert_eq!(second_level.len(), 1);
-        assert!(second_level.get(0).unwrap().is_tombstone());
+        assert_eq!(second_level.fork_versions.len(), 1);
+        assert!(second_level.fork_versions.get(0).unwrap().is_tombstone());
         assert_eq!(tombstone.deployment_slot, 10);
         assert_eq!(tombstone.effective_slot, 10);
 
@@ -1143,8 +1163,8 @@ mod tests {
             .entries
             .get(&program2)
             .expect("Failed to find the entry");
-        assert_eq!(second_level.len(), 1);
-        assert!(!second_level.get(0).unwrap().is_tombstone());
+        assert_eq!(second_level.fork_versions.len(), 1);
+        assert!(!second_level.fork_versions.get(0).unwrap().is_tombstone());
 
         let tombstone = set_tombstone(
             &mut cache,
@@ -1156,9 +1176,9 @@ mod tests {
             .entries
             .get(&program2)
             .expect("Failed to find the entry");
-        assert_eq!(second_level.len(), 2);
-        assert!(!second_level.get(0).unwrap().is_tombstone());
-        assert!(second_level.get(1).unwrap().is_tombstone());
+        assert_eq!(second_level.fork_versions.len(), 2);
+        assert!(!second_level.fork_versions.get(0).unwrap().is_tombstone());
+        assert!(second_level.fork_versions.get(1).unwrap().is_tombstone());
         assert!(tombstone.is_tombstone());
         assert_eq!(tombstone.deployment_slot, 60);
         assert_eq!(tombstone.effective_slot, 60);
@@ -1591,8 +1611,8 @@ mod tests {
         assert!(missing.contains(&(program4, 1)));
 
         // Remove the expired entry to let the rest of the test continue
-        if let Some(programs) = cache.entries.get_mut(&program4) {
-            programs.pop();
+        if let Some(second_level) = cache.entries.get_mut(&program4) {
+            second_level.fork_versions.pop();
         }
 
         cache.prune(&fork_graph, 5);
@@ -1852,6 +1872,7 @@ mod tests {
                 .entries
                 .get(&program1)
                 .expect("Didn't find program1")
+                .fork_versions
                 .len(),
             3
         );
@@ -1863,6 +1884,7 @@ mod tests {
                 .entries
                 .get(&program1)
                 .expect("Didn't find program1")
+                .fork_versions
                 .len(),
             1
         );
