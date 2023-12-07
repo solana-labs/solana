@@ -69,7 +69,7 @@ impl AccountOffset for HotAccountOffset {
     /// Creates a new AccountOffset instance given the block offset and the
     /// intra-block offset.
     fn new(block_offset: usize, intra_block_offset: usize) -> TieredStorageResult<Self> {
-        if block_offset >= MAX_HOT_ACCOUNT_OFFSET {
+        if block_offset > MAX_HOT_ACCOUNT_OFFSET {
             return Err(TieredStorageError::OffsetOutOfBounds(
                 block_offset,
                 MAX_HOT_ACCOUNT_OFFSET,
@@ -102,11 +102,6 @@ impl AccountOffset for HotAccountOffset {
     /// The offset to the block that contains the account.
     fn block_offset(&self) -> usize {
         self.0 as usize * HOT_ACCOUNT_OFFSET_MULTIPLIER
-    }
-
-    /// The offset to the account inside the account block.
-    fn intra_block_offset(&self) -> usize {
-        0
     }
 }
 

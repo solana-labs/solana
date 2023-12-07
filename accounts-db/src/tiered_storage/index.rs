@@ -31,9 +31,6 @@ pub trait AccountOffset {
 
     /// The offset to the block that contains the account.
     fn block_offset(&self) -> usize;
-
-    /// The offset to the account inside the account block.
-    fn intra_block_offset(&self) -> usize;
 }
 
 /// The offset to an account/address entry in the accounts index block.
