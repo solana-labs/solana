@@ -18,7 +18,10 @@ Release channels have their own copy of this changelog:
   * The default for `--use-snapshot-archives-at-startup` is now `when-newest` (#33883)
     * The default for `solana-ledger-tool`, however, remains `always` (#34228)
   * Added `central-scheduler` option for `--block-production-method` (#33890)
+  * Updated to Borsh v1
 * Upgrade Notes
+  * `solana-program` and `solana-sdk` default to support for Borsh v1, with
+limited backward compatibility for v0.10 and v0.9. Please upgrade to Borsh v1.
 
 ## [1.17.0]
 * Changes
