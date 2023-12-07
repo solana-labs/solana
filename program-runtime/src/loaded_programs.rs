@@ -782,14 +782,8 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         keys: impl Iterator<Item = (Pubkey, (LoadedProgramMatchCriteria, u64))>,
     ) -> Arc<Mutex<ExtractedPrograms>> {
         debug_assert!(self.fork_graph.is_some());
-        let current_epoch = self
-            .fork_graph
-            .as_ref()
-            .unwrap()
-            .read()
-            .unwrap()
-            .slot_epoch(current_slot)
-            .unwrap();
+        let locked_fork_graph = self.fork_graph.as_ref().unwrap().read().unwrap();
+        let current_epoch = locked_fork_graph.slot_epoch(current_slot).unwrap();
         let environments = self.get_environments_for_epoch(current_epoch);
         let extracted = Arc::new(Mutex::new(ExtractedPrograms {
             loaded: LoadedProgramsForTxBatch {
@@ -805,18 +799,10 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                 let mut reloading = false;
                 if let Some(second_level) = self.entries.get(&key) {
                     for entry in second_level.iter().rev() {
-                        let is_ancestor = self
-                            .fork_graph
-                            .as_ref()
-                            .unwrap()
-                            .read()
-                            .map(|fork_graph_r| {
-                                matches!(
-                                    fork_graph_r.relationship(entry.deployment_slot, current_slot),
-                                    BlockRelation::Ancestor
-                                )
-                            })
-                            .unwrap_or(false);
+                        let is_ancestor = matches!(
+                            locked_fork_graph.relationship(entry.deployment_slot, current_slot),
+                            BlockRelation::Ancestor
+                        );
 
                         if entry.deployment_slot <= self.latest_root_slot
                             || entry.deployment_slot == current_slot
@@ -857,6 +843,8 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                 None
             })
             .collect::<HashMap<Pubkey, Arc<LoadedProgram>>>();
+
+        drop(locked_fork_graph);
         self.stats
             .misses
             .fetch_add(extracting.missing.len() as u64, Ordering::Relaxed);
