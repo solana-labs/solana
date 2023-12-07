@@ -1847,6 +1847,9 @@ mod tests {
             1
         );
 
+        // Unlock the cooperative loading lock so that the subsequent prune can do its job
+        cache.finish_cooperative_loading_task(15, program1, new_test_loaded_program(0, 1));
+
         // New root 15 should evict the expired entry for program1
         cache.prune(&fork_graph, 15);
         assert!(cache.entries.get(&program1).is_none());
