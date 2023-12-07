@@ -62,7 +62,7 @@ pull_request_rules:
           - -files~=(\.rs|Cargo\.toml|Cargo\.lock|\.github/scripts/cargo-clippy-before-script\.sh|\.github/workflows/cargo\.yml)$
           - check-success=clippy (macos-latest)
         - or:
-          - -files~=(\.rs|Cargo\.toml|Cargo\.lock|cargo-build-bpf|cargo-test-bpf|cargo-build-sbf|cargo-test-sbf|ci/downstream-projects/run-spl.sh|.github/workflows/downstream-project-spl.yml)$
+          - -files~=(\.rs|Cargo\.toml|Cargo\.lock|cargo-build-bpf|cargo-test-bpf|cargo-build-sbf|cargo-test-sbf|ci/downstream-projects/run-spl\.sh|\.github/workflows/downstream-project-spl\.yml)$
           - and:
             - status-success=cargo-test-sbf (token/program)
             - status-success=cargo-test-sbf (instruction-padding/program, token/program-2022, token/program-2022-test)
