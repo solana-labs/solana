@@ -46,6 +46,7 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
+use assert_matches::assert_matches;
 
 // SchedulerPool must be accessed via dyn by solana-runtime code, because of its internal fields'
 // types (currently TransactionStatusSender; also, PohRecorder in the future) aren't available
@@ -763,7 +764,7 @@ where
                                 }
                             },
                             recv(if state_machine.has_retryable_task() { always_retry } else { never_retry }) -> now => {
-                                assert!(now.is_ok());
+                                assert_matches!(now.is_ok());
                                 if let Some(task) = state_machine.schedule_retryable_task() {
                                     blocked_transaction_sessioned_sender
                                         .send(ChainedChannel::Payload(task))
@@ -1201,7 +1202,6 @@ where
 mod tests {
     use {
         super::*,
-        assert_matches::assert_matches,
         solana_runtime::{
             bank::Bank,
             bank_forks::BankForks,
