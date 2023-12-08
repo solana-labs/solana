@@ -47,7 +47,7 @@ export RUSTFLAGS="${coverageFlags[*]} $RUSTFLAGS"
 export CARGO_INCREMENTAL=0
 export RUST_BACKTRACE=1
 export RUST_MIN_STACK=8388608
-export SOLANA_TEST_ACCOUNTS_INDEX_MEMORY_LIMIT_MB=10000
+export SOLANA_TEST_ACCOUNTS_INDEX_MEMORY_LIMIT_MB=10000 
 
 echo "--- remove old coverage results"
 if [[ -d target/cov ]]; then
