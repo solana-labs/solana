@@ -27,7 +27,7 @@ cargo="$(readlink -f "./cargo")"
 reportName="lcov-${CI_COMMIT:0:9}"
 
 if [[ -z $1 ]]; then
-  packages=(--lib --all --exclude solana-local-cluster --exclude solana-k8s-cluster)
+  packages=(--lib --all --exclude solana-local-cluster)
 else
   packages=("$@")
 fi
