@@ -539,10 +539,6 @@ impl<T1: Send + Sync + 'static, T2: Send + Sync + 'static> ChainedChannel<T1, T2
     }
 }
 
-fn always() -> Receiver<Instant> {
-    tick(Duration::default())
-}
-
 #[derive(Default)]
 struct LogInterval(usize);
 
@@ -728,7 +724,7 @@ where
                 tid_sender
                     .send(rustix::thread::gettid().as_raw_nonzero().get())
                     .unwrap();
-                let (always_retry, never_retry) = (&always(), &never());
+                let (always_retry, never_retry) = (&disconnected(), &never());
 
                 while !end_thread {
                     loop {
