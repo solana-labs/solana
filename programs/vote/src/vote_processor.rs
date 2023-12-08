@@ -9,7 +9,6 @@ use {
         sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
-        feature_set,
         instruction::InstructionError,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
