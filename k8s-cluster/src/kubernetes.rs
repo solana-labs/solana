@@ -489,7 +489,7 @@ impl<'a> Kubernetes<'a> {
         if let Some(ref mut known_validators) = self.validator_config.known_validators {
             known_validators.push(pubkey);
         } else {
-            let mut new_known_validators = Vec::new();
+            let mut new_known_validators = vec![];
             new_known_validators.push(pubkey);
             self.validator_config.known_validators = Some(new_known_validators);
         }
