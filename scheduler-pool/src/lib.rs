@@ -10,7 +10,7 @@
 
 use {
     crossbeam_channel::{
-        bounded, disconnected, never, select_biased, tick, unbounded, Receiver, RecvError, RecvTimeoutError, Sender,
+        bounded, disconnected, never, select_biased, unbounded, Receiver, RecvError, RecvTimeoutError, Sender,
         TryRecvError,
     },
     log::*,
@@ -763,8 +763,8 @@ where
                                     }
                                 }
                             },
-                            recv(if state_machine.has_retryable_task() { always_retry } else { never_retry }) -> now => {
-                                assert_matches!(now, Err(RecvError));
+                            recv(if state_machine.has_retryable_task() { always_retry } else { never_retry }) -> result => {
+                                assert_matches!(result, Err(RecvError));
 
                                 if let Some(task) = state_machine.schedule_retryable_task() {
                                     blocked_transaction_sessioned_sender
