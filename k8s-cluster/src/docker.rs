@@ -58,8 +58,8 @@ impl<'a> DockerConfig<'a> {
             Err(err) => return Err(err),
         };
 
-        info!("Tmp: {}", dockerfile_path.as_path().display());
-        info!("Exists: {}", dockerfile_path.as_path().exists());
+        trace!("Tmp: {}", dockerfile_path.as_path().display());
+        trace!("Exists: {}", dockerfile_path.as_path().exists());
 
         // We use std::process::Command here because Docker-rs is very slow building dockerfiles
         // when they are in large repos. Docker-rs doesn't seem to support the `--file` flag natively.
@@ -160,7 +160,7 @@ WORKDIR /home/solana
             self.insert_client_accounts_if_present()
         );
 
-        info!("dockerfile: {}", dockerfile);
+        debug!("dockerfile: {}", dockerfile);
         std::fs::write(
             docker_path.as_path().join("Dockerfile"),
             content.unwrap_or(dockerfile.as_str()),

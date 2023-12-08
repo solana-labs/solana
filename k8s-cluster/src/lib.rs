@@ -56,14 +56,13 @@ pub fn get_solana_root() -> PathBuf {
         .parent()
         .expect("Failed to get Solana root directory")
         .to_path_buf();
-    info!("solana root: {:?}", solana_root);
     solana_root
 }
 
 #[macro_export]
 macro_rules! boxed_error {
     ($message:expr) => {
-        Box::new(std::io::Error::new(std::io::ErrorKind::Other, $message)) as Box<dyn Error>
+        Box::new(std::io::Error::new(std::io::ErrorKind::Other, $message)) as Box<dyn Error + Send>
     };
 }
 
