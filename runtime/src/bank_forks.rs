@@ -87,7 +87,9 @@ impl Index<u64> for BankForks {
 impl BankForks {
     pub fn new_rw_arc(bank: Bank) -> Arc<RwLock<Self>> {
         let root = bank.slot();
-        Self::new_from_banks(&[Arc::new(bank)], root)
+        let bank_forks = Self::new_from_banks(&[Arc::new(bank)], root);
+        bank_forks.read().unwrap().prune_program_cache(root);
+        bank_forks
     }
 
     pub fn banks(&self) -> &HashMap<Slot, BankWithScheduler> {
