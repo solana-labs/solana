@@ -15,7 +15,9 @@ use {
         Client,
     },
     log::*,
-    solana_sdk::{hash::Hash, pubkey::Pubkey},
+    solana_sdk::{
+        hash::Hash, pubkey::Pubkey, signature::keypair::read_keypair_file, signer::Signer,
+    },
     std::{collections::BTreeMap, error::Error, path::PathBuf},
 };
 
@@ -35,10 +37,19 @@ pub struct ValidatorConfig<'a> {
     pub require_tower: bool,
     pub enable_full_rpc: bool,
     pub entrypoints: Vec<String>,
+    pub known_validators: Option<Vec<Pubkey>>,
 }
 
 impl<'a> std::fmt::Display for ValidatorConfig<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let known_validators = match &self.known_validators {
+            Some(validators) => validators
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<_>>()
+                .join(", "),
+            None => "None".to_string(),
+        };
         write!(
             f,
             "Runtime Config\n\
@@ -56,7 +67,8 @@ impl<'a> std::fmt::Display for ValidatorConfig<'a> {
              no_snapshot_fetch: {}\n\
              require_tower: {}\n\
              enable_full_rpc: {}\n\
-             entrypoints: {:?}",
+             entrypoints: {:?}\n\
+             known_validators: {:?}",
             self.tpu_enable_udp,
             self.tpu_disable_quic,
             self.gpu_mode,
@@ -72,6 +84,7 @@ impl<'a> std::fmt::Display for ValidatorConfig<'a> {
             self.require_tower,
             self.enable_full_rpc,
             self.entrypoints.join(", "),
+            known_validators,
         )
     }
 }
@@ -175,9 +188,7 @@ impl<'a> Kubernetes<'a> {
         self.validator_config.bank_hash = Some(bank_hash);
     }
 
-    fn generate_command_flags(&mut self) -> Vec<String> {
-        let mut flags = Vec::new();
-
+    fn generate_command_flags(&self, flags: &mut Vec<String>) {
         if self.validator_config.tpu_enable_udp {
             flags.push("--tpu-enable-udp".to_string());
         }
@@ -202,12 +213,11 @@ impl<'a> Kubernetes<'a> {
             flags.push("--limit-ledger-size".to_string());
             flags.push(limit_ledger_size.to_string());
         }
-
-        flags
     }
 
-    fn generate_bootstrap_command_flags(&mut self) -> Vec<String> {
-        let mut flags = self.generate_command_flags();
+    fn generate_bootstrap_command_flags(&self) -> Vec<String> {
+        let mut flags: Vec<String> = Vec::new();
+        self.generate_command_flags(&mut flags);
         if let Some(slot) = self.validator_config.wait_for_supermajority {
             flags.push("--wait-for-supermajority".to_string());
             flags.push(slot.to_string());
@@ -221,8 +231,18 @@ impl<'a> Kubernetes<'a> {
         flags
     }
 
-    fn generate_validator_command_flags(&mut self) -> Vec<String> {
-        let mut flags = self.generate_command_flags();
+    fn add_known_validators_if_exists(&self, flags: &mut Vec<String>) {
+        if let Some(known_validators) = &self.validator_config.known_validators {
+            for key in known_validators.iter() {
+                flags.push("--known-validator".to_string());
+                flags.push(key.to_string());
+            }
+        }
+    }
+
+    fn generate_validator_command_flags(&self) -> Vec<String> {
+        let mut flags: Vec<String> = Vec::new();
+        self.generate_command_flags(&mut flags);
 
         flags.push("--internal-node-stake-sol".to_string());
         flags.push(self.validator_config.internal_node_stake_sol.to_string());
@@ -234,15 +254,20 @@ impl<'a> Kubernetes<'a> {
             flags.push(shred_version.to_string());
         }
 
+        self.add_known_validators_if_exists(&mut flags);
+
         flags
     }
 
-    fn generate_non_voting_command_flags(&mut self) -> Vec<String> {
-        let mut flags = self.generate_command_flags();
+    fn generate_non_voting_command_flags(&self) -> Vec<String> {
+        let mut flags: Vec<String> = Vec::new();
+        self.generate_command_flags(&mut flags);
         if let Some(shred_version) = self.validator_config.shred_version {
             flags.push("--expected-shred-version".to_string());
             flags.push(shred_version.to_string());
         }
+
+        self.add_known_validators_if_exists(&mut flags);
 
         flags
     }
@@ -384,11 +409,17 @@ impl<'a> Kubernetes<'a> {
         }
     }
 
-    pub fn create_bootstrap_secret(&self, secret_name: &str) -> Result<Secret, Box<dyn Error>> {
+    pub fn create_bootstrap_secret(&mut self, secret_name: &str) -> Result<Secret, Box<dyn Error>> {
         let faucet_key_path = SOLANA_ROOT.join("config-k8s/faucet.json");
         let identity_key_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator/identity.json");
         let vote_key_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator/vote-account.json");
         let stake_key_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator/stake-account.json");
+
+        let bootstrap_keypair = read_keypair_file(identity_key_path.clone())
+            .expect("Failed to read bootstrap validator keypair file");
+
+        //TODO: need to fix and not read the json path twice
+        self.add_known_validator(bootstrap_keypair.pubkey());
 
         let key_files = vec![
             (faucet_key_path, "faucet"),
@@ -452,6 +483,17 @@ impl<'a> Kubernetes<'a> {
         key_files.push((config_path.join("faucet.json"), "faucet"));
 
         k8s_helpers::create_secret_from_files(&secret_name, &key_files)
+    }
+
+    pub fn add_known_validator(&mut self, pubkey: Pubkey) {
+        if let Some(ref mut known_validators) = self.validator_config.known_validators {
+            known_validators.push(pubkey);
+        } else {
+            let new_known_validators = vec![pubkey];
+            self.validator_config.known_validators = Some(new_known_validators);
+        }
+
+        info!("pubkey added to known validators: {:?}", pubkey);
     }
 
     pub async fn deploy_replicas_set(
