@@ -4333,7 +4333,7 @@ impl Bank {
         let mut loaded_programs_for_txs = LoadedProgramsForTxBatch::new(self.slot());
         let mut program_to_store = None;
         while !missing_programs.is_empty() {
-            let (found, program_to_load) = {
+            let (found, program_to_load, task_cookie, task_waiter) = {
                 // Lock the global cache
                 let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
                 // to submit our last completed loading task
@@ -4345,7 +4345,10 @@ impl Bank {
                     );
                 }
                 // and to figure out which programs need to be loaded next.
-                loaded_programs_cache.extract(self, &mut missing_programs)
+                let (found, program_to_load) =
+                    loaded_programs_cache.extract(self, &mut missing_programs);
+                let task_waiter = Arc::clone(&loaded_programs_cache.loading_task_waiter);
+                (found, program_to_load, task_waiter.cookie(), task_waiter)
                 // Unlock the global cache again.
             };
 
@@ -4357,8 +4360,11 @@ impl Bank {
                 let program = self.load_program(&key);
                 program.tx_usage_counter.store(count, Ordering::Relaxed);
                 program_to_store = Some((key, program));
-            } else {
-                // TODO: Wait on a std::sync::Condvar
+            } else if !missing_programs.is_empty() {
+                // Sleep until the next finish_cooperative_loading_task() call.
+                // Once a task completes we'll wake up and try to load the
+                // missing programs inside the tx batch again.
+                let _new_cookie = task_waiter.wait(task_cookie);
             }
         }
         loaded_programs_for_txs
