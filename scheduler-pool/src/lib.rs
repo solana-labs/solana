@@ -539,7 +539,7 @@ impl<T1: Send + Sync + 'static, T2: Send + Sync + 'static> ChainedChannel<T1, T2
     }
 }
 
-fn ready() -> Receiver<Instant> {
+fn always() -> Receiver<Instant> {
     tick(Duration::default())
 }
 
@@ -728,7 +728,7 @@ where
                 tid_sender
                     .send(rustix::thread::gettid().as_raw_nonzero().get())
                     .unwrap();
-                let (ready_to_retry, never_retry) = (&ready(), &never());
+                let (always_retry, never_retry) = (&always(), &never());
 
                 while !end_thread {
                     loop {
@@ -766,7 +766,7 @@ where
                                     }
                                 }
                             },
-                            recv(if state_machine.has_retryable_task() { ready_to_retry } else { never_retry }) -> now => {
+                            recv(if state_machine.has_retryable_task() { always_retry } else { never_retry }) -> now => {
                                 assert!(now.is_ok());
                                 if let Some(task) = state_machine.schedule_retryable_task() {
                                     blocked_transaction_sessioned_sender
