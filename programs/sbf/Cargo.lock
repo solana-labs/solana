@@ -2604,12 +2604,13 @@ dependencies = [
 
 [[package]]
 name = "light-poseidon"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "949bdd22e4ed93481d45e9a6badb34b99132bcad0c8a8d4f05c42f7dcc7b90bc"
+checksum = "3c9a85a9752c549ceb7578064b4ed891179d20acd85f27318573b64d2d7ee7ee"
 dependencies = [
  "ark-bn254",
  "ark-ff",
+ "num-bigint 0.4.4",
  "thiserror",
 ]
 
