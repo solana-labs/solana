@@ -9,11 +9,11 @@ use {
 
 /// The in-memory struct for the writing index block.
 #[derive(Debug)]
-pub struct AccountIndexWriterEntry<'a, T: AccountOffset> {
+pub struct AccountIndexWriterEntry<'a, Offset: AccountOffset> {
     /// The account address.
     pub address: &'a Pubkey,
     /// The offset to the account.
-    pub offset: T,
+    pub offset: Offset,
 }
 
 /// The offset to an account.
@@ -86,18 +86,18 @@ impl IndexBlockFormat {
     }
 
     /// Returns the offset to the account given the specified index.
-    pub fn get_account_offset<T: AccountOffset + Copy>(
+    pub fn get_account_offset<Offset: AccountOffset + Copy>(
         &self,
         mmap: &Mmap,
         footer: &TieredStorageFooter,
         index_offset: IndexOffset,
-    ) -> TieredStorageResult<T> {
+    ) -> TieredStorageResult<Offset> {
         match self {
             Self::AddressAndBlockOffsetOnly => {
                 let offset = footer.index_block_offset as usize
                     + std::mem::size_of::<Pubkey>() * footer.account_entry_count as usize
-                    + std::mem::size_of::<T>() * index_offset.0 as usize;
-                let (account_offset, _) = get_type::<T>(mmap, offset)?;
+                    + std::mem::size_of::<Offset>() * index_offset.0 as usize;
+                let (account_offset, _) = get_type::<Offset>(mmap, offset)?;
 
                 Ok(*account_offset)
             }
@@ -105,10 +105,10 @@ impl IndexBlockFormat {
     }
 
     /// Returns the size of one index entry.
-    pub fn entry_size<T: AccountOffset>(&self) -> usize {
+    pub fn entry_size<Offset: AccountOffset>(&self) -> usize {
         match self {
             Self::AddressAndBlockOffsetOnly => {
-                std::mem::size_of::<Pubkey>() + std::mem::size_of::<T>()
+                std::mem::size_of::<Pubkey>() + std::mem::size_of::<Offset>()
             }
         }
     }
@@ -120,7 +120,7 @@ mod tests {
         super::*,
         crate::tiered_storage::{
             file::TieredStorageFile,
-            hot::{HotAccountOffset, HOT_ACCOUNT_OFFSET_MULTIPLIER},
+            hot::{HotAccountOffset, HOT_ACCOUNT_OFFSET_ALIGNMENT},
         },
         memmap2::MmapOptions,
         rand::Rng,
@@ -146,7 +146,7 @@ mod tests {
             .map(|address| AccountIndexWriterEntry {
                 address,
                 offset: HotAccountOffset::new(
-                    rng.gen_range(0..u32::MAX) as usize * HOT_ACCOUNT_OFFSET_MULTIPLIER,
+                    rng.gen_range(0..u32::MAX) as usize * HOT_ACCOUNT_OFFSET_ALIGNMENT,
                 )
                 .unwrap(),
             })

@@ -35,12 +35,13 @@ const MAX_HOT_PADDING: u8 = 7;
 /// The maximum allowed value for the owner index of a hot account.
 const MAX_HOT_OWNER_OFFSET: OwnerOffset = OwnerOffset((1 << 29) - 1);
 
-/// The multiplier for converting HotAccountOffset to the internal hot account
-/// offset.  This increases the maximum size of a hot accounts file.
-pub(crate) const HOT_ACCOUNT_OFFSET_MULTIPLIER: usize = 8;
+/// The alignment for HotAccountOffset.  It is also a multiplier for converting
+/// HotAccountOffset to the internal hot account offset that increases the maximum
+/// size of a hot accounts file.
+pub(crate) const HOT_ACCOUNT_OFFSET_ALIGNMENT: usize = 8;
 
 /// The maximum supported offset for hot accounts storage.
-const MAX_HOT_ACCOUNT_OFFSET: usize = u32::MAX as usize * HOT_ACCOUNT_OFFSET_MULTIPLIER;
+const MAX_HOT_ACCOUNT_OFFSET: usize = u32::MAX as usize * HOT_ACCOUNT_OFFSET_ALIGNMENT;
 
 #[bitfield(bits = 32)]
 #[repr(C)]
@@ -77,22 +78,22 @@ impl HotAccountOffset {
             ));
         }
 
-        // Hot accounts are aligned based on HOT_ACCOUNT_OFFSET_MULTIPLIER.
-        if offset % HOT_ACCOUNT_OFFSET_MULTIPLIER != 0 {
+        // Hot accounts are aligned based on HOT_ACCOUNT_OFFSET_ALIGNMENT.
+        if offset % HOT_ACCOUNT_OFFSET_ALIGNMENT != 0 {
             return Err(TieredStorageError::OffsetAlignmentError(
                 offset,
-                HOT_ACCOUNT_OFFSET_MULTIPLIER,
+                HOT_ACCOUNT_OFFSET_ALIGNMENT,
             ));
         }
 
         Ok(HotAccountOffset(
-            (offset / HOT_ACCOUNT_OFFSET_MULTIPLIER) as u32,
+            (offset / HOT_ACCOUNT_OFFSET_ALIGNMENT) as u32,
         ))
     }
 
     /// Returns the offset to the account.
     fn offset(&self) -> usize {
-        self.0 as usize * HOT_ACCOUNT_OFFSET_MULTIPLIER
+        self.0 as usize * HOT_ACCOUNT_OFFSET_ALIGNMENT
     }
 }
 
@@ -551,7 +552,7 @@ pub mod tests {
             .map(|address| AccountIndexWriterEntry {
                 address,
                 offset: HotAccountOffset::new(
-                    rng.gen_range(0..u32::MAX) as usize * HOT_ACCOUNT_OFFSET_MULTIPLIER,
+                    rng.gen_range(0..u32::MAX) as usize * HOT_ACCOUNT_OFFSET_ALIGNMENT,
                 )
                 .unwrap(),
             })
