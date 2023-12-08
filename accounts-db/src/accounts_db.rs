@@ -77,6 +77,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::{prelude::*, ThreadPool},
+    seqlock::SeqLock,
     serde::{Deserialize, Serialize},
     smallvec::SmallVec,
     solana_measure::{measure::Measure, measure_us},
@@ -1012,7 +1013,7 @@ pub struct AccountStorageEntry {
     ///  any accounts in it
     /// status corresponding to the storage, lets us know that
     ///  the append_vec, once maxed out, then emptied, can be reclaimed
-    count_and_status: RwLock<(usize, AccountStorageStatus)>,
+    count_and_status: SeqLock<(usize, AccountStorageStatus)>,
 
     /// This is the total number of accounts stored ever since initialized to keep
     /// track of lifetime count of all store operations. And this differs from
@@ -1035,7 +1036,7 @@ impl AccountStorageEntry {
             id: AtomicAppendVecId::new(id),
             slot: AtomicU64::new(slot),
             accounts,
-            count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
+            count_and_status: SeqLock::new((0, AccountStorageStatus::Available)),
             approx_store_count: AtomicUsize::new(0),
             alive_bytes: AtomicUsize::new(0),
         }
@@ -1051,14 +1052,14 @@ impl AccountStorageEntry {
             id: AtomicAppendVecId::new(id),
             slot: AtomicU64::new(slot),
             accounts,
-            count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
+            count_and_status: SeqLock::new((0, AccountStorageStatus::Available)),
             approx_store_count: AtomicUsize::new(num_accounts),
             alive_bytes: AtomicUsize::new(0),
         }
     }
 
     pub fn set_status(&self, mut status: AccountStorageStatus) {
-        let mut count_and_status = self.count_and_status.write().unwrap();
+        let mut count_and_status = self.count_and_status.lock_write();
 
         let count = count_and_status.0;
 
@@ -1079,7 +1080,7 @@ impl AccountStorageEntry {
     }
 
     pub fn recycle(&self, slot: Slot, id: AppendVecId) {
-        let mut count_and_status = self.count_and_status.write().unwrap();
+        let mut count_and_status = self.count_and_status.lock_write();
         self.accounts.reset();
         *count_and_status = (0, AccountStorageStatus::Available);
         self.slot.store(slot, Ordering::Release);
@@ -1089,11 +1090,11 @@ impl AccountStorageEntry {
     }
 
     pub fn status(&self) -> AccountStorageStatus {
-        self.count_and_status.read().unwrap().1
+        self.count_and_status.read().1
     }
 
     pub fn count(&self) -> usize {
-        self.count_and_status.read().unwrap().0
+        self.count_and_status.read().0
     }
 
     pub fn approx_stored_count(&self) -> usize {
@@ -1133,14 +1134,14 @@ impl AccountStorageEntry {
     }
 
     fn add_account(&self, num_bytes: usize) {
-        let mut count_and_status = self.count_and_status.write().unwrap();
+        let mut count_and_status = self.count_and_status.lock_write();
         *count_and_status = (count_and_status.0 + 1, count_and_status.1);
         self.approx_store_count.fetch_add(1, Ordering::Relaxed);
         self.alive_bytes.fetch_add(num_bytes, Ordering::SeqCst);
     }
 
     fn try_available(&self) -> bool {
-        let mut count_and_status = self.count_and_status.write().unwrap();
+        let mut count_and_status = self.count_and_status.lock_write();
         let (count, status) = *count_and_status;
 
         if status == AccountStorageStatus::Available {
@@ -1156,7 +1157,7 @@ impl AccountStorageEntry {
     }
 
     fn remove_account(&self, num_bytes: usize, reset_accounts: bool) -> usize {
-        let mut count_and_status = self.count_and_status.write().unwrap();
+        let mut count_and_status = self.count_and_status.lock_write();
         let (mut count, mut status) = *count_and_status;
 
         if count == 1 && status == AccountStorageStatus::Full && reset_accounts {
@@ -9423,7 +9424,7 @@ impl AccountsDb {
                     store.count(),
                 );
                 {
-                    let mut count_and_status = store.count_and_status.write().unwrap();
+                    let mut count_and_status = store.count_and_status.lock_write();
                     assert_eq!(count_and_status.0, 0);
                     count_and_status.0 = entry.count;
                 }
@@ -9436,7 +9437,7 @@ impl AccountsDb {
                 );
             } else {
                 trace!("id: {} clearing count", id);
-                store.count_and_status.write().unwrap().0 = 0;
+                store.count_and_status.lock_write().0 = 0;
             }
         }
         storage_size_storages_time.stop();
@@ -9453,7 +9454,7 @@ impl AccountsDb {
                 "  slot: {} id: {} count_and_status: {:?} approx_store_count: {} len: {} capacity: {} (recycled: {:?})",
                 entry.slot(),
                 entry.append_vec_id(),
-                *entry.count_and_status.read().unwrap(),
+                entry.count_and_status.read(),
                 entry.approx_store_count.load(Ordering::Relaxed),
                 entry.accounts.len(),
                 entry.accounts.capacity(),
@@ -9491,7 +9492,7 @@ impl AccountsDb {
                 "  slot: {} id: {} count_and_status: {:?} approx_store_count: {} len: {} capacity: {}",
                 slot,
                 entry.append_vec_id(),
-                *entry.count_and_status.read().unwrap(),
+                entry.count_and_status.read(),
                 entry.approx_store_count.load(Ordering::Relaxed),
                 entry.accounts.len(),
                 entry.accounts.capacity(),
@@ -15796,7 +15797,7 @@ pub mod tests {
         // fake out the store count to avoid the assert
         for (_, store) in accounts.storage.iter() {
             store.alive_bytes.store(0, Ordering::Release);
-            let mut count_and_status = store.count_and_status.write().unwrap();
+            let mut count_and_status = store.count_and_status.lock_write();
             count_and_status.0 = 0;
         }
 
@@ -15815,14 +15816,14 @@ pub mod tests {
         );
 
         for (_, store) in accounts.storage.iter() {
-            assert_eq!(store.count_and_status.read().unwrap().0, 0);
+            assert_eq!(store.count_and_status.read().0, 0);
             assert_eq!(store.alive_bytes.load(Ordering::Acquire), 0);
         }
         accounts.set_storage_count_and_alive_bytes(dashmap, &mut GenerateIndexTimings::default());
         assert_eq!(accounts.storage.len(), 1);
         for (_, store) in accounts.storage.iter() {
             assert_eq!(store.append_vec_id(), 0);
-            assert_eq!(store.count_and_status.read().unwrap().0, count);
+            assert_eq!(store.count_and_status.read().0, count);
             assert_eq!(store.alive_bytes.load(Ordering::Acquire), 2);
         }
     }
