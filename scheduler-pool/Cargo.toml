@@ -10,6 +10,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+assert_matches = { workspace = true }
 cpu-time = "1.0.0"
 crossbeam-channel = { workspace = true }
 dashmap = { workspace = true }
@@ -27,7 +28,6 @@ solana-sdk = { workspace = true }
 solana-vote = { workspace = true }
 
 [dev-dependencies]
-assert_matches = { workspace = true }
 bincode = { workspace = true }
 jemallocator = { workspace = true }
 log = { workspace = true }
