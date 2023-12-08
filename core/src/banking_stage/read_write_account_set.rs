@@ -173,7 +173,7 @@ mod tests {
 
     fn create_test_bank() -> Arc<Bank> {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config))
+        Bank::new_no_wallclock_throttle_for_tests(&genesis_config).0
     }
 
     // Helper function (could potentially use test_case in future).

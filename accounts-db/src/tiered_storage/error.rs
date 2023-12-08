@@ -1,4 +1,4 @@
-use {std::path::PathBuf, thiserror::Error};
+use {super::footer::SanitizeFooterError, std::path::PathBuf, thiserror::Error};
 
 #[derive(Error, Debug)]
 pub enum TieredStorageError {
@@ -16,4 +16,13 @@ pub enum TieredStorageError {
 
     #[error("Unsupported: the feature is not yet supported")]
     Unsupported(),
+
+    #[error("invalid footer size: {0}, expected: {1}")]
+    InvalidFooterSize(u64, u64),
+
+    #[error("invalid footer version: {0}")]
+    InvalidFooterVersion(u64),
+
+    #[error("footer is unsanitary: {0}")]
+    SanitizeFooter(#[from] SanitizeFooterError),
 }

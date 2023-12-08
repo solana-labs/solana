@@ -10,8 +10,8 @@ mod tests {
         },
         solana_sdk::{net::DEFAULT_TPU_COALESCE, packet::PACKET_DATA_SIZE, signature::Keypair},
         solana_streamer::{
-            nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT, streamer::StakedNodes,
-            tls_certificates::new_self_signed_tls_certificate,
+            nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT, quic::SpawnServerResult,
+            streamer::StakedNodes, tls_certificates::new_self_signed_tls_certificate,
         },
         std::{
             net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
@@ -68,7 +68,11 @@ mod tests {
         let (sender, receiver) = unbounded();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let (s, exit, keypair, ip) = server_args();
-        let (_, t) = solana_streamer::quic::spawn_server(
+        let SpawnServerResult {
+            endpoint: _,
+            thread: t,
+            key_updater: _,
+        } = solana_streamer::quic::spawn_server(
             "quic_streamer_test",
             s.try_clone().unwrap(),
             &keypair,
@@ -204,7 +208,11 @@ mod tests {
         let (sender, receiver) = unbounded();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let (request_recv_socket, request_recv_exit, keypair, request_recv_ip) = server_args();
-        let (request_recv_endpoint, request_recv_thread) = solana_streamer::quic::spawn_server(
+        let SpawnServerResult {
+            endpoint: request_recv_endpoint,
+            thread: request_recv_thread,
+            key_updater: _,
+        } = solana_streamer::quic::spawn_server(
             "quic_streamer_test",
             request_recv_socket.try_clone().unwrap(),
             &keypair,
@@ -228,7 +236,11 @@ mod tests {
         let addr = response_recv_socket.local_addr().unwrap().ip();
         let port = response_recv_socket.local_addr().unwrap().port();
         let server_addr = SocketAddr::new(addr, port);
-        let (response_recv_endpoint, response_recv_thread) = solana_streamer::quic::spawn_server(
+        let SpawnServerResult {
+            endpoint: response_recv_endpoint,
+            thread: response_recv_thread,
+            key_updater: _,
+        } = solana_streamer::quic::spawn_server(
             "quic_streamer_test",
             response_recv_socket,
             &keypair2,

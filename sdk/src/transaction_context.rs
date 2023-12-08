@@ -489,7 +489,7 @@ impl InstructionContext {
         self.instruction_accounts.len() as IndexOfAccount
     }
 
-    /// Assert that enough account were supplied to this Instruction
+    /// Assert that enough accounts were supplied to this Instruction
     pub fn check_number_of_instruction_accounts(
         &self,
         expected_at_least: IndexOfAccount,
@@ -1152,7 +1152,7 @@ pub struct ExecutionRecord {
 impl From<TransactionContext> for ExecutionRecord {
     fn from(context: TransactionContext) -> Self {
         let accounts = Rc::try_unwrap(context.accounts)
-            .expect("transaction_context.accounts has unexpectd outstanding refs");
+            .expect("transaction_context.accounts has unexpected outstanding refs");
         let touched_account_count = accounts.touched_count() as u64;
         let accounts = accounts.into_accounts();
         Self {

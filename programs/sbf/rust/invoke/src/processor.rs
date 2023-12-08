@@ -1315,6 +1315,34 @@ fn process_instruction(
                 },
                 &vec![0; original_data_len - new_len]
             );
+
+            // Realloc to [0xFC; 2]. Here we keep the same length, but realloc the underlying
+            // vector. CPI must zero even if the length is unchanged.
+            invoke(
+                &create_instruction(
+                    *callee_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (callee_program_id, false, false),
+                    ],
+                    vec![0xFC; 2],
+                ),
+                accounts,
+            )
+            .unwrap();
+
+            // Check that [2..20] is zeroed
+            let new_len = account.data_len();
+            assert_eq!(&*account.data.borrow(), &[0xFC; 2]);
+            assert_eq!(
+                unsafe {
+                    slice::from_raw_parts(
+                        account.data.borrow().as_ptr().add(new_len),
+                        original_data_len - new_len,
+                    )
+                },
+                &vec![0; original_data_len - new_len]
+            );
         }
         TEST_WRITE_ACCOUNT => {
             msg!("TEST_WRITE_ACCOUNT");

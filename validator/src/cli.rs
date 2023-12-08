@@ -1279,21 +1279,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                        May be specified multiple times. \
                        [default: [ledger]/accounts_index]"),
         )
-        .arg(Arg::with_name("accounts_filler_count")
-            .long("accounts-filler-count")
-            .value_name("COUNT")
-            .validator(is_parsable::<usize>)
-            .takes_value(true)
-            .default_value(&default_args.accounts_filler_count)
-            .help("How many accounts to add to stress the system. Accounts are ignored in operations related to correctness."))
-        .arg(Arg::with_name("accounts_filler_size")
-            .long("accounts-filler-size")
-            .value_name("BYTES")
-            .validator(is_parsable::<usize>)
-            .takes_value(true)
-            .default_value(&default_args.accounts_filler_size)
-            .requires("accounts_filler_count")
-            .help("Size per filler account in bytes."))
         .arg(
             Arg::with_name("accounts_db_test_hash_calculation")
                 .long("accounts-db-test-hash-calculation")
@@ -1955,8 +1940,6 @@ pub struct DefaultArgs {
 
     pub contact_debug_interval: String,
 
-    pub accounts_filler_count: String,
-    pub accounts_filler_size: String,
     pub accountsdb_repl_threads: String,
 
     pub snapshot_version: SnapshotVersion,
@@ -2030,8 +2013,6 @@ impl DefaultArgs {
                 .to_string(),
             rpc_pubsub_worker_threads: "4".to_string(),
             accountsdb_repl_threads: num_cpus::get().to_string(),
-            accounts_filler_count: "0".to_string(),
-            accounts_filler_size: "0".to_string(),
             maximum_full_snapshot_archives_to_retain: DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN
                 .to_string(),
             maximum_incremental_snapshot_archives_to_retain:

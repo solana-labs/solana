@@ -193,6 +193,7 @@ impl Message {
     /// // another crate so it can be shared between the on-chain program and
     /// // the client.
     /// #[derive(BorshSerialize, BorshDeserialize)]
+    /// # #[borsh(crate = "borsh")]
     /// enum BankInstruction {
     ///     Initialize,
     ///     Deposit { lamports: u64 },
@@ -264,6 +265,7 @@ impl Message {
     /// // another crate so it can be shared between the on-chain program and
     /// // the client.
     /// #[derive(BorshSerialize, BorshDeserialize)]
+    /// # #[borsh(crate = "borsh")]
     /// enum BankInstruction {
     ///     Initialize,
     ///     Deposit { lamports: u64 },
@@ -363,6 +365,7 @@ impl Message {
     /// // another crate so it can be shared between the on-chain program and
     /// // the client.
     /// #[derive(BorshSerialize, BorshDeserialize)]
+    /// # #[borsh(crate = "borsh")]
     /// enum BankInstruction {
     ///     Initialize,
     ///     Deposit { lamports: u64 },

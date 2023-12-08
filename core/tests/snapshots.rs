@@ -196,7 +196,7 @@ fn run_bank_forks_snapshot_n<F>(
     f: F,
     set_root_interval: u64,
 ) where
-    F: Fn(&mut Bank, &Keypair),
+    F: Fn(&Bank, &Keypair),
 {
     solana_logger::setup();
     // Set up snapshotting config
@@ -221,13 +221,13 @@ fn run_bank_forks_snapshot_n<F>(
         accounts_package_sender,
     };
     for slot in 1..=last_slot {
-        let mut bank = Bank::new_from_parent(
+        let bank = Bank::new_from_parent(
             bank_forks.read().unwrap().get(slot - 1).unwrap().clone(),
             &Pubkey::default(),
             slot,
         );
-        f(&mut bank, mint_keypair);
         let bank = bank_forks.write().unwrap().insert(bank);
+        f(bank.clone_without_scheduler().as_ref(), mint_keypair);
         // Set root to make sure we don't end up with too many account storage entries
         // and to allow snapshotting of bank and the purging logic on status_cache to
         // kick in
@@ -399,6 +399,11 @@ fn test_concurrent_snapshot_packaging(
             &Pubkey::default(),
             parent_slot + 1,
         );
+        let bank = bank_forks
+            .write()
+            .unwrap()
+            .insert(bank)
+            .clone_without_scheduler();
         let slot = bank.slot();
         let key1 = Keypair::new().pubkey();
         let tx = system_transaction::transfer(mint_keypair, &key1, 1, genesis_config.hash());
@@ -439,7 +444,6 @@ fn test_concurrent_snapshot_packaging(
         );
         accounts_package_sender.send(accounts_package).unwrap();
 
-        bank_forks.write().unwrap().insert(bank);
         if slot == saved_slot {
             // Find the relevant snapshot storages
             let snapshot_storage_files: HashSet<_> = bank_forks
@@ -758,6 +762,8 @@ fn test_bank_forks_incremental_snapshot(
         let bank = {
             let parent = bank_forks.read().unwrap().get(slot - 1).unwrap();
             let bank = Bank::new_from_parent(parent, &Pubkey::default(), slot);
+            let bank_scheduler = bank_forks.write().unwrap().insert(bank);
+            let bank = bank_scheduler.clone_without_scheduler();
 
             let key = solana_sdk::pubkey::new_rand();
             let tx = system_transaction::transfer(mint_keypair, &key, 1, bank.last_blockhash());
@@ -771,7 +777,7 @@ fn test_bank_forks_incremental_snapshot(
                 bank.register_unique_tick();
             }
 
-            bank_forks.write().unwrap().insert(bank)
+            bank_scheduler
         };
 
         // Set root to make sure we don't end up with too many account storage entries
@@ -1062,6 +1068,11 @@ fn test_snapshots_with_background_services(
                 &Pubkey::default(),
                 slot,
             );
+            let bank = bank_forks
+                .write()
+                .unwrap()
+                .insert(bank)
+                .clone_without_scheduler();
 
             let key = solana_sdk::pubkey::new_rand();
             let tx = system_transaction::transfer(mint_keypair, &key, 1, bank.last_blockhash());
@@ -1074,8 +1085,6 @@ fn test_snapshots_with_background_services(
             while !bank.is_complete() {
                 bank.register_unique_tick();
             }
-
-            bank_forks.write().unwrap().insert(bank);
         }
 
         // Call `BankForks::set_root()` to cause snapshots to be taken

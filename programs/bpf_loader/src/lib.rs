@@ -35,8 +35,8 @@ use {
         entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
             bpf_account_data_direct_mapping, enable_bpf_loader_extend_program_ix,
-            enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
-            native_programs_consume_cu, remove_bpf_loader_incorrect_program_id,
+            enable_bpf_loader_set_authority_checked_ix, native_programs_consume_cu,
+            remove_bpf_loader_incorrect_program_id,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -771,12 +771,7 @@ fn process_loader_upgradeable_instruction(
                     .get(buffer_data_offset..)
                     .ok_or(InstructionError::AccountDataTooSmall)?;
                 dst_slice.copy_from_slice(src_slice);
-                if invoke_context
-                    .feature_set
-                    .is_active(&enable_program_redeployment_cooldown::id())
-                {
-                    buffer.set_data_length(UpgradeableLoaderState::size_of_buffer(0))?;
-                }
+                buffer.set_data_length(UpgradeableLoaderState::size_of_buffer(0))?;
             }
 
             // Update the Program account
@@ -889,11 +884,7 @@ fn process_loader_upgradeable_instruction(
                 upgrade_authority_address,
             } = programdata.get_state()?
             {
-                if invoke_context
-                    .feature_set
-                    .is_active(&enable_program_redeployment_cooldown::id())
-                    && clock.slot == slot
-                {
+                if clock.slot == slot {
                     ic_logger_msg!(log_collector, "Program was deployed in this block already");
                     return Err(InstructionError::InvalidArgument);
                 }
@@ -980,12 +971,7 @@ fn process_loader_upgradeable_instruction(
             )?;
             buffer.set_lamports(0)?;
             programdata.set_lamports(programdata_balance_required)?;
-            if invoke_context
-                .feature_set
-                .is_active(&enable_program_redeployment_cooldown::id())
-            {
-                buffer.set_data_length(UpgradeableLoaderState::size_of_buffer(0))?;
-            }
+            buffer.set_data_length(UpgradeableLoaderState::size_of_buffer(0))?;
 
             ic_logger_msg!(log_collector, "Upgraded program {:?}", new_program_id);
         }
@@ -1142,12 +1128,7 @@ fn process_loader_upgradeable_instruction(
                 instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             let close_key = *close_account.get_key();
             let close_account_state = close_account.get_state()?;
-            if invoke_context
-                .feature_set
-                .is_active(&enable_program_redeployment_cooldown::id())
-            {
-                close_account.set_data_length(UpgradeableLoaderState::size_of_uninitialized())?;
-            }
+            close_account.set_data_length(UpgradeableLoaderState::size_of_uninitialized())?;
             match close_account_state {
                 UpgradeableLoaderState::Uninitialized => {
                     let mut recipient_account = instruction_context
@@ -1187,18 +1168,10 @@ fn process_loader_upgradeable_instruction(
                         ic_logger_msg!(log_collector, "Program account not owned by loader");
                         return Err(InstructionError::IncorrectProgramId);
                     }
-                    if invoke_context
-                        .feature_set
-                        .is_active(&enable_program_redeployment_cooldown::id())
-                    {
-                        let clock = invoke_context.get_sysvar_cache().get_clock()?;
-                        if clock.slot == slot {
-                            ic_logger_msg!(
-                                log_collector,
-                                "Program was deployed in this block already"
-                            );
-                            return Err(InstructionError::InvalidArgument);
-                        }
+                    let clock = invoke_context.get_sysvar_cache().get_clock()?;
+                    if clock.slot == slot {
+                        ic_logger_msg!(log_collector, "Program was deployed in this block already");
+                        return Err(InstructionError::InvalidArgument);
                     }
 
                     match program_account.get_state()? {

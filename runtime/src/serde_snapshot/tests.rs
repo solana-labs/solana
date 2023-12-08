@@ -446,9 +446,6 @@ mod serde_snapshot_tests {
         let account2 = AccountSharedData::new(some_lamport + 1, no_data, &owner);
         let pubkey2 = solana_sdk::pubkey::new_rand();
 
-        let filler_account = AccountSharedData::new(some_lamport, no_data, &owner);
-        let filler_account_pubkey = solana_sdk::pubkey::new_rand();
-
         let accounts = AccountsDb::new_single_for_tests();
 
         let mut current_slot = 1;
@@ -459,12 +456,6 @@ mod serde_snapshot_tests {
         accounts.store_for_tests(current_slot, &[(&pubkey, &zero_lamport_account)]);
         accounts.store_for_tests(current_slot, &[(&pubkey2, &account2)]);
 
-        // Store the account a few times.
-        // use to be: store enough accounts such that an additional store for slot 2 is created.
-        // but we use the write cache now
-        for _ in 0..3 {
-            accounts.store_for_tests(current_slot, &[(&filler_account_pubkey, &filler_account)]);
-        }
         accounts.add_root_and_flush_write_cache(current_slot);
 
         accounts.assert_load_account(current_slot, pubkey, zero_lamport);

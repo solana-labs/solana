@@ -119,12 +119,13 @@ impl TransactionStateContainer {
     }
 
     /// Insert a new transaction into the container's queues and maps.
+    /// Returns `true` if a packet was dropped due to capacity limits.
     pub(crate) fn insert_new_transaction(
         &mut self,
         transaction_id: TransactionId,
         transaction_ttl: SanitizedTransactionTTL,
         transaction_priority_details: TransactionPriorityDetails,
-    ) {
+    ) -> bool {
         let priority_id =
             TransactionPriorityId::new(transaction_priority_details.priority, transaction_id);
         self.id_to_transaction_state.insert(
@@ -151,12 +152,15 @@ impl TransactionStateContainer {
 
     /// Pushes a transaction id into the priority queue. If the queue is full, the lowest priority
     /// transaction will be dropped (removed from the queue and map).
-    pub(crate) fn push_id_into_queue(&mut self, priority_id: TransactionPriorityId) {
+    /// Returns `true` if a packet was dropped due to capacity limits.
+    pub(crate) fn push_id_into_queue(&mut self, priority_id: TransactionPriorityId) -> bool {
         if self.remaining_queue_capacity() == 0 {
             let popped_id = self.priority_queue.push_pop_min(priority_id);
             self.remove_by_id(&popped_id.id);
+            true
         } else {
             self.priority_queue.push(priority_id);
+            false
         }
     }
 

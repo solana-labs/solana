@@ -21,7 +21,7 @@ use {
 };
 use {
     crate::{
-        errors::ProofVerificationError, sigma_proofs::errors::FeeSigmaProofError,
+        sigma_proofs::errors::{FeeSigmaProofVerificationError, SigmaProofVerificationError},
         transcript::TranscriptProtocol,
     },
     curve25519_dalek::{
@@ -313,7 +313,7 @@ impl FeeSigmaProof {
         claimed_commitment: &PedersenCommitment,
         max_fee: u64,
         transcript: &mut Transcript,
-    ) -> Result<(), FeeSigmaProofError> {
+    ) -> Result<(), FeeSigmaProofVerificationError> {
         // extract the relevant scalar and Ristretto points from the input
         let m = Scalar::from(max_fee);
 
@@ -329,19 +329,19 @@ impl FeeSigmaProof {
             .fee_max_proof
             .Y_max_proof
             .decompress()
-            .ok_or(ProofVerificationError::Deserialization)?;
+            .ok_or(SigmaProofVerificationError::Deserialization)?;
         let z_max = self.fee_max_proof.z_max_proof;
 
         let Y_delta_real = self
             .fee_equality_proof
             .Y_delta
             .decompress()
-            .ok_or(ProofVerificationError::Deserialization)?;
+            .ok_or(SigmaProofVerificationError::Deserialization)?;
         let Y_claimed = self
             .fee_equality_proof
             .Y_claimed
             .decompress()
-            .ok_or(ProofVerificationError::Deserialization)?;
+            .ok_or(SigmaProofVerificationError::Deserialization)?;
         let z_x = self.fee_equality_proof.z_x;
         let z_delta_real = self.fee_equality_proof.z_delta;
         let z_claimed = self.fee_equality_proof.z_claimed;
@@ -387,7 +387,7 @@ impl FeeSigmaProof {
         if check.is_identity() {
             Ok(())
         } else {
-            Err(ProofVerificationError::AlgebraicRelation.into())
+            Err(SigmaProofVerificationError::AlgebraicRelation.into())
         }
     }
 
@@ -429,7 +429,7 @@ impl FeeSigmaProof {
         buf
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, FeeSigmaProofError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, FeeSigmaProofVerificationError> {
         let mut chunks = bytes.chunks(UNIT_LEN);
         let Y_max_proof = ristretto_point_from_optional_slice(chunks.next())?;
         let z_max_proof = canonical_scalar_from_optional_slice(chunks.next())?;

@@ -259,6 +259,7 @@ impl BankWithScheduler {
         self.inner.bank.register_tick(hash, &self.inner.scheduler);
     }
 
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn fill_bank_with_ticks_for_tests(&self) {
         self.do_fill_bank_with_ticks_for_tests(&self.inner.scheduler);
     }
