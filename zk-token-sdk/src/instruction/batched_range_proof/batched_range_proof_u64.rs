@@ -5,6 +5,7 @@ use {
     crate::{
         encryption::pedersen::{PedersenCommitment, PedersenOpening},
         errors::{ProofGenerationError, ProofVerificationError},
+        instruction::batched_range_proof::MAX_COMMITMENTS,
         range_proof::RangeProof,
     },
     std::convert::TryInto,
@@ -76,6 +77,12 @@ impl ZkProofData<BatchedRangeProofContext> for BatchedRangeProofU64Data {
     #[cfg(not(target_os = "solana"))]
     fn verify_proof(&self) -> Result<(), ProofVerificationError> {
         let (commitments, bit_lengths) = self.context.try_into()?;
+        let num_commitments = commitments.len();
+
+        if num_commitments > MAX_COMMITMENTS || num_commitments != bit_lengths.len() {
+            return Err(ProofVerificationError::IllegalCommitmentLength);
+        }
+
         let mut transcript = self.context_data().new_transcript();
         let proof: RangeProof = self.proof.try_into()?;
 

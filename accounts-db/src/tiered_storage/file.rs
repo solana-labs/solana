@@ -15,11 +15,10 @@ impl TieredStorageFile {
                 .read(true)
                 .create(false)
                 .open(&file_path)
-                .unwrap_or_else(|e| {
+                .unwrap_or_else(|err| {
                     panic!(
-                        "[TieredStorageError] Unable to open {:?} as read-only: {:?}",
+                        "[TieredStorageError] Unable to open {} as read-only: {err}",
                         file_path.as_ref().display(),
-                        e
                     );
                 }),
         )
@@ -36,18 +35,14 @@ impl TieredStorageFile {
 
     pub fn write_type<T>(&self, value: &T) -> IoResult<usize> {
         let ptr = value as *const _ as *const u8;
-        let slice = unsafe { std::slice::from_raw_parts(ptr, mem::size_of::<T>()) };
-        (&self.0).write_all(slice)?;
-
-        Ok(std::mem::size_of::<T>())
+        let bytes = unsafe { std::slice::from_raw_parts(ptr, mem::size_of::<T>()) };
+        self.write_bytes(bytes)
     }
 
     pub fn read_type<T>(&self, value: &mut T) -> IoResult<()> {
         let ptr = value as *mut _ as *mut u8;
-        let slice = unsafe { std::slice::from_raw_parts_mut(ptr, mem::size_of::<T>()) };
-        (&self.0).read_exact(slice)?;
-
-        Ok(())
+        let bytes = unsafe { std::slice::from_raw_parts_mut(ptr, mem::size_of::<T>()) };
+        self.read_bytes(bytes)
     }
 
     pub fn seek(&self, offset: u64) -> IoResult<u64> {
@@ -65,8 +60,6 @@ impl TieredStorageFile {
     }
 
     pub fn read_bytes(&self, buffer: &mut [u8]) -> IoResult<()> {
-        (&self.0).read_exact(buffer)?;
-
-        Ok(())
+        (&self.0).read_exact(buffer)
     }
 }

@@ -64,6 +64,8 @@ impl VoteSimulator {
             latest_validator_votes_for_frozen_banks: LatestValidatorVotesForFrozenBanks::default(),
         }
     }
+
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn fill_bank_forks(
         &mut self,
         forks: Tree<u64>,
@@ -84,6 +86,12 @@ impl VoteSimulator {
             let parent = *walk.get_parent().unwrap().data();
             let parent_bank = self.bank_forks.read().unwrap().get(parent).unwrap();
             let new_bank = Bank::new_from_parent(parent_bank.clone(), &Pubkey::default(), slot);
+            let new_bank = self
+                .bank_forks
+                .write()
+                .unwrap()
+                .insert(new_bank)
+                .clone_without_scheduler();
             self.progress
                 .entry(slot)
                 .or_insert_with(|| ForkProgress::new(Hash::default(), None, None, 0, 0));
@@ -131,7 +139,6 @@ impl VoteSimulator {
                     Some((new_bank.parent_slot(), new_bank.parent_hash())),
                 );
             }
-            self.bank_forks.write().unwrap().insert(new_bank);
 
             walk.forward();
         }
@@ -357,7 +364,7 @@ pub fn initialize_state(
     );
 
     genesis_config.poh_config.hashes_per_tick = Some(2);
-    let bank0 = Bank::new_for_tests(&genesis_config);
+    let (bank0, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
 
     for pubkey in validator_keypairs_map.keys() {
         bank0.transfer(10_000, &mint_keypair, pubkey).unwrap();
@@ -372,7 +379,6 @@ pub fn initialize_state(
         0,
         ForkProgress::new_from_bank(&bank0, bank0.collector_id(), &Pubkey::default(), None, 0, 0),
     );
-    let bank_forks = BankForks::new_rw_arc(bank0);
     let heaviest_subtree_fork_choice =
         HeaviestSubtreeForkChoice::new_from_bank_forks(bank_forks.clone());
     (bank_forks, progress, heaviest_subtree_fork_choice)

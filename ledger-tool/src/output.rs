@@ -1,7 +1,9 @@
 use {
-    serde::Serialize,
+    serde::{Deserialize, Serialize},
     solana_cli_output::{QuietDisplay, VerboseDisplay},
-    std::fmt::{Display, Formatter, Result},
+    solana_sdk::clock::Slot,
+    solana_transaction_status::EntrySummary,
+    std::fmt::{self, Display, Formatter, Result},
 };
 
 #[derive(Serialize, Debug, Default)]
@@ -65,5 +67,54 @@ impl Display for SlotBounds<'_> {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliEntries {
+    pub entries: Vec<CliEntry>,
+    #[serde(skip_serializing)]
+    pub slot: Slot,
+}
+
+impl QuietDisplay for CliEntries {}
+impl VerboseDisplay for CliEntries {}
+
+impl fmt::Display for CliEntries {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "Slot {}", self.slot)?;
+        for (i, entry) in self.entries.iter().enumerate() {
+            writeln!(
+                f,
+                "  Entry {} - num_hashes: {}, hash: {}, transactions: {}, starting_transaction_index: {}",
+                i,
+                entry.num_hashes,
+                entry.hash,
+                entry.num_transactions,
+                entry.starting_transaction_index,
+            )?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliEntry {
+    num_hashes: u64,
+    hash: String,
+    num_transactions: u64,
+    starting_transaction_index: usize,
+}
+
+impl From<EntrySummary> for CliEntry {
+    fn from(entry_summary: EntrySummary) -> Self {
+        Self {
+            num_hashes: entry_summary.num_hashes,
+            hash: entry_summary.hash.to_string(),
+            num_transactions: entry_summary.num_transactions,
+            starting_transaction_index: entry_summary.starting_transaction_index,
+        }
     }
 }

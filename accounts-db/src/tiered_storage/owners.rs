@@ -18,7 +18,7 @@ pub struct OwnersBlock;
 ///
 /// Note that as its internal type is u32, it means the maximum number of
 /// unique owners in one TieredStorageFile is 2^32.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
 pub struct OwnerOffset(pub u32);
 
 /// OwnersBlock is persisted as a consecutive bytes of pubkeys without any

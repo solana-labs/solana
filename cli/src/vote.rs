@@ -70,15 +70,15 @@ impl VoteSubCommands for App<'_, '_> {
                         .validator(is_valid_signer)
                         .help("Keypair of validator that will vote with this account"),
                 )
-                .arg(
-                    pubkey!(Arg::with_name("authorized_withdrawer")
+                .arg(pubkey!(
+                    Arg::with_name("authorized_withdrawer")
                         .index(3)
                         .value_name("WITHDRAWER_PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .long("authorized-withdrawer"),
-                        "Public key of the authorized withdrawer")
-                )
+                    "Public key of the authorized withdrawer"
+                ))
                 .arg(
                     Arg::with_name("commission")
                         .long("commission")
@@ -87,43 +87,48 @@ impl VoteSubCommands for App<'_, '_> {
                         .default_value("100")
                         .help("The commission taken on reward redemption (0-100)"),
                 )
-                .arg(
-                    pubkey!(Arg::with_name("authorized_voter")
+                .arg(pubkey!(
+                    Arg::with_name("authorized_voter")
                         .long("authorized-voter")
                         .value_name("VOTER_PUBKEY"),
-                        "Public key of the authorized voter [default: validator identity pubkey]. "),
-                )
+                    "Public key of the authorized voter [default: validator identity pubkey]. "
+                ))
                 .arg(
                     Arg::with_name("allow_unsafe_authorized_withdrawer")
                         .long("allow-unsafe-authorized-withdrawer")
                         .takes_value(false)
-                        .help("Allow an authorized withdrawer pubkey to be identical to the validator identity \
-                               account pubkey or vote account pubkey, which is normally an unsafe \
-                               configuration and should be avoided."),
+                        .help(
+                            "Allow an authorized withdrawer pubkey to be identical to the \
+                             validator identity account pubkey or vote account pubkey, which is \
+                             normally an unsafe configuration and should be avoided.",
+                        ),
                 )
                 .arg(
                     Arg::with_name("seed")
                         .long("seed")
                         .value_name("STRING")
                         .takes_value(true)
-                        .help("Seed for address generation; if specified, the resulting account will be at a derived address of the VOTE ACCOUNT pubkey")
+                        .help(
+                            "Seed for address generation; if specified, the resulting account \
+                             will be at a derived address of the VOTE ACCOUNT pubkey",
+                        ),
                 )
                 .offline_args()
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
-                .arg(compute_unit_price_arg())
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("vote-authorize-voter")
                 .about("Authorize a new vote signing keypair for the given vote account")
-                .arg(
-                    pubkey!(Arg::with_name("vote_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("vote_account_pubkey")
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Vote account in which to set the authorized voter. "),
-                )
+                    "Vote account in which to set the authorized voter. "
+                ))
                 .arg(
                     Arg::with_name("authorized")
                         .index(2)
@@ -132,29 +137,29 @@ impl VoteSubCommands for App<'_, '_> {
                         .validator(is_valid_signer)
                         .help("Current authorized vote signer."),
                 )
-                .arg(
-                    pubkey!(Arg::with_name("new_authorized_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("new_authorized_pubkey")
                         .index(3)
                         .value_name("NEW_AUTHORIZED_PUBKEY")
                         .required(true),
-                        "New authorized vote signer. "),
-                )
+                    "New authorized vote signer. "
+                ))
                 .offline_args()
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
-                .arg(compute_unit_price_arg())
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("vote-authorize-withdrawer")
                 .about("Authorize a new withdraw signing keypair for the given vote account")
-                .arg(
-                    pubkey!(Arg::with_name("vote_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("vote_account_pubkey")
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Vote account in which to set the authorized withdrawer. "),
-                )
+                    "Vote account in which to set the authorized withdrawer. "
+                ))
                 .arg(
                     Arg::with_name("authorized")
                         .index(2)
@@ -163,30 +168,32 @@ impl VoteSubCommands for App<'_, '_> {
                         .validator(is_valid_signer)
                         .help("Current authorized withdrawer."),
                 )
-                .arg(
-                    pubkey!(Arg::with_name("new_authorized_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("new_authorized_pubkey")
                         .index(3)
                         .value_name("AUTHORIZED_PUBKEY")
                         .required(true),
-                        "New authorized withdrawer. "),
-                )
+                    "New authorized withdrawer. "
+                ))
                 .offline_args()
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
-                .arg(compute_unit_price_arg())
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("vote-authorize-voter-checked")
-                .about("Authorize a new vote signing keypair for the given vote account, \
-                    checking the new authority as a signer")
-                .arg(
-                    pubkey!(Arg::with_name("vote_account_pubkey")
+                .about(
+                    "Authorize a new vote signing keypair for the given vote account, checking \
+                     the new authority as a signer",
+                )
+                .arg(pubkey!(
+                    Arg::with_name("vote_account_pubkey")
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Vote account in which to set the authorized voter. "),
-                )
+                    "Vote account in which to set the authorized voter. "
+                ))
                 .arg(
                     Arg::with_name("authorized")
                         .index(2)
@@ -207,19 +214,21 @@ impl VoteSubCommands for App<'_, '_> {
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
-                .arg(compute_unit_price_arg())
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("vote-authorize-withdrawer-checked")
-                .about("Authorize a new withdraw signing keypair for the given vote account, \
-                    checking the new authority as a signer")
-                .arg(
-                    pubkey!(Arg::with_name("vote_account_pubkey")
+                .about(
+                    "Authorize a new withdraw signing keypair for the given vote account, \
+                     checking the new authority as a signer",
+                )
+                .arg(pubkey!(
+                    Arg::with_name("vote_account_pubkey")
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Vote account in which to set the authorized withdrawer. "),
-                )
+                    "Vote account in which to set the authorized withdrawer. "
+                ))
                 .arg(
                     Arg::with_name("authorized")
                         .index(2)
@@ -240,18 +249,18 @@ impl VoteSubCommands for App<'_, '_> {
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
-                .arg(compute_unit_price_arg())
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("vote-update-validator")
                 .about("Update the vote account's validator identity")
-                .arg(
-                    pubkey!(Arg::with_name("vote_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("vote_account_pubkey")
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Vote account to update. "),
-                )
+                    "Vote account to update. "
+                ))
                 .arg(
                     Arg::with_name("new_identity_account")
                         .index(2)
@@ -274,18 +283,18 @@ impl VoteSubCommands for App<'_, '_> {
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
-                .arg(compute_unit_price_arg())
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("vote-update-commission")
                 .about("Update the vote account's commission")
-                .arg(
-                    pubkey!(Arg::with_name("vote_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("vote_account_pubkey")
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Vote account to update. "),
-                )
+                    "Vote account to update. "
+                ))
                 .arg(
                     Arg::with_name("commission")
                         .index(2)
@@ -293,7 +302,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_percentage)
-                        .help("The new commission")
+                        .help("The new commission"),
                 )
                 .arg(
                     Arg::with_name("authorized_withdrawer")
@@ -308,19 +317,19 @@ impl VoteSubCommands for App<'_, '_> {
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
-                .arg(compute_unit_price_arg())
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("vote-account")
                 .about("Show the contents of a vote account")
                 .alias("show-vote-account")
-                .arg(
-                    pubkey!(Arg::with_name("vote_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("vote_account_pubkey")
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Vote account pubkey. "),
-                )
+                    "Vote account pubkey. "
+                ))
                 .arg(
                     Arg::with_name("lamports")
                         .long("lamports")
@@ -347,26 +356,29 @@ impl VoteSubCommands for App<'_, '_> {
                         .validator(|s| is_within_range(s, 1..=50))
                         .default_value_if("with_rewards", None, "1")
                         .requires("with_rewards")
-                        .help("Display rewards for NUM recent epochs, max 10 [default: latest epoch only]"),
+                        .help(
+                            "Display rewards for NUM recent epochs, max 10 \
+                            [default: latest epoch only]",
+                        ),
                 ),
         )
         .subcommand(
             SubCommand::with_name("withdraw-from-vote-account")
                 .about("Withdraw lamports from a vote account into a specified account")
-                .arg(
-                    pubkey!(Arg::with_name("vote_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("vote_account_pubkey")
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Vote account from which to withdraw. "),
-                )
-                .arg(
-                    pubkey!(Arg::with_name("destination_account_pubkey")
+                    "Vote account from which to withdraw. "
+                ))
+                .arg(pubkey!(
+                    Arg::with_name("destination_account_pubkey")
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
-                        "The recipient of withdrawn SOL. "),
-                )
+                    "The recipient of withdrawn SOL. "
+                ))
                 .arg(
                     Arg::with_name("amount")
                         .index(3)
@@ -374,7 +386,10 @@ impl VoteSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_amount_or_all)
-                        .help("The amount to withdraw, in SOL; accepts keyword ALL, which for this command means account balance minus rent-exempt minimum"),
+                        .help(
+                            "The amount to withdraw, in SOL; accepts keyword ALL, which for this \
+                             command means account balance minus rent-exempt minimum",
+                        ),
                 )
                 .arg(
                     Arg::with_name("authorized_withdrawer")
@@ -388,26 +403,25 @@ impl VoteSubCommands for App<'_, '_> {
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
-                .arg(compute_unit_price_arg()
-            )
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("close-vote-account")
                 .about("Close a vote account and withdraw all funds remaining")
-                .arg(
-                    pubkey!(Arg::with_name("vote_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("vote_account_pubkey")
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Vote account to be closed. "),
-                )
-                .arg(
-                    pubkey!(Arg::with_name("destination_account_pubkey")
+                    "Vote account to be closed. "
+                ))
+                .arg(pubkey!(
+                    Arg::with_name("destination_account_pubkey")
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
-                        "The recipient of all withdrawn SOL. "),
-                )
+                    "The recipient of all withdrawn SOL. "
+                ))
                 .arg(
                     Arg::with_name("authorized_withdrawer")
                         .long("authorized-withdrawer")
@@ -418,8 +432,7 @@ impl VoteSubCommands for App<'_, '_> {
                 )
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
-                .arg(compute_unit_price_arg()
-            )
+                .arg(compute_unit_price_arg()),
         )
     }
 }
@@ -451,15 +464,15 @@ pub fn parse_create_vote_account(
     if !allow_unsafe {
         if authorized_withdrawer == vote_account_pubkey.unwrap() {
             return Err(CliError::BadParameter(
-                "Authorized withdrawer pubkey is identical to vote \
-                                               account pubkey, an unsafe configuration"
+                "Authorized withdrawer pubkey is identical to vote account pubkey, an unsafe \
+                 configuration"
                     .to_owned(),
             ));
         }
         if authorized_withdrawer == identity_pubkey.unwrap() {
             return Err(CliError::BadParameter(
-                "Authorized withdrawer pubkey is identical to identity \
-                                               account pubkey, an unsafe configuration"
+                "Authorized withdrawer pubkey is identical to identity account pubkey, an unsafe \
+                 configuration"
                     .to_owned(),
             ));
         }
@@ -956,8 +969,10 @@ pub fn process_vote_authorize(
                 if let Some(signer) = new_authorized_signer {
                     if signer.is_interactive() {
                         return Err(CliError::BadParameter(format!(
-                            "invalid new authorized vote signer {new_authorized_pubkey:?}. Interactive vote signers not supported"
-                        )).into());
+                            "invalid new authorized vote signer {new_authorized_pubkey:?}. \
+                             Interactive vote signers not supported"
+                        ))
+                        .into());
                     }
                 }
             }
@@ -1337,7 +1352,9 @@ pub fn process_withdraw_from_vote_account(
             let balance_remaining = current_balance.saturating_sub(withdraw_amount);
             if balance_remaining < minimum_balance && balance_remaining != 0 {
                 return Err(CliError::BadParameter(format!(
-                    "Withdraw amount too large. The vote account balance must be at least {} SOL to remain rent exempt", lamports_to_sol(minimum_balance)
+                    "Withdraw amount too large. The vote account balance must be at least {} SOL \
+                     to remain rent exempt",
+                    lamports_to_sol(minimum_balance)
                 ))
                 .into());
             }

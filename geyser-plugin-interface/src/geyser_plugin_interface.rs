@@ -321,6 +321,35 @@ pub type Result<T> = std::result::Result<T, GeyserPluginError>;
 /// Geyser plugins must describe desired behavior for load and unload,
 /// as well as how they will handle streamed data.
 pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
+    /// The callback to allow the plugin to setup the logging configuration using the logger
+    /// and log level specified by the validator. Will be called first on load/reload, before any other
+    /// callback, and only called once.
+    /// # Examples
+    ///
+    /// ```
+    /// use solana_geyser_plugin_interface::geyser_plugin_interface::{GeyserPlugin,
+    /// GeyserPluginError, Result};
+    ///
+    /// #[derive(Debug)]
+    /// struct SamplePlugin;
+    /// impl GeyserPlugin for SamplePlugin {
+    ///     fn setup_logger(&self, logger: &'static dyn log::Log, level: log::LevelFilter) -> Result<()> {
+    ///        log::set_max_level(level);
+    ///        if let Err(err) = log::set_logger(logger) {
+    ///            return Err(GeyserPluginError::Custom(Box::new(err)));
+    ///        }
+    ///        Ok(())
+    ///     }
+    ///     fn name(&self) -> &'static str {
+    ///         &"sample"
+    ///     }
+    /// }
+    /// ```
+    #[allow(unused_variables)]
+    fn setup_logger(&self, logger: &'static dyn log::Log, level: log::LevelFilter) -> Result<()> {
+        Ok(())
+    }
+
     fn name(&self) -> &'static str;
 
     /// The callback called when a plugin is loaded by the system,

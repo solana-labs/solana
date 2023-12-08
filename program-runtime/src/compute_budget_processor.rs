@@ -5,7 +5,7 @@ use {
         prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
     },
     solana_sdk::{
-        borsh0_10::try_from_slice_unchecked,
+        borsh1::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
         entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
         feature_set::{
