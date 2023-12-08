@@ -1245,6 +1245,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
     });
 }
 
+#[derive(Debug, PartialEq)]
 struct MissingBlocksData {
     missing_blocks: Vec<Slot>,
     superfluous_blocks: Vec<Slot>,
@@ -1310,23 +1311,107 @@ mod tests {
         let missing_slots = vec![37, 41, 42];
         let missing_slots_leftshift = vec![37, 38, 39, 40, 41, 42, 43, 44, 45];
         let missing_slots_rightshift = vec![37, 38, 39, 40, 41, 42, 43, 45];
-        assert!(missing_blocks(&[], &[]).is_empty());
-        assert!(missing_blocks(&[], &owned_slots).is_empty());
         assert_eq!(
-            missing_blocks(&reference_slots, &[]),
-            reference_slots.to_owned()
+            missing_blocks(&0, &[], &[]),
+            MissingBlocksData {
+                missing_blocks: vec![],
+                superfluous_blocks: vec![],
+                num_reference_blocks: 0,
+                num_owned_blocks: 0,
+            }
         );
         assert_eq!(
-            missing_blocks(&reference_slots, &owned_slots),
-            missing_slots
+            missing_blocks(owned_slots.last().unwrap(), &[], &owned_slots),
+            MissingBlocksData {
+                missing_blocks: vec![],
+                superfluous_blocks: owned_slots.clone(),
+                num_reference_blocks: 0,
+                num_owned_blocks: owned_slots.len(),
+            }
         );
         assert_eq!(
-            missing_blocks(&reference_slots, &owned_slots_leftshift),
-            missing_slots_leftshift
+            missing_blocks(reference_slots.last().unwrap(), &reference_slots, &[]),
+            MissingBlocksData {
+                missing_blocks: reference_slots.clone(),
+                superfluous_blocks: vec![],
+                num_reference_blocks: reference_slots.len(),
+                num_owned_blocks: 0,
+            }
         );
         assert_eq!(
-            missing_blocks(&reference_slots, &owned_slots_rightshift),
-            missing_slots_rightshift
+            missing_blocks(owned_slots.last().unwrap(), &reference_slots, &owned_slots),
+            MissingBlocksData {
+                missing_blocks: missing_slots.clone(),
+                superfluous_blocks: vec![46, 47],
+                num_reference_blocks: reference_slots.len(),
+                num_owned_blocks: owned_slots.len(),
+            }
+        );
+        // Use last ref slot as last_block_checked to ensure the same slot range
+        assert_eq!(
+            missing_blocks(
+                reference_slots.last().unwrap(),
+                &reference_slots,
+                &owned_slots
+            ),
+            MissingBlocksData {
+                missing_blocks: missing_slots,
+                superfluous_blocks: vec![],
+                num_reference_blocks: reference_slots.len(),
+                num_owned_blocks: owned_slots.len() - 2,
+            }
+        );
+        assert_eq!(
+            missing_blocks(
+                owned_slots_leftshift.last().unwrap(),
+                &reference_slots,
+                &owned_slots_leftshift
+            ),
+            MissingBlocksData {
+                missing_blocks: vec![],
+                superfluous_blocks: owned_slots_leftshift[1..].to_vec(),
+                num_reference_blocks: 1,
+                num_owned_blocks: owned_slots_leftshift.len(),
+            }
+        );
+        assert_eq!(
+            missing_blocks(
+                reference_slots.last().unwrap(),
+                &reference_slots,
+                &owned_slots_leftshift
+            ),
+            MissingBlocksData {
+                missing_blocks: missing_slots_leftshift,
+                superfluous_blocks: owned_slots_leftshift[1..].to_vec(),
+                num_reference_blocks: reference_slots.len(),
+                num_owned_blocks: owned_slots_leftshift.len(),
+            }
+        );
+        assert_eq!(
+            missing_blocks(
+                owned_slots_rightshift.last().unwrap(),
+                &reference_slots,
+                &owned_slots_rightshift
+            ),
+            MissingBlocksData {
+                missing_blocks: missing_slots_rightshift.clone(),
+                superfluous_blocks: owned_slots_rightshift[2..].to_vec(),
+                num_reference_blocks: reference_slots.len(),
+                num_owned_blocks: owned_slots_rightshift.len(),
+            }
+        );
+        assert_eq!(
+            missing_blocks(
+                reference_slots.last().unwrap(),
+                &reference_slots,
+                &owned_slots_rightshift
+            ),
+            MissingBlocksData {
+                missing_blocks: missing_slots_rightshift,
+                superfluous_blocks: vec![],
+                num_reference_blocks: reference_slots.len(),
+                num_owned_blocks: 2,
+            }
         );
     }
 }
