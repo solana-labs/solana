@@ -28,11 +28,10 @@ use {
     solana_metrics::inc_new_counter_error,
     solana_perf::packet::{Packet, PacketBatch},
     solana_rayon_threadlimit::get_thread_count,
-    solana_runtime::bank_forks::BankForks,
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT},
-        epoch_schedule::EpochSchedule,
-        feature_set::{self, FeatureSet},
+        feature_set,
     },
     std::{
         cmp::Reverse,
@@ -142,14 +141,14 @@ impl WindowServiceMetrics {
     }
 }
 
-fn should_send_index_and_erasure_conflicts(
-    shred_slot: Slot,
-    feature_set: &FeatureSet,
-    epoch_schedule: &EpochSchedule,
-) -> bool {
-    match feature_set.activated_slot(&feature_set::index_erasure_conflict_duplicate_proofs::id()) {
+fn should_send_index_and_erasure_conflicts(shred_slot: Slot, root_bank: &Arc<Bank>) -> bool {
+    match root_bank
+        .feature_set
+        .activated_slot(&feature_set::index_erasure_conflict_duplicate_proofs::id())
+    {
         None => false,
         Some(feature_slot) => {
+            let epoch_schedule = root_bank.epoch_schedule();
             let feature_epoch = epoch_schedule.get_epoch(feature_slot);
             let shred_epoch = epoch_schedule.get_epoch(shred_slot);
             // Has a 1 epoch delay, as we don't have enough information
@@ -166,25 +165,17 @@ fn run_check_duplicate(
     duplicate_slots_sender: &DuplicateSlotSender,
     bank_forks: &Arc<RwLock<BankForks>>,
 ) -> Result<()> {
-    let (mut feature_set, mut epoch_schedule) = {
-        let root_bank = bank_forks.read().unwrap().root_bank();
-        (
-            root_bank.feature_set.clone(),
-            root_bank.epoch_schedule().clone(),
-        )
-    };
+    let mut root_bank = bank_forks.read().unwrap().root_bank().clone();
     let mut last_updated = Instant::now();
     let check_duplicate = |shred: PossibleDuplicateShred| -> Result<()> {
         if last_updated.elapsed().as_millis() as u64 > DEFAULT_MS_PER_SLOT {
             // Grabs bank forks lock once a slot
             last_updated = Instant::now();
-            let root_bank = bank_forks.read().unwrap().root_bank();
-            feature_set = root_bank.feature_set.clone();
-            epoch_schedule = root_bank.epoch_schedule().clone();
+            root_bank = bank_forks.read().unwrap().root_bank().clone();
         }
         let shred_slot = shred.slot();
         let send_index_and_erasure_conflicts =
-            should_send_index_and_erasure_conflicts(shred_slot, &feature_set, &epoch_schedule);
+            should_send_index_and_erasure_conflicts(shred_slot, &root_bank);
         let (shred1, shred2) = match shred {
             PossibleDuplicateShred::LastIndexConflict(shred, conflict)
             | PossibleDuplicateShred::ErasureConflict(shred, conflict) => {
