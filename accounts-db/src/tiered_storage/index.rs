@@ -96,7 +96,7 @@ impl IndexBlockFormat {
             Self::AddressAndBlockOffsetOnly => {
                 let offset = footer.index_block_offset as usize
                     + std::mem::size_of::<Pubkey>() * footer.account_entry_count as usize
-                    + std::mem::size_of::<u32>() * index_offset.0 as usize;
+                    + std::mem::size_of::<T>() * index_offset.0 as usize;
                 let (account_offset, _) = get_type::<T>(mmap, offset)?;
 
                 Ok(*account_offset)
@@ -105,10 +105,10 @@ impl IndexBlockFormat {
     }
 
     /// Returns the size of one index entry.
-    pub fn entry_size(&self) -> usize {
+    pub fn entry_size<T: AccountOffset>(&self) -> usize {
         match self {
             Self::AddressAndBlockOffsetOnly => {
-                std::mem::size_of::<Pubkey>() + std::mem::size_of::<u32>()
+                std::mem::size_of::<Pubkey>() + std::mem::size_of::<T>()
             }
         }
     }
