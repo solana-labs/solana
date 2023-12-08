@@ -65,42 +65,33 @@ struct HotMetaPackedFields {
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
 pub struct HotAccountOffset(u32);
 
-impl AccountOffset for HotAccountOffset {
-    /// Creates a new AccountOffset instance given the block offset and the
-    /// intra-block offset.
-    fn new(block_offset: usize, intra_block_offset: usize) -> TieredStorageResult<Self> {
-        if block_offset > MAX_HOT_ACCOUNT_OFFSET {
+impl AccountOffset for HotAccountOffset {}
+
+impl HotAccountOffset {
+    /// Creates a new AccountOffset instance
+    pub fn new(offset: usize) -> TieredStorageResult<Self> {
+        if offset > MAX_HOT_ACCOUNT_OFFSET {
             return Err(TieredStorageError::OffsetOutOfBounds(
-                block_offset,
+                offset,
                 MAX_HOT_ACCOUNT_OFFSET,
             ));
         }
 
         // Hot accounts are aligned based on HOT_ACCOUNT_OFFSET_MULTIPLIER.
-        if block_offset % HOT_ACCOUNT_OFFSET_MULTIPLIER != 0 {
+        if offset % HOT_ACCOUNT_OFFSET_MULTIPLIER != 0 {
             return Err(TieredStorageError::OffsetAlignmentError(
-                block_offset,
+                offset,
                 HOT_ACCOUNT_OFFSET_MULTIPLIER,
             ));
         }
 
-        // Each hot account has its own account block.  As a result, its
-        // intra-block offset is always 0.  Any intra-block offset that is
-        // greater than 0 is invalid.
-        if intra_block_offset > 0 {
-            return Err(TieredStorageError::IntraBlockOffsetOutOfBounds(
-                block_offset,
-                0,
-            ));
-        }
-
         Ok(HotAccountOffset(
-            (block_offset / HOT_ACCOUNT_OFFSET_MULTIPLIER) as u32,
+            (offset / HOT_ACCOUNT_OFFSET_MULTIPLIER) as u32,
         ))
     }
 
-    /// The offset to the block that contains the account.
-    fn block_offset(&self) -> usize {
+    /// Returns the offset to the account.
+    fn offset(&self) -> usize {
         self.0 as usize * HOT_ACCOUNT_OFFSET_MULTIPLIER
     }
 }
@@ -279,7 +270,7 @@ impl HotStorageReader {
         &self,
         account_offset: HotAccountOffset,
     ) -> TieredStorageResult<&HotAccountMeta> {
-        let internal_account_offset = account_offset.block_offset();
+        let internal_account_offset = account_offset.offset();
 
         let (meta, _) = get_type::<HotAccountMeta>(&self.mmap, internal_account_offset)?;
         Ok(meta)
@@ -524,7 +515,7 @@ pub mod tests {
                 .map(|meta| {
                     let prev_offset = current_offset;
                     current_offset += file.write_type(meta).unwrap();
-                    HotAccountOffset::new(prev_offset, 0).unwrap()
+                    HotAccountOffset::new(prev_offset).unwrap()
                 })
                 .collect();
             // while the test only focuses on account metas, writing a footer
@@ -559,8 +550,10 @@ pub mod tests {
             .iter()
             .map(|address| AccountIndexWriterEntry {
                 address,
-                block_offset: rng.gen_range(0..u32::MAX) as usize * HOT_ACCOUNT_OFFSET_MULTIPLIER,
-                intra_block_offset: 0,
+                offset: HotAccountOffset::new(
+                    rng.gen_range(0..u32::MAX) as usize * HOT_ACCOUNT_OFFSET_MULTIPLIER,
+                )
+                .unwrap(),
             })
             .collect();
 
@@ -577,7 +570,7 @@ pub mod tests {
 
             footer
                 .index_block_format
-                .write_index_block::<HotAccountOffset>(&file, &index_writer_entries)
+                .write_index_block(&file, &index_writer_entries)
                 .unwrap();
 
             // while the test only focuses on account metas, writing a footer
@@ -590,10 +583,7 @@ pub mod tests {
             let account_offset = hot_storage
                 .get_account_offset(IndexOffset(i as u32))
                 .unwrap();
-            assert_eq!(
-                account_offset.block_offset(),
-                index_writer_entry.block_offset
-            );
+            assert_eq!(*account_offset, index_writer_entry.offset);
 
             let account_address = hot_storage
                 .get_account_address(IndexOffset(i as u32))

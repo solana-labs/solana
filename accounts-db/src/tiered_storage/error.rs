@@ -31,7 +31,4 @@ pub enum TieredStorageError {
 
     #[error("OffsetAlignmentError: offset {0} must be multiple of {1}")]
     OffsetAlignmentError(usize, usize),
-
-    #[error("IntraBlockOffsetOutOfBounds: offset {0} is larger than the supported size {1}")]
-    IntraBlockOffsetOutOfBounds(usize, usize),
 }
