@@ -17,8 +17,52 @@ use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
     Hash,
     Debug,
 )]
+#[borsh(crate = "borsh")]
 pub struct StakeFlags {
     bits: u8,
+}
+impl borsh0_10::de::BorshDeserialize for StakeFlags {
+    fn deserialize_reader<R: borsh0_10::maybestd::io::Read>(
+        reader: &mut R,
+    ) -> ::core::result::Result<Self, borsh0_10::maybestd::io::Error> {
+        Ok(Self {
+            bits: borsh0_10::BorshDeserialize::deserialize_reader(reader)?,
+        })
+    }
+}
+impl borsh0_10::BorshSchema for StakeFlags {
+    fn declaration() -> borsh0_10::schema::Declaration {
+        "StakeFlags".to_string()
+    }
+    fn add_definitions_recursively(
+        definitions: &mut borsh0_10::maybestd::collections::HashMap<
+            borsh0_10::schema::Declaration,
+            borsh0_10::schema::Definition,
+        >,
+    ) {
+        let fields = borsh0_10::schema::Fields::NamedFields(<[_]>::into_vec(
+            borsh0_10::maybestd::boxed::Box::new([(
+                "bits".to_string(),
+                <u8 as borsh0_10::BorshSchema>::declaration(),
+            )]),
+        ));
+        let definition = borsh0_10::schema::Definition::Struct { fields };
+        Self::add_definition(
+            <Self as borsh0_10::BorshSchema>::declaration(),
+            definition,
+            definitions,
+        );
+        <u8 as borsh0_10::BorshSchema>::add_definitions_recursively(definitions);
+    }
+}
+impl borsh0_10::ser::BorshSerialize for StakeFlags {
+    fn serialize<W: borsh0_10::maybestd::io::Write>(
+        &self,
+        writer: &mut W,
+    ) -> ::core::result::Result<(), borsh0_10::maybestd::io::Error> {
+        borsh0_10::BorshSerialize::serialize(&self.bits, writer)?;
+        Ok(())
+    }
 }
 
 /// Currently, only bit 1 is used. The other 7 bits are reserved for future usage.
