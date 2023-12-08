@@ -59,7 +59,7 @@ anchor() {
   patch_crates_io_solana Cargo.toml "$solana_dir"
 
   $cargo test
-  (cd spl && $cargo_build_sbf -- --all-features)
+  (cd spl && $cargo_build_sbf --features dex metadata stake)
   (cd client && $cargo test --all-features)
 
   anchor_dir=$PWD
