@@ -1277,14 +1277,17 @@ fn missing_blocks(
         .cloned()
         .collect();
 
-    let missing_blocks = reference_hashset
+    let mut missing_blocks: Vec<_> = reference_hashset
         .difference(&owned_hashset)
         .cloned()
         .collect();
-    let superfluous_blocks = owned_hashset
+    missing_blocks.sort_unstable(); // Unstable sort is fine, as we've already ensured no duplicates
+
+    let mut superfluous_blocks: Vec<_> = owned_hashset
         .difference(&reference_hashset)
         .cloned()
         .collect();
+    superfluous_blocks.sort_unstable(); // Unstable sort is fine, as we've already ensured no duplicates
 
     MissingBlocksData {
         missing_blocks,
