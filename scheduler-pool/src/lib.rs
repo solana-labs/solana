@@ -10,7 +10,7 @@
 
 use {
     crossbeam_channel::{
-        bounded, never, select_biased, tick, unbounded, Receiver, RecvTimeoutError, Sender,
+        bounded, disconnected, never, select_biased, tick, unbounded, Receiver, RecvTimeoutError, Sender,
         TryRecvError,
     },
     log::*,
