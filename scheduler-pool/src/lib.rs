@@ -9,9 +9,10 @@
 //! helper fun called `execute_batch()`.
 
 use {
+    assert_matches::assert_matches,
     crossbeam_channel::{
-        bounded, disconnected, never, select_biased, unbounded, Receiver, RecvError, RecvTimeoutError, Sender,
-        TryRecvError,
+        bounded, disconnected, never, select_biased, unbounded, Receiver, RecvError,
+        RecvTimeoutError, Sender, TryRecvError,
     },
     log::*,
     solana_ledger::blockstore_processor::{
@@ -46,7 +47,6 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
-use assert_matches::assert_matches;
 
 // SchedulerPool must be accessed via dyn by solana-runtime code, because of its internal fields'
 // types (currently TransactionStatusSender; also, PohRecorder in the future) aren't available
