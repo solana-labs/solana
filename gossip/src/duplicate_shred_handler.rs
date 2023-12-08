@@ -246,7 +246,7 @@ mod tests {
             get_tmp_ledger_path_auto_delete,
             shred::Shredder,
         },
-        solana_runtime::bank::Bank,
+        solana_runtime::{accounts_background_service::AbsRequestSender, bank::Bank},
         solana_sdk::{
             signature::{Keypair, Signer},
             timing::timestamp,
@@ -301,21 +301,34 @@ mod tests {
         let my_pubkey = my_keypair.pubkey();
         let genesis_config_info = create_genesis_config_with_leader(10_000, &my_pubkey, 10_000);
         let GenesisConfigInfo { genesis_config, .. } = genesis_config_info;
-        let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests(&genesis_config));
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.activate_feature(&feature_set::enable_gossip_duplicate_proof_ingestion::id());
+        let slots_in_epoch = bank.get_epoch_info().slots_in_epoch;
+        let bank_forks_arc = BankForks::new_rw_arc(bank);
+        {
+            let mut bank_forks = bank_forks_arc.write().unwrap();
+            let bank0 = bank_forks.get(0).unwrap();
+            bank_forks.insert(Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 9));
+            bank_forks.set_root(9, &AbsRequestSender::default(), None);
+        }
+        blockstore.set_roots([0, 9].iter()).unwrap();
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
-            &bank_forks.read().unwrap().working_bank(),
+            &bank_forks_arc.read().unwrap().working_bank(),
         ));
         let (sender, receiver) = unbounded();
+        // The feature will only be activated at Epoch 1.
+        let start_slot: Slot = slots_in_epoch + 1;
+
         let mut duplicate_shred_handler = DuplicateShredHandler::new(
             blockstore.clone(),
             leader_schedule_cache,
-            bank_forks,
+            bank_forks_arc,
             sender,
         );
         let chunks = create_duplicate_proof(
             my_keypair.clone(),
             None,
-            1,
+            start_slot,
             None,
             DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
         )
@@ -323,21 +336,24 @@ mod tests {
         let chunks1 = create_duplicate_proof(
             my_keypair.clone(),
             None,
-            2,
+            start_slot + 1,
             None,
             DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
         )
         .unwrap();
-        assert!(!blockstore.has_duplicate_shreds_in_slot(1));
-        assert!(!blockstore.has_duplicate_shreds_in_slot(2));
+        assert!(!blockstore.has_duplicate_shreds_in_slot(start_slot));
+        assert!(!blockstore.has_duplicate_shreds_in_slot(start_slot + 1));
         // Test that two proofs are mixed together, but we can store the proofs fine.
         for (chunk1, chunk2) in chunks.zip(chunks1) {
             duplicate_shred_handler.handle(chunk1);
             duplicate_shred_handler.handle(chunk2);
         }
-        assert!(blockstore.has_duplicate_shreds_in_slot(1));
-        assert!(blockstore.has_duplicate_shreds_in_slot(2));
-        assert_eq!(receiver.try_iter().collect_vec(), vec![1, 2]);
+        assert!(blockstore.has_duplicate_shreds_in_slot(start_slot));
+        assert!(blockstore.has_duplicate_shreds_in_slot(start_slot + 1));
+        assert_eq!(
+            receiver.try_iter().collect_vec(),
+            vec![start_slot, start_slot + 1]
+        );
 
         // Test all kinds of bad proofs.
         for error in [
@@ -348,7 +364,7 @@ mod tests {
             match create_duplicate_proof(
                 my_keypair.clone(),
                 None,
-                3,
+                start_slot + 2,
                 Some(error),
                 DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
             ) {
@@ -357,7 +373,7 @@ mod tests {
                     for chunk in chunks {
                         duplicate_shred_handler.handle(chunk);
                     }
-                    assert!(!blockstore.has_duplicate_shreds_in_slot(3));
+                    assert!(!blockstore.has_duplicate_shreds_in_slot(start_slot + 2));
                     assert!(receiver.is_empty());
                 }
             }
@@ -374,18 +390,29 @@ mod tests {
         let my_pubkey = my_keypair.pubkey();
         let genesis_config_info = create_genesis_config_with_leader(10_000, &my_pubkey, 10_000);
         let GenesisConfigInfo { genesis_config, .. } = genesis_config_info;
-        let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests(&genesis_config));
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.activate_feature(&feature_set::enable_gossip_duplicate_proof_ingestion::id());
+        let slots_in_epoch = bank.get_epoch_info().slots_in_epoch;
+        let bank_forks_arc = BankForks::new_rw_arc(bank);
+        {
+            let mut bank_forks = bank_forks_arc.write().unwrap();
+            let bank0 = bank_forks.get(0).unwrap();
+            bank_forks.insert(Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 9));
+            bank_forks.set_root(9, &AbsRequestSender::default(), None);
+        }
+        blockstore.set_roots([0, 9].iter()).unwrap();
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
-            &bank_forks.read().unwrap().working_bank(),
+            &bank_forks_arc.read().unwrap().working_bank(),
         ));
         let (sender, receiver) = unbounded();
         let mut duplicate_shred_handler = DuplicateShredHandler::new(
             blockstore.clone(),
             leader_schedule_cache,
-            bank_forks,
+            bank_forks_arc,
             sender,
         );
-        let start_slot: Slot = 1;
+        // The feature will only be activated at Epoch 1.
+        let start_slot: Slot = slots_in_epoch + 1;
 
         // This proof will not be accepted because num_chunks is too large.
         let chunks = create_duplicate_proof(
