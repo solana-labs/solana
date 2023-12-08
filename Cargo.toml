@@ -439,7 +439,7 @@ zstd = "0.11.2"
 # for details, see https://github.com/solana-labs/crossbeam/commit/fd279d707025f0e60951e429bf778b4813d1b6bf
 crossbeam-epoch = { git = "https://github.com/solana-labs/crossbeam", rev = "fd279d707025f0e60951e429bf778b4813d1b6bf" }
 
-crossbeam-channel = { git = "https://github.com/ryoqun/crossbeam", rev = "5b38a7d0fb61136c43686ec06a504aa5a76a6ee2" }
+crossbeam-channel = { git = "https://github.com/ryoqun/crossbeam", rev = "808083dd664aab420890e59ada2eb7333c3d966e" }
 
 # We include the following crates as our dependencies above from crates.io:
 #
