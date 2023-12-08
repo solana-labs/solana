@@ -361,6 +361,24 @@ pub mod tests {
     }
 
     #[test]
+    fn test_max_hot_account_offset() {
+        HotAccountOffset::new(0).unwrap();
+        HotAccountOffset::new(MAX_HOT_ACCOUNT_OFFSET).unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "OffsetOutOfBounds(34359738368, 34359738360)")]
+    fn test_max_hot_account_offset_out_of_bounds() {
+        HotAccountOffset::new(MAX_HOT_ACCOUNT_OFFSET + HOT_ACCOUNT_OFFSET_ALIGNMENT).unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "OffsetAlignmentError(7, 8)")]
+    fn test_max_hot_account_offset_alignment_error() {
+        HotAccountOffset::new(HOT_ACCOUNT_OFFSET_ALIGNMENT - 1).unwrap();
+    }
+
+    #[test]
     #[should_panic(expected = "padding exceeds MAX_HOT_PADDING")]
     fn test_hot_meta_padding_exceeds_limit() {
         HotAccountMeta::new().with_account_data_padding(MAX_HOT_PADDING + 1);
