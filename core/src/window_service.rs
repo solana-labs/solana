@@ -163,7 +163,7 @@ fn run_check_duplicate(
     blockstore: &Blockstore,
     shred_receiver: &Receiver<PossibleDuplicateShred>,
     duplicate_slots_sender: &DuplicateSlotSender,
-    bank_forks: &Arc<RwLock<BankForks>>,
+    bank_forks: &RwLock<BankForks>,
 ) -> Result<()> {
     let mut root_bank = bank_forks.read().unwrap().root_bank().clone();
     let mut last_updated = Instant::now();
