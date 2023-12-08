@@ -355,7 +355,7 @@ pub struct LoadedPrograms {
     entries: HashMap<Pubkey, Vec<Arc<LoadedProgram>>>,
     /// Globally shared RBPF config and syscall registry
     pub program_runtime_environment_v1: Arc<BuiltinProgram<InvokeContext<'static>>>,
-    latest_root: Slot,
+    pub latest_root: Slot,
     pub stats: Stats,
 }
 

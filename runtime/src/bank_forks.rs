@@ -171,6 +171,7 @@ impl BankForks {
         let mut descendants = HashMap::<_, HashSet<_>>::new();
         for (slot, bank) in &banks {
             descendants.entry(*slot).or_default();
+            bank.loaded_programs_cache.write().unwrap().latest_root = root;
             for parent in bank.proper_ancestors() {
                 descendants.entry(parent).or_default().insert(*slot);
             }
