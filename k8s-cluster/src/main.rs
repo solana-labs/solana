@@ -16,7 +16,7 @@ use {
     solana_ledger::blockstore_cleanup_service::{
         DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS,
     },
-    solana_sdk::pubkey::Pubkey,
+    solana_sdk::{pubkey::Pubkey, signature::keypair::read_keypair_file, signer::Signer},
     std::{thread, time::Duration},
 };
 
@@ -905,6 +905,18 @@ async fn main() {
         "app.kubernetes.io/name".to_string(),
         "bootstrap-validator-selector".to_string(),
     );
+    bootstrap_rs_labels.insert(
+        "app.kubernetes.io/type".to_string(),
+        "bootstrap".to_string(),
+    );
+
+    let identity_path = get_solana_root().join("config-k8s/bootstrap-validator/identity.json");
+    let bootstrap_keypair =
+        read_keypair_file(identity_path).expect("Failed to read bootstrap keypair file");
+    bootstrap_rs_labels.insert(
+        "app.kubernetes.io/identity".to_string(),
+        bootstrap_keypair.pubkey().to_string(),
+    );
 
     let bootstrap_replica_set = match kub_controller.create_bootstrap_validator_replica_set(
         bootstrap_container_name,
@@ -995,6 +1007,22 @@ async fn main() {
                 "app.kubernetes.io/lb".to_string(),
                 "load-balancer-selector".to_string(),
             );
+            nvv_rs_labels.insert(
+                "app.kubernetes.io/type".to_string(),
+                "non-voting".to_string(),
+            );
+
+            let identity_path = get_solana_root().join(format!(
+                "config-k8s/non-voting-validator-identity-{}.json",
+                nvv_index
+            ));
+            let nvv_keypair = read_keypair_file(identity_path)
+                .expect("Failed to read non voting validator keypair file");
+            nvv_rs_labels.insert(
+                "app.kubernetes.io/identity".to_string(),
+                nvv_keypair.pubkey().to_string(),
+            );
+
             let nvv_secret = match kub_controller.create_non_voting_secret(nvv_index) {
                 Ok(secret) => secret,
                 Err(err) => {
@@ -1106,19 +1134,33 @@ async fn main() {
             }
         }
 
-        let label_selector = kub_controller.create_selector(
+        let mut validator_labels = kub_controller.create_selector(
             "app.kubernetes.io/name",
             format!("validator-{}", validator_index).as_str(),
         );
+        validator_labels.insert(
+            "app.kubernetes.io/type".to_string(),
+            "validator".to_string(),
+        );
 
-        let validator_replica_set: k8s_openapi::api::apps::v1::ReplicaSet = match kub_controller
-            .create_validator_replica_set(
-                validator_container_name,
-                validator_index,
-                validator_image_name,
-                validator_secret.metadata.name.clone(),
-                &label_selector,
-            ) {
+        let identity_path = get_solana_root().join(format!(
+            "config-k8s/validator-identity-{}.json",
+            validator_index
+        ));
+        let validator_keypair =
+            read_keypair_file(identity_path).expect("Failed to read validator keypair file");
+        validator_labels.insert(
+            "app.kubernetes.io/identity".to_string(),
+            validator_keypair.pubkey().to_string(),
+        );
+
+        let validator_replica_set = match kub_controller.create_validator_replica_set(
+            validator_container_name,
+            validator_index,
+            validator_image_name,
+            validator_secret.metadata.name.clone(),
+            &validator_labels,
+        ) {
             Ok(replica_set) => replica_set,
             Err(err) => {
                 error!("Error creating validator replicas_set: {}", err);
@@ -1148,7 +1190,7 @@ async fn main() {
 
         let validator_service = kub_controller.create_validator_service(
             format!("validator-{}-service", validator_index).as_str(),
-            &label_selector,
+            &validator_labels,
         );
         match kub_controller.deploy_service(&validator_service).await {
             Ok(_) => info!(
