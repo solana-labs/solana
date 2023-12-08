@@ -60,6 +60,7 @@ anchor() {
 
   $cargo test
   (cd spl && $cargo test --all-features)
+  (cd client && $cargo test --all-features)
 
   anchor_dir=$PWD
   anchor_ver=$(readCargoVariable version "$anchor_dir"/lang/Cargo.toml)
