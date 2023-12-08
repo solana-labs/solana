@@ -35,10 +35,18 @@ pub struct ValidatorConfig<'a> {
     pub require_tower: bool,
     pub enable_full_rpc: bool,
     pub entrypoints: Vec<String>,
+    pub known_validators: Option<Vec<Pubkey>>,
 }
 
 impl<'a> std::fmt::Display for ValidatorConfig<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let known_validators = match &self.known_validators {
+            Some(validators) => validators.iter()
+                                          .map(|v| v.to_string())
+                                          .collect::<Vec<_>>()
+                                          .join(", "),
+            None => "None".to_string(),
+        };
         write!(
             f,
             "Runtime Config\n\
@@ -56,7 +64,8 @@ impl<'a> std::fmt::Display for ValidatorConfig<'a> {
              no_snapshot_fetch: {}\n\
              require_tower: {}\n\
              enable_full_rpc: {}\n\
-             entrypoints: {:?}",
+             entrypoints: {:?}\n\
+             known_validators: {:?}",
             self.tpu_enable_udp,
             self.tpu_disable_quic,
             self.gpu_mode,
@@ -72,6 +81,7 @@ impl<'a> std::fmt::Display for ValidatorConfig<'a> {
             self.require_tower,
             self.enable_full_rpc,
             self.entrypoints.join(", "),
+            known_validators,
         )
     }
 }
@@ -234,6 +244,13 @@ impl<'a> Kubernetes<'a> {
             flags.push(shred_version.to_string());
         }
 
+        if let Some(known_validators) = &self.validator_config.known_validators {
+            for key in known_validators.iter() {
+                flags.push("--known-validator".to_string());
+                flags.push(key.to_string());
+            }
+        }
+
         flags
     }
 
@@ -390,6 +407,8 @@ impl<'a> Kubernetes<'a> {
         let vote_key_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator/vote-account.json");
         let stake_key_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator/stake-account.json");
 
+        
+
         let key_files = vec![
             (faucet_key_path, "faucet"),
             (identity_key_path, "identity"),
@@ -452,6 +471,18 @@ impl<'a> Kubernetes<'a> {
         key_files.push((config_path.join("faucet.json"), "faucet"));
 
         k8s_helpers::create_secret_from_files(&secret_name, &key_files)
+    }
+
+    pub fn add_known_validator(&mut self, pubkey: Pubkey) {
+        if let Some(ref mut known_validators ) = self.validator_config.known_validators {
+            known_validators.push(pubkey);
+        } else {
+            let mut new_known_validators = Vec::new();
+            new_known_validators.push(pubkey);
+            self.validator_config.known_validators = Some(new_known_validators);
+        }
+
+        info!("pubkey added to known validators: {:?}", pubkey);
     }
 
     pub async fn deploy_replicas_set(

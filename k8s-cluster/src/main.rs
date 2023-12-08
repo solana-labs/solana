@@ -604,6 +604,7 @@ async fn main() {
         require_tower: matches.is_present("require_tower"),
         enable_full_rpc: matches.is_present("enable_full_rpc"),
         entrypoints: Vec::new(),
+        known_validators: None,
     };
 
     let wait_for_supermajority: Option<u64> = validator_config.wait_for_supermajority;
