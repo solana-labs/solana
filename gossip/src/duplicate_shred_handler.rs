@@ -9,6 +9,7 @@ use {
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
         clock::{Epoch, Slot},
+        feature_set,
         pubkey::Pubkey,
     },
     std::{
@@ -47,6 +48,8 @@ pub struct DuplicateShredHandler {
     cached_slots_in_epoch: u64,
     // Used to notify duplicate consensus state machine
     duplicate_slots_sender: Sender<Slot>,
+    // Used to enable gossip duplicate proof ingestion and send to state machine.
+    enable_gossip_duplicate_proof_ingestion: bool,
 }
 
 impl DuplicateShredHandlerTrait for DuplicateShredHandler {
@@ -79,6 +82,7 @@ impl DuplicateShredHandler {
             leader_schedule_cache,
             bank_forks,
             duplicate_slots_sender,
+            enable_gossip_duplicate_proof_ingestion: false,
         }
     }
 
@@ -91,6 +95,9 @@ impl DuplicateShredHandler {
         if let Ok(bank_fork) = self.bank_forks.try_read() {
             let root_bank = bank_fork.root_bank();
             let epoch_info = root_bank.get_epoch_info();
+            self.enable_gossip_duplicate_proof_ingestion = root_bank
+                .feature_set
+                .is_active(&feature_set::enable_gossip_duplicate_proof_ingestion::id());
             if self.cached_staked_nodes.is_empty() || self.cached_on_epoch < epoch_info.epoch {
                 self.cached_on_epoch = epoch_info.epoch;
                 if let Some(cached_staked_nodes) = root_bank.epoch_staked_nodes(epoch_info.epoch) {
@@ -136,10 +143,12 @@ impl DuplicateShredHandler {
                     shred1.into_payload(),
                     shred2.into_payload(),
                 )?;
-                // Notify duplicate consensus state machine
-                self.duplicate_slots_sender
-                    .send(slot)
-                    .map_err(|_| Error::DuplicateSlotSenderFailure)?;
+                if self.enable_gossip_duplicate_proof_ingestion {
+                    // Notify duplicate consensus state machine
+                    self.duplicate_slots_sender
+                        .send(slot)
+                        .map_err(|_| Error::DuplicateSlotSenderFailure)?;
+                }
             }
             self.consumed.insert(slot, true);
         }
