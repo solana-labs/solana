@@ -9,6 +9,7 @@ use {
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
         clock::{Epoch, Slot},
+        epoch_schedule::EpochSchedule,
         feature_set,
         pubkey::Pubkey,
     },
@@ -46,10 +47,11 @@ pub struct DuplicateShredHandler {
     cached_on_epoch: Epoch,
     cached_staked_nodes: Arc<HashMap<Pubkey, u64>>,
     cached_slots_in_epoch: u64,
+    cached_epoch_schedule: Option<EpochSchedule>,
     // Used to notify duplicate consensus state machine
     duplicate_slots_sender: Sender<Slot>,
-    // Used to enable gossip duplicate proof ingestion and send to state machine.
-    enable_gossip_duplicate_proof_ingestion: bool,
+    // The Epoch to enable gossip duplicate proof ingestion and send to state machine.
+    enable_gossip_duplicate_proof_ingestion_epoch: Option<Epoch>,
 }
 
 impl DuplicateShredHandlerTrait for DuplicateShredHandler {
@@ -78,11 +80,12 @@ impl DuplicateShredHandler {
             cached_on_epoch: 0,
             cached_staked_nodes: Arc::new(HashMap::new()),
             cached_slots_in_epoch: 0,
+            cached_epoch_schedule: None,
             blockstore,
             leader_schedule_cache,
             bank_forks,
             duplicate_slots_sender,
-            enable_gossip_duplicate_proof_ingestion: false,
+            enable_gossip_duplicate_proof_ingestion_epoch: None,
         }
     }
 
@@ -94,10 +97,12 @@ impl DuplicateShredHandler {
         self.last_root = last_root;
         if let Ok(bank_fork) = self.bank_forks.try_read() {
             let root_bank = bank_fork.root_bank();
+            self.cached_epoch_schedule = Some(*root_bank.epoch_schedule());
             let epoch_info = root_bank.get_epoch_info();
-            self.enable_gossip_duplicate_proof_ingestion = root_bank
+            self.enable_gossip_duplicate_proof_ingestion_epoch = root_bank
                 .feature_set
-                .is_active(&feature_set::enable_gossip_duplicate_proof_ingestion::id());
+                .activated_slot(&feature_set::enable_gossip_duplicate_proof_ingestion::id())
+                .map(|slot| root_bank.epoch_schedule().get_epoch(slot));
             if self.cached_staked_nodes.is_empty() || self.cached_on_epoch < epoch_info.epoch {
                 self.cached_on_epoch = epoch_info.epoch;
                 if let Some(cached_staked_nodes) = root_bank.epoch_staked_nodes(epoch_info.epoch) {
@@ -143,11 +148,16 @@ impl DuplicateShredHandler {
                     shred1.into_payload(),
                     shred2.into_payload(),
                 )?;
-                if self.enable_gossip_duplicate_proof_ingestion {
-                    // Notify duplicate consensus state machine
-                    self.duplicate_slots_sender
-                        .send(slot)
-                        .map_err(|_| Error::DuplicateSlotSenderFailure)?;
+                if let Some(epoch_schedule) = self.cached_epoch_schedule {
+                    if self
+                        .enable_gossip_duplicate_proof_ingestion_epoch
+                        .is_some_and(|feature_epoch| epoch_schedule.get_epoch(slot) > feature_epoch)
+                    {
+                        // Notify duplicate consensus state machine
+                        self.duplicate_slots_sender
+                            .send(slot)
+                            .map_err(|_| Error::DuplicateSlotSenderFailure)?;
+                    }
                 }
             }
             self.consumed.insert(slot, true);
