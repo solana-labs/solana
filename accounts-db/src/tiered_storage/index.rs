@@ -86,7 +86,7 @@ impl IndexBlockFormat {
     }
 
     /// Returns the offset to the account given the specified index.
-    pub fn get_account_offset<'a, T: AccountOffset + Copy>(
+    pub fn get_account_offset<T: AccountOffset + Copy>(
         &self,
         mmap: &Mmap,
         footer: &TieredStorageFooter,
