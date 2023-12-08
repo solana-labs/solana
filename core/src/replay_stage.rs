@@ -67,6 +67,7 @@ use {
     },
     solana_sdk::{
         clock::{BankId, Slot, MAX_PROCESSING_AGE, NUM_CONSECUTIVE_LEADER_SLOTS},
+        feature_set,
         genesis_config::ClusterType,
         hash::Hash,
         pubkey::Pubkey,
@@ -2109,7 +2110,11 @@ impl ReplayStage {
         );
 
         // If we previously marked this slot as duplicate in blockstore, let the state machine know
-        if !duplicate_slots_tracker.contains(&slot) && blockstore.get_duplicate_slot(slot).is_some()
+        if !duplicate_slots_tracker.contains(&slot)
+            && blockstore.get_duplicate_slot(slot).is_some()
+            && bank
+                .feature_set
+                .is_active(&feature_set::consume_blockstore_duplicate_proofs::id())
         {
             let duplicate_state = DuplicateState::new_from_state(
                 slot,
@@ -2921,6 +2926,9 @@ impl ReplayStage {
                 // If we previously marked this slot as duplicate in blockstore, let the state machine know
                 if !duplicate_slots_tracker.contains(&bank.slot())
                     && blockstore.get_duplicate_slot(bank.slot()).is_some()
+                    && bank
+                        .feature_set
+                        .is_active(&feature_set::consume_blockstore_duplicate_proofs::id())
                 {
                     let duplicate_state = DuplicateState::new_from_state(
                         bank.slot(),
