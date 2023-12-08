@@ -764,7 +764,7 @@ where
                                 }
                             },
                             recv(if state_machine.has_retryable_task() { always_retry } else { never_retry }) -> now => {
-                                assert_matches!(now, RecvError::Err(()));
+                                assert_matches!(now, RecvError);
 
                                 if let Some(task) = state_machine.schedule_retryable_task() {
                                     blocked_transaction_sessioned_sender
