@@ -6,6 +6,7 @@ use {
     itertools::Itertools,
     log::{debug, error, log_enabled, trace},
     percentage::PercentageInteger,
+    rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
     solana_rbpf::{
         elf::Executable,
@@ -415,6 +416,10 @@ impl LoadedProgram {
                 == DELAY_VISIBILITY_SLOT_OFFSET
             && slot >= self.deployment_slot
             && slot < self.effective_slot
+    }
+
+    fn decayed_usage_counter(&self, _now: Slot) -> u64 {
+        self.tx_usage_counter.load(Ordering::Relaxed)
     }
 }
 
@@ -935,6 +940,26 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         })
     }
 
+    /// Returns the list of loaded programs which are verified and compiled.
+    fn get_flattened_entries(&self) -> Vec<(Pubkey, Arc<LoadedProgram>)> {
+        self.entries
+            .iter()
+            .flat_map(|(id, second_level)| {
+                second_level
+                    .slot_versions
+                    .iter()
+                    .filter_map(move |program| match program.program {
+                        LoadedProgramType::LegacyV0(_)
+                        | LoadedProgramType::LegacyV1(_)
+                        | LoadedProgramType::Typed(_) => Some((*id, program.clone())),
+                        #[cfg(test)]
+                        LoadedProgramType::TestLoaded(_) => Some((*id, program.clone())),
+                        _ => None,
+                    })
+            })
+            .collect()
+    }
+
     /// Returns the list of loaded programs which are verified and compiled sorted by `tx_usage_counter`.
     ///
     /// Entries from program runtime v1 and v2 can be individually filtered.
@@ -976,6 +1001,39 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         self.unload_program_entries(sorted_candidates.iter().take(num_to_unload));
     }
 
+    /// Evicts programs using 2's random selection, choosing the least used program out of the two entries.
+    /// The eviction is performed enough number of times to reduce the cache usage to the given percentage.
+    pub fn evict_using_2s_random_selection(&mut self, shrink_to: PercentageInteger, now: Slot) {
+        let mut candidates = self.get_flattened_entries();
+        let num_to_unload = candidates
+            .len()
+            .saturating_sub(shrink_to.apply_to(MAX_LOADED_ENTRY_COUNT));
+        for _ in 0..num_to_unload {
+            let mut rng = thread_rng();
+            let index1 = rng.gen_range(0..candidates.len());
+            let index2 = rng.gen_range(0..candidates.len());
+            if let Some((usage_counter1, usage_counter2)) =
+                candidates.get(index1).and_then(|(_id, entry1)| {
+                    candidates.get(index2).map(|(_id, entry2)| {
+                        (
+                            entry1.decayed_usage_counter(now),
+                            entry2.decayed_usage_counter(now),
+                        )
+                    })
+                })
+            {
+                let (program, entry) = if usage_counter1 < usage_counter2 {
+                    candidates.remove(index1)
+                } else {
+                    candidates.remove(index2)
+                };
+                self.unload_program_entry(&program, &entry);
+            } else {
+                error!("Failed in evicting an entry from the program cache");
+            }
+        }
+    }
+
     /// Removes all the entries at the given keys, if they exist
     pub fn remove_programs(&mut self, keys: impl Iterator<Item = Pubkey>) {
         for k in keys {
@@ -1003,30 +1061,34 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         keys.iter().for_each(|key| self.unload_program(key));
     }
 
+    fn unload_program_entry(&mut self, program: &Pubkey, remove_entry: &Arc<LoadedProgram>) {
+        if let Some(second_level) = self.entries.get_mut(program) {
+            if let Some(candidate) = second_level
+                .slot_versions
+                .iter_mut()
+                .find(|entry| entry == &remove_entry)
+            {
+                if let Some(unloaded) = candidate.to_unloaded() {
+                    if candidate.tx_usage_counter.load(Ordering::Relaxed) == 1 {
+                        self.stats.one_hit_wonders.fetch_add(1, Ordering::Relaxed);
+                    }
+                    self.stats
+                        .evictions
+                        .entry(*program)
+                        .and_modify(|c| saturating_add_assign!(*c, 1))
+                        .or_insert(1);
+                    *candidate = Arc::new(unloaded);
+                }
+            }
+        }
+    }
+
     fn unload_program_entries<'a>(
         &mut self,
         remove: impl Iterator<Item = &'a (Pubkey, Arc<LoadedProgram>)>,
     ) {
-        for (id, program) in remove {
-            if let Some(second_level) = self.entries.get_mut(id) {
-                if let Some(candidate) = second_level
-                    .slot_versions
-                    .iter_mut()
-                    .find(|entry| entry == &program)
-                {
-                    if let Some(unloaded) = candidate.to_unloaded() {
-                        if candidate.tx_usage_counter.load(Ordering::Relaxed) == 1 {
-                            self.stats.one_hit_wonders.fetch_add(1, Ordering::Relaxed);
-                        }
-                        self.stats
-                            .evictions
-                            .entry(*id)
-                            .and_modify(|c| saturating_add_assign!(*c, 1))
-                            .or_insert(1);
-                        *candidate = Arc::new(unloaded);
-                    }
-                }
-            }
+        for (program, entry) in remove {
+            self.unload_program_entry(program, entry);
         }
     }
 

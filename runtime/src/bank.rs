@@ -5287,7 +5287,10 @@ impl Bank {
         self.loaded_programs_cache
             .write()
             .unwrap()
-            .sort_and_unload(Percentage::from(SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE));
+            .evict_using_2s_random_selection(
+                Percentage::from(SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE),
+                self.slot(),
+            );
 
         debug!(
             "check: {}us load: {}us execute: {}us txs_len={}",
