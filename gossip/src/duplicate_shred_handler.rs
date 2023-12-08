@@ -467,4 +467,46 @@ mod tests {
         assert!(blockstore.has_duplicate_shreds_in_slot(start_slot));
         assert_eq!(receiver.try_iter().collect_vec(), vec![start_slot]);
     }
+
+    #[test]
+    fn test_feature_disabled() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
+        let my_keypair = Arc::new(Keypair::new());
+        let my_pubkey = my_keypair.pubkey();
+        let genesis_config_info = create_genesis_config_with_leader(10_000, &my_pubkey, 10_000);
+        let GenesisConfigInfo { genesis_config, .. } = genesis_config_info;
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.deactivate_feature(&feature_set::enable_gossip_duplicate_proof_ingestion::id());
+        assert!(!bank
+            .feature_set
+            .is_active(&feature_set::enable_gossip_duplicate_proof_ingestion::id()));
+        let bank_forks_arc = BankForks::new_rw_arc(bank);
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
+            &bank_forks_arc.read().unwrap().working_bank(),
+        ));
+        let (sender, receiver) = unbounded();
+
+        let mut duplicate_shred_handler = DuplicateShredHandler::new(
+            blockstore.clone(),
+            leader_schedule_cache,
+            bank_forks_arc,
+            sender,
+        );
+        let chunks = create_duplicate_proof(
+            my_keypair.clone(),
+            None,
+            1,
+            None,
+            DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
+        )
+        .unwrap();
+        assert!(!blockstore.has_duplicate_shreds_in_slot(1));
+        for chunk in chunks {
+            duplicate_shred_handler.handle(chunk);
+        }
+        // If feature disabled, blockstore gets signal but state machine doesn't see it.
+        assert!(blockstore.has_duplicate_shreds_in_slot(1));
+        assert!(receiver.try_iter().collect_vec().is_empty());
+    }
 }
