@@ -16,7 +16,7 @@ use {
     },
     solana_program::{account_info::AccountInfo, debug_account_data::*, sysvar::Sysvar},
     std::{
-        cell::{Ref, RefCell},
+        cell::{Ref, RefCell, RefMut},
         fmt,
         mem::MaybeUninit,
         ptr,
@@ -351,7 +351,53 @@ impl ReadableAccount for Ref<'_, AccountSharedData> {
     }
 }
 
+impl ReadableAccount for RefMut<'_, AccountSharedData> {
+    fn lamports(&self) -> u64 {
+        self.lamports
+    }
+    fn data(&self) -> &[u8] {
+        &self.data
+    }
+    fn owner(&self) -> &Pubkey {
+        &self.owner
+    }
+    fn executable(&self) -> bool {
+        self.executable
+    }
+    fn rent_epoch(&self) -> Epoch {
+        self.rent_epoch
+    }
+    fn to_account_shared_data(&self) -> AccountSharedData {
+        AccountSharedData {
+            lamports: self.lamports(),
+            // avoid data copy here
+            data: Arc::clone(&self.data),
+            owner: *self.owner(),
+            executable: self.executable(),
+            rent_epoch: self.rent_epoch(),
+        }
+    }
+}
+
 impl ReadableAccount for Ref<'_, Account> {
+    fn lamports(&self) -> u64 {
+        self.lamports
+    }
+    fn data(&self) -> &[u8] {
+        &self.data
+    }
+    fn owner(&self) -> &Pubkey {
+        &self.owner
+    }
+    fn executable(&self) -> bool {
+        self.executable
+    }
+    fn rent_epoch(&self) -> Epoch {
+        self.rent_epoch
+    }
+}
+
+impl ReadableAccount for RefMut<'_, Account> {
     fn lamports(&self) -> u64 {
         self.lamports
     }
