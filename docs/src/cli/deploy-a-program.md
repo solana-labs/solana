@@ -282,14 +282,24 @@ intermediary buffer contents and then vote to allow an upgrade using it.
 solana program write-buffer <PROGRAM_FILEPATH>
 ```
 
-Buffer accounts support authorities like program accounts:
+Buffer accounts are managed by some authority - default signer, or signer specified with 
+`--buffer-authority` option:
+
+```bash
+solana program write-buffer <PROGRAM_FILEPATH> --buffer-authority <BUFFER_AUTHORITY_SIGNER>
+```
+
+Note, `--buffer-authority` from above must be a **Signer** - this prevents a developer from giving 
+upgrade authority to a key that they do not have access to. That means you can't set `--buffer-authority` 
+in `solana program write-buffer` to a Pubkey, and hence for certain use-cases (like offline signing) you 
+might want to use `solana program set-buffer-authority` command to set the authority for existing buffer 
+(which supports authority in the form of Pubkey, or even a program account):
 
 ```bash
 solana program set-buffer-authority <BUFFER_ADDRESS> --new-buffer-authority <NEW_BUFFER_AUTHORITY>
 ```
 
-One exception is that buffer accounts cannot be marked immutable like program
-accounts can, so they don't support `--final`.
+Unlike program accounts buffer accounts cannot be marked immutable, so they don't support `--final` option.
 
 The buffer account, once entirely written, can be passed to `deploy` to deploy
 the program:
