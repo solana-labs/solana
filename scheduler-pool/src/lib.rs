@@ -764,7 +764,7 @@ where
                                 }
                             },
                             recv(if state_machine.has_retryable_task() { always_retry } else { never_retry }) -> now => {
-                                assert_matches!(now, usize);
+                                let a: usize = now;
                                 if let Some(task) = state_machine.schedule_retryable_task() {
                                     blocked_transaction_sessioned_sender
                                         .send(ChainedChannel::Payload(task))
