@@ -86,12 +86,12 @@ impl IndexBlockFormat {
     }
 
     /// Returns the offset to the account given the specified index.
-    pub fn get_account_offset<'a, T: AccountOffset>(
+    pub fn get_account_offset<'a, T: AccountOffset + Copy>(
         &self,
-        mmap: &'a Mmap,
+        mmap: &Mmap,
         footer: &TieredStorageFooter,
         index_offset: IndexOffset,
-    ) -> TieredStorageResult<&'a T> {
+    ) -> TieredStorageResult<T> {
         match self {
             Self::AddressAndBlockOffsetOnly => {
                 let offset = footer.index_block_offset as usize
@@ -99,7 +99,7 @@ impl IndexBlockFormat {
                     + std::mem::size_of::<u32>() * index_offset.0 as usize;
                 let (account_offset, _) = get_type::<T>(mmap, offset)?;
 
-                Ok(account_offset)
+                Ok(*account_offset)
             }
         }
     }
@@ -169,7 +169,7 @@ mod tests {
             let account_offset = indexer
                 .get_account_offset::<HotAccountOffset>(&mmap, &footer, IndexOffset(i as u32))
                 .unwrap();
-            assert_eq!(index_entry.offset, *account_offset);
+            assert_eq!(index_entry.offset, account_offset);
             let address = indexer
                 .get_account_address(&mmap, &footer, IndexOffset(i as u32))
                 .unwrap();

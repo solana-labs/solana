@@ -280,7 +280,7 @@ impl HotStorageReader {
     fn get_account_offset(
         &self,
         index_offset: IndexOffset,
-    ) -> TieredStorageResult<&HotAccountOffset> {
+    ) -> TieredStorageResult<HotAccountOffset> {
         self.footer
             .index_block_format
             .get_account_offset::<HotAccountOffset>(&self.mmap, &self.footer, index_offset)
@@ -583,7 +583,7 @@ pub mod tests {
             let account_offset = hot_storage
                 .get_account_offset(IndexOffset(i as u32))
                 .unwrap();
-            assert_eq!(*account_offset, index_writer_entry.offset);
+            assert_eq!(account_offset, index_writer_entry.offset);
 
             let account_address = hot_storage
                 .get_account_address(IndexOffset(i as u32))
