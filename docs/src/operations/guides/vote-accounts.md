@@ -165,7 +165,7 @@ Rotating the vote account authority keys requires special handling when dealing
 with a live validator.
 
 Note that vote account key rotation has no effect on the stake accounts that
-have been delegate to the vote account. For example it is possible to use key
+have been delegated to the vote account. For example it is possible to use key
 rotation to transfer all authority of a vote account from one entity to another
 without any impact to staking rewards.
 
