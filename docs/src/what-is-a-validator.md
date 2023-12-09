@@ -6,7 +6,7 @@ A validator is a computer that helps to run the Solana network. Each validator e
 
 The more independent entities that run validators, the less vulnerable the cluster is to an attack or catastrophe that affects the cluster.
 
-> For an more in depth look at the health of the Solana network, see the [Solana Foundation Validator Health Report](https://solana.com/news/validator-health-report-march-2023).
+> For a more in depth look at the health of the Solana network, see the [Solana Foundation Validator Health Report](https://solana.com/news/validator-health-report-march-2023).
 
 By becoming a validator, you are helping to grow the network. You are also learning first hand how the Solana cluster functions at the lowest level. You will become part of an active community of operators that are passionate about the Solana ecosystem.
 
