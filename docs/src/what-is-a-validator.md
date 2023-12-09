@@ -12,7 +12,7 @@ By becoming a validator, you are helping to grow the network. You are also learn
 
 ## Consensus vs RPC
 
-Before, we discuss validators in more detail, it's useful to make some distinctions. Using the same validator software, you have the option of running a voting/consensus node or choosing to instead run an RPC node. An RPC node helps Solana devs and others interact with the blockchain but for performance reasons should not vote. We go into more detail on RPC nodes in the next section, [what is an rpc node](./what-is-an-rpc-node.md).
+Before we discuss validators in more detail, it's useful to make some distinctions. Using the same validator software, you have the option of running a voting/consensus node or choosing to instead run an RPC node. An RPC node helps Solana devs and others interact with the blockchain but for performance reasons should not vote. We go into more detail on RPC nodes in the next section, [what is an rpc node](./what-is-an-rpc-node.md).
 
 For this document, when a validator is mentioned, we are talking about a voting/consensus node. Now, to better understand what your validator is doing, it would help to understand how the Solana network functions in more depth.
 
