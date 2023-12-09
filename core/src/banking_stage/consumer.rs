@@ -587,6 +587,10 @@ impl Consumer {
         let (freeze_lock, freeze_lock_us) = measure_us!(bank.freeze_lock());
         execute_and_commit_timings.freeze_lock_us = freeze_lock_us;
 
+        let ((last_blockhash, lamports_per_signature), last_blockhash_us) =
+            measure_us!(bank.last_blockhash_and_lamports_per_signature());
+        execute_and_commit_timings.last_blockhash_us = last_blockhash_us;
+
         let (record_transactions_summary, record_us) = measure_us!(self
             .transaction_recorder
             .record_transactions(bank.slot(), executed_transactions));
@@ -623,6 +627,8 @@ impl Consumer {
                 batch,
                 &mut loaded_transactions,
                 execution_results,
+                last_blockhash,
+                lamports_per_signature,
                 starting_transaction_index,
                 bank,
                 &mut pre_balance_info,
