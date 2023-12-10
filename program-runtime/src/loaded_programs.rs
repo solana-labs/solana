@@ -130,6 +130,8 @@ pub struct LoadedProgram {
     pub tx_usage_counter: AtomicU64,
     /// How often this entry was used by an instruction
     pub ix_usage_counter: AtomicU64,
+    /// Latest slot in which the entry was used
+    pub latest_access_slot: RwLock<Slot>,
 }
 
 #[derive(Debug, Default)]
@@ -349,6 +351,7 @@ impl LoadedProgram {
             tx_usage_counter: AtomicU64::new(0),
             program,
             ix_usage_counter: AtomicU64::new(0),
+            latest_access_slot: RwLock::new(0),
         })
     }
 
@@ -361,6 +364,7 @@ impl LoadedProgram {
             maybe_expiration_slot: self.maybe_expiration_slot,
             tx_usage_counter: AtomicU64::new(self.tx_usage_counter.load(Ordering::Relaxed)),
             ix_usage_counter: AtomicU64::new(self.ix_usage_counter.load(Ordering::Relaxed)),
+            latest_access_slot: RwLock::new(*self.latest_access_slot.read().unwrap()),
         })
     }
 
@@ -382,6 +386,7 @@ impl LoadedProgram {
             tx_usage_counter: AtomicU64::new(0),
             program: LoadedProgramType::Builtin(BuiltinProgram::new_builtin(function_registry)),
             ix_usage_counter: AtomicU64::new(0),
+            latest_access_slot: RwLock::new(0),
         }
     }
 
@@ -396,6 +401,7 @@ impl LoadedProgram {
             maybe_expiration_slot,
             tx_usage_counter: AtomicU64::default(),
             ix_usage_counter: AtomicU64::default(),
+            latest_access_slot: RwLock::new(0),
         };
         debug_assert!(tombstone.is_tombstone());
         tombstone
@@ -418,8 +424,17 @@ impl LoadedProgram {
             && slot < self.effective_slot
     }
 
-    fn decayed_usage_counter(&self, _now: Slot) -> u64 {
-        self.tx_usage_counter.load(Ordering::Relaxed)
+    pub fn update_access_slot(&self, slot: Slot) {
+        let mut current_slot = self.latest_access_slot.write().unwrap();
+        if slot > *current_slot {
+            *current_slot = slot;
+        }
+    }
+
+    fn decayed_usage_counter(&self, now: Slot) -> u64 {
+        let last_access = self.latest_access_slot.read().unwrap();
+        let decaying_for = now.saturating_sub(*last_access);
+        self.tx_usage_counter.load(Ordering::Relaxed) >> decaying_for
     }
 }
 
@@ -867,7 +882,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                             if let LoadedProgramType::Unloaded(_environment) = &entry.program {
                                 break;
                             }
-
+                            entry.update_access_slot(loaded_programs_for_tx_batch.slot);
                             entry.clone()
                         } else if entry.is_implicit_delay_visibility_tombstone(
                             loaded_programs_for_tx_batch.slot,
@@ -1187,6 +1202,7 @@ mod tests {
             maybe_expiration_slot: expiry,
             tx_usage_counter: usage_counter,
             ix_usage_counter: AtomicU64::default(),
+            latest_access_slot: RwLock::new(0),
         })
     }
 
@@ -1199,6 +1215,7 @@ mod tests {
             maybe_expiration_slot: None,
             tx_usage_counter: AtomicU64::default(),
             ix_usage_counter: AtomicU64::default(),
+            latest_access_slot: RwLock::new(0),
         })
     }
 
@@ -1227,6 +1244,7 @@ mod tests {
                 maybe_expiration_slot: None,
                 tx_usage_counter: AtomicU64::default(),
                 ix_usage_counter: AtomicU64::default(),
+                latest_access_slot: RwLock::new(0),
             }
             .to_unloaded()
             .expect("Failed to unload the program"),
@@ -1250,6 +1268,176 @@ mod tests {
                     .count()
             })
             .sum()
+    }
+
+    #[test]
+    fn test_usage_counter_decay() {
+        let _cache = new_mock_cache::<TestForkGraph>();
+        let program = new_test_loaded_program_with_usage(10, 11, AtomicU64::new(32));
+        program.update_access_slot(15);
+        assert_eq!(program.decayed_usage_counter(15), 32);
+        assert_eq!(program.decayed_usage_counter(16), 16);
+        assert_eq!(program.decayed_usage_counter(17), 8);
+        assert_eq!(program.decayed_usage_counter(18), 4);
+        assert_eq!(program.decayed_usage_counter(19), 2);
+        assert_eq!(program.decayed_usage_counter(20), 1);
+        assert_eq!(program.decayed_usage_counter(21), 0);
+        assert_eq!(program.decayed_usage_counter(15), 32);
+        assert_eq!(program.decayed_usage_counter(14), 32);
+
+        program.update_access_slot(18);
+        assert_eq!(program.decayed_usage_counter(15), 32);
+        assert_eq!(program.decayed_usage_counter(16), 32);
+        assert_eq!(program.decayed_usage_counter(17), 32);
+        assert_eq!(program.decayed_usage_counter(18), 32);
+        assert_eq!(program.decayed_usage_counter(19), 16);
+        assert_eq!(program.decayed_usage_counter(20), 8);
+        assert_eq!(program.decayed_usage_counter(21), 4);
+    }
+
+    #[test]
+    fn test_random_eviction() {
+        let mut programs = vec![];
+
+        let mut cache = new_mock_cache::<TestForkGraph>();
+
+        let program1 = Pubkey::new_unique();
+        let program1_deployment_slots = [0, 10, 20];
+        let program1_usage_counters = [4, 5, 25];
+        program1_deployment_slots
+            .iter()
+            .enumerate()
+            .for_each(|(i, deployment_slot)| {
+                let usage_counter = *program1_usage_counters.get(i).unwrap_or(&0);
+                cache.replenish(
+                    program1,
+                    new_test_loaded_program_with_usage(
+                        *deployment_slot,
+                        (*deployment_slot) + 2,
+                        AtomicU64::new(usage_counter),
+                    ),
+                );
+                programs.push((program1, *deployment_slot, usage_counter));
+            });
+
+        let env = Arc::new(BuiltinProgram::new_mock());
+        for slot in 21..31 {
+            set_tombstone(
+                &mut cache,
+                program1,
+                slot,
+                LoadedProgramType::FailedVerification(env.clone()),
+            );
+        }
+
+        for slot in 31..41 {
+            insert_unloaded_program(&mut cache, program1, slot);
+        }
+
+        let program2 = Pubkey::new_unique();
+        let program2_deployment_slots = [5, 11];
+        let program2_usage_counters = [0, 2];
+        program2_deployment_slots
+            .iter()
+            .enumerate()
+            .for_each(|(i, deployment_slot)| {
+                let usage_counter = *program2_usage_counters.get(i).unwrap_or(&0);
+                cache.replenish(
+                    program2,
+                    new_test_loaded_program_with_usage(
+                        *deployment_slot,
+                        (*deployment_slot) + 2,
+                        AtomicU64::new(usage_counter),
+                    ),
+                );
+                programs.push((program2, *deployment_slot, usage_counter));
+            });
+
+        for slot in 21..31 {
+            set_tombstone(
+                &mut cache,
+                program2,
+                slot,
+                LoadedProgramType::DelayVisibility,
+            );
+        }
+
+        for slot in 31..41 {
+            insert_unloaded_program(&mut cache, program2, slot);
+        }
+
+        let program3 = Pubkey::new_unique();
+        let program3_deployment_slots = [0, 5, 15];
+        let program3_usage_counters = [100, 3, 20];
+        program3_deployment_slots
+            .iter()
+            .enumerate()
+            .for_each(|(i, deployment_slot)| {
+                let usage_counter = *program3_usage_counters.get(i).unwrap_or(&0);
+                cache.replenish(
+                    program3,
+                    new_test_loaded_program_with_usage(
+                        *deployment_slot,
+                        (*deployment_slot) + 2,
+                        AtomicU64::new(usage_counter),
+                    ),
+                );
+                programs.push((program3, *deployment_slot, usage_counter));
+            });
+
+        for slot in 21..31 {
+            set_tombstone(&mut cache, program3, slot, LoadedProgramType::Closed);
+        }
+
+        for slot in 31..41 {
+            insert_unloaded_program(&mut cache, program3, slot);
+        }
+
+        programs.sort_by_key(|(_id, _slot, usage_count)| *usage_count);
+
+        let num_loaded = num_matching_entries(&cache, |program_type| {
+            matches!(program_type, LoadedProgramType::TestLoaded(_))
+        });
+        let num_unloaded = num_matching_entries(&cache, |program_type| {
+            matches!(program_type, LoadedProgramType::Unloaded(_))
+        });
+        let num_tombstones = num_matching_entries(&cache, |program_type| {
+            matches!(
+                program_type,
+                LoadedProgramType::DelayVisibility
+                    | LoadedProgramType::FailedVerification(_)
+                    | LoadedProgramType::Closed
+            )
+        });
+
+        assert_eq!(num_loaded, 8);
+        assert_eq!(num_unloaded, 30);
+        assert_eq!(num_tombstones, 30);
+
+        // Evicting to 2% should update cache with
+        // * 5 active entries
+        // * 33 unloaded entries (3 active programs will get unloaded)
+        // * 30 tombstones (tombstones are not evicted)
+        cache.evict_using_2s_random_selection(Percentage::from(2), 50);
+
+        let num_loaded = num_matching_entries(&cache, |program_type| {
+            matches!(program_type, LoadedProgramType::TestLoaded(_))
+        });
+        let num_unloaded = num_matching_entries(&cache, |program_type| {
+            matches!(program_type, LoadedProgramType::Unloaded(_))
+        });
+        let num_tombstones = num_matching_entries(&cache, |program_type| {
+            matches!(
+                program_type,
+                LoadedProgramType::DelayVisibility
+                    | LoadedProgramType::FailedVerification(_)
+                    | LoadedProgramType::Closed
+            )
+        });
+
+        assert_eq!(num_loaded, 5);
+        assert_eq!(num_unloaded, 33);
+        assert_eq!(num_tombstones, 30);
     }
 
     #[test]
@@ -1644,6 +1832,7 @@ mod tests {
             maybe_expiration_slot: None,
             tx_usage_counter: AtomicU64::default(),
             ix_usage_counter: AtomicU64::default(),
+            latest_access_slot: RwLock::new(0),
         });
         let (existing, program) = cache.replenish(program1, updated_program.clone());
         assert!(!existing);
@@ -1936,6 +2125,7 @@ mod tests {
             maybe_expiration_slot: Some(21),
             tx_usage_counter: AtomicU64::default(),
             ix_usage_counter: AtomicU64::default(),
+            latest_access_slot: RwLock::new(0),
         });
         assert!(!cache.replenish(program4, test_program).0);
 
@@ -2279,6 +2469,7 @@ mod tests {
             maybe_expiration_slot: Some(15),
             tx_usage_counter: AtomicU64::default(),
             ix_usage_counter: AtomicU64::default(),
+            latest_access_slot: RwLock::new(0),
         });
         assert!(!cache.replenish(program1, test_program).0);
 

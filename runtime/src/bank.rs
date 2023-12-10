@@ -4799,6 +4799,7 @@ impl Bank {
             loaded_program.ix_usage_counter =
                 AtomicU64::new(recompile.ix_usage_counter.load(Ordering::Relaxed));
         }
+        loaded_program.update_access_slot(self.slot());
         Arc::new(loaded_program)
     }
 
