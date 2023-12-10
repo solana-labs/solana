@@ -13,7 +13,7 @@ concatenating (1), (2), and (3)
 deduplicating this list of entries by pubkey favoring entries with contact info
 filtering this list by entries with contact info
 
-This list is then is randomly shuffled by stake weight.
+This list is then randomly shuffled by stake weight.
 
 Shreds are then retransmitted to up to FANOUT neighbors and up to FANOUT
 children.
@@ -37,7 +37,7 @@ First, only epoch staked nodes will be considered regardless of presence of
 contact info (and possibly including the validator node itself).
 
 A deterministic ordering of the epoch staked nodes will be created based on the
-derministic shred seed using weighted_shuffle.
+deterministic shred seed using weighted_shuffle.
 
 Let `neighbor_set` be selected from up to FANOUT neighbors of the current node.
 Let `child_set` be selected from up to FANOUT children of the current node.
@@ -73,7 +73,7 @@ distribution levels.
 distribution levels because of lack of contact info.
 - Current node was part of original epoch staked shuffle from retransmitter
 but was filtered out because of missing contact info. Current node subsequently
-receives retransmisison of shred and assumes that the retransmit was a result
+receives retransmission of shred and assumes that the retransmit was a result
 of the deterministic tree calculation and not from subsequent random selection.
 This should be benign because the current node will underestimate prior stake
 weight in the retransmission tree.
@@ -105,5 +105,5 @@ Practically, signals should fall into the following buckets:
 1.2. can signal layer 1 + subset of layer 2 when retransmit is sent
 3. layer 2
 3.1. can signal layer 2 when shred is received
-3.2. can signal layer 2 + subset of layer 3 when retrnasmit is sent
+3.2. can signal layer 2 + subset of layer 3 when retransmit is sent
 4. current node not a member of epoch staked nodes, no signal can be sent
