@@ -618,21 +618,15 @@ pub fn parse_program_subcommand(
             let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
             let blockhash_query = BlockhashQuery::new_from_matches(matches);
 
-            let buffer_pubkey = if let Ok(Some(buffer_pubkey)) =
-                pubkey_of_signer(matches, "buffer", wallet_manager)
-            {
-                buffer_pubkey
-            } else {
+            let Ok(Some(buffer_pubkey)) = pubkey_of_signer(matches, "buffer", wallet_manager)
+            else {
                 return Err(CliError::BadParameter(
                     "`BUFFER_PUBKEY` must be specified when doing program upgrade".into(),
                 ));
             };
 
-            let program_pubkey = if let Ok(Some(program_pubkey)) =
-                pubkey_of_signer(matches, "program_id", wallet_manager)
-            {
-                program_pubkey
-            } else {
+            let Ok(Some(program_pubkey)) = pubkey_of_signer(matches, "program_id", wallet_manager)
+            else {
                 return Err(CliError::BadParameter(
                     "`PROGRAM_ID` must be specified when doing program upgrade".into(),
                 ));
