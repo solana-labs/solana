@@ -14,7 +14,6 @@ use {
     },
 };
 
-#[derive(Debug)]
 pub struct RemoteKeypair {
     pub wallet_type: RemoteWalletType,
     pub derivation_path: DerivationPath,

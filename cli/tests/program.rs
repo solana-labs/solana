@@ -1469,11 +1469,9 @@ fn test_cli_program_deploy_with_offline_signing(use_offline_signer_as_fee_payer:
     let online_signer_identity = NullSigner::new(&online_signer.pubkey());
     let offline_signer = Keypair::new();
     let buffer_signer = Keypair::new();
-    let buffer_signer_identity = NullSigner::new(&buffer_signer.pubkey());
     // Typically, keypair for program signer should be different from online signer or
     // offline signer keypairs.
     let program_signer = Keypair::new();
-    let program_signer_identity = NullSigner::new(&program_signer.pubkey());
 
     config.command = CliCommand::Airdrop {
         pubkey: None,
@@ -1517,21 +1515,17 @@ fn test_cli_program_deploy_with_offline_signing(use_offline_signer_as_fee_payer:
     );
 
     // Offline sign-only with signature over "wrong" message (with different buffer)
-    config.signers = vec![
-        &offline_signer,
-        &buffer_signer_identity,
-        &program_signer_identity,
-    ];
+    config.signers = vec![&offline_signer];
     let fee_payer_signer_index = if use_offline_signer_as_fee_payer {
         0 // offline signer
     } else {
         config.signers.push(&online_signer_identity); // can't (and won't) provide signature in --sign-only mode
-        3 // online signer
+        1 // online signer
     };
     config.command = CliCommand::Program(ProgramCliCommand::Upgrade {
         fee_payer_signer_index,
-        program_signer_index: 2,
-        buffer_signer_index: 2, // will ensure offline signature applies to wrong(different) message
+        program_pubkey: program_signer.pubkey(),
+        buffer_pubkey: program_signer.pubkey(), // will ensure offline signature applies to wrong(different) message
         upgrade_authority_signer_index: 0,
         sign_only: true,
         dump_transaction_message: false,
@@ -1542,21 +1536,17 @@ fn test_cli_program_deploy_with_offline_signing(use_offline_signer_as_fee_payer:
     let sign_only = parse_sign_only_reply_string(&sig_response);
     let offline_pre_signer = sign_only.presigner_of(&offline_signer.pubkey()).unwrap();
     // Attempt to deploy from buffer using signature over wrong(different) message (should fail)
-    config.signers = vec![
-        &offline_pre_signer,
-        &buffer_signer_identity,
-        &program_signer,
-    ];
+    config.signers = vec![&offline_pre_signer, &program_signer];
     let fee_payer_signer_index = if use_offline_signer_as_fee_payer {
         0 // offline signer
     } else {
         config.signers.push(&online_signer); // can provide signature when not in --sign-only mode
-        3 // online signer
+        2 // online signer
     };
     config.command = CliCommand::Program(ProgramCliCommand::Upgrade {
         fee_payer_signer_index,
-        program_signer_index: 2,
-        buffer_signer_index: 1,
+        program_pubkey: program_signer.pubkey(),
+        buffer_pubkey: buffer_signer.pubkey(),
         upgrade_authority_signer_index: 0,
         sign_only: false,
         dump_transaction_message: false,
@@ -1567,21 +1557,17 @@ fn test_cli_program_deploy_with_offline_signing(use_offline_signer_as_fee_payer:
     assert_eq!(error.to_string(), "presigner error");
 
     // Offline sign-only with online signer as fee payer (correct signature for program upgrade)
-    config.signers = vec![
-        &offline_signer,
-        &buffer_signer_identity,
-        &program_signer_identity,
-    ];
+    config.signers = vec![&offline_signer];
     let fee_payer_signer_index = if use_offline_signer_as_fee_payer {
         0 // offline signer
     } else {
         config.signers.push(&online_signer_identity); // can't (and won't) provide signature in --sign-only mode
-        3 // online signer
+        1 // online signer
     };
     config.command = CliCommand::Program(ProgramCliCommand::Upgrade {
         fee_payer_signer_index,
-        program_signer_index: 2,
-        buffer_signer_index: 1,
+        program_pubkey: program_signer.pubkey(),
+        buffer_pubkey: buffer_signer.pubkey(),
         upgrade_authority_signer_index: 0,
         sign_only: true,
         dump_transaction_message: false,
@@ -1592,21 +1578,17 @@ fn test_cli_program_deploy_with_offline_signing(use_offline_signer_as_fee_payer:
     let sign_only = parse_sign_only_reply_string(&sig_response);
     let offline_pre_signer = sign_only.presigner_of(&offline_signer.pubkey()).unwrap();
     // Attempt to deploy from buffer using signature over correct message (should succeed)
-    config.signers = vec![
-        &offline_pre_signer,
-        &buffer_signer_identity,
-        &program_signer,
-    ];
+    config.signers = vec![&offline_pre_signer, &program_signer];
     let fee_payer_signer_index = if use_offline_signer_as_fee_payer {
         0 // offline signer
     } else {
         config.signers.push(&online_signer); // can provide signature when not in --sign-only mode
-        3 // online signer
+        2 // online signer
     };
     config.command = CliCommand::Program(ProgramCliCommand::Upgrade {
         fee_payer_signer_index,
-        program_signer_index: 2,
-        buffer_signer_index: 1,
+        program_pubkey: program_signer.pubkey(),
+        buffer_pubkey: buffer_signer.pubkey(),
         upgrade_authority_signer_index: 0,
         sign_only: false,
         dump_transaction_message: false,

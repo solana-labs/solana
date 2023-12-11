@@ -32,10 +32,6 @@ impl Signer for NullSigner {
     fn is_interactive(&self) -> bool {
         false
     }
-
-    fn is_null_signer(&self) -> bool {
-        true
-    }
 }
 
 impl<T> PartialEq<T> for NullSigner

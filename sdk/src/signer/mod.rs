@@ -12,7 +12,6 @@ use {
     itertools::Itertools,
     std::{
         error,
-        fmt::Debug,
         fs::{self, File, OpenOptions},
         io::{Read, Write},
         ops::Deref,
@@ -67,7 +66,7 @@ pub enum SignerError {
 /// The `Signer` trait declares operations that all digital signature providers
 /// must support. It is the primary interface by which signers are specified in
 /// `Transaction` signing interfaces
-pub trait Signer: Debug {
+pub trait Signer {
     /// Infallibly gets the implementor's public key. Returns the all-zeros
     /// `Pubkey` if the implementor has none.
     fn pubkey(&self) -> Pubkey {
@@ -84,10 +83,6 @@ pub trait Signer: Debug {
     fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError>;
     /// Whether the implementation requires user interaction to sign
     fn is_interactive(&self) -> bool;
-    /// Whether the implementation is NullSigner
-    fn is_null_signer(&self) -> bool {
-        false // default reusable code
-    }
 }
 
 impl<T> From<T> for Box<dyn Signer>
@@ -100,7 +95,7 @@ where
 }
 
 /// This impl allows using Signer with types like Box/Rc/Arc.
-impl<Container: Deref<Target = impl Signer> + Debug> Signer for Container {
+impl<Container: Deref<Target = impl Signer>> Signer for Container {
     #[inline]
     fn pubkey(&self) -> Pubkey {
         self.deref().pubkey()
@@ -130,6 +125,12 @@ impl PartialEq for dyn Signer {
 }
 
 impl Eq for dyn Signer {}
+
+impl std::fmt::Debug for dyn Signer {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(fmt, "Signer: {:?}", self.pubkey())
+    }
+}
 
 /// Removes duplicate signers while preserving order. O(n²)
 pub fn unique_signers(signers: Vec<&dyn Signer>) -> Vec<&dyn Signer> {
