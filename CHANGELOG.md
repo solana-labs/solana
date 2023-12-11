@@ -19,6 +19,9 @@ Release channels have their own copy of this changelog:
     * The default for `solana-ledger-tool`, however, remains `always` (#34228)
   * Added `central-scheduler` option for `--block-production-method` (#33890)
   * Updated to Borsh v1
+  * Added allow_commission_decrease_at_any_time feature which will allow commission on a vote account to be
+    decreased even in the second half of epochs when the commission_updates_only_allowed_in_first_half_of_epoch
+    feature would have prevented it
 * Upgrade Notes
   * `solana-program` and `solana-sdk` default to support for Borsh v1, with
 limited backward compatibility for v0.10 and v0.9. Please upgrade to Borsh v1.

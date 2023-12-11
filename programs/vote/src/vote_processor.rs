@@ -1,7 +1,7 @@
 //! Vote program processor
 
 use {
-    crate::{vote_error::VoteError, vote_state},
+    crate::vote_state,
     log::*,
     solana_program::vote::{instruction::VoteInstruction, program::id, state::VoteAuthorize},
     solana_program_runtime::{
@@ -9,7 +9,6 @@ use {
         sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
-        feature_set,
         instruction::InstructionError,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
@@ -140,20 +139,14 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
             )
         }
         VoteInstruction::UpdateCommission(commission) => {
-            if invoke_context.feature_set.is_active(
-                &feature_set::commission_updates_only_allowed_in_first_half_of_epoch::id(),
-            ) {
-                let sysvar_cache = invoke_context.get_sysvar_cache();
-                let epoch_schedule = sysvar_cache.get_epoch_schedule()?;
-                let clock = sysvar_cache.get_clock()?;
-                if !vote_state::is_commission_update_allowed(clock.slot, &epoch_schedule) {
-                    return Err(VoteError::CommissionUpdateTooLate.into());
-                }
-            }
+            let sysvar_cache = invoke_context.get_sysvar_cache();
+
             vote_state::update_commission(
                 &mut me,
                 commission,
                 &signers,
+                sysvar_cache.get_epoch_schedule()?.as_ref(),
+                sysvar_cache.get_clock()?.as_ref(),
                 &invoke_context.feature_set,
             )
         }
