@@ -60,18 +60,6 @@ pub trait ForkGraph {
     }
 }
 
-/// Provides information about current working slot, and its ancestors
-pub trait WorkingSlot {
-    /// Returns the current slot
-    fn current_slot(&self) -> Slot;
-
-    /// Returns the epoch of the current slot
-    fn current_epoch(&self) -> Epoch;
-
-    /// Returns true if the `other` slot is an ancestor of self, false otherwise
-    fn is_ancestor(&self, other: Slot) -> bool;
-}
-
 #[derive(Default)]
 pub enum LoadedProgramType {
     /// Tombstone for undeployed, closed or unloadable programs
@@ -783,14 +771,15 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
 
     /// Extracts a subset of the programs relevant to a transaction batch
     /// and returns which program accounts the accounts DB needs to load.
-    pub fn extract<S: WorkingSlot>(
+    pub fn extract(
         &self,
-        working_slot: &S,
+        current_slot: Slot,
         keys: impl Iterator<Item = (Pubkey, (LoadedProgramMatchCriteria, u64))>,
     ) -> Arc<Mutex<ExtractedPrograms>> {
         debug_assert!(self.fork_graph.is_some());
-        let environments = self.get_environments_for_epoch(working_slot.current_epoch());
-        let current_slot = working_slot.current_slot();
+        let locked_fork_graph = self.fork_graph.as_ref().unwrap().read().unwrap();
+        let current_epoch = locked_fork_graph.slot_epoch(current_slot).unwrap();
+        let environments = self.get_environments_for_epoch(current_epoch);
         let extracted = Arc::new(Mutex::new(ExtractedPrograms {
             loaded: LoadedProgramsForTxBatch {
                 entries: HashMap::new(),
@@ -805,20 +794,10 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                 let mut reloading = false;
                 if let Some(second_level) = self.entries.get(&key) {
                     for entry in second_level.iter().rev() {
-                        let is_ancestor = if let Some(fork_graph) = &self.fork_graph {
-                            fork_graph
-                                .read()
-                                .map(|fork_graph_r| {
-                                    matches!(
-                                        fork_graph_r
-                                            .relationship(entry.deployment_slot, current_slot),
-                                        BlockRelation::Ancestor
-                                    )
-                                })
-                                .unwrap_or(false)
-                        } else {
-                            working_slot.is_ancestor(entry.deployment_slot)
-                        };
+                        let is_ancestor = matches!(
+                            locked_fork_graph.relationship(entry.deployment_slot, current_slot),
+                            BlockRelation::Ancestor
+                        );
 
                         if entry.deployment_slot <= self.latest_root_slot
                             || entry.deployment_slot == current_slot
@@ -859,6 +838,8 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                 None
             })
             .collect::<HashMap<Pubkey, Arc<LoadedProgram>>>();
+
+        drop(locked_fork_graph);
         self.stats
             .misses
             .fetch_add(extracting.missing.len() as u64, Ordering::Relaxed);
@@ -998,15 +979,12 @@ mod tests {
         crate::loaded_programs::{
             BlockRelation, ExtractedPrograms, ForkGraph, LoadedProgram, LoadedProgramMatchCriteria,
             LoadedProgramType, LoadedPrograms, ProgramRuntimeEnvironment,
-            ProgramRuntimeEnvironments, WorkingSlot, DELAY_VISIBILITY_SLOT_OFFSET,
+            ProgramRuntimeEnvironments, DELAY_VISIBILITY_SLOT_OFFSET,
         },
         assert_matches::assert_matches,
         percentage::Percentage,
         solana_rbpf::program::BuiltinProgram,
-        solana_sdk::{
-            clock::{Epoch, Slot},
-            pubkey::Pubkey,
-        },
+        solana_sdk::{clock::Slot, pubkey::Pubkey},
         std::{
             ops::ControlFlow,
             sync::{
@@ -1596,22 +1574,6 @@ mod tests {
         }
     }
 
-    struct TestWorkingSlot(pub Slot);
-
-    impl WorkingSlot for TestWorkingSlot {
-        fn current_slot(&self) -> Slot {
-            self.0
-        }
-
-        fn current_epoch(&self) -> Epoch {
-            0
-        }
-
-        fn is_ancestor(&self, _other: Slot) -> bool {
-            false
-        }
-    }
-
     fn match_slot(
         extracted: &Arc<Mutex<ExtractedPrograms>>,
         program: &Pubkey,
@@ -1719,7 +1681,7 @@ mod tests {
 
         // Testing fork 0 - 10 - 12 - 22 with current slot at 22
         let extracted = cache.extract(
-            &TestWorkingSlot(22),
+            22,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 2)),
@@ -1737,7 +1699,7 @@ mod tests {
 
         // Testing fork 0 - 5 - 11 - 15 - 16 with current slot at 16
         let extracted = cache.extract(
-            &TestWorkingSlot(15),
+            15,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -1765,7 +1727,7 @@ mod tests {
 
         // Testing the same fork above, but current slot is now 18 (equal to effective slot of program4).
         let extracted = cache.extract(
-            &TestWorkingSlot(18),
+            18,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -1785,7 +1747,7 @@ mod tests {
 
         // Testing the same fork above, but current slot is now 23 (future slot than effective slot of program4).
         let extracted = cache.extract(
-            &TestWorkingSlot(23),
+            23,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -1805,7 +1767,7 @@ mod tests {
 
         // Testing fork 0 - 5 - 11 - 15 - 16 with current slot at 11
         let extracted = cache.extract(
-            &TestWorkingSlot(11),
+            11,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -1843,7 +1805,7 @@ mod tests {
 
         // Testing fork 0 - 5 - 11 - 15 - 16 - 19 - 21 - 23 with current slot at 19
         let extracted = cache.extract(
-            &TestWorkingSlot(19),
+            19,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -1863,7 +1825,7 @@ mod tests {
         // Testing fork 0 - 5 - 11 - 15 - 16 - 19 - 21 - 23 with current slot at 21
         // This would cause program4 deployed at slot 19 to be expired.
         let extracted = cache.extract(
-            &TestWorkingSlot(21),
+            21,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -1903,7 +1865,7 @@ mod tests {
 
         // Testing fork 11 - 15 - 16- 19 - 22 with root at 5 and current slot at 22
         let extracted = cache.extract(
-            &TestWorkingSlot(21),
+            21,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -1922,7 +1884,7 @@ mod tests {
 
         // Testing fork 0 - 5 - 11 - 25 - 27 with current slot at 27
         let extracted = cache.extract(
-            &TestWorkingSlot(27),
+            27,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -1956,7 +1918,7 @@ mod tests {
 
         // Testing fork 16, 19, 23, with root at 15, current slot at 23
         let extracted = cache.extract(
-            &TestWorkingSlot(23),
+            23,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2014,7 +1976,7 @@ mod tests {
 
         // Testing fork 0 - 5 - 11 - 15 - 16 - 19 - 21 - 23 with current slot at 19
         let extracted = cache.extract(
-            &TestWorkingSlot(12),
+            12,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2030,7 +1992,7 @@ mod tests {
 
         // Test the same fork, but request the program modified at a later slot than what's in the cache.
         let extracted = cache.extract(
-            &TestWorkingSlot(12),
+            12,
             vec![
                 (
                     program1,
@@ -2108,7 +2070,7 @@ mod tests {
 
         // Testing fork 0 - 5 - 11 - 15 - 16 - 19 - 21 - 23 with current slot at 19
         let extracted = cache.extract(
-            &TestWorkingSlot(19),
+            19,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2124,7 +2086,7 @@ mod tests {
 
         // Testing fork 0 - 5 - 11 - 25 - 27 with current slot at 27
         let extracted = cache.extract(
-            &TestWorkingSlot(27),
+            27,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2140,7 +2102,7 @@ mod tests {
 
         // Testing fork 0 - 10 - 20 - 22 with current slot at 22
         let extracted = cache.extract(
-            &TestWorkingSlot(22),
+            22,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2206,7 +2168,7 @@ mod tests {
 
         // Testing fork 0 - 5 - 11 - 15 - 16 - 19 - 21 - 23 with current slot at 19
         let extracted = cache.extract(
-            &TestWorkingSlot(12),
+            12,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2224,7 +2186,7 @@ mod tests {
         // Testing fork 0 - 5 - 11 - 12 - 15 - 16 - 19 - 21 - 23 with current slot at 15
         // This would cause program4 deployed at slot 15 to be expired.
         let extracted = cache.extract(
-            &TestWorkingSlot(15),
+            15,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2291,7 +2253,7 @@ mod tests {
         cache.prune(10, 0);
 
         let extracted = cache.extract(
-            &TestWorkingSlot(20),
+            20,
             vec![(program1, (LoadedProgramMatchCriteria::NoCriteria, 1))].into_iter(),
         );
 
@@ -2337,7 +2299,7 @@ mod tests {
         assert!(!cache.replenish(program2, new_test_loaded_program(10, 11)).0);
 
         let extracted = cache.extract(
-            &TestWorkingSlot(20),
+            20,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2349,7 +2311,7 @@ mod tests {
         assert!(match_slot(&extracted, &program2, 10, 20));
 
         let extracted = cache.extract(
-            &TestWorkingSlot(6),
+            6,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2365,7 +2327,7 @@ mod tests {
         cache.prune_by_deployment_slot(5);
 
         let extracted = cache.extract(
-            &TestWorkingSlot(20),
+            20,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2377,7 +2339,7 @@ mod tests {
         assert!(match_slot(&extracted, &program2, 10, 20));
 
         let extracted = cache.extract(
-            &TestWorkingSlot(6),
+            6,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2393,7 +2355,7 @@ mod tests {
         cache.prune_by_deployment_slot(10);
 
         let extracted = cache.extract(
-            &TestWorkingSlot(20),
+            20,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
                 (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
