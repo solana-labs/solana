@@ -17,6 +17,7 @@ use {
     },
     bip39::{Language, Mnemonic, Seed},
     clap::ArgMatches,
+    itertools::Itertools,
     rpassword::prompt_password,
     solana_remote_wallet::{
         locator::{Locator as RemoteWalletLocator, LocatorError as RemoteWalletLocatorError},
@@ -66,6 +67,7 @@ impl SignOnly {
 }
 pub type CliSigners = Vec<Box<dyn Signer>>;
 pub type SignerIndex = usize;
+#[derive(Debug)]
 pub struct CliSignerInfo {
     pub signers: CliSigners,
 }
@@ -196,10 +198,13 @@ impl DefaultSigner {
     /// `bulk_signers` is a vector of signers, all of which are optional. If any
     /// of those signers is `None`, then the default signer will be loaded; if
     /// all of those signers are `Some`, then the default signer will not be
-    /// loaded.
+    /// loaded. If multiple equivalent (same pub key) signers are provided - only
+    /// one of those will be returned in the result, such that NullSigner(s)
+    /// always get lower priority.
     ///
     /// The returned value includes all of the `bulk_signers` that were not
-    /// `None`, and maybe the default signer, if it was loaded.
+    /// `None`, and maybe the default signer (if it was loaded). There is no
+    /// guarantees on resulting signers ordering.
     ///
     /// # Examples
     ///
@@ -245,17 +250,29 @@ impl DefaultSigner {
         wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     ) -> Result<CliSignerInfo, Box<dyn error::Error>> {
         let mut unique_signers = vec![];
-
-        // Determine if the default signer is needed
-        if bulk_signers.iter().any(|signer| signer.is_none()) {
-            let default_signer = self.signer_from_path(matches, wallet_manager)?;
-            unique_signers.push(default_signer);
-        }
-
-        for signer in bulk_signers.into_iter().flatten() {
-            if !unique_signers.iter().any(|s| s == &signer) {
-                unique_signers.push(signer);
+        // Group provided signers by pub key
+        for (_, mut signers) in &bulk_signers.into_iter().group_by(|signer| -> Pubkey {
+            if let Some(signer) = signer {
+                return signer.pubkey();
             }
+            Pubkey::default()
+        }) {
+            let best_signer = signers.next().unwrap(); // group can't have 0 elems
+            if best_signer.is_none() {
+                // If there is a group of None signers, we need to add default one.
+                let default_signer = self.signer_from_path(matches, wallet_manager)?;
+                unique_signers.push(default_signer);
+                continue; // nothing else to do for this group
+            }
+            let mut best_signer = best_signer.unwrap(); // can't be None here
+            for signer in signers.skip(1) {
+                let signer = signer.unwrap(); // can't be None here
+                if !signer.is_null_signer() {
+                    best_signer = signer;
+                    break; // prefer any signer over null signer
+                }
+            }
+            unique_signers.push(best_signer);
         }
         Ok(CliSignerInfo {
             signers: unique_signers,

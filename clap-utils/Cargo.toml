@@ -19,6 +19,7 @@ thiserror = { workspace = true }
 tiny-bip39 = { workspace = true }
 uriparse = { workspace = true }
 url = { workspace = true }
+itertools = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }

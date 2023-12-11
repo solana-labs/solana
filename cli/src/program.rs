@@ -18,11 +18,13 @@ use {
         input_parsers::*,
         input_validators::*,
         keypair::*,
+        offline::{OfflineArgs, DUMP_TRANSACTION_MESSAGE, SIGN_ONLY_ARG},
     },
     solana_cli_output::{
-        CliProgram, CliProgramAccountType, CliProgramAuthority, CliProgramBuffer, CliProgramId,
-        CliUpgradeableBuffer, CliUpgradeableBuffers, CliUpgradeableProgram,
-        CliUpgradeableProgramClosed, CliUpgradeableProgramExtended, CliUpgradeablePrograms,
+        return_signers_with_config, CliProgram, CliProgramAccountType, CliProgramAuthority,
+        CliProgramBuffer, CliProgramId, CliUpgradeableBuffer, CliUpgradeableBuffers,
+        CliUpgradeableProgram, CliUpgradeableProgramClosed, CliUpgradeableProgramExtended,
+        CliUpgradeablePrograms, ReturnSignersConfig,
     },
     solana_client::{
         connection_cache::ConnectionCache,
@@ -40,6 +42,7 @@ use {
         config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSendTransactionConfig},
         filter::{Memcmp, RpcFilterType},
     },
+    solana_rpc_client_nonce_utils::blockhash_query::BlockhashQuery,
     solana_sdk::{
         account::Account,
         account_utils::StateMut,
@@ -87,6 +90,15 @@ pub enum ProgramCliCommand {
         max_len: Option<usize>,
         allow_excessive_balance: bool,
         skip_fee_check: bool,
+    },
+    Upgrade {
+        fee_payer_signer_index: SignerIndex,
+        program_signer_index: SignerIndex,
+        buffer_signer_index: SignerIndex,
+        upgrade_authority_signer_index: SignerIndex,
+        sign_only: bool,
+        dump_transaction_message: bool,
+        blockhash_query: BlockhashQuery,
     },
     WriteBuffer {
         program_location: String,
@@ -219,6 +231,38 @@ impl ProgramSubCommands for App<'_, '_> {
                                      holds a large balance of SOL",
                                 ),
                         ),
+                )
+                .subcommand(
+                    SubCommand::with_name("upgrade")
+                        .about("Upgrade an upgradeable program")
+                        .arg(
+                            Arg::with_name("buffer")
+                                .index(1)
+                                .required(true)
+                                .value_name("BUFFER_PUBKEY")
+                                .takes_value(true)
+                                .validator(is_valid_pubkey)
+                                .help("Intermediate buffer account with new program data"),
+                        )
+                        .arg(
+                            Arg::with_name("upgrade_authority")
+                                .long("upgrade-authority")
+                                .value_name("UPGRADE_AUTHORITY_SIGNER")
+                                .takes_value(true)
+                                .validator(is_valid_signer)
+                                .help(
+                                    "Upgrade authority [default: the default configured keypair]",
+                                ),
+                        )
+                        .arg(pubkey!(
+                            Arg::with_name("program_id")
+                                .index(2)
+                                .required(true)
+                                .value_name("PROGRAM_ID"),
+                            "Executable program's address (pubkey)"
+                        ))
+                        .arg(fee_payer_arg())
+                        .offline_args(),
                 )
                 .subcommand(
                     SubCommand::with_name("write-buffer")
@@ -571,6 +615,75 @@ pub fn parse_program_subcommand(
                 signers: signer_info.signers,
             }
         }
+        ("upgrade", Some(matches)) => {
+            let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+            let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
+            let blockhash_query = BlockhashQuery::new_from_matches(matches);
+
+            let mut bulk_signers = vec![];
+
+            let fee_payer_pubkey = if let Ok((Some(fee_payer_signer), Some(fee_payer_pubkey))) =
+                signer_of_or_null_signer(matches, FEE_PAYER_ARG.name, wallet_manager)
+            {
+                bulk_signers.push(Some(fee_payer_signer));
+                fee_payer_pubkey
+            } else {
+                let fee_payer_signer = default_signer.signer_from_path(matches, wallet_manager)?;
+                let fee_payer_pubkey = fee_payer_signer.pubkey();
+                bulk_signers.push(Some(fee_payer_signer));
+                fee_payer_pubkey
+            };
+
+            let buffer_pubkey = if let Ok(Some(buffer_pubkey)) =
+                pubkey_of_signer(matches, "buffer", wallet_manager)
+            {
+                Some(buffer_pubkey)
+            } else {
+                return Err(CliError::BadParameter(
+                    "`BUFFER_PUBKEY` must be specified when doing program upgrade".into(),
+                ));
+            };
+
+            let upgrade_authority_pubkey =
+                if let Ok((upgrade_authority, Some(upgrade_authority_pubkey))) =
+                    signer_of_or_null_signer(matches, "buffer", wallet_manager)
+                {
+                    bulk_signers.push(upgrade_authority);
+                    Some(upgrade_authority_pubkey)
+                } else {
+                    return Err(CliError::BadParameter(
+                        "`--upgrade-authority` must be specified when doing program upgrade".into(),
+                    ));
+                };
+
+            let program_pubkey = if let Ok(Some(program_pubkey)) =
+                pubkey_of_signer(matches, "program_id", wallet_manager)
+            {
+                Some(program_pubkey)
+            } else {
+                return Err(CliError::BadParameter(
+                    "`PROGRAM_ID` must be specified when doing program upgrade".into(),
+                ));
+            };
+
+            let signer_info =
+                default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
+
+            CliCommandInfo {
+                command: CliCommand::Program(ProgramCliCommand::Upgrade {
+                    fee_payer_signer_index: signer_info.index_of(Some(fee_payer_pubkey)).unwrap(),
+                    program_signer_index: signer_info.index_of(program_pubkey).unwrap(),
+                    buffer_signer_index: signer_info.index_of(buffer_pubkey).unwrap(),
+                    upgrade_authority_signer_index: signer_info
+                        .index_of(upgrade_authority_pubkey)
+                        .unwrap(),
+                    sign_only,
+                    dump_transaction_message,
+                    blockhash_query,
+                }),
+                signers: signer_info.signers,
+            }
+        }
         ("write-buffer", Some(matches)) => {
             let (fee_payer, fee_payer_pubkey) =
                 signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
@@ -815,6 +928,25 @@ pub fn process_program_subcommand(
             *max_len,
             *allow_excessive_balance,
             *skip_fee_check,
+        ),
+        ProgramCliCommand::Upgrade {
+            fee_payer_signer_index,
+            program_signer_index,
+            buffer_signer_index,
+            upgrade_authority_signer_index,
+            sign_only,
+            dump_transaction_message,
+            blockhash_query,
+        } => process_program_upgrade(
+            rpc_client,
+            config,
+            *fee_payer_signer_index,
+            *program_signer_index,
+            *buffer_signer_index,
+            *upgrade_authority_signer_index,
+            *sign_only,
+            *dump_transaction_message,
+            blockhash_query,
         ),
         ProgramCliCommand::WriteBuffer {
             program_location,
@@ -1172,6 +1304,71 @@ fn fetch_buffer_len(
         Ok(program_len)
     } else {
         Err(format!("Buffer account {buffer_pubkey} not found, was it already consumed?",).into())
+    }
+}
+
+/// Upgrade existing program using upgradeable loader
+#[allow(clippy::too_many_arguments)]
+fn process_program_upgrade(
+    rpc_client: Arc<RpcClient>,
+    config: &CliConfig,
+    fee_payer_signer_index: SignerIndex,
+    program_signer_index: SignerIndex,
+    buffer_signer_index: SignerIndex,
+    upgrade_authority_signer_index: SignerIndex,
+    sign_only: bool,
+    dump_transaction_message: bool,
+    blockhash_query: &BlockhashQuery,
+) -> ProcessResult {
+    let fee_payer_signer = config.signers[fee_payer_signer_index];
+    let upgrade_authority_signer = config.signers[upgrade_authority_signer_index];
+    let buffer_pubkey = config.signers[buffer_signer_index].pubkey();
+    let program_pubkey = config.signers[program_signer_index].pubkey();
+
+    let blockhash = blockhash_query.get_blockhash(&rpc_client, config.commitment)?;
+    let message = Message::new_with_blockhash(
+        &[bpf_loader_upgradeable::upgrade(
+            &program_pubkey,
+            &buffer_pubkey,
+            &upgrade_authority_signer.pubkey(),
+            &fee_payer_signer.pubkey(),
+        )],
+        Some(&fee_payer_signer.pubkey()),
+        &blockhash,
+    );
+
+    if sign_only {
+        let mut tx = Transaction::new_unsigned(message);
+        let signers = &[fee_payer_signer, upgrade_authority_signer];
+        // Using try_partial_sign here because fee_payer_signer might not be the fee payer we
+        // end up using for this transaction (it might be NullSigner).
+        tx.try_partial_sign(signers, blockhash)?;
+        return_signers_with_config(
+            &tx,
+            &config.output_format,
+            &ReturnSignersConfig {
+                dump_transaction_message,
+            },
+        )
+    } else {
+        let fee = rpc_client.get_fee_for_message(&message)?;
+        check_account_for_spend_and_fee_with_commitment(
+            &rpc_client,
+            &fee_payer_signer.pubkey(),
+            0,
+            fee,
+            config.commitment,
+        )?;
+        let mut tx = Transaction::new_unsigned(message);
+        let signers = &[fee_payer_signer, upgrade_authority_signer];
+        tx.try_sign(signers, blockhash)?;
+        rpc_client
+            .send_and_confirm_transaction_with_spinner(&tx)
+            .map_err(|e| format!("Upgrading program failed: {e}"))?;
+        let program_id = CliProgramId {
+            program_id: program_pubkey.to_string(),
+        };
+        Ok(config.output_format.formatted_string(&program_id))
     }
 }
 

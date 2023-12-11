@@ -5674,6 +5674,7 @@ dependencies = [
  "assert_matches",
  "chrono",
  "clap 2.33.3",
+ "itertools",
  "rpassword",
  "solana-remote-wallet",
  "solana-sdk",
@@ -5751,6 +5752,7 @@ dependencies = [
  "solana_rbpf",
  "spl-memo",
  "tempfile",
+ "test-case",
  "thiserror",
  "tiny-bip39",
 ]

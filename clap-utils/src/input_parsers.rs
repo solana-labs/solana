@@ -1,7 +1,8 @@
 use {
     crate::keypair::{
         keypair_from_seed_phrase, pubkey_from_path, resolve_signer_from_path, signer_from_path,
-        ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG,
+        signer_from_path_with_config, SignerFromPathConfig, ASK_KEYWORD,
+        SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
     chrono::DateTime,
     clap::ArgMatches,
@@ -118,7 +119,7 @@ pub fn pubkeys_sigs_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<(Pubk
     })
 }
 
-// Return a signer from matches at `name`
+// Return a signer from matches at `name` (returns error if signer is NullSigner).
 #[allow(clippy::type_complexity)]
 pub fn signer_of(
     matches: &ArgMatches<'_>,
@@ -127,6 +128,27 @@ pub fn signer_of(
 ) -> Result<(Option<Box<dyn Signer>>, Option<Pubkey>), Box<dyn std::error::Error>> {
     if let Some(location) = matches.value_of(name) {
         let signer = signer_from_path(matches, location, name, wallet_manager)?;
+        let signer_pubkey = signer.pubkey();
+        Ok((Some(signer), Some(signer_pubkey)))
+    } else {
+        Ok((None, None))
+    }
+}
+
+// Return a signer from matches at `name` (returns NullSigner if no "real" signer can be extracted from matches arg).
+#[allow(clippy::type_complexity)]
+pub fn signer_of_or_null_signer(
+    matches: &ArgMatches<'_>,
+    name: &str,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
+) -> Result<(Option<Box<dyn Signer>>, Option<Pubkey>), Box<dyn std::error::Error>> {
+    if let Some(location) = matches.value_of(name) {
+        // Allow pubkey signers without accompanying signatures
+        let config = SignerFromPathConfig {
+            allow_null_signer: true,
+        };
+        let signer =
+            signer_from_path_with_config(matches, location, name, wallet_manager, &config)?;
         let signer_pubkey = signer.pubkey();
         Ok((Some(signer), Some(signer_pubkey)))
     } else {
