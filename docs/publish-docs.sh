@@ -106,8 +106,8 @@ cat > "$CONFIG_FILE" <<EOF
     { "source": "/developing/runtime-facilities/:path*", "destination": "/runtime/:path*" },
     
     { "destination": "https://solana.com/docs/rpc/:path*", "source": "/api/:path*" },
-    { "destination": "https://solana.com/docs/rpc/:path*", "source": "/developing/clients/jsonrpc-api" },
-    { "destination": "https://solana.com/docs/rpc/:path*", "source": "/apps/jsonrpc-api" },
+    { "destination": "https://solana.com/docs/rpc", "source": "/developing/clients/jsonrpc-api" },
+    { "destination": "https://solana.com/docs/rpc", "source": "/apps/jsonrpc-api" },
     { "destination": "https://solana.com/docs/terminology", "source": "/terminology" },
     { "destination": "https://solana.com/docs/core/rent", "source": "/developing/intro/rent" },
     { "destination": "https://solana.com/docs/core/programs", "source": "/developing/intro/programs" },
