@@ -194,11 +194,11 @@ module.exports = {
           customCss: require.resolve("./src/css/custom.css"),
         },
         // Google Analytics are only active in prod
-        gtag: {
-          // this GA code is safe to be published
-          trackingID: "G-94WS0LRZRS",
-          anonymizeIP: true,
-        },
+        // gtag: {
+        // this GA code is safe to be published
+        // trackingID: "",
+        // anonymizeIP: true,
+        // },
       },
     ],
   ],
