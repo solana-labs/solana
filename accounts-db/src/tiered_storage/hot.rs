@@ -35,7 +35,7 @@ const MAX_HOT_PADDING: u8 = 7;
 /// The maximum allowed value for the owner index of a hot account.
 const MAX_HOT_OWNER_OFFSET: OwnerOffset = OwnerOffset((1 << 29) - 1);
 
-/// The alignment for hot accounts.  This alignment serves duo purposes.
+/// The byte alignment for hot accounts.  This alignment serves duo purposes.
 /// First, it allows hot accounts to be directly accessed when the underlying
 /// file is mmapped.  In addition, as all hot accounts are aligned, it allows
 /// each hot accounts file to handle more accounts with the same number of
