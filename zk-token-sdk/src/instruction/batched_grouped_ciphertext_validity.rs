@@ -19,7 +19,7 @@ use {
             elgamal::ElGamalPubkey, grouped_elgamal::GroupedElGamalCiphertext,
             pedersen::PedersenOpening,
         },
-        errors::ProofError,
+        errors::{ProofGenerationError, ProofVerificationError},
         sigma_proofs::batched_grouped_ciphertext_validity_proof::BatchedGroupedCiphertext2HandlesValidityProof,
         transcript::TranscriptProtocol,
     },
@@ -69,7 +69,7 @@ impl BatchedGroupedCiphertext2HandlesValidityProofData {
         amount_hi: u64,
         opening_lo: &PedersenOpening,
         opening_hi: &PedersenOpening,
-    ) -> Result<Self, ProofError> {
+    ) -> Result<Self, ProofGenerationError> {
         let pod_destination_pubkey = pod::ElGamalPubkey(destination_pubkey.to_bytes());
         let pod_auditor_pubkey = pod::ElGamalPubkey(auditor_pubkey.to_bytes());
         let pod_grouped_ciphertext_lo = (*grouped_ciphertext_lo).into();
@@ -106,7 +106,7 @@ impl ZkProofData<BatchedGroupedCiphertext2HandlesValidityProofContext>
     }
 
     #[cfg(not(target_os = "solana"))]
-    fn verify_proof(&self) -> Result<(), ProofError> {
+    fn verify_proof(&self) -> Result<(), ProofVerificationError> {
         let mut transcript = self.context.new_transcript();
 
         let destination_pubkey = self.context.destination_pubkey.try_into()?;

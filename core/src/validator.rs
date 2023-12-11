@@ -755,13 +755,7 @@ impl Validator {
 
         let (snapshot_package_sender, snapshot_packager_service) =
             if config.snapshot_config.should_generate_snapshots() {
-                // filler accounts make snapshots invalid for use
-                // so, do not publish that we have snapshots
-                let enable_gossip_push = config
-                    .accounts_db_config
-                    .as_ref()
-                    .map(|config| config.filler_accounts_config.count == 0)
-                    .unwrap_or(true);
+                let enable_gossip_push = true;
                 let (snapshot_package_sender, snapshot_package_receiver) =
                     crossbeam_channel::unbounded();
                 let snapshot_packager_service = SnapshotPackagerService::new(
@@ -1093,13 +1087,6 @@ impl Validator {
             exit.clone(),
         );
 
-        *admin_rpc_service_post_init.write().unwrap() = Some(AdminRpcRequestMetadataPostInit {
-            bank_forks: bank_forks.clone(),
-            cluster_info: cluster_info.clone(),
-            vote_account: *vote_account,
-            repair_whitelist: config.repair_whitelist.clone(),
-        });
-
         let waited_for_supermajority = wait_for_supermajority(
             config,
             Some(&mut process_blockstore),
@@ -1309,7 +1296,7 @@ impl Validator {
             };
         }
 
-        let tpu = Tpu::new(
+        let (tpu, mut key_notifies) = Tpu::new(
             &cluster_info,
             &poh_recorder,
             entry_receiver,
@@ -1360,6 +1347,16 @@ impl Validator {
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
+        key_notifies.push(connection_cache);
+
+        *admin_rpc_service_post_init.write().unwrap() = Some(AdminRpcRequestMetadataPostInit {
+            bank_forks: bank_forks.clone(),
+            cluster_info: cluster_info.clone(),
+            vote_account: *vote_account,
+            repair_whitelist: config.repair_whitelist.clone(),
+            notifies: key_notifies,
+        });
+
         Ok(Self {
             stats_reporter_service,
             gossip_service,
@@ -1815,7 +1812,8 @@ fn load_blockstore(
                 .map(|service| service.sender()),
             accounts_update_notifier,
             exit,
-        );
+        )
+        .map_err(|err| err.to_string())?;
 
     // Before replay starts, set the callbacks in each of the banks in BankForks so that
     // all dropped banks come through the `pruned_banks_receiver` channel. This way all bank

@@ -30,6 +30,9 @@ solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
 tempfile = { workspace = true }
 
+[dev-dependencies]
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
+
 [[bin]]
 name = "solana-genesis"
 path = "src/main.rs"

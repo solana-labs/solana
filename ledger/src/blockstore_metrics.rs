@@ -143,6 +143,104 @@ impl BlockstoreInsertionMetrics {
     }
 }
 
+/// A metrics struct to track the number of times Blockstore RPC function are called.
+#[derive(Default)]
+pub(crate) struct BlockstoreRpcApiMetrics {
+    pub num_get_block_height: AtomicU64,
+    pub num_get_complete_transaction: AtomicU64,
+    pub num_get_confirmed_signatures_for_address: AtomicU64,
+    pub num_get_confirmed_signatures_for_address2: AtomicU64,
+    pub num_get_rooted_block: AtomicU64,
+    pub num_get_rooted_block_time: AtomicU64,
+    pub num_get_rooted_transaction: AtomicU64,
+    pub num_get_rooted_transaction_status: AtomicU64,
+    pub num_get_rooted_block_with_entries: AtomicU64,
+    pub num_get_transaction_status: AtomicU64,
+}
+
+impl BlockstoreRpcApiMetrics {
+    pub fn report(&self) {
+        let num_get_block_height = self.num_get_block_height.swap(0, Ordering::Relaxed);
+        let num_get_complete_transaction =
+            self.num_get_complete_transaction.swap(0, Ordering::Relaxed);
+        let num_get_confirmed_signatures_for_address = self
+            .num_get_confirmed_signatures_for_address
+            .swap(0, Ordering::Relaxed);
+        let num_get_confirmed_signatures_for_address2 = self
+            .num_get_confirmed_signatures_for_address2
+            .swap(0, Ordering::Relaxed);
+        let num_get_rooted_block = self.num_get_rooted_block.swap(0, Ordering::Relaxed);
+        let num_get_rooted_block_time = self.num_get_rooted_block_time.swap(0, Ordering::Relaxed);
+        let num_get_rooted_transaction = self.num_get_rooted_transaction.swap(0, Ordering::Relaxed);
+        let num_get_rooted_transaction_status = self
+            .num_get_rooted_transaction_status
+            .swap(0, Ordering::Relaxed);
+        let num_get_rooted_block_with_entries = self
+            .num_get_rooted_block_with_entries
+            .swap(0, Ordering::Relaxed);
+        let num_get_transaction_status = self.num_get_transaction_status.swap(0, Ordering::Relaxed);
+
+        let total_num_queries = num_get_block_height
+            .saturating_add(num_get_complete_transaction)
+            .saturating_add(num_get_confirmed_signatures_for_address)
+            .saturating_add(num_get_confirmed_signatures_for_address2)
+            .saturating_add(num_get_rooted_block)
+            .saturating_add(num_get_rooted_block_time)
+            .saturating_add(num_get_rooted_transaction)
+            .saturating_add(num_get_rooted_transaction_status)
+            .saturating_add(num_get_rooted_block_with_entries)
+            .saturating_add(num_get_transaction_status);
+
+        if total_num_queries > 0 {
+            datapoint_info!(
+                "blockstore-rpc-api",
+                ("num_get_block_height", num_get_block_height as i64, i64),
+                (
+                    "num_get_complete_transaction",
+                    num_get_complete_transaction as i64,
+                    i64
+                ),
+                (
+                    "num_get_confirmed_signatures_for_address",
+                    num_get_confirmed_signatures_for_address as i64,
+                    i64
+                ),
+                (
+                    "num_get_confirmed_signatures_for_address2",
+                    num_get_confirmed_signatures_for_address2 as i64,
+                    i64
+                ),
+                ("num_get_rooted_block", num_get_rooted_block as i64, i64),
+                (
+                    "num_get_rooted_block_time",
+                    num_get_rooted_block_time as i64,
+                    i64
+                ),
+                (
+                    "num_get_rooted_transaction",
+                    num_get_rooted_transaction as i64,
+                    i64
+                ),
+                (
+                    "num_get_rooted_transaction_status",
+                    num_get_rooted_transaction_status as i64,
+                    i64
+                ),
+                (
+                    "num_get_rooted_block_with_entries",
+                    num_get_rooted_block_with_entries as i64,
+                    i64
+                ),
+                (
+                    "num_get_transaction_status",
+                    num_get_transaction_status as i64,
+                    i64
+                ),
+            );
+        }
+    }
+}
+
 /// A metrics struct that exposes RocksDB's column family properties.
 ///
 /// Here we only expose a subset of all the internal properties which are

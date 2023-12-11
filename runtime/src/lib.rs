@@ -4,6 +4,7 @@
 #[macro_use]
 extern crate lazy_static;
 
+pub mod accounts;
 pub mod accounts_background_service;
 pub mod bank;
 pub mod bank_client;

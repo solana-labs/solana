@@ -27,7 +27,8 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
             let config_file = match matches.value_of("config_file") {
                 None => {
                     println!(
-                        "{} Either provide the `--config` arg or ensure home directory exists to use the default config location",
+                        "{} Either provide the `--config` arg or ensure home directory exists to \
+                         use the default config location",
                         style("No config file found.").bold()
                     );
                     return Ok(false);

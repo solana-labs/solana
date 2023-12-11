@@ -97,7 +97,7 @@ mod tests {
         },
         solana_perf::packet::to_packet_batches,
         solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
-        solana_runtime::{bank::Bank, bank_forks::BankForks},
+        solana_runtime::bank::Bank,
         solana_sdk::{
             genesis_config::GenesisConfig, poh_config::PohConfig, pubkey::Pubkey,
             signature::Keypair, system_transaction,
@@ -128,9 +128,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_slow_genesis_config(10_000);
-        let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
-        let bank_forks = BankForks::new_rw_arc(bank);
-        let bank = bank_forks.read().unwrap().working_bank();
+        let (bank, bank_forks) = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path())

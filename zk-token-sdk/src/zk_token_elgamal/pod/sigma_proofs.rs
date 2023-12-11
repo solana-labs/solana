@@ -47,7 +47,7 @@ impl From<DecodedCiphertextCommitmentEqualityProof> for CiphertextCommitmentEqua
 
 #[cfg(not(target_os = "solana"))]
 impl TryFrom<CiphertextCommitmentEqualityProof> for DecodedCiphertextCommitmentEqualityProof {
-    type Error = EqualityProofError;
+    type Error = EqualityProofVerificationError;
 
     fn try_from(pod_proof: CiphertextCommitmentEqualityProof) -> Result<Self, Self::Error> {
         Self::from_bytes(&pod_proof.0)
@@ -68,7 +68,7 @@ impl From<DecodedCiphertextCiphertextEqualityProof> for CiphertextCiphertextEqua
 
 #[cfg(not(target_os = "solana"))]
 impl TryFrom<CiphertextCiphertextEqualityProof> for DecodedCiphertextCiphertextEqualityProof {
-    type Error = EqualityProofError;
+    type Error = EqualityProofVerificationError;
 
     fn try_from(pod_proof: CiphertextCiphertextEqualityProof) -> Result<Self, Self::Error> {
         Self::from_bytes(&pod_proof.0)
@@ -95,7 +95,7 @@ impl From<DecodedGroupedCiphertext2HandlesValidityProof>
 impl TryFrom<GroupedCiphertext2HandlesValidityProof>
     for DecodedGroupedCiphertext2HandlesValidityProof
 {
-    type Error = ValidityProofError;
+    type Error = ValidityProofVerificationError;
 
     fn try_from(pod_proof: GroupedCiphertext2HandlesValidityProof) -> Result<Self, Self::Error> {
         Self::from_bytes(&pod_proof.0)
@@ -122,7 +122,7 @@ impl From<DecodedBatchedGroupedCiphertext2HandlesValidityProof>
 impl TryFrom<BatchedGroupedCiphertext2HandlesValidityProof>
     for DecodedBatchedGroupedCiphertext2HandlesValidityProof
 {
-    type Error = ValidityProofError;
+    type Error = ValidityProofVerificationError;
 
     fn try_from(
         pod_proof: BatchedGroupedCiphertext2HandlesValidityProof,
@@ -145,7 +145,7 @@ impl From<DecodedZeroBalanceProof> for ZeroBalanceProof {
 
 #[cfg(not(target_os = "solana"))]
 impl TryFrom<ZeroBalanceProof> for DecodedZeroBalanceProof {
-    type Error = ZeroBalanceProofError;
+    type Error = ZeroBalanceProofVerificationError;
 
     fn try_from(pod_proof: ZeroBalanceProof) -> Result<Self, Self::Error> {
         Self::from_bytes(&pod_proof.0)
@@ -166,7 +166,7 @@ impl From<DecodedFeeSigmaProof> for FeeSigmaProof {
 
 #[cfg(not(target_os = "solana"))]
 impl TryFrom<FeeSigmaProof> for DecodedFeeSigmaProof {
-    type Error = FeeSigmaProofError;
+    type Error = FeeSigmaProofVerificationError;
 
     fn try_from(pod_proof: FeeSigmaProof) -> Result<Self, Self::Error> {
         Self::from_bytes(&pod_proof.0)
@@ -187,7 +187,7 @@ impl From<DecodedPubkeyValidityProof> for PubkeyValidityProof {
 
 #[cfg(not(target_os = "solana"))]
 impl TryFrom<PubkeyValidityProof> for DecodedPubkeyValidityProof {
-    type Error = PubkeyValidityProofError;
+    type Error = PubkeyValidityProofVerificationError;
 
     fn try_from(pod_proof: PubkeyValidityProof) -> Result<Self, Self::Error> {
         Self::from_bytes(&pod_proof.0)

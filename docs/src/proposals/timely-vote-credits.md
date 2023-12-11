@@ -10,7 +10,7 @@ vote credits earned by validator votes.
 Vote credits are the accounting method used to determine what percentage of
 inflation rewards a validator earns on behalf of its stakers.  Currently, when
 a slot that a validator has previously voted on is "rooted", it earns 1 vote
-credit.  A "rooted" slot is one which has received full committment by the
+credit.  A "rooted" slot is one which has received full commitment by the
 validator (i.e. has been finalized).
 
 One problem with this simple accounting method is that it awards one credit

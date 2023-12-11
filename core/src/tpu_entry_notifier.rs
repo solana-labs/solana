@@ -29,6 +29,7 @@ impl TpuEntryNotifier {
             .spawn(move || {
                 let mut current_slot = 0;
                 let mut current_index = 0;
+                let mut current_transaction_index = 0;
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -41,6 +42,7 @@ impl TpuEntryNotifier {
                         &broadcast_entry_sender,
                         &mut current_slot,
                         &mut current_index,
+                        &mut current_transaction_index,
                     ) {
                         break;
                     }
@@ -57,11 +59,13 @@ impl TpuEntryNotifier {
         broadcast_entry_sender: &Sender<WorkingBankEntry>,
         current_slot: &mut u64,
         current_index: &mut usize,
+        current_transaction_index: &mut usize,
     ) -> Result<(), RecvTimeoutError> {
         let (bank, (entry, tick_height)) = entry_receiver.recv_timeout(Duration::from_secs(1))?;
         let slot = bank.slot();
         let index = if slot != *current_slot {
             *current_index = 0;
+            *current_transaction_index = 0;
             *current_slot = slot;
             0
         } else {
@@ -78,11 +82,13 @@ impl TpuEntryNotifier {
             slot,
             index,
             entry: entry_summary,
+            starting_transaction_index: *current_transaction_index,
         }) {
             warn!(
                 "Failed to send slot {slot:?} entry {index:?} from Tpu to EntryNotifierService, error {err:?}",
             );
         }
+        *current_transaction_index += entry.transactions.len();
 
         if let Err(err) = broadcast_entry_sender.send((bank, (entry, tick_height))) {
             warn!(

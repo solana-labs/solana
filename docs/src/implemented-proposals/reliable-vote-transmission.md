@@ -20,7 +20,7 @@ Validator votes are messages that have a critical function for consensus and con
 
 Each vote transaction should maintain a `wallclock` in its data. The merge strategy for Votes will keep the last N set of votes as configured by the local client. For push/pull the vector is traversed recursively and each Transaction is treated as an individual CrdsValue with its own local wallclock and signature.
 
-Gossip is designed for efficient propagation of state. Messages that are sent through gossip-push are batched and propagated with a minimum spanning tree to the rest of the network. Any partial failures in the tree are actively repaired with the gossip-pull protocol while minimizing the amount of data transfered between any nodes.
+Gossip is designed for efficient propagation of state. Messages that are sent through gossip-push are batched and propagated with a minimum spanning tree to the rest of the network. Any partial failures in the tree are actively repaired with the gossip-pull protocol while minimizing the amount of data transferred between any nodes.
 
 ## How this design solves the Challenges
 

@@ -28,7 +28,7 @@ use {
 use {
     crate::{
         encryption::pedersen::{PedersenCommitment, PedersenOpening},
-        errors::ProofError,
+        errors::{ProofGenerationError, ProofVerificationError},
     },
     bytemuck::bytes_of,
     curve25519_dalek::traits::IsIdentity,
@@ -63,7 +63,7 @@ impl BatchedRangeProofContext {
         amounts: &Vec<u64>,
         bit_lengths: &Vec<usize>,
         openings: &Vec<&PedersenOpening>,
-    ) -> Result<Self, ProofError> {
+    ) -> Result<Self, ProofGenerationError> {
         // the number of commitments is capped at 8
         let num_commitments = commitments.len();
         if num_commitments > MAX_COMMITMENTS
@@ -71,14 +71,14 @@ impl BatchedRangeProofContext {
             || num_commitments != bit_lengths.len()
             || num_commitments != openings.len()
         {
-            return Err(ProofError::Generation);
+            return Err(ProofGenerationError::IllegalCommitmentLength);
         }
 
         let mut pod_commitments = [pod::PedersenCommitment::zeroed(); MAX_COMMITMENTS];
         for (i, commitment) in commitments.iter().enumerate() {
             // all-zero commitment is invalid
             if commitment.get_point().is_identity() {
-                return Err(ProofError::Generation);
+                return Err(ProofGenerationError::InvalidCommitment);
             }
             pod_commitments[i] = pod::PedersenCommitment(commitment.to_bytes());
         }
@@ -87,7 +87,7 @@ impl BatchedRangeProofContext {
         for (i, bit_length) in bit_lengths.iter().enumerate() {
             pod_bit_lengths[i] = (*bit_length)
                 .try_into()
-                .map_err(|_| ProofError::Generation)?;
+                .map_err(|_| ProofGenerationError::IllegalAmountBitLength)?;
         }
 
         Ok(BatchedRangeProofContext {
@@ -99,7 +99,7 @@ impl BatchedRangeProofContext {
 
 #[cfg(not(target_os = "solana"))]
 impl TryInto<(Vec<PedersenCommitment>, Vec<usize>)> for BatchedRangeProofContext {
-    type Error = ProofError;
+    type Error = ProofVerificationError;
 
     fn try_into(self) -> Result<(Vec<PedersenCommitment>, Vec<usize>), Self::Error> {
         let commitments = self
@@ -107,7 +107,8 @@ impl TryInto<(Vec<PedersenCommitment>, Vec<usize>)> for BatchedRangeProofContext
             .into_iter()
             .take_while(|commitment| *commitment != pod::PedersenCommitment::zeroed())
             .map(|commitment| commitment.try_into())
-            .collect::<Result<Vec<PedersenCommitment>, _>>()?;
+            .collect::<Result<Vec<PedersenCommitment>, _>>()
+            .map_err(|_| ProofVerificationError::ProofContext)?;
 
         let bit_lengths: Vec<_> = self
             .bit_lengths

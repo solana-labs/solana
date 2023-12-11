@@ -10,7 +10,6 @@ use {
             elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
             pedersen::H,
         },
-        errors::ProofVerificationError,
         sigma_proofs::{canonical_scalar_from_optional_slice, ristretto_point_from_optional_slice},
         UNIT_LEN,
     },
@@ -19,7 +18,10 @@ use {
     zeroize::Zeroize,
 };
 use {
-    crate::{sigma_proofs::errors::ZeroBalanceProofError, transcript::TranscriptProtocol},
+    crate::{
+        sigma_proofs::errors::{SigmaProofVerificationError, ZeroBalanceProofVerificationError},
+        transcript::TranscriptProtocol,
+    },
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
@@ -102,7 +104,7 @@ impl ZeroBalanceProof {
         elgamal_pubkey: &ElGamalPubkey,
         ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
-    ) -> Result<(), ZeroBalanceProofError> {
+    ) -> Result<(), ZeroBalanceProofVerificationError> {
         transcript.zero_balance_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the input
@@ -123,11 +125,11 @@ impl ZeroBalanceProof {
         let Y_P = self
             .Y_P
             .decompress()
-            .ok_or(ProofVerificationError::Deserialization)?;
+            .ok_or(SigmaProofVerificationError::Deserialization)?;
         let Y_D = self
             .Y_D
             .decompress()
-            .ok_or(ProofVerificationError::Deserialization)?;
+            .ok_or(SigmaProofVerificationError::Deserialization)?;
 
         // check the required algebraic relation
         let check = RistrettoPoint::multiscalar_mul(
@@ -152,7 +154,7 @@ impl ZeroBalanceProof {
         if check.is_identity() {
             Ok(())
         } else {
-            Err(ProofVerificationError::AlgebraicRelation.into())
+            Err(SigmaProofVerificationError::AlgebraicRelation.into())
         }
     }
 
@@ -165,7 +167,7 @@ impl ZeroBalanceProof {
         buf
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ZeroBalanceProofError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ZeroBalanceProofVerificationError> {
         let mut chunks = bytes.chunks(UNIT_LEN);
         let Y_P = ristretto_point_from_optional_slice(chunks.next())?;
         let Y_D = ristretto_point_from_optional_slice(chunks.next())?;

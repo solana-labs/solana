@@ -4,7 +4,7 @@ use {
     log::*,
     solana_entry::entry::EntrySummary,
     solana_geyser_plugin_interface::geyser_plugin_interface::{
-        ReplicaEntryInfo, ReplicaEntryInfoVersions,
+        ReplicaEntryInfoV2, ReplicaEntryInfoVersions,
     },
     solana_ledger::entry_notifier_interface::EntryNotifier,
     solana_measure::measure::Measure,
@@ -18,7 +18,13 @@ pub(crate) struct EntryNotifierImpl {
 }
 
 impl EntryNotifier for EntryNotifierImpl {
-    fn notify_entry<'a>(&'a self, slot: Slot, index: usize, entry: &'a EntrySummary) {
+    fn notify_entry<'a>(
+        &'a self,
+        slot: Slot,
+        index: usize,
+        entry: &'a EntrySummary,
+        starting_transaction_index: usize,
+    ) {
         let mut measure = Measure::start("geyser-plugin-notify_plugins_of_entry_info");
 
         let plugin_manager = self.plugin_manager.read().unwrap();
@@ -26,13 +32,14 @@ impl EntryNotifier for EntryNotifierImpl {
             return;
         }
 
-        let entry_info = Self::build_replica_entry_info(slot, index, entry);
+        let entry_info =
+            Self::build_replica_entry_info(slot, index, entry, starting_transaction_index);
 
         for plugin in plugin_manager.plugins.iter() {
             if !plugin.entry_notifications_enabled() {
                 continue;
             }
-            match plugin.notify_entry(ReplicaEntryInfoVersions::V0_0_1(&entry_info)) {
+            match plugin.notify_entry(ReplicaEntryInfoVersions::V0_0_2(&entry_info)) {
                 Err(err) => {
                     error!(
                         "Failed to notify entry, error: ({}) to plugin {}",
@@ -64,13 +71,15 @@ impl EntryNotifierImpl {
         slot: Slot,
         index: usize,
         entry: &'_ EntrySummary,
-    ) -> ReplicaEntryInfo<'_> {
-        ReplicaEntryInfo {
+        starting_transaction_index: usize,
+    ) -> ReplicaEntryInfoV2<'_> {
+        ReplicaEntryInfoV2 {
             slot,
             index,
             num_hashes: entry.num_hashes,
             hash: entry.hash.as_ref(),
             executed_transaction_count: entry.num_transactions,
+            starting_transaction_index,
         }
     }
 }
