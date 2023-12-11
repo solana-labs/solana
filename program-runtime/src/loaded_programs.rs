@@ -484,7 +484,7 @@ pub struct LoadedProgramsForTxBatch {
 
 pub struct ExtractedPrograms {
     pub loaded: LoadedProgramsForTxBatch,
-    pub missing: HashMap<Pubkey, (u64, bool)>,
+    pub missing: HashMap<Pubkey, u64>,
 }
 
 impl LoadedProgramsForTxBatch {
@@ -789,7 +789,6 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         let mut extracting = extracted.lock().unwrap();
         extracting.loaded.entries = keys
             .filter_map(|(key, (match_criteria, usage_count))| {
-                let mut reloading = false;
                 if let Some(second_level) = self.entries.get(&key) {
                     for entry in second_level.iter().rev() {
                         let is_ancestor = matches!(
@@ -809,7 +808,6 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                                 }
 
                                 if let LoadedProgramType::Unloaded(_environment) = &entry.program {
-                                    reloading = true;
                                     break;
                                 }
 
@@ -832,7 +830,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                         }
                     }
                 }
-                extracting.missing.insert(key, (usage_count, reloading));
+                extracting.missing.insert(key, usage_count);
                 None
             })
             .collect::<HashMap<Pubkey, Arc<LoadedProgram>>>();
@@ -1591,14 +1589,10 @@ mod tests {
     fn match_missing(
         extracted: &Arc<Mutex<ExtractedPrograms>>,
         key: &Pubkey,
-        reload: bool,
+        _reload: bool,
     ) -> bool {
         let extracted = extracted.lock().unwrap();
-        extracted
-            .missing
-            .get(key)
-            .filter(|(_count, reloading)| *reloading == reload)
-            .is_some()
+        extracted.missing.get(key).is_some()
     }
 
     #[test]
