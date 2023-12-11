@@ -8,7 +8,7 @@ These architectural proposals have been accepted by the Solana maintainers, but 
 
 ## After Implemented
 
-Once a proposal has been implemented, it will be moved to [Implemented Proposals](../implemented-proposals/implemented-proposals.md) and the details will be added to relevant sections of the docs.
+Once a proposal has been implemented, it will be moved to [Implemented Proposals](../implemented-proposals/index.md) and the details will be added to relevant sections of the docs.
 
 ## Submit a New Proposal
 

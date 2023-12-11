@@ -1,5 +1,7 @@
 ---
-title: TVU
+title: Transaction Validation Unit
+sidebar_label: TVU
+sidebar_position: 3
 ---
 
 TVU (Transaction Validation Unit) is the logic of the validator
