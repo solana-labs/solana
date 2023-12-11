@@ -131,7 +131,7 @@ pub struct LoadedProgram {
     /// How often this entry was used by an instruction
     pub ix_usage_counter: AtomicU64,
     /// Latest slot in which the entry was used
-    pub latest_access_slot: RwLock<Slot>,
+    pub latest_access_slot: AtomicU64,
 }
 
 #[derive(Debug, Default)]
@@ -351,7 +351,7 @@ impl LoadedProgram {
             tx_usage_counter: AtomicU64::new(0),
             program,
             ix_usage_counter: AtomicU64::new(0),
-            latest_access_slot: RwLock::new(0),
+            latest_access_slot: AtomicU64::new(0),
         })
     }
 
@@ -364,7 +364,7 @@ impl LoadedProgram {
             maybe_expiration_slot: self.maybe_expiration_slot,
             tx_usage_counter: AtomicU64::new(self.tx_usage_counter.load(Ordering::Relaxed)),
             ix_usage_counter: AtomicU64::new(self.ix_usage_counter.load(Ordering::Relaxed)),
-            latest_access_slot: RwLock::new(*self.latest_access_slot.read().unwrap()),
+            latest_access_slot: AtomicU64::new(self.latest_access_slot.load(Ordering::Relaxed)),
         })
     }
 
@@ -386,7 +386,7 @@ impl LoadedProgram {
             tx_usage_counter: AtomicU64::new(0),
             program: LoadedProgramType::Builtin(BuiltinProgram::new_builtin(function_registry)),
             ix_usage_counter: AtomicU64::new(0),
-            latest_access_slot: RwLock::new(0),
+            latest_access_slot: AtomicU64::new(0),
         }
     }
 
@@ -401,7 +401,7 @@ impl LoadedProgram {
             maybe_expiration_slot,
             tx_usage_counter: AtomicU64::default(),
             ix_usage_counter: AtomicU64::default(),
-            latest_access_slot: RwLock::new(0),
+            latest_access_slot: AtomicU64::new(0),
         };
         debug_assert!(tombstone.is_tombstone());
         tombstone
@@ -425,15 +425,24 @@ impl LoadedProgram {
     }
 
     pub fn update_access_slot(&self, slot: Slot) {
-        let mut current_slot = self.latest_access_slot.write().unwrap();
-        if slot > *current_slot {
-            *current_slot = slot;
+        let mut last_access = self.latest_access_slot.load(Ordering::Relaxed);
+        while last_access < slot {
+            if let Err(updated_last_access) = self.latest_access_slot.compare_exchange(
+                last_access,
+                slot,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                last_access = updated_last_access;
+            } else {
+                last_access = slot;
+            }
         }
     }
 
     fn decayed_usage_counter(&self, now: Slot) -> u64 {
-        let last_access = self.latest_access_slot.read().unwrap();
-        let decaying_for = now.saturating_sub(*last_access);
+        let last_access = self.latest_access_slot.load(Ordering::Relaxed);
+        let decaying_for = now.saturating_sub(last_access);
         self.tx_usage_counter.load(Ordering::Relaxed) >> decaying_for
     }
 }
@@ -1066,8 +1075,15 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                         .entry(*id)
                         .and_modify(|c| saturating_add_assign!(*c, 1))
                         .or_insert(1);
+                } else {
+                    error!(
+                        "Failed to create an unloaded cache entry for a program type {:?}",
+                        entry.program
+                    );
                 }
             }
+        } else {
+            error!("Failed to find a cached entry for program {}", id);
         }
     }
 
@@ -1093,8 +1109,20 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                         .and_modify(|c| saturating_add_assign!(*c, 1))
                         .or_insert(1);
                     *candidate = Arc::new(unloaded);
+                } else {
+                    error!(
+                        "Failed to create an unloaded cache entry for a program type {:?}",
+                        candidate.program
+                    );
                 }
+            } else {
+                error!(
+                    "Failed to find the cache entry for program {} that was to be unloaded",
+                    program
+                );
             }
+        } else {
+            error!("Failed to find a cached entry for program {}", program);
         }
     }
 
@@ -1202,7 +1230,7 @@ mod tests {
             maybe_expiration_slot: expiry,
             tx_usage_counter: usage_counter,
             ix_usage_counter: AtomicU64::default(),
-            latest_access_slot: RwLock::new(0),
+            latest_access_slot: AtomicU64::default(),
         })
     }
 
@@ -1215,7 +1243,7 @@ mod tests {
             maybe_expiration_slot: None,
             tx_usage_counter: AtomicU64::default(),
             ix_usage_counter: AtomicU64::default(),
-            latest_access_slot: RwLock::new(0),
+            latest_access_slot: AtomicU64::default(),
         })
     }
 
@@ -1244,7 +1272,7 @@ mod tests {
                 maybe_expiration_slot: None,
                 tx_usage_counter: AtomicU64::default(),
                 ix_usage_counter: AtomicU64::default(),
-                latest_access_slot: RwLock::new(0),
+                latest_access_slot: AtomicU64::default(),
             }
             .to_unloaded()
             .expect("Failed to unload the program"),
@@ -1832,7 +1860,7 @@ mod tests {
             maybe_expiration_slot: None,
             tx_usage_counter: AtomicU64::default(),
             ix_usage_counter: AtomicU64::default(),
-            latest_access_slot: RwLock::new(0),
+            latest_access_slot: AtomicU64::default(),
         });
         let (existing, program) = cache.replenish(program1, updated_program.clone());
         assert!(!existing);
@@ -2125,7 +2153,7 @@ mod tests {
             maybe_expiration_slot: Some(21),
             tx_usage_counter: AtomicU64::default(),
             ix_usage_counter: AtomicU64::default(),
-            latest_access_slot: RwLock::new(0),
+            latest_access_slot: AtomicU64::default(),
         });
         assert!(!cache.replenish(program4, test_program).0);
 
@@ -2469,7 +2497,7 @@ mod tests {
             maybe_expiration_slot: Some(15),
             tx_usage_counter: AtomicU64::default(),
             ix_usage_counter: AtomicU64::default(),
-            latest_access_slot: RwLock::new(0),
+            latest_access_slot: AtomicU64::default(),
         });
         assert!(!cache.replenish(program1, test_program).0);
 
