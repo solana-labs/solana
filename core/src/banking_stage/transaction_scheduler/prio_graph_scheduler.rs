@@ -15,6 +15,7 @@ use {
     crossbeam_channel::{Receiver, Sender, TryRecvError},
     itertools::izip,
     prio_graph::{AccessKind, PrioGraph},
+    solana_cost_model::block_cost_limits::MAX_BLOCK_UNITS,
     solana_measure::measure_us,
     solana_sdk::{
         pubkey::Pubkey, saturating_add_assign, slot_history::Slot,
@@ -61,6 +62,26 @@ impl PrioGraphScheduler {
         filter: impl Fn(&[&SanitizedTransaction], &mut [bool]),
     ) -> Result<SchedulingSummary, SchedulerError> {
         let num_threads = self.consume_work_senders.len();
+
+        // Do not continue queueing on any thread that is already over the self-imposed limit.
+        let mut schedulable_threads = ThreadSet::any(num_threads);
+        let max_thread_in_flight_cus = MAX_BLOCK_UNITS / num_threads as u64;
+        for thread_index in 0..num_threads {
+            if self.in_flight_tracker.cus_in_flight_per_thread()[thread_index]
+                >= max_thread_in_flight_cus
+            {
+                schedulable_threads.remove(thread_index);
+            }
+        }
+        if schedulable_threads.is_empty() {
+            return Ok(SchedulingSummary {
+                num_scheduled: 0,
+                num_unschedulable: 0,
+                num_filtered_out: 0,
+                filter_time_us: 0,
+            });
+        }
+
         let mut batches = Batches::new(num_threads);
         let mut chain_id_to_thread_index = HashMap::new();
         // Some transactions may be unschedulable due to multi-thread conflicts.
@@ -133,8 +154,9 @@ impl PrioGraphScheduler {
         let mut num_sent: usize = 0;
         let mut num_unschedulable: usize = 0;
         while num_scheduled < MAX_TRANSACTIONS_PER_SCHEDULING_PASS {
-            // If nothing is in the main-queue of the `PrioGraph` then there's nothing left to schedule.
-            if prio_graph.is_empty() {
+            // If nothing is in the main-queue of the `PrioGraph` then there's nothing left to schedule,
+            // or if there are no schedulable threads, then there's nothing left to schedule.
+            if prio_graph.is_empty() || schedulable_threads.is_empty() {
                 break;
             }
 
@@ -166,7 +188,7 @@ impl PrioGraphScheduler {
                 let Some(thread_id) = self.account_locks.try_lock_accounts(
                     transaction_locks.writable.into_iter(),
                     transaction_locks.readonly.into_iter(),
-                    ThreadSet::any(num_threads),
+                    schedulable_threads,
                     |thread_set| {
                         Self::select_thread(
                             thread_set,
@@ -202,12 +224,25 @@ impl PrioGraphScheduler {
                 batches.max_age_slots[thread_id].push(max_age_slot);
                 saturating_add_assign!(batches.total_cus[thread_id], cu_limit);
 
+                // If this batch pushes the in-flight CUs for this thread over the limit,
+                // remove it from the schedulable thread set
+                if self.in_flight_tracker.cus_in_flight_per_thread()[thread_id]
+                    .saturating_add(batches.total_cus[thread_id])
+                    >= max_thread_in_flight_cus
+                {
+                    schedulable_threads.remove(thread_id);
+                }
+
                 // If target batch size is reached, send only this batch.
                 if batches.ids[thread_id].len() >= TARGET_NUM_TRANSACTIONS_PER_BATCH {
                     saturating_add_assign!(num_sent, self.send_batch(&mut batches, thread_id)?);
                 }
 
                 if num_scheduled >= MAX_TRANSACTIONS_PER_SCHEDULING_PASS {
+                    break;
+                }
+
+                if schedulable_threads.is_empty() {
                     break;
                 }
             }
@@ -540,6 +575,7 @@ mod tests {
         to_pubkeys: impl IntoIterator<Item = impl Borrow<Pubkey>>,
         lamports: u64,
         priority: u64,
+        cu_limit: Option<u32>,
     ) -> SanitizedTransaction {
         let to_pubkeys_lamports = to_pubkeys
             .into_iter()
@@ -550,6 +586,10 @@ mod tests {
             system_instruction::transfer_many(&from_keypair.pubkey(), &to_pubkeys_lamports);
         let prioritization = ComputeBudgetInstruction::set_compute_unit_price(priority);
         ixs.push(prioritization);
+        if let Some(cu_limit) = cu_limit {
+            let cu_limit = ComputeBudgetInstruction::set_compute_unit_limit(cu_limit);
+            ixs.push(cu_limit);
+        }
         let message = Message::new(&ixs, Some(&from_keypair.pubkey()));
         let tx = Transaction::new(&[from_keypair], message, Hash::default());
         SanitizedTransaction::from_transaction_for_tests(tx)
@@ -562,16 +602,22 @@ mod tests {
                 impl IntoIterator<Item = impl Borrow<Pubkey>>,
                 u64,
                 u64,
+                Option<u32>,
             ),
         >,
     ) -> TransactionStateContainer {
         let mut container = TransactionStateContainer::with_capacity(10 * 1024);
-        for (index, (from_keypair, to_pubkeys, lamports, priority)) in
+        for (index, (from_keypair, to_pubkeys, lamports, priority, cu_limit)) in
             tx_infos.into_iter().enumerate()
         {
             let id = TransactionId::new(index as u64);
-            let transaction =
-                prioritized_tranfers(from_keypair.borrow(), to_pubkeys, lamports, priority);
+            let transaction = prioritized_tranfers(
+                from_keypair.borrow(),
+                to_pubkeys,
+                lamports,
+                priority,
+                cu_limit,
+            );
             let transaction_ttl = SanitizedTransactionTTL {
                 transaction,
                 max_age_slot: Slot::MAX,
@@ -581,7 +627,7 @@ mod tests {
                 transaction_ttl,
                 TransactionPriorityDetails {
                     priority,
-                    compute_unit_limit: 1,
+                    compute_unit_limit: cu_limit.unwrap_or(1) as u64,
                 },
             );
         }
@@ -608,7 +654,8 @@ mod tests {
     #[test]
     fn test_schedule_disconnected_channel() {
         let (mut scheduler, work_receivers, _finished_work_sender) = create_test_frame(1);
-        let mut container = create_container([(&Keypair::new(), &[Pubkey::new_unique()], 1, 1)]);
+        let mut container =
+            create_container([(&Keypair::new(), &[Pubkey::new_unique()], 1, 1, None)]);
 
         drop(work_receivers); // explicitly drop receivers
         assert_matches!(
@@ -621,8 +668,8 @@ mod tests {
     fn test_schedule_single_threaded_no_conflicts() {
         let (mut scheduler, work_receivers, _finished_work_sender) = create_test_frame(1);
         let mut container = create_container([
-            (&Keypair::new(), &[Pubkey::new_unique()], 1, 1),
-            (&Keypair::new(), &[Pubkey::new_unique()], 2, 2),
+            (&Keypair::new(), &[Pubkey::new_unique()], 1, 1, None),
+            (&Keypair::new(), &[Pubkey::new_unique()], 2, 2, None),
         ]);
 
         let scheduling_summary = scheduler.schedule(&mut container, test_filter).unwrap();
@@ -636,8 +683,8 @@ mod tests {
         let (mut scheduler, work_receivers, _finished_work_sender) = create_test_frame(1);
         let pubkey = Pubkey::new_unique();
         let mut container = create_container([
-            (&Keypair::new(), &[pubkey], 1, 1),
-            (&Keypair::new(), &[pubkey], 1, 2),
+            (&Keypair::new(), &[pubkey], 1, 1, None),
+            (&Keypair::new(), &[pubkey], 1, 2, None),
         ]);
 
         let scheduling_summary = scheduler.schedule(&mut container, test_filter).unwrap();
@@ -654,7 +701,7 @@ mod tests {
         let (mut scheduler, work_receivers, _finished_work_sender) = create_test_frame(1);
         let mut container = create_container(
             (0..4 * TARGET_NUM_TRANSACTIONS_PER_BATCH)
-                .map(|i| (Keypair::new(), [Pubkey::new_unique()], i as u64, 1)),
+                .map(|i| (Keypair::new(), [Pubkey::new_unique()], i as u64, 1, None)),
         );
 
         // expect 4 full batches to be scheduled
@@ -676,7 +723,7 @@ mod tests {
     fn test_schedule_simple_thread_selection() {
         let (mut scheduler, work_receivers, _finished_work_sender) = create_test_frame(2);
         let mut container =
-            create_container((0..4).map(|i| (Keypair::new(), [Pubkey::new_unique()], 1, i)));
+            create_container((0..4).map(|i| (Keypair::new(), [Pubkey::new_unique()], 1, i, None)));
 
         let scheduling_summary = scheduler.schedule(&mut container, test_filter).unwrap();
         assert_eq!(scheduling_summary.num_scheduled, 4);
@@ -691,11 +738,11 @@ mod tests {
 
         let accounts = (0..6).map(|_| Keypair::new()).collect_vec();
         let mut container = create_container([
-            (&accounts[0], &[accounts[1].pubkey()], 1, 4),
-            (&accounts[1], &[accounts[2].pubkey()], 1, 3),
-            (&accounts[3], &[accounts[4].pubkey()], 1, 2),
-            (&accounts[4], &[accounts[5].pubkey()], 1, 1),
-            (&accounts[2], &[accounts[5].pubkey()], 1, 0),
+            (&accounts[0], &[accounts[1].pubkey()], 1, 4, None),
+            (&accounts[1], &[accounts[2].pubkey()], 1, 3, None),
+            (&accounts[3], &[accounts[4].pubkey()], 1, 2, None),
+            (&accounts[4], &[accounts[5].pubkey()], 1, 1, None),
+            (&accounts[2], &[accounts[5].pubkey()], 1, 0, None),
         ]);
 
         // The look-ahead window allows the prio-graph to have a limited view of
@@ -727,12 +774,12 @@ mod tests {
 
         let accounts = (0..8).map(|_| Keypair::new()).collect_vec();
         let mut container = create_container([
-            (&accounts[0], &[accounts[1].pubkey()], 1, 6),
-            (&accounts[2], &[accounts[3].pubkey()], 1, 5),
-            (&accounts[4], &[accounts[5].pubkey()], 1, 4),
-            (&accounts[6], &[accounts[7].pubkey()], 1, 3),
-            (&accounts[1], &[accounts[2].pubkey()], 1, 2),
-            (&accounts[2], &[accounts[3].pubkey()], 1, 1),
+            (&accounts[0], &[accounts[1].pubkey()], 1, 6, None),
+            (&accounts[2], &[accounts[3].pubkey()], 1, 5, None),
+            (&accounts[4], &[accounts[5].pubkey()], 1, 4, None),
+            (&accounts[6], &[accounts[7].pubkey()], 1, 3, None),
+            (&accounts[1], &[accounts[2].pubkey()], 1, 2, None),
+            (&accounts[2], &[accounts[3].pubkey()], 1, 1, None),
         ]);
 
         // The look-ahead window is intentionally shortened, high priority transactions
@@ -782,5 +829,66 @@ mod tests {
             collect_work(&work_receivers[1]).1,
             [txids!([4]), txids!([5])]
         );
+    }
+
+    #[test]
+    fn test_queue_limit() {
+        let (mut scheduler, work_receivers, finished_work_sender) = create_test_frame(1);
+
+        // Create a container with enough 1M CU transactions to fill the queue-limit, plus some extras.
+        // Transactions over the limit, should not be scheduled until some of the in-flight transactions
+        // have been completed.
+        const TRANSACTION_CU_LIMIT: u32 = 1_000_000;
+        const NUM_SATURATING_TRANSACTIONS: usize = (MAX_BLOCK_UNITS as usize
+            / TRANSACTION_CU_LIMIT as usize)
+            + if MAX_BLOCK_UNITS % TRANSACTION_CU_LIMIT as u64 != 0 {
+                1
+            } else {
+                0
+            };
+        const NUM_TRANSACTIONS: usize = NUM_SATURATING_TRANSACTIONS + 16;
+
+        let mut container = create_container((0..NUM_TRANSACTIONS).map(|i| {
+            (
+                Keypair::new(),
+                [Pubkey::new_unique()],
+                1,
+                i as u64,
+                Some(TRANSACTION_CU_LIMIT),
+            )
+        }));
+        let scheduling_summary = scheduler.schedule(&mut container, test_filter).unwrap();
+        assert_eq!(
+            scheduling_summary.num_scheduled,
+            NUM_SATURATING_TRANSACTIONS
+        );
+        // The last 16 transactions are not scheduled, since they are over the limit. BUT they are not
+        // unschedulable, since we just broke the loop early.
+        assert_eq!(scheduling_summary.num_unschedulable, 0);
+
+        // Scheduling again, should just exit early without any actual scheduling.
+        let scheduling_summary = scheduler.schedule(&mut container, test_filter).unwrap();
+        assert_eq!(scheduling_summary.num_scheduled, 0);
+        assert_eq!(scheduling_summary.num_unschedulable, 0);
+
+        // Complete the first 16 batches, so that the remaining transactions can be scheduled.
+        let (works, _) = collect_work(&work_receivers[0]);
+        for work in works
+            .into_iter()
+            .take(NUM_TRANSACTIONS - NUM_SATURATING_TRANSACTIONS)
+        {
+            finished_work_sender
+                .send(FinishedConsumeWork {
+                    work,
+                    retryable_indexes: vec![],
+                })
+                .unwrap();
+        }
+        scheduler.receive_completed(&mut container).unwrap();
+
+        // Now, the remaining transactions should be scheduled.
+        let scheduling_summary = scheduler.schedule(&mut container, test_filter).unwrap();
+        assert_eq!(scheduling_summary.num_scheduled, 16);
+        assert_eq!(scheduling_summary.num_unschedulable, 0);
     }
 }
