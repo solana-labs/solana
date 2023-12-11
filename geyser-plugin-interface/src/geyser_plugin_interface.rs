@@ -2,6 +2,8 @@
 /// the GeyserPlugin trait to work with the runtime.
 /// In addition, the dynamic library must export a "C" function _create_plugin which
 /// creates the implementation of the plugin.
+use solana_sdk::pubkey::Pubkey;
+use std::net::SocketAddr;
 use {
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
@@ -12,6 +14,36 @@ use {
     std::{any::Any, error, io},
     thiserror::Error,
 };
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+/// Information about a node  in  the cluster.
+pub struct ReplicaClusterInfoNode {
+    pub id: Pubkey,
+    /// gossip address
+    pub gossip: Option<SocketAddr>,
+    /// address to connect to for replication
+    pub tvu: Option<SocketAddr>,
+    /// TVU over QUIC protocol.
+    pub tvu_quic: Option<SocketAddr>,
+    /// repair service over QUIC protocol.
+    pub serve_repair_quic: Option<SocketAddr>,
+    /// transactions address
+    pub tpu: Option<SocketAddr>,
+    /// address to forward unprocessed transactions to
+    pub tpu_forwards: Option<SocketAddr>,
+    /// address to which to send bank state requests
+    pub tpu_vote: Option<SocketAddr>,
+    /// address to which to send JSON-RPC requests
+    pub rpc: Option<SocketAddr>,
+    /// websocket for JSON-RPC push notifications
+    pub rpc_pubsub: Option<SocketAddr>,
+    /// address to send repair requests to
+    pub serve_repair: Option<SocketAddr>,
+    /// latest wallclock picked
+    pub wallclock: u64,
+    /// node shred version
+    pub shred_version: u16,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Information about an account being updated
@@ -314,6 +346,12 @@ pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
         slot: Slot,
         is_startup: bool,
     ) -> Result<()> {
+        Ok(())
+    }
+
+    /// Called when a cluster info is updated on gossip network.
+    #[allow(unused_variables)]
+    fn update_cluster_info(&self, cluster_info: &ReplicaClusterInfoNode) -> Result<()> {
         Ok(())
     }
 

@@ -6011,6 +6011,7 @@ name = "solana-geyser-plugin-interface"
 version = "1.17.5"
 dependencies = [
  "log",
+ "solana-gossip",
  "solana-sdk",
  "solana-transaction-status",
  "thiserror",
@@ -6029,8 +6030,10 @@ dependencies = [
  "log",
  "serde_json",
  "solana-accounts-db",
+ "solana-client",
  "solana-entry",
  "solana-geyser-plugin-interface",
+ "solana-gossip",
  "solana-ledger",
  "solana-measure",
  "solana-metrics",
