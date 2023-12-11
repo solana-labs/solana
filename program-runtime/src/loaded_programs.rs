@@ -25,7 +25,7 @@ use {
         fmt::{Debug, Formatter},
         sync::{
             atomic::{AtomicU64, Ordering},
-            Arc, RwLock,
+            Arc, Condvar, Mutex, RwLock,
         },
     },
 };
@@ -439,6 +439,54 @@ impl Default for ProgramRuntimeEnvironments {
     }
 }
 
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub struct LoadingTaskCookie(u64);
+
+impl LoadingTaskCookie {
+    fn new() -> Self {
+        Self(0)
+    }
+
+    fn update(&mut self) {
+        let LoadingTaskCookie(cookie) = self;
+        *cookie = cookie.wrapping_add(1);
+    }
+}
+
+/// Prevents excessive polling during cooperative loading
+#[derive(Debug, Default)]
+pub struct LoadingTaskWaiter {
+    cookie: Mutex<LoadingTaskCookie>,
+    cond: Condvar,
+}
+
+impl LoadingTaskWaiter {
+    pub fn new() -> Self {
+        Self {
+            cookie: Mutex::new(LoadingTaskCookie::new()),
+            cond: Condvar::new(),
+        }
+    }
+
+    pub fn cookie(&self) -> LoadingTaskCookie {
+        *self.cookie.lock().unwrap()
+    }
+
+    pub fn notify(&self) {
+        let mut cookie = self.cookie.lock().unwrap();
+        cookie.update();
+        self.cond.notify_all();
+    }
+
+    pub fn wait(&self, cookie: LoadingTaskCookie) -> LoadingTaskCookie {
+        let cookie_guard = self.cookie.lock().unwrap();
+        *self
+            .cond
+            .wait_while(cookie_guard, |current_cookie| *current_cookie == cookie)
+            .unwrap()
+    }
+}
+
 #[derive(Debug, Default)]
 struct SecondLevel {
     slot_versions: Vec<Arc<LoadedProgram>>,
@@ -467,6 +515,7 @@ pub struct LoadedPrograms<FG: ForkGraph> {
     pub programs_to_recompile: Vec<(Pubkey, Arc<LoadedProgram>)>,
     pub stats: Stats,
     pub fork_graph: Option<Arc<RwLock<FG>>>,
+    pub loading_task_waiter: Arc<LoadingTaskWaiter>,
 }
 
 impl<FG: ForkGraph> Debug for LoadedPrograms<FG> {
@@ -559,6 +608,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
             programs_to_recompile: Vec::default(),
             stats: Stats::default(),
             fork_graph: None,
+            loading_task_waiter: Arc::new(LoadingTaskWaiter::default()),
         }
     }
 
@@ -875,6 +925,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         );
         second_level.cooperative_loading_lock = None;
         self.assign_program(key, loaded_program);
+        self.loading_task_waiter.notify();
     }
 
     pub fn merge(&mut self, tx_batch_cache: &LoadedProgramsForTxBatch) {
