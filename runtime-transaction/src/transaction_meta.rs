@@ -67,4 +67,15 @@ impl TransactionMeta {
     pub(crate) fn set_is_simple_vote_tx(&mut self, is_simple_vote_tx: bool) {
         self.is_simple_vote_tx = is_simple_vote_tx;
     }
+
+    pub(crate) fn set_compute_budget_limits(
+        &mut self,
+        compute_budget_limits: ComputeBudgetLimits,
+        expiry: Slot,
+    ) {
+        self.requested_limits = RequestedLimitsWithExpiry {
+            expiry,
+            compute_budget_limits,
+        };
+    }
 }

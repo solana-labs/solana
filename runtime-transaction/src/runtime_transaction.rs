@@ -11,8 +11,11 @@
 //!    with its dynamic metadata loaded.
 use {
     crate::transaction_meta::{DynamicMeta, RequestedLimits, StaticMeta, TransactionMeta},
-    solana_program_runtime::compute_budget_processor::ComputeBudgetLimits,
+    solana_program_runtime::compute_budget_processor::{
+        process_compute_budget_instructions, ComputeBudgetLimits,
+    },
     solana_sdk::{
+        feature_set::FeatureSet,
         hash::Hash,
         message::{AddressLoader, SanitizedMessage, SanitizedVersionedMessage},
         signature::Signature,
@@ -82,6 +85,8 @@ impl RuntimeTransaction<SanitizedVersionedMessage> {
         sanitized_versioned_tx: SanitizedVersionedTransaction,
         message_hash: Option<Hash>,
         is_simple_vote_tx: Option<bool>,
+        feature_set: &FeatureSet,
+        expiry: Slot,
     ) -> Result<Self> {
         let mut meta = TransactionMeta::default();
         meta.set_is_simple_vote_tx(
@@ -90,12 +95,34 @@ impl RuntimeTransaction<SanitizedVersionedMessage> {
         );
 
         let (signatures, message) = sanitized_versioned_tx.destruct();
-
         meta.set_message_hash(message_hash.unwrap_or_else(|| message.message.hash()));
+
+        let compute_budget_limits: ComputeBudgetLimits =
+            process_compute_budget_instructions(message.program_instructions_iter(), feature_set)?;
+        meta.set_compute_budget_limits(compute_budget_limits, expiry);
 
         Ok(Self {
             signatures,
             message,
+            meta,
+        })
+    }
+
+    // RuntimeTransaction instance can be renewed into a new instance if its cached TransactionMeta
+    // was expired.
+    pub fn renew_from(self, feature_set: &FeatureSet, expiry: Slot) -> Result<Self> {
+        let compute_budget_limits: ComputeBudgetLimits = process_compute_budget_instructions(
+            self.message.program_instructions_iter(),
+            feature_set,
+        )?;
+
+        let mut meta = TransactionMeta::default();
+        let _ = std::mem::replace(&mut meta, self.meta);
+        meta.set_compute_budget_limits(compute_budget_limits, expiry);
+
+        Ok(Self {
+            signatures: self.signatures,
+            message: self.message,
             meta,
         })
     }
@@ -128,13 +155,13 @@ impl RuntimeTransaction<SanitizedMessage> {
 mod tests {
     use {
         super::*,
-        crate::transaction_meta::RequestedLimitsWithExpiry,
         solana_program::{
             system_instruction,
             vote::{self, state::Vote},
         },
         solana_sdk::{
             compute_budget::ComputeBudgetInstruction,
+            instruction::Instruction,
             message::Message,
             signer::{keypair::Keypair, Signer},
             transaction::{SimpleAddressLoader, Transaction, VersionedTransaction},
@@ -157,98 +184,109 @@ mod tests {
         SanitizedVersionedTransaction::try_from(VersionedTransaction::from(vote_tx)).unwrap()
     }
 
-    fn non_vote_sanitized_versioned_transaction(
-        compute_unit_price: u64,
-    ) -> SanitizedVersionedTransaction {
-        let from_keypair = Keypair::new();
-        let ixs = vec![
-            system_instruction::transfer(
+    fn non_vote_sanitized_versioned_transaction() -> SanitizedVersionedTransaction {
+        TestTransaction::new().to_sanitized_versioned_transaction()
+    }
+
+    // Simple transfer transaction for testing, it does not support vote instruction
+    // because simple vote transaction will not request limits
+    struct TestTransaction {
+        from_keypair: Keypair,
+        hash: Hash,
+        instructions: Vec<Instruction>,
+    }
+
+    impl TestTransaction {
+        fn new() -> Self {
+            let from_keypair = Keypair::new();
+            let instructions = vec![system_instruction::transfer(
                 &from_keypair.pubkey(),
                 &solana_sdk::pubkey::new_rand(),
                 1,
-            ),
-            ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
-        ];
-        let message = Message::new(&ixs, Some(&from_keypair.pubkey()));
-        let tx = Transaction::new(&[&from_keypair], message, Hash::new_unique());
-        SanitizedVersionedTransaction::try_from(VersionedTransaction::from(tx)).unwrap()
+            )];
+            TestTransaction {
+                from_keypair,
+                hash: Hash::new_unique(),
+                instructions,
+            }
+        }
+
+        fn add_compute_unit_limit(&mut self, val: u32) -> &mut TestTransaction {
+            self.instructions
+                .push(ComputeBudgetInstruction::set_compute_unit_limit(val));
+            self
+        }
+
+        fn add_compute_unit_price(&mut self, val: u64) -> &mut TestTransaction {
+            self.instructions
+                .push(ComputeBudgetInstruction::set_compute_unit_price(val));
+            self
+        }
+
+        fn add_loaded_accounts_bytes(&mut self, val: u32) -> &mut TestTransaction {
+            self.instructions
+                .push(ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(val));
+            self
+        }
+
+        fn to_sanitized_versioned_transaction(&self) -> SanitizedVersionedTransaction {
+            let message = Message::new(&self.instructions, Some(&self.from_keypair.pubkey()));
+            let tx = Transaction::new(&[&self.from_keypair], message, self.hash);
+            SanitizedVersionedTransaction::try_from(VersionedTransaction::from(tx)).unwrap()
+        }
     }
 
-    fn get_transaction_meta(
-        svt: SanitizedVersionedTransaction,
-        hash: Option<Hash>,
-        is_simple_vote: Option<bool>,
-    ) -> TransactionMeta {
-        RuntimeTransaction::<SanitizedVersionedMessage>::try_from(svt, hash, is_simple_vote)
+    #[test]
+    fn test_runtime_transaction_is_vote_meta() {
+        fn get_is_simple_vote(
+            svt: SanitizedVersionedTransaction,
+            is_simple_vote: Option<bool>,
+        ) -> bool {
+            RuntimeTransaction::<SanitizedVersionedMessage>::try_from(
+                svt,
+                None,
+                is_simple_vote,
+                &FeatureSet::default(),
+                0,
+            )
             .unwrap()
             .meta
+            .is_simple_vote_tx
+        }
+
+        assert!(!get_is_simple_vote(
+            non_vote_sanitized_versioned_transaction(),
+            None
+        ));
+
+        assert!(get_is_simple_vote(
+            non_vote_sanitized_versioned_transaction(),
+            Some(true), // override
+        ));
+
+        assert!(get_is_simple_vote(
+            vote_sanitized_versioned_transaction(),
+            None
+        ));
+
+        assert!(!get_is_simple_vote(
+            vote_sanitized_versioned_transaction(),
+            Some(false), // override
+        ));
     }
 
     #[test]
-    fn test_new_runtime_transaction_static() {
+    fn test_advancing_transaction_type() {
         let hash = Hash::new_unique();
-        let compute_unit_price = 1_000;
-        let requested_limits = RequestedLimitsWithExpiry::default();
-
-        assert_eq!(
-            TransactionMeta {
-                message_hash: hash,
-                is_simple_vote_tx: false,
-                requested_limits: requested_limits.clone(),
-            },
-            get_transaction_meta(
-                non_vote_sanitized_versioned_transaction(compute_unit_price),
-                Some(hash),
-                None
-            )
-        );
-
-        assert_eq!(
-            TransactionMeta {
-                message_hash: hash,
-                is_simple_vote_tx: true,
-                requested_limits: requested_limits.clone(),
-            },
-            get_transaction_meta(
-                non_vote_sanitized_versioned_transaction(compute_unit_price),
-                Some(hash),
-                Some(true), // override
-            )
-        );
-
-        assert_eq!(
-            TransactionMeta {
-                message_hash: hash,
-                is_simple_vote_tx: true,
-                requested_limits: requested_limits.clone(),
-            },
-            get_transaction_meta(vote_sanitized_versioned_transaction(), Some(hash), None)
-        );
-
-        assert_eq!(
-            TransactionMeta {
-                message_hash: hash,
-                is_simple_vote_tx: false,
-                requested_limits,
-            },
-            get_transaction_meta(
-                vote_sanitized_versioned_transaction(),
-                Some(hash),
-                Some(false), // override
-            )
-        );
-    }
-
-    #[test]
-    fn test_advance_transaction_type() {
-        let hash = Hash::new_unique();
-        let compute_unit_price = 999;
+        let expiry: Slot = 1;
 
         let statically_loaded_transaction =
             RuntimeTransaction::<SanitizedVersionedMessage>::try_from(
-                non_vote_sanitized_versioned_transaction(compute_unit_price),
+                non_vote_sanitized_versioned_transaction(),
                 Some(hash),
                 None,
+                &FeatureSet::default(),
+                expiry,
             )
             .unwrap();
 
@@ -264,5 +302,88 @@ mod tests {
 
         assert_eq!(hash, *dynamically_loaded_transaction.message_hash());
         assert!(!dynamically_loaded_transaction.is_simple_vote_tx());
+    }
+
+    #[test]
+    fn test_runtime_transaction_static_meta() {
+        let hash = Hash::new_unique();
+        let compute_unit_limit = 250_000;
+        let compute_unit_price = 1_000;
+        let loaded_accounts_bytes = 1_024;
+        let feature_set = FeatureSet::all_enabled();
+        let expiry = 100;
+        let mut test_transaction = TestTransaction::new();
+
+        let runtime_transaction_static = RuntimeTransaction::<SanitizedVersionedMessage>::try_from(
+            test_transaction
+                .add_compute_unit_limit(compute_unit_limit)
+                .add_compute_unit_price(compute_unit_price)
+                .add_loaded_accounts_bytes(loaded_accounts_bytes)
+                .to_sanitized_versioned_transaction(),
+            Some(hash),
+            None,
+            &feature_set,
+            expiry,
+        )
+        .unwrap();
+
+        // asserts before metadata expiration
+        assert_eq!(&hash, runtime_transaction_static.message_hash());
+        assert!(!runtime_transaction_static.is_simple_vote_tx());
+        assert_eq!(
+            compute_unit_limit,
+            runtime_transaction_static
+                .compute_unit_limit(Some(expiry))
+                .unwrap()
+        );
+        assert_eq!(
+            compute_unit_price,
+            runtime_transaction_static
+                .compute_unit_price(Some(expiry))
+                .unwrap()
+        );
+        assert_eq!(
+            loaded_accounts_bytes,
+            runtime_transaction_static
+                .loaded_accounts_bytes(Some(expiry))
+                .unwrap()
+        );
+
+        // asserts after metadata expiration
+        let current_slot = expiry + 1;
+        assert!(runtime_transaction_static
+            .compute_unit_limit(Some(current_slot))
+            .is_none());
+        assert!(runtime_transaction_static
+            .compute_unit_price(Some(current_slot))
+            .is_none());
+        assert!(runtime_transaction_static
+            .loaded_accounts_bytes(Some(current_slot))
+            .is_none());
+
+        // asserts after renewal
+        let renewed_runtime_transaction_static = runtime_transaction_static
+            .renew_from(&feature_set, current_slot)
+            .unwrap();
+        assert_eq!(&hash, renewed_runtime_transaction_static.message_hash());
+        assert!(!renewed_runtime_transaction_static.is_simple_vote_tx());
+        assert_eq!(
+            compute_unit_limit,
+            renewed_runtime_transaction_static
+                .compute_unit_limit(Some(current_slot))
+                .unwrap()
+        );
+        assert_eq!(
+            compute_unit_price,
+            renewed_runtime_transaction_static
+                .compute_unit_price(Some(current_slot))
+                .unwrap()
+        );
+        assert_eq!(
+            loaded_accounts_bytes,
+            renewed_runtime_transaction_static
+                .loaded_accounts_bytes(Some(current_slot))
+                .unwrap()
+        );
     }
 }
