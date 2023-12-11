@@ -235,15 +235,21 @@ impl ProgramSubCommands for App<'_, '_> {
                 .subcommand(
                     SubCommand::with_name("upgrade")
                         .about("Upgrade an upgradeable program")
-                        .arg(
+                        .arg(pubkey!(
                             Arg::with_name("buffer")
                                 .index(1)
                                 .required(true)
-                                .value_name("BUFFER_PUBKEY")
-                                .takes_value(true)
-                                .validator(is_valid_pubkey)
-                                .help("Intermediate buffer account with new program data"),
-                        )
+                                .value_name("BUFFER_PUBKEY"),
+                            "Intermediate buffer account with new program data"
+                        ))
+                        .arg(pubkey!(
+                            Arg::with_name("program_id")
+                                .index(2)
+                                .required(true)
+                                .value_name("PROGRAM_ID"),
+                            "Executable program's address (pubkey)"
+                        ))
+                        .arg(fee_payer_arg())
                         .arg(
                             Arg::with_name("upgrade_authority")
                                 .long("upgrade-authority")
@@ -254,14 +260,6 @@ impl ProgramSubCommands for App<'_, '_> {
                                     "Upgrade authority [default: the default configured keypair]",
                                 ),
                         )
-                        .arg(pubkey!(
-                            Arg::with_name("program_id")
-                                .index(2)
-                                .required(true)
-                                .value_name("PROGRAM_ID"),
-                            "Executable program's address (pubkey)"
-                        ))
-                        .arg(fee_payer_arg())
                         .offline_args(),
                 )
                 .subcommand(
@@ -620,14 +618,6 @@ pub fn parse_program_subcommand(
             let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
             let blockhash_query = BlockhashQuery::new_from_matches(matches);
 
-            let (fee_payer, fee_payer_pubkey) =
-                signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
-
-            let mut bulk_signers = vec![
-                Some(default_signer.signer_from_path(matches, wallet_manager)?),
-                fee_payer, // if None, default signer will be supplied
-            ];
-
             let buffer_pubkey = if let Ok(Some(buffer_pubkey)) =
                 pubkey_of_signer(matches, "buffer", wallet_manager)
             {
@@ -638,10 +628,6 @@ pub fn parse_program_subcommand(
                 ));
             };
 
-            let (upgrade_authority, upgrade_authority_pubkey) =
-                signer_of(matches, "upgrade_authority", wallet_manager)?;
-            bulk_signers.push(upgrade_authority);
-
             let program_pubkey = if let Ok(Some(program_pubkey)) =
                 pubkey_of_signer(matches, "program_id", wallet_manager)
             {
@@ -651,6 +637,18 @@ pub fn parse_program_subcommand(
                     "`PROGRAM_ID` must be specified when doing program upgrade".into(),
                 ));
             };
+
+            let (fee_payer, fee_payer_pubkey) =
+                signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
+
+            let mut bulk_signers = vec![
+                Some(default_signer.signer_from_path(matches, wallet_manager)?),
+                fee_payer, // if None, default signer will be supplied
+            ];
+
+            let (upgrade_authority, upgrade_authority_pubkey) =
+                signer_of(matches, "upgrade_authority", wallet_manager)?;
+            bulk_signers.push(upgrade_authority);
 
             let signer_info =
                 default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
@@ -1325,7 +1323,7 @@ fn process_program_upgrade(
         let mut tx = Transaction::new_unsigned(message);
         let signers = &[fee_payer_signer, upgrade_authority_signer];
         // Using try_partial_sign here because fee_payer_signer might not be the fee payer we
-        // end up using for this transaction (it might be NullSigner).
+        // end up using for this transaction (it might be NullSigner in `--sing-only` mode).
         tx.try_partial_sign(signers, blockhash)?;
         return_signers_with_config(
             &tx,
