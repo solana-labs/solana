@@ -282,14 +282,24 @@ intermediary buffer contents and then vote to allow an upgrade using it.
 solana program write-buffer <PROGRAM_FILEPATH>
 ```
 
-Buffer accounts support authorities like program accounts:
+Buffer accounts are managed by an authority. To create a buffer and specify a different
+authority than the default:
+
+```bash
+solana program write-buffer <PROGRAM_FILEPATH> --buffer-authority <BUFFER_AUTHORITY_SIGNER>
+```
+
+Only the buffer authority may write to the buffer, so the `--buffer-authority` above must be a
+**signer**, and not an address.  This requirement limits usage with offline signers.
+To use an offline address as a buffer authority, the buffer account must be initialized and
+written with an online keypair, and then the buffer authority must be assigned using
+`solana program set-buffer-authority`:
 
 ```bash
 solana program set-buffer-authority <BUFFER_ADDRESS> --new-buffer-authority <NEW_BUFFER_AUTHORITY>
 ```
 
-One exception is that buffer accounts cannot be marked immutable like program
-accounts can, so they don't support `--final`.
+Unlike program accounts buffer accounts cannot be marked immutable, so they don't support the `--final` option.
 
 The buffer account, once entirely written, can be passed to `deploy` to deploy
 the program:
