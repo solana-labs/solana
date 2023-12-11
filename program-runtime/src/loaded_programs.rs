@@ -439,11 +439,16 @@ impl Default for ProgramRuntimeEnvironments {
     }
 }
 
+#[derive(Debug, Default)]
+struct SecondLevel {
+    slot_versions: Vec<Arc<LoadedProgram>>,
+}
+
 pub struct LoadedPrograms<FG: ForkGraph> {
     /// A two level index:
     ///
-    /// Pubkey is the address of a program, multiple versions can coexists simultaneously under the same address (in different slots).
-    entries: HashMap<Pubkey, Vec<Arc<LoadedProgram>>>,
+    /// The first level is for the address at which programs are deployed and the second level for the slot (and thus also fork).
+    entries: HashMap<Pubkey, SecondLevel>,
     /// The slot of the last rerooting
     pub latest_root_slot: Slot,
     /// The epoch of the last rerooting
@@ -577,12 +582,12 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         key: Pubkey,
         entry: Arc<LoadedProgram>,
     ) -> (bool, Arc<LoadedProgram>) {
-        let second_level = self.entries.entry(key).or_default();
-        let index = second_level
+        let slot_versions = &mut self.entries.entry(key).or_default().slot_versions;
+        let index = slot_versions
             .iter()
             .position(|at| at.effective_slot >= entry.effective_slot);
         if let Some((existing, entry_index)) =
-            index.and_then(|index| second_level.get(index).map(|value| (value, index)))
+            index.and_then(|index| slot_versions.get(index).map(|value| (value, index)))
         {
             if existing.deployment_slot == entry.deployment_slot
                 && existing.effective_slot == entry.effective_slot
@@ -598,13 +603,13 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                         existing.ix_usage_counter.load(Ordering::Relaxed),
                         Ordering::Relaxed,
                     );
-                    second_level.remove(entry_index);
+                    slot_versions.remove(entry_index);
                 } else if existing.is_tombstone() != entry.is_tombstone() {
                     // Either the old entry is tombstone and the new one is not.
                     // (Let's give the new entry a chance).
                     // Or, the old entry is not a tombstone and the new one is a tombstone.
                     // (Remove the old entry, as the tombstone makes it obsolete).
-                    second_level.remove(entry_index);
+                    slot_versions.remove(entry_index);
                 } else {
                     self.stats.replacements.fetch_add(1, Ordering::Relaxed);
                     return (true, existing.clone());
@@ -612,7 +617,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
             }
         }
         self.stats.insertions.fetch_add(1, Ordering::Relaxed);
-        second_level.insert(index.unwrap_or(second_level.len()), entry.clone());
+        slot_versions.insert(index.unwrap_or(slot_versions.len()), entry.clone());
         (false, entry)
     }
 
@@ -628,7 +633,9 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
 
     pub fn prune_by_deployment_slot(&mut self, slot: Slot) {
         for second_level in self.entries.values_mut() {
-            second_level.retain(|entry| entry.deployment_slot != slot);
+            second_level
+                .slot_versions
+                .retain(|entry| entry.deployment_slot != slot);
         }
         self.remove_programs_with_no_entries();
     }
@@ -656,7 +663,8 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
             // Remove entries un/re/deployed on orphan forks
             let mut first_ancestor_found = false;
             let mut first_ancestor_env = None;
-            *second_level = second_level
+            second_level.slot_versions = second_level
+                .slot_versions
                 .iter()
                 .rev()
                 .filter(|entry| {
@@ -712,7 +720,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                 })
                 .cloned()
                 .collect();
-            second_level.reverse();
+            second_level.slot_versions.reverse();
         }
         self.remove_programs_with_no_entries();
         debug_assert!(self.latest_root_slot <= new_root_slot);
@@ -773,7 +781,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         let locked_fork_graph = self.fork_graph.as_ref().unwrap().read().unwrap();
         search_for.retain(|(key, (match_criteria, usage_count))| {
             if let Some(second_level) = self.entries.get(&key) {
-                for entry in second_level.iter().rev() {
+                for entry in second_level.slot_versions.iter().rev() {
                     let is_ancestor = matches!(
                         locked_fork_graph
                             .relationship(entry.deployment_slot, loaded_programs_for_tx_batch.slot),
@@ -853,8 +861,10 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
     ) -> Vec<(Pubkey, Arc<LoadedProgram>)> {
         self.entries
             .iter()
-            .flat_map(|(id, list)| {
-                list.iter()
+            .flat_map(|(id, second_level)| {
+                second_level
+                    .slot_versions
+                    .iter()
                     .filter_map(move |program| match program.program {
                         LoadedProgramType::LegacyV0(_) | LoadedProgramType::LegacyV1(_)
                             if include_program_runtime_v1 =>
@@ -890,8 +900,8 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
     }
 
     fn unload_program(&mut self, id: &Pubkey) {
-        if let Some(entries) = self.entries.get_mut(id) {
-            for entry in entries.iter_mut() {
+        if let Some(second_level) = self.entries.get_mut(id) {
+            for entry in second_level.slot_versions.iter_mut() {
                 if let Some(unloaded) = entry.to_unloaded() {
                     *entry = Arc::new(unloaded);
                     self.stats
@@ -914,8 +924,12 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         remove: impl Iterator<Item = &'a (Pubkey, Arc<LoadedProgram>)>,
     ) {
         for (id, program) in remove {
-            if let Some(entries) = self.entries.get_mut(id) {
-                if let Some(candidate) = entries.iter_mut().find(|entry| entry == &program) {
+            if let Some(second_level) = self.entries.get_mut(id) {
+                if let Some(candidate) = second_level
+                    .slot_versions
+                    .iter_mut()
+                    .find(|entry| entry == &program)
+                {
                     if let Some(unloaded) = candidate.to_unloaded() {
                         if candidate.tx_usage_counter.load(Ordering::Relaxed) == 1 {
                             self.stats.one_hit_wonders.fetch_add(1, Ordering::Relaxed);
@@ -934,7 +948,8 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
 
     fn remove_programs_with_no_entries(&mut self) {
         let num_programs_before_removal = self.entries.len();
-        self.entries.retain(|_, programs| !programs.is_empty());
+        self.entries
+            .retain(|_, second_level| !second_level.slot_versions.is_empty());
         if self.entries.len() < num_programs_before_removal {
             self.stats.empty_entries.fetch_add(
                 num_programs_before_removal.saturating_sub(self.entries.len()) as u64,
@@ -1079,8 +1094,9 @@ mod tests {
         cache
             .entries
             .values()
-            .map(|programs| {
-                programs
+            .map(|second_level| {
+                second_level
+                    .slot_versions
                     .iter()
                     .filter(|program| predicate(&program.program))
                     .count()
@@ -1220,8 +1236,8 @@ mod tests {
         let unloaded = cache
             .entries
             .iter()
-            .flat_map(|(id, cached_programs)| {
-                cached_programs.iter().filter_map(|program| {
+            .flat_map(|(id, second_level)| {
+                second_level.slot_versions.iter().filter_map(|program| {
                     matches!(program.program, LoadedProgramType::Unloaded(_))
                         .then_some((*id, program.tx_usage_counter.load(Ordering::Relaxed)))
                 })
@@ -1274,8 +1290,8 @@ mod tests {
         });
         assert_eq!(num_unloaded, 1);
 
-        cache.entries.values().for_each(|programs| {
-            programs.iter().for_each(|program| {
+        cache.entries.values().for_each(|second_level| {
+            second_level.slot_versions.iter().for_each(|program| {
                 if matches!(program.program, LoadedProgramType::Unloaded(_)) {
                     // Test that the usage counter is retained for the unloaded program
                     assert_eq!(program.tx_usage_counter.load(Ordering::Relaxed), 10);
@@ -1292,8 +1308,8 @@ mod tests {
             new_test_loaded_program_with_usage(0, 2, AtomicU64::new(0)),
         );
 
-        cache.entries.values().for_each(|programs| {
-            programs.iter().for_each(|program| {
+        cache.entries.values().for_each(|second_level| {
+            second_level.slot_versions.iter().for_each(|program| {
                 if matches!(program.program, LoadedProgramType::Unloaded(_))
                     && program.deployment_slot == 0
                     && program.effective_slot == 2
@@ -1351,8 +1367,8 @@ mod tests {
             .entries
             .get(&program1)
             .expect("Failed to find the entry");
-        assert_eq!(second_level.len(), 1);
-        assert!(second_level.first().unwrap().is_tombstone());
+        assert_eq!(second_level.slot_versions.len(), 1);
+        assert!(second_level.slot_versions.first().unwrap().is_tombstone());
         assert_eq!(tombstone.deployment_slot, 10);
         assert_eq!(tombstone.effective_slot, 10);
 
@@ -1367,8 +1383,8 @@ mod tests {
             .entries
             .get(&program2)
             .expect("Failed to find the entry");
-        assert_eq!(second_level.len(), 1);
-        assert!(!second_level.first().unwrap().is_tombstone());
+        assert_eq!(second_level.slot_versions.len(), 1);
+        assert!(!second_level.slot_versions.first().unwrap().is_tombstone());
 
         let tombstone = set_tombstone(
             &mut cache,
@@ -1380,9 +1396,9 @@ mod tests {
             .entries
             .get(&program2)
             .expect("Failed to find the entry");
-        assert_eq!(second_level.len(), 2);
-        assert!(!second_level.first().unwrap().is_tombstone());
-        assert!(second_level.get(1).unwrap().is_tombstone());
+        assert_eq!(second_level.slot_versions.len(), 2);
+        assert!(!second_level.slot_versions.first().unwrap().is_tombstone());
+        assert!(second_level.slot_versions.get(1).unwrap().is_tombstone());
         assert!(tombstone.is_tombstone());
         assert_eq!(tombstone.deployment_slot, 60);
         assert_eq!(tombstone.effective_slot, 60);
@@ -1491,6 +1507,7 @@ mod tests {
                 .entries
                 .get(&program1)
                 .expect("failed to find the program")
+                .slot_versions
                 .len(),
             2
         );
@@ -1503,20 +1520,25 @@ mod tests {
                 .entries
                 .get(&program1)
                 .expect("failed to find the program")
+                .slot_versions
                 .len(),
             2
         );
 
         cache.prune(22, cache.latest_root_epoch.saturating_add(1));
 
-        let entries = cache
+        let second_level = cache
             .entries
             .get(&program1)
             .expect("failed to find the program");
         // Test that prune removed 1 entry, since epoch changed
-        assert_eq!(entries.len(), 1);
+        assert_eq!(second_level.slot_versions.len(), 1);
 
-        let entry = entries.first().expect("Failed to get the program").clone();
+        let entry = second_level
+            .slot_versions
+            .first()
+            .expect("Failed to get the program")
+            .clone();
         // Test that the correct entry remains in the cache
         assert_eq!(entry, updated_program);
     }
@@ -1804,8 +1826,8 @@ mod tests {
         assert!(match_missing(&missing, &program4, false));
 
         // Remove the expired entry to let the rest of the test continue
-        if let Some(programs) = cache.entries.get_mut(&program4) {
-            programs.pop();
+        if let Some(second_level) = cache.entries.get_mut(&program4) {
+            second_level.slot_versions.pop();
         }
 
         cache.prune(5, 0);
@@ -2148,6 +2170,7 @@ mod tests {
                 .entries
                 .get(&program1)
                 .expect("Didn't find program1")
+                .slot_versions
                 .len(),
             3
         );
@@ -2159,6 +2182,7 @@ mod tests {
                 .entries
                 .get(&program1)
                 .expect("Didn't find program1")
+                .slot_versions
                 .len(),
             1
         );
