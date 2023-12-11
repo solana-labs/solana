@@ -5011,40 +5011,50 @@ impl Bank {
                     .collect()
             };
 
-        let mut loaded_programs_for_txs = {
-            // Lock the global cache to figure out which programs need to be loaded
-            let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
-            let mut loaded_programs_for_txs = LoadedProgramsForTxBatch::new(
-                self.slot,
-                loaded_programs_cache
-                    .get_environments_for_epoch(self.epoch)
-                    .clone(),
-            );
-            let _cooperative_loading_task =
-                loaded_programs_cache.extract(&mut missing_programs, &mut loaded_programs_for_txs);
-            loaded_programs_for_txs
-        };
+        let mut loaded_programs_for_txs = None;
+        let mut program_to_store = None;
+        loop {
+            let program_to_load = {
+                // Lock the global cache.
+                let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
+                // Initialize our local cache.
+                if loaded_programs_for_txs.is_none() {
+                    loaded_programs_for_txs = Some(LoadedProgramsForTxBatch::new(
+                        self.slot,
+                        loaded_programs_cache
+                            .get_environments_for_epoch(self.epoch)
+                            .clone(),
+                    ));
+                }
+                // Submit our last completed loading task.
+                if let Some((key, program)) = program_to_store.take() {
+                    loaded_programs_cache.finish_cooperative_loading_task(
+                        self.slot(),
+                        key,
+                        program,
+                    );
+                }
+                // Figure out which program needs to be loaded next.
+                loaded_programs_cache.extract(
+                    &mut missing_programs,
+                    loaded_programs_for_txs.as_mut().unwrap(),
+                )
+                // Unlock the global cache again.
+            };
 
-        // Load missing programs while global cache is unlocked
-        let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing_programs
-            .iter()
-            .map(|(key, (_match_criteria, usage_count))| {
-                let program = self.load_program(key, false, None);
-                program
-                    .tx_usage_counter
-                    .store(*usage_count, Ordering::Relaxed);
-                (*key, program)
-            })
-            .collect();
-
-        // Lock the global cache again to replenish the missing programs
-        let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
-        for (key, program) in missing_programs {
-            let (_was_occupied, entry) = loaded_programs_cache.replenish(key, program);
-            // Use the returned entry as that might have been deduplicated globally
-            loaded_programs_for_txs.replenish(key, entry);
+            if let Some((key, count)) = program_to_load {
+                // Load, verify and compile one program.
+                let program = self.load_program(&key, false, None);
+                program.tx_usage_counter.store(count, Ordering::Relaxed);
+                program_to_store = Some((key, program));
+            } else if missing_programs.is_empty() {
+                break;
+            } else {
+                // TODO: Wait on a std::sync::Condvar
+            }
         }
-        loaded_programs_for_txs
+
+        loaded_programs_for_txs.unwrap()
     }
 
     /// Returns a hash map of executable program accounts (program accounts that are not writable
