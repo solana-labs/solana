@@ -34,12 +34,10 @@ pub(crate) enum TransactionState {
     Unprocessed {
         transaction_ttl: SanitizedTransactionTTL,
         transaction_priority_details: TransactionPriorityDetails,
-        forwarded: bool,
     },
     /// The transaction is currently scheduled or being processed.
     Pending {
         transaction_priority_details: TransactionPriorityDetails,
-        forwarded: bool,
     },
 }
 
@@ -52,7 +50,6 @@ impl TransactionState {
         Self::Unprocessed {
             transaction_ttl,
             transaction_priority_details,
-            forwarded: false,
         }
     }
 
@@ -75,22 +72,6 @@ impl TransactionState {
         self.transaction_priority_details().priority
     }
 
-    /// Returns whether or not the transaction has already been forwarded.
-    pub(crate) fn forwarded(&self) -> bool {
-        match self {
-            Self::Unprocessed { forwarded, .. } => *forwarded,
-            Self::Pending { forwarded, .. } => *forwarded,
-        }
-    }
-
-    /// Sets the transaction as forwarded.
-    pub(crate) fn set_forwarded(&mut self) {
-        match self {
-            Self::Unprocessed { forwarded, .. } => *forwarded = true,
-            Self::Pending { forwarded, .. } => *forwarded = true,
-        }
-    }
-
     /// Intended to be called when a transaction is scheduled. This method will
     /// transition the transaction from `Unprocessed` to `Pending` and return the
     /// `SanitizedTransactionTTL` for processing.
@@ -103,11 +84,9 @@ impl TransactionState {
             TransactionState::Unprocessed {
                 transaction_ttl,
                 transaction_priority_details,
-                forwarded,
             } => {
                 *self = TransactionState::Pending {
                     transaction_priority_details,
-                    forwarded,
                 };
                 transaction_ttl
             }
@@ -128,12 +107,10 @@ impl TransactionState {
             TransactionState::Unprocessed { .. } => panic!("already unprocessed"),
             TransactionState::Pending {
                 transaction_priority_details,
-                forwarded,
             } => {
                 *self = Self::Unprocessed {
                     transaction_ttl,
                     transaction_priority_details,
-                    forwarded,
                 }
             }
         }
@@ -162,7 +139,6 @@ impl TransactionState {
                     priority: 0,
                     compute_unit_limit: 0,
                 },
-                forwarded: false,
             },
         )
     }

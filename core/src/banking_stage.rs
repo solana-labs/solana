@@ -61,7 +61,6 @@ pub mod unprocessed_transaction_storage;
 mod consume_worker;
 mod decision_maker;
 mod forward_packet_batches_by_accounts;
-mod forward_worker;
 mod forwarder;
 mod immutable_deserialized_packet;
 mod latest_unprocessed_votes;
@@ -70,7 +69,6 @@ mod multi_iterator_scanner;
 mod packet_deserializer;
 mod packet_receiver;
 mod read_write_account_set;
-#[allow(dead_code)]
 mod scheduler_messages;
 mod transaction_scheduler;
 
