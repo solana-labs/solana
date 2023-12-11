@@ -26,6 +26,7 @@
 
 use {
     crate::{
+        cluster_info_notifier_interface::ClusterInfoUpdateNotifierLock,
         crds_entry::CrdsEntry,
         crds_gossip_pull::CrdsTimeouts,
         crds_shards::CrdsShards,
@@ -53,6 +54,8 @@ use {
         sync::Mutex,
     },
 };
+
+mod geyser_plugin_utils;
 
 const CRDS_SHARDS_BITS: u32 = 12;
 // Number of vote slots to track in an lru-cache for metrics.
@@ -86,6 +89,8 @@ pub struct Crds {
     // Mapping from nodes' pubkeys to their respective shred-version.
     shred_versions: HashMap<Pubkey, u16>,
     stats: Mutex<CrdsStats>,
+    /// GeyserPlugin cluster info update notifier
+    clusterinfo_update_notifier: Option<ClusterInfoUpdateNotifierLock>,
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -174,6 +179,7 @@ impl Default for Crds {
             purged: VecDeque::default(),
             shred_versions: HashMap::default(),
             stats: Mutex::<CrdsStats>::default(),
+            clusterinfo_update_notifier: None,
         }
     }
 }
@@ -221,9 +227,10 @@ impl Crds {
         route: GossipRoute,
     ) -> Result<(), CrdsError> {
         let label = value.label();
+        let gossip_label = label.clone();
         let pubkey = value.pubkey();
         let value = VersionedCrdsValue::new(value, self.cursor, now);
-        match self.table.entry(label) {
+        let ret = match self.table.entry(label) {
             Entry::Vacant(entry) => {
                 self.stats.lock().unwrap().record_insert(&value, route);
                 let entry_index = entry.index();
@@ -309,7 +316,10 @@ impl Crds {
                     Err(CrdsError::InsertFailed)
                 }
             }
-        }
+        };
+        //notify geyzer interface
+        self.notify_clusterinfo_update(self.table.get(&gossip_label));
+        ret
     }
 
     pub fn get<'a, 'b, V>(&'a self, key: V::Key) -> Option<V>

@@ -11,6 +11,7 @@ edition = { workspace = true }
 
 [dependencies]
 log = { workspace = true }
+solana-gossip = { workspace = true }
 solana-sdk = { workspace = true }
 solana-transaction-status = { workspace = true }
 thiserror = { workspace = true }
