@@ -5093,8 +5093,8 @@ impl Bank {
         // Load missing programs while global cache is unlocked
         let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing
             .iter()
-            .map(|(key, (count, reloading))| {
-                let program = self.load_program(key, *reloading, None);
+            .map(|(key, count)| {
+                let program = self.load_program(key, false, None);
                 program.tx_usage_counter.store(*count, Ordering::Relaxed);
                 (*key, program)
             })
