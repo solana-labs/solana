@@ -53,8 +53,20 @@ impl ByteBlockWriter {
         self.len
     }
 
+    /// Write plain ol' data to the internal buffer of the ByteBlockWriter instance
+    ///
+    /// Prefer this over `write_type()`, as it prevents some undefined behavior.
+    pub fn write_pod<T: bytemuck::NoUninit>(&mut self, value: &T) -> IoResult<usize> {
+        let bytes = bytemuck::bytes_of(value);
+        self.write(bytes)?;
+        Ok(mem::size_of::<T>())
+    }
+
     /// Write the specified typed instance to the internal buffer of
     /// the ByteBlockWriter instance.
+    ///
+    /// Prefer `write_pod()` when possible, because `write_type()` may cause
+    /// undefined behavior if `value` contains uninitized bytes.
     pub fn write_type<T>(&mut self, value: &T) -> IoResult<usize> {
         let size = mem::size_of::<T>();
         let ptr = value as *const _ as *const u8;
@@ -73,10 +85,10 @@ impl ByteBlockWriter {
     ) -> IoResult<usize> {
         let mut size = 0;
         if let Some(rent_epoch) = opt_fields.rent_epoch {
-            size += self.write_type(&rent_epoch)?;
+            size += self.write_pod(&rent_epoch)?;
         }
         if let Some(hash) = opt_fields.account_hash {
-            size += self.write_type(&hash)?;
+            size += self.write_pod(&hash)?;
         }
 
         debug_assert_eq!(size, opt_fields.size());
@@ -169,7 +181,7 @@ mod tests {
         let mut writer = ByteBlockWriter::new(format);
         let value: u32 = 42;
 
-        writer.write_type(&value).unwrap();
+        writer.write_pod(&value).unwrap();
         assert_eq!(writer.raw_len(), mem::size_of::<u32>());
 
         let buffer = writer.finish().unwrap();
