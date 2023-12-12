@@ -126,8 +126,12 @@ impl TransactionStateContainer {
         transaction_ttl: SanitizedTransactionTTL,
         transaction_priority_details: TransactionPriorityDetails,
     ) -> bool {
-        let priority_id =
-            TransactionPriorityId::new(transaction_priority_details.priority, transaction_id);
+        let priority_id = TransactionPriorityId::new(
+            transaction_priority_details.priority,
+            transaction_priority_details.compute_unit_limit,
+            transaction_ttl.transaction.signatures().len() as u64,
+            transaction_id,
+        );
         self.id_to_transaction_state.insert(
             transaction_id,
             TransactionState::new(transaction_ttl, transaction_priority_details),
@@ -145,7 +149,13 @@ impl TransactionStateContainer {
         let transaction_state = self
             .get_mut_transaction_state(&transaction_id)
             .expect("transaction must exist");
-        let priority_id = TransactionPriorityId::new(transaction_state.priority(), transaction_id);
+        let priority_details = transaction_state.transaction_priority_details();
+        let priority_id = TransactionPriorityId::new(
+            priority_details.priority,
+            priority_details.compute_unit_limit,
+            transaction_ttl.transaction.signatures().len() as u64,
+            transaction_id,
+        );
         transaction_state.transition_to_unprocessed(transaction_ttl);
         self.push_id_into_queue(priority_id);
     }
@@ -262,9 +272,9 @@ mod tests {
         assert_eq!(
             taken,
             vec![
-                TransactionPriorityId::new(4, TransactionId::new(4)),
-                TransactionPriorityId::new(3, TransactionId::new(3)),
-                TransactionPriorityId::new(2, TransactionId::new(2)),
+                TransactionPriorityId::new(4, 0, 0, TransactionId::new(4)),
+                TransactionPriorityId::new(3, 0, 0, TransactionId::new(3)),
+                TransactionPriorityId::new(2, 0, 0, TransactionId::new(2)),
             ]
         );
         // The remainder of the queue should not be empty
@@ -280,11 +290,11 @@ mod tests {
         assert_eq!(
             ordered,
             vec![
-                TransactionPriorityId::new(4, TransactionId::new(4)),
-                TransactionPriorityId::new(3, TransactionId::new(3)),
-                TransactionPriorityId::new(2, TransactionId::new(2)),
-                TransactionPriorityId::new(1, TransactionId::new(1)),
-                TransactionPriorityId::new(0, TransactionId::new(0)),
+                TransactionPriorityId::new(4, 0, 0, TransactionId::new(4)),
+                TransactionPriorityId::new(3, 0, 0, TransactionId::new(3)),
+                TransactionPriorityId::new(2, 0, 0, TransactionId::new(2)),
+                TransactionPriorityId::new(1, 0, 0, TransactionId::new(1)),
+                TransactionPriorityId::new(0, 0, 0, TransactionId::new(0)),
             ]
         );
         assert!(container.priority_queue.is_empty());
@@ -294,11 +304,11 @@ mod tests {
         assert_eq!(
             ordered,
             vec![
-                TransactionPriorityId::new(4, TransactionId::new(4)),
-                TransactionPriorityId::new(3, TransactionId::new(3)),
-                TransactionPriorityId::new(2, TransactionId::new(2)),
-                TransactionPriorityId::new(1, TransactionId::new(1)),
-                TransactionPriorityId::new(0, TransactionId::new(0)),
+                TransactionPriorityId::new(4, 0, 0, TransactionId::new(4)),
+                TransactionPriorityId::new(3, 0, 0, TransactionId::new(3)),
+                TransactionPriorityId::new(2, 0, 0, TransactionId::new(2)),
+                TransactionPriorityId::new(1, 0, 0, TransactionId::new(1)),
+                TransactionPriorityId::new(0, 0, 0, TransactionId::new(0)),
             ]
         );
         assert_eq!(container.priority_queue.len(), 5);

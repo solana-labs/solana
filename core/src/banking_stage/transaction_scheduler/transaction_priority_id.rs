@@ -13,7 +13,13 @@ pub(crate) struct TransactionPriorityId {
 }
 
 impl TransactionPriorityId {
-    pub(crate) fn new(priority: u64, id: TransactionId) -> Self {
+    pub(crate) fn new(
+        priority: u64,
+        cu_limit: u64,
+        num_signatures: u64,
+        id: TransactionId,
+    ) -> Self {
+        let priority = num_signatures * 5_000 / cu_limit + priority;
         Self { priority, id }
     }
 }
