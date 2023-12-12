@@ -15,6 +15,7 @@ use {
             TieredStorageError, TieredStorageFormat, TieredStorageResult,
         },
     },
+    bytemuck::{Pod, Zeroable},
     memmap2::{Mmap, MmapOptions},
     modular_bitfield::prelude::*,
     solana_sdk::{pubkey::Pubkey, stake_history::Epoch},
@@ -47,7 +48,7 @@ const MAX_HOT_ACCOUNT_OFFSET: usize = u32::MAX as usize * HOT_ACCOUNT_ALIGNMENT;
 
 #[bitfield(bits = 32)]
 #[repr(C)]
-#[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Pod, Zeroable)]
 struct HotMetaPackedFields {
     /// A hot account entry consists of the following elements:
     ///
@@ -63,10 +64,16 @@ struct HotMetaPackedFields {
     owner_offset: B29,
 }
 
+// Ensure there are no implicit padding bytes
+const _: () = assert!(std::mem::size_of::<HotMetaPackedFields>() == 4);
+
 /// The offset to access a hot account.
 #[repr(C)]
-#[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Pod, Zeroable)]
 pub struct HotAccountOffset(u32);
+
+// Ensure there are no implicit padding bytes
+const _: () = assert!(std::mem::size_of::<HotAccountOffset>() == 4);
 
 impl AccountOffset for HotAccountOffset {}
 
@@ -99,7 +106,7 @@ impl HotAccountOffset {
 
 /// The storage and in-memory representation of the metadata entry for a
 /// hot account.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Pod, Zeroable)]
 #[repr(C)]
 pub struct HotAccountMeta {
     /// The balance of this account.
@@ -109,6 +116,9 @@ pub struct HotAccountMeta {
     /// Stores boolean flags and existence of each optional field.
     flags: AccountMetaFlags,
 }
+
+// Ensure there are no implicit padding bytes
+const _: () = assert!(std::mem::size_of::<HotAccountMeta>() == 8 + 4 + 4);
 
 impl TieredAccountMeta for HotAccountMeta {
     /// Construct a HotAccountMeta instance.

@@ -29,6 +29,9 @@ pub const FOOTER_MAGIC_NUMBER: u64 = 0x502A2AB5; // SOLALABS -> SOLANA LABS
 #[repr(C)]
 pub struct TieredStorageMagicNumber(pub u64);
 
+// Ensure there are no implicit padding bytes
+const _: () = assert!(std::mem::size_of::<TieredStorageMagicNumber>() == 8);
+
 impl Default for TieredStorageMagicNumber {
     fn default() -> Self {
         Self(FOOTER_MAGIC_NUMBER)
