@@ -597,7 +597,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
-                    "Recipient of withdrawn SOL."
+                    "Recipient of withdrawn stake."
                 ))
                 .arg(
                     Arg::with_name("amount")

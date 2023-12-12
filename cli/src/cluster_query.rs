@@ -430,7 +430,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("ADDRESS")
                         .required(true),
-                    "Account."
+                    "Account to query for transactions."
                 ))
                 .arg(
                     Arg::with_name("limit")
