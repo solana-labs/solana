@@ -164,7 +164,7 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("custodian")
                         .long("custodian")
                         .value_name("PUBKEY"),
-                    "Authority to modify lockups"
+                    "Authority to modify lockups."
                 ))
                 .arg(
                     Arg::with_name("seed")
@@ -308,14 +308,14 @@ impl StakeSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "Stake account to delegate"
+                    "Stake account to delegate."
                 ))
                 .arg(pubkey!(
                     Arg::with_name("vote_account_pubkey")
                         .index(2)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "The vote account to which the stake will be delegated"
+                    "Vote account to which the stake will be delegated."
                 ))
                 .arg(stake_authority_arg())
                 .offline_args()
@@ -341,14 +341,14 @@ impl StakeSubCommands for App<'_, '_> {
                         .required(true),
                     "Existing delegated stake account that has been fully activated. On success \
                      this stake account will be scheduled for deactivation and the rent-exempt \
-                     balance may be withdrawn once fully deactivated"
+                     balance may be withdrawn once fully deactivated."
                 ))
                 .arg(pubkey!(
                     Arg::with_name("vote_account_pubkey")
                         .index(2)
                         .value_name("REDELEGATED_VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "The vote account to which the stake will be redelegated"
+                    "Vote account to which the stake will be redelegated."
                 ))
                 .arg(
                     Arg::with_name("redelegation_stake_account")
@@ -378,21 +378,21 @@ impl StakeSubCommands for App<'_, '_> {
                         .required(true)
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS"),
-                    "Stake account in which to set a new authority. "
+                    "Stake account in which to set a new authority."
                 ))
                 .arg(pubkey!(
                     Arg::with_name("new_stake_authority")
                         .long("new-stake-authority")
                         .required_unless("new_withdraw_authority")
                         .value_name("PUBKEY"),
-                    "New authorized staker"
+                    "New authorized staker."
                 ))
                 .arg(pubkey!(
                     Arg::with_name("new_withdraw_authority")
                         .long("new-withdraw-authority")
                         .required_unless("new_stake_authority")
                         .value_name("PUBKEY"),
-                    "New authorized withdrawer. "
+                    "New authorized withdrawer."
                 ))
                 .arg(stake_authority_arg())
                 .arg(withdraw_authority_arg())
@@ -423,7 +423,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .required(true)
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS"),
-                    "Stake account in which to set a new authority. "
+                    "Stake account in which to set a new authority."
                 ))
                 .arg(
                     Arg::with_name("new_stake_authority")
@@ -470,7 +470,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
                     "Stake account to be deactivated (or base of derived address if --seed is \
-                     used). "
+                     used)."
                 ))
                 .arg(
                     Arg::with_name("seed")
@@ -507,7 +507,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "Stake account to split (or base of derived address if --seed is used). "
+                    "Stake account to split (or base of derived address if --seed is used)."
                 ))
                 .arg(
                     Arg::with_name("split_stake_account")
@@ -564,15 +564,15 @@ impl StakeSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "Stake account to merge into"
+                    "Stake account to merge into."
                 ))
                 .arg(pubkey!(
                     Arg::with_name("source_stake_account_pubkey")
                         .index(2)
                         .value_name("SOURCE_STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "Source stake account for the merge.  If successful, this stake account will \
-                     no longer exist after the merge"
+                    "Source stake account for the merge. If successful, this stake account will \
+                     no longer exist after the merge."
                 ))
                 .arg(stake_authority_arg())
                 .offline_args()
@@ -590,14 +590,14 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
                     "Stake account from which to withdraw (or base of derived address if --seed \
-                     is used). "
+                     is used)."
                 ))
                 .arg(pubkey!(
                     Arg::with_name("destination_account_pubkey")
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
-                    "Recipient of withdrawn SOL"
+                    "Recipient of withdrawn stake."
                 ))
                 .arg(
                     Arg::with_name("amount")
@@ -637,7 +637,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "Stake account for which to set lockup parameters. "
+                    "Stake account for which to set lockup parameters."
                 ))
                 .arg(
                     Arg::with_name("lockup_epoch")
@@ -664,7 +664,7 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("new_custodian")
                         .long("new-custodian")
                         .value_name("PUBKEY"),
-                    "Identity of a new lockup custodian. "
+                    "New lockup custodian."
                 ))
                 .group(
                     ArgGroup::with_name("lockup_details")
@@ -694,7 +694,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "Stake account for which to set lockup parameters. "
+                    "Stake account for which to set lockup parameters."
                 ))
                 .arg(
                     Arg::with_name("lockup_epoch")
@@ -754,7 +754,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "The stake account to display. "
+                    "Stake account to display."
                 ))
                 .arg(
                     Arg::with_name("lamports")
