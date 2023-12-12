@@ -309,7 +309,7 @@ pub fn load_and_process_ledger(
     );
     match block_verification_method {
         BlockVerificationMethod::BlockstoreProcessor => {
-            info!("not installing scheduler pool...");
+            info!("no scheduler pool is installed for block verification...");
         }
         BlockVerificationMethod::UnifiedScheduler => {
             let no_transaction_status_sender = None;
