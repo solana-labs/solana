@@ -233,7 +233,7 @@ impl ProgramV4SubCommands for App<'_, '_> {
                                 .long("authority")
                                 .value_name("AUTHORITY")
                                 .conflicts_with("all"),
-                            "Authority [default: the default configured keypair]"
+                            "Authority [default: the default configured keypair]."
                         )),
                 )
                 .subcommand(
