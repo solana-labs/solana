@@ -124,11 +124,7 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> SchedulerPool<S, TH> {
             scheduler.replace_context(context);
             scheduler
         } else {
-            Box::new(S::spawn(
-                self.self_arc(),
-                context,
-                TH::recreate_handler_with_pool(self),
-            ))
+            Box::new(S::spawn(self.self_arc(), context))
         }
     }
 }
@@ -140,12 +136,7 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> InstalledSchedulerPool for Sche
 }
 
 pub trait TaskHandler: Send + Sync + Debug + Sized + 'static {
-    fn recreate_handler_with_pool<S: SpawnableScheduler<Self>>(
-        pool: &SchedulerPool<S, Self>,
-    ) -> Self;
-
     fn handle<S: SpawnableScheduler<Self>>(
-        &self,
         result: &mut Result<()>,
         timings: &mut ExecuteTimings,
         bank: &Arc<Bank>,
@@ -159,14 +150,7 @@ pub trait TaskHandler: Send + Sync + Debug + Sized + 'static {
 pub struct DefaultTaskHandler;
 
 impl TaskHandler for DefaultTaskHandler {
-    fn recreate_handler_with_pool<S: SpawnableScheduler<Self>>(
-        _pool: &SchedulerPool<S, Self>,
-    ) -> Self {
-        Self
-    }
-
     fn handle<S: SpawnableScheduler<Self>>(
-        &self,
         result: &mut Result<()>,
         timings: &mut ExecuteTimings,
         bank: &Arc<Bank>,
@@ -203,21 +187,15 @@ pub struct PooledScheduler<TH: TaskHandler> {
     pool: Arc<SchedulerPool<Self, TH>>,
     context: Option<SchedulingContext>,
     result_with_timings: Mutex<Option<ResultWithTimings>>,
-    handler: TH,
 }
 
 impl<TH: TaskHandler> PooledScheduler<TH> {
-    fn do_spawn(
-        pool: Arc<SchedulerPool<Self, TH>>,
-        initial_context: SchedulingContext,
-        handler: TH,
-    ) -> Self {
+    fn do_spawn(pool: Arc<SchedulerPool<Self, TH>>, initial_context: SchedulingContext) -> Self {
         Self {
             id: pool.new_scheduler_id(),
             pool,
             context: Some(initial_context),
             result_with_timings: Mutex::default(),
-            handler,
         }
     }
 }
@@ -227,11 +205,7 @@ pub trait SpawnableScheduler<TH: TaskHandler>: InstalledScheduler {
 
     fn replace_context(&mut self, context: SchedulingContext);
 
-    fn spawn(
-        pool: Arc<SchedulerPool<Self, TH>>,
-        initial_context: SchedulingContext,
-        handler: TH,
-    ) -> Self
+    fn spawn(pool: Arc<SchedulerPool<Self, TH>>, initial_context: SchedulingContext) -> Self
     where
         Self: Sized;
 }
@@ -246,12 +220,8 @@ impl<TH: TaskHandler> SpawnableScheduler<TH> for PooledScheduler<TH> {
         *self.result_with_timings.lock().expect("not poisoned") = None;
     }
 
-    fn spawn(
-        pool: Arc<SchedulerPool<Self, TH>>,
-        initial_context: SchedulingContext,
-        handler: TH,
-    ) -> Self {
-        Self::do_spawn(pool, initial_context, handler)
+    fn spawn(pool: Arc<SchedulerPool<Self, TH>>, initial_context: SchedulingContext) -> Self {
+        Self::do_spawn(pool, initial_context)
     }
 }
 
@@ -273,7 +243,6 @@ impl<TH: TaskHandler> InstalledScheduler for PooledScheduler<TH> {
         // need to solve inter-tx locking deps only in the case of single-thread fifo like this.
         if result.is_ok() {
             TH::handle(
-                &self.handler,
                 result,
                 timings,
                 self.context().bank(),
@@ -604,7 +573,6 @@ mod tests {
                 let mut timings = ExecuteTimings::default();
 
                 <DefaultTaskHandler as TaskHandler>::handle(
-                    &DefaultTaskHandler,
                     &mut result,
                     &mut timings,
                     context.bank(),
@@ -657,7 +625,6 @@ mod tests {
         fn spawn(
             pool: Arc<SchedulerPool<Self, DefaultTaskHandler>>,
             initial_context: SchedulingContext,
-            handler: DefaultTaskHandler,
         ) -> Self {
             AsyncScheduler::<TRIGGER_RACE_CONDITION>(
                 PooledScheduler::<DefaultTaskHandler> {
@@ -670,7 +637,6 @@ mod tests {
                     ),
                     context: Some(initial_context),
                     result_with_timings: Mutex::default(),
-                    handler,
                 },
                 Mutex::new(vec![]),
             )
