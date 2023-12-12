@@ -1,7 +1,10 @@
 use {
     crate::tiered_storage::{
-        error::TieredStorageError, file::TieredStorageFile, index::IndexBlockFormat,
-        mmap_utils::get_type, TieredStorageResult,
+        error::TieredStorageError,
+        file::TieredStorageFile,
+        index::IndexBlockFormat,
+        mmap_utils::{get_pod, get_type},
+        TieredStorageResult,
     },
     bytemuck::{Pod, Zeroable},
     memmap2::Mmap,
@@ -204,8 +207,9 @@ impl TieredStorageFooter {
     }
 
     pub fn write_footer_block(&self, file: &TieredStorageFile) -> TieredStorageResult<()> {
-        file.write_type(self)?;
-        file.write_type(&TieredStorageMagicNumber::default())?;
+        // SAFETY: The footer does not contain any uninitialized bytes.
+        unsafe { file.write_type(self)? };
+        file.write_pod(&TieredStorageMagicNumber::default())?;
 
         Ok(())
     }
@@ -214,13 +218,13 @@ impl TieredStorageFooter {
         file.seek_from_end(-(FOOTER_TAIL_SIZE as i64))?;
 
         let mut footer_version: u64 = 0;
-        file.read_type(&mut footer_version)?;
+        file.read_pod(&mut footer_version)?;
         if footer_version != FOOTER_FORMAT_VERSION {
             return Err(TieredStorageError::InvalidFooterVersion(footer_version));
         }
 
         let mut footer_size: u64 = 0;
-        file.read_type(&mut footer_size)?;
+        file.read_pod(&mut footer_size)?;
         if footer_size != FOOTER_SIZE as u64 {
             return Err(TieredStorageError::InvalidFooterSize(
                 footer_size,
@@ -229,7 +233,7 @@ impl TieredStorageFooter {
         }
 
         let mut magic_number = TieredStorageMagicNumber::zeroed();
-        file.read_type(&mut magic_number)?;
+        file.read_pod(&mut magic_number)?;
         if magic_number != TieredStorageMagicNumber::default() {
             return Err(TieredStorageError::MagicNumberMismatch(
                 TieredStorageMagicNumber::default().0,
@@ -239,7 +243,9 @@ impl TieredStorageFooter {
 
         let mut footer = Self::default();
         file.seek_from_end(-(footer_size as i64))?;
-        file.read_type(&mut footer)?;
+        // SAFETY: We sanitize the footer to ensure all the bytes are
+        // actually safe to interpret as a TieredStorageFooter.
+        unsafe { file.read_type(&mut footer)? };
         Self::sanitize(&footer)?;
 
         Ok(footer)
@@ -248,12 +254,12 @@ impl TieredStorageFooter {
     pub fn new_from_mmap(mmap: &Mmap) -> TieredStorageResult<&TieredStorageFooter> {
         let offset = mmap.len().saturating_sub(FOOTER_TAIL_SIZE);
 
-        let (footer_version, offset) = get_type::<u64>(mmap, offset)?;
+        let (footer_version, offset) = get_pod::<u64>(mmap, offset)?;
         if *footer_version != FOOTER_FORMAT_VERSION {
             return Err(TieredStorageError::InvalidFooterVersion(*footer_version));
         }
 
-        let (&footer_size, offset) = get_type::<u64>(mmap, offset)?;
+        let (&footer_size, offset) = get_pod::<u64>(mmap, offset)?;
         if footer_size != FOOTER_SIZE as u64 {
             return Err(TieredStorageError::InvalidFooterSize(
                 footer_size,
@@ -261,7 +267,7 @@ impl TieredStorageFooter {
             ));
         }
 
-        let (magic_number, _offset) = get_type::<TieredStorageMagicNumber>(mmap, offset)?;
+        let (magic_number, _offset) = get_pod::<TieredStorageMagicNumber>(mmap, offset)?;
         if *magic_number != TieredStorageMagicNumber::default() {
             return Err(TieredStorageError::MagicNumberMismatch(
                 TieredStorageMagicNumber::default().0,
@@ -270,7 +276,9 @@ impl TieredStorageFooter {
         }
 
         let footer_offset = mmap.len().saturating_sub(footer_size as usize);
-        let (footer, _offset) = get_type::<TieredStorageFooter>(mmap, footer_offset)?;
+        // SAFETY: We sanitize the footer to ensure all the bytes are
+        // actually safe to interpret as a TieredStorageFooter.
+        let (footer, _offset) = unsafe { get_type::<TieredStorageFooter>(mmap, footer_offset)? };
         Self::sanitize(footer)?;
 
         Ok(footer)
