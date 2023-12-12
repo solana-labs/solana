@@ -1032,29 +1032,30 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         let num_to_unload = candidates
             .len()
             .saturating_sub(shrink_to.apply_to(MAX_LOADED_ENTRY_COUNT));
-        for _ in 0..num_to_unload {
+        fn random_index_and_usage_counter(
+            candidates: &[(Pubkey, Arc<LoadedProgram>)],
+            now: Slot,
+        ) -> (usize, u64) {
             let mut rng = thread_rng();
-            let index1 = rng.gen_range(0..candidates.len());
-            let index2 = rng.gen_range(0..candidates.len());
-            if let Some((usage_counter1, usage_counter2)) =
-                candidates.get(index1).and_then(|(_id, entry1)| {
-                    candidates.get(index2).map(|(_id, entry2)| {
-                        (
-                            entry1.decayed_usage_counter(now),
-                            entry2.decayed_usage_counter(now),
-                        )
-                    })
-                })
-            {
-                let (program, entry) = if usage_counter1 < usage_counter2 {
-                    candidates.remove(index1)
-                } else {
-                    candidates.remove(index2)
-                };
-                self.unload_program_entry(&program, &entry);
+            let index = rng.gen_range(0..candidates.len());
+            let usage_counter = candidates
+                .get(index)
+                .expect("Failed to get cached entry")
+                .1
+                .decayed_usage_counter(now);
+            (index, usage_counter)
+        }
+
+        for _ in 0..num_to_unload {
+            let (index1, usage_counter1) = random_index_and_usage_counter(&candidates, now);
+            let (index2, usage_counter2) = random_index_and_usage_counter(&candidates, now);
+
+            let (program, entry) = if usage_counter1 < usage_counter2 {
+                candidates.remove(index1)
             } else {
-                error!("Failed in evicting an entry from the program cache");
-            }
+                candidates.remove(index2)
+            };
+            self.unload_program_entry(&program, &entry);
         }
     }
 
@@ -1093,36 +1094,26 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
     }
 
     fn unload_program_entry(&mut self, program: &Pubkey, remove_entry: &Arc<LoadedProgram>) {
-        if let Some(second_level) = self.entries.get_mut(program) {
-            if let Some(candidate) = second_level
-                .slot_versions
-                .iter_mut()
-                .find(|entry| entry == &remove_entry)
-            {
-                if let Some(unloaded) = candidate.to_unloaded() {
-                    if candidate.tx_usage_counter.load(Ordering::Relaxed) == 1 {
-                        self.stats.one_hit_wonders.fetch_add(1, Ordering::Relaxed);
-                    }
-                    self.stats
-                        .evictions
-                        .entry(*program)
-                        .and_modify(|c| saturating_add_assign!(*c, 1))
-                        .or_insert(1);
-                    *candidate = Arc::new(unloaded);
-                } else {
-                    error!(
-                        "Failed to create an unloaded cache entry for a program type {:?}",
-                        candidate.program
-                    );
-                }
-            } else {
-                error!(
-                    "Failed to find the cache entry for program {} that was to be unloaded",
-                    program
-                );
+        let second_level = self.entries.get_mut(program).expect("Cache lookup failed");
+        let candidate = second_level
+            .slot_versions
+            .iter_mut()
+            .find(|entry| entry == &remove_entry)
+            .expect("Program entry not found");
+
+        // Certain entry types cannot be unloaded, such as tombstones, or already unloaded entries.
+        // For such entries, `to_unloaded()` will return None.
+        // These entry types do not occupy much memory.
+        if let Some(unloaded) = candidate.to_unloaded() {
+            if candidate.tx_usage_counter.load(Ordering::Relaxed) == 1 {
+                self.stats.one_hit_wonders.fetch_add(1, Ordering::Relaxed);
             }
-        } else {
-            error!("Failed to find a cached entry for program {}", program);
+            self.stats
+                .evictions
+                .entry(*program)
+                .and_modify(|c| saturating_add_assign!(*c, 1))
+                .or_insert(1);
+            *candidate = Arc::new(unloaded);
         }
     }
 
@@ -1329,6 +1320,9 @@ mod tests {
 
         let mut cache = new_mock_cache::<TestForkGraph>();
 
+        // This test adds different kind of entries to the cache.
+        // Tombstones and unloaded entries are expected to not be evicted.
+        // It also adds multiple entries for three programs as it tries to create a typical cache instance.
         let program1 = Pubkey::new_unique();
         let program1_deployment_slots = [0, 10, 20];
         let program1_usage_counters = [4, 5, 25];
@@ -1438,6 +1432,7 @@ mod tests {
             )
         });
 
+        // Test that the cache is constructed with the expected number of entries.
         assert_eq!(num_loaded, 8);
         assert_eq!(num_unloaded, 30);
         assert_eq!(num_tombstones, 30);
@@ -1463,6 +1458,7 @@ mod tests {
             )
         });
 
+        // Test that expected number of loaded entries get evicted/unloaded.
         assert_eq!(num_loaded, 5);
         assert_eq!(num_unloaded, 33);
         assert_eq!(num_tombstones, 30);
