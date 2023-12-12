@@ -380,7 +380,7 @@ pub mod tests {
     #[test]
     fn test_max_hot_account_offset_out_of_bounds() {
         assert_matches!(
-            HotAccountOffset::new(MAX_HOT_ACCOUNT_OFFSET + HOT_ACCOUNT_OFFSET_ALIGNMENT),
+            HotAccountOffset::new(MAX_HOT_ACCOUNT_OFFSET + HOT_ACCOUNT_ALIGNMENT),
             Err(TieredStorageError::OffsetOutOfBounds(_, _))
         );
     }
@@ -388,7 +388,7 @@ pub mod tests {
     #[test]
     fn test_max_hot_account_offset_alignment_error() {
         assert_matches!(
-            HotAccountOffset::new(HOT_ACCOUNT_OFFSET_ALIGNMENT - 1),
+            HotAccountOffset::new(HOT_ACCOUNT_ALIGNMENT - 1),
             Err(TieredStorageError::OffsetAlignmentError(_, _))
         );
     }
