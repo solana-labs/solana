@@ -139,7 +139,7 @@ pub struct LoadedProgram {
     pub maybe_expiration_slot: Option<Slot>,
     /// How often this entry was used by a transaction
     pub tx_usage_counter: AtomicU64,
-    /// How often this entry was used by a transaction
+    /// How often this entry was used by an instruction
     pub ix_usage_counter: AtomicU64,
 }
 
@@ -371,7 +371,7 @@ impl LoadedProgram {
             effective_slot: self.effective_slot,
             maybe_expiration_slot: self.maybe_expiration_slot,
             tx_usage_counter: AtomicU64::new(self.tx_usage_counter.load(Ordering::Relaxed)),
-            ix_usage_counter: AtomicU64::new(self.tx_usage_counter.load(Ordering::Relaxed)),
+            ix_usage_counter: AtomicU64::new(self.ix_usage_counter.load(Ordering::Relaxed)),
         })
     }
 
@@ -639,14 +639,9 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
     }
 
     pub fn prune_by_deployment_slot(&mut self, slot: Slot) {
-        self.entries.retain(|_key, second_level| {
-            *second_level = second_level
-                .iter()
-                .filter(|entry| entry.deployment_slot != slot)
-                .cloned()
-                .collect();
-            !second_level.is_empty()
-        });
+        for second_level in self.entries.values_mut() {
+            second_level.retain(|entry| entry.deployment_slot != slot);
+        }
         self.remove_programs_with_no_entries();
     }
 
@@ -914,7 +909,6 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
             .len()
             .saturating_sub(shrink_to.apply_to(MAX_LOADED_ENTRY_COUNT));
         self.unload_program_entries(sorted_candidates.iter().take(num_to_unload));
-        self.remove_programs_with_no_entries();
     }
 
     /// Removes all the entries at the given keys, if they exist
@@ -926,7 +920,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
 
     fn unload_program(&mut self, id: &Pubkey) {
         if let Some(entries) = self.entries.get_mut(id) {
-            entries.iter_mut().for_each(|entry| {
+            for entry in entries.iter_mut() {
                 if let Some(unloaded) = entry.to_unloaded() {
                     *entry = Arc::new(unloaded);
                     self.stats
@@ -935,7 +929,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                         .and_modify(|c| saturating_add_assign!(*c, 1))
                         .or_insert(1);
                 }
-            });
+            }
         }
     }
 
@@ -1128,7 +1122,6 @@ mod tests {
     #[test]
     fn test_eviction() {
         let mut programs = vec![];
-        let mut num_total_programs: usize = 0;
 
         let mut cache = new_mock_cache::<TestForkGraph>();
 
@@ -1148,7 +1141,6 @@ mod tests {
                         AtomicU64::new(usage_counter),
                     ),
                 );
-                num_total_programs += 1;
                 programs.push((program1, *deployment_slot, usage_counter));
             });
 
@@ -1182,7 +1174,6 @@ mod tests {
                         AtomicU64::new(usage_counter),
                     ),
                 );
-                num_total_programs += 1;
                 programs.push((program2, *deployment_slot, usage_counter));
             });
 
@@ -1215,7 +1206,6 @@ mod tests {
                         AtomicU64::new(usage_counter),
                     ),
                 );
-                num_total_programs += 1;
                 programs.push((program3, *deployment_slot, usage_counter));
             });
 
