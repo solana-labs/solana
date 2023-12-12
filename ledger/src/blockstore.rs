@@ -156,20 +156,21 @@ impl PossibleDuplicateShred {
     }
 }
 
-enum WorkingStatus<T> {
-    Dirty(T),
-    Clean(T),
+enum WorkingEntry<T> {
+    Dirty(T), // Value has been modified with respect to the blockstore column
+    Clean(T), // Value matches what is currently in the blockstore column
 }
 
-impl<T> WorkingStatus<T> {
-    fn unwrap(&self) -> &T {
+impl<T> WorkingEntry<T> {
+    /// Returns a reference to the underlying value
+    fn value(&self) -> &T {
         match self {
             Self::Dirty(value) => value,
             Self::Clean(value) => value,
         }
     }
 
-    fn is_dirty(&self) -> bool {
+    fn should_write(&self) -> bool {
         matches!(self, Self::Dirty(_))
     }
 }
@@ -750,7 +751,7 @@ impl Blockstore {
 
     fn try_shred_recovery(
         &self,
-        erasure_metas: &HashMap<ErasureSetId, WorkingStatus<ErasureMeta>>,
+        erasure_metas: &HashMap<ErasureSetId, WorkingEntry<ErasureMeta>>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
         prev_inserted_shreds: &HashMap<ShredId, Shred>,
         reed_solomon_cache: &ReedSolomonCache,
@@ -762,7 +763,7 @@ impl Blockstore {
         // 3. Before trying recovery, check if enough number of shreds have been received
         // 3a. Enough number of shreds = (#data + #coding shreds) > erasure.num_data
         for (erasure_set, working_erasure_meta) in erasure_metas.iter() {
-            let erasure_meta = working_erasure_meta.unwrap();
+            let erasure_meta = working_erasure_meta.value();
             let slot = erasure_set.slot();
             let index_meta_entry = index_working_set.get_mut(&slot).expect("Index");
             let index = &mut index_meta_entry.index;
@@ -1038,25 +1039,25 @@ impl Blockstore {
         )?;
 
         for (erasure_set, working_erasure_meta) in erasure_metas {
-            if !working_erasure_meta.is_dirty() {
+            if !working_erasure_meta.should_write() {
                 // No need to rewrite the column
                 continue;
             }
             let (slot, fec_set_index) = erasure_set.store_key();
             write_batch.put::<cf::ErasureMeta>(
                 (slot, u64::from(fec_set_index)),
-                working_erasure_meta.unwrap(),
+                working_erasure_meta.value(),
             )?;
         }
 
         for (erasure_set, working_merkle_root_meta) in merkle_root_metas {
-            if !working_merkle_root_meta.is_dirty() {
+            if !working_merkle_root_meta.should_write() {
                 // No need to rewrite the column
                 continue;
             }
             write_batch.put::<cf::MerkleRootMeta>(
                 erasure_set.store_key(),
-                working_merkle_root_meta.unwrap(),
+                working_merkle_root_meta.value(),
             )?;
         }
 
@@ -1216,8 +1217,8 @@ impl Blockstore {
     fn check_insert_coding_shred(
         &self,
         shred: Shred,
-        erasure_metas: &mut HashMap<ErasureSetId, WorkingStatus<ErasureMeta>>,
-        merkle_root_metas: &mut HashMap<ErasureSetId, WorkingStatus<MerkleRootMeta>>,
+        erasure_metas: &mut HashMap<ErasureSetId, WorkingEntry<ErasureMeta>>,
+        merkle_root_metas: &mut HashMap<ErasureSetId, WorkingEntry<MerkleRootMeta>>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
         write_batch: &mut WriteBatch,
         just_received_shreds: &mut HashMap<ShredId, Shred>,
@@ -1238,7 +1239,7 @@ impl Blockstore {
 
         if let HashMapEntry::Vacant(entry) = merkle_root_metas.entry(erasure_set) {
             if let Some(meta) = self.merkle_root_meta(erasure_set).unwrap() {
-                entry.insert(WorkingStatus::Clean(meta));
+                entry.insert(WorkingEntry::Clean(meta));
             }
         }
 
@@ -1262,12 +1263,12 @@ impl Blockstore {
             .or_insert_with(|| {
                 self.erasure_meta(erasure_set)
                     .expect("Expect database get to succeed")
-                    .map(WorkingStatus::Clean)
+                    .map(WorkingEntry::Clean)
                     .unwrap_or_else(|| {
-                        WorkingStatus::Dirty(ErasureMeta::from_coding_shred(&shred).unwrap())
+                        WorkingEntry::Dirty(ErasureMeta::from_coding_shred(&shred).unwrap())
                     })
             })
-            .unwrap();
+            .value();
 
         if !erasure_meta.check_coding_shred(&shred) {
             metrics.num_coding_shreds_invalid_erasure_config += 1;
@@ -1328,7 +1329,7 @@ impl Blockstore {
 
             merkle_root_metas
                 .entry(erasure_set)
-                .or_insert(WorkingStatus::Dirty(MerkleRootMeta::from_shred(&shred)));
+                .or_insert(WorkingEntry::Dirty(MerkleRootMeta::from_shred(&shred)));
         }
 
         if let HashMapEntry::Vacant(entry) = just_received_shreds.entry(shred.id()) {
@@ -1411,8 +1412,8 @@ impl Blockstore {
     fn check_insert_data_shred(
         &self,
         shred: Shred,
-        erasure_metas: &mut HashMap<ErasureSetId, WorkingStatus<ErasureMeta>>,
-        merkle_root_metas: &mut HashMap<ErasureSetId, WorkingStatus<MerkleRootMeta>>,
+        erasure_metas: &mut HashMap<ErasureSetId, WorkingEntry<ErasureMeta>>,
+        merkle_root_metas: &mut HashMap<ErasureSetId, WorkingEntry<MerkleRootMeta>>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
         slot_meta_working_set: &mut HashMap<u64, SlotMetaWorkingSetEntry>,
         write_batch: &mut WriteBatch,
@@ -1441,7 +1442,7 @@ impl Blockstore {
         let erasure_set = shred.erasure_set();
         if let HashMapEntry::Vacant(entry) = merkle_root_metas.entry(erasure_set) {
             if let Some(meta) = self.merkle_root_meta(erasure_set).unwrap() {
-                entry.insert(WorkingStatus::Clean(meta));
+                entry.insert(WorkingEntry::Clean(meta));
             }
         }
 
@@ -1487,13 +1488,13 @@ impl Blockstore {
         )?;
         merkle_root_metas
             .entry(erasure_set)
-            .or_insert(WorkingStatus::Dirty(MerkleRootMeta::from_shred(&shred)));
+            .or_insert(WorkingEntry::Dirty(MerkleRootMeta::from_shred(&shred)));
         just_inserted_shreds.insert(shred.id(), shred);
         index_meta_working_set_entry.did_insert_occur = true;
         slot_meta_entry.did_insert_occur = true;
         if let HashMapEntry::Vacant(entry) = erasure_metas.entry(erasure_set) {
             if let Some(meta) = self.erasure_meta(erasure_set).unwrap() {
-                entry.insert(WorkingStatus::Clean(meta));
+                entry.insert(WorkingEntry::Clean(meta));
             }
         }
         Ok(newly_completed_data_sets)
@@ -6845,7 +6846,7 @@ pub mod tests {
             merkle_root_metas
                 .get(&coding_shred.erasure_set())
                 .unwrap()
-                .unwrap()
+                .value()
                 .merkle_root(),
             coding_shred.merkle_root().ok(),
         );
@@ -6853,7 +6854,7 @@ pub mod tests {
             merkle_root_metas
                 .get(&coding_shred.erasure_set())
                 .unwrap()
-                .unwrap()
+                .value()
                 .first_received_shred_index(),
             index
         );
@@ -6861,7 +6862,7 @@ pub mod tests {
             merkle_root_metas
                 .get(&coding_shred.erasure_set())
                 .unwrap()
-                .unwrap()
+                .value()
                 .first_received_shred_type(),
             ShredType::Code,
         );
@@ -6870,7 +6871,7 @@ pub mod tests {
             write_batch
                 .put::<cf::MerkleRootMeta>(
                     erasure_set.store_key(),
-                    working_merkle_root_meta.unwrap(),
+                    working_merkle_root_meta.value(),
                 )
                 .unwrap();
         }
@@ -6907,7 +6908,7 @@ pub mod tests {
             merkle_root_metas
                 .get(&coding_shred.erasure_set())
                 .unwrap()
-                .unwrap()
+                .value()
                 .merkle_root(),
             coding_shred.merkle_root().ok()
         );
@@ -6915,7 +6916,7 @@ pub mod tests {
             merkle_root_metas
                 .get(&coding_shred.erasure_set())
                 .unwrap()
-                .unwrap()
+                .value()
                 .first_received_shred_index(),
             index
         );
@@ -6965,7 +6966,7 @@ pub mod tests {
             merkle_root_metas
                 .get(&coding_shred.erasure_set())
                 .unwrap()
-                .unwrap()
+                .value()
                 .merkle_root(),
             coding_shred.merkle_root().ok()
         );
@@ -6973,7 +6974,7 @@ pub mod tests {
             merkle_root_metas
                 .get(&coding_shred.erasure_set())
                 .unwrap()
-                .unwrap()
+                .value()
                 .first_received_shred_index(),
             index
         );
@@ -6981,7 +6982,7 @@ pub mod tests {
             merkle_root_metas
                 .get(&new_coding_shred.erasure_set())
                 .unwrap()
-                .unwrap()
+                .value()
                 .merkle_root(),
             new_coding_shred.merkle_root().ok()
         );
@@ -6989,7 +6990,7 @@ pub mod tests {
             merkle_root_metas
                 .get(&new_coding_shred.erasure_set())
                 .unwrap()
-                .unwrap()
+                .value()
                 .first_received_shred_index(),
             new_index
         );
@@ -7037,7 +7038,7 @@ pub mod tests {
             merkle_root_metas
                 .get(&data_shred.erasure_set())
                 .unwrap()
-                .unwrap()
+                .value()
                 .merkle_root(),
             data_shred.merkle_root().ok()
         );
@@ -7045,7 +7046,7 @@ pub mod tests {
             merkle_root_metas
                 .get(&data_shred.erasure_set())
                 .unwrap()
-                .unwrap()
+                .value()
                 .first_received_shred_index(),
             index
         );
@@ -7053,7 +7054,7 @@ pub mod tests {
             merkle_root_metas
                 .get(&data_shred.erasure_set())
                 .unwrap()
-                .unwrap()
+                .value()
                 .first_received_shred_type(),
             ShredType::Data,
         );
@@ -7062,7 +7063,7 @@ pub mod tests {
             write_batch
                 .put::<cf::MerkleRootMeta>(
                     erasure_set.store_key(),
-                    working_merkle_root_meta.unwrap(),
+                    working_merkle_root_meta.value(),
                 )
                 .unwrap();
         }
@@ -7103,7 +7104,7 @@ pub mod tests {
             merkle_root_metas
                 .get(&data_shred.erasure_set())
                 .unwrap()
-                .unwrap()
+                .value()
                 .merkle_root(),
             data_shred.merkle_root().ok()
         );
@@ -7111,7 +7112,7 @@ pub mod tests {
             merkle_root_metas
                 .get(&data_shred.erasure_set())
                 .unwrap()
-                .unwrap()
+                .value()
                 .first_received_shred_index(),
             index
         );
@@ -7171,7 +7172,7 @@ pub mod tests {
             merkle_root_metas
                 .get(&data_shred.erasure_set())
                 .unwrap()
-                .unwrap()
+                .value()
                 .merkle_root(),
             data_shred.merkle_root().ok()
         );
@@ -7179,7 +7180,7 @@ pub mod tests {
             merkle_root_metas
                 .get(&data_shred.erasure_set())
                 .unwrap()
-                .unwrap()
+                .value()
                 .first_received_shred_index(),
             index
         );
@@ -7187,7 +7188,7 @@ pub mod tests {
             merkle_root_metas
                 .get(&new_data_shred.erasure_set())
                 .unwrap()
-                .unwrap()
+                .value()
                 .merkle_root(),
             new_data_shred.merkle_root().ok()
         );
@@ -7195,7 +7196,7 @@ pub mod tests {
             merkle_root_metas
                 .get(&new_data_shred.erasure_set())
                 .unwrap()
-                .unwrap()
+                .value()
                 .first_received_shred_index(),
             new_index
         );
