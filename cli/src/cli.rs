@@ -1753,6 +1753,7 @@ mod tests {
         },
         solana_transaction_status::TransactionConfirmationStatus,
     };
+    use solana_sdk::offchain_message::{ApplicationDomain, Version};
 
     fn make_tmp_path(name: &str) -> String {
         let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
@@ -2014,14 +2015,18 @@ mod tests {
             "sign-offchain-message",
             "Test Message",
         ]);
-        let message = OffchainMessage::new(OffchainMessageVersion::V0, "Test Message").unwrap();
+
+        let keypair_signers = read_keypair_file(&keypair_file).unwrap();
+
+        let message = OffchainMessage::new(Version::V0, b"Test Message", vec![keypair_signers.pubkey()], ApplicationDomain::default()).unwrap();
+
         assert_eq!(
             parse_command(&test_sign_offchain, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::SignOffchainMessage {
                     message: message.clone()
                 },
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![keypair_signers.into()],
             }
         );
 
@@ -2404,7 +2409,8 @@ mod tests {
         config.command = CliCommand::GetTransactionCount;
         assert!(process_command(&config).is_err());
 
-        let message = OffchainMessage::new(OffchainMessageVersion::V0, "Test Message").unwrap();
+        let message = OffchainMessage::new(Version::V0, b"Test Message", vec![keypair.pubkey()], ApplicationDomain::default()).unwrap();
+
         config.command = CliCommand::SignOffchainMessage {
             message: message.clone(),
         };

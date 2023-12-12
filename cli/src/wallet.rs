@@ -1,15 +1,15 @@
 use {
+    clap::{App, Arg, ArgMatches, SubCommand, value_t_or_exit},
     crate::{
         cli::{
-            log_instruction_custom_error, request_and_confirm_airdrop, CliCommand, CliCommandInfo,
-            CliConfig, CliError, ProcessResult,
+            CliCommand, CliCommandInfo, CliConfig, CliError,
+            log_instruction_custom_error, ProcessResult, request_and_confirm_airdrop,
         },
         compute_unit_price::WithComputeUnitPrice,
         memo::WithMemo,
         nonce::check_nonce_account,
         spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
     },
-    clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand},
     hex::FromHex,
     solana_clap_utils::{
         compute_unit_price::{compute_unit_price_arg, COMPUTE_UNIT_PRICE_ARG},
@@ -23,9 +23,9 @@ use {
         offline::*,
     },
     solana_cli_output::{
-        display::{build_balance_message, BuildBalanceMessageConfig},
-        return_signers_with_config, CliAccount, CliBalance, CliFindProgramDerivedAddress,
-        CliSignatureVerificationStatus, CliTransaction, CliTransactionConfirmation, OutputFormat,
+        CliAccount,
+        CliBalance, CliFindProgramDerivedAddress, CliSignatureVerificationStatus, CliTransaction,
+        CliTransactionConfirmation, display::{build_balance_message, BuildBalanceMessageConfig}, OutputFormat, return_signers_with_config,
         ReturnSignersConfig,
     },
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
@@ -33,9 +33,10 @@ use {
     solana_rpc_client_api::config::RpcTransactionConfig,
     solana_rpc_client_nonce_utils::blockhash_query::BlockhashQuery,
     solana_sdk::{
+        offchain_message::Version as OffchainHeaderVersion,
         commitment_config::CommitmentConfig,
         message::Message,
-        offchain_message::{ApplicationDomain, OffchainMessage, Version as OffchainMessageVersion},
+        offchain_message::{ApplicationDomain, OffchainMessage},
         pubkey::Pubkey,
         signature::Signature,
         stake,
@@ -280,121 +281,112 @@ impl WalletSubCommands for App<'_, '_> {
                     Arg::with_name("from")
                         .long("from")
                         .value_name("FROM_ADDRESS"),
-                    "Source account of funds (if different from client local account). "
-                ))
-                .arg(
-                    Arg::with_name("no_wait")
-                        .long("no-wait")
-                        .takes_value(false)
-                        .help(
-                            "Return signature immediately after submitting the transaction, \
-                             instead of waiting for confirmations",
-                        ),
-                )
-                .arg(
-                    Arg::with_name("derived_address_seed")
-                        .long("derived-address-seed")
-                        .takes_value(true)
-                        .value_name("SEED_STRING")
-                        .requires("derived_address_program_id")
-                        .validator(is_derived_address_seed)
-                        .hidden(hidden_unless_forced()),
-                )
-                .arg(
-                    Arg::with_name("derived_address_program_id")
-                        .long("derived-address-program-id")
-                        .takes_value(true)
-                        .value_name("PROGRAM_ID")
-                        .requires("derived_address_seed")
-                        .hidden(hidden_unless_forced()),
-                )
-                .arg(
-                    Arg::with_name("allow_unfunded_recipient")
-                        .long("allow-unfunded-recipient")
-                        .takes_value(false)
-                        .help("Complete the transfer even if the recipient address is not funded"),
-                )
-                .offline_args()
-                .nonce_args(false)
-                .arg(memo_arg())
-                .arg(fee_payer_arg())
-                .arg(compute_unit_price_arg()),
-        )
-        .subcommand(
-            SubCommand::with_name("sign-offchain-message")
-                .about("Sign off-chain message")
-                .arg(
-                    Arg::with_name("message")
-                        .index(1)
-                        .takes_value(true)
-                        .value_name("STRING")
-                        .required(true)
-                        .help("The message text to be signed"),
-                )
-                .arg(
-                    Arg::with_name("application_domain")
-                        .long("application-domain")
-                        .takes_value(true)
-                        .value_name("APPLICATION_DOMAIN")
-                        .required(true)
-                        .help("32byte application identifier, base58 encoded")
-                )
-                .arg(
-                    Arg::with_name("version")
-                        .long("version")
-                        .takes_value(true)
-                        .value_name("VERSION")
-                        .required(false)
-                        .default_value("0")
-                        .validator(|p| match p.parse::<OffchainMessageVersion>() {
-                            Err(e) => Err(e.to_string()),
-                            Ok(_) => { Ok(()) }
-                        })
-                        .help("The off-chain message version"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("verify-offchain-signature")
-                .about("Verify off-chain message signature")
-                .arg(
-                    Arg::with_name("message")
-                        .index(1)
-                        .takes_value(true)
-                        .value_name("STRING")
-                        .required(true)
-                        .help("The text of the original message"),
-                )
-                .arg(
-                    Arg::with_name("signature")
-                        .index(2)
-                        .value_name("SIGNATURE")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The message signature to verify"),
-                )
-                .arg(
-                    Arg::with_name("application_domain")
-                        .long("application-domain")
-                        .takes_value(true)
-                        .value_name("APPLICATION_DOMAIN")
-                        .required(true)
-                        .help("32byte application identifier, base58 encoded")
-                )
-                .arg(
-                    Arg::with_name("version")
-                        .long("version")
-                        .takes_value(true)
-                        .value_name("VERSION")
-                        .required(false)
-                        .default_value("0")
-                        .validator(|p| match p.parse::<OffchainMessageVersion>() {
-                            Err(e) => Err(e.to_string()),
-                            Ok(_) => { Ok(()) }
-                        })
-                        .help("The off-chain message version"),
-                )
-                .arg(pubkey!(
-                    Arg::with_name("signer")
+                        "Source account of funds (if different from client local account). "),
+                    )
+                    .arg(
+                        Arg::with_name("no_wait")
+                            .long("no-wait")
+                            .takes_value(false)
+                            .help("Return signature immediately after submitting the transaction, instead of waiting for confirmations"),
+                    )
+                    .arg(
+                        Arg::with_name("derived_address_seed")
+                            .long("derived-address-seed")
+                            .takes_value(true)
+                            .value_name("SEED_STRING")
+                            .requires("derived_address_program_id")
+                            .validator(is_derived_address_seed)
+                            .hidden(hidden_unless_forced())
+                    )
+                    .arg(
+                        Arg::with_name("derived_address_program_id")
+                            .long("derived-address-program-id")
+                            .takes_value(true)
+                            .value_name("PROGRAM_ID")
+                            .requires("derived_address_seed")
+                            .hidden(hidden_unless_forced())
+                    )
+                    .arg(
+                        Arg::with_name("allow_unfunded_recipient")
+                            .long("allow-unfunded-recipient")
+                            .takes_value(false)
+                            .help("Complete the transfer even if the recipient address is not funded")
+                    )
+                    .offline_args()
+                    .nonce_args(false)
+                    .arg(memo_arg())
+                    .arg(fee_payer_arg())
+                    .arg(compute_unit_price_arg()),
+            )
+            .subcommand(
+                SubCommand::with_name("sign-offchain-message")
+                    .about("Sign off-chain message")
+                    .arg(
+                        Arg::with_name("message")
+                            .index(1)
+                            .takes_value(true)
+                            .value_name("STRING")
+                            .required(true)
+                            .help("The message text to be signed")
+                    )
+                    .arg(
+                        Arg::with_name("application_domain")
+                            .long("application-domain")
+                            .takes_value(true)
+                            .value_name("APPLICATION_DOMAIN")
+                            .validator(is_base_58_string)
+                            .required(false)
+                            .help("32byte application identifier, base58 encoded")
+                    )
+                    .arg(
+                        Arg::with_name("version")
+                            .long("version")
+                            .takes_value(true)
+                            .value_name("VERSION")
+                            .required(false)
+                            .default_value("0")
+                            .validator(is_valid_offchain_message_version)
+                            .help("The off-chain message version")
+                    )
+            ).subcommand(
+                SubCommand::with_name("verify-offchain-signature")
+                    .about("Verify off-chain message signature")
+                    .arg(
+                        Arg::with_name("message")
+                            .index(1)
+                            .takes_value(true)
+                            .value_name("STRING")
+                            .required(true)
+                            .help("The text of the original message")
+                    )
+                    .arg(
+                        Arg::with_name("signature")
+                            .index(2)
+                            .value_name("SIGNATURE")
+                            .takes_value(true)
+                            .required(true)
+                            .help("The message signature to verify")
+                    )
+                    .arg(
+                        Arg::with_name("application_domain")
+                            .long("application-domain")
+                            .takes_value(true)
+                            .value_name("APPLICATION_DOMAIN")
+                            .required(false)
+                            .help("32byte application identifier, base58 encoded")
+                    )
+                    .arg(
+                        Arg::with_name("version")
+                            .long("version")
+                            .takes_value(true)
+                            .value_name("VERSION")
+                            .required(false)
+                            .default_value("0")
+                            .validator(is_valid_offchain_message_version)
+                            .help("The off-chain message version")
+                    )
+                    .arg(
+                        pubkey!(Arg::with_name("signer")
                         .long("signer")
                         .value_name("PUBKEY")
                         .required(false),
@@ -620,22 +612,36 @@ pub fn parse_transfer(
     })
 }
 
+fn parse_application_domain(
+    matches: &ArgMatches<'_>
+) -> ApplicationDomain {
+    if let Some(application_domain) = value_of::<String>(matches, "application_domain") {
+        let application_domain = &mut bs58::decode(application_domain).into_vec()
+            .map_err(|_| CliError::BadParameter("APPLICATION DOMAIN".to_string())).unwrap();
+        application_domain.resize(32, 0);
+        ApplicationDomain::from_slice(application_domain)
+    } else {
+        //Return empty buffer
+        ApplicationDomain::default()
+    }
+}
+
 pub fn parse_sign_offchain_message(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let version: OffchainMessageVersion = value_of(matches, "version").unwrap();
+    let version: OffchainHeaderVersion = value_of(matches, "version").unwrap();
+
+    let application_domain = parse_application_domain(matches);
+
     let message_text: String = value_of(matches, "message")
         .ok_or_else(|| CliError::BadParameter("MESSAGE".to_string()))?;
-    let application_domain = value_of::<String>(matches, "application_domain").unwrap();
-    let application_domain = ApplicationDomain::from_slice(
-        &bs58::decode(application_domain).into_vec()
-            .map_err(|_| CliError::BadParameter("move me to inputvalidator".to_string()))?
-    );
+
     let signer = default_signer.signer_from_path(matches, wallet_manager)?;
-    let message = OffchainMessage::new(version, message_text.as_str(), application_domain, vec![signer.pubkey()])
-        .map_err(|_| CliError::BadParameter("MESSAGE".to_string()))?;
+
+    let message = OffchainMessage::new(version, message_text.as_bytes(), vec![signer.pubkey()], application_domain)
+        .map_err(|_| CliError::BadParameter("VERSION or MESSAGE".to_string()))?;
 
     Ok(CliCommandInfo {
         command: CliCommand::SignOffchainMessage { message },
@@ -648,19 +654,20 @@ pub fn parse_verify_offchain_signature(
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let version: OffchainMessageVersion = value_of(matches, "version").unwrap();
+    let version: OffchainHeaderVersion = value_of(matches, "version").unwrap();
+
+    let application_domain = parse_application_domain(matches);
+
     let message_text: String = value_of(matches, "message")
         .ok_or_else(|| CliError::BadParameter("MESSAGE".to_string()))?;
-    let application_domain = value_of::<String>(matches, "application_domain").unwrap();
-    let application_domain = ApplicationDomain::from_slice(
-        &bs58::decode(application_domain).into_vec()
-            .map_err(|_| CliError::BadParameter("move me to inputvalidator".to_string()))?
-    );
+
     let signer = default_signer.signer_from_path(matches, wallet_manager)?;
-    let message = OffchainMessage::new(version, message_text.as_str(), application_domain, vec![signer.pubkey()])
-        .map_err(|_| CliError::BadParameter("MESSAGE".to_string()))?;
+
+    let message = OffchainMessage::new(version, message_text.as_bytes(), vec![signer.pubkey()], application_domain)
+        .map_err(|_| CliError::BadParameter("VERSION or MESSAGE".to_string()))?;
 
     let signer_pubkey = pubkey_of_signer(matches, "signer", wallet_manager)?;
+
     let signers = if signer_pubkey.is_some() {
         vec![]
     } else {
