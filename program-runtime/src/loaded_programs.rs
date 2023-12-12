@@ -425,19 +425,11 @@ impl LoadedProgram {
     }
 
     pub fn update_access_slot(&self, slot: Slot) {
-        let mut last_access = self.latest_access_slot.load(Ordering::Relaxed);
-        while last_access < slot {
-            if let Err(updated_last_access) = self.latest_access_slot.compare_exchange(
-                last_access,
-                slot,
-                Ordering::Relaxed,
-                Ordering::Relaxed,
-            ) {
-                last_access = updated_last_access;
-            } else {
-                last_access = slot;
-            }
-        }
+        let _ = self.latest_access_slot.fetch_update(
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+            |last_access| (last_access < slot).then_some(slot),
+        );
     }
 
     fn decayed_usage_counter(&self, now: Slot) -> u64 {
@@ -1083,8 +1075,6 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                     );
                 }
             }
-        } else {
-            error!("Failed to find a cached entry for program {}", id);
         }
     }
 
@@ -1093,6 +1083,8 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         keys.iter().for_each(|key| self.unload_program(key));
     }
 
+    /// This function removes the given entry for the given program from the cache.
+    /// The function expects that the program and entry exists in the cache. Otherwise it'll panic.
     fn unload_program_entry(&mut self, program: &Pubkey, remove_entry: &Arc<LoadedProgram>) {
         let second_level = self.entries.get_mut(program).expect("Cache lookup failed");
         let candidate = second_level
@@ -1221,7 +1213,7 @@ mod tests {
             maybe_expiration_slot: expiry,
             tx_usage_counter: usage_counter,
             ix_usage_counter: AtomicU64::default(),
-            latest_access_slot: AtomicU64::default(),
+            latest_access_slot: AtomicU64::new(deployment_slot),
         })
     }
 
@@ -1441,7 +1433,7 @@ mod tests {
         // * 5 active entries
         // * 33 unloaded entries (3 active programs will get unloaded)
         // * 30 tombstones (tombstones are not evicted)
-        cache.evict_using_2s_random_selection(Percentage::from(2), 50);
+        cache.evict_using_2s_random_selection(Percentage::from(2), 21);
 
         let num_loaded = num_matching_entries(&cache, |program_type| {
             matches!(program_type, LoadedProgramType::TestLoaded(_))
