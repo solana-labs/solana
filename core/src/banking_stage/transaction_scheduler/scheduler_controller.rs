@@ -668,7 +668,11 @@ mod tests {
     ) -> Transaction {
         let transfer = system_instruction::transfer(&from_keypair.pubkey(), to_pubkey, lamports);
         let prioritization = ComputeBudgetInstruction::set_compute_unit_price(priority);
-        let message = Message::new(&[transfer, prioritization], Some(&from_keypair.pubkey()));
+        let cu_limit = ComputeBudgetInstruction::set_compute_unit_limit(5_000);
+        let message = Message::new(
+            &[transfer, prioritization, cu_limit],
+            Some(&from_keypair.pubkey()),
+        );
         Transaction::new(&vec![from_keypair], message, recent_blockhash)
     }
 
