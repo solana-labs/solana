@@ -547,7 +547,7 @@ rev = "b500cdc2a920cd5bff9e2dd974d7b97349d61464"
 # https://github.com/tokio-rs/tokio/issues/4873#issuecomment-1198277677
 #
 # This may indeed be true of the code in this monorepo, but we haven't yet
-# identified the big or a way to fix. As a stopgap, this patches `tokio` to the
+# identified the bug or a way to fix. As a stopgap, this patches `tokio` to the
 # tagged version specified above with commit `4eed411` reverted.
 #
 # Comparison:
