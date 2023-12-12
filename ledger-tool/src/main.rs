@@ -2425,15 +2425,14 @@ fn main() {
                     force_update_to_open,
                     enforce_ulimit_nofile,
                 );
-                match load_and_process_ledger(
+                let (bank_forks, _) = load_and_process_ledger_or_exit(
                     arg_matches,
                     &genesis_config,
                     Arc::new(blockstore),
                     process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
-                ) {
-                    Ok((bank_forks, ..)) => {
+                );
                         println!(
                             "{}",
                             compute_shred_version(
@@ -2441,12 +2440,6 @@ fn main() {
                                 Some(&bank_forks.read().unwrap().working_bank().hard_forks())
                             )
                         );
-                    }
-                    Err(err) => {
-                        eprintln!("Failed to load ledger: {err:?}");
-                        exit(1);
-                    }
-                }
             }
             ("shred-meta", Some(arg_matches)) => {
                 #[derive(Debug)]
@@ -2511,22 +2504,15 @@ fn main() {
                     force_update_to_open,
                     enforce_ulimit_nofile,
                 );
-                match load_and_process_ledger(
+                let (bank_forks, _) = load_and_process_ledger_or_exit(
                     arg_matches,
                     &genesis_config,
                     Arc::new(blockstore),
                     process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
-                ) {
-                    Ok((bank_forks, ..)) => {
+                );
                         println!("{}", &bank_forks.read().unwrap().working_bank().hash());
-                    }
-                    Err(err) => {
-                        eprintln!("Failed to load ledger: {err:?}");
-                        exit(1);
-                    }
-                }
             }
             ("slot", Some(arg_matches)) => {
                 let slots = values_t_or_exit!(arg_matches, "slots", Slot);
@@ -2763,18 +2749,15 @@ fn main() {
                     force_update_to_open,
                     enforce_ulimit_nofile,
                 );
-                let (bank_forks, ..) = load_and_process_ledger(
+                let (bank_forks, _) = load_and_process_ledger_or_exit(
                     arg_matches,
                     &genesis_config,
                     Arc::new(blockstore),
                     process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
-                )
-                .unwrap_or_else(|err| {
-                    eprintln!("Ledger verification failed: {err:?}");
-                    exit(1);
-                });
+                );
+
                 if print_accounts_stats {
                     let working_bank = bank_forks.read().unwrap().working_bank();
                     working_bank.print_accounts_stats();
@@ -2814,6 +2797,7 @@ fn main() {
                     ..ProcessOptions::default()
                 };
 
+                let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let blockstore = open_blockstore(
                     &ledger_path,
                     get_access_type(&process_options),
@@ -2821,15 +2805,14 @@ fn main() {
                     force_update_to_open,
                     enforce_ulimit_nofile,
                 );
-                match load_and_process_ledger(
+                let (bank_forks, _) = load_and_process_ledger_or_exit(
                     arg_matches,
-                    &open_genesis_config_by(&ledger_path, arg_matches),
+                    &genesis_config,
                     Arc::new(blockstore),
                     process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
-                ) {
-                    Ok((bank_forks, ..)) => {
+                );
                         let dot = graph_forks(&bank_forks.read().unwrap(), &graph_config);
 
                         let extension = Path::new(&output_file).extension();
@@ -2846,12 +2829,6 @@ fn main() {
                             Ok(_) => println!("Wrote {output_file}"),
                             Err(err) => eprintln!("Unable to write {output_file}: {err}"),
                         }
-                    }
-                    Err(err) => {
-                        eprintln!("Failed to load ledger: {err:?}");
-                        exit(1);
-                    }
-                }
             }
             ("create-snapshot", Some(arg_matches)) => {
                 let is_incremental = arg_matches.is_present("incremental");
@@ -3007,15 +2984,14 @@ fn main() {
                     output_directory.display()
                 );
 
-                match load_and_process_ledger(
+                let (bank_forks, starting_snapshot_hashes) = load_and_process_ledger_or_exit(
                     arg_matches,
                     &genesis_config,
                     blockstore.clone(),
                     process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
-                ) {
-                    Ok((bank_forks, starting_snapshot_hashes)) => {
+                );
                         let mut bank = bank_forks
                             .read()
                             .unwrap()
@@ -3372,12 +3348,6 @@ fn main() {
                             "Shred version: {}",
                             compute_shred_version(&genesis_config.hash(), Some(&bank.hard_forks()))
                         );
-                    }
-                    Err(err) => {
-                        eprintln!("Failed to load ledger: {err:?}");
-                        exit(1);
-                    }
-                }
             }
             ("accounts", Some(arg_matches)) => {
                 let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
@@ -3402,18 +3372,14 @@ fn main() {
                     force_update_to_open,
                     enforce_ulimit_nofile,
                 );
-                let (bank_forks, ..) = load_and_process_ledger(
+                let (bank_forks, _) = load_and_process_ledger_or_exit(
                     arg_matches,
                     &genesis_config,
                     Arc::new(blockstore),
                     process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
-                )
-                .unwrap_or_else(|err| {
-                    eprintln!("Failed to load ledger: {err:?}");
-                    exit(1);
-                });
+                );
 
                 let bank = bank_forks.read().unwrap().working_bank();
                 let mut serializer = serde_json::Serializer::new(stdout());
@@ -3496,15 +3462,14 @@ fn main() {
                     force_update_to_open,
                     enforce_ulimit_nofile,
                 );
-                match load_and_process_ledger(
+                let (bank_forks, ..) = load_and_process_ledger_or_exit(
                     arg_matches,
                     &genesis_config,
                     Arc::new(blockstore),
                     process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
-                ) {
-                    Ok((bank_forks, ..)) => {
+                );
                         let bank_forks = bank_forks.read().unwrap();
                         let slot = bank_forks.working_bank().slot();
                         let bank = bank_forks.get(slot).unwrap_or_else(|| {
@@ -4004,12 +3969,6 @@ fn main() {
                             println!("RentCollector: {:?}", bank.rent_collector());
                             println!("Capitalization: {}", Sol(bank.capitalization()));
                         }
-                    }
-                    Err(err) => {
-                        eprintln!("Failed to load ledger: {err:?}");
-                        exit(1);
-                    }
-                }
             }
             ("purge", Some(arg_matches)) => {
                 let start_slot = value_t_or_exit!(arg_matches, "start_slot", Slot);
