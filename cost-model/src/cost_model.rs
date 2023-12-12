@@ -11,8 +11,8 @@ use {
     solana_program_runtime::{
         compute_budget::DEFAULT_HEAP_COST,
         compute_budget_processor::{
-            process_compute_budget_instructions, ComputeBudgetLimits,
-            DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT, MAX_COMPUTE_UNIT_LIMIT,
+            process_compute_budget_instructions, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
+            MAX_COMPUTE_UNIT_LIMIT,
         },
     },
     solana_sdk::{
@@ -51,24 +51,6 @@ impl CostModel {
             debug!("transaction {:?} has cost {:?}", transaction, tx_cost);
             TransactionCost::Transaction(tx_cost)
         }
-    }
-
-    // Calculate cost of loaded accounts size in the same way heap cost is charged at
-    // rate of 8cu per 32K. Citing `program_runtime\src\compute_budget.rs`: "(cost of
-    // heap is about) 0.5us per 32k at 15 units/us rounded up"
-    //
-    // Before feature `support_set_loaded_accounts_data_size_limit_ix` is enabled, or
-    // if user doesn't use compute budget ix `set_loaded_accounts_data_size_limit_ix`
-    // to set limit, `compute_budget.loaded_accounts_data_size_limit` is set to default
-    // limit of 64MB; which will convert to (64M/32K)*8CU = 16_000 CUs
-    //
-    pub fn calculate_loaded_accounts_data_size_cost(
-        compute_budget_limits: &ComputeBudgetLimits,
-    ) -> u64 {
-        FeeStructure::calculate_memory_usage_cost(
-            usize::try_from(compute_budget_limits.loaded_accounts_bytes).unwrap(),
-            DEFAULT_HEAP_COST,
-        )
     }
 
     fn get_signature_cost(transaction: &SanitizedTransaction) -> u64 {
@@ -150,8 +132,10 @@ impl CostModel {
                 if feature_set
                     .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id())
                 {
-                    loaded_accounts_data_size_cost =
-                        Self::calculate_loaded_accounts_data_size_cost(&compute_budget_limits);
+                    loaded_accounts_data_size_cost = FeeStructure::calculate_memory_usage_cost(
+                        usize::try_from(compute_budget_limits.loaded_accounts_bytes).unwrap(),
+                        DEFAULT_HEAP_COST,
+                    )
                 }
             }
             Err(_) => {
@@ -623,42 +607,6 @@ mod tests {
         assert_eq!(
             expected_loaded_accounts_data_size_cost,
             tx_cost.loaded_accounts_data_size_cost()
-        );
-    }
-
-    #[allow(clippy::field_reassign_with_default)]
-    #[test]
-    fn test_calculate_loaded_accounts_data_size_cost() {
-        let mut compute_budget_limits = ComputeBudgetLimits::default();
-
-        // accounts data size are priced in block of 32K, ...
-
-        // ... requesting less than 32K should still be charged as one block
-        compute_budget_limits.loaded_accounts_bytes = 31 * 1024;
-        assert_eq!(
-            DEFAULT_HEAP_COST,
-            CostModel::calculate_loaded_accounts_data_size_cost(&compute_budget_limits)
-        );
-
-        // ... requesting exact 32K should be charged as one block
-        compute_budget_limits.loaded_accounts_bytes = 32 * 1024;
-        assert_eq!(
-            DEFAULT_HEAP_COST,
-            CostModel::calculate_loaded_accounts_data_size_cost(&compute_budget_limits)
-        );
-
-        // ... requesting slightly above 32K should be charged as 2 block
-        compute_budget_limits.loaded_accounts_bytes = 33 * 1024;
-        assert_eq!(
-            DEFAULT_HEAP_COST * 2,
-            CostModel::calculate_loaded_accounts_data_size_cost(&compute_budget_limits)
-        );
-
-        // ... requesting exact 64K should be charged as 2 block
-        compute_budget_limits.loaded_accounts_bytes = 64 * 1024;
-        assert_eq!(
-            DEFAULT_HEAP_COST * 2,
-            CostModel::calculate_loaded_accounts_data_size_cost(&compute_budget_limits)
         );
     }
 
