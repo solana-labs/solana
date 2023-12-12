@@ -58,7 +58,7 @@ pub struct SchedulerPool<S: SpawnableScheduler<TH>, TH: TaskHandler> {
     // memory increase.
     weak_self: Weak<Self>,
     next_scheduler_id: AtomicSchedulerId,
-    _phantom: PhantomData<(S, TH)>,
+    _phantom: PhantomData<TH>,
 }
 
 pub type DefaultSchedulerPool =
