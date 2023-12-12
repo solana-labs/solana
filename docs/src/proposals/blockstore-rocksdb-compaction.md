@@ -109,7 +109,7 @@ close to 1 read amplification.  As each key is only inserted once, we have
 space amplification 1.
 
 ### Use Current Settings for Metadata Column Families
-The second type of the column families related to shred insertion is medadata
+The second type of the column families related to shred insertion is metadata
 column families.  These metadata column families contributes ~1% of the shred
 insertion data in size.  The largest metadata column family here is the Index
 column family, which occupies 0.8% of the shred insertion data.
@@ -160,7 +160,7 @@ in Solana's BlockStore use case:
 Here we discuss Level to FIFO and FIFO to Level migrations:
 
 ### Level to FIFO
-heoretically, FIFO compaction is the superset of all other compaction styles,
+Theoretically, FIFO compaction is the superset of all other compaction styles,
 as it does not have any assumption of the LSM tree structure.  However, the
 current RocksDB implementation does not offer such flexibility while it is
 theoretically doable.

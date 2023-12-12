@@ -164,7 +164,7 @@ impl ElGamal {
     }
 
     /// On input a secret key and a ciphertext, the function returns the decrypted amount
-    /// interpretted as a positive 32-bit number (but still of type `u64`).
+    /// interpreted as a positive 32-bit number (but still of type `u64`).
     ///
     /// If the originally encrypted amount is not a positive 32-bit number, then the function
     /// returns `None`.
