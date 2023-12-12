@@ -50,7 +50,7 @@ comment as such and then close the report.
 
 ### 2. Triage
 Within the draft security advisory, discuss and determine the severity of the issue. If necessary, members of the solana-labs/security-incident-response group may add other github users to the advisory to assist.
-If it is determined that this not a critical network issue then the advisory should be closed and if more follow-up is required a normal Solana public github issue should be created.
+If it is determined that this is not a critical network issue then the advisory should be closed and if more follow-up is required a normal Solana public github issue should be created.
 
 ### 3. Prepare Fixes
 For the affected branches, typically all three (edge, beta and stable), prepare a fix for the issue and push them to the corresponding branch in the private repository associated with the draft security advisory.
