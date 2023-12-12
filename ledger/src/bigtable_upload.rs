@@ -178,10 +178,10 @@ pub async fn upload_confirmed_blocks(
                                     break;
                                 }
 
-                                let _ = match blockstore.get_rooted_block(slot, true) {
-                                    Ok(confirmed_block) => {
+                                let _ = match blockstore.get_rooted_block_with_entries(slot, true) {
+                                    Ok(confirmed_block_with_entries) => {
                                         num_blocks_read += 1;
-                                        sender.send((slot, Some(confirmed_block)))
+                                        sender.send((slot, Some(confirmed_block_with_entries)))
                                     }
                                     Err(err) => {
                                         warn!(
@@ -227,7 +227,8 @@ pub async fn upload_confirmed_blocks(
             Some(confirmed_block) => {
                 let bt = bigtable.clone();
                 Some(tokio::spawn(async move {
-                    bt.upload_confirmed_block(slot, confirmed_block).await
+                    bt.upload_confirmed_block_with_entries(slot, confirmed_block)
+                        .await
                 }))
             }
         });

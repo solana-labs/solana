@@ -1302,11 +1302,14 @@ fn update_caller_account(
             caller_account.vm_data_addr,
             caller_account.original_data_len,
         )? {
-            // Since each instruction account is directly mapped in a memory region
-            // with a *fixed* length, upon returning from CPI we must ensure that the
-            // current capacity is at least the original length (what is mapped in
-            // memory), so that the account's memory region never points to an
-            // invalid address.
+            // Since each instruction account is directly mapped in a memory region with a *fixed*
+            // length, upon returning from CPI we must ensure that the current capacity is at least
+            // the original length (what is mapped in memory), so that the account's memory region
+            // never points to an invalid address.
+            //
+            // Note that the capacity can be smaller than the original length only if the account is
+            // reallocated using the AccountSharedData API directly (deprecated). BorrowedAccount
+            // and CoW don't trigger this, see BorrowedAccount::make_data_mut.
             let min_capacity = caller_account.original_data_len;
             if callee_account.capacity() < min_capacity {
                 callee_account
@@ -1314,10 +1317,13 @@ fn update_caller_account(
                 zero_all_mapped_spare_capacity = true;
             }
 
-            // If an account's data pointer has changed - because of CoW, reserve() as called above
-            // or because of using AccountSharedData directly (deprecated) - we must update the
-            // corresponding MemoryRegion in the caller's address space. Address spaces are fixed so
-            // we don't need to update the MemoryRegion's length.
+            // If an account's data pointer has changed we must update the corresponding
+            // MemoryRegion in the caller's address space. Address spaces are fixed so we don't need
+            // to update the MemoryRegion's length.
+            //
+            // An account's data pointer can change if the account is reallocated because of CoW,
+            // because of BorrowedAccount::make_data_mut or by a program that uses the
+            // AccountSharedData API directly (deprecated).
             let callee_ptr = callee_account.get_data().as_ptr() as u64;
             if region.host_addr.get() != callee_ptr {
                 region.host_addr.set(callee_ptr);
@@ -1328,7 +1334,6 @@ fn update_caller_account(
 
     let prev_len = *caller_account.ref_to_len_in_vm.get()? as usize;
     let post_len = callee_account.get_data().len();
-    let realloc_bytes_used = post_len.saturating_sub(caller_account.original_data_len);
     if prev_len != post_len {
         let max_increase = if direct_mapping && !invoke_context.get_check_aligned() {
             0
@@ -1352,37 +1357,8 @@ fn update_caller_account(
         if post_len < prev_len {
             if direct_mapping {
                 // We have two separate regions to zero out: the account data
-                // and the realloc region.
-                //
-                // Here we zero the account data region.
-                let spare_len = if zero_all_mapped_spare_capacity {
-                    // In the unlikely case where the account data vector has
-                    // changed - which can happen during CoW - we zero the whole
-                    // extra capacity up to the original data length.
-                    //
-                    // The extra capacity up to original data length is
-                    // accessible from the vm and since it's uninitialized
-                    // memory, it could be a source of non determinism.
-                    caller_account.original_data_len
-                } else {
-                    // If the allocation has not changed, we only zero the
-                    // difference between the previous and current lengths. The
-                    // rest of the memory contains whatever it contained before,
-                    // which is deterministic.
-                    prev_len
-                }
-                .saturating_sub(post_len);
-                if spare_len > 0 {
-                    let dst = callee_account
-                        .spare_data_capacity_mut()?
-                        .get_mut(..spare_len)
-                        .ok_or_else(|| Box::new(InstructionError::AccountDataTooSmall))?
-                        .as_mut_ptr();
-                    // Safety: we check bounds above
-                    unsafe { ptr::write_bytes(dst, 0, spare_len) };
-                }
-
-                // Here we zero the realloc region.
+                // and the realloc region. Here we zero the realloc region, the
+                // data region is zeroed further down below.
                 //
                 // This is done for compatibility but really only necessary for
                 // the fringe case of a program calling itself, see
@@ -1464,50 +1440,91 @@ fn update_caller_account(
         )?;
         *serialized_len_ptr = post_len as u64;
     }
-    if !direct_mapping {
+
+    if direct_mapping {
+        // Here we zero the account data region.
+        //
+        // If zero_all_mapped_spare_capacity=true, we need to zero regardless of whether the account
+        // size changed, because the underlying vector holding the account might have been
+        // reallocated and contain uninitialized memory in the spare capacity.
+        //
+        // See TEST_CPI_CHANGE_ACCOUNT_DATA_MEMORY_ALLOCATION for an example of
+        // this case.
+        let spare_len = if zero_all_mapped_spare_capacity {
+            // In the unlikely case where the account data vector has
+            // changed - which can happen during CoW - we zero the whole
+            // extra capacity up to the original data length.
+            //
+            // The extra capacity up to original data length is
+            // accessible from the vm and since it's uninitialized
+            // memory, it could be a source of non determinism.
+            caller_account.original_data_len
+        } else {
+            // If the allocation has not changed, we only zero the
+            // difference between the previous and current lengths. The
+            // rest of the memory contains whatever it contained before,
+            // which is deterministic.
+            prev_len
+        }
+        .saturating_sub(post_len);
+
+        if spare_len > 0 {
+            let dst = callee_account
+                .spare_data_capacity_mut()?
+                .get_mut(..spare_len)
+                .ok_or_else(|| Box::new(InstructionError::AccountDataTooSmall))?
+                .as_mut_ptr();
+            // Safety: we check bounds above
+            unsafe { ptr::write_bytes(dst, 0, spare_len) };
+        }
+
+        // Propagate changes to the realloc region in the callee up to the caller.
+        let realloc_bytes_used = post_len.saturating_sub(caller_account.original_data_len);
+        if realloc_bytes_used > 0 {
+            // In the is_loader_deprecated case, we must have failed with
+            // InvalidRealloc by now.
+            debug_assert!(!is_loader_deprecated);
+
+            let to_slice = {
+                // If a callee reallocs an account, we write into the caller's
+                // realloc region regardless of whether the caller has write
+                // permissions to the account or not. If the callee has been able to
+                // make changes, it means they had permissions to do so, and here
+                // we're just going to reflect those changes to the caller's frame.
+                //
+                // Therefore we temporarily configure the realloc region as writable
+                // then set it back to whatever state it had.
+                let realloc_region = caller_account
+                    .realloc_region(memory_mapping, is_loader_deprecated)?
+                    .unwrap(); // unwrapping here is fine, we asserted !is_loader_deprecated
+                let original_state = realloc_region.state.replace(MemoryState::Writable);
+                defer! {
+                    realloc_region.state.set(original_state);
+                };
+
+                translate_slice_mut::<u8>(
+                    memory_mapping,
+                    caller_account
+                        .vm_data_addr
+                        .saturating_add(caller_account.original_data_len as u64),
+                    realloc_bytes_used as u64,
+                    invoke_context.get_check_aligned(),
+                )?
+            };
+            let from_slice = callee_account
+                .get_data()
+                .get(caller_account.original_data_len..post_len)
+                .ok_or(SyscallError::InvalidLength)?;
+            if to_slice.len() != from_slice.len() {
+                return Err(Box::new(InstructionError::AccountDataTooSmall));
+            }
+            to_slice.copy_from_slice(from_slice);
+        }
+    } else {
         let to_slice = &mut caller_account.serialized_data;
         let from_slice = callee_account
             .get_data()
             .get(0..post_len)
-            .ok_or(SyscallError::InvalidLength)?;
-        if to_slice.len() != from_slice.len() {
-            return Err(Box::new(InstructionError::AccountDataTooSmall));
-        }
-        to_slice.copy_from_slice(from_slice);
-    } else if realloc_bytes_used > 0 {
-        // In the is_loader_deprecated case, we must have failed with
-        // InvalidRealloc by now.
-        debug_assert!(!is_loader_deprecated);
-
-        let to_slice = {
-            // If a callee reallocs an account, we write into the caller's
-            // realloc region regardless of whether the caller has write
-            // permissions to the account or not. If the callee has been able to
-            // make changes, it means they had permissions to do so, and here
-            // we're just going to reflect those changes to the caller's frame.
-            //
-            // Therefore we temporarily configure the realloc region as writable
-            // then set it back to whatever state it had.
-            let realloc_region = caller_account
-                .realloc_region(memory_mapping, is_loader_deprecated)?
-                .unwrap(); // unwrapping here is fine, we asserted !is_loader_deprecated
-            let original_state = realloc_region.state.replace(MemoryState::Writable);
-            defer! {
-                realloc_region.state.set(original_state);
-            };
-
-            translate_slice_mut::<u8>(
-                memory_mapping,
-                caller_account
-                    .vm_data_addr
-                    .saturating_add(caller_account.original_data_len as u64),
-                realloc_bytes_used as u64,
-                invoke_context.get_check_aligned(),
-            )?
-        };
-        let from_slice = callee_account
-            .get_data()
-            .get(caller_account.original_data_len..post_len)
             .ok_or(SyscallError::InvalidLength)?;
         if to_slice.len() != from_slice.len() {
             return Err(Box::new(InstructionError::AccountDataTooSmall));

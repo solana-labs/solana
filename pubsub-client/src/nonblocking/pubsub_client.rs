@@ -3,7 +3,7 @@
 //! The [`PubsubClient`] implements [Solana WebSocket event
 //! subscriptions][spec].
 //!
-//! [spec]: https://docs.solana.com/developing/clients/jsonrpc-api#subscription-websocket
+//! [spec]: https://docs.solana.com/api/websocket#subscription-websocket
 //!
 //! This is a nonblocking (async) API. For a blocking API use the synchronous
 //! client in [`crate::pubsub_client`].
@@ -366,7 +366,7 @@ impl PubsubClient {
     ///
     /// This method corresponds directly to the [`accountSubscribe`] RPC method.
     ///
-    /// [`accountSubscribe`]: https://docs.solana.com/developing/clients/jsonrpc-api#accountsubscribe
+    /// [`accountSubscribe`]: https://docs.solana.com/api/websocket#accountsubscribe
     pub async fn account_subscribe(
         &self,
         pubkey: &Pubkey,
@@ -387,7 +387,7 @@ impl PubsubClient {
     ///
     /// This method corresponds directly to the [`blockSubscribe`] RPC method.
     ///
-    /// [`blockSubscribe`]: https://docs.solana.com/developing/clients/jsonrpc-api#blocksubscribe---unstable-disabled-by-default
+    /// [`blockSubscribe`]: https://docs.solana.com/api/websocket#blocksubscribe
     pub async fn block_subscribe(
         &self,
         filter: RpcBlockSubscribeFilter,
@@ -404,7 +404,7 @@ impl PubsubClient {
     ///
     /// This method corresponds directly to the [`logsSubscribe`] RPC method.
     ///
-    /// [`logsSubscribe`]: https://docs.solana.com/developing/clients/jsonrpc-api#logssubscribe
+    /// [`logsSubscribe`]: https://docs.solana.com/api/websocket#logssubscribe
     pub async fn logs_subscribe(
         &self,
         filter: RpcTransactionLogsFilter,
@@ -422,7 +422,7 @@ impl PubsubClient {
     ///
     /// This method corresponds directly to the [`programSubscribe`] RPC method.
     ///
-    /// [`programSubscribe`]: https://docs.solana.com/developing/clients/jsonrpc-api#programsubscribe
+    /// [`programSubscribe`]: https://docs.solana.com/api/websocket#programsubscribe
     pub async fn program_subscribe(
         &self,
         pubkey: &Pubkey,
@@ -458,7 +458,7 @@ impl PubsubClient {
     ///
     /// This method corresponds directly to the [`voteSubscribe`] RPC method.
     ///
-    /// [`voteSubscribe`]: https://docs.solana.com/developing/clients/jsonrpc-api#votesubscribe---unstable-disabled-by-default
+    /// [`voteSubscribe`]: https://docs.solana.com/api/websocket#votesubscribe
     pub async fn vote_subscribe(&self) -> SubscribeResult<'_, RpcVote> {
         self.subscribe("vote", json!([])).await
     }
@@ -474,7 +474,7 @@ impl PubsubClient {
     ///
     /// This method corresponds directly to the [`rootSubscribe`] RPC method.
     ///
-    /// [`rootSubscribe`]: https://docs.solana.com/developing/clients/jsonrpc-api#rootsubscribe
+    /// [`rootSubscribe`]: https://docs.solana.com/api/websocket#rootsubscribe
     pub async fn root_subscribe(&self) -> SubscribeResult<'_, Slot> {
         self.subscribe("root", json!([])).await
     }
@@ -491,7 +491,7 @@ impl PubsubClient {
     ///
     /// This method corresponds directly to the [`signatureSubscribe`] RPC method.
     ///
-    /// [`signatureSubscribe`]: https://docs.solana.com/developing/clients/jsonrpc-api#signaturesubscribe
+    /// [`signatureSubscribe`]: https://docs.solana.com/api/websocket#signaturesubscribe
     pub async fn signature_subscribe(
         &self,
         signature: &Signature,
@@ -509,7 +509,7 @@ impl PubsubClient {
     ///
     /// This method corresponds directly to the [`slotSubscribe`] RPC method.
     ///
-    /// [`slotSubscribe`]: https://docs.solana.com/developing/clients/jsonrpc-api#slotsubscribe
+    /// [`slotSubscribe`]: https://docs.solana.com/api/websocket#slotsubscribe
     pub async fn slot_subscribe(&self) -> SubscribeResult<'_, SlotInfo> {
         self.subscribe("slot", json!([])).await
     }
@@ -527,7 +527,7 @@ impl PubsubClient {
     ///
     /// This method corresponds directly to the [`slotUpdatesSubscribe`] RPC method.
     ///
-    /// [`slotUpdatesSubscribe`]: https://docs.solana.com/developing/clients/jsonrpc-api#slotsupdatessubscribe---unstable
+    /// [`slotUpdatesSubscribe`]: https://docs.solana.com/api/websocket#slotsupdatessubscribe
     pub async fn slot_updates_subscribe(&self) -> SubscribeResult<'_, SlotUpdate> {
         self.subscribe("slotsUpdates", json!([])).await
     }

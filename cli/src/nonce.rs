@@ -48,20 +48,20 @@ impl NonceSubCommands for App<'_, '_> {
         self.subcommand(
             SubCommand::with_name("authorize-nonce-account")
                 .about("Assign account authority to a new entity")
-                .arg(
-                    pubkey!(Arg::with_name("nonce_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Address of the nonce account. "),
-                )
-                .arg(
-                    pubkey!(Arg::with_name("new_authority")
+                    "Address of the nonce account. "
+                ))
+                .arg(pubkey!(
+                    Arg::with_name("new_authority")
                         .index(2)
                         .value_name("AUTHORITY_PUBKEY")
                         .required(true),
-                        "Account to be granted authority of the nonce account. "),
-                )
+                    "Account to be granted authority of the nonce account. "
+                ))
                 .arg(nonce_authority_arg())
                 .arg(memo_arg())
                 .arg(compute_unit_price_arg()),
@@ -85,20 +85,26 @@ impl NonceSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_amount_or_all)
-                        .help("The amount to load the nonce account with, in SOL; accepts keyword ALL"),
+                        .help(
+                            "The amount to load the nonce account with, in SOL; accepts keyword \
+                             ALL",
+                        ),
                 )
-                .arg(
-                    pubkey!(Arg::with_name(NONCE_AUTHORITY_ARG.name)
+                .arg(pubkey!(
+                    Arg::with_name(NONCE_AUTHORITY_ARG.name)
                         .long(NONCE_AUTHORITY_ARG.long)
                         .value_name("PUBKEY"),
-                        "Assign noncing authority to another entity. "),
-                )
+                    "Assign noncing authority to another entity. "
+                ))
                 .arg(
                     Arg::with_name("seed")
                         .long("seed")
                         .value_name("STRING")
                         .takes_value(true)
-                        .help("Seed for address generation; if specified, the resulting account will be at a derived address of the NONCE_ACCOUNT pubkey")
+                        .help(
+                            "Seed for address generation; if specified, the resulting account \
+                             will be at a derived address of the NONCE_ACCOUNT pubkey",
+                        ),
                 )
                 .arg(memo_arg())
                 .arg(compute_unit_price_arg()),
@@ -107,24 +113,24 @@ impl NonceSubCommands for App<'_, '_> {
             SubCommand::with_name("nonce")
                 .about("Get the current nonce value")
                 .alias("get-nonce")
-                .arg(
-                    pubkey!(Arg::with_name("nonce_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Address of the nonce account to display. "),
-                ),
+                    "Address of the nonce account to display. "
+                )),
         )
         .subcommand(
             SubCommand::with_name("new-nonce")
                 .about("Generate a new nonce, rendering the existing nonce useless")
-                .arg(
-                    pubkey!(Arg::with_name("nonce_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Address of the nonce account. "),
-                )
+                    "Address of the nonce account. "
+                ))
                 .arg(nonce_authority_arg())
                 .arg(memo_arg())
                 .arg(compute_unit_price_arg()),
@@ -133,13 +139,13 @@ impl NonceSubCommands for App<'_, '_> {
             SubCommand::with_name("nonce-account")
                 .about("Show the contents of a nonce account")
                 .alias("show-nonce-account")
-                .arg(
-                    pubkey!(Arg::with_name("nonce_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Address of the nonce account to display. "),
-                )
+                    "Address of the nonce account to display. "
+                ))
                 .arg(
                     Arg::with_name("lamports")
                         .long("lamports")
@@ -150,20 +156,20 @@ impl NonceSubCommands for App<'_, '_> {
         .subcommand(
             SubCommand::with_name("withdraw-from-nonce-account")
                 .about("Withdraw SOL from the nonce account")
-                .arg(
-                    pubkey!(Arg::with_name("nonce_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Nonce account to withdraw from. "),
-                )
-                .arg(
-                    pubkey!(Arg::with_name("destination_account_pubkey")
+                    "Nonce account to withdraw from. "
+                ))
+                .arg(pubkey!(
+                    Arg::with_name("destination_account_pubkey")
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
-                        "The account to which the SOL should be transferred. "),
-                )
+                    "The account to which the SOL should be transferred. "
+                ))
                 .arg(
                     Arg::with_name("amount")
                         .index(3)
@@ -179,15 +185,17 @@ impl NonceSubCommands for App<'_, '_> {
         )
         .subcommand(
             SubCommand::with_name("upgrade-nonce-account")
-                .about("One-time idempotent upgrade of legacy nonce versions \
-                        in order to bump them out of chain blockhash domain.")
-                .arg(
-                    pubkey!(Arg::with_name("nonce_account_pubkey")
+                .about(
+                    "One-time idempotent upgrade of legacy nonce versions in order to bump them \
+                     out of chain blockhash domain.",
+                )
+                .arg(pubkey!(
+                    Arg::with_name("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Nonce account to upgrade. "),
-                )
+                    "Nonce account to upgrade. "
+                ))
                 .arg(memo_arg())
                 .arg(compute_unit_price_arg()),
         )
@@ -502,7 +510,8 @@ pub fn process_create_nonce_account(
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(State::size())?;
     if lamports < minimum_balance {
         return Err(CliError::BadParameter(format!(
-            "need at least {minimum_balance} lamports for nonce account to be rent exempt, provided lamports: {lamports}"
+            "need at least {minimum_balance} lamports for nonce account to be rent exempt, \
+             provided lamports: {lamports}"
         ))
         .into());
     }

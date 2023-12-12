@@ -116,7 +116,6 @@ pub struct Bucket<T: Copy + PartialEq + 'static> {
 
     /// true if this bucket was loaded (as opposed to created blank).
     /// When populating, we want to prioritize looking for data on disk that already matches as opposed to writing new data.
-    #[allow(dead_code)]
     reused_file_at_startup: bool,
 }
 

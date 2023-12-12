@@ -410,9 +410,9 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
         Ok(rows)
     }
 
-    async fn refresh_access_token(&self) {
+    fn refresh_access_token(&self) {
         if let Some(ref access_token) = self.access_token {
-            access_token.refresh().await;
+            access_token.refresh();
         }
     }
 
@@ -434,7 +434,7 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
         if rows_limit == 0 {
             return Ok(vec![]);
         }
-        self.refresh_access_token().await;
+        self.refresh_access_token();
         let response = self
             .client
             .read_rows(ReadRowsRequest {
@@ -479,7 +479,7 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
 
     /// Check whether a row key exists in a `table`
     pub async fn row_key_exists(&mut self, table_name: &str, row_key: RowKey) -> Result<bool> {
-        self.refresh_access_token().await;
+        self.refresh_access_token();
 
         let response = self
             .client
@@ -524,7 +524,7 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
         if rows_limit == 0 {
             return Ok(vec![]);
         }
-        self.refresh_access_token().await;
+        self.refresh_access_token();
         let response = self
             .client
             .read_rows(ReadRowsRequest {
@@ -558,7 +558,7 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
         table_name: &str,
         row_keys: &[RowKey],
     ) -> Result<Vec<(RowKey, RowData)>> {
-        self.refresh_access_token().await;
+        self.refresh_access_token();
 
         let response = self
             .client
@@ -594,7 +594,7 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
         table_name: &str,
         row_key: RowKey,
     ) -> Result<RowData> {
-        self.refresh_access_token().await;
+        self.refresh_access_token();
 
         let response = self
             .client
@@ -623,7 +623,7 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
 
     /// Delete one or more `table` rows
     async fn delete_rows(&mut self, table_name: &str, row_keys: &[RowKey]) -> Result<()> {
-        self.refresh_access_token().await;
+        self.refresh_access_token();
 
         let mut entries = vec![];
         for row_key in row_keys {
@@ -669,7 +669,7 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
         family_name: &str,
         row_data: &[(&RowKey, RowData)],
     ) -> Result<()> {
-        self.refresh_access_token().await;
+        self.refresh_access_token();
 
         let mut entries = vec![];
         for (row_key, row_data) in row_data {
@@ -744,6 +744,14 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
                 )
             })
             .collect())
+    }
+
+    pub async fn get_protobuf_cell<P>(&mut self, table: &str, key: RowKey) -> Result<P>
+    where
+        P: prost::Message + Default,
+    {
+        let row_data = self.get_single_row_data(table, key.clone()).await?;
+        deserialize_protobuf_cell_data(&row_data, table, key.to_string())
     }
 
     pub async fn get_protobuf_or_bincode_cell<B, P>(

@@ -65,6 +65,7 @@ fn test_cli_program_deploy_non_upgradeable() {
 
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: None,
         buffer_signer_index: None,
@@ -109,6 +110,7 @@ fn test_cli_program_deploy_non_upgradeable() {
     config.signers = vec![&keypair, &custom_address_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: Some(1),
         program_pubkey: None,
         buffer_signer_index: None,
@@ -163,6 +165,7 @@ fn test_cli_program_deploy_non_upgradeable() {
     config.signers = vec![&keypair, &custom_address_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: Some(1),
         program_pubkey: None,
         buffer_signer_index: None,
@@ -185,6 +188,7 @@ fn test_cli_program_deploy_non_upgradeable() {
     // Use forcing parameter to deploy to account with excess balance
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: Some(1),
         program_pubkey: None,
         buffer_signer_index: None,
@@ -245,6 +249,7 @@ fn test_cli_program_deploy_no_authority() {
     config.signers = vec![&keypair, &upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: None,
         buffer_signer_index: None,
@@ -271,6 +276,7 @@ fn test_cli_program_deploy_no_authority() {
     config.signers = vec![&keypair, &upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: Some(program_id),
         buffer_signer_index: None,
@@ -332,6 +338,7 @@ fn test_cli_program_deploy_with_authority() {
     config.signers = vec![&keypair, &upgrade_authority, &program_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: Some(2),
         program_pubkey: Some(program_keypair.pubkey()),
         buffer_signer_index: None,
@@ -380,6 +387,7 @@ fn test_cli_program_deploy_with_authority() {
     config.signers = vec![&keypair, &upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: None,
         buffer_signer_index: None,
@@ -422,6 +430,7 @@ fn test_cli_program_deploy_with_authority() {
     config.signers = vec![&keypair, &upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: Some(program_pubkey),
         buffer_signer_index: None,
@@ -477,6 +486,7 @@ fn test_cli_program_deploy_with_authority() {
     config.signers = vec![&keypair, &new_upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: Some(program_pubkey),
         buffer_signer_index: None,
@@ -552,6 +562,7 @@ fn test_cli_program_deploy_with_authority() {
     config.signers = vec![&keypair, &new_upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: Some(program_pubkey),
         buffer_signer_index: None,
@@ -568,6 +579,7 @@ fn test_cli_program_deploy_with_authority() {
     config.signers = vec![&keypair, &new_upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: None,
         buffer_signer_index: None,
@@ -671,6 +683,7 @@ fn test_cli_program_close_program() {
     config.signers = vec![&keypair, &upgrade_authority, &program_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: Some(2),
         program_pubkey: Some(program_keypair.pubkey()),
         buffer_signer_index: None,
@@ -774,6 +787,7 @@ fn test_cli_program_extend_program() {
     config.signers = vec![&keypair, &upgrade_authority, &program_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: Some(2),
         program_pubkey: Some(program_keypair.pubkey()),
         buffer_signer_index: None,
@@ -864,6 +878,7 @@ fn test_cli_program_write_buffer() {
     config.signers = vec![&keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
         program_location: noop_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
         buffer_signer_index: None,
         buffer_pubkey: None,
         buffer_authority_signer_index: 0,
@@ -899,6 +914,7 @@ fn test_cli_program_write_buffer() {
     config.signers = vec![&keypair, &buffer_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
         program_location: noop_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         buffer_authority_signer_index: 0,
@@ -961,6 +977,7 @@ fn test_cli_program_write_buffer() {
     config.signers = vec![&keypair, &buffer_keypair, &authority_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
         program_location: noop_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         buffer_authority_signer_index: 2,
@@ -999,6 +1016,7 @@ fn test_cli_program_write_buffer() {
     config.signers = vec![&keypair, &buffer_keypair, &authority_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
         program_location: noop_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
         buffer_signer_index: None,
         buffer_pubkey: None,
         buffer_authority_signer_index: 2,
@@ -1073,6 +1091,7 @@ fn test_cli_program_write_buffer() {
     config.signers = vec![&keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
         program_location: noop_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
         buffer_signer_index: None,
         buffer_pubkey: None,
         buffer_authority_signer_index: 0,
@@ -1114,6 +1133,7 @@ fn test_cli_program_write_buffer() {
     config.signers = vec![&keypair, &buffer_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
         program_location: noop_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         buffer_authority_signer_index: 0,
@@ -1124,6 +1144,7 @@ fn test_cli_program_write_buffer() {
     config.signers = vec![&keypair, &buffer_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_large_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: None,
         buffer_signer_index: Some(1),
@@ -1186,6 +1207,7 @@ fn test_cli_program_set_buffer_authority() {
     config.signers = vec![&keypair, &buffer_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
         program_location: noop_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         buffer_authority_signer_index: 0,
@@ -1200,7 +1222,7 @@ fn test_cli_program_set_buffer_authority() {
         panic!("not a buffer account");
     }
 
-    // Set new authority
+    // Set new buffer authority
     let new_buffer_authority = Keypair::new();
     config.signers = vec![&keypair, &buffer_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::SetBufferAuthority {
@@ -1229,7 +1251,25 @@ fn test_cli_program_set_buffer_authority() {
         panic!("not a buffer account");
     }
 
-    // Set authority to buffer
+    // Attempt to deploy program from buffer using previous authority (should fail)
+    config.signers = vec![&keypair, &buffer_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
+        program_signer_index: None,
+        program_pubkey: None,
+        buffer_signer_index: None,
+        buffer_pubkey: Some(buffer_keypair.pubkey()),
+        allow_excessive_balance: false,
+        upgrade_authority_signer_index: 0,
+        is_final: false,
+        max_len: None,
+        skip_fee_check: false,
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    process_command(&config).unwrap_err();
+
+    // Set buffer authority to the buffer identity (it's a common way for program devs to do so)
     config.signers = vec![&keypair, &new_buffer_authority];
     config.command = CliCommand::Program(ProgramCliCommand::SetBufferAuthority {
         buffer_pubkey: buffer_keypair.pubkey(),
@@ -1255,6 +1295,24 @@ fn test_cli_program_set_buffer_authority() {
     } else {
         panic!("not a buffer account");
     }
+
+    // Deploy from buffer using proper(new) buffer authority
+    config.signers = vec![&keypair, &buffer_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
+        program_signer_index: None,
+        program_pubkey: None,
+        buffer_signer_index: None,
+        buffer_pubkey: Some(buffer_keypair.pubkey()),
+        allow_excessive_balance: false,
+        upgrade_authority_signer_index: 1,
+        is_final: false,
+        max_len: None,
+        skip_fee_check: false,
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    process_command(&config).unwrap();
 }
 
 #[test]
@@ -1302,6 +1360,7 @@ fn test_cli_program_mismatch_buffer_authority() {
     config.signers = vec![&keypair, &buffer_keypair, &buffer_authority];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
         program_location: noop_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         buffer_authority_signer_index: 2,
@@ -1321,6 +1380,7 @@ fn test_cli_program_mismatch_buffer_authority() {
     config.signers = vec![&keypair, &upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: None,
         buffer_signer_index: None,
@@ -1337,6 +1397,7 @@ fn test_cli_program_mismatch_buffer_authority() {
     config.signers = vec![&keypair, &buffer_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: None,
         buffer_signer_index: None,
@@ -1398,6 +1459,7 @@ fn test_cli_program_show() {
     config.signers = vec![&keypair, &buffer_keypair, &authority_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
         program_location: noop_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         buffer_authority_signer_index: 2,
@@ -1454,6 +1516,7 @@ fn test_cli_program_show() {
     config.signers = vec![&keypair, &authority_keypair, &program_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: Some(2),
         program_pubkey: Some(program_keypair.pubkey()),
         buffer_signer_index: None,
@@ -1585,6 +1648,7 @@ fn test_cli_program_dump() {
     config.signers = vec![&keypair, &buffer_keypair, &authority_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
         program_location: noop_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         buffer_authority_signer_index: 2,

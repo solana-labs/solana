@@ -55,6 +55,7 @@ thiserror = { workspace = true }
 [dev-dependencies]
 num_cpus = { workspace = true }
 serial_test = { workspace = true }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 test-case = { workspace = true }
 
 [build-dependencies]

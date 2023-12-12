@@ -5,6 +5,7 @@ use {
     crate::{
         encryption::pedersen::{PedersenCommitment, PedersenOpening},
         errors::{ProofGenerationError, ProofVerificationError},
+        instruction::batched_range_proof::MAX_COMMITMENTS,
         range_proof::RangeProof,
     },
     std::convert::TryInto,
@@ -46,7 +47,7 @@ impl BatchedRangeProofU128Data {
             .try_fold(0_usize, |acc, &x| acc.checked_add(x))
             .ok_or(ProofGenerationError::IllegalAmountBitLength)?;
 
-        // `u64::BITS` is 128, which fits in a single byte and should not overflow to `usize` for
+        // `u128::BITS` is 128, which fits in a single byte and should not overflow to `usize` for
         // an overwhelming number of platforms. However, to be extra cautious, use `try_from` and
         // `unwrap` here. A simple case `u128::BITS as usize` can silently overflow.
         let expected_bit_length = usize::try_from(u128::BITS).unwrap();
@@ -77,6 +78,12 @@ impl ZkProofData<BatchedRangeProofContext> for BatchedRangeProofU128Data {
     #[cfg(not(target_os = "solana"))]
     fn verify_proof(&self) -> Result<(), ProofVerificationError> {
         let (commitments, bit_lengths) = self.context.try_into()?;
+        let num_commitments = commitments.len();
+
+        if num_commitments > MAX_COMMITMENTS || num_commitments != bit_lengths.len() {
+            return Err(ProofVerificationError::IllegalCommitmentLength);
+        }
+
         let mut transcript = self.context_data().new_transcript();
         let proof: RangeProof = self.proof.try_into()?;
 

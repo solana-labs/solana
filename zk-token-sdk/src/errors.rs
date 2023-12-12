@@ -36,6 +36,8 @@ pub enum ProofVerificationError {
     ElGamal(#[from] ElGamalError),
     #[error("Invalid proof context")]
     ProofContext,
+    #[error("illegal commitment length")]
+    IllegalCommitmentLength,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

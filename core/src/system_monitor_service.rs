@@ -393,6 +393,7 @@ pub struct SystemMonitorStatsReportConfig {
     pub report_os_disk_stats: bool,
 }
 
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 enum InterestingLimit {
     Recommend(i64),
     QueryOnly,
@@ -460,7 +461,7 @@ impl SystemMonitorService {
     fn linux_report_network_limits(
         current_limits: &[(&'static str, &'static InterestingLimit, i64)],
     ) -> bool {
-        !current_limits
+        current_limits
             .iter()
             .map(|(key, interesting_limit, current_value)| {
                 datapoint_warn!("os-config", (key, *current_value, i64));

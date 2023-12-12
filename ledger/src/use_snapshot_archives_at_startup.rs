@@ -48,4 +48,8 @@ pub mod cli {
     pub fn default_value() -> &'static str {
         UseSnapshotArchivesAtStartup::default().into()
     }
+
+    pub fn default_value_for_ledger_tool() -> &'static str {
+        UseSnapshotArchivesAtStartup::Always.into()
+    }
 }

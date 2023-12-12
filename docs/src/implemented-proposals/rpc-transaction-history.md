@@ -10,13 +10,14 @@ fall back to the external data store.
 
 The affected RPC endpoints are:
 
-- [getFirstAvailableBlock](../api/http#getfirstavailableblock)
-- [getConfirmedBlock](../api/http#getconfirmedblock)
-- [getConfirmedBlocks](../api/http#getconfirmedblocks)
-- [getConfirmedSignaturesForAddress](../api/http#getconfirmedsignaturesforaddress)
-- [getConfirmedTransaction](../api/http#getconfirmedtransaction)
-- [getSignatureStatuses](../api/http#getsignaturestatuses)
-- [getBlockTime](../api/http#getblocktime)
+
+- [getFirstAvailableBlock](https://solana.com/docs/rpc/http/getfirstavailableblock)
+- [getConfirmedBlock](https://solana.com/docs/rpc/http/getconfirmedblock)
+- [getConfirmedBlocks](https://solana.com/docs/rpc/http/getconfirmedblocks)
+- [getConfirmedSignaturesForAddress](https://solana.com/docs/rpc/http/getconfirmedsignaturesforaddress)
+- [getConfirmedTransaction](https://solana.com/docs/rpc/http/getconfirmedtransaction)
+- [getSignatureStatuses](https://solana.com/docs/rpc/http/getsignaturestatuses)
+- [getBlockTime](https://solana.com/docs/rpc/http/getblocktime)
 
 Some system design constraints:
 

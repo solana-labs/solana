@@ -10,6 +10,8 @@
 //! For Entries:
 //! * recorded entry must be >= WorkingBank::min_tick_height && entry must be < WorkingBank::max_tick_height
 //!
+#[cfg(feature = "dev-context-only-utils")]
+use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
 use {
     crate::{leader_bank_notifier::LeaderBankNotifier, poh_service::PohService},
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, SendError, Sender, TrySendError},
@@ -18,11 +20,7 @@ use {
         entry::{hash_transactions, Entry},
         poh::Poh,
     },
-    solana_ledger::{
-        blockstore::Blockstore,
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        leader_schedule_cache::LeaderScheduleCache,
-    },
+    solana_ledger::{blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache},
     solana_measure::{measure, measure_us},
     solana_metrics::poh_timing_point::{send_poh_timing_point, PohTimingSender, SlotPohTimingInfo},
     solana_runtime::{bank::Bank, installed_scheduler_pool::BankWithScheduler},
@@ -1053,6 +1051,7 @@ impl PohRecorder {
     }
 
     // Used in tests
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn schedule_dummy_max_height_reached_failure(&mut self) {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));

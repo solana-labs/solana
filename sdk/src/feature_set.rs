@@ -732,6 +732,14 @@ pub mod enable_zk_transfer_with_fee {
     solana_sdk::declare_id!("zkNLP7EQALfC1TYeB3biDU7akDckj8iPkvh9y2Mt2K3");
 }
 
+pub mod drop_legacy_shreds {
+    solana_sdk::declare_id!("GV49KKQdBNaiv2pgqhS2Dy3GWYJGXMTVYbYkdk91orRy");
+}
+
+pub mod allow_commission_decrease_at_any_time {
+    solana_sdk::declare_id!("decoMktMcnmiq6t3u7g5BfgcQu91nKZr6RvMYf9z1Jb");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -910,6 +918,8 @@ lazy_static! {
         (validate_fee_collector_account::id(), "validate fee collector account #33888"),
         (disable_rent_fees_collection::id(), "Disable rent fees collection #33945"),
         (enable_zk_transfer_with_fee::id(), "enable Zk Token proof program transfer with fee"),
+        (drop_legacy_shreds::id(), "drops legacy shreds #34328"),
+        (allow_commission_decrease_at_any_time::id(), "Allow commission decrease at any time in epoch #33843"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

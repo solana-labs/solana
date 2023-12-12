@@ -57,14 +57,6 @@ pub struct AccountLocks {
     readonly_locks: HashMap<Pubkey, u64>,
 }
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum RewardInterval {
-    /// the slot within the epoch is INSIDE the reward distribution interval
-    InsideInterval,
-    /// the slot within the epoch is OUTSIDE the reward distribution interval
-    OutsideInterval,
-}
-
 impl AccountLocks {
     fn is_locked_readonly(&self, key: &Pubkey) -> bool {
         self.readonly_locks
