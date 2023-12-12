@@ -326,6 +326,7 @@ pub mod tests {
             index::{AccountIndexWriterEntry, IndexBlockFormat, IndexOffset},
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
         },
+        assert_matches::assert_matches,
         memoffset::offset_of,
         rand::Rng,
         solana_sdk::{hash::Hash, pubkey::Pubkey, stake_history::Epoch},
@@ -368,6 +369,28 @@ pub mod tests {
 
         assert_eq!(meta.account_data_padding(), MAX_HOT_PADDING);
         assert_eq!(meta.owner_offset(), MAX_HOT_OWNER_OFFSET);
+    }
+
+    #[test]
+    fn test_max_hot_account_offset() {
+        assert_matches!(HotAccountOffset::new(0), Ok(_));
+        assert_matches!(HotAccountOffset::new(MAX_HOT_ACCOUNT_OFFSET), Ok(_));
+    }
+
+    #[test]
+    fn test_max_hot_account_offset_out_of_bounds() {
+        assert_matches!(
+            HotAccountOffset::new(MAX_HOT_ACCOUNT_OFFSET + HOT_ACCOUNT_OFFSET_ALIGNMENT),
+            Err(TieredStorageError::OffsetOutOfBounds(_, _))
+        );
+    }
+
+    #[test]
+    fn test_max_hot_account_offset_alignment_error() {
+        assert_matches!(
+            HotAccountOffset::new(HOT_ACCOUNT_OFFSET_ALIGNMENT - 1),
+            Err(TieredStorageError::OffsetAlignmentError(_, _))
+        );
     }
 
     #[test]
