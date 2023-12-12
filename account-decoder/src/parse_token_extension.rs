@@ -6,6 +6,7 @@ use {
         solana_program::pubkey::Pubkey,
         solana_zk_token_sdk::zk_token_elgamal::pod::ElGamalPubkey,
     },
+    spl_token_group_interface::state::{TokenGroup, TokenGroupMember},
     spl_token_metadata_interface::state::TokenMetadata,
 };
 
@@ -32,6 +33,10 @@ pub enum UiExtension {
     TransferHookAccount(UiTransferHookAccount),
     MetadataPointer(UiMetadataPointer),
     TokenMetadata(UiTokenMetadata),
+    GroupPointer(UiGroupPointer),
+    GroupMemberPointer(UiGroupMemberPointer),
+    TokenGroup(UiTokenGroup),
+    TokenGroupMember(UiTokenGroupMember),
     UnparseableExtension,
 }
 
@@ -107,6 +112,22 @@ pub fn parse_extension<S: BaseState>(
         ExtensionType::TransferHookAccount => account
             .get_extension::<extension::transfer_hook::TransferHookAccount>()
             .map(|&extension| UiExtension::TransferHookAccount(extension.into()))
+            .unwrap_or(UiExtension::UnparseableExtension),
+        ExtensionType::GroupPointer => account
+            .get_extension::<extension::group_pointer::GroupPointer>()
+            .map(|&extension| UiExtension::GroupPointer(extension.into()))
+            .unwrap_or(UiExtension::UnparseableExtension),
+        ExtensionType::GroupMemberPointer => account
+            .get_extension::<extension::group_member_pointer::GroupMemberPointer>()
+            .map(|&extension| UiExtension::GroupMemberPointer(extension.into()))
+            .unwrap_or(UiExtension::UnparseableExtension),
+        ExtensionType::TokenGroup => account
+            .get_extension::<TokenGroup>()
+            .map(|&extension| UiExtension::TokenGroup(extension.into()))
+            .unwrap_or(UiExtension::UnparseableExtension),
+        ExtensionType::TokenGroupMember => account
+            .get_extension::<TokenGroupMember>()
+            .map(|&extension| UiExtension::TokenGroupMember(extension.into()))
             .unwrap_or(UiExtension::UnparseableExtension),
     }
 }
@@ -478,6 +499,81 @@ impl From<extension::transfer_hook::TransferHookAccount> for UiTransferHookAccou
     fn from(transfer_hook: extension::transfer_hook::TransferHookAccount) -> Self {
         Self {
             transferring: transfer_hook.transferring.into(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UiGroupPointer {
+    pub authority: Option<String>,
+    pub group_address: Option<String>,
+}
+
+impl From<extension::group_pointer::GroupPointer> for UiGroupPointer {
+    fn from(group_pointer: extension::group_pointer::GroupPointer) -> Self {
+        let authority: Option<Pubkey> = group_pointer.authority.into();
+        let group_address: Option<Pubkey> = group_pointer.group_address.into();
+        Self {
+            authority: authority.map(|pubkey| pubkey.to_string()),
+            group_address: group_address.map(|pubkey| pubkey.to_string()),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UiGroupMemberPointer {
+    pub authority: Option<String>,
+    pub member_address: Option<String>,
+}
+
+impl From<extension::group_member_pointer::GroupMemberPointer> for UiGroupMemberPointer {
+    fn from(member_pointer: extension::group_member_pointer::GroupMemberPointer) -> Self {
+        let authority: Option<Pubkey> = member_pointer.authority.into();
+        let member_address: Option<Pubkey> = member_pointer.member_address.into();
+        Self {
+            authority: authority.map(|pubkey| pubkey.to_string()),
+            member_address: member_address.map(|pubkey| pubkey.to_string()),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UiTokenGroup {
+    pub update_authority: Option<String>,
+    pub mint: String,
+    pub size: u32,
+    pub max_size: u32,
+}
+
+impl From<TokenGroup> for UiTokenGroup {
+    fn from(token_group: TokenGroup) -> Self {
+        let update_authority: Option<Pubkey> = token_group.update_authority.into();
+        Self {
+            update_authority: update_authority.map(|pubkey| pubkey.to_string()),
+            mint: token_group.mint.to_string(),
+            size: token_group.size.into(),
+            max_size: token_group.max_size.into(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UiTokenGroupMember {
+    pub mint: String,
+    pub group: String,
+    pub member_number: u32,
+}
+
+impl From<TokenGroupMember> for UiTokenGroupMember {
+    fn from(member: TokenGroupMember) -> Self {
+        Self {
+            mint: member.mint.to_string(),
+            group: member.group.to_string(),
+            member_number: member.member_number.into(),
         }
     }
 }
