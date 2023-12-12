@@ -25,6 +25,7 @@ solana-vote-program = { workspace = true }
 [dev-dependencies]
 rand = { workspace = true }
 serial_test = { workspace = true }
+solana-accounts-db = { workspace = true }
 solana-entry = { workspace = true }
 solana-streamer = { workspace = true }
 

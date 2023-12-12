@@ -255,6 +255,10 @@ fn write_wen_restart_records(
 mod tests {
     use {
         crate::wen_restart::*,
+        solana_accounts_db::{
+            accounts_db::AccountShrinkThreshold,
+            accounts_index::AccountSecondaryIndexes,
+        },
         solana_entry::entry,
         solana_gossip::{
             cluster_info::ClusterInfo,
@@ -271,6 +275,7 @@ mod tests {
             genesis_utils::{
                 create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
             },
+            runtime_config::RuntimeConfig,
         },
         solana_sdk::{pubkey::Pubkey, signature::Signer, timing::timestamp},
         solana_streamer::socket::SocketAddrSpace,
@@ -303,7 +308,13 @@ mod tests {
             &validator_voting_keypairs,
             vec![100; validator_voting_keypairs.len()],
         );
-        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = Bank::new_with_paths_for_tests(
+            &genesis_config,
+            Arc::new(RuntimeConfig::default()),
+            Vec::new(),
+            AccountSecondaryIndexes::default(),
+            AccountShrinkThreshold::default(),
+        );
         let bank_forks = BankForks::new_rw_arc(bank);
         let expected_slots = 400;
         let last_vote_slot = (RestartLastVotedForkSlots::MAX_SLOTS + expected_slots)

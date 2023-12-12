@@ -7701,6 +7701,7 @@ dependencies = [
  "rand 0.8.5",
  "rustc_version 0.4.0",
  "serial_test",
+ "solana-accounts-db",
  "solana-entry",
  "solana-gossip",
  "solana-ledger",
