@@ -65,7 +65,7 @@ impl WalletSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("ACCOUNT_ADDRESS")
                         .required(true),
-                    "Account key URI."
+                    "Account."
                 ))
                 .arg(
                     Arg::with_name("output_file")
