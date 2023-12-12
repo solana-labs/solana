@@ -315,7 +315,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .index(2)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "The vote account to which the stake will be delegated."
+                    "Vote account to which the stake will be delegated."
                 ))
                 .arg(stake_authority_arg())
                 .offline_args()
@@ -348,7 +348,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .index(2)
                         .value_name("REDELEGATED_VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "The vote account to which the stake will be redelegated."
+                    "Vote account to which the stake will be redelegated."
                 ))
                 .arg(
                     Arg::with_name("redelegation_stake_account")
@@ -571,7 +571,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .index(2)
                         .value_name("SOURCE_STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "Source stake account for the merge.  If successful, this stake account will \
+                    "Source stake account for the merge. If successful, this stake account will \
                      no longer exist after the merge."
                 ))
                 .arg(stake_authority_arg())
@@ -664,7 +664,7 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("new_custodian")
                         .long("new-custodian")
                         .value_name("PUBKEY"),
-                    "Identity of a new lockup custodian."
+                    "New lockup custodian."
                 ))
                 .group(
                     ArgGroup::with_name("lockup_details")
@@ -754,7 +754,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "The stake account to display."
+                    "Stake account to display."
                 ))
                 .arg(
                     Arg::with_name("lamports")

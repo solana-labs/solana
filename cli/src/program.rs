@@ -190,8 +190,8 @@ impl ProgramSubCommands for App<'_, '_> {
                             Arg::with_name("program_id")
                                 .long("program-id")
                                 .value_name("PROGRAM_ID"),
-                            "Executable program's address, must be a keypair for initial deploys, \
-                             can be a pubkey for upgrades [default: address of keypair at \
+                            "Executable program; must be a signer for initial deploys, \
+                             can be an address for upgrades [default: address of keypair at \
                              /path/to/program-keypair.json if present, otherwise a random address]."
                         ))
                         .arg(
@@ -286,7 +286,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .long("new-buffer-authority")
                                 .value_name("NEW_BUFFER_AUTHORITY")
                                 .required(true),
-                            "Address of the new buffer authority."
+                            "New buffer authority."
                         )),
                 )
                 .subcommand(
@@ -444,7 +444,7 @@ impl ProgramSubCommands for App<'_, '_> {
                             Arg::with_name("recipient_account")
                                 .long("recipient")
                                 .value_name("RECIPIENT_ADDRESS"),
-                            "Address of the account to deposit the closed account's lamports \
+                            "Account to deposit the closed account's lamports \
                              [default: the default configured keypair]."
                         ))
                         .arg(

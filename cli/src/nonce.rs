@@ -53,7 +53,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "Address of the nonce account."
+                    "Nonce account."
                 ))
                 .arg(pubkey!(
                     Arg::with_name("new_authority")
@@ -94,7 +94,7 @@ impl NonceSubCommands for App<'_, '_> {
                     Arg::with_name(NONCE_AUTHORITY_ARG.name)
                         .long(NONCE_AUTHORITY_ARG.long)
                         .value_name("PUBKEY"),
-                    "Assign noncing authority to another entity."
+                    "Assign noncing authority to this other entity."
                 ))
                 .arg(
                     Arg::with_name("seed")
@@ -118,7 +118,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "Address of the nonce account to display."
+                    "Nonce account to display."
                 )),
         )
         .subcommand(
@@ -129,7 +129,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "Address of the nonce account."
+                    "Nonce account."
                 ))
                 .arg(nonce_authority_arg())
                 .arg(memo_arg())
@@ -144,7 +144,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "Address of the nonce account to display."
+                    "Nonce account to display."
                 ))
                 .arg(
                     Arg::with_name("lamports")
@@ -168,7 +168,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
-                    "The account to which the SOL should be transferred."
+                    "Account to which the SOL should be transferred."
                 ))
                 .arg(
                     Arg::with_name("amount")

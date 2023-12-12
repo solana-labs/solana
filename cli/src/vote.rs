@@ -77,7 +77,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .long("authorized-withdrawer"),
-                    "Public key of the authorized withdrawer."
+                    "Authorized withdrawer."
                 ))
                 .arg(
                     Arg::with_name("commission")
@@ -91,7 +91,7 @@ impl VoteSubCommands for App<'_, '_> {
                     Arg::with_name("authorized_voter")
                         .long("authorized-voter")
                         .value_name("VOTER_PUBKEY"),
-                    "Public key of the authorized voter [default: validator identity pubkey]."
+                    "Authorized voter [default: validator identity pubkey]."
                 ))
                 .arg(
                     Arg::with_name("allow_unsafe_authorized_withdrawer")
@@ -328,7 +328,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "Vote account pubkey."
+                    "Vote account."
                 ))
                 .arg(
                     Arg::with_name("lamports")
