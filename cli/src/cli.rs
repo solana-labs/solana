@@ -1743,7 +1743,6 @@ mod tests {
         },
         solana_rpc_client_nonce_utils::blockhash_query,
         solana_sdk::{
-            offchain_message::Version as OffchainMessageVersion,
             pubkey::Pubkey,
             signature::{
                 keypair_from_seed, read_keypair_file, write_keypair_file, Keypair, Presigner,

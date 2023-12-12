@@ -624,7 +624,7 @@ mod tests {
         let min_message = [c_ascii].iter().collect::<String>();
         let message = OffchainMessage::new(
             Version::V0,
-            (&min_message).as_ref(),
+            min_message.as_ref(),
             signers.clone(),
             application_domain.clone(),
         ).unwrap();
@@ -635,7 +635,7 @@ mod tests {
         let min_message = [c_utf8].iter().collect::<String>();
         let message = OffchainMessage::new(
             Version::V0,
-            (&min_message).as_ref(),
+            min_message.as_ref(),
             signers.clone(),
             application_domain.clone(),
         ).unwrap();
@@ -647,7 +647,7 @@ mod tests {
         let min_message = std::iter::repeat(c_ascii).take(max_message_for_ledger + 1).collect::<String>();
         let message = OffchainMessage::new(
             Version::V0,
-            (&min_message).as_ref(),
+            min_message.as_ref(),
             signers.clone(),
             application_domain.clone(),
         ).unwrap();
@@ -658,7 +658,7 @@ mod tests {
         let max_message = std::iter::repeat(c_ascii).take(max_message_for_ledger).collect::<String>();
         let message = OffchainMessage::new(
             Version::V0,
-            (&max_message).as_ref(),
+            max_message.as_ref(),
             signers.clone(),
             application_domain.clone(),
         ).unwrap();
@@ -673,7 +673,7 @@ mod tests {
             .collect::<String>();
         let message = OffchainMessage::new(
             Version::V0,
-            (&max_message).as_ref(),
+            max_message.as_ref(),
             signers.clone(),
             application_domain.clone(),
         ).unwrap();
@@ -685,7 +685,7 @@ mod tests {
         let max_message = std::iter::repeat(c_ascii).take(max_message_len).collect::<String>();
         let message = OffchainMessage::new(
             Version::V0,
-            (&max_message).as_ref(),
+            max_message.as_ref(),
             signers.clone(),
             application_domain.clone(),
         ).unwrap();
@@ -696,7 +696,7 @@ mod tests {
         let overflow_message = std::iter::repeat(c_ascii).take(max_message_len + 1).collect::<String>();
         let message_result = OffchainMessage::new(
             Version::V0,
-            (&overflow_message).as_ref(),
+            overflow_message.as_ref(),
             signers.clone(),
             application_domain.clone(),
         );
