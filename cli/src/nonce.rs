@@ -168,7 +168,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
-                    "Account to which the SOL should be transferred."
+                    "Recipient of withdrawn SOL."
                 ))
                 .arg(
                     Arg::with_name("amount")

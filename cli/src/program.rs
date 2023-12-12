@@ -444,7 +444,7 @@ impl ProgramSubCommands for App<'_, '_> {
                             Arg::with_name("recipient_account")
                                 .long("recipient")
                                 .value_name("RECIPIENT_ADDRESS"),
-                            "Account to deposit the closed account's lamports \
+                            "Recipient of closed account's lamports \
                              [default: the default configured keypair]."
                         ))
                         .arg(
