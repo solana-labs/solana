@@ -845,37 +845,38 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                         || entry.deployment_slot == loaded_programs_for_tx_batch.slot
                         || is_ancestor
                     {
-                        let entry_to_return =
-                            if loaded_programs_for_tx_batch.slot >= entry.effective_slot {
-                                if !Self::is_entry_usable(
-                                    entry,
-                                    loaded_programs_for_tx_batch.slot,
-                                    match_criteria,
-                                ) || !Self::matches_environment(
-                                    entry,
-                                    &loaded_programs_for_tx_batch.environments,
-                                ) {
-                                    break;
-                                }
-
-                                if let LoadedProgramType::Unloaded(_environment) = &entry.program {
-                                    break;
-                                }
-
-                                entry.clone()
-                            } else if entry.is_implicit_delay_visibility_tombstone(
-                                loaded_programs_for_tx_batch.slot,
+                        let entry_to_return = if loaded_programs_for_tx_batch.slot
+                            >= entry.effective_slot
+                            && Self::matches_environment(
+                                entry,
+                                &loaded_programs_for_tx_batch.environments,
                             ) {
-                                // Found a program entry on the current fork, but it's not effective
-                                // yet. It indicates that the program has delayed visibility. Return
-                                // the tombstone to reflect that.
-                                Arc::new(LoadedProgram::new_tombstone(
-                                    entry.deployment_slot,
-                                    LoadedProgramType::DelayVisibility,
-                                ))
-                            } else {
-                                continue;
-                            };
+                            if !Self::is_entry_usable(
+                                entry,
+                                loaded_programs_for_tx_batch.slot,
+                                match_criteria,
+                            ) {
+                                break;
+                            }
+
+                            if let LoadedProgramType::Unloaded(_environment) = &entry.program {
+                                break;
+                            }
+
+                            entry.clone()
+                        } else if entry.is_implicit_delay_visibility_tombstone(
+                            loaded_programs_for_tx_batch.slot,
+                        ) {
+                            // Found a program entry on the current fork, but it's not effective
+                            // yet. It indicates that the program has delayed visibility. Return
+                            // the tombstone to reflect that.
+                            Arc::new(LoadedProgram::new_tombstone(
+                                entry.deployment_slot,
+                                LoadedProgramType::DelayVisibility,
+                            ))
+                        } else {
+                            continue;
+                        };
                         entry_to_return
                             .tx_usage_counter
                             .fetch_add(*usage_count, Ordering::Relaxed);
