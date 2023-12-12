@@ -3,6 +3,7 @@ use {
         file::TieredStorageFile, footer::TieredStorageFooter, mmap_utils::get_type,
         TieredStorageResult,
     },
+    bytemuck::{Pod, Zeroable},
     memmap2::Mmap,
     solana_sdk::pubkey::Pubkey,
 };
@@ -17,13 +18,17 @@ pub struct AccountIndexWriterEntry<'a, Offset: AccountOffset> {
 }
 
 /// The offset to an account.
-pub trait AccountOffset {}
+pub trait AccountOffset: Clone + Copy + Pod + Zeroable {}
 
 /// The offset to an account/address entry in the accounts index block.
 /// This can be used to obtain the AccountOffset and address by looking through
 /// the accounts index block.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Pod, Zeroable)]
 pub struct IndexOffset(pub u32);
+
+// Ensure there are no implicit padding bytes
+const _: () = assert!(std::mem::size_of::<IndexOffset>() == 4);
 
 /// The index format of a tiered accounts file.
 #[repr(u16)]
@@ -45,6 +50,9 @@ pub enum IndexBlockFormat {
     #[default]
     AddressAndBlockOffsetOnly = 0,
 }
+
+// Ensure there are no implicit padding bytes
+const _: () = assert!(std::mem::size_of::<IndexBlockFormat>() == 2);
 
 impl IndexBlockFormat {
     /// Persists the specified index_entries to the specified file and returns
@@ -86,7 +94,7 @@ impl IndexBlockFormat {
     }
 
     /// Returns the offset to the account given the specified index.
-    pub fn get_account_offset<Offset: AccountOffset + Copy>(
+    pub fn get_account_offset<Offset: AccountOffset>(
         &self,
         mmap: &Mmap,
         footer: &TieredStorageFooter,
