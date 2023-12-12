@@ -35,13 +35,15 @@ const MAX_HOT_PADDING: u8 = 7;
 /// The maximum allowed value for the owner index of a hot account.
 const MAX_HOT_OWNER_OFFSET: OwnerOffset = OwnerOffset((1 << 29) - 1);
 
-/// The alignment for HotAccountOffset.  It is also a multiplier for converting
-/// HotAccountOffset to the internal hot account offset that increases the maximum
-/// size of a hot accounts file.
-pub(crate) const HOT_ACCOUNT_OFFSET_ALIGNMENT: usize = 8;
+/// The byte alignment for hot accounts.  This alignment serves duo purposes.
+/// First, it allows hot accounts to be directly accessed when the underlying
+/// file is mmapped.  In addition, as all hot accounts are aligned, it allows
+/// each hot accounts file to handle more accounts with the same number of
+/// bytes in HotAccountOffset.
+pub(crate) const HOT_ACCOUNT_ALIGNMENT: usize = 8;
 
 /// The maximum supported offset for hot accounts storage.
-const MAX_HOT_ACCOUNT_OFFSET: usize = u32::MAX as usize * HOT_ACCOUNT_OFFSET_ALIGNMENT;
+const MAX_HOT_ACCOUNT_OFFSET: usize = u32::MAX as usize * HOT_ACCOUNT_ALIGNMENT;
 
 #[bitfield(bits = 32)]
 #[repr(C)]
@@ -78,22 +80,20 @@ impl HotAccountOffset {
             ));
         }
 
-        // Hot accounts are aligned based on HOT_ACCOUNT_OFFSET_ALIGNMENT.
-        if offset % HOT_ACCOUNT_OFFSET_ALIGNMENT != 0 {
+        // Hot accounts are aligned based on HOT_ACCOUNT_ALIGNMENT.
+        if offset % HOT_ACCOUNT_ALIGNMENT != 0 {
             return Err(TieredStorageError::OffsetAlignmentError(
                 offset,
-                HOT_ACCOUNT_OFFSET_ALIGNMENT,
+                HOT_ACCOUNT_ALIGNMENT,
             ));
         }
 
-        Ok(HotAccountOffset(
-            (offset / HOT_ACCOUNT_OFFSET_ALIGNMENT) as u32,
-        ))
+        Ok(HotAccountOffset((offset / HOT_ACCOUNT_ALIGNMENT) as u32))
     }
 
     /// Returns the offset to the account.
     fn offset(&self) -> usize {
-        self.0 as usize * HOT_ACCOUNT_OFFSET_ALIGNMENT
+        self.0 as usize * HOT_ACCOUNT_ALIGNMENT
     }
 }
 
@@ -552,7 +552,7 @@ pub mod tests {
             .map(|address| AccountIndexWriterEntry {
                 address,
                 offset: HotAccountOffset::new(
-                    rng.gen_range(0..u32::MAX) as usize * HOT_ACCOUNT_OFFSET_ALIGNMENT,
+                    rng.gen_range(0..u32::MAX) as usize * HOT_ACCOUNT_ALIGNMENT,
                 )
                 .unwrap(),
             })
