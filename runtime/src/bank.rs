@@ -517,6 +517,7 @@ impl PartialEq for Bank {
             skipped_rewrites: _,
             rc: _,
             status_cache: _,
+            final_tick_blockhash: _,
             blockhash_queue,
             ancestors,
             hash,
@@ -673,6 +674,13 @@ pub struct Bank {
 
     /// A cache of signature statuses
     pub status_cache: Arc<RwLock<BankStatusCache>>,
+
+    /// Blockhash of the final tick. Will be inserted into
+    /// the `blockhash_queue` only during freezing.
+    /// This prevents race-conditions on fetching recent blockhash
+    /// from the `blockhash_queue`.
+    #[allow(dead_code)]
+    final_tick_blockhash: Mutex<Hash>,
 
     /// FIFO queue of `recent_blockhash` items
     blockhash_queue: RwLock<BlockhashQueue>,
@@ -967,6 +975,7 @@ impl Bank {
             incremental_snapshot_persistence: None,
             rc: BankRc::new(accounts, Slot::default()),
             status_cache: Arc::<RwLock<BankStatusCache>>::default(),
+            final_tick_blockhash: Mutex::new(Hash::default()),
             blockhash_queue: RwLock::<BlockhashQueue>::default(),
             ancestors: Ancestors::default(),
             hash: RwLock::<Hash>::default(),
@@ -1271,6 +1280,7 @@ impl Bank {
             slot,
             bank_id,
             epoch,
+            final_tick_blockhash: Mutex::default(),
             blockhash_queue,
 
             // TODO: clean this up, so much special-case copying...
@@ -1780,6 +1790,7 @@ impl Bank {
             incremental_snapshot_persistence: fields.incremental_snapshot_persistence,
             rc: bank_rc,
             status_cache: Arc::<RwLock<BankStatusCache>>::default(),
+            final_tick_blockhash: Mutex::default(),
             blockhash_queue: RwLock::new(fields.blockhash_queue),
             ancestors,
             hash: RwLock::new(fields.hash),
