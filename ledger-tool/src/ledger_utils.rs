@@ -123,7 +123,7 @@ pub fn load_and_process_ledger_or_exit(
         incremental_snapshot_archive_path,
     )
     .unwrap_or_else(|err| {
-        eprintln!("Failed to load and process ledger: {err}. Exiting now");
+        eprintln!("Exiting. Failed to load and process ledger: {err}");
         exit(1);
     })
 }
