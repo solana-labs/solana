@@ -7,16 +7,20 @@ use {
     solana_core::{
         accounts_hash_verifier::AccountsHashVerifier, validator::BlockVerificationMethod,
     },
-    solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
+    solana_geyser_plugin_manager::geyser_plugin_service::{
+        GeyserPluginService, GeyserPluginServiceError,
+    },
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_ledger::{
-        bank_forks_utils,
+        bank_forks_utils::{self, BankForksUtilsError},
         blockstore::{Blockstore, BlockstoreError},
         blockstore_options::{
             AccessType, BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions,
             ShredStorageType,
         },
-        blockstore_processor::{self, ProcessOptions, TransactionStatusSender},
+        blockstore_processor::{
+            self, BlockstoreProcessorError, ProcessOptions, TransactionStatusSender,
+        },
     },
     solana_measure::measure,
     solana_rpc::transaction_status_service::TransactionStatusService,
@@ -30,11 +34,11 @@ use {
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{
             self, clean_orphaned_account_snapshot_dirs, create_all_accounts_run_and_snapshot_dirs,
-            move_and_async_delete_path_contents,
+            move_and_async_delete_path_contents, SnapshotError,
         },
     },
     solana_sdk::{
-        genesis_config::GenesisConfig, signature::Signer, signer::keypair::Keypair,
+        clock::Slot, genesis_config::GenesisConfig, signature::Signer, signer::keypair::Keypair,
         timing::timestamp,
     },
     solana_streamer::socket::SocketAddrSpace,
@@ -46,7 +50,47 @@ use {
             Arc, RwLock,
         },
     },
+    thiserror::Error,
 };
+
+const PROCESS_SLOTS_HELP_STRING: &str =
+    "The starting slot is either the latest found snapshot slot, or genesis (slot 0) if the \
+     --no-snapshot flag was specified or if no snapshots were found. \
+     The ending slot is the snapshot creation slot for create-snapshot, the value for \
+     --halt-at-slot if specified, or the highest slot in the blockstore.";
+
+#[derive(Error, Debug)]
+pub(crate) enum LoadAndProcessLedgerError {
+    #[error("failed to clean orphaned account snapshot directories: {0}")]
+    CleanOrphanedAccountSnapshotDirectories(#[source] SnapshotError),
+
+    #[error("failed to create all run and snapshot directories: {0}")]
+    CreateAllAccountsRunAndSnapshotDirectories(#[source] SnapshotError),
+
+    #[error("custom accounts path is not supported with seconday blockstore access")]
+    CustomAccountsPathUnsupported(#[source] BlockstoreError),
+
+    #[error(
+        "failed to process blockstore from starting slot {0} to ending slot {1}; the ending slot \
+         is less than the starting slot. {2}"
+    )]
+    EndingSlotLessThanStartingSlot(Slot, Slot, String),
+
+    #[error(
+        "failed to process blockstore from starting slot {0} to ending slot {1}; the blockstore \
+         does not contain a replayable sequence of blocks between these slots. {2}"
+    )]
+    EndingSlotNotReachableFromStartingSlot(Slot, Slot, String),
+
+    #[error("failed to setup geyser service: {0}")]
+    GeyserServiceSetup(#[source] GeyserPluginServiceError),
+
+    #[error("failed to load bank forks: {0}")]
+    LoadBankForks(#[source] BankForksUtilsError),
+
+    #[error("failed to process blockstore from root: {0}")]
+    ProcessBlockstoreFromRoot(#[source] BlockstoreProcessorError),
+}
 
 pub fn get_shred_storage_type(ledger_path: &Path, message: &str) -> ShredStorageType {
     // TODO: the following shred_storage_type inference must be updated once
@@ -69,7 +113,7 @@ pub fn load_and_process_ledger(
     process_options: ProcessOptions,
     snapshot_archive_path: Option<PathBuf>,
     incremental_snapshot_archive_path: Option<PathBuf>,
-) -> Result<(Arc<RwLock<BankForks>>, Option<StartingSnapshotHashes>), String> {
+) -> Result<(Arc<RwLock<BankForks>>, Option<StartingSnapshotHashes>), LoadAndProcessLedgerError> {
     let bank_snapshots_dir = if blockstore.is_primary_access() {
         blockstore.ledger_path().join("snapshot")
     } else {
@@ -107,8 +151,6 @@ pub fn load_and_process_ledger(
         })
     };
 
-    let start_slot_msg = "The starting slot will be the latest snapshot slot, or genesis if the \
-                          --no-snapshot flag is specified or if no snapshots are found.";
     match process_options.halt_at_slot {
         // Skip the following checks for sentinel values of Some(0) and None.
         // For Some(0), no slots will be be replayed after starting_slot.
@@ -116,20 +158,21 @@ pub fn load_and_process_ledger(
         None | Some(0) => {}
         Some(halt_slot) => {
             if halt_slot < starting_slot {
-                eprintln!(
-                    "Unable to process blockstore from starting slot {starting_slot} to \
-                     {halt_slot}; the ending slot is less than the starting slot. {start_slot_msg}"
-                );
-                exit(1);
+                return Err(LoadAndProcessLedgerError::EndingSlotLessThanStartingSlot(
+                    starting_slot,
+                    halt_slot,
+                    PROCESS_SLOTS_HELP_STRING.to_string(),
+                ));
             }
             // Check if we have the slot data necessary to replay from starting_slot to >= halt_slot.
             if !blockstore.slot_range_connected(starting_slot, halt_slot) {
-                eprintln!(
-                    "Unable to process blockstore from starting slot {starting_slot} to \
-                     {halt_slot}; the blockstore does not contain a replayable chain between \
-                     these slots. {start_slot_msg}"
+                return Err(
+                    LoadAndProcessLedgerError::EndingSlotNotReachableFromStartingSlot(
+                        starting_slot,
+                        halt_slot,
+                        PROCESS_SLOTS_HELP_STRING.to_string(),
+                    ),
                 );
-                exit(1);
             }
         }
     }
@@ -147,19 +190,15 @@ pub fn load_and_process_ledger(
                 "Checking if another process currently holding Primary access to {:?}",
                 blockstore.ledger_path()
             );
-            if Blockstore::open_with_options(
+            Blockstore::open_with_options(
                 blockstore.ledger_path(),
                 BlockstoreOptions {
                     access_type: AccessType::PrimaryForMaintenance,
                     ..BlockstoreOptions::default()
                 },
             )
-            .is_err()
-            {
-                // Couldn't get Primary access, error out to be defensive.
-                eprintln!("Error: custom accounts path is not supported under secondary access");
-                exit(1);
-            }
+            // Couldn't get Primary access, error out to be defensive.
+            .map_err(LoadAndProcessLedgerError::CustomAccountsPathUnsupported)?;
         }
         account_paths.split(',').map(PathBuf::from).collect()
     } else if blockstore.is_primary_access() {
@@ -177,11 +216,8 @@ pub fn load_and_process_ledger(
     };
 
     let (account_run_paths, account_snapshot_paths) =
-        create_all_accounts_run_and_snapshot_dirs(&account_paths).unwrap_or_else(|err| {
-            eprintln!("Error: {err}");
-            exit(1);
-        });
-
+        create_all_accounts_run_and_snapshot_dirs(&account_paths)
+            .map_err(LoadAndProcessLedgerError::CreateAllAccountsRunAndSnapshotDirectories)?;
     // From now on, use run/ paths in the same way as the previous account_paths.
     let account_paths = account_run_paths;
 
@@ -199,12 +235,8 @@ pub fn load_and_process_ledger(
     snapshot_utils::purge_incomplete_bank_snapshots(&bank_snapshots_dir);
 
     info!("Cleaning contents of account snapshot paths: {account_snapshot_paths:?}");
-    if let Err(err) =
-        clean_orphaned_account_snapshot_dirs(&bank_snapshots_dir, &account_snapshot_paths)
-    {
-        eprintln!("Failed to clean orphaned account snapshot dirs: {err}");
-        exit(1);
-    }
+    clean_orphaned_account_snapshot_dirs(&bank_snapshots_dir, &account_snapshot_paths)
+        .map_err(LoadAndProcessLedgerError::CleanOrphanedAccountSnapshotDirectories)?;
 
     let geyser_plugin_active = arg_matches.is_present("geyser_plugin_config");
     let (accounts_update_notifier, transaction_notifier) = if geyser_plugin_active {
@@ -216,12 +248,8 @@ pub fn load_and_process_ledger(
         let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
         drop(confirmed_bank_sender);
         let geyser_service =
-            GeyserPluginService::new(confirmed_bank_receiver, &geyser_config_files).unwrap_or_else(
-                |err| {
-                    eprintln!("Failed to setup Geyser service: {err}");
-                    exit(1);
-                },
-            );
+            GeyserPluginService::new(confirmed_bank_receiver, &geyser_config_files)
+                .map_err(LoadAndProcessLedgerError::GeyserServiceSetup)?;
         (
             geyser_service.get_accounts_update_notifier(),
             geyser_service.get_transaction_notifier(),
@@ -244,7 +272,7 @@ pub fn load_and_process_ledger(
             accounts_update_notifier,
             exit.clone(),
         )
-        .map_err(|err| err.to_string())?;
+        .map_err(LoadAndProcessLedgerError::LoadBankForks)?;
     let block_verification_method = value_t!(
         arg_matches,
         "block_verification_method",
@@ -345,7 +373,7 @@ pub fn load_and_process_ledger(
         &accounts_background_request_sender,
     )
     .map(|_| (bank_forks, starting_snapshot_hashes))
-    .map_err(|err| err.to_string());
+    .map_err(LoadAndProcessLedgerError::ProcessBlockstoreFromRoot);
 
     exit.store(true, Ordering::Relaxed);
     accounts_background_service.join().unwrap();

@@ -6433,6 +6433,7 @@ dependencies = [
  "solana-version",
  "solana-vote-program",
  "solana_rbpf",
+ "thiserror",
  "tikv-jemallocator",
  "tokio",
 ]
