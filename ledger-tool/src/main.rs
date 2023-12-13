@@ -3442,7 +3442,7 @@ fn main() {
                     force_update_to_open,
                     enforce_ulimit_nofile,
                 );
-                let (bank_forks, ..) = load_and_process_ledger_or_exit(
+                let (bank_forks, _) = load_and_process_ledger_or_exit(
                     arg_matches,
                     &genesis_config,
                     Arc::new(blockstore),
