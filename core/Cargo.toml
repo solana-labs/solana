@@ -96,6 +96,7 @@ solana-program-runtime = { workspace = true }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 solana-stake-program = { workspace = true }
+solana-unified-scheduler-pool = { workspace = true, features = ["dev-context-only-utils"] }
 static_assertions = { workspace = true }
 systemstat = { workspace = true }
 test-case = { workspace = true }

@@ -99,6 +99,7 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 )]
 pub trait InstalledScheduler: Send + Sync + Debug + 'static {
     fn id(&self) -> SchedulerId;
+    #[cfg(feature = "dev-context-only-utils")]
     fn context(&self) -> &SchedulingContext;
 
     // Calling this is illegal as soon as wait_for_termination is called.
@@ -226,6 +227,7 @@ pub type InstalledSchedulerRwLock = RwLock<Option<DefaultInstalledSchedulerBox>>
 impl BankWithScheduler {
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     pub(crate) fn new(bank: Arc<Bank>, scheduler: Option<DefaultInstalledSchedulerBox>) -> Self {
+        #[cfg(feature = "dev-context-only-utils")]
         if let Some(bank_in_context) = scheduler
             .as_ref()
             .map(|scheduler| scheduler.context().bank())
