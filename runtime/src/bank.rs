@@ -679,7 +679,6 @@ pub struct Bank {
     /// the `blockhash_queue` only during freezing.
     /// This prevents race-conditions on fetching recent blockhash
     /// from the `blockhash_queue`.
-    #[allow(dead_code)]
     final_tick_blockhash: Mutex<Hash>,
 
     /// FIFO queue of `recent_blockhash` items
@@ -3716,6 +3715,7 @@ impl Bank {
         let mut hash = self.hash.write().unwrap();
         if *hash == Hash::default() {
             // finish up any deferred changes to account state
+            self.register_and_update_recent_bank_hash_on_freeze();
             self.collect_rent_eagerly();
             self.distribute_transaction_fees();
             self.distribute_rent_fees();
@@ -4145,18 +4145,23 @@ impl Bank {
     }
 
     /// Register a new recent blockhash in the bank's recent blockhash queue. Called when a bank
-    /// reaches its max tick height. Can be called by tests to get new blockhashes for transaction
-    /// processing without advancing to a new bank slot.
+    /// reaches its max tick height.
     fn register_recent_blockhash(&self, blockhash: &Hash, scheduler: &InstalledSchedulerRwLock) {
         // This is needed because recent_blockhash updates necessitate synchronizations for
         // consistent tx check_age handling.
         BankWithScheduler::wait_for_paused_scheduler(self, scheduler);
 
-        // Only acquire the write lock for the blockhash queue on block boundaries because
-        // readers can starve this write lock acquisition and ticks would be slowed down too
-        // much if the write lock is acquired for each tick.
+        // Insert the new hash into temporary storage `final_tick_blockhash`, which will
+        // be registered in the bank's BlockhashQueue when the bank is frozen.
+        *self.final_tick_blockhash.lock().unwrap() = *blockhash;
+    }
+
+    /// Register a new recent blockhash in the bank's recent blockhash queue. Called when a bank
+    /// is being frozen.
+    fn register_and_update_recent_bank_hash_on_freeze(&self) {
+        let blockhash = self.final_tick_blockhash.lock().unwrap();
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
-        w_blockhash_queue.register_hash(blockhash, self.fee_rate_governor.lamports_per_signature);
+        w_blockhash_queue.register_hash(&blockhash, self.fee_rate_governor.lamports_per_signature);
         self.update_recent_blockhashes_locked(&w_blockhash_queue);
     }
 
