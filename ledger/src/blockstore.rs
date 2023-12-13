@@ -2278,12 +2278,8 @@ impl Blockstore {
         if let Some(highest_primary_index_slot) = *w_highest_primary_index_slot {
             if oldest_slot > highest_primary_index_slot {
                 *w_highest_primary_index_slot = None;
-                self.transaction_status_index_cf.delete(0)?;
-                self.transaction_status_index_cf.delete(1)?;
+                self.db.set_clean_slot_0(true);
             }
-        }
-        if w_highest_primary_index_slot.is_none() {
-            self.db.set_clean_slot_0(true);
         }
         Ok(())
     }
