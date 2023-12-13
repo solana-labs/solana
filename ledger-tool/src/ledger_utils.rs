@@ -106,6 +106,28 @@ pub fn get_shred_storage_type(ledger_path: &Path, message: &str) -> ShredStorage
     }
 }
 
+pub fn load_and_process_ledger_or_exit(
+    arg_matches: &ArgMatches,
+    genesis_config: &GenesisConfig,
+    blockstore: Arc<Blockstore>,
+    process_options: ProcessOptions,
+    snapshot_archive_path: Option<PathBuf>,
+    incremental_snapshot_archive_path: Option<PathBuf>,
+) -> (Arc<RwLock<BankForks>>, Option<StartingSnapshotHashes>) {
+    load_and_process_ledger(
+        arg_matches,
+        genesis_config,
+        blockstore,
+        process_options,
+        snapshot_archive_path,
+        incremental_snapshot_archive_path,
+    )
+    .unwrap_or_else(|err| {
+        eprintln!("Exiting. Failed to load and process ledger: {err}");
+        exit(1);
+    })
+}
+
 pub fn load_and_process_ledger(
     arg_matches: &ArgMatches,
     genesis_config: &GenesisConfig,

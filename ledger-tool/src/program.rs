@@ -119,18 +119,14 @@ fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank
         force_update_to_open,
         enforce_ulimit_nofile,
     );
-    let (bank_forks, ..) = load_and_process_ledger(
+    let (bank_forks, ..) = load_and_process_ledger_or_exit(
         arg_matches,
         &genesis_config,
         Arc::new(blockstore),
         process_options,
         snapshot_archive_path,
         incremental_snapshot_archive_path,
-    )
-    .unwrap_or_else(|err| {
-        eprintln!("Ledger loading failed: {err:?}");
-        exit(1);
-    });
+    );
     let bank = bank_forks.read().unwrap().working_bank();
     bank
 }
