@@ -322,7 +322,7 @@ Buffers also support `show` and `dump` just like programs do.
 
 ### Upgrading program using offline signer as authority
 
-Some security models require separating the signing process from the transaction broadcast, such that the signing keys can be completely disconnected from any network, also known as [offline signing](../offline-signing.md).
+Some security models require separating the signing process from the transaction broadcast, such that the signing keys can be completely disconnected from any network, also known as [offline signing](offline-signing.md).
 
 This section describes how a program developer can use offline signing to upgrade their program, unlike the [previous section](deploy-a-program.md#redeploy-a-program), which assumes the machine is connected to the internet, aka online signing.
 
@@ -367,4 +367,4 @@ Note:
 - you should pre-fill every value except for `blockhash` ahead of time, and once you are ready to act - you'll need to
   look up a recent `blockhash` and paste it in to generate the offline transaction signature. The `blockhash` expires
   after ~60 seconds. If you didn't make it in time - just get another fresh hash and repeat until you succeed, or
-  consider using [durable transaction nonces](../offline-signing/durable-nonce.md).
+  consider using [durable transaction nonces](durable-nonce.md).
