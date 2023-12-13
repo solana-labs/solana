@@ -1043,9 +1043,9 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
             let (index2, usage_counter2) = random_index_and_usage_counter(&candidates, now);
 
             let (program, entry) = if usage_counter1 < usage_counter2 {
-                candidates.remove(index1)
+                candidates.swap_remove(index1)
             } else {
-                candidates.remove(index2)
+                candidates.swap_remove(index2)
             };
             self.unload_program_entry(&program, &entry);
         }
