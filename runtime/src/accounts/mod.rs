@@ -416,8 +416,7 @@ fn load_transaction_accounts(
     })
 }
 
-/// If feature `cap_transaction_accounts_data_size` is active, total accounts data a
-/// transaction can load is limited to
+/// Total accounts data a transaction can load is limited to
 ///   if `set_tx_loaded_accounts_data_size` instruction is not activated or not used, then
 ///     default value of 64MiB to not break anyone in Mainnet-beta today
 ///   else
@@ -427,24 +426,17 @@ fn get_requested_loaded_accounts_data_size_limit(
     tx: &SanitizedTransaction,
     feature_set: &FeatureSet,
 ) -> Result<Option<NonZeroUsize>> {
-    if feature_set.is_active(&feature_set::cap_transaction_accounts_data_size::id()) {
-        let compute_budget_limits = process_compute_budget_instructions(
-            tx.message().program_instructions_iter(),
-            feature_set,
-        )
-        .unwrap_or_default();
-        // sanitize against setting size limit to zero
-        NonZeroUsize::new(
-            usize::try_from(compute_budget_limits.loaded_accounts_bytes).unwrap_or_default(),
-        )
-        .map_or(
-            Err(TransactionError::InvalidLoadedAccountsDataSizeLimit),
-            |v| Ok(Some(v)),
-        )
-    } else {
-        // feature not activated, no loaded accounts data limit imposed.
-        Ok(None)
-    }
+    let compute_budget_limits =
+        process_compute_budget_instructions(tx.message().program_instructions_iter(), feature_set)
+            .unwrap_or_default();
+    // sanitize against setting size limit to zero
+    NonZeroUsize::new(
+        usize::try_from(compute_budget_limits.loaded_accounts_bytes).unwrap_or_default(),
+    )
+    .map_or(
+        Err(TransactionError::InvalidLoadedAccountsDataSizeLimit),
+        |v| Ok(Some(v)),
+    )
 }
 
 fn account_shared_data_from_program(
@@ -1549,7 +1541,6 @@ mod tests {
                 solana_sdk::instruction::Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
             ];
 
-        let result_no_limit = Ok(None);
         let result_default_limit = Ok(Some(
             NonZeroUsize::new(
                 usize::try_from(compute_budget_processor::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES)
@@ -1563,22 +1554,13 @@ mod tests {
 
         let mut feature_set = FeatureSet::default();
 
-        // if `cap_transaction_accounts_data_size feature` is disable,
-        // the result will always be no limit
-        test(tx_not_set_limit, &feature_set, &result_no_limit);
-        test(tx_set_limit_99, &feature_set, &result_no_limit);
-        test(tx_set_limit_0, &feature_set, &result_no_limit);
-
-        // if `cap_transaction_accounts_data_size` is enabled, and
-        //    `add_set_tx_loaded_accounts_data_size_instruction` is disabled,
+        // if `add_set_tx_loaded_accounts_data_size_instruction` is disabled,
         // the result will always be default limit (64MiB)
-        feature_set.activate(&feature_set::cap_transaction_accounts_data_size::id(), 0);
         test(tx_not_set_limit, &feature_set, &result_default_limit);
         test(tx_set_limit_99, &feature_set, &result_default_limit);
         test(tx_set_limit_0, &feature_set, &result_default_limit);
 
-        // if `cap_transaction_accounts_data_size` and
-        //    `add_set_tx_loaded_accounts_data_size_instruction` are both enabled,
+        // if `add_set_tx_loaded_accounts_data_size_instruction` is enabled,
         // the results are:
         //    if tx doesn't set limit, then default limit (64MiB)
         //    if tx sets limit, then requested limit
