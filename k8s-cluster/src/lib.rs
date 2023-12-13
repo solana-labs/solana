@@ -33,6 +33,7 @@ pub mod k8s_helpers;
 pub mod kubernetes;
 pub mod ledger_helper;
 pub mod release;
+pub mod validator;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ValidatorType {

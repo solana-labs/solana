@@ -195,6 +195,17 @@ fn parse_matches() -> ArgMatches<'static> {
                 .help("Amount to stake internal nodes (Sol)."),
         )
         .arg(
+            Arg::with_name("internal_node_stake_distribution")
+                .long("internal-node-stake-distribution")
+                .takes_value(true)
+                .help("Distribution of node stake. based on 1,000,000 SOL.
+                list of percentages. e.g.
+                    --internal-node-stake-distribution 33 33 33
+                    --internal-node-stake-distribution 50 50
+                    --internal-node-stake-distribution 22 18 21 5 34
+                    "),
+        )
+        .arg(
             Arg::with_name("enable_warmup_epochs")
                 .long("enable-warmup-epochs")
                 .takes_value(true)

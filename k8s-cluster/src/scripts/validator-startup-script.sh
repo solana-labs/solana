@@ -14,7 +14,7 @@ args=(
 airdrops_enabled=1
 # next two values will be overwritten based on command line args. default is set here: k8s-cluster/src/genesis.rs
 node_sol=500 # 500 SOL: number of SOL to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
-stake_sol=10
+stake_sol=10 # this is actually set in main.rs
 identity=validator-accounts/identity.json
 vote_account=validator-accounts/vote.json
 no_restart=0
@@ -353,6 +353,7 @@ if ! run_solana_command "solana -u $LOAD_BALANCER_RPC_URL create-vote-account --
 fi
 
 if [ "$vote_account_already_exists" != true ]; then
+  echo "stake sol for account: $stake_sol"
   if ! run_solana_command "solana -u $LOAD_BALANCER_RPC_URL create-stake-account validator-accounts/stake.json $stake_sol -k $IDENTITY_FILE" "Create Stake Account"; then
     echo "Create stake account failed."
     exit 1
