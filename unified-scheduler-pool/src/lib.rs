@@ -70,6 +70,8 @@ pub type DefaultSchedulerPool =
     SchedulerPool<PooledScheduler<DefaultTaskHandler>, DefaultTaskHandler>;
 
 impl<S: SpawnableScheduler<TH>, TH: TaskHandler> SchedulerPool<S, TH> {
+    // Some internal impl and test code want an actual concrete type, NOT the
+    // `dyn InstalledSchedulerPool`. So don't merge this into `Self::new_dyn()`.
     fn new(
         log_messages_bytes_limit: Option<usize>,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -90,6 +92,8 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> SchedulerPool<S, TH> {
         })
     }
 
+    // This apparently-meaningless wrapper is handy, because some callers explicitly want
+    // `dyn InstalledSchedulerPool` to be returned for type inference convenience.
     pub fn new_dyn(
         log_messages_bytes_limit: Option<usize>,
         transaction_status_sender: Option<TransactionStatusSender>,
