@@ -329,7 +329,7 @@ This section describes how a program developer can use offline signing to upgrad
 Note that only the `upgrade` command can be performed in offline mode. The initial program deployment **must** be performed from an online machine, and only subsequent program upgrades can leverage offline signing.
 
 Assuming your program has been deployed and its upgrade authority has been changed to an
-offline signer, 
+offline signer,
 a typical setup would consist of 2 different signers:
 - online signer (fee payer for uploading program buffer and upgrading program)
 - offline signer (program upgrade authority)
