@@ -90,6 +90,58 @@ impl BankForks {
         Self::new_from_banks(&[Arc::new(bank)], root)
     }
 
+    pub fn new_from_banks(initial_forks: &[Arc<Bank>], root: Slot) -> Arc<RwLock<Self>> {
+        let mut banks = HashMap::new();
+
+        // Iterate through the heads of all the different forks
+        for bank in initial_forks {
+            banks.insert(
+                bank.slot(),
+                BankWithScheduler::new_without_scheduler(bank.clone()),
+            );
+            let parents = bank.parents();
+            for parent in parents {
+                if banks
+                    .insert(
+                        parent.slot(),
+                        BankWithScheduler::new_without_scheduler(parent.clone()),
+                    )
+                    .is_some()
+                {
+                    // All ancestors have already been inserted by another fork
+                    break;
+                }
+            }
+        }
+        let mut descendants = HashMap::<_, HashSet<_>>::new();
+        for (slot, bank) in &banks {
+            descendants.entry(*slot).or_default();
+            for parent in bank.proper_ancestors() {
+                descendants.entry(parent).or_default().insert(*slot);
+            }
+        }
+        let bank_forks = Arc::new(RwLock::new(Self {
+            root: Arc::new(AtomicSlot::new(root)),
+            banks,
+            descendants,
+            snapshot_config: None,
+            accounts_hash_interval_slots: std::u64::MAX,
+            last_accounts_hash_slot: root,
+            in_vote_only_mode: Arc::new(AtomicBool::new(false)),
+            highest_slot_at_startup: 0,
+            scheduler_pool: None,
+        }));
+
+        for bank in bank_forks.read().unwrap().banks.values() {
+            bank.loaded_programs_cache
+                .write()
+                .unwrap()
+                .set_fork_graph(bank_forks.clone());
+        }
+
+        bank_forks
+    }
+
     pub fn banks(&self) -> &HashMap<Slot, BankWithScheduler> {
         &self.banks
     }
@@ -165,58 +217,6 @@ impl BankForks {
 
     pub fn root_bank(&self) -> Arc<Bank> {
         self[self.root()].clone()
-    }
-
-    pub fn new_from_banks(initial_forks: &[Arc<Bank>], root: Slot) -> Arc<RwLock<Self>> {
-        let mut banks = HashMap::new();
-
-        // Iterate through the heads of all the different forks
-        for bank in initial_forks {
-            banks.insert(
-                bank.slot(),
-                BankWithScheduler::new_without_scheduler(bank.clone()),
-            );
-            let parents = bank.parents();
-            for parent in parents {
-                if banks
-                    .insert(
-                        parent.slot(),
-                        BankWithScheduler::new_without_scheduler(parent.clone()),
-                    )
-                    .is_some()
-                {
-                    // All ancestors have already been inserted by another fork
-                    break;
-                }
-            }
-        }
-        let mut descendants = HashMap::<_, HashSet<_>>::new();
-        for (slot, bank) in &banks {
-            descendants.entry(*slot).or_default();
-            for parent in bank.proper_ancestors() {
-                descendants.entry(parent).or_default().insert(*slot);
-            }
-        }
-        let bank_forks = Arc::new(RwLock::new(Self {
-            root: Arc::new(AtomicSlot::new(root)),
-            banks,
-            descendants,
-            snapshot_config: None,
-            accounts_hash_interval_slots: std::u64::MAX,
-            last_accounts_hash_slot: root,
-            in_vote_only_mode: Arc::new(AtomicBool::new(false)),
-            highest_slot_at_startup: 0,
-            scheduler_pool: None,
-        }));
-
-        for bank in bank_forks.read().unwrap().banks.values() {
-            bank.loaded_programs_cache
-                .write()
-                .unwrap()
-                .set_fork_graph(bank_forks.clone());
-        }
-
-        bank_forks
     }
 
     pub fn install_scheduler_pool(&mut self, pool: InstalledSchedulerPoolArc) {
