@@ -446,81 +446,7 @@ crossbeam-epoch = { git = "https://github.com/solana-labs/crossbeam", rev = "fd2
 # overrides in sync.
 solana-program = { path = "sdk/program" }
 solana-zk-token-sdk = { path = "zk-token-sdk" }
-<<<<<<< HEAD
-=======
 #
-# === zeroize versioning issues ===
-#
-# A number of packages used explicit upper bound on the `zeroize` package, such
-# as `>=1, <1.4`.  The problem is that cargo still does not duplicate `zeroize`
-# if a newer version is available and requested by another package and just
-# fails the whole dependency resolution process.
-#
-# This is described in
-#
-# https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#multiple-requirements
-#
-# So we have to patch `zeroize` dependency specifications in the projects that
-# introduce these constraints.  They have already removed these constraints in
-# newer versions, but we have not updated yet.  As we update, we need to remove
-# these patch requests.
-#
-# When our dependencies are upgraded, we can remove these patches.  Before that
-# we might need to maintain these patches in sync with our full dependency tree.
-
-# Our dependency tree has `aes-gcm-siv` v0.10.3 and the `zeroize` restriction
-# was removed in the next commit just after the release.  So it seems safe to
-# patch to this commit.
-#
-# `aes-gcm-siv` v0.10.3 release:
-#
-# https://github.com/RustCrypto/AEADs/releases/tag/aes-gcm-siv-v0.10.3
-#
-# Corresponds to commit
-#
-# https://github.com/RustCrypto/AEADs/commit/6f16f4577a1fc839a2346cf8c5531c85a44bf5c0
-#
-# Comparison with `6105d7a5591aefa646a95d12b5e8d3f55a9214ef` pinned here:
-#
-# https://github.com/RustCrypto/AEADs/compare/aes-gcm-siv-v0.10.3..6105d7a5591aefa646a95d12b5e8d3f55a9214ef
-#
-[patch.crates-io.aes-gcm-siv]
-git = "https://github.com/RustCrypto/AEADs"
-rev = "6105d7a5591aefa646a95d12b5e8d3f55a9214ef"
-
-# Our dependency tree has `curve25519-dalek` v3.2.1.  They have removed the
-# constraint in the next major release. The commit that removes the `zeroize`
-# constraint was added to multiple release branches, but not to the 3.2 branch.
-#
-# `curve25519-dalek` maintainers are saying they do not want to invest any more
-# time in the 3.2 release:
-#
-# https://github.com/dalek-cryptography/curve25519-dalek/issues/452#issuecomment-1749809428
-#
-# So we have to fork and create our own release, based on v3.2.1, with the
-# commit that removed `zeroize` constraint on the `main` branch cherry-picked on
-# top.
-#
-# `curve25519-dalek` v3.2.1 release:
-#
-# https://github.com/dalek-cryptography/curve25519-dalek/releases/tag/3.2.1
-#
-# Corresponds to commit
-#
-# https://github.com/dalek-cryptography/curve25519-dalek/commit/29e5c29b0e5c6821e4586af58b0d0891dd2ec639
-#
-# Comparison with `b500cdc2a920cd5bff9e2dd974d7b97349d61464`:
-#
-# https://github.com/dalek-cryptography/curve25519-dalek/compare/3.2.1...solana-labs:curve25519-dalek:b500cdc2a920cd5bff9e2dd974d7b97349d61464
-#
-# Or, using the branch name instead of the hash:
-#
-# https://github.com/dalek-cryptography/curve25519-dalek/compare/3.2.1...solana-labs:curve25519-dalek:3.2.1-unpin-zeroize
-#
-[patch.crates-io.curve25519-dalek]
-git = "https://github.com/solana-labs/curve25519-dalek.git"
-rev = "b500cdc2a920cd5bff9e2dd974d7b97349d61464"
-
 # Solana RPC nodes experience stalls when running with `tokio` containing this
 # commit:
 # https://github.com/tokio-rs/tokio/commit/4eed411519783ef6f58cbf74f886f91142b5cfa6
@@ -538,4 +464,3 @@ rev = "b500cdc2a920cd5bff9e2dd974d7b97349d61464"
 [patch.crates-io.tokio]
 git = "https://github.com/solana-labs/solana-tokio.git"
 rev = "7cf47705faacf7bf0e43e4131a5377b3291fce21"
->>>>>>> aaa48ec8db (Patch tokio to vendored version (#34240))
