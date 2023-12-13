@@ -1,3 +1,5 @@
+use crate::cluster_info_notifier::ClusterInfoNotifierImpl;
+use solana_gossip::cluster_info_notifier_interface::ClusterInfoUpdateNotifierLock;
 use {
     crate::{
         accounts_update_notifier::AccountsUpdateNotifierImpl,
@@ -37,6 +39,7 @@ pub struct GeyserPluginService {
     transaction_notifier: Option<TransactionNotifierArc>,
     entry_notifier: Option<EntryNotifierArc>,
     block_metadata_notifier: Option<BlockMetadataNotifierArc>,
+    cluster_info_notifier: Option<ClusterInfoUpdateNotifierLock>,
 }
 
 impl GeyserPluginService {
@@ -81,7 +84,16 @@ impl GeyserPluginService {
             plugin_manager.account_data_notifications_enabled();
         let transaction_notifications_enabled = plugin_manager.transaction_notifications_enabled();
         let entry_notifications_enabled = plugin_manager.entry_notifications_enabled();
+        let cluster_info_notifications_enabled = plugin_manager.clusterinfo_notifications_enabled();
         let plugin_manager = Arc::new(RwLock::new(plugin_manager));
+
+        let cluster_info_notifier: Option<ClusterInfoUpdateNotifierLock> =
+            if cluster_info_notifications_enabled {
+                let cluster_info_notifier = ClusterInfoNotifierImpl::new(plugin_manager.clone());
+                Some(Arc::new(RwLock::new(cluster_info_notifier)))
+            } else {
+                None
+            };
 
         let accounts_update_notifier: Option<AccountsUpdateNotifier> =
             if account_data_notifications_enabled {
@@ -143,6 +155,7 @@ impl GeyserPluginService {
             transaction_notifier,
             entry_notifier,
             block_metadata_notifier,
+            cluster_info_notifier,
         })
     }
 
@@ -170,6 +183,10 @@ impl GeyserPluginService {
 
     pub fn get_block_metadata_notifier(&self) -> Option<BlockMetadataNotifierArc> {
         self.block_metadata_notifier.clone()
+    }
+
+    pub fn get_cluster_info_notifier(&self) -> Option<ClusterInfoUpdateNotifierLock> {
+        self.cluster_info_notifier.clone()
     }
 
     pub fn join(self) -> thread::Result<()> {

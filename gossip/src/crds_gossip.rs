@@ -4,6 +4,7 @@
 //! designed to run with a simulator or over a UDP network connection with messages up to a
 //! packet::PACKET_DATA_SIZE size.
 
+use crate::cluster_info_notifier_interface::ClusterInfoUpdateNotifierLock;
 use {
     crate::{
         cluster_info::Ping,
@@ -45,6 +46,14 @@ pub struct CrdsGossip {
 }
 
 impl CrdsGossip {
+    pub fn set_clusterinfo_notifier(
+        &self,
+        cluster_info_notifier: Option<ClusterInfoUpdateNotifierLock>,
+    ) {
+        let mut crds = self.crds.write().unwrap();
+        crds.set_clusterinfo_notifier(cluster_info_notifier);
+    }
+
     /// Process a push message to the network.
     ///
     /// Returns unique origins' pubkeys of upserted values.

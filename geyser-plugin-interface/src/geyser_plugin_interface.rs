@@ -477,4 +477,11 @@ pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
     fn entry_notifications_enabled(&self) -> bool {
         false
     }
+
+    /// Check if the plugin is interested in cluster info data
+    /// Default is false -- if the plugin is interested in
+    /// cluster info data, return true.
+    fn clusterinfo_notifications_enabled(&self) -> bool {
+        false
+    }
 }
