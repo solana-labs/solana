@@ -33,7 +33,6 @@ pub mod k8s_helpers;
 pub mod kubernetes;
 pub mod ledger_helper;
 pub mod release;
-pub mod validator;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ValidatorType {
@@ -152,4 +151,33 @@ pub fn cat_file(path: &PathBuf) -> io::Result<()> {
     info!("{}", contents);
 
     Ok(())
+}
+
+pub fn calculate_stake_allocations(total_sol: f64, num_validators: i32, distribution: &Vec<u8>) -> Result<(Vec<f64>, Vec<f64>), String> {
+    if distribution.iter().sum::<u8>() != 100 {
+        return Err("The sum of distribution percentages must be 100".to_string());
+    }
+    let mut allocations: Vec<f64> = Vec::with_capacity(num_validators as usize);
+    let mut stake_per_bucket: Vec<f64> = Vec::with_capacity(distribution.len());
+    // let mut remaining_sol = total_sol;
+    let nodes_per_stake_grouping = num_validators as usize / distribution.len();
+
+    for (_, &percent) in distribution.iter().enumerate() {
+        // let is_last = i == distribution.len() - 1;
+        // let sol_to_alloc = if is_last {
+        //     remaining_sol //alloc all remaining sol to last validator
+        // } else {
+        //     (total_sol * (percent as f64 / 100.0))
+        // };
+
+        let sol_per_node = total_sol * (percent as f64 / 100.0);
+        stake_per_bucket.push(sol_per_node);
+        // remaining_sol -= sol_per_node * nodes_per_stake_grouping as f64;
+
+        for _ in 0..nodes_per_stake_grouping {
+            allocations.push(sol_per_node);
+        }
+
+    }
+    Ok((stake_per_bucket, allocations))
 }

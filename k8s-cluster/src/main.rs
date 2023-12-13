@@ -7,7 +7,7 @@ use {
             Genesis, GenesisFlags, DEFAULT_CLIENT_LAMPORTS_PER_SIGNATURE,
             DEFAULT_INTERNAL_NODE_SOL, DEFAULT_INTERNAL_NODE_STAKE_SOL,
         },
-        get_solana_root, initialize_globals,
+        get_solana_root, initialize_globals, calculate_stake_allocations,
         kubernetes::{ClientConfig, Kubernetes, Metrics, NodeAffinityType, ValidatorConfig},
         ledger_helper::LedgerHelper,
         release::{BuildConfig, Deploy},
@@ -198,9 +198,10 @@ fn parse_matches() -> ArgMatches<'static> {
             Arg::with_name("internal_node_stake_distribution")
                 .long("internal-node-stake-distribution")
                 .takes_value(true)
+                .multiple(true)
                 .help("Distribution of node stake. based on 1,000,000 SOL.
                 list of percentages. e.g.
-                    --internal-node-stake-distribution 33 33 33
+                    --internal-node-stake-distribution 33 33 34
                     --internal-node-stake-distribution 50 50
                     --internal-node-stake-distribution 22 18 21 5 34
                     "),
@@ -434,6 +435,8 @@ fn parse_matches() -> ArgMatches<'static> {
         .get_matches()
 }
 
+pub const TOTAL_SOL: f64 = 1000000.0; // 1 mil sol to distribute across validators
+
 #[derive(Clone, Debug)]
 pub struct SetupConfig<'a> {
     pub namespace: &'a str,
@@ -454,6 +457,30 @@ async fn main() {
         num_validators: value_t_or_exit!(matches, "number_of_validators", i32),
         skip_genesis_build: matches.is_present("skip_genesis_build"),
     };
+
+    let stake_distribution: Option<Vec<u8>> = matches.values_of("internal_node_stake_distribution")
+        .map(|values| values.map(|s| s.parse::<u8>().expect("Invalid percentage in distribution")).collect());
+
+    let (stake_per_bucket, allocations) = match stake_distribution {
+        Some(dist) => {
+            match calculate_stake_allocations(TOTAL_SOL,  setup_config.num_validators, &dist) {
+                Ok((stake_per_bucket, alloc)) => (Some(stake_per_bucket), Some(alloc)),
+                Err(err) => panic!("{}", err),
+            }
+        },
+        None => (None, None)
+    };
+
+    if let (Some(stake_buckets), Some(allocations)) = (&stake_per_bucket, &allocations) {
+        info!("stake per node bucket");
+        for i in stake_buckets.iter() {
+            info!("{}", i);
+        }
+        info!("stake per node");
+        for i in allocations.iter() {
+            info!("{}", i);
+        }
+    }
 
     if setup_config.skip_genesis_build
         && !get_solana_root()
