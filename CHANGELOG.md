@@ -19,6 +19,7 @@ and follows a [Backwards Compatibility Policy](https://docs.solana.com/developin
 ## [1.17.0]
 * Changes
   * Added a changelog.
+  * Added `--use-snapshot-archives-at-startup` for faster validator restarts
 * Upgrade Notes
 
 ## Adding to this Changelog
