@@ -1032,7 +1032,10 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            loaded_programs_cache: Arc::<RwLock<LoadedPrograms<BankForks>>>::default(),
+            loaded_programs_cache: Arc::new(RwLock::new(LoadedPrograms::new(
+                Slot::default(),
+                Epoch::default(),
+            ))),
             check_program_modification_slot: false,
             epoch_reward_status: EpochRewardStatus::default(),
         };
@@ -1880,7 +1883,10 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            loaded_programs_cache: Arc::<RwLock<LoadedPrograms<BankForks>>>::default(),
+            loaded_programs_cache: Arc::new(RwLock::new(LoadedPrograms::new(
+                fields.slot,
+                fields.epoch,
+            ))),
             check_program_modification_slot: false,
             epoch_reward_status: EpochRewardStatus::default(),
         };
