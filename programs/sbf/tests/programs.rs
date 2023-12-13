@@ -43,7 +43,7 @@ use {
         clock::MAX_PROCESSING_AGE,
         compute_budget::ComputeBudgetInstruction,
         entrypoint::MAX_PERMITTED_DATA_INCREASE,
-        feature_set::{self, remove_deprecated_request_unit_ix, FeatureSet},
+        feature_set::{self, FeatureSet},
         fee::FeeStructure,
         loader_instruction,
         message::{v0::LoadedAddresses, SanitizedMessage},
@@ -3868,8 +3868,7 @@ fn test_program_fees() {
         Some(&mint_keypair.pubkey()),
     );
 
-    let mut feature_set = FeatureSet::all_enabled();
-    feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
+    let feature_set = FeatureSet::all_enabled();
 
     let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
     let expected_normal_fee = fee_structure.calculate_fee(
@@ -3899,8 +3898,7 @@ fn test_program_fees() {
         Some(&mint_keypair.pubkey()),
     );
     let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
-    let mut feature_set = FeatureSet::all_enabled();
-    feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
+    let feature_set = FeatureSet::all_enabled();
     let expected_prioritized_fee = fee_structure.calculate_fee(
         &sanitized_message,
         congestion_multiplier,

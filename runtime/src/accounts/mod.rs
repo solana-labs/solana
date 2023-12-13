@@ -750,8 +750,7 @@ mod tests {
             instructions,
         );
 
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&solana_sdk::feature_set::remove_deprecated_request_unit_ix::id());
+        let feature_set = FeatureSet::all_enabled();
 
         let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
         let fee = FeeStructure::default().calculate_fee(
@@ -1621,8 +1620,7 @@ mod tests {
             Hash::default(),
         );
 
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&solana_sdk::feature_set::remove_deprecated_request_unit_ix::id());
+        let feature_set = FeatureSet::all_enabled();
 
         let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
         let fee = FeeStructure::default().calculate_fee(

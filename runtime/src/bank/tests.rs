@@ -10005,7 +10005,6 @@ fn calculate_test_fee(
     remove_congestion_multiplier: bool,
 ) -> u64 {
     let mut feature_set = FeatureSet::all_enabled();
-    feature_set.deactivate(&solana_sdk::feature_set::remove_deprecated_request_unit_ix::id());
 
     if !support_set_accounts_data_size_limit_ix {
         feature_set.deactivate(

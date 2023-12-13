@@ -8,10 +8,7 @@ use {
         borsh1::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
         entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
-        feature_set::{
-            add_set_tx_loaded_accounts_data_size_instruction, remove_deprecated_request_unit_ix,
-            FeatureSet,
-        },
+        feature_set::{add_set_tx_loaded_accounts_data_size_instruction, FeatureSet},
         fee::FeeBudgetLimits,
         instruction::{CompiledInstruction, InstructionError},
         pubkey::Pubkey,
@@ -33,7 +30,6 @@ pub struct ComputeBudgetLimits {
     pub compute_unit_limit: u32,
     pub compute_unit_price: u64,
     pub loaded_accounts_bytes: u32,
-    pub deprecated_additional_fee: Option<u64>,
 }
 
 impl Default for ComputeBudgetLimits {
@@ -43,23 +39,17 @@ impl Default for ComputeBudgetLimits {
             compute_unit_limit: MAX_COMPUTE_UNIT_LIMIT,
             compute_unit_price: 0,
             loaded_accounts_bytes: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
-            deprecated_additional_fee: None,
         }
     }
 }
 
 impl From<ComputeBudgetLimits> for FeeBudgetLimits {
     fn from(val: ComputeBudgetLimits) -> Self {
-        let prioritization_fee =
-            if let Some(deprecated_additional_fee) = val.deprecated_additional_fee {
-                deprecated_additional_fee
-            } else {
-                let prioritization_fee_details = PrioritizationFeeDetails::new(
-                    PrioritizationFeeType::ComputeUnitPrice(val.compute_unit_price),
-                    u64::from(val.compute_unit_limit),
-                );
-                prioritization_fee_details.get_fee()
-            };
+        let prioritization_fee_details = PrioritizationFeeDetails::new(
+            PrioritizationFeeType::ComputeUnitPrice(val.compute_unit_price),
+            u64::from(val.compute_unit_limit),
+        );
+        let prioritization_fee = prioritization_fee_details.get_fee();
 
         FeeBudgetLimits {
             // NOTE - usize::from(u32).unwrap() may fail if target is 16-bit and
@@ -81,8 +71,6 @@ pub fn process_compute_budget_instructions<'a>(
     instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
     feature_set: &FeatureSet,
 ) -> Result<ComputeBudgetLimits, TransactionError> {
-    let support_request_units_deprecated =
-        !feature_set.is_active(&remove_deprecated_request_unit_ix::id());
     let support_set_loaded_accounts_data_size_limit_ix =
         feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id());
 
@@ -91,7 +79,6 @@ pub fn process_compute_budget_instructions<'a>(
     let mut updated_compute_unit_price = None;
     let mut requested_heap_size = None;
     let mut updated_loaded_accounts_data_size_limit = None;
-    let mut deprecated_additional_fee = None;
 
     for (i, (program_id, instruction)) in instructions.enumerate() {
         if compute_budget::check_id(program_id) {
@@ -102,21 +89,6 @@ pub fn process_compute_budget_instructions<'a>(
             let duplicate_instruction_error = TransactionError::DuplicateInstruction(i as u8);
 
             match try_from_slice_unchecked(&instruction.data) {
-                Ok(ComputeBudgetInstruction::RequestUnitsDeprecated {
-                    units: compute_unit_limit,
-                    additional_fee,
-                }) if support_request_units_deprecated => {
-                    if updated_compute_unit_limit.is_some() {
-                        return Err(duplicate_instruction_error);
-                    }
-                    if updated_compute_unit_price.is_some() {
-                        return Err(duplicate_instruction_error);
-                    }
-                    updated_compute_unit_limit = Some(compute_unit_limit);
-                    updated_compute_unit_price =
-                        support_deprecated_requested_units(additional_fee, compute_unit_limit);
-                    deprecated_additional_fee = Some(u64::from(additional_fee));
-                }
                 Ok(ComputeBudgetInstruction::RequestHeapFrame(bytes)) => {
                     if requested_heap_size.is_some() {
                         return Err(duplicate_instruction_error);
@@ -179,24 +151,12 @@ pub fn process_compute_budget_instructions<'a>(
         compute_unit_limit,
         compute_unit_price,
         loaded_accounts_bytes,
-        deprecated_additional_fee,
     })
 }
 
 fn sanitize_requested_heap_size(bytes: u32) -> bool {
     (u32::try_from(MIN_HEAP_FRAME_BYTES).unwrap()..=MAX_HEAP_FRAME_BYTES).contains(&bytes)
         && bytes % 1024 == 0
-}
-
-// Supports request_units_deprecated ix, returns compute_unit_price from deprecated requested
-// units.
-fn support_deprecated_requested_units(additional_fee: u32, compute_unit_limit: u32) -> Option<u64> {
-    // TODO: remove support of 'Deprecated' after feature remove_deprecated_request_unit_ix::id() is activated
-    let prioritization_fee_details = PrioritizationFeeDetails::new(
-        PrioritizationFeeType::Deprecated(u64::from(additional_fee)),
-        u64::from(compute_unit_limit),
-    );
-    Some(prioritization_fee_details.get_priority())
 }
 
 #[cfg(test)]
@@ -224,7 +184,6 @@ mod tests {
                 Hash::default(),
             ));
             let mut feature_set = FeatureSet::default();
-            feature_set.activate(&remove_deprecated_request_unit_ix::id(), 0);
             if $support_set_loaded_accounts_data_size_limit_ix {
                 feature_set.activate(&add_set_tx_loaded_accounts_data_size_instruction::id(), 0);
             }
@@ -448,22 +407,6 @@ mod tests {
             ],
             Err(TransactionError::DuplicateInstruction(2))
         );
-
-        // deprecated
-        test!(
-            &[Instruction::new_with_borsh(
-                compute_budget::id(),
-                &compute_budget::ComputeBudgetInstruction::RequestUnitsDeprecated {
-                    units: 1_000,
-                    additional_fee: 10
-                },
-                vec![]
-            )],
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::InvalidInstructionData,
-            ))
-        );
     }
 
     #[test]
@@ -608,7 +551,6 @@ mod tests {
             ));
 
         let mut feature_set = FeatureSet::default();
-        feature_set.activate(&remove_deprecated_request_unit_ix::id(), 0);
         feature_set.activate(&add_set_tx_loaded_accounts_data_size_instruction::id(), 0);
 
         let result = process_compute_budget_instructions(
@@ -625,80 +567,6 @@ mod tests {
                 compute_unit_limit: 2 * DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
                 ..ComputeBudgetLimits::default()
             })
-        );
-    }
-
-    fn try_prioritization_fee_from_deprecated_requested_units(
-        additional_fee: u32,
-        compute_unit_limit: u32,
-    ) {
-        let payer_keypair = Keypair::new();
-        let tx = SanitizedTransaction::from_transaction_for_tests(Transaction::new(
-            &[&payer_keypair],
-            Message::new(
-                &[Instruction::new_with_borsh(
-                    compute_budget::id(),
-                    &compute_budget::ComputeBudgetInstruction::RequestUnitsDeprecated {
-                        units: compute_unit_limit,
-                        additional_fee,
-                    },
-                    vec![],
-                )],
-                Some(&payer_keypair.pubkey()),
-            ),
-            Hash::default(),
-        ));
-
-        // sucessfully process deprecated instruction
-        let compute_budget_limits = process_compute_budget_instructions(
-            tx.message().program_instructions_iter(),
-            &FeatureSet::default(),
-        )
-        .unwrap();
-
-        // assert compute_budget_limit
-        let expected_compute_unit_price = (additional_fee as u128)
-            .saturating_mul(1_000_000)
-            .checked_div(compute_unit_limit as u128)
-            .map(|cu_price| u64::try_from(cu_price).unwrap_or(u64::MAX))
-            .unwrap();
-        let expected_compute_unit_limit = compute_unit_limit.min(MAX_COMPUTE_UNIT_LIMIT);
-        assert_eq!(
-            compute_budget_limits.compute_unit_price,
-            expected_compute_unit_price
-        );
-        assert_eq!(
-            compute_budget_limits.compute_unit_limit,
-            expected_compute_unit_limit
-        );
-
-        // assert fee_budget_limits
-        let fee_budget_limits = FeeBudgetLimits::from(compute_budget_limits);
-        assert_eq!(
-            fee_budget_limits.prioritization_fee,
-            u64::from(additional_fee)
-        );
-        assert_eq!(
-            fee_budget_limits.compute_unit_limit,
-            u64::from(expected_compute_unit_limit)
-        );
-    }
-
-    #[test]
-    fn test_support_deprecated_requested_units() {
-        // a normal case
-        try_prioritization_fee_from_deprecated_requested_units(647, 6002);
-
-        // requesting cu limit more than MAX, div result will be round down
-        try_prioritization_fee_from_deprecated_requested_units(
-            640,
-            MAX_COMPUTE_UNIT_LIMIT + 606_002,
-        );
-
-        // requesting cu limit more than MAX, div result will round up
-        try_prioritization_fee_from_deprecated_requested_units(
-            764,
-            MAX_COMPUTE_UNIT_LIMIT + 606_004,
         );
     }
 }
