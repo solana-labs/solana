@@ -408,6 +408,7 @@ tempfile = "3.8.1"
 test-case = "3.3.1"
 thiserror = "1.0.50"
 tiny-bip39 = "0.8.2"
+# Update solana-tokio patch below when updating this version
 tokio = "1.29.1"
 tokio-serde = "0.8"
 tokio-stream = "0.1.14"
@@ -538,3 +539,21 @@ rev = "6105d7a5591aefa646a95d12b5e8d3f55a9214ef"
 [patch.crates-io.curve25519-dalek]
 git = "https://github.com/solana-labs/curve25519-dalek.git"
 rev = "b500cdc2a920cd5bff9e2dd974d7b97349d61464"
+
+# Solana RPC nodes experience stalls when running with `tokio` containing this
+# commit:
+# https://github.com/tokio-rs/tokio/commit/4eed411519783ef6f58cbf74f886f91142b5cfa6
+#
+# Tokio maintainers believe performance degradation is due to application bugs:
+# https://github.com/tokio-rs/tokio/issues/4873#issuecomment-1198277677
+#
+# This may indeed be true of the code in this monorepo, but we haven't yet
+# identified the bug or a way to fix. As a stopgap, this patches `tokio` to the
+# tagged version specified above with commit `4eed411` reverted.
+#
+# Comparison:
+# https://github.com/tokio-rs/tokio/compare/tokio-1.29.1...solana-labs:solana-tokio:tokio-1.29.1-revert-4eed411
+#
+[patch.crates-io.tokio]
+git = "https://github.com/solana-labs/solana-tokio.git"
+rev = "7cf47705faacf7bf0e43e4131a5377b3291fce21"

@@ -8446,8 +8446,7 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 [[package]]
 name = "tokio"
 version = "1.29.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "532826ff75199d5833b9d2c5fe410f29235e25704ee5f0ef599fb51c21f4a4da"
+source = "git+https://github.com/solana-labs/solana-tokio.git?rev=7cf47705faacf7bf0e43e4131a5377b3291fce21#7cf47705faacf7bf0e43e4131a5377b3291fce21"
 dependencies = [
  "autocfg",
  "backtrace",
@@ -8476,8 +8475,7 @@ dependencies = [
 [[package]]
 name = "tokio-macros"
 version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "630bdcf245f78637c13ec01ffae6187cca34625e8c63150d424b59e55af2675e"
+source = "git+https://github.com/solana-labs/solana-tokio.git?rev=7cf47705faacf7bf0e43e4131a5377b3291fce21#7cf47705faacf7bf0e43e4131a5377b3291fce21"
 dependencies = [
  "proc-macro2",
  "quote",
