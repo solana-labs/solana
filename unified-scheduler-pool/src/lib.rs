@@ -250,8 +250,9 @@ impl<TH: TaskHandler> InstalledScheduler for PooledScheduler<TH> {
         let (result, timings) =
             result_with_timings.get_or_insert_with(|| (Ok(()), ExecuteTimings::default()));
 
-        // ... so, we're NOT scheduling at all; rather, just execute tx straight off.  we doesn't
-        // need to solve inter-tx locking deps only in the case of single-thread fifo like this.
+        // ... so, we're NOT scheduling at all here; rather, just execute tx straight off. the
+        // inter-tx locking deps aren't needed to be resolved in the case of single-threaded FIFO
+        // like this.
         if result.is_ok() {
             TH::handle(
                 result,
