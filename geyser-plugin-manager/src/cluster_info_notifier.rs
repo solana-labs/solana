@@ -25,6 +25,10 @@ pub(crate) struct ClusterInfoNotifierImpl {
 }
 
 impl ClusterInfoNotifierImpl {
+    pub fn new(plugin_manager: Arc<RwLock<GeyserPluginManager>>) -> Self {
+        ClusterInfoNotifierImpl { plugin_manager }
+    }
+
     fn clusterinfo_from_legacy_contact_info(
         legacy_info: &LegacyContactInfo,
     ) -> ReplicaClusterInfoNode {

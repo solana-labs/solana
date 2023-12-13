@@ -18,6 +18,7 @@
     note = "Please use `solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE}` instead"
 )]
 #[allow(deprecated)]
+use crate::cluster_info_notifier_interface::ClusterInfoUpdateNotifierLock;
 pub use solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE};
 use {
     crate::{
@@ -437,6 +438,13 @@ impl ClusterInfo {
         me.insert_self();
         me.push_self();
         me
+    }
+
+    pub fn set_clusterinfo_notifier(
+        &self,
+        cluster_info_notifier: Option<ClusterInfoUpdateNotifierLock>,
+    ) {
+        self.gossip.set_clusterinfo_notifier(cluster_info_notifier);
     }
 
     pub fn set_contact_debug_interval(&mut self, new: u64) {

@@ -644,13 +644,19 @@ impl Validator {
             .as_ref()
             .and_then(|geyser_plugin_service| geyser_plugin_service.get_block_metadata_notifier());
 
+        let cluster_info_notifier = geyser_plugin_service
+            .as_ref()
+            .and_then(|geyser_plugin_service| geyser_plugin_service.get_cluster_info_notifier());
+
         info!(
             "Geyser plugin: accounts_update_notifier: {}, \
             transaction_notifier: {}, \
-            entry_notifier: {}",
+            entry_notifier: {} \
+            cluster_info_notifier: {}",
             accounts_update_notifier.is_some(),
             transaction_notifier.is_some(),
-            entry_notifier.is_some()
+            entry_notifier.is_some(),
+            cluster_info_notifier.is_some(),
         );
 
         let system_monitor_service = Some(SystemMonitorService::new(
@@ -728,6 +734,7 @@ impl Validator {
             identity_keypair.clone(),
             socket_addr_space,
         );
+        cluster_info.set_clusterinfo_notifier(cluster_info_notifier);
         cluster_info.set_contact_debug_interval(config.contact_debug_interval);
         cluster_info.set_entrypoints(cluster_entrypoints);
         cluster_info.restore_contact_info(ledger_path, config.contact_save_interval);

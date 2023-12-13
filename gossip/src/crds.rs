@@ -210,6 +210,13 @@ fn overrides(value: &CrdsValue, other: &VersionedCrdsValue) -> bool {
 }
 
 impl Crds {
+    pub fn set_clusterinfo_notifier(
+        &mut self,
+        cluster_info_notifier: Option<ClusterInfoUpdateNotifierLock>,
+    ) {
+        self.clusterinfo_update_notifier = cluster_info_notifier;
+    }
+
     /// Returns true if the given value updates an existing one in the table.
     /// The value is outdated and fails to insert, if it already exists in the
     /// table with a more recent wallclock.
