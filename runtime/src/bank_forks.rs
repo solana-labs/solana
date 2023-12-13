@@ -86,33 +86,28 @@ impl Index<u64> for BankForks {
 
 impl BankForks {
     pub fn new_rw_arc(bank: Bank) -> Arc<RwLock<Self>> {
+        let bank = Arc::new(bank);
         let root = bank.slot();
-        Self::new_from_banks(&[Arc::new(bank)], root)
-    }
 
-    pub fn new_from_banks(initial_forks: &[Arc<Bank>], root: Slot) -> Arc<RwLock<Self>> {
         let mut banks = HashMap::new();
-
-        // Iterate through the heads of all the different forks
-        for bank in initial_forks {
-            banks.insert(
-                bank.slot(),
-                BankWithScheduler::new_without_scheduler(bank.clone()),
-            );
-            let parents = bank.parents();
-            for parent in parents {
-                if banks
-                    .insert(
-                        parent.slot(),
-                        BankWithScheduler::new_without_scheduler(parent.clone()),
-                    )
-                    .is_some()
-                {
-                    // All ancestors have already been inserted by another fork
-                    break;
-                }
+        banks.insert(
+            bank.slot(),
+            BankWithScheduler::new_without_scheduler(bank.clone()),
+        );
+        let parents = bank.parents();
+        for parent in parents {
+            if banks
+                .insert(
+                    parent.slot(),
+                    BankWithScheduler::new_without_scheduler(parent.clone()),
+                )
+                .is_some()
+            {
+                // All ancestors have already been inserted by another fork
+                break;
             }
         }
+
         let mut descendants = HashMap::<_, HashSet<_>>::new();
         for (slot, bank) in &banks {
             descendants.entry(*slot).or_default();
@@ -759,21 +754,6 @@ mod tests {
         bank_forks.insert(child_bank);
         assert_eq!(bank_forks[1u64].tick_height(), 1);
         assert_eq!(bank_forks.working_bank().tick_height(), 1);
-    }
-
-    #[test]
-    fn test_bank_forks_new_from_banks() {
-        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        let child_bank = Arc::new(Bank::new_from_parent(bank.clone(), &Pubkey::default(), 1));
-
-        let bank_forks = BankForks::new_from_banks(&[bank.clone(), child_bank.clone()], 0);
-        assert_eq!(bank_forks.read().unwrap().root(), 0);
-        assert_eq!(bank_forks.read().unwrap().working_bank().slot(), 1);
-
-        let bank_forks = BankForks::new_from_banks(&[child_bank, bank], 0);
-        assert_eq!(bank_forks.read().unwrap().root(), 0);
-        assert_eq!(bank_forks.read().unwrap().working_bank().slot(), 1);
     }
 
     #[test]
