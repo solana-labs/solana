@@ -21,7 +21,6 @@ cargo run --bin solana-k8s --
     --num-validators 3
     --bootstrap-image <registry>/bootstrap-<image-name>:<tag>
     --validator-image <registry>/validator-<image-name>:<tag>
-    --prebuild-genesis
     --deploy-method local
     --do-build
     --docker-build
@@ -38,7 +37,6 @@ cargo run --bin solana-k8s --
     --num-validators 3
     --bootstrap-image <registry>/bootstrap-<image-name>:<tag>
     --validator-image <registry>/validator-<image-name>:<tag>
-    --prebuild-genesis
     --deploy-method tar
     --release-channel <release-channel. e.g. v1.16.5 (must prepend with 'v')>
     --do-build
@@ -56,7 +54,6 @@ cargo run --bin solana-k8s --
     --num-validators 3
     --bootstrap-image gregcusack/bootstrap-k8s-cluster-image:v2
     --validator-image gregcusack/validator-k8s-cluster-image:v2
-    --prebuild-genesis
     --deploy-method local
     --do-build
     --docker-build
@@ -80,6 +77,34 @@ cd k8s-cluster/src/scripts
 --metrics-db <database-name>            # from (1)
 --metrics-username <metrics-username>   # from (1)
 --metrics-password <metrics-password>   # from (1)
+```
+
+## Deploying with client
+```
+cargo run --bin solana-k8s --
+    -n <namespace e.g. greg-test>
+    --num-validators <num-validators>
+    --bootstrap-image <registry>/bootstrap-<image-name>:<tag>
+    --validator-image <registry>/validator-<image-name>:<tag>
+    --deploy-method local
+    --docker-build
+    --registry <docker-registry>
+    --image-name <name-of-your-image-to-build>
+    --tag <imagetag. default: latest>
+    -c <num-clients>
+    --client-delay-start <seconds-to-wait-after-deploying-validators-before-deploying-client>
+    --client-type <client-type e.g. thin-client>
+    --client-to-run <type-of-client e.g. bench-tps>
+    --bench-tps-args <bench-tps-args e.g. tx_count=25000>
+```
+
+## Deploying with a specific kube config location
+```
+KUBECONFIG=/path/to/my/kubeconfig cargo run --bin solana-k8s -- ....
+```
+e.g.
+```
+KUBECONFIG=/home/sol/.kube/config cargo run --bin solana-k8s -- ....
 ```
 
 ## Verifying Deployment

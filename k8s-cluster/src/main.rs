@@ -338,9 +338,7 @@ fn parse_matches() -> ArgMatches<'static> {
                     --bench-tps-args tx_count=25000
                 This will start bench-tps clients, and supply '--tx_count 25000'
                 to the bench-tps client.
-                If you want multiple args, pass in twice:
-                    --bench-tps-args tx_count=25000 --bench-tps-args --other-flag=<val>
-                "),
+                Multiple args not yet supported!"),
         )
         .arg(
             Arg::with_name("target_node")
