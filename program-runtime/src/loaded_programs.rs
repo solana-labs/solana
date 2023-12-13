@@ -626,14 +626,14 @@ impl LoadedPrograms {
                                 // Found a program entry on the current fork, but it's not effective
                                 // yet. It indicates that the program has delayed visibility. Return
                                 // the tombstone to reflect that.
-                                entry.tx_usage_counter.fetch_add(count, Ordering::Relaxed);
-                                return Some((
-                                    key,
-                                    Arc::new(LoadedProgram::new_tombstone(
-                                        entry.deployment_slot,
-                                        LoadedProgramType::DelayVisibility,
-                                    )),
+                                let entry_to_return = Arc::new(LoadedProgram::new_tombstone(
+                                    entry.deployment_slot,
+                                    LoadedProgramType::DelayVisibility,
                                 ));
+                                entry_to_return
+                                    .tx_usage_counter
+                                    .fetch_add(count, Ordering::Relaxed);
+                                return Some((key, entry_to_return));
                             }
                         }
                     }
