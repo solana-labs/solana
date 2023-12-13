@@ -33,7 +33,6 @@ use {
     },
 };
 
-const PRIMARY_SCHEDULER_ID: SchedulerId = 0;
 type AtomicSchedulerId = AtomicU64;
 
 // SchedulerPool must be accessed via dyn by solana-runtime code, because its internal fields'
@@ -87,7 +86,7 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> SchedulerPool<S, TH> {
                 prioritization_fee_cache,
             },
             weak_self: weak_self.clone(),
-            next_scheduler_id: AtomicSchedulerId::new(PRIMARY_SCHEDULER_ID),
+            next_scheduler_id: AtomicSchedulerId::default(),
             _phantom: PhantomData,
         })
     }
