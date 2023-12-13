@@ -618,25 +618,17 @@ pub fn parse_program_subcommand(
             let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
             let blockhash_query = BlockhashQuery::new_from_matches(matches);
 
-            let Ok(Some(buffer_pubkey)) = pubkey_of_signer(matches, "buffer", wallet_manager)
-            else {
-                return Err(CliError::BadParameter(
-                    "`BUFFER_PUBKEY` must be specified when doing program upgrade".into(),
-                ));
-            };
-
-            let Ok(Some(program_pubkey)) = pubkey_of_signer(matches, "program_id", wallet_manager)
-            else {
-                return Err(CliError::BadParameter(
-                    "`PROGRAM_ID` must be specified when doing program upgrade".into(),
-                ));
-            };
+            let buffer_pubkey = pubkey_of_signer(matches, "buffer", wallet_manager)
+                .unwrap()
+                .unwrap();
+            let program_pubkey = pubkey_of_signer(matches, "program_id", wallet_manager)
+                .unwrap()
+                .unwrap();
 
             let (fee_payer, fee_payer_pubkey) =
                 signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
 
             let mut bulk_signers = vec![
-                Some(default_signer.signer_from_path(matches, wallet_manager)?),
                 fee_payer, // if None, default signer will be supplied
             ];
 
@@ -1291,7 +1283,7 @@ fn process_program_upgrade(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
     fee_payer_signer_index: SignerIndex,
-    program_pubkey: Pubkey,
+    program_id: Pubkey,
     buffer_pubkey: Pubkey,
     upgrade_authority_signer_index: SignerIndex,
     sign_only: bool,
@@ -1304,7 +1296,7 @@ fn process_program_upgrade(
     let blockhash = blockhash_query.get_blockhash(&rpc_client, config.commitment)?;
     let message = Message::new_with_blockhash(
         &[bpf_loader_upgradeable::upgrade(
-            &program_pubkey,
+            &program_id,
             &buffer_pubkey,
             &upgrade_authority_signer.pubkey(),
             &fee_payer_signer.pubkey(),
@@ -1317,7 +1309,7 @@ fn process_program_upgrade(
         let mut tx = Transaction::new_unsigned(message);
         let signers = &[fee_payer_signer, upgrade_authority_signer];
         // Using try_partial_sign here because fee_payer_signer might not be the fee payer we
-        // end up using for this transaction (it might be NullSigner in `--sing-only` mode).
+        // end up using for this transaction (it might be NullSigner in `--sign-only` mode).
         tx.try_partial_sign(signers, blockhash)?;
         return_signers_with_config(
             &tx,
@@ -1342,7 +1334,7 @@ fn process_program_upgrade(
             .send_and_confirm_transaction_with_spinner(&tx)
             .map_err(|e| format!("Upgrading program failed: {e}"))?;
         let program_id = CliProgramId {
-            program_id: program_pubkey.to_string(),
+            program_id: program_id.to_string(),
         };
         Ok(config.output_format.formatted_string(&program_id))
     }

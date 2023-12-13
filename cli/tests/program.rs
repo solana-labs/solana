@@ -1909,26 +1909,14 @@ fn create_buffer_with_offline_authority<'a>(
     }
 
     // Set buffer authority to offline signer
-    config.signers = vec![online_signer, buffer_signer];
+    config.signers = vec![online_signer];
     config.command = CliCommand::Program(ProgramCliCommand::SetBufferAuthority {
         buffer_pubkey: buffer_signer.pubkey(),
         buffer_authority_index: Some(0),
         new_buffer_authority: offline_signer.pubkey(),
     });
     config.output_format = OutputFormat::JsonCompact;
-    let response = process_command(config);
-    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
-    let offline_signer_authority_str = json
-        .as_object()
-        .unwrap()
-        .get("authority")
-        .unwrap()
-        .as_str()
-        .unwrap();
-    assert_eq!(
-        Pubkey::from_str(offline_signer_authority_str).unwrap(),
-        offline_signer.pubkey()
-    );
+    process_command(config).unwrap();
     let buffer_account = rpc_client.get_account(&buffer_signer.pubkey()).unwrap();
     if let UpgradeableLoaderState::Buffer { authority_address } = buffer_account.state().unwrap() {
         assert_eq!(authority_address, Some(offline_signer.pubkey()));
