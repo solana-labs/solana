@@ -133,7 +133,7 @@ edition = "2021"
 
 [workspace.dependencies]
 Inflector = "0.11.4"
-aquamarine = "0.3.2"
+aquamarine = "0.3.3"
 aes-gcm-siv = "0.10.3"
 ahash = "0.8.6"
 anyhow = "1.0.75"
