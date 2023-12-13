@@ -29,6 +29,7 @@ limited backward compatibility for v0.10 and v0.9. Please upgrade to Borsh v1.
 ## [1.17.0]
 * Changes
   * Added a changelog.
+  * Added `--use-snapshot-archives-at-startup` for faster validator restarts
 * Upgrade Notes
 
 ## Adding to this Changelog
