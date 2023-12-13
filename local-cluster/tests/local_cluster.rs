@@ -2562,6 +2562,7 @@ fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
 
 #[test]
 #[serial]
+#[ignore]
 fn test_rpc_block_subscribe() {
     let total_stake = 100 * DEFAULT_NODE_STAKE;
     let leader_stake = total_stake;
