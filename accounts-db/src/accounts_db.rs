@@ -9561,10 +9561,6 @@ impl AccountsDb {
         }
     }
 
-    pub fn new_sized_caching(paths: Vec<PathBuf>, file_size: u64) -> Self {
-        Self::new_sized(paths, file_size)
-    }
-
     pub fn get_append_vec_id(&self, pubkey: &Pubkey, slot: Slot) -> Option<AppendVecId> {
         let ancestors = vec![(slot, 1)].into_iter().collect();
         let result = self.accounts_index.get(pubkey, Some(&ancestors), None);
@@ -13668,7 +13664,7 @@ pub mod tests {
     #[test]
     fn test_store_reuse() {
         solana_logger::setup();
-        let accounts = AccountsDb::new_sized_caching(vec![], 4096);
+        let accounts = AccountsDb::new_sized(vec![], 4096);
 
         let size = 100;
         let num_accounts: usize = 100;
