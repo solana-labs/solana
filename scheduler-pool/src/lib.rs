@@ -1026,9 +1026,7 @@ where
             self.schedulrable_transaction_sender
                 .send(SessionedMessage::StartSession(context.clone()))
                 .unwrap();
-            self.context = WeakSchedulingContext::downgrade(context);
         } else {
-            self.context = WeakSchedulingContext::downgrade(context);
             self.start_threads(&context);
         }
     }
@@ -1179,6 +1177,7 @@ where
 
     fn replace_context(&mut self, context: SchedulingContext) {
         self.thread_manager.write().unwrap().start_session(context);
+        self.context = context;
     }
 }
 
