@@ -475,6 +475,7 @@ pub struct LoadedPrograms<FG: ForkGraph> {
     pub fork_graph: Option<Arc<RwLock<FG>>>,
 }
 
+<<<<<<< HEAD
 impl<FG: ForkGraph> Default for LoadedPrograms<FG> {
     fn default() -> Self {
         Self {
@@ -487,6 +488,16 @@ impl<FG: ForkGraph> Default for LoadedPrograms<FG> {
             stats: Stats::default(),
             fork_graph: None,
         }
+=======
+impl<FG: ForkGraph> Debug for LoadedPrograms<FG> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoadedPrograms")
+            .field("root slot", &self.latest_root_slot)
+            .field("root epoch", &self.latest_root_epoch)
+            .field("stats", &self.stats)
+            .field("cache", &self.entries)
+            .finish()
+>>>>>>> 47dab26857 (Set root slot/epoch in cache constructor (#34447))
     }
 }
 
@@ -565,6 +576,19 @@ pub enum LoadedProgramMatchCriteria {
 }
 
 impl<FG: ForkGraph> LoadedPrograms<FG> {
+    pub fn new(root_slot: Slot, root_epoch: Epoch) -> Self {
+        Self {
+            entries: HashMap::new(),
+            latest_root_slot: root_slot,
+            latest_root_epoch: root_epoch,
+            environments: ProgramRuntimeEnvironments::default(),
+            upcoming_environments: None,
+            programs_to_recompile: Vec::default(),
+            stats: Stats::default(),
+            fork_graph: None,
+        }
+    }
+
     pub fn set_fork_graph(&mut self, fork_graph: Arc<RwLock<FG>>) {
         self.fork_graph = Some(fork_graph);
     }
@@ -983,7 +1007,7 @@ impl solana_frozen_abi::abi_example::AbiExample for LoadedProgram {
 impl<FG: ForkGraph> solana_frozen_abi::abi_example::AbiExample for LoadedPrograms<FG> {
     fn example() -> Self {
         // LoadedPrograms isn't serializable by definition.
-        Self::default()
+        Self::new(Slot::default(), Epoch::default())
     }
 }
 
@@ -1015,7 +1039,8 @@ mod tests {
         std::sync::OnceLock::<ProgramRuntimeEnvironment>::new();
 
     fn new_mock_cache<FG: ForkGraph>() -> LoadedPrograms<FG> {
-        let mut cache = LoadedPrograms::default();
+        let mut cache = LoadedPrograms::new(0, 0);
+
         cache.environments.program_runtime_v1 = MOCK_ENVIRONMENT
             .get_or_init(|| Arc::new(BuiltinProgram::new_mock()))
             .clone();
