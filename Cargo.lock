@@ -5751,6 +5751,7 @@ dependencies = [
  "solana_rbpf",
  "spl-memo",
  "tempfile",
+ "test-case",
  "thiserror",
  "tiny-bip39",
 ]
