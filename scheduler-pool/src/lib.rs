@@ -463,7 +463,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
         let scheduler = Self {
             completed_result_with_timings: None,
             thread_manager: Arc::new(RwLock::new(ThreadManager::<TH, SEA>::new(
-                initial_context,
+                &initial_context,
                 handler,
                 pool.clone(),
                 handler_count,
