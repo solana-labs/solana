@@ -1104,7 +1104,7 @@ where
     }
 
     fn context(&self) -> &SchedulingContext {
-        self.context
+        &self.context
     }
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
