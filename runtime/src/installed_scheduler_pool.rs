@@ -113,18 +113,22 @@ pub trait InstalledScheduler: Send + Sync + Debug + 'static {
     /// complete all of the executions for the scheduled transactions. This means the scheduler has
     /// prepared the finalized `ResultWithTimings` at least internally at the time of existing from
     /// this function. If no trsanction is scheduled, the result and timing will be `Ok(())` and
-    /// `ExecuteTimings::default()` respectively. This is done in the same way regardless of
-    /// `WaitReason`.
+    /// `ExecuteTimings::default()` respectively.
     ///
-    /// After that, the scheduler may behave differently depending on the reason, regarding the
-    /// final bookkeeping. Specifically, this function guaranteed to return
-    /// `Some(finalized_result_with_timings)` unless the reason is `PausedForRecentBlockhash`. In
-    /// the case of `PausedForRecentBlockhash`, the scheduler is responsible to retain the
-    /// finalized `ResultWithTimings` until it's `wait_for_termination()`-ed with one of the other
-    /// two reasons later.
-    #[must_use]
-    fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings>;
+    fn wait_for_termination(
+        self: Box<Self>,
+        is_dropped: bool,
+    ) -> (Box<dyn UninstalledScheduler>, ResultWithTimings);
 
+    /// Pause a scheduler to update bank's recent blockhash after completion without being returned
+    /// to the pool to collect scheduler's internally-held `ResultWithTimings` later. The
+    /// scheduler is responsible to retain the finalized `ResultWithTimings` until it's
+    /// `wait_for_termination()`-ed.
+    fn pause_for_recent_blockhash(&mut self);
+}
+
+#[cfg_attr(feature = "dev-context-only-utils", automock)]
+pub trait UninstalledScheduler: Send + Sync + Debug + 'static {
     fn return_to_pool(self: Box<Self>);
 }
 
@@ -167,7 +171,7 @@ pub type ResultWithTimings = (Result<()>, ExecuteTimings);
 
 /// A hint from the bank about the reason the caller is waiting on its scheduler termination.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum WaitReason {
+enum WaitReason {
     // The bank wants its scheduler to terminate after the completion of transaction execution, in
     // order to freeze itself immediately thereafter. This is by far the most normal wait reason.
     //
@@ -190,6 +194,15 @@ impl WaitReason {
         match self {
             WaitReason::PausedForRecentBlockhash => true,
             WaitReason::TerminatedToFreeze | WaitReason::DroppedFromBankForks => false,
+        }
+    }
+
+    pub fn is_dropped(&self) -> bool {
+        // Exhaustive `match` is preferred here than `matches!()` to trigger an explicit
+        // decision to be made, should we add new variants like `PausedForFooBar`...
+        match self {
+            WaitReason::DroppedFromBankForks => true,
+            WaitReason::TerminatedToFreeze | WaitReason::PausedForRecentBlockhash => false,
         }
     }
 }
@@ -341,18 +354,20 @@ impl BankWithSchedulerInner {
         );
 
         let mut scheduler = scheduler.write().unwrap();
-        let result_with_timings = if scheduler.is_some() {
-            let result_with_timings = scheduler
-                .as_mut()
-                .and_then(|scheduler| scheduler.wait_for_termination(&reason));
-            if !reason.is_paused() {
-                let scheduler = scheduler.take().expect("scheduler after waiting");
-                scheduler.return_to_pool();
-            }
-            result_with_timings
-        } else {
-            None
-        };
+        let result_with_timings =
+            if let Some(scheduler) = scheduler.as_mut().filter(|_| reason.is_paused()) {
+                scheduler.pause_for_recent_blockhash();
+                None
+            } else {
+                let (uninstalled_scheduler, result_with_timings) = scheduler
+                    .take()
+                    .map(|scheduler| scheduler.wait_for_termination(reason.is_dropped()))
+                    .unzip();
+                if let Some(uninstalled_scheduler) = uninstalled_scheduler {
+                    uninstalled_scheduler.return_to_pool();
+                }
+                result_with_timings
+            };
         debug!(
             "wait_for_scheduler_termination(slot: {}, reason: {:?}): finished with: {:?}...",
             bank.slot(),
@@ -415,7 +430,7 @@ mod tests {
 
     fn setup_mocked_scheduler_with_extra(
         bank: Arc<Bank>,
-        wait_reasons: impl Iterator<Item = WaitReason>,
+        is_dropped_flags: impl Iterator<Item = bool>,
         f: Option<impl Fn(&mut MockInstalledScheduler)>,
     ) -> DefaultInstalledSchedulerBox {
         let mut mock = MockInstalledScheduler::new();
@@ -426,24 +441,24 @@ mod tests {
             .in_sequence(&mut seq)
             .return_const(SchedulingContext::new(bank));
 
-        for wait_reason in wait_reasons {
+        for wait_reason in is_dropped_flags {
             mock.expect_wait_for_termination()
                 .with(mockall::predicate::eq(wait_reason))
                 .times(1)
                 .in_sequence(&mut seq)
                 .returning(move |_| {
-                    if wait_reason.is_paused() {
-                        None
-                    } else {
-                        Some((Ok(()), ExecuteTimings::default()))
-                    }
+                    let mut mock_uninstalled = MockUninstalledScheduler::new();
+                    mock_uninstalled
+                        .expect_return_to_pool()
+                        .times(1)
+                        .returning(|| ());
+                    (
+                        Box::new(mock_uninstalled),
+                        (Ok(()), ExecuteTimings::default()),
+                    )
                 });
         }
 
-        mock.expect_return_to_pool()
-            .times(1)
-            .in_sequence(&mut seq)
-            .returning(|| ());
         if let Some(f) = f {
             f(&mut mock);
         }
@@ -453,11 +468,11 @@ mod tests {
 
     fn setup_mocked_scheduler(
         bank: Arc<Bank>,
-        wait_reasons: impl Iterator<Item = WaitReason>,
+        is_dropped_flags: impl Iterator<Item = bool>,
     ) -> DefaultInstalledSchedulerBox {
         setup_mocked_scheduler_with_extra(
             bank,
-            wait_reasons,
+            is_dropped_flags,
             None::<fn(&mut MockInstalledScheduler) -> ()>,
         )
     }
@@ -469,10 +484,7 @@ mod tests {
         let bank = Arc::new(Bank::default_for_tests());
         let bank = BankWithScheduler::new(
             bank.clone(),
-            Some(setup_mocked_scheduler(
-                bank,
-                [WaitReason::TerminatedToFreeze].into_iter(),
-            )),
+            Some(setup_mocked_scheduler(bank, [false].into_iter())),
         );
         assert!(bank.has_installed_scheduler());
         assert_matches!(bank.wait_for_completed_scheduler(), Some(_));
@@ -502,10 +514,7 @@ mod tests {
         let bank = Arc::new(Bank::default_for_tests());
         let bank = BankWithScheduler::new(
             bank.clone(),
-            Some(setup_mocked_scheduler(
-                bank,
-                [WaitReason::DroppedFromBankForks].into_iter(),
-            )),
+            Some(setup_mocked_scheduler(bank, [true].into_iter())),
         );
         drop(bank);
     }
@@ -517,13 +526,15 @@ mod tests {
         let bank = Arc::new(crate::bank::tests::create_simple_test_bank(42));
         let bank = BankWithScheduler::new(
             bank.clone(),
-            Some(setup_mocked_scheduler(
+            Some(setup_mocked_scheduler_with_extra(
                 bank,
-                [
-                    WaitReason::PausedForRecentBlockhash,
-                    WaitReason::TerminatedToFreeze,
-                ]
-                .into_iter(),
+                [false].into_iter(),
+                Some(|mocked: &mut MockInstalledScheduler| {
+                    mocked
+                        .expect_pause_for_recent_blockhash()
+                        .times(1)
+                        .returning(|| ());
+                }),
             )),
         );
         goto_end_of_slot_with_scheduler(&bank);
@@ -548,7 +559,7 @@ mod tests {
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let mocked_scheduler = setup_mocked_scheduler_with_extra(
             bank.clone(),
-            [WaitReason::DroppedFromBankForks].into_iter(),
+            [true].into_iter(),
             Some(|mocked: &mut MockInstalledScheduler| {
                 mocked
                     .expect_schedule_execution()

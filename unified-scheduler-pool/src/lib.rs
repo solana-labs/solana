@@ -17,7 +17,7 @@ use {
         bank::Bank,
         installed_scheduler_pool::{
             InstalledScheduler, InstalledSchedulerPool, InstalledSchedulerPoolArc,
-            ResultWithTimings, SchedulerId, SchedulingContext, WaitReason,
+            ResultWithTimings, SchedulerId, SchedulingContext, UninstalledScheduler,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
@@ -40,7 +40,7 @@ type AtomicSchedulerId = AtomicU64;
 // PohRecorder in the future)...
 #[derive(Debug)]
 pub struct SchedulerPool<S: SpawnableScheduler<TH>, TH: TaskHandler> {
-    schedulers: Mutex<Vec<Box<S>>>,
+    scheduler_inners: Mutex<Vec<S::Inner>>,
     handler_context: HandlerContext,
     // weak_self could be elided by changing InstalledScheduler::take_scheduler()'s receiver to
     // Arc<Self> from &Self, because SchedulerPool is used as in the form of Arc<SchedulerPool>
@@ -78,7 +78,7 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> SchedulerPool<S, TH> {
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Arc<Self> {
         Arc::new_cyclic(|weak_self| Self {
-            schedulers: Mutex::default(),
+            scheduler_inners: Mutex::default(),
             handler_context: HandlerContext {
                 log_messages_bytes_limit,
                 transaction_status_sender,
@@ -118,30 +118,27 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> SchedulerPool<S, TH> {
         self.next_scheduler_id.fetch_add(1, Relaxed)
     }
 
-    fn return_scheduler(&self, scheduler: Box<S>) {
-        assert!(!scheduler.has_context());
-
-        self.schedulers
+    fn return_scheduler(&self, scheduler: S::Inner) {
+        self.scheduler_inners
             .lock()
             .expect("not poisoned")
             .push(scheduler);
     }
 
-    fn do_take_scheduler(&self, context: SchedulingContext) -> Box<S> {
+    fn do_take_scheduler(&self, context: SchedulingContext) -> S {
         // pop is intentional for filo, expecting relatively warmed-up scheduler due to having been
         // returned recently
-        if let Some(mut scheduler) = self.schedulers.lock().expect("not poisoned").pop() {
-            scheduler.replace_context(context);
-            scheduler
+        if let Some(inner) = self.scheduler_inners.lock().expect("not poisoned").pop() {
+            S::from_inner(inner, context)
         } else {
-            Box::new(S::spawn(self.self_arc(), context))
+            S::spawn(self.self_arc(), context)
         }
     }
 }
 
 impl<S: SpawnableScheduler<TH>, TH: TaskHandler> InstalledSchedulerPool for SchedulerPool<S, TH> {
     fn take_scheduler(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler> {
-        self.do_take_scheduler(context)
+        Box::new(self.do_take_scheduler(context))
     }
 }
 
@@ -193,27 +190,42 @@ impl TaskHandler for DefaultTaskHandler {
 // not usable at all, especially for mainnet-beta
 #[derive(Debug)]
 pub struct PooledScheduler<TH: TaskHandler> {
-    id: SchedulerId,
-    pool: Arc<SchedulerPool<Self, TH>>,
-    context: Option<SchedulingContext>,
+    inner: PooledSchedulerInner<Self, TH>,
+    context: SchedulingContext,
     result_with_timings: Mutex<Option<ResultWithTimings>>,
+}
+
+#[derive(Debug)]
+pub struct PooledSchedulerInner<S: SpawnableScheduler<TH>, TH: TaskHandler> {
+    id: SchedulerId,
+    pool: Arc<SchedulerPool<S, TH>>,
 }
 
 impl<TH: TaskHandler> PooledScheduler<TH> {
     fn do_spawn(pool: Arc<SchedulerPool<Self, TH>>, initial_context: SchedulingContext) -> Self {
-        Self {
-            id: pool.new_scheduler_id(),
-            pool,
-            context: Some(initial_context),
-            result_with_timings: Mutex::default(),
-        }
+        Self::from_inner(
+            PooledSchedulerInner::<Self, TH> {
+                id: pool.new_scheduler_id(),
+                pool,
+            },
+            initial_context,
+        )
+    }
+
+    fn do_wait_for_termination(&mut self) -> Option<ResultWithTimings> {
+        self.result_with_timings
+            .lock()
+            .expect("not poisoned")
+            .take()
     }
 }
 
 pub trait SpawnableScheduler<TH: TaskHandler>: InstalledScheduler {
-    fn has_context(&self) -> bool;
+    type Inner: Debug + Send + Sync;
 
-    fn replace_context(&mut self, context: SchedulingContext);
+    fn into_inner(self) -> Self::Inner;
+
+    fn from_inner(inner: Self::Inner, context: SchedulingContext) -> Self;
 
     fn spawn(pool: Arc<SchedulerPool<Self, TH>>, initial_context: SchedulingContext) -> Self
     where
@@ -221,13 +233,18 @@ pub trait SpawnableScheduler<TH: TaskHandler>: InstalledScheduler {
 }
 
 impl<TH: TaskHandler> SpawnableScheduler<TH> for PooledScheduler<TH> {
-    fn has_context(&self) -> bool {
-        self.context.is_some()
+    type Inner = PooledSchedulerInner<Self, TH>;
+
+    fn into_inner(self) -> Self::Inner {
+        self.inner
     }
 
-    fn replace_context(&mut self, context: SchedulingContext) {
-        self.context = Some(context);
-        *self.result_with_timings.lock().expect("not poisoned") = None;
+    fn from_inner(inner: Self::Inner, context: SchedulingContext) -> Self {
+        Self {
+            inner,
+            context,
+            result_with_timings: Mutex::new(Some((Ok(()), ExecuteTimings::default()))),
+        }
     }
 
     fn spawn(pool: Arc<SchedulerPool<Self, TH>>, initial_context: SchedulingContext) -> Self {
@@ -237,11 +254,11 @@ impl<TH: TaskHandler> SpawnableScheduler<TH> for PooledScheduler<TH> {
 
 impl<TH: TaskHandler> InstalledScheduler for PooledScheduler<TH> {
     fn id(&self) -> SchedulerId {
-        self.id
+        self.inner.id
     }
 
     fn context(&self) -> &SchedulingContext {
-        self.context.as_ref().expect("active context should exist")
+        &self.context
     }
 
     fn schedule_execution(&self, &(transaction, index): &(&SanitizedTransaction, usize)) {
@@ -259,34 +276,29 @@ impl<TH: TaskHandler> InstalledScheduler for PooledScheduler<TH> {
                 self.context().bank(),
                 transaction,
                 index,
-                &self.pool.handler_context,
+                &self.inner.pool.handler_context,
             );
         }
     }
 
-    fn wait_for_termination(&mut self, wait_reason: &WaitReason) -> Option<ResultWithTimings> {
-        let keep_result_with_timings = wait_reason.is_paused();
-
-        if keep_result_with_timings {
-            None
-        } else {
-            drop(
-                self.context
-                    .take()
-                    .expect("active context should be dropped"),
-            );
-            // current simplest form of this trait impl doesn't block the current thread materially
-            // just with the following single mutex lock. Suppose more elaborated synchronization
-            // across worker threads here in the future...
-            self.result_with_timings
-                .lock()
-                .expect("not poisoned")
-                .take()
-        }
+    fn wait_for_termination(
+        mut self: Box<Self>,
+        _is_dropped: bool,
+    ) -> (Box<dyn UninstalledScheduler>, ResultWithTimings) {
+        let result_with_timings = self.do_wait_for_termination().unwrap();
+        (Box::new(self.into_inner()), result_with_timings)
     }
 
+    fn pause_for_recent_blockhash(&mut self) {
+        // not surprisingly, there's nothing to do for this min impl!
+    }
+}
+
+impl<S: SpawnableScheduler<TH, Inner = PooledSchedulerInner<S, TH>>, TH: TaskHandler>
+    UninstalledScheduler for PooledSchedulerInner<S, TH>
+{
     fn return_to_pool(self: Box<Self>) {
-        self.pool.clone().return_scheduler(self)
+        self.pool.clone().return_scheduler(*self)
     }
 }
 
@@ -357,16 +369,10 @@ mod tests {
         let scheduler_id2 = scheduler2.id();
         assert_ne!(scheduler_id1, scheduler_id2);
 
-        assert_matches!(
-            scheduler1.wait_for_termination(&WaitReason::TerminatedToFreeze),
-            None
-        );
-        pool.return_scheduler(scheduler1);
-        assert_matches!(
-            scheduler2.wait_for_termination(&WaitReason::TerminatedToFreeze),
-            None
-        );
-        pool.return_scheduler(scheduler2);
+        assert_matches!(scheduler1.do_wait_for_termination(), Some((Ok(()), _)));
+        pool.return_scheduler(scheduler1.into_inner());
+        assert_matches!(scheduler2.do_wait_for_termination(), Some((Ok(()), _)));
+        pool.return_scheduler(scheduler2.into_inner());
 
         let scheduler3 = pool.do_take_scheduler(context.clone());
         assert_eq!(scheduler_id2, scheduler3.id());
@@ -385,17 +391,12 @@ mod tests {
 
         let mut scheduler = pool.do_take_scheduler(context.clone());
 
-        assert!(scheduler.has_context());
+        // should never panic.
+        scheduler.pause_for_recent_blockhash();
         assert_matches!(
-            scheduler.wait_for_termination(&WaitReason::PausedForRecentBlockhash),
-            None
+            Box::new(scheduler).wait_for_termination(false),
+            (_, (Ok(()), _))
         );
-        assert!(scheduler.has_context());
-        assert_matches!(
-            scheduler.wait_for_termination(&WaitReason::TerminatedToFreeze),
-            None
-        );
-        assert!(!scheduler.has_context());
     }
 
     #[test]
@@ -413,11 +414,8 @@ mod tests {
 
         let mut scheduler = pool.do_take_scheduler(old_context.clone());
         let scheduler_id = scheduler.id();
-        assert_matches!(
-            scheduler.wait_for_termination(&WaitReason::TerminatedToFreeze),
-            None
-        );
-        pool.return_scheduler(scheduler);
+        scheduler.do_wait_for_termination();
+        pool.return_scheduler(scheduler.into_inner());
 
         let scheduler = pool.take_scheduler(new_context.clone());
         assert_eq!(scheduler_id, scheduler.id());
@@ -556,6 +554,22 @@ mod tests {
         Mutex<Vec<JoinHandle<ResultWithTimings>>>,
     );
 
+    impl<const TRIGGER_RACE_CONDITION: bool> AsyncScheduler<TRIGGER_RACE_CONDITION> {
+        fn do_wait(&self) {
+            let mut overall_result = Ok(());
+            let mut overall_timings = ExecuteTimings::default();
+            for handle in self.1.lock().unwrap().drain(..) {
+                let (result, timings) = handle.join().unwrap();
+                match result {
+                    Ok(()) => {}
+                    Err(e) => overall_result = Err(e),
+                }
+                overall_timings.accumulate(&timings);
+            }
+            *self.0.result_with_timings.lock().unwrap() = Some((overall_result, overall_timings));
+        }
+    }
+
     impl<const TRIGGER_RACE_CONDITION: bool> InstalledScheduler
         for AsyncScheduler<TRIGGER_RACE_CONDITION>
     {
@@ -567,13 +581,10 @@ mod tests {
             self.0.context()
         }
 
-        fn schedule_execution<'a>(
-            &'a self,
-            &(transaction, index): &'a (&'a SanitizedTransaction, usize),
-        ) {
+        fn schedule_execution(&self, &(transaction, index): &(&SanitizedTransaction, usize)) {
             let transaction_and_index = (transaction.clone(), index);
             let context = self.context().clone();
-            let pool = self.0.pool.clone();
+            let pool = self.0.inner.pool.clone();
 
             self.1.lock().unwrap().push(std::thread::spawn(move || {
                 // intentionally sleep to simulate race condition where register_recent_blockhash
@@ -595,42 +606,36 @@ mod tests {
             }));
         }
 
-        fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings> {
-            if TRIGGER_RACE_CONDITION && matches!(reason, WaitReason::PausedForRecentBlockhash) {
-                // this is equivalent to NOT calling wait_for_paused_scheduler() in
-                // register_recent_blockhash().
-                return None;
-            }
-
-            let mut overall_result = Ok(());
-            let mut overall_timings = ExecuteTimings::default();
-            for handle in self.1.lock().unwrap().drain(..) {
-                let (result, timings) = handle.join().unwrap();
-                match result {
-                    Ok(()) => {}
-                    Err(e) => overall_result = Err(e),
-                }
-                overall_timings.accumulate(&timings);
-            }
-            *self.0.result_with_timings.lock().unwrap() = Some((overall_result, overall_timings));
-
-            self.0.wait_for_termination(reason)
+        fn wait_for_termination(
+            self: Box<Self>,
+            is_dropped: bool,
+        ) -> (Box<dyn UninstalledScheduler>, ResultWithTimings) {
+            self.do_wait();
+            Box::new(self.0).wait_for_termination(is_dropped)
         }
 
-        fn return_to_pool(self: Box<Self>) {
-            Box::new(self.0).return_to_pool()
+        fn pause_for_recent_blockhash(&mut self) {
+            if TRIGGER_RACE_CONDITION {
+                // this is equivalent to NOT calling wait_for_paused_scheduler() in
+                // register_recent_blockhash().
+                return;
+            }
+            self.do_wait();
         }
     }
 
     impl<const TRIGGER_RACE_CONDITION: bool> SpawnableScheduler<DefaultTaskHandler>
         for AsyncScheduler<TRIGGER_RACE_CONDITION>
     {
-        fn has_context(&self) -> bool {
-            self.0.has_context()
+        // well, i wish i can use ! (never type).....
+        type Inner = Self;
+
+        fn into_inner(self) -> Self::Inner {
+            todo!();
         }
 
-        fn replace_context(&mut self, context: SchedulingContext) {
-            self.0.replace_context(context)
+        fn from_inner(_inner: Self::Inner, _context: SchedulingContext) -> Self {
+            todo!();
         }
 
         fn spawn(
@@ -638,17 +643,18 @@ mod tests {
             initial_context: SchedulingContext,
         ) -> Self {
             AsyncScheduler::<TRIGGER_RACE_CONDITION>(
-                PooledScheduler::<DefaultTaskHandler> {
-                    id: pool.new_scheduler_id(),
-                    pool: SchedulerPool::new(
-                        pool.handler_context.log_messages_bytes_limit,
-                        pool.handler_context.transaction_status_sender.clone(),
-                        pool.handler_context.replay_vote_sender.clone(),
-                        pool.handler_context.prioritization_fee_cache.clone(),
-                    ),
-                    context: Some(initial_context),
-                    result_with_timings: Mutex::default(),
-                },
+                PooledScheduler::<DefaultTaskHandler>::from_inner(
+                    PooledSchedulerInner {
+                        id: pool.new_scheduler_id(),
+                        pool: SchedulerPool::new(
+                            pool.handler_context.log_messages_bytes_limit,
+                            pool.handler_context.transaction_status_sender.clone(),
+                            pool.handler_context.replay_vote_sender.clone(),
+                            pool.handler_context.prioritization_fee_cache.clone(),
+                        ),
+                    },
+                    initial_context,
+                ),
                 Mutex::new(vec![]),
             )
         }

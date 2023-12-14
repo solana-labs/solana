@@ -1947,7 +1947,9 @@ pub mod tests {
             genesis_utils::{
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
             },
-            installed_scheduler_pool::{MockInstalledScheduler, SchedulingContext, WaitReason},
+            installed_scheduler_pool::{
+                MockInstalledScheduler, MockUninstalledScheduler, SchedulingContext,
+            },
         },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
@@ -4557,15 +4559,20 @@ pub mod tests {
             .returning(|_| ());
         mocked_scheduler
             .expect_wait_for_termination()
-            .with(mockall::predicate::eq(WaitReason::DroppedFromBankForks))
+            .with(mockall::predicate::eq(true))
             .times(1)
             .in_sequence(&mut seq)
-            .returning(|_| None);
-        mocked_scheduler
-            .expect_return_to_pool()
-            .times(1)
-            .in_sequence(&mut seq)
-            .returning(|| ());
+            .returning(|_| {
+                let mut mocked_uninstalled_scheduler = MockUninstalledScheduler::new();
+                mocked_uninstalled_scheduler
+                    .expect_return_to_pool()
+                    .times(1)
+                    .returning(|| ());
+                (
+                    Box::new(mocked_uninstalled_scheduler),
+                    (Ok(()), ExecuteTimings::default()),
+                )
+            });
         let bank = BankWithScheduler::new(bank, Some(Box::new(mocked_scheduler)));
 
         let batch = bank.prepare_sanitized_batch(&txs);
