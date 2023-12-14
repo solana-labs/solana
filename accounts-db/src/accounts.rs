@@ -125,10 +125,6 @@ pub enum AccountAddressFilter {
 }
 
 impl Accounts {
-    pub fn default_for_tests() -> Self {
-        Self::new(Arc::new(AccountsDb::default_for_tests()))
-    }
-
     pub fn new(accounts_db: Arc<AccountsDb>) -> Self {
         Self {
             accounts_db,
@@ -931,7 +927,8 @@ mod tests {
 
     #[test]
     fn test_hold_range_in_memory() {
-        let accts = Accounts::default_for_tests();
+        let accounts_db = AccountsDb::default_for_tests();
+        let accts = Accounts::new(Arc::new(accounts_db));
         let range = Pubkey::from([0; 32])..=Pubkey::from([0xff; 32]);
         accts.hold_range_in_memory(&range, true, &test_thread_pool());
         accts.hold_range_in_memory(&range, false, &test_thread_pool());
@@ -943,7 +940,8 @@ mod tests {
 
     #[test]
     fn test_hold_range_in_memory2() {
-        let accts = Accounts::default_for_tests();
+        let accounts_db = AccountsDb::default_for_tests();
+        let accts = Accounts::new(Arc::new(accounts_db));
         let range = Pubkey::from([0; 32])..=Pubkey::from([0xff; 32]);
         let idx = &accts.accounts_db.accounts_index;
         let bins = idx.account_maps.len();

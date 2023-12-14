@@ -8174,7 +8174,9 @@ impl Bank {
     }
 
     pub fn default_for_tests() -> Self {
-        Self::default_with_accounts(Accounts::default_for_tests())
+        let accounts_db = AccountsDb::default_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
+        Self::default_with_accounts(accounts)
     }
 
     pub fn new_with_bank_forks_for_tests(
