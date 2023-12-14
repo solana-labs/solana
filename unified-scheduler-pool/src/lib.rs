@@ -240,7 +240,6 @@ impl<TH: TaskHandler> InstalledScheduler for PooledScheduler<TH> {
         self.id
     }
 
-    #[cfg(feature = "dev-context-only-utils")]
     fn context(&self) -> &SchedulingContext {
         self.context.as_ref().expect("active context should exist")
     }
@@ -257,7 +256,7 @@ impl<TH: TaskHandler> InstalledScheduler for PooledScheduler<TH> {
             TH::handle(
                 result,
                 timings,
-                self.context.as_ref().unwrap().bank(),
+                self.context().bank(),
                 transaction,
                 index,
                 &self.pool.handler_context,
@@ -564,7 +563,6 @@ mod tests {
             self.0.id()
         }
 
-        #[cfg(feature = "dev-context-only-utils")]
         fn context(&self) -> &SchedulingContext {
             self.0.context()
         }

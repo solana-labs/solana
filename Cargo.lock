@@ -7561,7 +7561,6 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-unified-scheduler-logic",
- "solana-unified-scheduler-pool",
  "solana-vote",
 ]
 
