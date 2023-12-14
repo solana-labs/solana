@@ -271,11 +271,6 @@ impl<TH: TaskHandler> InstalledScheduler for PooledScheduler<TH> {
         if keep_result_with_timings {
             None
         } else {
-            drop(
-                self.context
-                    .take()
-                    .expect("active context should be dropped"),
-            );
             // current simplest form of this trait impl doesn't block the current thread materially
             // just with the following single mutex lock. Suppose more elaborated synchronization
             // across worker threads here in the future...
@@ -286,7 +281,12 @@ impl<TH: TaskHandler> InstalledScheduler for PooledScheduler<TH> {
         }
     }
 
-    fn return_to_pool(self: Box<Self>) {
+    fn return_to_pool(mut self: Box<Self>) {
+        drop(
+            self.context
+                .take()
+                .expect("active context should be dropped"),
+        );
         self.pool.clone().return_scheduler(self)
     }
 }
