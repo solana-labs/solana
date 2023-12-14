@@ -223,12 +223,13 @@ mod serde_snapshot_tests {
     fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         solana_logger::setup();
         let (_accounts_dir, paths) = get_temp_accounts_paths(4).unwrap();
-        let accounts = Accounts::new_with_config_for_tests(
+        let accounts_db = AccountsDb::new_with_config_for_tests(
             paths,
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
+        let accounts = Accounts::new(Arc::new(accounts_db));
 
         let slot = 0;
         let mut pubkeys: Vec<Pubkey> = vec![];

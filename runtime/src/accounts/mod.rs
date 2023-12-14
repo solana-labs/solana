@@ -561,7 +561,7 @@ mod tests {
             transaction::{Result, Transaction, TransactionError},
             transaction_context::TransactionAccount,
         },
-        std::convert::TryFrom,
+        std::{convert::TryFrom, sync::Arc},
     };
 
     fn load_accounts_with_fee_and_rent(
@@ -575,12 +575,13 @@ mod tests {
     ) -> Vec<TransactionLoadResult> {
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(&tx.message().recent_blockhash, lamports_per_signature);
-        let accounts = Accounts::new_with_config_for_tests(
+        let accounts_db = AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
+        let accounts = Accounts::new(Arc::new(accounts_db));
         for ka in ka.iter() {
             accounts.accounts_db.store_for_tests(0, &[(&ka.0, &ka.1)]);
         }
@@ -1387,12 +1388,13 @@ mod tests {
     #[test]
     fn test_instructions() {
         solana_logger::setup();
-        let accounts = Accounts::new_with_config_for_tests(
+        let accounts_db = AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
+        let accounts = Accounts::new(Arc::new(accounts_db));
 
         let instructions_key = solana_sdk::sysvar::instructions::id();
         let keypair = Keypair::new();
@@ -1413,12 +1415,13 @@ mod tests {
     #[test]
     fn test_overrides() {
         solana_logger::setup();
-        let accounts = Accounts::new_with_config_for_tests(
+        let accounts_db = AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
+        let accounts = Accounts::new(Arc::new(accounts_db));
         let mut account_overrides = AccountOverrides::default();
         let slot_history_id = sysvar::slot_history::id();
         let account = AccountSharedData::new(42, 0, &Pubkey::default());
