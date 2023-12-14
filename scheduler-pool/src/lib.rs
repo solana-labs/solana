@@ -655,8 +655,8 @@ where
                 .send(SessionedMessage::StartSession(result_with_timings))
                 .unwrap();
 
-            let mut end_session = false;
-            let mut end_thread = false;
+            let mut session_ending = false;
+            let mut thread_ending = false;
             move || {
                 let mut state_machine = SchedulingStateMachine::new();
                 let mut log_interval = LogInterval::default();
@@ -668,7 +668,7 @@ where
                             "[sch_{:0width$x}]: slot: {}[{:8}]({}/{}): state_machine(({}(+{})=>{})/{}|{}/{}) channels(<{} >{}+{} <{}+{})",
                             scheduler_id, slot,
                             (if ($prefix) == "step" { "interval" } else { $prefix }),
-                            (if end_thread {"T"} else {"-"}), (if end_session {"S"} else {"-"}),
+                            (if thread_ending {"T"} else {"-"}), (if session_ending {"S"} else {"-"}),
                             state_machine.active_task_count(), state_machine.retryable_task_count(), state_machine.handled_task_count(),
                             state_machine.total_task_count(),
                             state_machine.reschedule_count(),
@@ -690,7 +690,7 @@ where
                     .unwrap();
                 let (always_retry, never_retry) = (&disconnected::<()>(), &never());
 
-                while !end_thread {
+                while !thread_ending {
                     loop {
                         let state_change = select_biased! {
                             recv(handled_blocked_transaction_receiver) -> task => {
@@ -702,7 +702,7 @@ where
                             recv(schedulable_transaction_receiver) -> m => {
                                 match m {
                                     Ok(SessionedMessage::Payload(payload)) => {
-                                        assert!(!end_session && !end_thread);
+                                        assert!(!session_ending && !thread_ending);
                                         if let Some(task) = state_machine.schedule_new_task(payload) {
                                             idle_transaction_sender.send(task).unwrap();
                                         }
@@ -714,13 +714,13 @@ where
                                         "started"
                                     }
                                     Ok(SessionedMessage::EndSession) => {
-                                        assert!(!end_session && !end_thread);
-                                        end_session = true;
+                                        assert!(!session_ending && !thread_ending);
+                                        session_ending = true;
                                         "S:ending"
                                     }
                                     Err(_) => {
-                                        assert!(!end_thread);
-                                        end_thread = true;
+                                        assert!(!thread_ending);
+                                        thread_ending = true;
                                         schedulable_transaction_receiver = never();
                                         "T:ending"
                                     }
@@ -749,26 +749,26 @@ where
                             log_scheduler!(state_change);
                         }
 
-                        let is_finished = state_machine.is_empty() && (end_session || end_thread);
+                        let is_finished = state_machine.is_empty() && (session_ending || thread_ending);
                         if is_finished {
                             break;
                         }
                     }
 
-                    if end_session {
+                    if session_ending {
                         log_scheduler!("S:ended");
                         (state_machine, log_interval) =
                             (SchedulingStateMachine::new(), <_>::default());
                         drop_sender.send(SessionedMessage::EndSession).unwrap();
                         result_sender.send(drop_receiver2.recv().unwrap()).unwrap();
-                        if !end_thread {
-                            end_session = false;
+                        if !thread_ending {
+                            session_ending = false;
                         }
                     }
                 }
 
                 log_scheduler!("T:ended");
-                let result_with_timings = if end_session {
+                let result_with_timings = if session_ending {
                     (Ok(()), ExecuteTimings::default())
                 } else {
                     drop_sender.send(SessionedMessage::EndSession).unwrap();
