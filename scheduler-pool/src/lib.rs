@@ -1180,11 +1180,7 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn has_context(&self) -> bool {
-        self.thread_manager
-            .read()
-            .unwrap()
-            .active_context()
-            .is_some()
+        true
     }
 
     fn replace_context(&mut self, context: SchedulingContext) {
