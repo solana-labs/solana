@@ -128,12 +128,11 @@ impl BankForks {
             scheduler_pool: None,
         }));
 
-        for bank in bank_forks.read().unwrap().banks.values() {
-            bank.loaded_programs_cache
-                .write()
-                .unwrap()
-                .set_fork_graph(bank_forks.clone());
-        }
+        root_bank
+            .loaded_programs_cache
+            .write()
+            .unwrap()
+            .set_fork_graph(bank_forks.clone());
 
         bank_forks
     }
