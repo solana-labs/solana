@@ -9522,23 +9522,6 @@ pub(crate) enum UpdateIndexThreadSelection {
 // These functions/fields are only usable from a dev context (i.e. tests and benches)
 #[cfg(feature = "dev-context-only-utils")]
 impl AccountsDb {
-    pub fn new_with_config_for_tests(
-        paths: Vec<PathBuf>,
-        cluster_type: &ClusterType,
-        account_indexes: AccountSecondaryIndexes,
-        shrink_ratio: AccountShrinkThreshold,
-    ) -> Self {
-        Self::new_with_config(
-            paths,
-            cluster_type,
-            account_indexes,
-            shrink_ratio,
-            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
-            None,
-            Arc::default(),
-        )
-    }
-
     pub fn new_with_config_for_benches(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
@@ -11965,12 +11948,10 @@ pub mod tests {
     fn test_clean_old_with_both_normal_and_zero_lamport_accounts() {
         solana_logger::setup();
 
-        let mut accounts = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            spl_token_mint_index_enabled(),
-            AccountShrinkThreshold::default(),
-        );
+        let mut accounts = AccountsDb {
+            account_indexes: spl_token_mint_index_enabled(),
+            ..AccountsDb::new_single_for_tests()
+        };
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
 
