@@ -8166,14 +8166,9 @@ impl Bank {
 #[cfg(feature = "dev-context-only-utils")]
 impl Bank {
     pub fn wrap_with_bank_forks_for_tests(self) -> (Arc<Self>, Arc<RwLock<BankForks>>) {
-        let bank_fork = BankForks::new_rw_arc(self);
-        let bank_arc = bank_fork.read().unwrap().root_bank();
-        bank_arc
-            .loaded_programs_cache
-            .write()
-            .unwrap()
-            .set_fork_graph(bank_fork.clone());
-        (bank_arc, bank_fork)
+        let bank_forks = BankForks::new_rw_arc(self);
+        let bank = bank_forks.read().unwrap().root_bank();
+        (bank, bank_forks)
     }
 
     pub fn default_for_tests() -> Self {
