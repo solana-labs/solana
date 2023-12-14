@@ -729,20 +729,27 @@ async fn handle_connection(
                         .clamp(Duration::from_millis(10), Duration::from_secs(1));
                     let mut start = Instant::now();
                     while !stream_exit.load(Ordering::Relaxed) {
-                        let chunk = stream.read_chunk(PACKET_DATA_SIZE, false).await;
-                        if handle_chunk(
-                            chunk,
-                            &mut maybe_batch,
-                            &remote_addr,
-                            &packet_sender,
-                            stats.clone(),
-                            peer_type,
-                        )
-                        .await
-                        {
-                            last_update.store(timing::timestamp(), Ordering::Relaxed);
-                            break;
-                        }
+                        tokio::select! {
+                            () = tokio::time::sleep(exit_check_interval) => {
+                                continue;
+                            },
+                            chunk = stream.read_chunk(PACKET_DATA_SIZE, false) => {
+                                if handle_chunk(
+                                    chunk,
+                                    &mut maybe_batch,
+                                    &remote_addr,
+                                    &packet_sender,
+                                    stats.clone(),
+                                    peer_type,
+                                )
+                                .await
+                                {
+                                    last_update.store(timing::timestamp(), Ordering::Relaxed);
+                                    break;
+                                }
+                            }
+                        };
+
                         start = Instant::now();
                     }
                     stats.total_streams.fetch_sub(1, Ordering::Relaxed);
