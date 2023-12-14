@@ -4914,7 +4914,6 @@ pub(crate) mod tests {
             bank0.register_default_tick_for_test();
         }
         bank0.freeze();
-        //let slot = bank0.slot();
         let bank_forks = BankForks::new_rw_arc(bank0);
 
         let exit = Arc::new(AtomicBool::new(false));
