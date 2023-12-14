@@ -1035,7 +1035,7 @@ where
             self.context = WeakSchedulingContext::downgrade(context);
         } else {
             self.context = WeakSchedulingContext::downgrade(context);
-            self.start_threads();
+            self.start_threads(&context);
         }
     }
 
