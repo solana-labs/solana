@@ -9562,17 +9562,11 @@ impl AccountsDb {
     }
 
     pub fn new_sized_caching(paths: Vec<PathBuf>, file_size: u64) -> Self {
-        AccountsDb {
-            file_size,
-            ..AccountsDb::new(paths, &ClusterType::Development)
-        }
+        Self::new_sized(paths, file_size)
     }
 
     pub fn new_sized_no_extra_stores(paths: Vec<PathBuf>, file_size: u64) -> Self {
-        AccountsDb {
-            file_size,
-            ..AccountsDb::new(paths, &ClusterType::Development)
-        }
+        Self::new_sized(paths, file_size)
     }
 
     pub fn get_append_vec_id(&self, pubkey: &Pubkey, slot: Slot) -> Option<AppendVecId> {
