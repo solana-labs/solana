@@ -1154,7 +1154,7 @@ where
             let task = SchedulingStateMachine::create_task(transaction.clone(), index, |pubkey| {
                 self.address_book.load(pubkey)
             });
-            self.ensure_thread_manager_started().send_task(task);
+            self.ensure_thread_manager_started(&self.context).send_task(task);
         });
     }
 
