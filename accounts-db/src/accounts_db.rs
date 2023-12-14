@@ -2552,15 +2552,7 @@ impl AccountsDb {
     }
 
     pub fn new_for_tests_with_caching(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
-        AccountsDb::new_with_config(
-            paths,
-            cluster_type,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
-            None,
-            Arc::default(),
-        )
+        AccountsDb::new_for_tests(paths, cluster_type)
     }
 
     pub fn new_with_config(
