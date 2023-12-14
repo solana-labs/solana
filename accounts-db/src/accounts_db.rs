@@ -9565,10 +9565,6 @@ impl AccountsDb {
         Self::new_sized(paths, file_size)
     }
 
-    pub fn new_sized_no_extra_stores(paths: Vec<PathBuf>, file_size: u64) -> Self {
-        Self::new_sized(paths, file_size)
-    }
-
     pub fn get_append_vec_id(&self, pubkey: &Pubkey, slot: Slot) -> Option<AppendVecId> {
         let ancestors = vec![(slot, 1)].into_iter().collect();
         let result = self.accounts_index.get(pubkey, Some(&ancestors), None);
@@ -13023,7 +13019,7 @@ pub mod tests {
         let zero_lamport_account = AccountSharedData::new(zero_lamport, data_size, &owner);
 
         let mut current_slot = 0;
-        let accounts = AccountsDb::new_sized_no_extra_stores(Vec::new(), store_size);
+        let accounts = AccountsDb::new_sized(Vec::new(), store_size);
 
         // A: Initialize AccountsDb with pubkey1 and pubkey2
         current_slot += 1;
