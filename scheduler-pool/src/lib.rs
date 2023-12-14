@@ -649,16 +649,13 @@ where
         self.context.upgrade()
     }
 
-    fn start_threads(&mut self) {
+    fn start_threads(&mut self, context: &SchedulingContext) {
         if self.is_active() {
             // this can't be promoted to panic! as read => write upgrade isn't completely
             // race-free in ensure_thread_manager_started()...
             warn!("start_threads(): already started");
             return;
         }
-        let context = self
-            .active_context()
-            .expect("start_threads(): stale scheduler....");
         debug!("start_threads(): doing now");
 
         let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
