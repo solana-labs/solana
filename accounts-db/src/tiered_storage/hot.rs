@@ -283,9 +283,10 @@ impl HotStorageReader {
     ) -> TieredStorageResult<&HotAccountMeta> {
         let internal_account_offset = account_offset.offset();
         assert!(
-            internal_account_offset <= 
-            (self.footer.index_block_offset as usize)
-                .saturating_sub(std::mem::size_of::<HotAccountMeta>()));
+            internal_account_offset
+                <= (self.footer.index_block_offset as usize)
+                    .saturating_sub(std::mem::size_of::<HotAccountMeta>())
+        );
 
         let (meta, _) = get_pod::<HotAccountMeta>(&self.mmap, internal_account_offset)?;
         Ok(meta)
