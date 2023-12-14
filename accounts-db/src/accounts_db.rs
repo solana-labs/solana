@@ -2551,10 +2551,6 @@ impl AccountsDb {
         )
     }
 
-    pub fn new_for_tests_with_caching(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
-        AccountsDb::new_for_tests(paths, cluster_type)
-    }
-
     pub fn new_with_config(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
@@ -2670,7 +2666,7 @@ impl AccountsDb {
     }
 
     pub fn new_single_for_tests_with_caching() -> Self {
-        AccountsDb::new_for_tests_with_caching(Vec::new(), &ClusterType::Development)
+        AccountsDb::new_for_tests(Vec::new(), &ClusterType::Development)
     }
 
     fn next_id(&self) -> AppendVecId {
@@ -18157,8 +18153,7 @@ pub mod tests {
 
     #[test]
     fn test_calculate_incremental_accounts_hash() {
-        let accounts_db =
-            AccountsDb::new_for_tests_with_caching(Vec::new(), &ClusterType::Development);
+        let accounts_db = AccountsDb::new_for_tests(Vec::new(), &ClusterType::Development);
 
         let owner = Pubkey::new_unique();
         let mut accounts: Vec<_> = (0..10)
