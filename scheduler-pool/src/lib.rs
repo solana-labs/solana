@@ -468,6 +468,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
                 pool.clone(),
                 handler_count,
             ))),
+            context: initial_context,
             address_book: AddressBook::default(),
             pooled_at: Instant::now(),
         };
