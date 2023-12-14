@@ -645,10 +645,6 @@ where
         *blocked_transaction_sessioned_sender = next_blocked_transaction_sessioned_sender;
     }
 
-    fn active_context(&self) -> Option<SchedulingContext> {
-        self.context.upgrade()
-    }
-
     fn start_threads(&mut self, context: &SchedulingContext) {
         if self.is_active() {
             // this can't be promoted to panic! as read => write upgrade isn't completely
