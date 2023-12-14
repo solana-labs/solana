@@ -2666,7 +2666,7 @@ impl AccountsDb {
     }
 
     pub fn new_single_for_tests_with_caching() -> Self {
-        AccountsDb::new_for_tests(Vec::new(), &ClusterType::Development)
+        AccountsDb::new_single_for_tests()
     }
 
     fn next_id(&self) -> AppendVecId {
