@@ -2539,6 +2539,10 @@ impl AccountsDb {
         }
     }
 
+    pub fn new_single_for_tests() -> Self {
+        AccountsDb::new_for_tests(Vec::new(), &ClusterType::Development)
+    }
+
     pub fn new_for_tests(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
         AccountsDb::new_with_config(
             paths,
@@ -2659,10 +2663,6 @@ impl AccountsDb {
     /// Get the base working directory
     pub fn get_base_working_path(&self) -> PathBuf {
         self.base_working_path.clone()
-    }
-
-    pub fn new_single_for_tests() -> Self {
-        AccountsDb::new_for_tests(Vec::new(), &ClusterType::Development)
     }
 
     fn next_id(&self) -> AppendVecId {
