@@ -129,26 +129,6 @@ impl Accounts {
         Self::new(Arc::new(AccountsDb::default_for_tests()))
     }
 
-    pub fn new_with_config(
-        paths: Vec<PathBuf>,
-        cluster_type: &ClusterType,
-        account_indexes: AccountSecondaryIndexes,
-        shrink_ratio: AccountShrinkThreshold,
-        accounts_db_config: Option<AccountsDbConfig>,
-        accounts_update_notifier: Option<AccountsUpdateNotifier>,
-        exit: Arc<AtomicBool>,
-    ) -> Self {
-        Self::new(Arc::new(AccountsDb::new_with_config(
-            paths,
-            cluster_type,
-            account_indexes,
-            shrink_ratio,
-            accounts_db_config,
-            accounts_update_notifier,
-            exit,
-        )))
-    }
-
     pub fn new(accounts_db: Arc<AccountsDb>) -> Self {
         Self {
             accounts_db,
@@ -806,7 +786,7 @@ impl Accounts {
         account_indexes: AccountSecondaryIndexes,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
-        Self::new_with_config(
+        let accounts_db = AccountsDb::new_with_config(
             paths,
             cluster_type,
             account_indexes,
@@ -814,7 +794,8 @@ impl Accounts {
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
             Arc::default(),
-        )
+        );
+        Self::new(Arc::new(accounts_db))
     }
 
     pub fn new_with_config_for_benches(
@@ -823,7 +804,7 @@ impl Accounts {
         account_indexes: AccountSecondaryIndexes,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
-        Self::new_with_config(
+        let accounts_db = AccountsDb::new_with_config(
             paths,
             cluster_type,
             account_indexes,
@@ -831,7 +812,8 @@ impl Accounts {
             Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
             None,
             Arc::default(),
-        )
+        );
+        Self::new(Arc::new(accounts_db))
     }
 }
 

@@ -1100,7 +1100,7 @@ impl Bank {
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
         exit: Arc<AtomicBool>,
     ) -> Self {
-        let accounts = Accounts::new_with_config(
+        let accounts_db = AccountsDb::new_with_config(
             paths,
             &genesis_config.cluster_type,
             account_indexes,
@@ -1109,6 +1109,7 @@ impl Bank {
             accounts_update_notifier,
             exit,
         );
+        let accounts = Accounts::new(Arc::new(accounts_db));
         let mut bank = Self::default_with_accounts(accounts);
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
         bank.transaction_debug_keys = debug_keys;
