@@ -71,7 +71,7 @@ use {
         account_overrides::AccountOverrides,
         accounts::{
             AccountAddressFilter, Accounts, LoadedTransaction, PubkeyAccountSlot, RewardInterval,
-            TransactionLoadResult,
+            TransactionLoadResult, TransactionRent,
         },
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig,
@@ -87,9 +87,9 @@ use {
         ancestors::{Ancestors, AncestorsForSerialization},
         blockhash_queue::BlockhashQueue,
         epoch_accounts_hash::EpochAccountsHash,
-        nonce_info::{NonceInfo, NoncePartial},
+        nonce_info::{NonceInfo, NoncePartial, NonceFull},
         partitioned_rewards::PartitionedEpochRewardsConfig,
-        rent_collector::{CollectedInfo, RentCollector},
+        rent_collector::{CollectedInfo, RentCollector, RENT_EXEMPT_RENT_EPOCH},
         rent_debits::RentDebits,
         sorted_storages::SortedStorages,
         stake_rewards::{RewardInfo, StakeReward},
@@ -174,6 +174,7 @@ use {
         },
         transaction_context::{
             ExecutionRecord, TransactionAccount, TransactionContext, TransactionReturnData,
+            IndexOfAccount, 
         },
     },
     solana_stake_program::stake_state::{
@@ -4975,7 +4976,20 @@ impl Bank {
                     .or_insert_with(|| accounts[acct_index].clone());
 
                 if acct_data_from_lookup != &accounts[acct_index] {
-                    *acct_data_from_lookup = accounts[acct_index].clone();
+                    if accounts[acct_index].is_zero_lamport(){
+                        let mut account = AccountSharedData::default(); 
+                        let set_exempt_rent_epoch_max =
+                            self.feature_set.is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
+                        if set_exempt_rent_epoch_max {
+                            // All new accounts must be rent-exempt (enforced in Bank::execute_loaded_transaction).
+                            // Currently, rent collection sets rent_epoch to u64::MAX, but initializing the account
+                            // with this field already set would allow us to skip rent collection for these accounts.
+                            account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
+                        }
+                        *acct_data_from_lookup = account;
+                    } else {
+                        *acct_data_from_lookup = accounts[acct_index].clone();
+                    }
                 }
             }
         }
@@ -5288,12 +5302,9 @@ impl Bank {
         let mut loaded_transactions = self.rc.accounts.load_accounts(
             &self.ancestors,
             sanitized_txs,
-            check_results,
-            &self.blockhash_queue.read().unwrap(),
+            check_results.clone(),
             &mut error_counters,
-            &self.rent_collector,
             &self.feature_set,
-            &self.fee_structure,
             account_overrides,
             self.get_reward_interval(),
             &program_accounts_map,
@@ -5316,9 +5327,10 @@ impl Bank {
         let execution_results: Vec<TransactionExecutionResult> = loaded_transactions
             .iter_mut()
             .zip(sanitized_txs.iter())
-            .map(|(accs, tx)| match accs {
-                (Err(e), _nonce) => TransactionExecutionResult::NotExecuted(e.clone()),
-                (Ok(loaded_transaction), nonce) => {
+            .zip(check_results.iter())
+            .map(|(((accs, full_nonce), tx), (_, partial_nonce))| match accs {
+                Err(e) => TransactionExecutionResult::NotExecuted(e.clone()),
+                Ok(loaded_transaction) => {
                     let compute_budget =
                         if let Some(compute_budget) = self.runtime_config.compute_budget {
                             compute_budget
@@ -5341,6 +5353,102 @@ impl Bank {
                             }
                             maybe_compute_budget.unwrap()
                         };
+
+                    let lamports_per_signature = partial_nonce
+                        .as_ref()
+                        .map(|nonce| nonce.lamports_per_signature())
+                        .unwrap_or_else(|| {
+                            self.blockhash_queue.read().unwrap().get_lamports_per_signature(tx.message().recent_blockhash())
+                        });
+                    let fee = if let Some(lamports_per_signature) = lamports_per_signature {
+                        self.fee_structure.calculate_fee(
+                            tx.message(),
+                            lamports_per_signature,
+                            &process_compute_budget_instructions(tx.message().program_instructions_iter(), &self.feature_set).unwrap_or_default().into(),
+                            self.feature_set.is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
+                            self.feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+                        )
+                    } else {
+                        return TransactionExecutionResult::NotExecuted(TransactionError::BlockhashNotFound);
+                    };
+
+                    let set_exempt_rent_epoch_max =
+                                self.feature_set.is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
+                    let mut validated_fee_payer = false;
+                    let message = tx.message();
+                    let mut rent;
+                    let mut tx_rent: TransactionRent = 0;
+                    let mut rent_debits = RentDebits::default();
+
+                    for (i, (key,acct)) in loaded_transaction.accounts
+                    .iter_mut()
+                    .enumerate() {
+                        let mut account = unique_loaded_accounts.get(key).unwrap().clone();
+
+                        if message.is_writable(i) {
+                            rent = self.rent_collector
+                                .collect_from_existing_account(
+                                    key,
+                                    &mut account,
+                                    self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
+                                    set_exempt_rent_epoch_max,
+                                )
+                                .rent_amount;
+                            unique_loaded_accounts.insert(*key, account.clone());
+                        } else {
+                            rent = 0;
+                        }
+                        
+                        tx_rent += rent;
+                        rent_debits.insert(key, rent, account.lamports());
+
+                        if !validated_fee_payer && message.is_non_loader_key(i) {
+
+                            if i != 0 {
+                                warn!("Payer index should be 0! {:?}", tx);
+                            }
+
+                            if self.rc.accounts.validate_fee_payer (
+                                key,
+                                &mut account,
+                                i as IndexOfAccount,
+                                &mut error_counters,
+                                &self.rent_collector,
+                                &self.feature_set,
+                                fee,
+                            ).is_ok() {
+                                validated_fee_payer = true;
+                                unique_loaded_accounts.insert(*key, account.clone());
+                            }
+                        }
+
+                        *acct = account;
+                    }
+
+                    if !validated_fee_payer {
+                        error_counters.account_not_found += 1;
+                        return TransactionExecutionResult::NotExecuted(TransactionError::AccountNotFound);
+                    }
+
+                    loaded_transaction.rent = tx_rent;
+                    loaded_transaction.rent_debits = rent_debits;
+
+                    // Update nonce with fee-subtracted accounts
+                    let nonce = if let Some(nonce) = partial_nonce {
+                        match NonceFull::from_partial(
+                            nonce.clone(),
+                            tx.message(),
+                            &loaded_transaction.accounts,
+                            &loaded_transaction.rent_debits,
+                        ) {
+                            Ok(nonce) => Some(nonce),
+                            Err(e) => return TransactionExecutionResult::NotExecuted(e)
+                        }
+                    } else {
+                        None
+                    };
+
+                    *full_nonce = nonce.clone();
 
                     let result = self.execute_loaded_transaction(
                         tx,

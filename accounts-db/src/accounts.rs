@@ -12,7 +12,6 @@ use {
         },
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::Ancestors,
-        blockhash_queue::BlockhashQueue,
         nonce_info::{NonceFull, NonceInfo},
         rent_collector::{RentCollector, RENT_EXEMPT_RENT_EPOCH},
         rent_debits::RentDebits,
@@ -34,11 +33,9 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
         feature_set::{
-            self, include_loaded_accounts_data_size_in_fee_calculation,
-            remove_congestion_multiplier_from_fee_calculation,
+            self, 
             simplify_writable_program_account_check, FeatureSet,
         },
-        fee::FeeStructure,
         genesis_config::ClusterType,
         message::{
             v0::{LoadedAddresses, MessageAddressTableLookup},
@@ -69,9 +66,6 @@ use {
         },
     },
 };
-
-// max_tx_per entry * avg_accts_per_tx = 64*16 =  
-const ENTRY_ACCTS_LOOKUP_TABLE_SIZE: usize = 1024; 
 
 pub type PubkeyAccountSlot = (Pubkey, AccountSharedData, Slot);
 
@@ -315,32 +309,28 @@ impl Accounts {
         &self,
         ancestors: &Ancestors,
         tx: &SanitizedTransaction,
-        fee: u64,
         error_counters: &mut TransactionErrorMetrics,
-        rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
         reward_interval: RewardInterval,
         program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
         loaded_programs: &LoadedProgramsForTxBatch,
-        entry_accts_lookup: &mut HashMap<Pubkey, AccountSharedData>,
     ) -> Result<LoadedTransaction> {
         let in_reward_interval = reward_interval == RewardInterval::InsideInterval;
 
         // NOTE: this check will never fail because `tx` is sanitized
-        if tx.signatures().is_empty() && fee != 0 {
+        if tx.signatures().is_empty() {
             return Err(TransactionError::MissingSignatureForFee);
         }
 
         // There is no way to predict what program will execute without an error
         // If a fee can pay for execution then the program will be scheduled
-        let mut validated_fee_payer = false;
-        let mut tx_rent: TransactionRent = 0;
+        let tx_rent: TransactionRent = 0;
         let message = tx.message();
         let account_keys = message.account_keys();
         let mut accounts_found = Vec::with_capacity(account_keys.len());
         let mut account_deps = Vec::with_capacity(account_keys.len());
-        let mut rent_debits = RentDebits::default();
+        let rent_debits = RentDebits::default();
 
         let set_exempt_rent_epoch_max =
             feature_set.is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
@@ -368,10 +358,10 @@ impl Accounts {
                     let instruction_account = u8::try_from(i)
                         .map(|i| instruction_accounts.contains(&&i))
                         .unwrap_or(false);
-                    let (account_size, mut account, rent) = if let Some(account_override) =
+                    let (account_size, account) = if let Some(account_override) =
                         account_overrides.and_then(|overrides| overrides.get(key))
                     {
-                        (account_override.data().len(), account_override.clone(), 0)
+                        (account_override.data().len(), account_override.clone())
                     } else if let Some(program) = (feature_set
                         .is_active(&simplify_writable_program_account_check::id())
                         && !instruction_account
@@ -386,28 +376,12 @@ impl Accounts {
                         // are needed to be loaded even though corresponding compiled program may
                         // already be present in the cache.
                         Self::account_shared_data_from_program(key, program_accounts)
-                            .map(|program_account| (program.account_size, program_account, 0))?
+                            .map(|program_account| (program.account_size, program_account))?
                     } else {
                         self.accounts_db
                             .load_with_fixed_root(ancestors, key)
-                            .map(|(mut account, _)| {
-                                // get the updated state from the entry level lookup
-                                if let Some(lookup_acct) = entry_accts_lookup.get(key) {
-                                    account = lookup_acct.clone();
-                                }
-                                if message.is_writable(i) {
-                                    let rent_due = rent_collector
-                                        .collect_from_existing_account(
-                                            key,
-                                            &mut account,
-                                            self.accounts_db.filler_account_suffix.as_ref(),
-                                            set_exempt_rent_epoch_max,
-                                        )
-                                        .rent_amount;
-                                    (account.data().len(), account, rent_due)
-                                } else {
-                                    (account.data().len(), account, 0)
-                                }
+                            .map(|(account, _)| {
+                                (account.data().len(), account)
                             })
                             .unwrap_or_else(|| {
                                 account_found = false;
@@ -418,7 +392,7 @@ impl Accounts {
                                     // with this field already set would allow us to skip rent collection for these accounts.
                                     default_account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
                                 }
-                                (default_account.data().len(), default_account, 0)
+                                (default_account.data().len(), default_account)
                             })
                     };
                     Self::accumulate_and_check_loaded_account_data_size(
@@ -427,24 +401,6 @@ impl Accounts {
                         requested_loaded_accounts_data_size_limit,
                         error_counters,
                     )?;
-
-                    if !validated_fee_payer && message.is_non_loader_key(i) {
-                        if i != 0 {
-                            warn!("Payer index should be 0! {:?}", tx);
-                        }
-
-                        Self::validate_fee_payer(
-                            key,
-                            &mut account,
-                            i as IndexOfAccount,
-                            error_counters,
-                            rent_collector,
-                            feature_set,
-                            fee,
-                        )?;
-
-                        validated_fee_payer = true;
-                    }
 
                     if !feature_set.is_active(&simplify_writable_program_account_check::id()) {
                         if bpf_loader_upgradeable::check_id(account.owner()) {
@@ -488,9 +444,6 @@ impl Accounts {
                         });
                     }
 
-                    tx_rent += rent;
-                    rent_debits.insert(key, rent, account.lamports());
-
                     account
                 };
 
@@ -498,11 +451,6 @@ impl Accounts {
                 Ok((*key, account))
             })
             .collect::<Result<Vec<_>>>()?;
-
-        if !validated_fee_payer {
-            error_counters.account_not_found += 1;
-            return Err(TransactionError::AccountNotFound);
-        }
 
         // Appends the account_deps at the end of the accounts,
         // this way they can be accessed in a uniform way.
@@ -582,7 +530,8 @@ impl Accounts {
         })
     }
 
-    fn validate_fee_payer(
+    pub fn validate_fee_payer(
+        &self,
         payer_address: &Pubkey,
         payer_account: &mut AccountSharedData,
         payer_index: IndexOfAccount,
@@ -646,86 +595,33 @@ impl Accounts {
         ancestors: &Ancestors,
         txs: &[SanitizedTransaction],
         lock_results: Vec<TransactionCheckResult>,
-        hash_queue: &BlockhashQueue,
         error_counters: &mut TransactionErrorMetrics,
-        rent_collector: &RentCollector,
         feature_set: &FeatureSet,
-        fee_structure: &FeeStructure,
         account_overrides: Option<&AccountOverrides>,
         in_reward_interval: RewardInterval,
         program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
         loaded_programs: &LoadedProgramsForTxBatch,
     ) -> Vec<TransactionLoadResult> {
-        let mut entry_accts_lookup: HashMap<Pubkey, AccountSharedData> =
-            HashMap::with_capacity(ENTRY_ACCTS_LOOKUP_TABLE_SIZE);
         txs.iter()
             .zip(lock_results)
             .map(|etx| match etx {
-                (tx, (Ok(()), nonce)) => {
-                    let lamports_per_signature = nonce
-                        .as_ref()
-                        .map(|nonce| nonce.lamports_per_signature())
-                        .unwrap_or_else(|| {
-                            hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
-                        });
-                    let fee = if let Some(lamports_per_signature) = lamports_per_signature {
-                        fee_structure.calculate_fee(
-                            tx.message(),
-                            lamports_per_signature,
-                            &process_compute_budget_instructions(tx.message().program_instructions_iter(), feature_set).unwrap_or_default().into(),
-                            feature_set.is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
-                            feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
-                        )
-                    } else {
-                        return (Err(TransactionError::BlockhashNotFound), None);
-                    };
+                (tx, (Ok(()), _)) => {
 
                     let loaded_transaction = match self.load_transaction_accounts(
                         ancestors,
                         tx,
-                        fee,
                         error_counters,
-                        rent_collector,
                         feature_set,
                         account_overrides,
                         in_reward_interval,
                         program_accounts,
                         loaded_programs,
-                        &mut entry_accts_lookup,
                     ) {
                         Ok(loaded_transaction) => loaded_transaction,
                         Err(e) => return (Err(e), None),
                     };
 
-                    // Update nonce with fee-subtracted accounts
-                    let nonce = if let Some(nonce) = nonce {
-                        match NonceFull::from_partial(
-                            nonce,
-                            tx.message(),
-                            &loaded_transaction.accounts,
-                            &loaded_transaction.rent_debits,
-                        ) {
-                            Ok(nonce) => Some(nonce),
-                            Err(e) => return (Err(e), None),
-                        }
-                    } else {
-                        None
-                    };
-
-                    // update lookup table after every transaction
-                    for (pubkey,acct) in loaded_transaction.accounts.iter(){
-                        if let Some(lookup_account) = entry_accts_lookup.get(&pubkey) {
-                            if lookup_account != acct {
-                                entry_accts_lookup.insert(*pubkey, acct.clone());
-                            }
-                        }
-                        else {
-                            entry_accts_lookup.insert(*pubkey, acct.clone());
-                        }
-
-                    }
-
-                    (Ok(loaded_transaction), nonce)
+                    (Ok(loaded_transaction), None)
                 }
                 (_, (Err(e), _nonce)) => (Err(e), None),
             })
