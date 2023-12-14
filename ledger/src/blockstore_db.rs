@@ -875,7 +875,8 @@ impl Column for columns::AddressSignatures {
     }
 
     fn index(key: &[u8]) -> (u64, Pubkey, Slot, Signature) {
-        <columns::AddressSignatures as ColumnIndexDeprecation>::try_current_index(key).unwrap()
+        <columns::AddressSignatures as ColumnIndexDeprecation>::try_current_index(key)
+            .unwrap_or_else(|_| Self::as_index(0))
     }
 
     fn primary_index(index: Self::Index) -> u64 {
