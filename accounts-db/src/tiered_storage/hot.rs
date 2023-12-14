@@ -282,15 +282,10 @@ impl HotStorageReader {
         account_offset: HotAccountOffset,
     ) -> TieredStorageResult<&HotAccountMeta> {
         let internal_account_offset = account_offset.offset();
-        let boundary = (self.footer.index_block_offset as usize)
-            .saturating_sub(std::mem::size_of::<HotAccountMeta>());
-
-        if internal_account_offset > boundary {
-            return Err(TieredStorageError::OffsetOutOfBounds(
-                internal_account_offset,
-                boundary,
-            ));
-        }
+        assert!(
+            internal_account_offset <= 
+            (self.footer.index_block_offset as usize)
+                .saturating_sub(std::mem::size_of::<HotAccountMeta>()));
 
         let (meta, _) = get_pod::<HotAccountMeta>(&self.mmap, internal_account_offset)?;
         Ok(meta)
@@ -581,6 +576,7 @@ pub mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "assertion failed")]
     fn test_get_acount_meta_from_offset_out_of_bounds() {
         // Generate a new temp path that is guaranteed to NOT already have a file.
         let temp_dir = TempDir::new().unwrap();
@@ -602,11 +598,8 @@ pub mod tests {
         let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
         let offset = HotAccountOffset::new(footer.index_block_offset as usize).unwrap();
         // Read from index_block_offset, which offset doesn't belong to
-        // account blocks.  Expect Err here.
-        assert!(matches!(
-            hot_storage.get_account_meta_from_offset(offset),
-            Err(TieredStorageError::OffsetOutOfBounds(_, _)),
-        ));
+        // account blocks.  Expect assert failure here
+        hot_storage.get_account_meta_from_offset(offset).unwrap();
     }
 
     #[test]
