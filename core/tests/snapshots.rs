@@ -73,7 +73,7 @@ struct SnapshotTestConfig {
     full_snapshot_archives_dir: TempDir,
     bank_snapshots_dir: TempDir,
     accounts_dir: PathBuf,
-    // as the underscore prefix indicates, this isn't explictly used; but it's needed to keep
+    // as the underscore prefix indicates, this isn't explicitly used; but it's needed to keep
     // TempDir::drop from running to retain that dir for the duration of test
     _accounts_tmp_dir: TempDir,
 }

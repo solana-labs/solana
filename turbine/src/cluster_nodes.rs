@@ -311,7 +311,7 @@ fn get_nodes(cluster_info: &ClusterInfo, stakes: &HashMap<Pubkey, u64>) -> Vec<N
 // fanout + k, 2*fanout + k, ..., fanout*fanout + k
 fn get_retransmit_peers<T: Copy>(
     fanout: usize,
-    index: usize, // Local node's index withing the nodes slice.
+    index: usize, // Local node's index within the nodes slice.
     nodes: &[T],
 ) -> impl Iterator<Item = T> + '_ {
     // Node's index within its neighborhood.

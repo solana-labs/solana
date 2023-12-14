@@ -1123,7 +1123,7 @@ pub mod tests {
         let request_slot = 100;
         let mut test_setup = setup_add_response_test_pruned(request_slot, 10);
 
-        // Insert all the correct ancestory
+        // Insert all the correct ancestry
         let tree = test_setup
             .correct_ancestors_response
             .iter()

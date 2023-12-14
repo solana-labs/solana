@@ -1730,7 +1730,7 @@ mod tests {
             }
         }
 
-        // If payer account has insufficent balance, expect InsufficientFundsForFee error
+        // If payer account has insufficient balance, expect InsufficientFundsForFee error
         // regardless feature gate status, or if payer is nonce account.
         {
             for feature_checked_arithmmetic_enable in [true, false] {

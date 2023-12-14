@@ -193,7 +193,7 @@ mod tests {
     fn test_quic_bi_direction() {
         /// This tests bi-directional quic communication. There are the following components
         /// The request receiver -- responsible for receiving requests
-        /// The request sender -- responsible sending requests to the request reciever using quic
+        /// The request sender -- responsible sending requests to the request receiver using quic
         /// The response receiver -- responsible for receiving the responses to the requests
         /// The response sender -- responsible for sending responses to the response receiver.
         /// In this we demonstrate that the request sender and the response receiver use the

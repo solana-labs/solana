@@ -6341,7 +6341,7 @@ pub mod tests {
         assert_eq!(
             blockstore.find_missing_data_indexes(
                 slot,
-                0,                  // first_timestmap
+                0,                  // first_timestamp
                 0,                  // defer_threshold_ticks
                 0,                  // start_index
                 gap - 1,            // end_index
@@ -6352,7 +6352,7 @@ pub mod tests {
         assert_eq!(
             blockstore.find_missing_data_indexes(
                 slot,
-                0,            // first_timestmap
+                0,            // first_timestamp
                 0,            // defer_threshold_ticks
                 gap - 2,      // start_index
                 gap,          // end_index
@@ -9951,7 +9951,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_rewards_protobuf_backward_compatability() {
+    fn test_rewards_protobuf_backward_compatibility() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
@@ -9994,7 +9994,7 @@ pub mod tests {
     // ledger archives, but typically those require contemporaraneous software for other reasons.
     // However, we are persisting the test since the apis still exist in `blockstore_db`.
     #[test]
-    fn test_transaction_status_protobuf_backward_compatability() {
+    fn test_transaction_status_protobuf_backward_compatibility() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
