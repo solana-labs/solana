@@ -583,7 +583,7 @@ where
         };
         // needs to start threads immediately, because the bank in initial_context can be dropped
         // anytime.
-        thread_manager.start_threads();
+        thread_manager.start_threads(&initial_context);
         thread_manager
     }
 
