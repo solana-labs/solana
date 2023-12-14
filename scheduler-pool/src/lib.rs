@@ -404,34 +404,6 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     pooled_at: Instant,
 }
 
-#[derive(Debug)]
-struct WeakSchedulingContext {
-    mode: Option<SchedulingMode>,
-    bank: Weak<Bank>,
-}
-
-impl WeakSchedulingContext {
-    fn new() -> Self {
-        Self {
-            mode: None,
-            bank: Weak::new(),
-        }
-    }
-
-    fn downgrade(context: SchedulingContext) -> Self {
-        Self {
-            mode: Some(context.mode()),
-            bank: Arc::downgrade(context.bank()),
-        }
-    }
-
-    fn upgrade(&self) -> Option<SchedulingContext> {
-        self.bank
-            .upgrade()
-            .map(|bank| SchedulingContext::new(self.mode.unwrap(), bank))
-    }
-}
-
 type Tid = i32;
 
 #[derive(Debug)]
