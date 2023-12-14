@@ -475,32 +475,6 @@ pub struct LoadedPrograms<FG: ForkGraph> {
     pub fork_graph: Option<Arc<RwLock<FG>>>,
 }
 
-<<<<<<< HEAD
-impl<FG: ForkGraph> Default for LoadedPrograms<FG> {
-    fn default() -> Self {
-        Self {
-            entries: HashMap::new(),
-            latest_root_slot: 0,
-            latest_root_epoch: 0,
-            environments: ProgramRuntimeEnvironments::default(),
-            upcoming_environments: None,
-            programs_to_recompile: Vec::default(),
-            stats: Stats::default(),
-            fork_graph: None,
-        }
-=======
-impl<FG: ForkGraph> Debug for LoadedPrograms<FG> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("LoadedPrograms")
-            .field("root slot", &self.latest_root_slot)
-            .field("root epoch", &self.latest_root_epoch)
-            .field("stats", &self.stats)
-            .field("cache", &self.entries)
-            .finish()
->>>>>>> 47dab26857 (Set root slot/epoch in cache constructor (#34447))
-    }
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct LoadedProgramsForTxBatch {
     /// Pubkey is the address of a program.
