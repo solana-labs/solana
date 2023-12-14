@@ -1,15 +1,14 @@
 #[cfg(feature = "dev-context-only-utils")]
-use crate::accounts_db::{ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING};
+use crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING;
 use {
     crate::{
         accounts_db::{
-            AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig, LoadHint,
-            LoadedAccount, ScanStorageResult, VerifyAccountsHashAndLamportsConfig,
+            AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, LoadHint, LoadedAccount,
+            ScanStorageResult, VerifyAccountsHashAndLamportsConfig,
         },
         accounts_index::{
             AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ScanResult, ZeroLamport,
         },
-        accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::Ancestors,
         nonce_info::{NonceFull, NonceInfo},
         rent_collector::RentCollector,
@@ -44,7 +43,7 @@ use {
         ops::RangeBounds,
         path::PathBuf,
         sync::{
-            atomic::{AtomicBool, AtomicUsize, Ordering},
+            atomic::{AtomicUsize, Ordering},
             Arc, Mutex,
         },
     },
@@ -788,24 +787,6 @@ impl Accounts {
             account_indexes,
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
-            None,
-            Arc::default(),
-        );
-        Self::new(Arc::new(accounts_db))
-    }
-
-    pub fn new_with_config_for_benches(
-        paths: Vec<PathBuf>,
-        cluster_type: &ClusterType,
-        account_indexes: AccountSecondaryIndexes,
-        shrink_ratio: AccountShrinkThreshold,
-    ) -> Self {
-        let accounts_db = AccountsDb::new_with_config(
-            paths,
-            cluster_type,
-            account_indexes,
-            shrink_ratio,
-            Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
             None,
             Arc::default(),
         );
