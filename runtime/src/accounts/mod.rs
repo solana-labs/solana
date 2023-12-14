@@ -28,7 +28,7 @@ use {
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         feature_set::{
-            self, include_loaded_accounts_data_size_in_fee_calculation,
+            include_loaded_accounts_data_size_in_fee_calculation,
             remove_congestion_multiplier_from_fee_calculation,
             simplify_writable_program_account_check, FeatureSet,
         },
