@@ -110,12 +110,11 @@ impl BankForks {
         }
 
         let mut descendants = HashMap::<_, HashSet<_>>::new();
-        for (slot, bank) in &banks {
-            descendants.entry(*slot).or_default();
-            for parent in bank.proper_ancestors() {
-                descendants.entry(parent).or_default().insert(*slot);
-            }
+        descendants.entry(root_slot).or_default();
+        for parent in root_bank.proper_ancestors() {
+            descendants.entry(parent).or_default().insert(root_slot);
         }
+
         let bank_forks = Arc::new(RwLock::new(Self {
             root: Arc::new(AtomicSlot::new(root_slot)),
             banks,
