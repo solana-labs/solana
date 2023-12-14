@@ -560,7 +560,7 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn new(
-        initial_context: SchedulingContext,
+        initial_context: &SchedulingContext,
         handler: TH,
         pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
         handler_count: usize,
@@ -582,9 +582,7 @@ where
             pool,
             session_result_with_timings: None,
         };
-        // needs to start threads immediately, because the bank in initial_context can be dropped
-        // anytime.
-        thread_manager.start_threads(&initial_context);
+        thread_manager.start_threads(initial_context);
         thread_manager
     }
 
