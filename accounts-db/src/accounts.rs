@@ -1,9 +1,10 @@
+#[cfg(feature = "dev-context-only-utils")]
+use crate::accounts_db::{ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING};
 use {
     crate::{
         accounts_db::{
             AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig, LoadHint,
             LoadedAccount, ScanStorageResult, VerifyAccountsHashAndLamportsConfig,
-            ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{
             AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ScanResult, ZeroLamport,
