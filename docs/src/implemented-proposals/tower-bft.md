@@ -154,7 +154,7 @@ ancestors.
 
 Each validator maintains a vote tower `T` which follows the rules described above in [Vote Tower](#vote-tower), which is a sequence of blocks it has voted for (initially empty). The variable `l` records the length of the stack. For each entry in the tower, denoted by `B = T(x)` for `x < l` where `B` is the `xth` entry in the tower, we record also a value `confcount(B)`. Define the lock expiration slot `lockexp(B) := slot(B) + 2 ^ confcount(B)`.
 
-The validator `i` runs a voting loop as as follows. Let `B` be the heaviest
+The validator `i` runs a voting loop as follows. Let `B` be the heaviest
 block returned by the fork choice rule above [Fork Choice](#fork-choice). If `i` has not voted for `B` before, then `i` votes for `B` so long as the following conditions are satisfied:
 
 1. Respecting lockouts: For any block `B′` in the tower that is not an ancestor of `B`, `lockexp(B′) ≤ slot(B)`.
