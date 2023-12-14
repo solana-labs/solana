@@ -85,16 +85,17 @@ impl Index<u64> for BankForks {
 }
 
 impl BankForks {
-    pub fn new_rw_arc(bank: Bank) -> Arc<RwLock<Self>> {
-        let bank = Arc::new(bank);
-        let root = bank.slot();
+    pub fn new_rw_arc(root_bank: Bank) -> Arc<RwLock<Self>> {
+        let root_bank = Arc::new(root_bank);
+        let root_slot = root_bank.slot();
 
         let mut banks = HashMap::new();
         banks.insert(
-            bank.slot(),
-            BankWithScheduler::new_without_scheduler(bank.clone()),
+            root_slot,
+            BankWithScheduler::new_without_scheduler(root_bank.clone()),
         );
-        let parents = bank.parents();
+
+        let parents = root_bank.parents();
         for parent in parents {
             if banks
                 .insert(
@@ -116,12 +117,12 @@ impl BankForks {
             }
         }
         let bank_forks = Arc::new(RwLock::new(Self {
-            root: Arc::new(AtomicSlot::new(root)),
+            root: Arc::new(AtomicSlot::new(root_slot)),
             banks,
             descendants,
             snapshot_config: None,
             accounts_hash_interval_slots: std::u64::MAX,
-            last_accounts_hash_slot: root,
+            last_accounts_hash_slot: root_slot,
             in_vote_only_mode: Arc::new(AtomicBool::new(false)),
             highest_slot_at_startup: 0,
             scheduler_pool: None,
