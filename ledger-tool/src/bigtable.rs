@@ -1241,12 +1241,25 @@ struct MissingBlocksData {
 }
 
 fn missing_blocks(reference: &[Slot], owned: &[Slot]) -> MissingBlocksData {
+    // Generally, callers should return early and not bother calling
+    // `missing_blocks()` when the reference set is empty. This code block
+    // included for completeness, to prevent panics.
+    if reference.is_empty() {
+        return MissingBlocksData {
+            last_block_checked: *owned.last().cloned().unwrap_or_default(),
+            missing_blocks: vec![],
+            superfluous_blocks: owned.to_owned(),
+            num_reference_blocks: 0,
+            num_owned_blocks: owned.len(),
+        };
+    }
+
     // Because the owned bigtable may include superfluous slots, stop checking
-    // the reference set at owned_bigtable_slots.last() or else the remaining
-    // reference slots will show up as missing.
+    // the reference set at owned.last() or else the remaining reference slots
+    // will show up as missing.
     let last_reference_block = reference
         .last()
-        .expect("already returned if reference_bigtable_slots is empty");
+        .expect("already returned if reference is empty");
     let last_block_checked = owned
         .last()
         .map(|last_owned_block| min(last_owned_block, last_reference_block))
