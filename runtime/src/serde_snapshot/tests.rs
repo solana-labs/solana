@@ -260,7 +260,7 @@ mod serde_snapshot_tests {
         let buf = writer.into_inner();
         let mut reader = BufReader::new(&buf[..]);
         let (_accounts_dir, daccounts_paths) = get_temp_accounts_paths(2).unwrap();
-        let daccounts = Accounts::new_empty(
+        let daccounts = Accounts::new(Arc::new(
             accountsdb_from_stream(
                 serde_style,
                 &mut reader,
@@ -268,7 +268,7 @@ mod serde_snapshot_tests {
                 storage_and_next_append_vec_id,
             )
             .unwrap(),
-        );
+        ));
         check_accounts_local(&daccounts, &pubkeys, 100);
         let daccounts_delta_hash = daccounts.accounts_db.calculate_accounts_delta_hash(slot);
         assert_eq!(accounts_delta_hash, daccounts_delta_hash);
