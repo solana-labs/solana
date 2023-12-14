@@ -1,9 +1,10 @@
+#[cfg(feature = "dev-context-only-utils")]
+use crate::accounts_db::{ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING};
 use {
     crate::{
         accounts_db::{
             AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig, LoadHint,
             LoadedAccount, ScanStorageResult, VerifyAccountsHashAndLamportsConfig,
-            ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{
             AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ScanResult, ZeroLamport,
@@ -125,41 +126,7 @@ pub enum AccountAddressFilter {
 
 impl Accounts {
     pub fn default_for_tests() -> Self {
-        Self::new_empty(AccountsDb::default_for_tests())
-    }
-
-    pub fn new_with_config_for_tests(
-        paths: Vec<PathBuf>,
-        cluster_type: &ClusterType,
-        account_indexes: AccountSecondaryIndexes,
-        shrink_ratio: AccountShrinkThreshold,
-    ) -> Self {
-        Self::new_with_config(
-            paths,
-            cluster_type,
-            account_indexes,
-            shrink_ratio,
-            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
-            None,
-            Arc::default(),
-        )
-    }
-
-    pub fn new_with_config_for_benches(
-        paths: Vec<PathBuf>,
-        cluster_type: &ClusterType,
-        account_indexes: AccountSecondaryIndexes,
-        shrink_ratio: AccountShrinkThreshold,
-    ) -> Self {
-        Self::new_with_config(
-            paths,
-            cluster_type,
-            account_indexes,
-            shrink_ratio,
-            Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
-            None,
-            Arc::default(),
-        )
+        Self::new(Arc::new(AccountsDb::default_for_tests()))
     }
 
     pub fn new_with_config(
@@ -171,7 +138,7 @@ impl Accounts {
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
         exit: Arc<AtomicBool>,
     ) -> Self {
-        Self::new_empty(AccountsDb::new_with_config(
+        Self::new(Arc::new(AccountsDb::new_with_config(
             paths,
             cluster_type,
             account_indexes,
@@ -179,11 +146,7 @@ impl Accounts {
             accounts_db_config,
             accounts_update_notifier,
             exit,
-        ))
-    }
-
-    pub fn new_empty(accounts_db: AccountsDb) -> Self {
-        Self::new(Arc::new(accounts_db))
+        )))
     }
 
     pub fn new(accounts_db: Arc<AccountsDb>) -> Self {
@@ -831,6 +794,44 @@ impl Accounts {
             }
         }
         (accounts, transactions)
+    }
+}
+
+// These functions/fields are only usable from a dev context (i.e. tests and benches)
+#[cfg(feature = "dev-context-only-utils")]
+impl Accounts {
+    pub fn new_with_config_for_tests(
+        paths: Vec<PathBuf>,
+        cluster_type: &ClusterType,
+        account_indexes: AccountSecondaryIndexes,
+        shrink_ratio: AccountShrinkThreshold,
+    ) -> Self {
+        Self::new_with_config(
+            paths,
+            cluster_type,
+            account_indexes,
+            shrink_ratio,
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
+            Arc::default(),
+        )
+    }
+
+    pub fn new_with_config_for_benches(
+        paths: Vec<PathBuf>,
+        cluster_type: &ClusterType,
+        account_indexes: AccountSecondaryIndexes,
+        shrink_ratio: AccountShrinkThreshold,
+    ) -> Self {
+        Self::new_with_config(
+            paths,
+            cluster_type,
+            account_indexes,
+            shrink_ratio,
+            Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
+            None,
+            Arc::default(),
+        )
     }
 }
 
