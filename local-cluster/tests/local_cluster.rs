@@ -2593,6 +2593,9 @@ fn test_rpc_block_subscribe() {
     let (mut block_subscribe_client, receiver) = PubsubClient::block_subscribe(
         &format!(
             "ws://{}",
+            // It is important that we subscribe to a non leader node as there
+            // is a race condition which can cause leader nodes to not send
+            // BlockUpdate notifications properly. See https://github.com/solana-labs/solana/pull/34421
             &rpc_node_contact_info.rpc_pubsub().unwrap().to_string()
         ),
         RpcBlockSubscribeFilter::All,
