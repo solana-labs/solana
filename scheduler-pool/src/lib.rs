@@ -399,6 +399,7 @@ impl ExecutedTask {
 pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     completed_result_with_timings: Option<ResultWithTimings>,
     thread_manager: Arc<RwLock<ThreadManager<TH, SEA>>>,
+    context2: WeakSchedulingContext,
     address_book: AddressBook,
     pooled_at: Instant,
 }
@@ -437,7 +438,6 @@ type Tid = i32;
 struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     scheduler_id: SchedulerId,
     pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
-    context2: WeakSchedulingContext,
     scheduler_thread_and_tid: Option<(JoinHandle<ResultWithTimings>, Tid)>,
     handler_threads: Vec<JoinHandle<()>>,
     drop_thread: Option<JoinHandle<()>>,
