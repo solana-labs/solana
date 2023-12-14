@@ -1018,9 +1018,7 @@ where
         self.schedulrable_transaction_sender
             .send(SessionedMessage::EndSession)
             .unwrap();
-        let result_with_timings = self.result_receiver.recv().unwrap();
-        self.context = WeakSchedulingContext::new();
-        result_with_timings
+        self.result_receiver.recv().unwrap()
     }
 
     fn start_session(&mut self, context: SchedulingContext) {
