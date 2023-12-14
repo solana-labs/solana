@@ -175,7 +175,7 @@ impl BankForks {
                 descendants.entry(parent).or_default().insert(*slot);
             }
         }
-        Self {
+        let bank_forks = Self {
             root: Arc::new(AtomicSlot::new(root)),
             banks,
             descendants,
@@ -184,7 +184,17 @@ impl BankForks {
             last_accounts_hash_slot: root,
             in_vote_only_mode: Arc::new(AtomicBool::new(false)),
             highest_slot_at_startup: 0,
-        }
+        };
+        let root_bank = bank_forks
+            .banks
+            .get(&root)
+            .expect("root bank didn't exist in bank_forks");
+        root_bank
+            .loaded_programs_cache
+            .write()
+            .unwrap()
+            .prune(&bank_forks, root);
+        bank_forks
     }
 
     pub fn insert(&mut self, mut bank: Bank) -> Arc<Bank> {
