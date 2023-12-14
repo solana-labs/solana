@@ -288,7 +288,7 @@ impl LoadedProgram {
             effective_slot: self.effective_slot,
             maybe_expiration_slot: self.maybe_expiration_slot,
             tx_usage_counter: AtomicU64::new(self.tx_usage_counter.load(Ordering::Relaxed)),
-            ix_usage_counter: AtomicU64::new(self.tx_usage_counter.load(Ordering::Relaxed)),
+            ix_usage_counter: AtomicU64::new(self.ix_usage_counter.load(Ordering::Relaxed)),
         })
     }
 
@@ -447,13 +447,11 @@ impl LoadedPrograms {
                 if matches!(existing.program, LoadedProgramType::Unloaded(_)) {
                     // The unloaded program is getting reloaded
                     // Copy over the usage counter to the new entry
-                    let mut usage_count = existing.tx_usage_counter.load(Ordering::Relaxed);
-                    saturating_add_assign!(
-                        usage_count,
-                        entry.tx_usage_counter.load(Ordering::Relaxed)
+                    entry.tx_usage_counter.fetch_add(
+                        existing.tx_usage_counter.load(Ordering::Relaxed),
+                        Ordering::Relaxed,
                     );
-                    entry.tx_usage_counter.store(usage_count, Ordering::Relaxed);
-                    entry.ix_usage_counter.store(
+                    entry.ix_usage_counter.fetch_add(
                         existing.ix_usage_counter.load(Ordering::Relaxed),
                         Ordering::Relaxed,
                     );
@@ -622,22 +620,20 @@ impl LoadedPrograms {
                             }
 
                             if current_slot >= entry.effective_slot {
-                                let mut usage_count =
-                                    entry.tx_usage_counter.load(Ordering::Relaxed);
-                                saturating_add_assign!(usage_count, count);
-                                entry.tx_usage_counter.store(usage_count, Ordering::Relaxed);
+                                entry.tx_usage_counter.fetch_add(count, Ordering::Relaxed);
                                 return Some((key, entry.clone()));
                             } else if entry.is_implicit_delay_visibility_tombstone(current_slot) {
                                 // Found a program entry on the current fork, but it's not effective
                                 // yet. It indicates that the program has delayed visibility. Return
                                 // the tombstone to reflect that.
-                                return Some((
-                                    key,
-                                    Arc::new(LoadedProgram::new_tombstone(
-                                        entry.deployment_slot,
-                                        LoadedProgramType::DelayVisibility,
-                                    )),
+                                let entry_to_return = Arc::new(LoadedProgram::new_tombstone(
+                                    entry.deployment_slot,
+                                    LoadedProgramType::DelayVisibility,
                                 ));
+                                entry_to_return
+                                    .tx_usage_counter
+                                    .fetch_add(count, Ordering::Relaxed);
+                                return Some((key, entry_to_return));
                             }
                         }
                     }
