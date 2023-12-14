@@ -1176,7 +1176,7 @@ where
     }
 
     fn replace_context(&mut self, context: SchedulingContext) {
-        self.thread_manager.write().unwrap().start_session(context);
+        self.thread_manager.write().unwrap().start_session(&context);
         self.context = context;
     }
 }
