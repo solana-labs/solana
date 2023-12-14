@@ -2665,10 +2665,6 @@ impl AccountsDb {
         AccountsDb::new_for_tests(Vec::new(), &ClusterType::Development)
     }
 
-    pub fn new_single_for_tests_with_caching() -> Self {
-        AccountsDb::new_single_for_tests()
-    }
-
     fn next_id(&self) -> AppendVecId {
         let next_id = self.next_id.fetch_add(1, Ordering::AcqRel);
         assert!(next_id != AppendVecId::MAX, "We've run out of storage ids!");
