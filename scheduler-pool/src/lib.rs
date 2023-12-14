@@ -1103,8 +1103,8 @@ where
         self.thread_manager.read().unwrap().scheduler_id
     }
 
-    fn context(&self) -> SchedulingContext {
-        self.context.clone()
+    fn context(&self) -> &SchedulingContext {
+        self.context
     }
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
