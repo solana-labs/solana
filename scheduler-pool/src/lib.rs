@@ -1161,7 +1161,7 @@ where
     fn wait_for_termination(&mut self, wait_reason: &WaitReason) -> Option<ResultWithTimings> {
         if self.completed_result_with_timings.is_none() {
             self.completed_result_with_timings =
-                Some(self.thread_manager.write().unwrap().end_session());
+                Some(self.thread_manager.write().unwrap().end_session(self.context));
         }
 
         if wait_reason.is_paused() {
