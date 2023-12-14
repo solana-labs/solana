@@ -399,7 +399,7 @@ impl ExecutedTask {
 pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     completed_result_with_timings: Option<ResultWithTimings>,
     thread_manager: Arc<RwLock<ThreadManager<TH, SEA>>>,
-    context2: WeakSchedulingContext,
+    context: WeakSchedulingContext,
     address_book: AddressBook,
     pooled_at: Instant,
 }
