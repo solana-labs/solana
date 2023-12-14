@@ -13595,12 +13595,7 @@ pub mod tests {
     #[test]
     fn test_store_clean_after_shrink() {
         solana_logger::setup();
-        let accounts = AccountsDb::new_with_config_for_tests(
-            vec![],
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts = AccountsDb::new_single_for_tests();
         let epoch_schedule = EpochSchedule::default();
 
         let account = AccountSharedData::new(1, 16 * 4096, &Pubkey::default());
@@ -13967,12 +13962,7 @@ pub mod tests {
 
     #[test]
     fn test_read_only_accounts_cache() {
-        let db = Arc::new(AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        ));
+        let db = Arc::new(AccountsDb::new_single_for_tests());
 
         let account_key = Pubkey::new_unique();
         let zero_lamport_account =
@@ -14012,12 +14002,7 @@ pub mod tests {
 
     #[test]
     fn test_account_matches_owners() {
-        let db = Arc::new(AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        ));
+        let db = Arc::new(AccountsDb::new_single_for_tests());
 
         let owners: Vec<Pubkey> = (0..2).map(|_| Pubkey::new_unique()).collect();
 
@@ -14109,12 +14094,7 @@ pub mod tests {
 
     #[test]
     fn test_flush_cache_clean() {
-        let db = Arc::new(AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        ));
+        let db = Arc::new(AccountsDb::new_single_for_tests());
 
         let account_key = Pubkey::new_unique();
         let zero_lamport_account =
@@ -14158,12 +14138,7 @@ pub mod tests {
 
     #[test]
     fn test_flush_cache_dont_clean_zero_lamport_account() {
-        let db = Arc::new(AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        ));
+        let db = Arc::new(AccountsDb::new_single_for_tests());
 
         let zero_lamport_account_key = Pubkey::new_unique();
         let other_account_key = Pubkey::new_unique();
@@ -14302,12 +14277,7 @@ pub mod tests {
 
     #[test]
     fn test_scan_flush_accounts_cache_then_clean_drop() {
-        let db = Arc::new(AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        ));
+        let db = Arc::new(AccountsDb::new_single_for_tests());
         let account_key = Pubkey::new_unique();
         let account_key2 = Pubkey::new_unique();
         let zero_lamport_account =
@@ -14417,12 +14387,7 @@ pub mod tests {
 
     #[test]
     fn test_alive_bytes() {
-        let accounts_db = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
         let slot: Slot = 0;
         let num_keys = 10;
 
@@ -14461,12 +14426,7 @@ pub mod tests {
         scan_slot: Option<Slot>,
         write_cache_limit_bytes: Option<u64>,
     ) -> (Arc<AccountsDb>, Vec<Pubkey>, Vec<Slot>, Option<ScanTracker>) {
-        let mut accounts_db = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let mut accounts_db = AccountsDb::new_single_for_tests();
         accounts_db.write_cache_limit_bytes = write_cache_limit_bytes;
         let accounts_db = Arc::new(accounts_db);
 
@@ -14868,12 +14828,7 @@ pub mod tests {
     }
 
     fn run_test_shrink_unref(do_intra_cache_clean: bool) {
-        let db = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let db = AccountsDb::new_single_for_tests();
         let epoch_schedule = EpochSchedule::default();
         let account_key1 = Pubkey::new_unique();
         let account_key2 = Pubkey::new_unique();
@@ -15128,12 +15083,7 @@ pub mod tests {
     fn do_test_load_account_and_cache_flush_race(with_retry: bool) {
         solana_logger::setup();
 
-        let mut db = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let mut db = AccountsDb::new_single_for_tests();
         db.load_delay = RACY_SLEEP_MS;
         let db = Arc::new(db);
         let pubkey = Arc::new(Pubkey::new_unique());
@@ -15201,12 +15151,7 @@ pub mod tests {
     }
 
     fn do_test_load_account_and_shrink_race(with_retry: bool) {
-        let mut db = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let mut db = AccountsDb::new_single_for_tests();
         let epoch_schedule = EpochSchedule::default();
         db.load_delay = RACY_SLEEP_MS;
         let db = Arc::new(db);
@@ -15267,12 +15212,7 @@ pub mod tests {
 
     #[test]
     fn test_cache_flush_delayed_remove_unrooted_race() {
-        let mut db = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let mut db = AccountsDb::new_single_for_tests();
         db.load_delay = RACY_SLEEP_MS;
         let db = Arc::new(db);
         let slot = 10;
@@ -15337,12 +15277,7 @@ pub mod tests {
 
     #[test]
     fn test_cache_flush_remove_unrooted_race_multiple_slots() {
-        let db = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let db = AccountsDb::new_single_for_tests();
         let db = Arc::new(db);
         let num_cached_slots = 100;
 
