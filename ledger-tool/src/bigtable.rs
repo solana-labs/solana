@@ -211,27 +211,13 @@ async fn compare_blocks(
         owned_bigtable_slots.len()
     );
 
-    // Because the owned bigtable may include superfluous slots, stop checking
-    // the reference set at owned_bigtable_slots.last() or else the remaining
-    // reference slots will show up as missing.
-    let last_reference_block = reference_bigtable_slots
-        .last()
-        .expect("already returned if reference_bigtable_slots is empty");
-    let last_block_checked = owned_bigtable_slots
-        .last()
-        .map(|last_owned_block| min(last_owned_block, last_reference_block))
-        .unwrap_or(last_reference_block);
-
     let MissingBlocksData {
+        last_block_checked,
         missing_blocks,
         superfluous_blocks,
         num_reference_blocks,
         num_owned_blocks,
-    } = missing_blocks(
-        last_block_checked,
-        &reference_bigtable_slots,
-        &owned_bigtable_slots,
-    );
+    } = missing_blocks(&reference_bigtable_slots, &owned_bigtable_slots);
 
     println!(
         "{}",
@@ -1247,19 +1233,28 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
 
 #[derive(Debug, PartialEq)]
 struct MissingBlocksData {
+    last_block_checked: Slot,
     missing_blocks: Vec<Slot>,
     superfluous_blocks: Vec<Slot>,
     num_reference_blocks: usize,
     num_owned_blocks: usize,
 }
 
-fn missing_blocks(
-    last_block_checked: &Slot,
-    reference: &[Slot],
-    owned: &[Slot],
-) -> MissingBlocksData {
+fn missing_blocks(reference: &[Slot], owned: &[Slot]) -> MissingBlocksData {
+    // Because the owned bigtable may include superfluous slots, stop checking
+    // the reference set at owned_bigtable_slots.last() or else the remaining
+    // reference slots will show up as missing.
+    let last_reference_block = reference
+        .last()
+        .expect("already returned if reference_bigtable_slots is empty");
+    let last_block_checked = owned
+        .last()
+        .map(|last_owned_block| min(last_owned_block, last_reference_block))
+        .unwrap_or(last_reference_block);
+
     if owned.is_empty() && !reference.is_empty() {
         return MissingBlocksData {
+            last_block_checked: *last_block_checked,
             missing_blocks: reference.to_owned(),
             superfluous_blocks: vec![],
             num_reference_blocks: reference.len(),
@@ -1291,6 +1286,7 @@ fn missing_blocks(
     superfluous_blocks.sort_unstable(); // Unstable sort is fine, as we've already ensured no duplicates
 
     MissingBlocksData {
+        last_block_checked: *last_block_checked,
         missing_blocks,
         superfluous_blocks,
         num_reference_blocks: reference_hashset.len(),
