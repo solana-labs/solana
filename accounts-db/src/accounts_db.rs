@@ -9519,39 +9519,6 @@ pub(crate) enum UpdateIndexThreadSelection {
     PoolWithThreshold,
 }
 
-#[cfg(test)]
-impl AccountsDb {
-    pub fn new_with_config_for_tests(
-        paths: Vec<PathBuf>,
-        cluster_type: &ClusterType,
-        account_indexes: AccountSecondaryIndexes,
-        shrink_ratio: AccountShrinkThreshold,
-    ) -> Self {
-        Self::new_with_config(
-            paths,
-            cluster_type,
-            account_indexes,
-            shrink_ratio,
-            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
-            None,
-            Arc::default(),
-        )
-    }
-
-    pub fn new_sized(paths: Vec<PathBuf>, file_size: u64) -> Self {
-        AccountsDb {
-            file_size,
-            ..AccountsDb::new_for_tests(paths, &ClusterType::Development)
-        }
-    }
-
-    pub fn get_append_vec_id(&self, pubkey: &Pubkey, slot: Slot) -> Option<AppendVecId> {
-        let ancestors = vec![(slot, 1)].into_iter().collect();
-        let result = self.accounts_index.get(pubkey, Some(&ancestors), None);
-        result.map(|(list, index)| list.slot_list()[index].1.store_id())
-    }
-}
-
 // These functions/fields are only usable from a dev context (i.e. tests and benches)
 #[cfg(feature = "dev-context-only-utils")]
 impl AccountsDb {
@@ -9854,6 +9821,36 @@ pub mod tests {
     }
 
     impl AccountsDb {
+        pub fn new_with_config_for_tests(
+            paths: Vec<PathBuf>,
+            cluster_type: &ClusterType,
+            account_indexes: AccountSecondaryIndexes,
+            shrink_ratio: AccountShrinkThreshold,
+        ) -> Self {
+            Self::new_with_config(
+                paths,
+                cluster_type,
+                account_indexes,
+                shrink_ratio,
+                Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+                None,
+                Arc::default(),
+            )
+        }
+
+        pub fn new_sized(paths: Vec<PathBuf>, file_size: u64) -> Self {
+            AccountsDb {
+                file_size,
+                ..AccountsDb::new_for_tests(paths, &ClusterType::Development)
+            }
+        }
+
+        pub fn get_append_vec_id(&self, pubkey: &Pubkey, slot: Slot) -> Option<AppendVecId> {
+            let ancestors = vec![(slot, 1)].into_iter().collect();
+            let result = self.accounts_index.get(pubkey, Some(&ancestors), None);
+            result.map(|(list, index)| list.slot_list()[index].1.store_id())
+        }
+
         fn scan_snapshot_stores(
             &self,
             storage: &SortedStorages,
