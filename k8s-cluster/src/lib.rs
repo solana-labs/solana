@@ -10,6 +10,7 @@ use {
         io::{self, BufReader, Cursor, Read},
         path::{Path, PathBuf},
         time::Duration,
+        collections::HashMap,
     },
     tar::Archive,
     url::Url,
@@ -151,4 +152,13 @@ pub fn cat_file(path: &PathBuf) -> io::Result<()> {
     info!("{}", contents);
 
     Ok(())
+}
+
+pub fn parse_and_format_bench_tps_args(bench_tps_args: Option<&str>) -> Option<Vec<String>> {
+    bench_tps_args.map(|args| {
+        args.split_whitespace()
+            .filter_map(|arg| arg.split_once('='))
+            .flat_map(|(key, value)| vec![format!("--{}", key), value.to_string()])
+            .collect()
+})
 }

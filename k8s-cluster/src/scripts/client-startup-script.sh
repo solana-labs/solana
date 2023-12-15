@@ -39,9 +39,6 @@ missing() {
   exit 1
 }
 
-# [[ -n $deployMethod ]] || missing deployMethod
-# [[ -n $entrypointIp ]] || missing entrypointIp
-
 threadCount=$(nproc)
 if [[ $threadCount -gt 4 ]]; then
   threadCount=4
