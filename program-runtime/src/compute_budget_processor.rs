@@ -8,7 +8,7 @@ use {
         borsh1::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
         entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
-        feature_set::{add_set_tx_loaded_accounts_data_size_instruction, FeatureSet},
+        feature_set::FeatureSet,
         fee::FeeBudgetLimits,
         instruction::{CompiledInstruction, InstructionError},
         pubkey::Pubkey,
@@ -69,11 +69,8 @@ impl From<ComputeBudgetLimits> for FeeBudgetLimits {
 /// are retrieved and returned,
 pub fn process_compute_budget_instructions<'a>(
     instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
-    feature_set: &FeatureSet,
+    _feature_set: &FeatureSet,
 ) -> Result<ComputeBudgetLimits, TransactionError> {
-    let support_set_loaded_accounts_data_size_limit_ix =
-        feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id());
-
     let mut num_non_compute_budget_instructions: u32 = 0;
     let mut updated_compute_unit_limit = None;
     let mut updated_compute_unit_price = None;
@@ -111,9 +108,7 @@ pub fn process_compute_budget_instructions<'a>(
                     }
                     updated_compute_unit_price = Some(micro_lamports);
                 }
-                Ok(ComputeBudgetInstruction::SetLoadedAccountsDataSizeLimit(bytes))
-                    if support_set_loaded_accounts_data_size_limit_ix =>
-                {
+                Ok(ComputeBudgetInstruction::SetLoadedAccountsDataSizeLimit(bytes)) => {
                     if updated_loaded_accounts_data_size_limit.is_some() {
                         return Err(duplicate_instruction_error);
                     }
@@ -176,25 +171,19 @@ mod tests {
     };
 
     macro_rules! test {
-        ( $instructions: expr, $expected_result: expr, $support_set_loaded_accounts_data_size_limit_ix: expr ) => {
+        ( $instructions: expr, $expected_result: expr) => {
             let payer_keypair = Keypair::new();
             let tx = SanitizedTransaction::from_transaction_for_tests(Transaction::new(
                 &[&payer_keypair],
                 Message::new($instructions, Some(&payer_keypair.pubkey())),
                 Hash::default(),
             ));
-            let mut feature_set = FeatureSet::default();
-            if $support_set_loaded_accounts_data_size_limit_ix {
-                feature_set.activate(&add_set_tx_loaded_accounts_data_size_instruction::id(), 0);
-            }
+            let feature_set = FeatureSet::default();
             let result = process_compute_budget_instructions(
                 tx.message().program_instructions_iter(),
                 &feature_set,
             );
             assert_eq!($expected_result, result);
-        };
-        ( $instructions: expr, $expected_result: expr ) => {
-            test!($instructions, $expected_result, false);
         };
     }
 
@@ -411,128 +400,78 @@ mod tests {
 
     #[test]
     fn test_process_loaded_accounts_data_size_limit_instruction() {
-        // Assert for empty instructions, change value of support_set_loaded_accounts_data_size_limit_ix
-        // will not change results, which should all be default
-        for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
-            test!(
-                &[],
-                Ok(ComputeBudgetLimits {
-                    compute_unit_limit: 0,
-                    ..ComputeBudgetLimits::default()
-                }),
-                support_set_loaded_accounts_data_size_limit_ix
-            );
-        }
+        test!(
+            &[],
+            Ok(ComputeBudgetLimits {
+                compute_unit_limit: 0,
+                ..ComputeBudgetLimits::default()
+            })
+        );
 
         // Assert when set_loaded_accounts_data_size_limit presents,
-        // if support_set_loaded_accounts_data_size_limit_ix then
-        //     budget is set with data_size
-        // else
-        //     return InstructionError
+        // budget is set with data_size
         let data_size = 1;
-        for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
-            let expected_result = if support_set_loaded_accounts_data_size_limit_ix {
-                Ok(ComputeBudgetLimits {
-                    compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
-                    loaded_accounts_bytes: data_size,
-                    ..ComputeBudgetLimits::default()
-                })
-            } else {
-                Err(TransactionError::InstructionError(
-                    0,
-                    InstructionError::InvalidInstructionData,
-                ))
-            };
+        let expected_result = Ok(ComputeBudgetLimits {
+            compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
+            loaded_accounts_bytes: data_size,
+            ..ComputeBudgetLimits::default()
+        });
 
-            test!(
-                &[
-                    ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size),
-                    Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                ],
-                expected_result,
-                support_set_loaded_accounts_data_size_limit_ix
-            );
-        }
+        test!(
+            &[
+                ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+            ],
+            expected_result
+        );
 
         // Assert when set_loaded_accounts_data_size_limit presents, with greater than max value
-        // if support_set_loaded_accounts_data_size_limit_ix then
-        //     budget is set to max data size
-        // else
-        //     return InstructionError
+        // budget is set to max data size
         let data_size = MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES + 1;
-        for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
-            let expected_result = if support_set_loaded_accounts_data_size_limit_ix {
-                Ok(ComputeBudgetLimits {
-                    compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
-                    loaded_accounts_bytes: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
-                    ..ComputeBudgetLimits::default()
-                })
-            } else {
-                Err(TransactionError::InstructionError(
-                    0,
-                    InstructionError::InvalidInstructionData,
-                ))
-            };
+        let expected_result = Ok(ComputeBudgetLimits {
+            compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
+            loaded_accounts_bytes: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
+            ..ComputeBudgetLimits::default()
+        });
 
-            test!(
-                &[
-                    ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size),
-                    Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                ],
-                expected_result,
-                support_set_loaded_accounts_data_size_limit_ix
-            );
-        }
+        test!(
+            &[
+                ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+            ],
+            expected_result
+        );
 
         // Assert when set_loaded_accounts_data_size_limit is not presented
-        // if support_set_loaded_accounts_data_size_limit_ix then
-        //     budget is set to default data size
-        // else
-        //     return
-        for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
-            let expected_result = Ok(ComputeBudgetLimits {
-                compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
-                loaded_accounts_bytes: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
-                ..ComputeBudgetLimits::default()
-            });
+        // budget is set to default data size
+        let expected_result = Ok(ComputeBudgetLimits {
+            compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
+            loaded_accounts_bytes: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
+            ..ComputeBudgetLimits::default()
+        });
 
-            test!(
-                &[Instruction::new_with_bincode(
-                    Pubkey::new_unique(),
-                    &0_u8,
-                    vec![]
-                ),],
-                expected_result,
-                support_set_loaded_accounts_data_size_limit_ix
-            );
-        }
+        test!(
+            &[Instruction::new_with_bincode(
+                Pubkey::new_unique(),
+                &0_u8,
+                vec![]
+            ),],
+            expected_result
+        );
 
         // Assert when set_loaded_accounts_data_size_limit presents more than once,
-        // if support_set_loaded_accounts_data_size_limit_ix then
-        //     return DuplicateInstruction
-        // else
-        //     return InstructionError
+        // return DuplicateInstruction
         let data_size = MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES;
-        for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
-            let expected_result = if support_set_loaded_accounts_data_size_limit_ix {
-                Err(TransactionError::DuplicateInstruction(2))
-            } else {
-                Err(TransactionError::InstructionError(
-                    1,
-                    InstructionError::InvalidInstructionData,
-                ))
-            };
+        let expected_result = Err(TransactionError::DuplicateInstruction(2));
 
-            test!(
-                &[
-                    Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                    ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size),
-                    ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size),
-                ],
-                expected_result,
-                support_set_loaded_accounts_data_size_limit_ix
-            );
-        }
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size),
+                ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size),
+            ],
+            expected_result
+        );
     }
 
     #[test]
@@ -550,8 +489,7 @@ mod tests {
                 Hash::default(),
             ));
 
-        let mut feature_set = FeatureSet::default();
-        feature_set.activate(&add_set_tx_loaded_accounts_data_size_instruction::id(), 0);
+        let feature_set = FeatureSet::default();
 
         let result = process_compute_budget_instructions(
             transaction.message().program_instructions_iter(),

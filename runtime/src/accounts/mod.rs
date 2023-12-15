@@ -1544,23 +1544,12 @@ mod tests {
             Ok(Some(NonZeroUsize::new(99).unwrap()));
         let result_invalid_limit = Err(TransactionError::InvalidLoadedAccountsDataSizeLimit);
 
-        let mut feature_set = FeatureSet::default();
+        let feature_set = FeatureSet::default();
 
-        // if `add_set_tx_loaded_accounts_data_size_instruction` is disabled,
-        // the result will always be default limit (64MiB)
-        test(tx_not_set_limit, &feature_set, &result_default_limit);
-        test(tx_set_limit_99, &feature_set, &result_default_limit);
-        test(tx_set_limit_0, &feature_set, &result_default_limit);
-
-        // if `add_set_tx_loaded_accounts_data_size_instruction` is enabled,
-        // the results are:
+        // the results should be:
         //    if tx doesn't set limit, then default limit (64MiB)
         //    if tx sets limit, then requested limit
         //    if tx sets limit to zero, then TransactionError::InvalidLoadedAccountsDataSizeLimit
-        feature_set.activate(
-            &solana_sdk::feature_set::add_set_tx_loaded_accounts_data_size_instruction::id(),
-            0,
-        );
         test(tx_not_set_limit, &feature_set, &result_default_limit);
         test(tx_set_limit_99, &feature_set, &result_requested_limit);
         test(tx_set_limit_0, &feature_set, &result_invalid_limit);
