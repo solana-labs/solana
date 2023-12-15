@@ -87,9 +87,9 @@ use {
     solana_storage_bigtable::Error as StorageError,
     solana_streamer::socket::SocketAddrSpace,
     solana_transaction_status::{
-        BlockEncodingOptions, ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
-        ConfirmedTransactionWithStatusMeta, EncodedConfirmedTransactionWithStatusMeta,
-        InnerInstruction, InnerInstructions, Reward, RewardType, TransactionBinaryEncoding,
+        map_inner_instructions, BlockEncodingOptions, ConfirmedBlock,
+        ConfirmedTransactionStatusWithSignature, ConfirmedTransactionWithStatusMeta,
+        EncodedConfirmedTransactionWithStatusMeta, Reward, RewardType, TransactionBinaryEncoding,
         TransactionConfirmationStatus, TransactionStatus, UiConfirmedBlock, UiTransactionEncoding,
     },
     solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY},
@@ -3812,19 +3812,7 @@ pub mod rpc_full {
             };
 
             let inner_instructions = inner_instructions.map(|info| {
-                info.into_iter()
-                    .enumerate()
-                    .map(|(index, instructions)| InnerInstructions {
-                        index: index as u8,
-                        instructions: instructions
-                            .into_iter()
-                            .map(|info| InnerInstruction {
-                                stack_height: Some(u32::from(info.stack_height)),
-                                instruction: info.instruction,
-                            })
-                            .collect(),
-                    })
-                    .filter(|i| !i.instructions.is_empty())
+                map_inner_instructions(info)
                     .map(|converted| UiInnerInstructions::parse(converted, &account_keys))
                     .collect()
             });

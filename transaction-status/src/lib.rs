@@ -230,6 +230,27 @@ pub struct InnerInstruction {
     pub stack_height: Option<u32>,
 }
 
+/// Maps a list of inner instructions from `solana_sdk` into a list of this
+/// crate's representation of inner instructions (with instruction indices).
+pub fn map_inner_instructions(
+    inner_instructions: solana_sdk::inner_instruction::InnerInstructionsList,
+) -> impl Iterator<Item = InnerInstructions> {
+    inner_instructions
+        .into_iter()
+        .enumerate()
+        .map(|(index, instructions)| InnerInstructions {
+            index: index as u8,
+            instructions: instructions
+                .into_iter()
+                .map(|info| InnerInstruction {
+                    stack_height: Some(u32::from(info.stack_height)),
+                    instruction: info.instruction,
+                })
+                .collect(),
+        })
+        .filter(|i| !i.instructions.is_empty())
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiInnerInstructions {

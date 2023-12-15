@@ -54,7 +54,7 @@ use {
         transaction::VersionedTransaction,
     },
     solana_transaction_status::{
-        ConfirmedTransactionWithStatusMeta, InnerInstructions, TransactionStatusMeta,
+        map_inner_instructions, ConfirmedTransactionWithStatusMeta, TransactionStatusMeta,
         TransactionWithStatusMeta, VersionedTransactionWithStatusMeta,
     },
     std::collections::HashMap,
@@ -212,21 +212,7 @@ fn execute_transactions(
                     );
 
                     let inner_instructions = inner_instructions.map(|inner_instructions| {
-                        inner_instructions
-                            .into_iter()
-                            .enumerate()
-                            .map(|(index, instructions)| InnerInstructions {
-                                index: index as u8,
-                                instructions: instructions
-                                    .into_iter()
-                                    .map(|ix| solana_transaction_status::InnerInstruction {
-                                        instruction: ix.instruction,
-                                        stack_height: Some(u32::from(ix.stack_height)),
-                                    })
-                                    .collect(),
-                            })
-                            .filter(|i| !i.instructions.is_empty())
-                            .collect()
+                        map_inner_instructions(inner_instructions).collect()
                     });
 
                     let tx_status_meta = TransactionStatusMeta {
