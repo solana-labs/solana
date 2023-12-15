@@ -1,4 +1,9 @@
 // Re-exported since these have moved to `solana_sdk`.
+#[deprecated(
+    since = "1.18.0",
+    note = "Please use `InnerInstruction`, `InnerInstructions`, or \
+    `InnerInstructionsList` from `solana_sdk::inner_instruction` instead"
+)]
 pub use solana_sdk::inner_instruction::{InnerInstruction, InnerInstructionsList};
 use {
     crate::{
