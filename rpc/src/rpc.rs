@@ -3676,6 +3676,7 @@ pub mod rpc_full {
                     post_simulation_accounts: _,
                     units_consumed,
                     return_data,
+                    inner_instructions: _,
                 } = preflight_bank.simulate_transaction(transaction, false)
                 {
                     match err {
@@ -3762,6 +3763,7 @@ pub mod rpc_full {
                 post_simulation_accounts,
                 units_consumed,
                 return_data,
+                inner_instructions: _,
             } = bank.simulate_transaction(transaction, enable_cpi_recording);
 
             let accounts = if let Some(config_accounts) = config_accounts {

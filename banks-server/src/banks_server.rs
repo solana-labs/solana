@@ -194,11 +194,13 @@ fn simulate_transaction(
         post_simulation_accounts: _,
         units_consumed,
         return_data,
+        inner_instructions,
     } = bank.simulate_transaction_unchecked(sanitized_transaction, false);
     let simulation_details = TransactionSimulationDetails {
         logs,
         units_consumed,
         return_data,
+        inner_instructions,
     };
     BanksTransactionResultWithSimulation {
         result: Some(result),
