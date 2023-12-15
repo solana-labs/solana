@@ -503,13 +503,13 @@ impl From<solana_rpc_client_nonce_utils::Error> for CliError {
         }
     }
 }
-
 pub struct CliConfig<'a> {
     pub command: CliCommand,
     pub json_rpc_url: String,
     pub websocket_url: String,
     pub keypair_path: String,
     pub commitment: CommitmentConfig,
+    pub fee: String,
     pub signers: Vec<&'a dyn Signer>,
     pub rpc_client: Option<Arc<RpcClient>>,
     pub rpc_timeout: Duration,
@@ -556,6 +556,7 @@ impl Default for CliConfig<'_> {
             websocket_url: ConfigInput::default().websocket_url,
             keypair_path: ConfigInput::default().keypair_path,
             commitment: ConfigInput::default().commitment,
+            fee: ConfigInput::default().fee.clone().to_string(),
             signers: Vec::new(),
             rpc_client: None,
             rpc_timeout: Duration::from_secs(u64::from_str(DEFAULT_RPC_TIMEOUT_SECONDS).unwrap()),
@@ -859,6 +860,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             println_name_value("Pubkey:", &pubkey);
         }
         println_name_value("Commitment:", &config.commitment.commitment.to_string());
+        println_name_value(
+            "Fee:",
+            &solana_sdk::native_token::lamports_to_sol(config.fee.to_string().parse::<u64>()
+                
+                .unwrap_or_else(|_| 0))
+                .to_string()
+        );
     }
 
     let rpc_client = if config.rpc_client.is_none() {

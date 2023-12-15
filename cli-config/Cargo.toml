@@ -16,6 +16,7 @@ serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_yaml = { workspace = true }
 solana-clap-utils = { workspace = true }
+solana-client.workspace = true
 solana-sdk = { workspace = true }
 url = { workspace = true }
 

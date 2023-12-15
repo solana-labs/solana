@@ -2,6 +2,9 @@ use {
     crate::Config, solana_clap_utils::input_validators::normalize_to_url_if_moniker,
     solana_sdk::commitment_config::CommitmentConfig, std::str::FromStr,
 };
+use solana_client::rpc_client::RpcClient;
+
+use crate::CONFIG_FILE;
 
 pub enum SettingType {
     Explicit,
@@ -14,6 +17,7 @@ pub struct ConfigInput {
     pub websocket_url: String,
     pub keypair_path: String,
     pub commitment: CommitmentConfig,
+    pub fee: u64,
 }
 
 impl ConfigInput {
@@ -31,6 +35,10 @@ impl ConfigInput {
 
     fn default_commitment() -> CommitmentConfig {
         CommitmentConfig::confirmed()
+    }
+
+    fn default_fee() -> u64 {
+        Self::calculate_recent_fee(None)
     }
 
     fn first_nonempty_setting(
@@ -112,6 +120,54 @@ impl ConfigInput {
             (SettingType::SystemDefault, Some(Self::default_commitment())),
         ])
     }
+
+    pub fn compute_fee_config(
+        fee_cmd: &str,
+        fee_cfg: &str,
+    ) -> (SettingType, u64) {
+        Self::first_setting_is_some(vec![
+            (
+                SettingType::Explicit,
+                u64::from_str(fee_cmd).ok(),
+            ),
+            (
+                SettingType::Explicit,
+                u64::from_str(fee_cfg).ok(),
+            ),
+            (SettingType::SystemDefault, Some(Self::default_fee())),
+        ])
+    }
+    
+    pub fn calculate_recent_fee(
+        commitment_config: Option<CommitmentConfig>,
+    ) -> u64 {
+        let default_config = "~/.config/solana/cli/config.yml".to_string();
+        let config_file = CONFIG_FILE.as_ref()
+            .unwrap_or(&default_config);
+        let config = Config::load(&config_file).unwrap_or(Config::default());
+        if config.json_rpc_url.is_empty() {
+            return 0;
+        }
+        if config.json_rpc_url.contains("api.solana.com") {
+            return 0;
+        }
+        let rpc_client = RpcClient::new_with_commitment(
+            config.json_rpc_url,
+            commitment_config.unwrap_or(
+            CommitmentConfig::confirmed()
+            ),
+        );
+        let recent_fees = rpc_client.get_recent_prioritization_fees(
+            &[]
+        ).unwrap_or_default();
+        recent_fees
+        .iter()
+        .map(|fee| fee.prioritization_fee)
+        .sum::<u64>()
+        .checked_div(recent_fees.len() as u64).unwrap_or(10000)
+    }
+
+
 }
 
 impl Default for ConfigInput {
@@ -121,6 +177,7 @@ impl Default for ConfigInput {
             websocket_url: Self::default_websocket_url(),
             keypair_path: Self::default_keypair_path(),
             commitment: CommitmentConfig::confirmed(),
+            fee: Self::default_fee(),
         }
     }
 }

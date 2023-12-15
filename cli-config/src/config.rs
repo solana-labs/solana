@@ -64,6 +64,8 @@ pub struct Config {
     /// `solana_sdk::commitment_config::CommitmentLevel::Confirmed`.
     #[serde(default)]
     pub commitment: String,
+    #[serde(default)]
+    pub fee: String,
 }
 
 impl Default for Config {
@@ -87,12 +89,15 @@ impl Default for Config {
 
         let commitment = "confirmed".to_string();
 
+
+        let fee = "0".to_string();
         Self {
             json_rpc_url,
             websocket_url,
             keypair_path,
             address_labels,
             commitment,
+            fee
         }
     }
 }

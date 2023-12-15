@@ -197,6 +197,10 @@ pub fn parse_args<'a>(
         matches.value_of("commitment").unwrap_or(""),
         &config.commitment,
     );
+    let (_, fee) = ConfigInput::compute_fee_config(
+        matches.value_of("fee").unwrap_or("0"),
+        &config.fee,
+    );
 
     let address_labels = if matches.is_present("no_address_labels") {
         HashMap::new()
@@ -224,13 +228,14 @@ pub fn parse_args<'a>(
             verbose,
             output_format,
             commitment,
+            fee: fee.to_string(),
             send_transaction_config: RpcSendTransactionConfig {
                 preflight_commitment: Some(commitment.commitment),
                 ..RpcSendTransactionConfig::default()
             },
             confirm_transaction_initial_timeout,
             address_labels,
-            use_quic,
+            use_quic
         },
         signers,
     ))

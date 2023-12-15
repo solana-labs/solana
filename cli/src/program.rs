@@ -59,6 +59,7 @@ use {
         system_instruction::{self, SystemError},
         system_program,
         transaction::{Transaction, TransactionError},
+        compute_budget::ComputeBudgetInstruction,
     },
     std::{
         fs::File,
@@ -70,7 +71,6 @@ use {
         sync::Arc,
     },
 };
-
 pub const CLOSE_PROGRAM_WARNING: &str = "WARNING! Closed programs cannot be recreated at the same \
                                          program id. Once a program is closed, it can never be \
                                          invoked again. To proceed with closing, rerun the \
@@ -149,11 +149,11 @@ pub enum ProgramCliCommand {
     },
 }
 
-pub trait ProgramSubCommands {
+pub trait ProgramSubCommands<'a> {
     fn program_subcommands(self) -> Self;
 }
-
-impl ProgramSubCommands for App<'_, '_> {
+impl<'a> ProgramSubCommands<'a> for App<'_, '_> {
+    
     fn program_subcommands(self) -> Self {
         self.subcommand(
             SubCommand::with_name("program")
@@ -221,6 +221,17 @@ impl ProgramSubCommands for App<'_, '_> {
                                     "Maximum length of the upgradeable program \
                                     [default: twice the length of the original deployed program]",
                                 ),
+                        )
+                        .arg(
+                             Arg::with_name("fee")
+                            .long("fee")
+                            .value_name("fee")
+                            .takes_value(true)
+                            .required(false)
+                            .help(
+                        
+                                    "Priority fee for the transaction [default: average of a recent blockhash priority fee in lamports on your rpc url in your config or 0 if you're using a standard url.]"
+                            )
                         )
                         .arg(
                             Arg::with_name("allow_excessive_balance")
@@ -1294,13 +1305,16 @@ fn process_program_upgrade(
     let upgrade_authority_signer = config.signers[upgrade_authority_signer_index];
 
     let blockhash = blockhash_query.get_blockhash(&rpc_client, config.commitment)?;
+    
     let message = Message::new_with_blockhash(
-        &[bpf_loader_upgradeable::upgrade(
-            &program_id,
-            &buffer_pubkey,
-            &upgrade_authority_signer.pubkey(),
-            &fee_payer_signer.pubkey(),
-        )],
+        &[ComputeBudgetInstruction::set_compute_unit_price(config.fee.parse().unwrap_or(0)),
+            bpf_loader_upgradeable::upgrade(
+                &program_id,
+                &buffer_pubkey,
+                &upgrade_authority_signer.pubkey(),
+                &fee_payer_signer.pubkey(),
+            )
+        ],
         Some(&fee_payer_signer.pubkey()),
         &blockhash,
     );
@@ -2144,7 +2158,7 @@ fn do_process_program_write_and_deploy(
     let blockhash = rpc_client.get_latest_blockhash()?;
 
     // Initialize buffer account or complete if already partially initialized
-    let (initial_instructions, balance_needed) = if let Some(account) = rpc_client
+    let (mut initial_instructions, balance_needed) = if let Some(account) = rpc_client
         .get_account_with_commitment(buffer_pubkey, config.commitment)?
         .value
     {
@@ -2184,6 +2198,10 @@ fn do_process_program_write_and_deploy(
             min_rent_exempt_program_data_balance,
         )
     };
+    initial_instructions.insert(
+        0,
+        ComputeBudgetInstruction::set_compute_unit_price(config.fee.parse().unwrap_or(0)),
+    );
     let initial_message = if !initial_instructions.is_empty() {
         Some(Message::new_with_blockhash(
             &initial_instructions,
@@ -2206,7 +2224,8 @@ fn do_process_program_write_and_deploy(
         } else {
             loader_instruction::write(buffer_pubkey, loader_id, offset, bytes)
         };
-        Message::new_with_blockhash(&[instruction], Some(&fee_payer_signer.pubkey()), &blockhash)
+        Message::new_with_blockhash(&[ComputeBudgetInstruction::set_compute_unit_price(config.fee.parse().unwrap_or(0)),
+        instruction], Some(&fee_payer_signer.pubkey()), &blockhash)
     };
 
     let mut write_messages = vec![];
@@ -2215,26 +2234,32 @@ fn do_process_program_write_and_deploy(
         write_messages.push(create_msg((i * chunk_size) as u32, chunk.to_vec()));
     }
 
+    
     // Create and add final message
     let final_message = if let Some(program_signers) = program_signers {
+        let mut instructions = bpf_loader_upgradeable::deploy_with_max_program_len(
+            &fee_payer_signer.pubkey(),
+                &program_signers[0].pubkey(),
+                buffer_pubkey,
+                &program_signers[1].pubkey(),
+                rpc_client.get_minimum_balance_for_rent_exemption(
+                    UpgradeableLoaderState::size_of_program(),
+                )?,
+                program_data_max_len,
+            )?;
+        instructions.insert(
+            0, ComputeBudgetInstruction::set_compute_unit_price(config.fee.parse().unwrap_or(0)),
+        );
         let message = if loader_id == &bpf_loader_upgradeable::id() {
             Message::new_with_blockhash(
-                &bpf_loader_upgradeable::deploy_with_max_program_len(
-                    &fee_payer_signer.pubkey(),
-                    &program_signers[0].pubkey(),
-                    buffer_pubkey,
-                    &program_signers[1].pubkey(),
-                    rpc_client.get_minimum_balance_for_rent_exemption(
-                        UpgradeableLoaderState::size_of_program(),
-                    )?,
-                    program_data_max_len,
-                )?,
+                &instructions,
                 Some(&fee_payer_signer.pubkey()),
                 &blockhash,
             )
         } else {
             Message::new_with_blockhash(
-                &[loader_instruction::finalize(buffer_pubkey, loader_id)],
+                &[ComputeBudgetInstruction::set_compute_unit_price(config.fee.parse().unwrap_or(0)),
+                loader_instruction::finalize(buffer_pubkey, loader_id)],
                 Some(&fee_payer_signer.pubkey()),
                 &blockhash,
             )
@@ -2300,7 +2325,7 @@ fn do_process_program_upgrade(
     let (initial_message, write_messages, balance_needed) =
         if let Some(buffer_signer) = buffer_signer {
             // Check Buffer account to see if partial initialization has occurred
-            let (initial_instructions, balance_needed) = if let Some(account) = rpc_client
+            let (mut initial_instructions, balance_needed) = if let Some(account) = rpc_client
                 .get_account_with_commitment(&buffer_signer.pubkey(), config.commitment)?
                 .value
             {
@@ -2325,7 +2350,10 @@ fn do_process_program_upgrade(
                     min_rent_exempt_program_data_balance,
                 )
             };
-
+            initial_instructions.insert(
+                0,
+                ComputeBudgetInstruction::set_compute_unit_price(config.fee.parse().unwrap_or(0)),
+            );
             let initial_message = if !initial_instructions.is_empty() {
                 Some(Message::new_with_blockhash(
                     &initial_instructions,
@@ -2346,7 +2374,8 @@ fn do_process_program_upgrade(
                     bytes,
                 );
                 Message::new_with_blockhash(
-                    &[instruction],
+                    &[ComputeBudgetInstruction::set_compute_unit_price(config.fee.parse().unwrap_or(0)),
+                    instruction],
                     Some(&fee_payer_signer.pubkey()),
                     &blockhash,
                 )
@@ -2366,7 +2395,8 @@ fn do_process_program_upgrade(
 
     // Create and add final message
     let final_message = Message::new_with_blockhash(
-        &[bpf_loader_upgradeable::upgrade(
+        &[ComputeBudgetInstruction::set_compute_unit_price(config.fee.parse().unwrap_or(0)),
+        bpf_loader_upgradeable::upgrade(
             program_id,
             buffer_pubkey,
             &upgrade_authority.pubkey(),
@@ -2456,9 +2486,12 @@ fn complete_partial_program_init(
                 .into(),
         );
     }
-
+    instructions.push(
+        ComputeBudgetInstruction::set_compute_unit_price(CliConfig::default().fee.parse().unwrap_or(0)),
+    );
     if account.data.is_empty() && system_program::check_id(&account.owner) {
-        instructions.push(system_instruction::allocate(
+        instructions.push(
+            system_instruction::allocate(
             elf_pubkey,
             account_data_len as u64,
         ));
