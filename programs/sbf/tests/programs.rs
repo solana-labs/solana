@@ -3868,18 +3868,13 @@ fn test_program_fees() {
         Some(&mint_keypair.pubkey()),
     );
 
-    let feature_set = FeatureSet::all_enabled();
-
     let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
     let expected_normal_fee = fee_structure.calculate_fee(
         &sanitized_message,
         congestion_multiplier,
-        &process_compute_budget_instructions(
-            sanitized_message.program_instructions_iter(),
-            &feature_set,
-        )
-        .unwrap_or_default()
-        .into(),
+        &process_compute_budget_instructions(sanitized_message.program_instructions_iter())
+            .unwrap_or_default()
+            .into(),
         true,
         false,
     );
@@ -3898,16 +3893,12 @@ fn test_program_fees() {
         Some(&mint_keypair.pubkey()),
     );
     let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
-    let feature_set = FeatureSet::all_enabled();
     let expected_prioritized_fee = fee_structure.calculate_fee(
         &sanitized_message,
         congestion_multiplier,
-        &process_compute_budget_instructions(
-            sanitized_message.program_instructions_iter(),
-            &feature_set,
-        )
-        .unwrap_or_default()
-        .into(),
+        &process_compute_budget_instructions(sanitized_message.program_instructions_iter())
+            .unwrap_or_default()
+            .into(),
         true,
         false,
     );
