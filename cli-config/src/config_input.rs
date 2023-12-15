@@ -145,7 +145,8 @@ impl ConfigInput {
         let config_file = CONFIG_FILE.as_ref()
             .unwrap_or(&default_config);
         let config = Config::load(&config_file).unwrap_or(Config::default());
-        if config.json_rpc_url.is_empty() {
+        println!("config.json_rpc_url: {}", config.json_rpc_url);
+        if config.json_rpc_url.len() == 0 {
             return 0;
         }
         if config.json_rpc_url.contains("api.solana.com") {
@@ -154,17 +155,19 @@ impl ConfigInput {
         let rpc_client = RpcClient::new_with_commitment(
             config.json_rpc_url,
             commitment_config.unwrap_or(
-            CommitmentConfig::confirmed()
+            CommitmentConfig::finalized()
             ),
         );
         let recent_fees = rpc_client.get_recent_prioritization_fees(
             &[]
         ).unwrap_or_default();
-        recent_fees
+        let recent_fees = recent_fees
         .iter()
         .map(|fee| fee.prioritization_fee)
         .sum::<u64>()
-        .checked_div(recent_fees.len() as u64).unwrap_or(10000)
+        .checked_div(recent_fees.len() as u64).unwrap_or(10000);
+    println!("recent_fees: {}", recent_fees);
+    recent_fees
     }
 
 
