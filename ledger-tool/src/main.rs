@@ -109,12 +109,6 @@ mod ledger_utils;
 mod output;
 mod program;
 
-#[derive(PartialEq, Eq)]
-enum LedgerOutputMethod {
-    Print,
-    Json,
-}
-
 fn get_program_ids(tx: &VersionedTransaction) -> impl Iterator<Item = &Pubkey> + '_ {
     let message = &tx.message;
     let account_keys = message.static_account_keys();
@@ -134,9 +128,9 @@ fn parse_encoding_format(matches: &ArgMatches<'_>) -> UiAccountEncoding {
     }
 }
 
-fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &LedgerOutputMethod) {
+fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &OutputFormat) {
     // Note: rewards are not output in JSON yet
-    if *method == LedgerOutputMethod::Print {
+    if *method == OutputFormat::Display {
         if let Ok(Some(rewards)) = blockstore.read_rewards(slot) {
             if !rewards.is_empty() {
                 println!("  Rewards:");
@@ -171,13 +165,13 @@ fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &LedgerOutpu
 
 fn output_entry(
     blockstore: &Blockstore,
-    method: &LedgerOutputMethod,
+    method: &OutputFormat,
     slot: Slot,
     entry_index: usize,
     entry: Entry,
 ) {
     match method {
-        LedgerOutputMethod::Print => {
+        OutputFormat::Display => {
             println!(
                 "  Entry {} - num_hashes: {}, hash: {}, transactions: {}",
                 entry_index,
@@ -208,11 +202,12 @@ fn output_entry(
                 );
             }
         }
-        LedgerOutputMethod::Json => {
+        OutputFormat::Json => {
             // Note: transaction status is not output in JSON yet
             serde_json::to_writer(stdout(), &entry).expect("serialize entry");
             stdout().write_all(b",\n").expect("newline");
         }
+        _ => unreachable!(),
     }
 }
 
@@ -220,13 +215,13 @@ fn output_slot(
     blockstore: &Blockstore,
     slot: Slot,
     allow_dead_slots: bool,
-    method: &LedgerOutputMethod,
+    method: &OutputFormat,
     verbose_level: u64,
     all_program_ids: &mut HashMap<Pubkey, u64>,
 ) -> Result<(), String> {
     if blockstore.is_dead(slot) {
         if allow_dead_slots {
-            if *method == LedgerOutputMethod::Print {
+            if *method == OutputFormat::Display {
                 println!(" Slot is dead");
             }
         } else {
@@ -238,7 +233,7 @@ fn output_slot(
         .get_slot_entries_with_shred_info(slot, 0, allow_dead_slots)
         .map_err(|err| format!("Failed to load entries for slot {slot}: {err:?}"))?;
 
-    if *method == LedgerOutputMethod::Print {
+    if *method == OutputFormat::Display {
         if let Ok(Some(meta)) = blockstore.meta(slot) {
             if verbose_level >= 1 {
                 println!("  {meta:?} is_full: {is_full}");
@@ -297,7 +292,7 @@ fn output_ledger(
     starting_slot: Slot,
     ending_slot: Slot,
     allow_dead_slots: bool,
-    method: LedgerOutputMethod,
+    method: OutputFormat,
     num_slots: Option<Slot>,
     verbose_level: u64,
     only_rooted: bool,
@@ -309,7 +304,7 @@ fn output_ledger(
             exit(1);
         });
 
-    if method == LedgerOutputMethod::Json {
+    if method == OutputFormat::Json {
         stdout().write_all(b"{\"ledger\":[\n").expect("open array");
     }
 
@@ -325,13 +320,14 @@ fn output_ledger(
         }
 
         match method {
-            LedgerOutputMethod::Print => {
+            OutputFormat::Display => {
                 println!("Slot {} root?: {}", slot, blockstore.is_root(slot))
             }
-            LedgerOutputMethod::Json => {
+            OutputFormat::Json => {
                 serde_json::to_writer(stdout(), &slot_meta).expect("serialize slot_meta");
                 stdout().write_all(b",\n").expect("newline");
             }
+            _ => unreachable!(),
         }
 
         if let Err(err) = output_slot(
@@ -350,7 +346,7 @@ fn output_ledger(
         }
     }
 
-    if method == LedgerOutputMethod::Json {
+    if method == OutputFormat::Json {
         stdout().write_all(b"\n]}\n").expect("close array");
     } else {
         println!("Summary of Programs:");
@@ -2303,7 +2299,7 @@ fn main() {
                     starting_slot,
                     ending_slot,
                     allow_dead_slots,
-                    LedgerOutputMethod::Print,
+                    OutputFormat::Display,
                     num_slots,
                     verbose_level,
                     only_rooted,
@@ -2531,7 +2527,7 @@ fn main() {
                         &blockstore,
                         slot,
                         allow_dead_slots,
-                        &LedgerOutputMethod::Print,
+                        &OutputFormat::Display,
                         verbose_level,
                         &mut HashMap::new(),
                     ) {
@@ -2553,7 +2549,7 @@ fn main() {
                     starting_slot,
                     Slot::MAX,
                     allow_dead_slots,
-                    LedgerOutputMethod::Json,
+                    OutputFormat::Json,
                     None,
                     std::u64::MAX,
                     true,
