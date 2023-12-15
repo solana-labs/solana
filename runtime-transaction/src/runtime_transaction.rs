@@ -10,17 +10,15 @@
 //!    ALT, RuntimeTransaction<SanitizedMessage> transits into Dynamically Loaded state,
 //!    with its dynamic metadata loaded.
 use {
-    crate::transaction_meta::{DynamicMeta, RequestedLimits, StaticMeta, TransactionMeta},
+    crate::transaction_meta::{DynamicMeta, StaticMeta, TransactionMeta},
     solana_program_runtime::compute_budget_processor::{
         process_compute_budget_instructions, ComputeBudgetLimits,
     },
     solana_sdk::{
-        feature_set::FeatureSet,
         hash::Hash,
         message::{AddressLoader, SanitizedMessage, SanitizedVersionedMessage},
         signature::Signature,
         simple_vote_transaction_checker::is_simple_vote_transaction,
-        slot_history::Slot,
         transaction::{Result, SanitizedVersionedTransaction},
     },
 };
@@ -46,17 +44,6 @@ impl StaticMetaAccess for SanitizedVersionedMessage {}
 impl StaticMetaAccess for SanitizedMessage {}
 impl DynamicMetaAccess for SanitizedMessage {}
 
-impl<M: StaticMetaAccess> RequestedLimits for RuntimeTransaction<M> {
-    fn requested_limits(&self, current_slot: Option<Slot>) -> Option<&ComputeBudgetLimits> {
-        if let Some(current_slot) = current_slot {
-            (current_slot <= self.meta.requested_limits.expiry)
-                .then_some(&self.meta.requested_limits.compute_budget_limits)
-        } else {
-            Some(&self.meta.requested_limits.compute_budget_limits)
-        }
-    }
-}
-
 impl<M: StaticMetaAccess> StaticMeta for RuntimeTransaction<M> {
     fn message_hash(&self) -> &Hash {
         &self.meta.message_hash
@@ -64,17 +51,14 @@ impl<M: StaticMetaAccess> StaticMeta for RuntimeTransaction<M> {
     fn is_simple_vote_tx(&self) -> bool {
         self.meta.is_simple_vote_tx
     }
-    fn compute_unit_limit(&self, current_slot: Option<Slot>) -> Option<u32> {
-        self.requested_limits(current_slot)
-            .map(|requested_limits| requested_limits.compute_unit_limit)
+    fn compute_unit_limit(&self) -> u32 {
+        self.meta.compute_unit_limit
     }
-    fn compute_unit_price(&self, current_slot: Option<Slot>) -> Option<u64> {
-        self.requested_limits(current_slot)
-            .map(|requested_limits| requested_limits.compute_unit_price)
+    fn compute_unit_price(&self) -> u64 {
+        self.meta.compute_unit_price
     }
-    fn loaded_accounts_bytes(&self, current_slot: Option<Slot>) -> Option<u32> {
-        self.requested_limits(current_slot)
-            .map(|requested_limits| requested_limits.loaded_accounts_bytes)
+    fn loaded_accounts_bytes(&self) -> u32 {
+        self.meta.loaded_accounts_bytes
     }
 }
 
@@ -85,8 +69,6 @@ impl RuntimeTransaction<SanitizedVersionedMessage> {
         sanitized_versioned_tx: SanitizedVersionedTransaction,
         message_hash: Option<Hash>,
         is_simple_vote_tx: Option<bool>,
-        feature_set: &FeatureSet,
-        expiry: Slot,
     ) -> Result<Self> {
         let mut meta = TransactionMeta::default();
         meta.set_is_simple_vote_tx(
@@ -97,32 +79,19 @@ impl RuntimeTransaction<SanitizedVersionedMessage> {
         let (signatures, message) = sanitized_versioned_tx.destruct();
         meta.set_message_hash(message_hash.unwrap_or_else(|| message.message.hash()));
 
-        let compute_budget_limits: ComputeBudgetLimits =
-            process_compute_budget_instructions(message.program_instructions_iter(), feature_set)?;
-        meta.set_compute_budget_limits(compute_budget_limits, expiry);
+        let ComputeBudgetLimits {
+            compute_unit_limit,
+            compute_unit_price,
+            loaded_accounts_bytes,
+            ..
+        } = process_compute_budget_instructions(message.program_instructions_iter())?;
+        meta.set_compute_unit_limit(compute_unit_limit);
+        meta.set_compute_unit_price(compute_unit_price);
+        meta.set_loaded_accounts_bytes(loaded_accounts_bytes);
 
         Ok(Self {
             signatures,
             message,
-            meta,
-        })
-    }
-
-    // RuntimeTransaction instance can be renewed into a new instance if its cached TransactionMeta
-    // was expired.
-    pub fn renew_from(self, feature_set: &FeatureSet, expiry: Slot) -> Result<Self> {
-        let compute_budget_limits: ComputeBudgetLimits = process_compute_budget_instructions(
-            self.message.program_instructions_iter(),
-            feature_set,
-        )?;
-
-        let mut meta = TransactionMeta::default();
-        let _ = std::mem::replace(&mut meta, self.meta);
-        meta.set_compute_budget_limits(compute_budget_limits, expiry);
-
-        Ok(Self {
-            signatures: self.signatures,
-            message: self.message,
             meta,
         })
     }
@@ -242,16 +211,10 @@ mod tests {
             svt: SanitizedVersionedTransaction,
             is_simple_vote: Option<bool>,
         ) -> bool {
-            RuntimeTransaction::<SanitizedVersionedMessage>::try_from(
-                svt,
-                None,
-                is_simple_vote,
-                &FeatureSet::default(),
-                0,
-            )
-            .unwrap()
-            .meta
-            .is_simple_vote_tx
+            RuntimeTransaction::<SanitizedVersionedMessage>::try_from(svt, None, is_simple_vote)
+                .unwrap()
+                .meta
+                .is_simple_vote_tx
         }
 
         assert!(!get_is_simple_vote(
@@ -278,15 +241,12 @@ mod tests {
     #[test]
     fn test_advancing_transaction_type() {
         let hash = Hash::new_unique();
-        let expiry: Slot = 1;
 
         let statically_loaded_transaction =
             RuntimeTransaction::<SanitizedVersionedMessage>::try_from(
                 non_vote_sanitized_versioned_transaction(),
                 Some(hash),
                 None,
-                &FeatureSet::default(),
-                expiry,
             )
             .unwrap();
 
@@ -310,8 +270,6 @@ mod tests {
         let compute_unit_limit = 250_000;
         let compute_unit_price = 1_000;
         let loaded_accounts_bytes = 1_024;
-        let feature_set = FeatureSet::all_enabled();
-        let expiry = 100;
         let mut test_transaction = TestTransaction::new();
 
         let runtime_transaction_static = RuntimeTransaction::<SanitizedVersionedMessage>::try_from(
@@ -322,68 +280,22 @@ mod tests {
                 .to_sanitized_versioned_transaction(),
             Some(hash),
             None,
-            &feature_set,
-            expiry,
         )
         .unwrap();
 
-        // asserts before metadata expiration
         assert_eq!(&hash, runtime_transaction_static.message_hash());
         assert!(!runtime_transaction_static.is_simple_vote_tx());
         assert_eq!(
             compute_unit_limit,
-            runtime_transaction_static
-                .compute_unit_limit(Some(expiry))
-                .unwrap()
+            runtime_transaction_static.compute_unit_limit()
         );
         assert_eq!(
             compute_unit_price,
-            runtime_transaction_static
-                .compute_unit_price(Some(expiry))
-                .unwrap()
+            runtime_transaction_static.compute_unit_price()
         );
         assert_eq!(
             loaded_accounts_bytes,
-            runtime_transaction_static
-                .loaded_accounts_bytes(Some(expiry))
-                .unwrap()
-        );
-
-        // asserts after metadata expiration
-        let current_slot = expiry + 1;
-        assert!(runtime_transaction_static
-            .compute_unit_limit(Some(current_slot))
-            .is_none());
-        assert!(runtime_transaction_static
-            .compute_unit_price(Some(current_slot))
-            .is_none());
-        assert!(runtime_transaction_static
-            .loaded_accounts_bytes(Some(current_slot))
-            .is_none());
-
-        // asserts after renewal
-        let renewed_runtime_transaction_static = runtime_transaction_static
-            .renew_from(&feature_set, current_slot)
-            .unwrap();
-        assert_eq!(&hash, renewed_runtime_transaction_static.message_hash());
-        assert!(!renewed_runtime_transaction_static.is_simple_vote_tx());
-        assert_eq!(
-            compute_unit_limit,
-            renewed_runtime_transaction_static
-                .compute_unit_limit(Some(current_slot))
-                .unwrap()
-        );
-        assert_eq!(
-            compute_unit_price,
-            renewed_runtime_transaction_static
-                .compute_unit_price(Some(current_slot))
-                .unwrap()
-        );
-        assert_eq!(
-            loaded_accounts_bytes,
-            renewed_runtime_transaction_static
-                .loaded_accounts_bytes(Some(current_slot))
-                .unwrap()
+            runtime_transaction_static.loaded_accounts_bytes()
         );
     }
 }
