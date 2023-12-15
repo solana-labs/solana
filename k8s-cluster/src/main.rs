@@ -336,10 +336,9 @@ fn parse_matches() -> ArgMatches<'static> {
                 User can optionally provide extraArgs that are transparently
                 supplied to the client program as command line parameters.
                 For example,
-                    --bench-tps-args 'tx-count=25000'
-                This will start bench-tps clients, and supply '--tx-count 25000'
-                to the bench-tps client.
-                Multiple args not yet supported!"),
+                    --bench-tps-args 'tx-count=5000 thread-batch-sleep-ms=250'
+                This will start bench-tps clients, and supply '--tx-count 5000 --thread-batch-sleep-ms 250'
+                to the bench-tps client."),
         )
         .arg(
             Arg::with_name("target_node")
