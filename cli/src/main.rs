@@ -198,7 +198,7 @@ pub fn parse_args<'a>(
         &config.commitment,
     );
     let (_, fee) = ConfigInput::compute_fee_config(
-        matches.value_of("fee").unwrap_or("0"),
+        matches.value_of("fee").unwrap_or(""),
         &config.fee,
     );
 

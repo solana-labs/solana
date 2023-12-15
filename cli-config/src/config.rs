@@ -90,15 +90,14 @@ impl Default for Config {
         let commitment = "confirmed".to_string();
 
 
-        let fee = Config::default().fee;
-        
+        let fee = "0".to_string();
         Self {
             json_rpc_url,
             websocket_url,
             keypair_path,
             address_labels,
             commitment,
-            fee: fee.to_string(),
+            fee
         }
     }
 }

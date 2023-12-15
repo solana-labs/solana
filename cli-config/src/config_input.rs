@@ -160,7 +160,12 @@ impl ConfigInput {
         );
         let recent_fees = rpc_client.get_recent_prioritization_fees(
             &[]
-        ).unwrap_or_default();
+        );
+        if recent_fees.is_err() {
+            println!("recent_fees: {:?}", recent_fees.err());
+            return 0;
+        }
+        let recent_fees = recent_fees.unwrap();
         println!("recent_fees: {:?}", recent_fees.len());
         let recent_fees = recent_fees
         .iter()
