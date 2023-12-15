@@ -69,9 +69,8 @@ impl From<ComputeBudgetLimits> for FeeBudgetLimits {
 /// are retrieved and returned,
 pub fn process_compute_budget_instructions<'a>(
     instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
-    feature_set: &FeatureSet,
+    _feature_set: &FeatureSet,
 ) -> Result<ComputeBudgetLimits, TransactionError> {
-
     let mut num_non_compute_budget_instructions: u32 = 0;
     let mut updated_compute_unit_limit = None;
     let mut updated_compute_unit_price = None;
@@ -160,7 +159,6 @@ mod tests {
     use {
         super::*,
         solana_sdk::{
-            feature_set::add_set_tx_loaded_accounts_data_size_instruction,
             hash::Hash,
             instruction::Instruction,
             message::Message,
@@ -180,9 +178,7 @@ mod tests {
                 Message::new($instructions, Some(&payer_keypair.pubkey())),
                 Hash::default(),
             ));
-            let mut feature_set = FeatureSet::default();
-            feature_set.activate(&remove_deprecated_request_unit_ix::id(), 0);
-            feature_set.activate(&add_set_tx_loaded_accounts_data_size_instruction::id(), 0);
+            let feature_set = FeatureSet::default();
             let result = process_compute_budget_instructions(
                 tx.message().program_instructions_iter(),
                 &feature_set,
@@ -493,8 +489,7 @@ mod tests {
                 Hash::default(),
             ));
 
-        let mut feature_set = FeatureSet::default();
-        feature_set.activate(&add_set_tx_loaded_accounts_data_size_instruction::id(), 0);
+        let feature_set = FeatureSet::default();
 
         let result = process_compute_budget_instructions(
             transaction.message().program_instructions_iter(),

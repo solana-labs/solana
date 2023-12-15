@@ -24,13 +24,7 @@ pub trait GetTransactionPriorityDetails {
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
         _round_compute_unit_price_enabled: bool,
     ) -> Option<TransactionPriorityDetails> {
-        let mut feature_set = FeatureSet::default();
-        // this feature was enabled on mainnet-beta since epooch 537
-        // https://github.com/solana-labs/solana/issues/30366
-        feature_set.activate(
-            &solana_sdk::feature_set::add_set_tx_loaded_accounts_data_size_instruction::id(),
-            0,
-        );
+        let feature_set = FeatureSet::default();
 
         let compute_budget_limits =
             process_compute_budget_instructions(instructions, &feature_set).ok()?;
