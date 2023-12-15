@@ -161,11 +161,12 @@ impl ConfigInput {
         let recent_fees = rpc_client.get_recent_prioritization_fees(
             &[]
         ).unwrap_or_default();
+        println!("recent_fees: {:?}", recent_fees.len());
         let recent_fees = recent_fees
         .iter()
         .map(|fee| fee.prioritization_fee)
         .sum::<u64>()
-        .checked_div(recent_fees.len() as u64).unwrap_or(10000);
+        .checked_div(recent_fees.len() as u64).unwrap_or(0);
     println!("recent_fees: {}", recent_fees);
     recent_fees
     }
