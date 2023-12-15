@@ -95,7 +95,7 @@ pub struct ClientConfig {
     pub client_delay_start: u64,
     pub client_type: String,
     pub client_to_run: String,
-    pub bench_tps_args: Vec<String>,
+    pub bench_tps_args: Option<Vec<String>>,
     pub target_node: Option<Pubkey>,
     pub duration: u64,
     pub num_nodes: Option<u64>,
@@ -276,8 +276,11 @@ impl<'a> Kubernetes<'a> {
         let mut flags = vec![];
 
         flags.push(self.client_config.client_to_run.clone()); //client to run
-        let bench_tps_args = self.client_config.bench_tps_args.join(" ");
-        flags.push(bench_tps_args);
+        if let Some(bench_tps_args) = &self.client_config.bench_tps_args {
+            flags.push(bench_tps_args.join(" "));
+        }
+        // let bench_tps_args = self.client_config.bench_tps_args.expect("Need bench_tps_args!").join(" ");
+        // flags.push(bench_tps_args);
         flags.push(self.client_config.client_type.clone());
 
         if let Some(target_node) = self.client_config.target_node {
