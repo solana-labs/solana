@@ -1176,9 +1176,9 @@ fn main() {
         .validator(is_slot)
         .takes_value(true)
         .help("Halt processing at the given slot");
-    let no_os_memory_stats_reporting_arg = Arg::with_name("no_os_memory_stats_reporting")
-        .long("no-os-memory-stats-reporting")
-        .help("Disable reporting of OS memory statistics.");
+    let os_memory_stats_reporting_arg = Arg::with_name("os_memory_stats_reporting")
+        .long("os-memory-stats-reporting")
+        .help("Enable reporting of OS memory statistics.");
     let accounts_db_skip_initial_hash_calc_arg =
         Arg::with_name("accounts_db_skip_initial_hash_calculation")
             .long("accounts-db-skip-initial-hash-calculation")
@@ -1634,7 +1634,7 @@ fn main() {
                 .arg(&halt_at_slot_store_hash_raw_data)
                 .arg(&hard_forks_arg)
                 .arg(&accounts_db_test_hash_calculation_arg)
-                .arg(&no_os_memory_stats_reporting_arg)
+                .arg(&os_memory_stats_reporting_arg)
                 .arg(&allow_dead_slots_arg)
                 .arg(&max_genesis_archive_unpacked_size_arg)
                 .arg(&debug_key_arg)
@@ -2684,12 +2684,11 @@ fn main() {
             }
             ("verify", Some(arg_matches)) => {
                 let exit_signal = Arc::new(AtomicBool::new(false));
-                let no_os_memory_stats_reporting =
-                    arg_matches.is_present("no_os_memory_stats_reporting");
+                let report_os_memory_stats = arg_matches.is_present("os_memory_stats_reporting");
                 let system_monitor_service = SystemMonitorService::new(
                     Arc::clone(&exit_signal),
                     SystemMonitorStatsReportConfig {
-                        report_os_memory_stats: !no_os_memory_stats_reporting,
+                        report_os_memory_stats,
                         report_os_network_stats: false,
                         report_os_cpu_stats: false,
                         report_os_disk_stats: false,
