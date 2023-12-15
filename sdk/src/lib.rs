@@ -78,6 +78,7 @@ pub mod genesis_config;
 pub mod hard_forks;
 pub mod hash;
 pub mod inflation;
+pub mod inner_instruction;
 pub mod log;
 pub mod native_loader;
 pub mod net;
