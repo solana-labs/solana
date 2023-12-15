@@ -281,14 +281,13 @@ impl HotStorageReader {
         &self,
         account_offset: HotAccountOffset,
     ) -> TieredStorageResult<&HotAccountMeta> {
-        let internal_account_offset = account_offset.offset();
-        assert!(
-            internal_account_offset
-                <= (self.footer.index_block_offset as usize)
-                    .saturating_sub(std::mem::size_of::<HotAccountMeta>())
-        );
+        let offset = account_offset.offset();
 
-        let (meta, _) = get_pod::<HotAccountMeta>(&self.mmap, internal_account_offset)?;
+        assert!(
+            offset.saturating_add(std::mem::size_of::<HotAccountMeta>())
+                <= self.footer.index_block_offset as usize
+        );
+        let (meta, _) = get_pod::<HotAccountMeta>(&self.mmap, offset)?;
         Ok(meta)
     }
 
@@ -577,7 +576,9 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed")]
+    #[should_panic(
+        expected = "offset.saturating_add(std::mem::size_of::<HotAccountMeta>()) <=\\n    self.footer.index_block_offset"
+    )]
     fn test_get_acount_meta_from_offset_out_of_bounds() {
         // Generate a new temp path that is guaranteed to NOT already have a file.
         let temp_dir = TempDir::new().unwrap();
