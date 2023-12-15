@@ -5076,14 +5076,14 @@ impl Bank {
 
         let mut loaded_programs_for_txs = {
             // Lock the global cache to figure out which programs need to be loaded
-            let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
+            let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
             let mut loaded_programs_for_txs = LoadedProgramsForTxBatch::new(
                 self.slot,
                 loaded_programs_cache
                     .get_environments_for_epoch(self.epoch)
                     .clone(),
             );
-            loaded_programs_cache.extract(
+            let _cooperative_loading_task = loaded_programs_cache.extract(
                 self,
                 &mut missing_programs,
                 &mut loaded_programs_for_txs,

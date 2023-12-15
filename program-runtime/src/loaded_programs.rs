@@ -454,6 +454,8 @@ impl Default for ProgramRuntimeEnvironments {
 #[derive(Debug, Default)]
 struct SecondLevel {
     slot_versions: Vec<Arc<LoadedProgram>>,
+    /// Contains the bank and TX batch a program at this address is currently being loaded
+    cooperative_loading_lock: Option<(Slot, std::thread::ThreadId)>,
 }
 
 #[derive(Debug)]
@@ -775,13 +777,14 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
     /// Extracts a subset of the programs relevant to a transaction batch
     /// and returns which program accounts the accounts DB needs to load.
     pub fn extract<S: WorkingSlot>(
-        &self,
+        &mut self,
         working_slot: &S,
         search_for: &mut Vec<(Pubkey, (LoadedProgramMatchCriteria, u64))>,
         loaded_programs_for_tx_batch: &mut LoadedProgramsForTxBatch,
-    ) {
+    ) -> Option<(Pubkey, u64)> {
+        let mut cooperative_loading_task = None;
         search_for.retain(|(key, (match_criteria, usage_count))| {
-            if let Some(second_level) = self.entries.get(key) {
+            if let Some(second_level) = self.entries.get_mut(key) {
                 for entry in second_level.slot_versions.iter().rev() {
                     let is_ancestor = if let Some(fork_graph) = &self.fork_graph {
                         fork_graph
@@ -845,6 +848,16 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                     }
                 }
             }
+            if cooperative_loading_task.is_none() {
+                // We have not selected a task so far
+                let second_level = self.entries.entry(*key).or_default();
+                if second_level.cooperative_loading_lock.is_none() {
+                    // Select this missing entry which is not selected by any other TX batch yet
+                    cooperative_loading_task = Some((*key, *usage_count));
+                    second_level.cooperative_loading_lock =
+                        Some((working_slot.current_slot(), std::thread::current().id()));
+                }
+            }
             true
         });
         self.stats
@@ -854,6 +867,23 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
             loaded_programs_for_tx_batch.entries.len() as u64,
             Ordering::Relaxed,
         );
+        cooperative_loading_task
+    }
+
+    /// Called by Bank::replenish_program_cache() for each program that is done loading.
+    pub fn finish_cooperative_loading_task(
+        &mut self,
+        slot: Slot,
+        key: Pubkey,
+        loaded_program: Arc<LoadedProgram>,
+    ) {
+        let second_level = self.entries.entry(key).or_default();
+        debug_assert_eq!(
+            second_level.cooperative_loading_lock,
+            Some((slot, std::thread::current().id()))
+        );
+        second_level.cooperative_loading_lock = None;
+        self.assign_program(key, loaded_program);
     }
 
     pub fn merge(&mut self, tx_batch_cache: &LoadedProgramsForTxBatch) {
@@ -959,8 +989,10 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
 
     fn remove_programs_with_no_entries(&mut self) {
         let num_programs_before_removal = self.entries.len();
-        self.entries
-            .retain(|_, second_level| !second_level.slot_versions.is_empty());
+        self.entries.retain(|_, second_level| {
+            !second_level.slot_versions.is_empty()
+                || second_level.cooperative_loading_lock.is_some()
+        });
         if self.entries.len() < num_programs_before_removal {
             self.stats.empty_entries.fetch_add(
                 num_programs_before_removal.saturating_sub(self.entries.len()) as u64,
@@ -2216,6 +2248,9 @@ mod tests {
                 .len(),
             1
         );
+
+        // Unlock the cooperative loading lock so that the subsequent prune can do its job
+        cache.finish_cooperative_loading_task(15, program1, new_test_loaded_program(0, 1));
 
         // New root 15 should evict the expired entry for program1
         cache.prune(15, 0);
