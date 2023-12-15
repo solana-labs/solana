@@ -19,7 +19,7 @@ use {
     solana_sdk::{
         genesis_config::ClusterType, pubkey::Pubkey, sysvar::epoch_schedule::EpochSchedule,
     },
-    std::{env, fs, path::PathBuf, sync::Arc},
+    std::{env, fs, path::PathBuf},
 };
 
 fn main() {
@@ -75,7 +75,7 @@ fn main() {
         AccountSecondaryIndexes::default(),
         AccountShrinkThreshold::default(),
     );
-    let accounts = Accounts::new(Arc::new(accounts_db));
+    let accounts = Accounts::new(accounts_db);
     println!("Creating {num_accounts} accounts");
     let mut create_time = Measure::start("create accounts");
     let pubkeys: Vec<_> = (0..num_slots)

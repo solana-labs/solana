@@ -160,7 +160,7 @@ impl AccountsPackage {
     /// Only use for tests; many of the fields are invalid!
     pub fn default_for_tests() -> Self {
         let accounts_db = AccountsDb::default_for_tests();
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
         Self {
             package_kind: AccountsPackageKind::AccountsHashVerifier,
             slot: Slot::default(),

@@ -1109,7 +1109,7 @@ impl Bank {
             accounts_update_notifier,
             exit,
         );
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
         let mut bank = Self::default_with_accounts(accounts);
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
         bank.transaction_debug_keys = debug_keys;
@@ -8175,7 +8175,7 @@ impl Bank {
 
     pub fn default_for_tests() -> Self {
         let accounts_db = AccountsDb::default_for_tests();
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
         Self::default_with_accounts(accounts)
     }
 

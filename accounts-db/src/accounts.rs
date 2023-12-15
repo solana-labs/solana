@@ -118,9 +118,9 @@ pub enum AccountAddressFilter {
 }
 
 impl Accounts {
-    pub fn new(accounts_db: Arc<AccountsDb>) -> Self {
+    pub fn new(accounts_db: impl Into<Arc<AccountsDb>>) -> Self {
         Self {
-            accounts_db,
+            accounts_db: accounts_db.into(),
             account_locks: Mutex::new(AccountLocks::default()),
         }
     }
@@ -883,7 +883,7 @@ mod tests {
     #[test]
     fn test_hold_range_in_memory() {
         let accounts_db = AccountsDb::default_for_tests();
-        let accts = Accounts::new(Arc::new(accounts_db));
+        let accts = Accounts::new(accounts_db);
         let range = Pubkey::from([0; 32])..=Pubkey::from([0xff; 32]);
         accts.hold_range_in_memory(&range, true, &test_thread_pool());
         accts.hold_range_in_memory(&range, false, &test_thread_pool());
@@ -896,7 +896,7 @@ mod tests {
     #[test]
     fn test_hold_range_in_memory2() {
         let accounts_db = AccountsDb::default_for_tests();
-        let accts = Accounts::new(Arc::new(accounts_db));
+        let accts = Accounts::new(accounts_db);
         let range = Pubkey::from([0; 32])..=Pubkey::from([0xff; 32]);
         let idx = &accts.accounts_db.accounts_index;
         let bins = idx.account_maps.len();
@@ -945,7 +945,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
 
         let invalid_table_key = Pubkey::new_unique();
         let address_table_lookup = MessageAddressTableLookup {
@@ -973,7 +973,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
 
         let invalid_table_key = Pubkey::new_unique();
         let mut invalid_table_account = AccountSharedData::default();
@@ -1005,7 +1005,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
 
         let invalid_table_key = Pubkey::new_unique();
         let invalid_table_account =
@@ -1037,7 +1037,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
 
         let table_key = Pubkey::new_unique();
         let table_addresses = vec![Pubkey::new_unique(), Pubkey::new_unique()];
@@ -1083,7 +1083,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
 
         // Load accounts owned by various programs into AccountsDb
         let pubkey0 = solana_sdk::pubkey::new_rand();
@@ -1112,7 +1112,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
         assert!(accounts.accounts_db.get_bank_hash_stats(0).is_some());
         assert!(accounts.accounts_db.get_bank_hash_stats(1).is_none());
     }
@@ -1125,7 +1125,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
 
         let keypair = Keypair::new();
         let message = Message {
@@ -1150,7 +1150,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
 
         let keypair = Keypair::new();
 
@@ -1216,7 +1216,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
         accounts.store_for_tests(0, &keypair0.pubkey(), &account0);
         accounts.store_for_tests(0, &keypair1.pubkey(), &account1);
         accounts.store_for_tests(0, &keypair2.pubkey(), &account2);
@@ -1326,7 +1326,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
         accounts.store_for_tests(0, &keypair0.pubkey(), &account0);
         accounts.store_for_tests(0, &keypair1.pubkey(), &account1);
         accounts.store_for_tests(0, &keypair2.pubkey(), &account2);
@@ -1408,7 +1408,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
         accounts.store_for_tests(0, &keypair0.pubkey(), &account0);
         accounts.store_for_tests(0, &keypair1.pubkey(), &account1);
         accounts.store_for_tests(0, &keypair2.pubkey(), &account2);
@@ -1485,7 +1485,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
         accounts.store_for_tests(0, &keypair0.pubkey(), &account0);
         accounts.store_for_tests(0, &keypair1.pubkey(), &account1);
         accounts.store_for_tests(0, &keypair2.pubkey(), &account2);
@@ -1645,7 +1645,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
         {
             accounts
                 .account_locks
@@ -1697,7 +1697,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
         let mut old_pubkey = Pubkey::default();
         let zero_account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
         info!("storing..");
@@ -2037,7 +2037,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
         let txs = vec![tx];
         let execution_results = vec![new_execution_result(
             Err(TransactionError::InstructionError(
@@ -2151,7 +2151,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
         let txs = vec![tx];
         let execution_results = vec![new_execution_result(
             Err(TransactionError::InstructionError(
@@ -2193,7 +2193,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
 
         /* This test assumes pubkey0 < pubkey1 < pubkey2.
          * But the keys created with new_unique() does not gurantee this

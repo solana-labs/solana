@@ -561,7 +561,7 @@ mod tests {
             transaction::{Result, Transaction, TransactionError},
             transaction_context::TransactionAccount,
         },
-        std::{convert::TryFrom, sync::Arc},
+        std::convert::TryFrom,
     };
 
     fn load_accounts_with_fee_and_rent(
@@ -581,7 +581,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
         for ka in ka.iter() {
             accounts.accounts_db.store_for_tests(0, &[(&ka.0, &ka.1)]);
         }
@@ -1394,7 +1394,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
 
         let instructions_key = solana_sdk::sysvar::instructions::id();
         let keypair = Keypair::new();
@@ -1421,7 +1421,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        let accounts = Accounts::new(Arc::new(accounts_db));
+        let accounts = Accounts::new(accounts_db);
         let mut account_overrides = AccountOverrides::default();
         let slot_history_id = sysvar::slot_history::id();
         let account = AccountSharedData::new(42, 0, &Pubkey::default());
