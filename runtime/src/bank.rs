@@ -5077,7 +5077,7 @@ impl Bank {
         let mut loaded_programs_for_txs = None;
         let mut program_to_store = None;
         loop {
-            let program_to_load = {
+            let (program_to_load, task_cookie, task_waiter) = {
                 // Lock the global cache.
                 let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
                 // Initialize our local cache.
@@ -5098,11 +5098,13 @@ impl Bank {
                     );
                 }
                 // Figure out which program needs to be loaded next.
-                loaded_programs_cache.extract(
+                let program_to_load = loaded_programs_cache.extract(
                     self,
                     &mut missing_programs,
                     loaded_programs_for_txs.as_mut().unwrap(),
-                )
+                );
+                let task_waiter = Arc::clone(&loaded_programs_cache.loading_task_waiter);
+                (program_to_load, task_waiter.cookie(), task_waiter)
                 // Unlock the global cache again.
             };
 
@@ -5114,7 +5116,10 @@ impl Bank {
             } else if missing_programs.is_empty() {
                 break;
             } else {
-                // TODO: Wait on a std::sync::Condvar
+                // Sleep until the next finish_cooperative_loading_task() call.
+                // Once a task completes we'll wake up and try to load the
+                // missing programs inside the tx batch again.
+                let _new_cookie = task_waiter.wait(task_cookie);
             }
         }
 
