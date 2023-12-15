@@ -4773,14 +4773,16 @@ impl Bank {
             accounts: &[(Pubkey, AccountSharedData)],
             message: &SanitizedMessage,
         ) -> Option<u128> {
-            let mut lamports_sum = 0u128;
-            for i in 0..message.account_keys().len() {
-                let Some((_, account)) = accounts.get(i) else {
-                    return None;
-                };
-                lamports_sum = lamports_sum.checked_add(u128::from(account.lamports()))?;
+            if accounts.len() < message.account_keys().len() {
+                None
+            } else {
+                Some(
+                    accounts[..message.account_keys().len()]
+                        .iter()
+                        .map(|x| u128::from(x.1.lamports()))
+                        .sum(),
+                )
             }
-            Some(lamports_sum)
         }
 
         let lamports_before_tx =
