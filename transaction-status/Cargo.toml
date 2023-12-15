@@ -13,7 +13,9 @@ edition = { workspace = true }
 Inflector = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }
-borsh = { workspace = true }
+# Update this borsh dependency to the workspace version once
+# spl-associated-token-account is upgraded and used in the monorepo.
+borsh = { version = "0.10.3" }
 bs58 = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }

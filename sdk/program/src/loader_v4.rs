@@ -17,7 +17,7 @@ pub const DEPLOYMENT_COOLDOWN_IN_SLOTS: u64 = 750;
 #[repr(u64)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy, AbiExample)]
 pub enum LoaderV4Status {
-    /// Program is in maintanance
+    /// Program is in maintenance
     Retracted,
     /// Program is ready to be executed
     Deployed,

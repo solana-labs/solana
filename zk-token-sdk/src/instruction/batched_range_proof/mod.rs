@@ -54,7 +54,7 @@ impl BatchedRangeProofContext {
     fn new_transcript(&self) -> Transcript {
         let mut transcript = Transcript::new(b"BatchedRangeProof");
         transcript.append_message(b"commitments", bytes_of(&self.commitments));
-        transcript.append_message(b"bit-legnths", bytes_of(&self.bit_lengths));
+        transcript.append_message(b"bit-lengths", bytes_of(&self.bit_lengths));
         transcript
     }
 

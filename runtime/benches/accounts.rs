@@ -10,11 +10,12 @@ use {
     solana_accounts_db::{
         accounts::{AccountAddressFilter, Accounts},
         accounts_db::{
-            test_utils::create_test_accounts, AccountShrinkThreshold,
+            test_utils::create_test_accounts, AccountShrinkThreshold, AccountsDb,
             VerifyAccountsHashAndLamportsConfig,
         },
         accounts_index::{AccountSecondaryIndexes, ScanConfig},
         ancestors::Ancestors,
+        epoch_accounts_hash::EpochAccountsHash,
         rent_collector::RentCollector,
     },
     solana_runtime::bank::*,
@@ -70,6 +71,15 @@ fn test_accounts_squash(bencher: &mut Bencher) {
     deposit_many(&prev_bank, &mut pubkeys, 250_000).unwrap();
     prev_bank.freeze();
 
+    // Need to set the EAH to Valid so that `Bank::new_from_parent()` doesn't panic during
+    // freeze when parent is in the EAH calculation window.
+    prev_bank
+        .rc
+        .accounts
+        .accounts_db
+        .epoch_accounts_hash_manager
+        .set_valid(EpochAccountsHash::new(Hash::new_unique()), 0);
+
     // Measures the performance of the squash operation.
     // This mainly consists of the freeze operation which calculates the
     // merkle hash of the account state and distribution of fees and rent
@@ -89,12 +99,13 @@ fn test_accounts_squash(bencher: &mut Bencher) {
 
 #[bench]
 fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
-    let accounts = Accounts::new_with_config_for_benches(
+    let accounts_db = AccountsDb::new_with_config_for_benches(
         vec![PathBuf::from("bench_accounts_hash_internal")],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         AccountShrinkThreshold::default(),
     );
+    let accounts = Accounts::new(Arc::new(accounts_db));
     let mut pubkeys: Vec<Pubkey> = vec![];
     let num_accounts = 60_000;
     let slot = 0;
@@ -126,12 +137,13 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
 #[bench]
 fn test_update_accounts_hash(bencher: &mut Bencher) {
     solana_logger::setup();
-    let accounts = Accounts::new_with_config_for_benches(
+    let accounts_db = AccountsDb::new_with_config_for_benches(
         vec![PathBuf::from("update_accounts_hash")],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         AccountShrinkThreshold::default(),
     );
+    let accounts = Accounts::new(Arc::new(accounts_db));
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 50_000, 0);
     let ancestors = Ancestors::from(vec![0]);
@@ -145,12 +157,13 @@ fn test_update_accounts_hash(bencher: &mut Bencher) {
 #[bench]
 fn test_accounts_delta_hash(bencher: &mut Bencher) {
     solana_logger::setup();
-    let accounts = Accounts::new_with_config_for_benches(
+    let accounts_db = AccountsDb::new_with_config_for_benches(
         vec![PathBuf::from("accounts_delta_hash")],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         AccountShrinkThreshold::default(),
     );
+    let accounts = Accounts::new(Arc::new(accounts_db));
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 100_000, 0);
     bencher.iter(|| {
@@ -161,12 +174,13 @@ fn test_accounts_delta_hash(bencher: &mut Bencher) {
 #[bench]
 fn bench_delete_dependencies(bencher: &mut Bencher) {
     solana_logger::setup();
-    let accounts = Accounts::new_with_config_for_benches(
+    let accounts_db = AccountsDb::new_with_config_for_benches(
         vec![PathBuf::from("accounts_delete_deps")],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         AccountShrinkThreshold::default(),
     );
+    let accounts = Accounts::new(Arc::new(accounts_db));
     let mut old_pubkey = Pubkey::default();
     let zero_account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
     for i in 0..1000 {
@@ -190,7 +204,7 @@ fn store_accounts_with_possible_contention<F: 'static>(
     F: Fn(&Accounts, &[Pubkey]) + Send + Copy,
 {
     let num_readers = 5;
-    let accounts = Arc::new(Accounts::new_with_config_for_benches(
+    let accounts_db = AccountsDb::new_with_config_for_benches(
         vec![
             PathBuf::from(std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string()))
                 .join(bench_name),
@@ -198,7 +212,8 @@ fn store_accounts_with_possible_contention<F: 'static>(
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         AccountShrinkThreshold::default(),
-    ));
+    );
+    let accounts = Arc::new(Accounts::new(Arc::new(accounts_db)));
     let num_keys = 1000;
     let slot = 0;
     accounts.add_root(slot);
@@ -326,7 +341,7 @@ fn bench_rwlock_hashmap_single_reader_with_n_writers(bencher: &mut Bencher) {
 }
 
 fn setup_bench_dashmap_iter() -> (Arc<Accounts>, DashMap<Pubkey, (AccountSharedData, Hash)>) {
-    let accounts = Arc::new(Accounts::new_with_config_for_benches(
+    let accounts_db = AccountsDb::new_with_config_for_benches(
         vec![
             PathBuf::from(std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string()))
                 .join("bench_dashmap_par_iter"),
@@ -334,7 +349,8 @@ fn setup_bench_dashmap_iter() -> (Arc<Accounts>, DashMap<Pubkey, (AccountSharedD
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         AccountShrinkThreshold::default(),
-    ));
+    );
+    let accounts = Arc::new(Accounts::new(Arc::new(accounts_db)));
 
     let dashmap = DashMap::new();
     let num_keys = std::env::var("NUM_BENCH_KEYS")
@@ -383,12 +399,13 @@ fn bench_dashmap_iter(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_load_largest_accounts(b: &mut Bencher) {
-    let accounts = Accounts::new_with_config_for_benches(
+    let accounts_db = AccountsDb::new_with_config_for_benches(
         Vec::new(),
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         AccountShrinkThreshold::default(),
     );
+    let accounts = Accounts::new(Arc::new(accounts_db));
     let mut rng = rand::thread_rng();
     for _ in 0..10_000 {
         let lamports = rng.gen();

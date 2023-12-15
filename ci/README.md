@@ -73,7 +73,7 @@ sudo CUDA=1 ./setup-new-buildkite-agent/setup-new-machine.sh
 
 ### Configure Node for Buildkite-agent based CI
 
-- Install `buildkite-agent` and set up it user environment with:
+- Install `buildkite-agent` and set up its user environment with:
 ```bash
 sudo ./setup-new-buildkite-agent/setup-buildkite.sh
 ```

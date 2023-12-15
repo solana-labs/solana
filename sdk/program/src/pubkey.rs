@@ -84,6 +84,7 @@ impl From<u64> for PubkeyError {
     Serialize,
     Zeroable,
 )]
+#[borsh(crate = "borsh")]
 pub struct Pubkey(pub(crate) [u8; 32]);
 
 impl crate::sanitize::Sanitize for Pubkey {}
@@ -328,6 +329,7 @@ impl Pubkey {
     /// // The computed address of the PDA will be passed to this program via
     /// // the `accounts` vector of the `Instruction` type.
     /// #[derive(BorshSerialize, BorshDeserialize, Debug)]
+    /// # #[borsh(crate = "borsh")]
     /// pub struct InstructionData {
     ///     pub vault_bump_seed: u8,
     ///     pub lamports: u64,
@@ -409,6 +411,7 @@ impl Pubkey {
     /// # use anyhow::Result;
     /// #
     /// # #[derive(BorshSerialize, BorshDeserialize, Debug)]
+    /// # #[borsh(crate = "borsh")]
     /// # struct InstructionData {
     /// #    pub vault_bump_seed: u8,
     /// #    pub lamports: u64,
@@ -668,47 +671,70 @@ impl fmt::Display for Pubkey {
     }
 }
 
+impl borsh0_10::de::BorshDeserialize for Pubkey {
+    fn deserialize_reader<R: borsh0_10::maybestd::io::Read>(
+        reader: &mut R,
+    ) -> ::core::result::Result<Self, borsh0_10::maybestd::io::Error> {
+        Ok(Self(borsh0_10::BorshDeserialize::deserialize_reader(
+            reader,
+        )?))
+    }
+}
 impl borsh0_9::de::BorshDeserialize for Pubkey {
     fn deserialize(buf: &mut &[u8]) -> ::core::result::Result<Self, borsh0_9::maybestd::io::Error> {
         Ok(Self(borsh0_9::BorshDeserialize::deserialize(buf)?))
     }
 }
-impl borsh0_9::BorshSchema for Pubkey
-where
-    [u8; 32]: borsh0_9::BorshSchema,
-{
-    fn declaration() -> borsh0_9::schema::Declaration {
-        "Pubkey".to_string()
-    }
-    fn add_definitions_recursively(
-        definitions: &mut borsh0_9::maybestd::collections::HashMap<
-            borsh0_9::schema::Declaration,
-            borsh0_9::schema::Definition,
-        >,
-    ) {
-        let fields = borsh0_9::schema::Fields::UnnamedFields(<[_]>::into_vec(
-            borsh0_9::maybestd::boxed::Box::new([
-                <[u8; 32] as borsh0_9::BorshSchema>::declaration(),
-            ]),
-        ));
-        let definition = borsh0_9::schema::Definition::Struct { fields };
-        <Self as borsh0_9::BorshSchema>::add_definition(
-            <Self as borsh0_9::BorshSchema>::declaration(),
-            definition,
-            definitions,
-        );
-        <[u8; 32] as borsh0_9::BorshSchema>::add_definitions_recursively(definitions);
-    }
+
+macro_rules! impl_borsh_schema {
+    ($borsh:ident) => {
+        impl $borsh::BorshSchema for Pubkey
+        where
+            [u8; 32]: $borsh::BorshSchema,
+        {
+            fn declaration() -> $borsh::schema::Declaration {
+                "Pubkey".to_string()
+            }
+            fn add_definitions_recursively(
+                definitions: &mut $borsh::maybestd::collections::HashMap<
+                    $borsh::schema::Declaration,
+                    $borsh::schema::Definition,
+                >,
+            ) {
+                let fields = $borsh::schema::Fields::UnnamedFields(<[_]>::into_vec(
+                    $borsh::maybestd::boxed::Box::new([
+                        <[u8; 32] as $borsh::BorshSchema>::declaration(),
+                    ]),
+                ));
+                let definition = $borsh::schema::Definition::Struct { fields };
+                <Self as $borsh::BorshSchema>::add_definition(
+                    <Self as $borsh::BorshSchema>::declaration(),
+                    definition,
+                    definitions,
+                );
+                <[u8; 32] as $borsh::BorshSchema>::add_definitions_recursively(definitions);
+            }
+        }
+    };
 }
-impl borsh0_9::ser::BorshSerialize for Pubkey {
-    fn serialize<W: borsh0_9::maybestd::io::Write>(
-        &self,
-        writer: &mut W,
-    ) -> ::core::result::Result<(), borsh0_9::maybestd::io::Error> {
-        borsh0_9::BorshSerialize::serialize(&self.0, writer)?;
-        Ok(())
-    }
+impl_borsh_schema!(borsh0_10);
+impl_borsh_schema!(borsh0_9);
+
+macro_rules! impl_borsh_serialize {
+    ($borsh:ident) => {
+        impl $borsh::ser::BorshSerialize for Pubkey {
+            fn serialize<W: $borsh::maybestd::io::Write>(
+                &self,
+                writer: &mut W,
+            ) -> ::core::result::Result<(), $borsh::maybestd::io::Error> {
+                $borsh::BorshSerialize::serialize(&self.0, writer)?;
+                Ok(())
+            }
+        }
+    };
 }
+impl_borsh_serialize!(borsh0_10);
+impl_borsh_serialize!(borsh0_9);
 
 #[cfg(test)]
 mod tests {

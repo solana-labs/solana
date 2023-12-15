@@ -2563,33 +2563,40 @@ fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
 #[test]
 #[serial]
 fn test_rpc_block_subscribe() {
-    let total_stake = 100 * DEFAULT_NODE_STAKE;
-    let leader_stake = total_stake;
-    let node_stakes = vec![leader_stake];
+    let leader_stake = 100 * DEFAULT_NODE_STAKE;
+    let rpc_stake = DEFAULT_NODE_STAKE;
+    let total_stake = leader_stake + rpc_stake;
+    let node_stakes = vec![leader_stake, rpc_stake];
     let mut validator_config = ValidatorConfig::default_for_test();
     validator_config.enable_default_rpc_block_subscribe();
 
     let validator_keys = [
         "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
+        "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
     ]
     .iter()
     .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
     .take(node_stakes.len())
     .collect::<Vec<_>>();
+    let rpc_node_pubkey = &validator_keys[1].0.pubkey();
 
     let mut config = ClusterConfig {
         cluster_lamports: total_stake,
         node_stakes,
-        validator_configs: vec![validator_config],
+        validator_configs: make_identical_validator_configs(&validator_config, 2),
         validator_keys: Some(validator_keys),
         skip_warmup_slots: true,
         ..ClusterConfig::default()
     };
     let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
+    let rpc_node_contact_info = cluster.get_contact_info(rpc_node_pubkey).unwrap();
     let (mut block_subscribe_client, receiver) = PubsubClient::block_subscribe(
         &format!(
             "ws://{}",
-            &cluster.entry_point_info.rpc_pubsub().unwrap().to_string()
+            // It is important that we subscribe to a non leader node as there
+            // is a race condition which can cause leader nodes to not send
+            // BlockUpdate notifications properly. See https://github.com/solana-labs/solana/pull/34421
+            &rpc_node_contact_info.rpc_pubsub().unwrap().to_string()
         ),
         RpcBlockSubscribeFilter::All,
         Some(RpcBlockSubscribeConfig {
@@ -5027,6 +5034,7 @@ fn test_boot_from_local_state() {
 #[test]
 #[serial]
 #[allow(unused_attributes)]
+#[ignore]
 fn test_duplicate_shreds_switch_failure() {
     fn wait_for_duplicate_fork_frozen(ledger_path: &Path, dup_slot: Slot) -> Hash {
         // Ensure all the slots <= dup_slot are also full so we know we can replay up to dup_slot

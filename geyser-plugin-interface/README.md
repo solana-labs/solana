@@ -6,10 +6,10 @@
 
 # Solana Geyser Plugin Interface
 
-This crate enables an plugin to be added into the Solana Validator runtime to
+This crate enables a plugin to be added into the Solana Validator runtime to
 take actions at the time of account updates or block and transaction processing;
 for example, saving the account state to an external database. The plugin must
-implement the `GeyserPlugin` trait. Please see the detail of the
+implement the `GeyserPlugin` trait. Please see the details of the
 `geyser_plugin_interface.rs` for the interface definition.
 
 The plugin should produce a `cdylib` dynamic library, which must expose a `C`
@@ -18,7 +18,7 @@ interface.
 
 The https://github.com/solana-labs/solana-accountsdb-plugin-postgres repository
 provides an example of how to create a plugin which saves the accounts data into
-an external PostgreSQL databases.
+an external PostgreSQL database.
 
 More information about Solana is available in the [Solana documentation](https://docs.solana.com/).
 

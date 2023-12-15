@@ -615,7 +615,7 @@ impl<'a> InvokeContext<'a> {
     pub fn get_syscall_context(&self) -> Result<&SyscallContext, InstructionError> {
         self.syscall_context
             .last()
-            .and_then(|syscall_context| syscall_context.as_ref())
+            .and_then(std::option::Option::as_ref)
             .ok_or(InstructionError::CallDepth)
     }
 

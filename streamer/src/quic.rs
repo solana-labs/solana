@@ -10,7 +10,7 @@ use {
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::PACKET_DATA_SIZE,
-        quic::{QUIC_MAX_TIMEOUT, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS},
+        quic::{NotifyKeyUpdate, QUIC_MAX_TIMEOUT, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS},
         signature::Keypair,
     },
     std::{
@@ -34,6 +34,12 @@ impl SkipClientVerification {
     pub fn new() -> Arc<Self> {
         Arc::new(Self)
     }
+}
+
+pub struct SpawnServerResult {
+    pub endpoint: Endpoint,
+    pub thread: thread::JoinHandle<()>,
+    pub key_updater: Arc<EndpointKeyUpdater>,
 }
 
 impl rustls::server::ClientCertVerifier for SkipClientVerification {
@@ -111,6 +117,19 @@ pub enum QuicServerError {
     CertificateError(#[from] rcgen::RcgenError),
     #[error("TLS error: {0}")]
     TlsError(#[from] rustls::Error),
+}
+
+pub struct EndpointKeyUpdater {
+    endpoint: Endpoint,
+    gossip_host: IpAddr,
+}
+
+impl NotifyKeyUpdate for EndpointKeyUpdater {
+    fn update_key(&self, key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
+        let (config, _) = configure_server(key, self.gossip_host)?;
+        self.endpoint.set_server_config(Some(config));
+        Ok(())
+    }
 }
 
 #[derive(Default)]
@@ -404,7 +423,7 @@ pub fn spawn_server(
     max_unstaked_connections: usize,
     wait_for_chunk_timeout: Duration,
     coalesce: Duration,
-) -> Result<(Endpoint, thread::JoinHandle<()>), QuicServerError> {
+) -> Result<SpawnServerResult, QuicServerError> {
     let runtime = rt();
     let (endpoint, _stats, task) = {
         let _guard = runtime.enter();
@@ -431,7 +450,15 @@ pub fn spawn_server(
             }
         })
         .unwrap();
-    Ok((endpoint, handle))
+    let updater = EndpointKeyUpdater {
+        endpoint: endpoint.clone(),
+        gossip_host,
+    };
+    Ok(SpawnServerResult {
+        endpoint,
+        thread: handle,
+        key_updater: Arc::new(updater),
+    })
 }
 
 #[cfg(test)]
@@ -457,7 +484,11 @@ mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let (_, t) = spawn_server(
+        let SpawnServerResult {
+            endpoint: _,
+            thread: t,
+            key_updater: _,
+        } = spawn_server(
             "quic_streamer_test",
             s,
             &keypair,
@@ -513,7 +544,11 @@ mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let (_, t) = spawn_server(
+        let SpawnServerResult {
+            endpoint: _,
+            thread: t,
+            key_updater: _,
+        } = spawn_server(
             "quic_streamer_test",
             s,
             &keypair,
@@ -556,7 +591,11 @@ mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let (_, t) = spawn_server(
+        let SpawnServerResult {
+            endpoint: _,
+            thread: t,
+            key_updater: _,
+        } = spawn_server(
             "quic_streamer_test",
             s,
             &keypair,

@@ -1347,7 +1347,12 @@ mod test {
         fn new(bank_forks: Arc<RwLock<BankForks>>) -> Self {
             let ancestor_hashes_request_statuses = Arc::new(DashMap::new());
             let ancestor_hashes_request_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").unwrap());
-            let epoch_schedule = *bank_forks.read().unwrap().root_bank().epoch_schedule();
+            let epoch_schedule = bank_forks
+                .read()
+                .unwrap()
+                .root_bank()
+                .epoch_schedule()
+                .clone();
             let keypair = Keypair::new();
             let requester_cluster_info = Arc::new(ClusterInfo::new(
                 Node::new_localhost_with_pubkey(&keypair.pubkey()).info,

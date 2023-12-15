@@ -1,7 +1,7 @@
 #![allow(clippy::arithmetic_side_effects)]
 macro_rules! ACCOUNT_STRING {
     () => {
-        r#", one of:
+        r#" Address is one of:
   * a base58-encoded public key
   * a path to a keypair file
   * a hyphen; signals a JSON-encoded keypair on stdin
