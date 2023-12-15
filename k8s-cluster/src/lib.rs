@@ -10,7 +10,6 @@ use {
         io::{self, BufReader, Cursor, Read},
         path::{Path, PathBuf},
         time::Duration,
-        collections::HashMap,
     },
     tar::Archive,
     url::Url,
