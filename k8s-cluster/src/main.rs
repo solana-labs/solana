@@ -7,9 +7,10 @@ use {
             Genesis, GenesisFlags, DEFAULT_CLIENT_LAMPORTS_PER_SIGNATURE,
             DEFAULT_INTERNAL_NODE_SOL, DEFAULT_INTERNAL_NODE_STAKE_SOL,
         },
-        get_solana_root, initialize_globals, parse_and_format_bench_tps_args,
+        get_solana_root, initialize_globals,
         kubernetes::{ClientConfig, Kubernetes, Metrics, NodeAffinityType, ValidatorConfig},
         ledger_helper::LedgerHelper,
+        parse_and_format_bench_tps_args,
         release::{BuildConfig, Deploy},
         ValidatorType,
     },
@@ -482,13 +483,10 @@ async fn main() {
             .map(|value_str| value_str.parse().expect("Invalid value for num_nodes")),
     };
 
-
-
     if let Some(ref bench_tps_args) = client_config.bench_tps_args {
         for s in bench_tps_args.iter() {
             info!("s: {}", s);
         }
-
     }
 
     let build_config = BuildConfig {

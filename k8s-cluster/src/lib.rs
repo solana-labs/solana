@@ -159,5 +159,5 @@ pub fn parse_and_format_bench_tps_args(bench_tps_args: Option<&str>) -> Option<V
             .filter_map(|arg| arg.split_once('='))
             .flat_map(|(key, value)| vec![format!("--{}", key), value.to_string()])
             .collect()
-})
+    })
 }
