@@ -775,59 +775,58 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         let current_slot = working_slot.current_slot();
         let mut loaded = HashMap::new();
         search_for.retain(|(key, (match_criteria, usage_count))| {
-                if let Some(second_level) = self.entries.get(key) {
-                    for entry in second_level.iter().rev() {
-                        let is_ancestor = if let Some(fork_graph) = &self.fork_graph {
-                            fork_graph
-                                .read()
-                                .map(|fork_graph_r| {
-                                    matches!(
-                                        fork_graph_r
-                                            .relationship(entry.deployment_slot, current_slot),
-                                        BlockRelation::Ancestor
-                                    )
-                                })
-                                .unwrap_or(false)
+            if let Some(second_level) = self.entries.get(key) {
+                for entry in second_level.iter().rev() {
+                    let is_ancestor = if let Some(fork_graph) = &self.fork_graph {
+                        fork_graph
+                            .read()
+                            .map(|fork_graph_r| {
+                                matches!(
+                                    fork_graph_r.relationship(entry.deployment_slot, current_slot),
+                                    BlockRelation::Ancestor
+                                )
+                            })
+                            .unwrap_or(false)
+                    } else {
+                        working_slot.is_ancestor(entry.deployment_slot)
+                    };
+
+                    if entry.deployment_slot <= self.latest_root_slot
+                        || entry.deployment_slot == current_slot
+                        || is_ancestor
+                    {
+                        let entry_to_return = if current_slot >= entry.effective_slot {
+                            if !Self::is_entry_usable(entry, current_slot, match_criteria)
+                                || !Self::matches_environment(entry, environments)
+                            {
+                                break;
+                            }
+
+                            if let LoadedProgramType::Unloaded(_environment) = &entry.program {
+                                break;
+                            }
+
+                            entry.clone()
+                        } else if entry.is_implicit_delay_visibility_tombstone(current_slot) {
+                            // Found a program entry on the current fork, but it's not effective
+                            // yet. It indicates that the program has delayed visibility. Return
+                            // the tombstone to reflect that.
+                            Arc::new(LoadedProgram::new_tombstone(
+                                entry.deployment_slot,
+                                LoadedProgramType::DelayVisibility,
+                            ))
                         } else {
-                            working_slot.is_ancestor(entry.deployment_slot)
+                            continue;
                         };
-
-                        if entry.deployment_slot <= self.latest_root_slot
-                            || entry.deployment_slot == current_slot
-                            || is_ancestor
-                        {
-                            let entry_to_return = if current_slot >= entry.effective_slot {
-                                if !Self::is_entry_usable(entry, current_slot, match_criteria)
-                                    || !Self::matches_environment(entry, environments)
-                                {
-                                    break;
-                                }
-
-                                if let LoadedProgramType::Unloaded(_environment) = &entry.program {
-                                    break;
-                                }
-
-                                entry.clone()
-                            } else if entry.is_implicit_delay_visibility_tombstone(current_slot) {
-                                // Found a program entry on the current fork, but it's not effective
-                                // yet. It indicates that the program has delayed visibility. Return
-                                // the tombstone to reflect that.
-                                Arc::new(LoadedProgram::new_tombstone(
-                                    entry.deployment_slot,
-                                    LoadedProgramType::DelayVisibility,
-                                ))
-                            } else {
-                                continue;
-                            };
-                            entry_to_return
-                                .tx_usage_counter
-                                .fetch_add(*usage_count, Ordering::Relaxed);
-                            loaded.insert(*key, entry_to_return);
-                            return false;
-                        }
+                        entry_to_return
+                            .tx_usage_counter
+                            .fetch_add(*usage_count, Ordering::Relaxed);
+                        loaded.insert(*key, entry_to_return);
+                        return false;
                     }
                 }
-                true
+            }
+            true
         });
         self.stats
             .misses
