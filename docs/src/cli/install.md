@@ -215,6 +215,20 @@ Download `protoc` from the
 [GitHub releases page of Protocol Buffers](https://github.com/protocolbuffers/protobuf/releases),
 and add it to your `PATH`.
 
+:::info
+
+Users on Windows 10 or 11 may need to install
+[Windows Subsystem for Linux](https://learn.microsoft.com/en-us/windows/wsl/install)
+(WSL) in order to be able to build from source. WSL provides a Linux environment
+that runs inside your existing Windows installation. You can then run regular
+Linux software, including the Linux versions of Solana CLI.
+
+After installed, run `wsl` from your Windows terminal, then continue through the
+[Debian and Other Linux Distributions](#for-debian-and-other-linux-distributions)
+above.
+
+:::
+
 ### Building from Source
 
 After installing the prerequisites, proceed with building Solana from source, 
