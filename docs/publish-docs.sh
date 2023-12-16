@@ -45,7 +45,7 @@ cat > "$CONFIG_FILE" <<EOF
     { "source": "/apps/builtins", "destination": "/developing/runtime-facilities/programs" },
     { "source": "/apps/backwards-compatibility", "destination": "/developing/backwards-compatibility" },
     { "source": "/implemented-proposals/secp256k1_instruction", "destination": "/developing/runtime-facilities/programs#secp256k1-program" },
-    
+
     { "source": "/implemented-proposals/implemented-proposals", "destination": "/implemented-proposals" },
     { "source": "/cli/install-solana-cli-tools", "destination": "/cli/install" },
     { "source": "/cli/conventions", "destination": "/cli/intro" },
@@ -63,11 +63,11 @@ cat > "$CONFIG_FILE" <<EOF
     { "source": "/wallet-guide/file-system-wallet", "destination": "/cli/wallets/file-system" },
     { "source": "/wallet-guide/hardware-wallet", "destination": "/cli/wallets/hardware-wallet" },
     { "source": "/wallet-guide/hardware-wallet/ledger", "destination": "/cli/wallets/hardware-wallet/ledger" },
-    
+
     { "source": "/cluster/overview", "destination": "/clusters/index" },
     { "source": "/cluster/bench-tps", "destination": "/clusters/benchmark" },
     { "source": "/cluster/performance-metrics", "destination": "/clusters/metrics" },
-    
+
     { "source": "/running-validator", "destination": "/operations" },
     { "source": "/validator/get-started/setup-a-validator", "destination": "/operations/setup-a-validator" },
     { "source": "/validator/get-started/setup-an-rpc-node", "destination": "/operations/setup-an-rpc-node" },
@@ -78,7 +78,7 @@ cat > "$CONFIG_FILE" <<EOF
     { "source": "/validator/overview/validator-prerequisites", "destination": "/operations/prerequisites" },
     { "source": "/validator/overview/validator-initiatives", "destination": "/operations/validator-initiatives" },
     { "source": "/running-validator/validator-reqs", "destination": "/operations/requirements" },
-    
+
     { "source": "/running-validator/validator-troubleshoot", "destination": "/operations/guides/validator-troubleshoot" },
     { "source": "/running-validator/validator-start", "destination": "/operations/guides/validator-start" },
     { "source": "/running-validator/vote-accounts", "destination": "/operations/guides/vote-accounts" },
@@ -87,7 +87,7 @@ cat > "$CONFIG_FILE" <<EOF
     { "source": "/running-validator/validator-info", "destination": "/operations/guides/validator-info" },
     { "source": "/running-validator/validator-failover", "destination": "/operations/guides/validator-failover" },
     { "source": "/running-validator/restart-cluster", "destination": "/operations/guides/restart-cluster" },
-    
+
     { "source": "/cluster/synchronization", "destination": "/consensus/synchronization" },
     { "source": "/cluster/leader-rotation", "destination": "/consensus/leader-rotation" },
     { "source": "/cluster/fork-generation", "destination": "/consensus/fork-generation" },
@@ -96,7 +96,7 @@ cat > "$CONFIG_FILE" <<EOF
     { "source": "/cluster/commitments", "destination": "/consensus/commitments" },
     { "source": "/cluster/vote-signing", "destination": "/consensus/vote-signing" },
     { "source": "/cluster/stake-delegation-and-rewards", "destination": "/consensus/stake-delegation-and-rewards" },
-    
+
     { "source": "/developing/backwards-compatibility", "destination": "/backwards-compatibility" },
     { "source": "/validator/faq", "destination": "/faq" },
     { "source": "/developing/plugins/geyser-plugins", "destination": "/validator/geyser" },
@@ -104,7 +104,7 @@ cat > "$CONFIG_FILE" <<EOF
     { "source": "/validator/overview/what-is-a-validator", "destination": "/what-is-a-validator" },
 
     { "source": "/developing/runtime-facilities/:path*", "destination": "/runtime/:path*" },
-    
+
     { "destination": "https://solana.com/docs/rpc/:path*", "source": "/api/:path*" },
     { "destination": "https://solana.com/docs/rpc", "source": "/developing/clients/jsonrpc-api" },
     { "destination": "https://solana.com/docs/rpc", "source": "/apps/jsonrpc-api" },
