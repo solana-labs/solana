@@ -104,6 +104,7 @@ pub(crate) fn configure_server(
 fn rt() -> Runtime {
     tokio::runtime::Builder::new_multi_thread()
         .thread_name("quic-server")
+        .worker_threads(4)
         .enable_all()
         .build()
         .unwrap()
