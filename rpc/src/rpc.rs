@@ -87,10 +87,10 @@ use {
     solana_storage_bigtable::Error as StorageError,
     solana_streamer::socket::SocketAddrSpace,
     solana_transaction_status::{
-        BlockEncodingOptions, ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
-        ConfirmedTransactionWithStatusMeta, EncodedConfirmedTransactionWithStatusMeta, Reward,
-        RewardType, TransactionBinaryEncoding, TransactionConfirmationStatus, TransactionStatus,
-        UiConfirmedBlock, UiTransactionEncoding,
+        map_inner_instructions, BlockEncodingOptions, ConfirmedBlock,
+        ConfirmedTransactionStatusWithSignature, ConfirmedTransactionWithStatusMeta,
+        EncodedConfirmedTransactionWithStatusMeta, Reward, RewardType, TransactionBinaryEncoding,
+        TransactionConfirmationStatus, TransactionStatus, UiConfirmedBlock, UiTransactionEncoding,
     },
     solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY},
     spl_token_2022::{
@@ -3266,6 +3266,7 @@ pub mod rpc_full {
     use {
         super::*,
         solana_sdk::message::{SanitizedVersionedMessage, VersionedMessage},
+        solana_transaction_status::UiInnerInstructions,
     };
     #[rpc]
     pub trait Full {
@@ -3676,7 +3677,8 @@ pub mod rpc_full {
                     post_simulation_accounts: _,
                     units_consumed,
                     return_data,
-                } = preflight_bank.simulate_transaction(transaction)
+                    inner_instructions: _, // Always `None` due to `enable_cpi_recording = false`
+                } = preflight_bank.simulate_transaction(&transaction, false)
                 {
                     match err {
                         TransactionError::BlockhashNotFound => {
@@ -3694,6 +3696,7 @@ pub mod rpc_full {
                             accounts: None,
                             units_consumed: Some(units_consumed),
                             return_data: return_data.map(|return_data| return_data.into()),
+                            inner_instructions: None,
                         },
                     }
                     .into());
@@ -3724,6 +3727,7 @@ pub mod rpc_full {
                 encoding,
                 accounts: config_accounts,
                 min_context_slot,
+                inner_instructions: enable_cpi_recording,
             } = config.unwrap_or_default();
             let tx_encoding = encoding.unwrap_or(UiTransactionEncoding::Base58);
             let binary_encoding = tx_encoding.into_binary_encoding().ok_or_else(|| {
@@ -3753,7 +3757,6 @@ pub mod rpc_full {
             if sig_verify {
                 verify_transaction(&transaction, &bank.feature_set)?;
             }
-            let number_of_accounts = transaction.message().account_keys().len();
 
             let TransactionSimulationResult {
                 result,
@@ -3761,7 +3764,11 @@ pub mod rpc_full {
                 post_simulation_accounts,
                 units_consumed,
                 return_data,
-            } = bank.simulate_transaction(transaction);
+                inner_instructions,
+            } = bank.simulate_transaction(&transaction, enable_cpi_recording);
+
+            let account_keys = transaction.message().account_keys();
+            let number_of_accounts = account_keys.len();
 
             let accounts = if let Some(config_accounts) = config_accounts {
                 let accounts_encoding = config_accounts
@@ -3804,6 +3811,12 @@ pub mod rpc_full {
                 None
             };
 
+            let inner_instructions = inner_instructions.map(|info| {
+                map_inner_instructions(info)
+                    .map(|converted| UiInnerInstructions::parse(converted, &account_keys))
+                    .collect()
+            });
+
             Ok(new_response(
                 bank,
                 RpcSimulateTransactionResult {
@@ -3812,6 +3825,7 @@ pub mod rpc_full {
                     accounts,
                     units_consumed: Some(units_consumed),
                     return_data: return_data.map(|return_data| return_data.into()),
+                    inner_instructions,
                 },
             ))
         }
@@ -5913,6 +5927,7 @@ pub mod tests {
                         }
                     ],
                     "err":null,
+                    "innerInstructions": null,
                     "logs":[
                         "Program 11111111111111111111111111111111 invoke [1]",
                         "Program 11111111111111111111111111111111 success"
@@ -5997,6 +6012,7 @@ pub mod tests {
                 "value":{
                     "accounts":null,
                     "err":null,
+                    "innerInstructions":null,
                     "logs":[
                         "Program 11111111111111111111111111111111 invoke [1]",
                         "Program 11111111111111111111111111111111 success"
@@ -6025,6 +6041,7 @@ pub mod tests {
                 "value":{
                     "accounts":null,
                     "err":null,
+                    "innerInstructions":null,
                     "logs":[
                         "Program 11111111111111111111111111111111 invoke [1]",
                         "Program 11111111111111111111111111111111 success"
@@ -6077,6 +6094,7 @@ pub mod tests {
                 "value":{
                     "err":"BlockhashNotFound",
                     "accounts":null,
+                    "innerInstructions":null,
                     "logs":[],
                     "returnData":null,
                     "unitsConsumed":0,
@@ -6103,6 +6121,7 @@ pub mod tests {
                 "value":{
                     "accounts":null,
                     "err":null,
+                    "innerInstructions":null,
                     "logs":[
                         "Program 11111111111111111111111111111111 invoke [1]",
                         "Program 11111111111111111111111111111111 success"
@@ -6483,7 +6502,7 @@ pub mod tests {
         assert_eq!(
             res,
             Some(
-                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Blockhash not found","data":{"accounts":null,"err":"BlockhashNotFound","logs":[],"returnData":null,"unitsConsumed":0}},"id":1}"#.to_string(),
+                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Blockhash not found","data":{"accounts":null,"err":"BlockhashNotFound","innerInstructions":null,"logs":[],"returnData":null,"unitsConsumed":0}},"id":1}"#.to_string(),
             )
         );
 

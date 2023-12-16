@@ -14136,6 +14136,6 @@ fn test_failed_simulation_compute_units() {
 
     bank.freeze();
     let sanitized = SanitizedTransaction::from_transaction_for_tests(transaction);
-    let simulation = bank.simulate_transaction(sanitized);
+    let simulation = bank.simulate_transaction(&sanitized, false);
     assert_eq!(TEST_UNITS, simulation.units_consumed);
 }

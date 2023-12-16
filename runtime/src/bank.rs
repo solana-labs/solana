@@ -150,6 +150,7 @@ use {
         hash::{extend_and_hash, hashv, Hash},
         incinerator,
         inflation::Inflation,
+        inner_instruction::InnerInstructions,
         instruction::InstructionError,
         loader_v4::{self, LoaderV4State, LoaderV4Status},
         message::{AccountKeys, SanitizedMessage},
@@ -338,6 +339,7 @@ pub struct TransactionSimulationResult {
     pub post_simulation_accounts: Vec<TransactionAccount>,
     pub units_consumed: u64,
     pub return_data: Option<TransactionReturnData>,
+    pub inner_instructions: Option<Vec<InnerInstructions>>,
 }
 pub struct TransactionBalancesSet {
     pub pre_balances: TransactionBalances,
@@ -4308,23 +4310,25 @@ impl Bank {
     /// Run transactions against a frozen bank without committing the results
     pub fn simulate_transaction(
         &self,
-        transaction: SanitizedTransaction,
+        transaction: &SanitizedTransaction,
+        enable_cpi_recording: bool,
     ) -> TransactionSimulationResult {
         assert!(self.is_frozen(), "simulation bank must be frozen");
 
-        self.simulate_transaction_unchecked(transaction)
+        self.simulate_transaction_unchecked(transaction, enable_cpi_recording)
     }
 
     /// Run transactions against a bank without committing the results; does not check if the bank
     /// is frozen, enabling use in single-Bank test frameworks
     pub fn simulate_transaction_unchecked(
         &self,
-        transaction: SanitizedTransaction,
+        transaction: &SanitizedTransaction,
+        enable_cpi_recording: bool,
     ) -> TransactionSimulationResult {
         let account_keys = transaction.message().account_keys();
         let number_of_accounts = account_keys.len();
         let account_overrides = self.get_account_overrides_for_simulation(&account_keys);
-        let batch = self.prepare_unlocked_batch_from_single_tx(&transaction);
+        let batch = self.prepare_unlocked_batch_from_single_tx(transaction);
         let mut timings = ExecuteTimings::default();
 
         let LoadAndExecuteTransactionsOutput {
@@ -4337,7 +4341,7 @@ impl Bank {
             // for processing. During forwarding, the transaction could expire if the
             // delay is not accounted for.
             MAX_PROCESSING_AGE - MAX_TRANSACTION_FORWARDING_DELAY,
-            false,
+            enable_cpi_recording,
             true,
             true,
             &mut timings,
@@ -4374,11 +4378,13 @@ impl Bank {
 
         let execution_result = execution_results.pop().unwrap();
         let flattened_result = execution_result.flattened_result();
-        let (logs, return_data) = match execution_result {
-            TransactionExecutionResult::Executed { details, .. } => {
-                (details.log_messages, details.return_data)
-            }
-            TransactionExecutionResult::NotExecuted(_) => (None, None),
+        let (logs, return_data, inner_instructions) = match execution_result {
+            TransactionExecutionResult::Executed { details, .. } => (
+                details.log_messages,
+                details.return_data,
+                details.inner_instructions,
+            ),
+            TransactionExecutionResult::NotExecuted(_) => (None, None, None),
         };
         let logs = logs.unwrap_or_default();
 
@@ -4388,6 +4394,7 @@ impl Bank {
             post_simulation_accounts,
             units_consumed,
             return_data,
+            inner_instructions,
         }
     }
 
