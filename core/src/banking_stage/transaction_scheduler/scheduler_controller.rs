@@ -115,11 +115,9 @@ impl SchedulerController {
         match decision {
             BufferedPacketsDecision::Consume(bank_start) => {
                 let (scheduling_summary, schedule_time_us) =
-                    measure_us!(self
-                        .scheduler
-                        .schedule(&mut self.container, |txs, results| {
-                            Self::pre_scheduling_filter(txs, results, &bank_start.working_bank)
-                        })?);
+                    measure_us!(self.scheduler.schedule(&self.container, |txs, results| {
+                        Self::pre_scheduling_filter(txs, results, &bank_start.working_bank)
+                    })?);
                 saturating_add_assign!(
                     self.count_metrics.num_scheduled,
                     scheduling_summary.num_scheduled
@@ -200,17 +198,15 @@ impl SchedulerController {
 
         for chunk in transaction_ids.chunks(CHUNK_SIZE) {
             let lock_results = vec![Ok(()); chunk.len()];
-            let sanitized_txs: Vec<_> = chunk
+            // Temporary vector to hold the RefMut from internal data structure...
+            let tx_refs: Vec<_> = chunk
                 .iter()
-                .map(|id| {
-                    &self
-                        .container
-                        .get_transaction_ttl(&id.id)
-                        .expect("transaction must exist")
-                        .transaction
-                })
+                .map(|id| self.container.get_mut_transaction_state(&id.id).unwrap())
                 .collect();
-
+            let sanitized_txs: Vec<_> = tx_refs
+                .iter()
+                .map(|tx_ref| &tx_ref.transaction_ttl().transaction)
+                .collect();
             let check_results = bank.check_transactions(
                 &sanitized_txs,
                 &lock_results,
@@ -230,7 +226,7 @@ impl SchedulerController {
     /// Receives completed transactions from the workers and updates metrics.
     fn receive_completed(&mut self) -> Result<(), SchedulerError> {
         let ((num_transactions, num_retryable), receive_completed_time_us) =
-            measure_us!(self.scheduler.receive_completed(&mut self.container)?);
+            measure_us!(self.scheduler.receive_completed(&self.container)?);
         saturating_add_assign!(self.count_metrics.num_finished, num_transactions);
         saturating_add_assign!(self.count_metrics.num_retryable, num_retryable);
         saturating_add_assign!(
