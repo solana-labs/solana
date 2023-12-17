@@ -223,12 +223,13 @@ mod serde_snapshot_tests {
     fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         solana_logger::setup();
         let (_accounts_dir, paths) = get_temp_accounts_paths(4).unwrap();
-        let accounts = Accounts::new_with_config_for_tests(
+        let accounts_db = AccountsDb::new_with_config_for_tests(
             paths,
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
+        let accounts = Accounts::new(Arc::new(accounts_db));
 
         let slot = 0;
         let mut pubkeys: Vec<Pubkey> = vec![];
@@ -260,7 +261,7 @@ mod serde_snapshot_tests {
         let buf = writer.into_inner();
         let mut reader = BufReader::new(&buf[..]);
         let (_accounts_dir, daccounts_paths) = get_temp_accounts_paths(2).unwrap();
-        let daccounts = Accounts::new_empty(
+        let daccounts = Accounts::new(Arc::new(
             accountsdb_from_stream(
                 serde_style,
                 &mut reader,
@@ -268,7 +269,7 @@ mod serde_snapshot_tests {
                 storage_and_next_append_vec_id,
             )
             .unwrap(),
-        );
+        ));
         check_accounts_local(&daccounts, &pubkeys, 100);
         let daccounts_delta_hash = daccounts.accounts_db.calculate_accounts_delta_hash(slot);
         assert_eq!(accounts_delta_hash, daccounts_delta_hash);
@@ -286,7 +287,7 @@ mod serde_snapshot_tests {
         solana_logger::setup();
         let unrooted_slot = 9;
         let unrooted_bank_id = 9;
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
         let key = solana_sdk::pubkey::new_rand();
         let account0 = AccountSharedData::new(1, 0, &key);
         db.store_for_tests(unrooted_slot, &[(&key, &account0)]);

@@ -1,6 +1,6 @@
 use {
     crate::tiered_storage::{
-        file::TieredStorageFile, footer::TieredStorageFooter, mmap_utils::get_type,
+        file::TieredStorageFile, footer::TieredStorageFooter, mmap_utils::get_pod,
         TieredStorageResult,
     },
     bytemuck::{Pod, Zeroable},
@@ -66,10 +66,10 @@ impl IndexBlockFormat {
             Self::AddressAndBlockOffsetOnly => {
                 let mut bytes_written = 0;
                 for index_entry in index_entries {
-                    bytes_written += file.write_type(index_entry.address)?;
+                    bytes_written += file.write_pod(index_entry.address)?;
                 }
                 for index_entry in index_entries {
-                    bytes_written += file.write_type(&index_entry.offset)?;
+                    bytes_written += file.write_pod(&index_entry.offset)?;
                 }
                 Ok(bytes_written)
             }
@@ -89,7 +89,7 @@ impl IndexBlockFormat {
                     + std::mem::size_of::<Pubkey>() * (index_offset.0 as usize)
             }
         };
-        let (address, _) = get_type::<Pubkey>(mmap, account_offset)?;
+        let (address, _) = get_pod::<Pubkey>(mmap, account_offset)?;
         Ok(address)
     }
 
@@ -105,7 +105,7 @@ impl IndexBlockFormat {
                 let offset = footer.index_block_offset as usize
                     + std::mem::size_of::<Pubkey>() * footer.account_entry_count as usize
                     + std::mem::size_of::<Offset>() * index_offset.0 as usize;
-                let (account_offset, _) = get_type::<Offset>(mmap, offset)?;
+                let (account_offset, _) = get_pod::<Offset>(mmap, offset)?;
 
                 Ok(*account_offset)
             }

@@ -109,12 +109,6 @@ mod ledger_utils;
 mod output;
 mod program;
 
-#[derive(PartialEq, Eq)]
-enum LedgerOutputMethod {
-    Print,
-    Json,
-}
-
 fn get_program_ids(tx: &VersionedTransaction) -> impl Iterator<Item = &Pubkey> + '_ {
     let message = &tx.message;
     let account_keys = message.static_account_keys();
@@ -134,9 +128,9 @@ fn parse_encoding_format(matches: &ArgMatches<'_>) -> UiAccountEncoding {
     }
 }
 
-fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &LedgerOutputMethod) {
+fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &OutputFormat) {
     // Note: rewards are not output in JSON yet
-    if *method == LedgerOutputMethod::Print {
+    if *method == OutputFormat::Display {
         if let Ok(Some(rewards)) = blockstore.read_rewards(slot) {
             if !rewards.is_empty() {
                 println!("  Rewards:");
@@ -171,13 +165,13 @@ fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &LedgerOutpu
 
 fn output_entry(
     blockstore: &Blockstore,
-    method: &LedgerOutputMethod,
+    method: &OutputFormat,
     slot: Slot,
     entry_index: usize,
     entry: Entry,
 ) {
     match method {
-        LedgerOutputMethod::Print => {
+        OutputFormat::Display => {
             println!(
                 "  Entry {} - num_hashes: {}, hash: {}, transactions: {}",
                 entry_index,
@@ -208,11 +202,12 @@ fn output_entry(
                 );
             }
         }
-        LedgerOutputMethod::Json => {
+        OutputFormat::Json => {
             // Note: transaction status is not output in JSON yet
             serde_json::to_writer(stdout(), &entry).expect("serialize entry");
             stdout().write_all(b",\n").expect("newline");
         }
+        _ => unreachable!(),
     }
 }
 
@@ -220,13 +215,13 @@ fn output_slot(
     blockstore: &Blockstore,
     slot: Slot,
     allow_dead_slots: bool,
-    method: &LedgerOutputMethod,
+    method: &OutputFormat,
     verbose_level: u64,
     all_program_ids: &mut HashMap<Pubkey, u64>,
 ) -> Result<(), String> {
     if blockstore.is_dead(slot) {
         if allow_dead_slots {
-            if *method == LedgerOutputMethod::Print {
+            if *method == OutputFormat::Display {
                 println!(" Slot is dead");
             }
         } else {
@@ -238,7 +233,7 @@ fn output_slot(
         .get_slot_entries_with_shred_info(slot, 0, allow_dead_slots)
         .map_err(|err| format!("Failed to load entries for slot {slot}: {err:?}"))?;
 
-    if *method == LedgerOutputMethod::Print {
+    if *method == OutputFormat::Display {
         if let Ok(Some(meta)) = blockstore.meta(slot) {
             if verbose_level >= 1 {
                 println!("  {meta:?} is_full: {is_full}");
@@ -297,7 +292,7 @@ fn output_ledger(
     starting_slot: Slot,
     ending_slot: Slot,
     allow_dead_slots: bool,
-    method: LedgerOutputMethod,
+    method: OutputFormat,
     num_slots: Option<Slot>,
     verbose_level: u64,
     only_rooted: bool,
@@ -309,7 +304,7 @@ fn output_ledger(
             exit(1);
         });
 
-    if method == LedgerOutputMethod::Json {
+    if method == OutputFormat::Json {
         stdout().write_all(b"{\"ledger\":[\n").expect("open array");
     }
 
@@ -325,13 +320,14 @@ fn output_ledger(
         }
 
         match method {
-            LedgerOutputMethod::Print => {
+            OutputFormat::Display => {
                 println!("Slot {} root?: {}", slot, blockstore.is_root(slot))
             }
-            LedgerOutputMethod::Json => {
+            OutputFormat::Json => {
                 serde_json::to_writer(stdout(), &slot_meta).expect("serialize slot_meta");
                 stdout().write_all(b",\n").expect("newline");
             }
+            _ => unreachable!(),
         }
 
         if let Err(err) = output_slot(
@@ -350,7 +346,7 @@ fn output_ledger(
         }
     }
 
-    if method == LedgerOutputMethod::Json {
+    if method == OutputFormat::Json {
         stdout().write_all(b"\n]}\n").expect("close array");
     } else {
         println!("Summary of Programs:");
@@ -1180,9 +1176,9 @@ fn main() {
         .validator(is_slot)
         .takes_value(true)
         .help("Halt processing at the given slot");
-    let no_os_memory_stats_reporting_arg = Arg::with_name("no_os_memory_stats_reporting")
-        .long("no-os-memory-stats-reporting")
-        .help("Disable reporting of OS memory statistics.");
+    let os_memory_stats_reporting_arg = Arg::with_name("os_memory_stats_reporting")
+        .long("os-memory-stats-reporting")
+        .help("Enable reporting of OS memory statistics.");
     let accounts_db_skip_initial_hash_calc_arg =
         Arg::with_name("accounts_db_skip_initial_hash_calculation")
             .long("accounts-db-skip-initial-hash-calculation")
@@ -1638,7 +1634,7 @@ fn main() {
                 .arg(&halt_at_slot_store_hash_raw_data)
                 .arg(&hard_forks_arg)
                 .arg(&accounts_db_test_hash_calculation_arg)
-                .arg(&no_os_memory_stats_reporting_arg)
+                .arg(&os_memory_stats_reporting_arg)
                 .arg(&allow_dead_slots_arg)
                 .arg(&max_genesis_archive_unpacked_size_arg)
                 .arg(&debug_key_arg)
@@ -2303,7 +2299,7 @@ fn main() {
                     starting_slot,
                     ending_slot,
                     allow_dead_slots,
-                    LedgerOutputMethod::Print,
+                    OutputFormat::Display,
                     num_slots,
                     verbose_level,
                     only_rooted,
@@ -2531,7 +2527,7 @@ fn main() {
                         &blockstore,
                         slot,
                         allow_dead_slots,
-                        &LedgerOutputMethod::Print,
+                        &OutputFormat::Display,
                         verbose_level,
                         &mut HashMap::new(),
                     ) {
@@ -2553,7 +2549,7 @@ fn main() {
                     starting_slot,
                     Slot::MAX,
                     allow_dead_slots,
-                    LedgerOutputMethod::Json,
+                    OutputFormat::Json,
                     None,
                     std::u64::MAX,
                     true,
@@ -2688,12 +2684,11 @@ fn main() {
             }
             ("verify", Some(arg_matches)) => {
                 let exit_signal = Arc::new(AtomicBool::new(false));
-                let no_os_memory_stats_reporting =
-                    arg_matches.is_present("no_os_memory_stats_reporting");
+                let report_os_memory_stats = arg_matches.is_present("os_memory_stats_reporting");
                 let system_monitor_service = SystemMonitorService::new(
                     Arc::clone(&exit_signal),
                     SystemMonitorStatsReportConfig {
-                        report_os_memory_stats: !no_os_memory_stats_reporting,
+                        report_os_memory_stats,
                         report_os_network_stats: false,
                         report_os_cpu_stats: false,
                         report_os_disk_stats: false,

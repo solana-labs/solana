@@ -183,16 +183,6 @@ async fn compare_blocks(
     config: solana_storage_bigtable::LedgerStorageConfig,
     ref_config: solana_storage_bigtable::LedgerStorageConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let owned_bigtable = solana_storage_bigtable::LedgerStorage::new_with_config(config)
-        .await
-        .map_err(|err| format!("failed to connect to owned bigtable: {err:?}"))?;
-    let owned_bigtable_slots = owned_bigtable
-        .get_confirmed_blocks(starting_slot, limit)
-        .await?;
-    info!(
-        "owned bigtable {} blocks found ",
-        owned_bigtable_slots.len()
-    );
     let reference_bigtable = solana_storage_bigtable::LedgerStorage::new_with_config(ref_config)
         .await
         .map_err(|err| format!("failed to connect to reference bigtable: {err:?}"))?;
@@ -205,13 +195,38 @@ async fn compare_blocks(
         reference_bigtable_slots.len(),
     );
 
+    if reference_bigtable_slots.is_empty() {
+        println!("Reference bigtable is empty after {starting_slot}. Aborting.");
+        return Ok(());
+    }
+
+    let owned_bigtable = solana_storage_bigtable::LedgerStorage::new_with_config(config)
+        .await
+        .map_err(|err| format!("failed to connect to owned bigtable: {err:?}"))?;
+    let owned_bigtable_slots = owned_bigtable
+        .get_confirmed_blocks(starting_slot, limit)
+        .await?;
+    info!(
+        "owned bigtable {} blocks found ",
+        owned_bigtable_slots.len()
+    );
+
+    let MissingBlocksData {
+        last_block_checked,
+        missing_blocks,
+        superfluous_blocks,
+        num_reference_blocks,
+        num_owned_blocks,
+    } = missing_blocks(&reference_bigtable_slots, &owned_bigtable_slots);
+
     println!(
         "{}",
         json!({
-            "num_reference_slots": json!(reference_bigtable_slots.len()),
-            "num_owned_slots": json!(owned_bigtable_slots.len()),
-            "reference_last_block": json!(reference_bigtable_slots.len().checked_sub(1).map(|i| reference_bigtable_slots[i])),
-            "missing_blocks":  json!(missing_blocks(&reference_bigtable_slots, &owned_bigtable_slots)),
+            "num_reference_slots": json!(num_reference_blocks),
+            "num_owned_slots": json!(num_owned_blocks),
+            "reference_last_block": json!(last_block_checked),
+            "missing_blocks":  json!(missing_blocks),
+            "superfluous_blocks":  json!(superfluous_blocks),
         })
     );
 
@@ -1216,21 +1231,80 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
     });
 }
 
-fn missing_blocks(reference: &[Slot], owned: &[Slot]) -> Vec<Slot> {
-    if owned.is_empty() && !reference.is_empty() {
-        return reference.to_owned();
-    } else if owned.is_empty() {
-        return vec![];
+#[derive(Debug, PartialEq)]
+struct MissingBlocksData {
+    last_block_checked: Slot,
+    missing_blocks: Vec<Slot>,
+    superfluous_blocks: Vec<Slot>,
+    num_reference_blocks: usize,
+    num_owned_blocks: usize,
+}
+
+fn missing_blocks(reference: &[Slot], owned: &[Slot]) -> MissingBlocksData {
+    // Generally, callers should return early and not bother calling
+    // `missing_blocks()` when the reference set is empty. This code block
+    // included for completeness, to prevent panics.
+    if reference.is_empty() {
+        return MissingBlocksData {
+            last_block_checked: owned.last().cloned().unwrap_or_default(),
+            missing_blocks: vec![],
+            superfluous_blocks: owned.to_owned(),
+            num_reference_blocks: 0,
+            num_owned_blocks: owned.len(),
+        };
     }
 
-    let owned_hashset: HashSet<_> = owned.iter().collect();
-    let mut missing_slots = vec![];
-    for slot in reference {
-        if !owned_hashset.contains(slot) {
-            missing_slots.push(slot.to_owned());
-        }
+    // Because the owned bigtable may include superfluous slots, stop checking
+    // the reference set at owned.last() or else the remaining reference slots
+    // will show up as missing.
+    let last_reference_block = reference
+        .last()
+        .expect("already returned if reference is empty");
+    let last_block_checked = owned
+        .last()
+        .map(|last_owned_block| min(last_owned_block, last_reference_block))
+        .unwrap_or(last_reference_block);
+
+    if owned.is_empty() && !reference.is_empty() {
+        return MissingBlocksData {
+            last_block_checked: *last_block_checked,
+            missing_blocks: reference.to_owned(),
+            superfluous_blocks: vec![],
+            num_reference_blocks: reference.len(),
+            num_owned_blocks: 0,
+        };
     }
-    missing_slots
+
+    let owned_hashset: HashSet<_> = owned
+        .iter()
+        .take_while(|&slot| slot <= last_block_checked)
+        .cloned()
+        .collect();
+    let reference_hashset: HashSet<_> = reference
+        .iter()
+        .take_while(|&slot| slot <= last_block_checked)
+        .cloned()
+        .collect();
+
+    let mut missing_blocks: Vec<_> = reference_hashset
+        .difference(&owned_hashset)
+        .cloned()
+        .collect();
+    missing_blocks.sort_unstable(); // Unstable sort is fine, as we've already ensured no duplicates
+
+    let mut superfluous_blocks: Vec<_> = owned_hashset
+        .difference(&reference_hashset)
+        .cloned()
+        .collect();
+    superfluous_blocks.sort_unstable(); // Unstable sort is fine, as we've already ensured no duplicates
+
+    MissingBlocksData {
+        last_block_checked: *last_block_checked,
+        missing_blocks,
+        superfluous_blocks,
+        num_reference_blocks: reference_hashset.len(),
+        num_owned_blocks: owned_hashset.len(),
+    }
 }
 
 #[cfg(test)]
@@ -1244,25 +1318,66 @@ mod tests {
         let owned_slots_leftshift = vec![0, 25, 26, 27, 28, 29, 30, 31, 32];
         let owned_slots_rightshift = vec![0, 44, 46, 47, 48, 49, 50, 51, 52, 53, 54];
         let missing_slots = vec![37, 41, 42];
-        let missing_slots_leftshift = vec![37, 38, 39, 40, 41, 42, 43, 44, 45];
         let missing_slots_rightshift = vec![37, 38, 39, 40, 41, 42, 43, 45];
-        assert!(missing_blocks(&[], &[]).is_empty());
-        assert!(missing_blocks(&[], &owned_slots).is_empty());
+        assert_eq!(
+            missing_blocks(&[], &[]),
+            MissingBlocksData {
+                last_block_checked: 0,
+                missing_blocks: vec![],
+                superfluous_blocks: vec![],
+                num_reference_blocks: 0,
+                num_owned_blocks: 0,
+            }
+        );
+        assert_eq!(
+            missing_blocks(&[], &owned_slots),
+            MissingBlocksData {
+                last_block_checked: *owned_slots.last().unwrap(),
+                missing_blocks: vec![],
+                superfluous_blocks: owned_slots.clone(),
+                num_reference_blocks: 0,
+                num_owned_blocks: owned_slots.len(),
+            }
+        );
         assert_eq!(
             missing_blocks(&reference_slots, &[]),
-            reference_slots.to_owned()
+            MissingBlocksData {
+                last_block_checked: *reference_slots.last().unwrap(),
+                missing_blocks: reference_slots.clone(),
+                superfluous_blocks: vec![],
+                num_reference_blocks: reference_slots.len(),
+                num_owned_blocks: 0,
+            }
         );
         assert_eq!(
             missing_blocks(&reference_slots, &owned_slots),
-            missing_slots
+            MissingBlocksData {
+                last_block_checked: *reference_slots.last().unwrap(), // reference_slots.last() < owned_slots.last()
+                missing_blocks: missing_slots.clone(),
+                superfluous_blocks: vec![],
+                num_reference_blocks: reference_slots.len(),
+                num_owned_blocks: owned_slots.len() - 2,
+            }
         );
         assert_eq!(
             missing_blocks(&reference_slots, &owned_slots_leftshift),
-            missing_slots_leftshift
+            MissingBlocksData {
+                last_block_checked: *owned_slots_leftshift.last().unwrap(),
+                missing_blocks: vec![],
+                superfluous_blocks: owned_slots_leftshift[1..].to_vec(),
+                num_reference_blocks: 1,
+                num_owned_blocks: owned_slots_leftshift.len(),
+            }
         );
         assert_eq!(
             missing_blocks(&reference_slots, &owned_slots_rightshift),
-            missing_slots_rightshift
+            MissingBlocksData {
+                last_block_checked: *reference_slots.last().unwrap(), // reference_slots.last() < missing_slots_rightshift.last()
+                missing_blocks: missing_slots_rightshift.clone(),
+                superfluous_blocks: vec![],
+                num_reference_blocks: reference_slots.len(),
+                num_owned_blocks: owned_slots_rightshift.len() - 9,
+            }
         );
     }
 }

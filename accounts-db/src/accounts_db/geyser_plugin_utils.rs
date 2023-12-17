@@ -328,7 +328,7 @@ pub mod tests {
 
     #[test]
     fn test_notify_account_at_accounts_update() {
-        let mut accounts = AccountsDb::new_single_for_tests_with_caching();
+        let mut accounts = AccountsDb::new_single_for_tests();
 
         let notifier = GeyserTestPlugin::default();
 

@@ -1,7 +1,6 @@
 use {
     solana_program_runtime::compute_budget_processor::process_compute_budget_instructions,
     solana_sdk::{
-        feature_set::FeatureSet,
         instruction::CompiledInstruction,
         pubkey::Pubkey,
         transaction::{SanitizedTransaction, SanitizedVersionedTransaction},
@@ -24,14 +23,7 @@ pub trait GetTransactionPriorityDetails {
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
         _round_compute_unit_price_enabled: bool,
     ) -> Option<TransactionPriorityDetails> {
-        let mut feature_set = FeatureSet::default();
-        feature_set.activate(
-            &solana_sdk::feature_set::add_set_tx_loaded_accounts_data_size_instruction::id(),
-            0,
-        );
-
-        let compute_budget_limits =
-            process_compute_budget_instructions(instructions, &feature_set).ok()?;
+        let compute_budget_limits = process_compute_budget_instructions(instructions).ok()?;
         Some(TransactionPriorityDetails {
             priority: compute_budget_limits.compute_unit_price,
             compute_unit_limit: u64::from(compute_budget_limits.compute_unit_limit),

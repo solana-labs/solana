@@ -319,3 +319,52 @@ account and the buffer account is set to zero. The lamports from the buffer
 account are refunded to a spill account.
 
 Buffers also support `show` and `dump` just like programs do.
+
+### Upgrading program using offline signer as authority
+
+Some security models require separating the signing process from the transaction broadcast, such that the signing keys can be completely disconnected from any network, also known as [offline signing](offline-signing.md).
+
+This section describes how a program developer can use offline signing to upgrade their program, unlike the [previous section](deploy-a-program.md#redeploy-a-program), which assumes the machine is connected to the internet, aka online signing.
+
+Note that only the `upgrade` command can be performed in offline mode. The initial program deployment **must** be performed from an online machine, and only subsequent program upgrades can leverage offline signing.
+
+Assuming your program has been deployed and its upgrade authority has been changed to an
+offline signer,
+a typical setup would consist of 2 different signers:
+- online signer (fee payer for uploading program buffer and upgrading program)
+- offline signer (program upgrade authority)
+
+The general process is as follows:
+1. (online) create buffer and write new program to it
+2. (online) set buffer authority to offline signer
+3. (optional, online) verify the buffer's on-chain contents
+4. (offline) sign a transaction to upgrade the program
+5. (online) use this signature to broadcast the upgrade transaction
+
+```bash
+# (1) (use online machine) create buffer
+solana program write-buffer <PROGRAM_FILEPATH>
+
+# (2) (use online machine) set buffer authority to offline signer
+solana program set-buffer-authority <BUFFER_PUBKEY> --new-buffer-authority <OFFLINE_SIGNER_PUBKEY>
+```
+
+(3) (optional) You may verify that the uploaded program matches the built binary. See
+[dumping a program to a file](deploy-a-program.md#dumping-a-program-to-a-file) for more information and details.
+
+```bash
+# (4) (use offline machine) get a signature for your intent to upgrade program
+solana program upgrade <BUFFER_PUBKEY> <PROGRAM_ID> --sign-only --fee-payer <ONLINE_SIGNER_PUBKEY> --upgrade-authority <OFFLINE_SIGNER> --blockhash <VALUE>
+
+# (5) (use online machine) use this signature to build and broadcast the upgrade transaction on-chain
+solana program upgrade <BUFFER_PUBKEY> <PROGRAM_ID> --fee-payer <ONLINE_SIGNER> --upgrade-authority <OFFLINE_SIGNER_PUBKEY> --blockhash <VALUE> --signer <OFFLINE_SIGNER_PUBKEY>:<OFFLINE_SIGNER_SIGNATURE>
+```
+Note:
+- typically, the output of the previous command(s) will contain some values useful in subsequent commands, e.g.
+  `--program-id`, `--buffer`, `--signer`
+- you need to specify matching (or corresponding) values for params with same names (`--fee-payer`, `--program-id`,
+  `--upgrade-authority`, `--buffer`, `--blockhash`) in offline/online modes
+- you should pre-fill every value except for `blockhash` ahead of time, and once you are ready to act - you'll need to
+  look up a recent `blockhash` and paste it in to generate the offline transaction signature. The `blockhash` expires
+  after ~60 seconds. If you didn't make it in time - just get another fresh hash and repeat until you succeed, or
+  consider using [durable transaction nonces](durable-nonce.md).
