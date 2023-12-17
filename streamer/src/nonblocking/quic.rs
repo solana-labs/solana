@@ -730,9 +730,9 @@ async fn handle_connection(
                     let mut start = Instant::now();
                     while !stream_exit.load(Ordering::Relaxed) {
                         tokio::select! {
-                            () = tokio::time::sleep(exit_check_interval) => {
-                                continue;
-                            },
+                            // () = tokio::time::sleep(exit_check_interval) => {
+                            //     continue;
+                            // },
                             chunk = stream.read_chunk(PACKET_DATA_SIZE, false) => {
                                 if handle_chunk(
                                     chunk,
