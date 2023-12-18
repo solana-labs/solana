@@ -24,6 +24,7 @@ Release channels have their own copy of this changelog:
     feature would have prevented it
   * Updated local ledger storage so that the RPC endpoint
     `getSignaturesForAddress` always returns signatures in block-inclusion order
+  * RPC's `simulate_transaction` now returns `inner_instructions` as `json`/`jsonParsed` (#34313).
 * Upgrade Notes
   * `solana-program` and `solana-sdk` default to support for Borsh v1, with
 limited backward compatibility for v0.10 and v0.9. Please upgrade to Borsh v1.
