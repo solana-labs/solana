@@ -7916,8 +7916,31 @@ impl AccountsDb {
     ///
     /// As part of calculating the accounts delta hash, get a list of accounts modified this slot
     /// (aka dirty pubkeys) and add them to `self.uncleaned_pubkeys` for future cleaning.
-    pub fn calculate_accounts_delta_hash(&self, slot: Slot) -> AccountsDeltaHash {
+    pub fn calculate_accounts_delta_hash(&self, slot: Slot) -> (AccountsDeltaHash, Vec<(Pubkey, AccountHash)>) {
         self.calculate_accounts_delta_hash_internal(slot, None, HashMap::default())
+    }
+
+    pub fn accumulate_accounts_hash(
+        &self,
+        slot: Slot,
+        mut ancestors: Ancestors,
+        accumulated_accounts_hash: &mut Hash,
+        pubkey_hash: Vec<(Pubkey, AccountHash)>,
+    ) {
+        // we are assuming it was easy to lookup a hash for everything written in `slot` when we were calculating the delta hash. So, caller passes in `pubkey_hash`
+        // note we don't need rewrites in `pubkey_hash`. these accounts had the same hash before and after. So, we only have to consider what was written that changed.
+        ancestors.remove(&slot);
+        // if we want to look it up ourselves: let (hashes, _scan_us, _accumulate) = self.get_pubkey_hash_for_slot(slot);
+        let old = pubkey_hash.iter().map(|(k, _)| {
+            self.load_with_fixed_root(&ancestors, k).map(|(account, _)| Self::hash_account(&account, k))
+        }).collect::<Vec<_>>();
+        pubkey_hash.into_iter().zip(old.into_iter()).for_each(|((k, new_hash), old_hash)| {
+            if let Some(old) = old_hash {
+                // todo if old == new, then we can avoid this update altogether
+                // todo subtract accumulated_accounts_hash -= old_hash
+            }
+            // todo add accumulated_accounts_hash += new_hash
+        });
     }
 
     /// Calculate accounts delta hash for `slot`
@@ -7929,8 +7952,9 @@ impl AccountsDb {
         slot: Slot,
         ignore: Option<Pubkey>,
         mut skipped_rewrites: HashMap<Pubkey, AccountHash>,
-    ) -> AccountsDeltaHash {
+    ) -> (AccountsDeltaHash, Vec<(Pubkey, AccountHash)>) {
         let (mut hashes, scan_us, mut accumulate) = self.get_pubkey_hash_for_slot(slot);
+        let original_pubkey_hash = hashes.clone();
         let dirty_keys = hashes.iter().map(|(pubkey, _hash)| *pubkey).collect();
 
         hashes.iter().for_each(|(k, _h)| {
@@ -7969,7 +7993,7 @@ impl AccountsDb {
             .skipped_rewrites_num
             .fetch_add(num_skipped_rewrites, Ordering::Relaxed);
 
-        accounts_delta_hash
+        (accounts_delta_hash, original_pubkey_hash)
     }
 
     /// Set the accounts delta hash for `slot` in the `accounts_delta_hashes` map
