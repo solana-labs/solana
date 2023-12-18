@@ -397,7 +397,6 @@ mod tests {
         let pool = DefaultSchedulerPool::new(None, None, None, ignored_prioritization_fee_cache);
         let bank = Arc::new(Bank::default_for_tests());
         let context = &SchedulingContext::new(bank);
-
         let mut scheduler = pool.do_take_scheduler(context.clone());
 
         // should never panic.
@@ -514,35 +513,41 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
-        let unfunded_keypair = Keypair::new();
-        let tx0 = &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
-            &unfunded_keypair,
-            &solana_sdk::pubkey::new_rand(),
-            2,
-            genesis_config.hash(),
-        ));
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
             DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
         let context = SchedulingContext::new(bank.clone());
+        let mut scheduler = pool.take_scheduler(context);
 
+        let unfunded_keypair = Keypair::new();
+        let bad_tx =
+            &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &unfunded_keypair,
+                &solana_sdk::pubkey::new_rand(),
+                2,
+                genesis_config.hash(),
+            ));
         assert_eq!(bank.transaction_count(), 0);
-        let scheduler = pool.take_scheduler(context);
-        scheduler.schedule_execution(&(tx0, 0));
+        scheduler.schedule_execution(&(bad_tx, 0));
+        scheduler.pause_for_recent_blockhash();
         assert_eq!(bank.transaction_count(), 0);
 
-        let tx1 = &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
-            &mint_keypair,
-            &solana_sdk::pubkey::new_rand(),
-            3,
-            genesis_config.hash(),
-        ));
+        let good_tx_after_bad_tx =
+            &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &mint_keypair,
+                &solana_sdk::pubkey::new_rand(),
+                3,
+                genesis_config.hash(),
+            ));
+        // make sure this tx is really a good one to execute.
         assert_matches!(
-            bank.simulate_transaction_unchecked(tx1, false).result,
+            bank.simulate_transaction_unchecked(good_tx_after_bad_tx, false)
+                .result,
             Ok(_)
         );
-        scheduler.schedule_execution(&(tx1, 0));
+        scheduler.schedule_execution(&(good_tx_after_bad_tx, 0));
+        scheduler.pause_for_recent_blockhash();
         // transaction_count should remain same as scheduler should be bailing out.
         assert_eq!(bank.transaction_count(), 0);
 
