@@ -285,9 +285,11 @@ impl<TH: TaskHandler> InstalledScheduler for PooledScheduler<TH> {
     fn wait_for_termination(
         mut self: Box<Self>,
         _is_dropped: bool,
-    ) -> (UninstalledSchedulerBox, ResultWithTimings) {
-        let result_with_timings = self.do_wait_for_termination().unwrap();
-        (Box::new(self.into_inner()), result_with_timings)
+    ) -> (ResultWithTimings, UninstalledSchedulerBox) {
+        (
+            self.do_wait_for_termination().unwrap(),
+            Box::new(self.into_inner()),
+        )
     }
 
     fn pause_for_recent_blockhash(&mut self) {
@@ -396,7 +398,7 @@ mod tests {
         scheduler.pause_for_recent_blockhash();
         assert_matches!(
             Box::new(scheduler).wait_for_termination(false),
-            (_, (Ok(()), _))
+            ((Ok(()), _), _)
         );
     }
 
@@ -610,7 +612,7 @@ mod tests {
         fn wait_for_termination(
             self: Box<Self>,
             is_dropped: bool,
-        ) -> (UninstalledSchedulerBox, ResultWithTimings) {
+        ) -> (ResultWithTimings, UninstalledSchedulerBox) {
             self.do_wait();
             Box::new(self.0).wait_for_termination(is_dropped)
         }

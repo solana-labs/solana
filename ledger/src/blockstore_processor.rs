@@ -4569,8 +4569,8 @@ pub mod tests {
                     .times(1)
                     .returning(|| ());
                 (
-                    Box::new(mocked_uninstalled_scheduler),
                     (Ok(()), ExecuteTimings::default()),
+                    Box::new(mocked_uninstalled_scheduler),
                 )
             });
         let bank = BankWithScheduler::new(bank, Some(Box::new(mocked_scheduler)));

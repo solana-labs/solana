@@ -119,7 +119,7 @@ pub trait InstalledScheduler: Send + Sync + Debug + 'static {
     fn wait_for_termination(
         self: Box<Self>,
         is_dropped: bool,
-    ) -> (UninstalledSchedulerBox, ResultWithTimings);
+    ) -> (ResultWithTimings, UninstalledSchedulerBox);
 
     /// Pause a scheduler after processing to update bank's recent blockhash.
     ///
@@ -364,7 +364,7 @@ impl BankWithSchedulerInner {
                 scheduler.pause_for_recent_blockhash();
                 None
             } else {
-                let (uninstalled_scheduler, result_with_timings) = scheduler
+                let (result_with_timings, uninstalled_scheduler) = scheduler
                     .take()
                     .map(|scheduler| scheduler.wait_for_termination(reason.is_dropped()))
                     .unzip();
@@ -458,8 +458,8 @@ mod tests {
                         .times(1)
                         .returning(|| ());
                     (
-                        Box::new(mock_uninstalled),
                         (Ok(()), ExecuteTimings::default()),
+                        Box::new(mock_uninstalled),
                     )
                 });
         }
