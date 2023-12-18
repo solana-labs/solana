@@ -483,6 +483,7 @@ impl PartialEq for Bank {
             return true;
         }
         let Self {
+            accumulated_accounts_hash: _,
             skipped_rewrites: _,
             rc: _,
             status_cache: _,
@@ -800,6 +801,8 @@ pub struct Bank {
 
     pub loaded_programs_cache: Arc<RwLock<LoadedPrograms<BankForks>>>,
 
+    pub accumulated_accounts_hash: RwLock<Option<Hash>>,
+
     epoch_reward_status: EpochRewardStatus,
 
     transaction_processor: TransactionBatchProcessor<BankForks>,
@@ -926,6 +929,7 @@ pub(super) enum RewardInterval {
 impl Bank {
     fn default_with_accounts(accounts: Accounts) -> Self {
         let mut bank = Self {
+            accumulated_accounts_hash: RwLock::default(),
             skipped_rewrites: Mutex::default(),
             incremental_snapshot_persistence: None,
             rc: BankRc::new(accounts, Slot::default()),
@@ -1235,6 +1239,7 @@ impl Bank {
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
         let mut new = Self {
+            accumulated_accounts_hash: RwLock::default(),
             skipped_rewrites: Mutex::default(),
             incremental_snapshot_persistence: None,
             rc,
@@ -1753,6 +1758,7 @@ impl Bank {
         );
         let stakes_accounts_load_duration = now.elapsed();
         let mut bank = Self {
+            accumulated_accounts_hash: RwLock::default(),
             skipped_rewrites: Mutex::default(),
             incremental_snapshot_persistence: fields.incremental_snapshot_persistence,
             rc: bank_rc,
@@ -6272,7 +6278,7 @@ impl Bank {
         let ignore = (!self.is_partitioned_rewards_feature_enabled()
             && self.force_partition_rewards_in_first_block_of_epoch())
         .then_some(sysvar::epoch_rewards::id());
-        let accounts_delta_hash = self
+        let (accounts_delta_hash, pubkey_hash) = self
             .rc
             .accounts
             .accounts_db
@@ -6281,6 +6287,24 @@ impl Bank {
                 ignore,
                 self.skipped_rewrites.lock().unwrap().clone(),
             );
+
+        let mut accumulated = self
+            .parent()
+            .map(|bank| {
+                bank.accumulated_accounts_hash
+                    .read()
+                    .unwrap()
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default(); // todo probably not default here
+        self.rc.accounts.accounts_db.accumulate_accounts_hash(
+            slot,
+            self.ancestors.clone(),
+            &mut accumulated,
+            pubkey_hash,
+        );
+
+        *self.accumulated_accounts_hash.write().unwrap() = Some(accumulated);
 
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count());
