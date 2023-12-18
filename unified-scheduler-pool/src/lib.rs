@@ -239,7 +239,7 @@ impl<TH: TaskHandler> SpawnableScheduler<TH> for PooledScheduler<TH> {
 
     fn into_inner(self) -> (ResultWithTimings, Self::Inner) {
         (
-            self.result_with_timings.into_inner().expect("no poisoned"),
+            self.result_with_timings.into_inner().expect("not poisoned"),
             self.inner,
         )
     }
