@@ -36,7 +36,7 @@ use {
 type AtomicSchedulerId = AtomicU64;
 
 // SchedulerPool must be accessed as a dyn trait from solana-runtime, because SchedulerPool
-// contain some internal fields, whose types aren't available in solana-runtime (currently
+// contains some internal fields, whose types aren't available in solana-runtime (currently
 // TransactionStatusSender; also, PohRecorder in the future)...
 #[derive(Debug)]
 pub struct SchedulerPool<S: SpawnableScheduler<TH>, TH: TaskHandler> {
