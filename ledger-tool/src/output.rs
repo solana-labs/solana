@@ -1,7 +1,11 @@
 use {
+    chrono::{Local, TimeZone},
     serde::{Deserialize, Serialize},
-    solana_cli_output::{QuietDisplay, VerboseDisplay},
-    solana_sdk::clock::{Slot, UnixTimestamp},
+    solana_cli_output::{display::writeln_transaction, QuietDisplay, VerboseDisplay},
+    solana_sdk::{
+        clock::{Slot, UnixTimestamp},
+        native_token::lamports_to_sol,
+    },
     solana_transaction_status::{EncodedTransactionWithStatusMeta, EntrySummary, Rewards},
     std::fmt::{self, Display, Formatter, Result},
 };
@@ -119,11 +123,11 @@ impl From<EntrySummary> for CliEntry {
     }
 }
 
-impl From<CliPopulatedEntry> for CliEntry {
-    fn from(populated_entry: CliPopulatedEntry) -> Self {
+impl From<&CliPopulatedEntry> for CliEntry {
+    fn from(populated_entry: &CliPopulatedEntry) -> Self {
         Self {
             num_hashes: populated_entry.num_hashes,
-            hash: populated_entry.hash,
+            hash: populated_entry.hash.clone(),
             num_transactions: populated_entry.num_transactions,
             starting_transaction_index: populated_entry.starting_transaction_index,
         }
@@ -154,6 +158,97 @@ impl VerboseDisplay for CliBlockWithEntries {}
 
 impl fmt::Display for CliBlockWithEntries {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "Slot: {}", self.slot)?;
+        writeln!(
+            f,
+            "Parent Slot: {}",
+            self.encoded_confirmed_block.parent_slot
+        )?;
+        writeln!(f, "Blockhash: {}", self.encoded_confirmed_block.blockhash)?;
+        writeln!(
+            f,
+            "Previous Blockhash: {}",
+            self.encoded_confirmed_block.previous_blockhash
+        )?;
+        if let Some(block_time) = self.encoded_confirmed_block.block_time {
+            writeln!(
+                f,
+                "Block Time: {:?}",
+                Local.timestamp_opt(block_time, 0).unwrap()
+            )?;
+        }
+        if let Some(block_height) = self.encoded_confirmed_block.block_height {
+            writeln!(f, "Block Height: {block_height:?}")?;
+        }
+        if !self.encoded_confirmed_block.rewards.is_empty() {
+            let mut rewards = self.encoded_confirmed_block.rewards.clone();
+            rewards.sort_by(|a, b| a.pubkey.cmp(&b.pubkey));
+            let mut total_rewards = 0;
+            writeln!(f, "Rewards:")?;
+            writeln!(
+                f,
+                "  {:<44}  {:^15}  {:<15}  {:<20}  {:>14}  {:>10}",
+                "Address", "Type", "Amount", "New Balance", "Percent Change", "Commission"
+            )?;
+            for reward in rewards {
+                let sign = if reward.lamports < 0 { "-" } else { "" };
+
+                total_rewards += reward.lamports;
+                #[allow(clippy::format_in_format_args)]
+                writeln!(
+                    f,
+                    "  {:<44}  {:^15}  {:>15}  {}  {}",
+                    reward.pubkey,
+                    if let Some(reward_type) = reward.reward_type {
+                        format!("{reward_type}")
+                    } else {
+                        "-".to_string()
+                    },
+                    format!(
+                        "{}◎{:<14.9}",
+                        sign,
+                        lamports_to_sol(reward.lamports.unsigned_abs())
+                    ),
+                    if reward.post_balance == 0 {
+                        "          -                 -".to_string()
+                    } else {
+                        format!(
+                            "◎{:<19.9}  {:>13.9}%",
+                            lamports_to_sol(reward.post_balance),
+                            (reward.lamports.abs() as f64
+                                / (reward.post_balance as f64 - reward.lamports as f64))
+                                * 100.0
+                        )
+                    },
+                    reward
+                        .commission
+                        .map(|commission| format!("{commission:>9}%"))
+                        .unwrap_or_else(|| "    -".to_string())
+                )?;
+            }
+
+            let sign = if total_rewards < 0 { "-" } else { "" };
+            writeln!(
+                f,
+                "Total Rewards: {}◎{:<12.9}",
+                sign,
+                lamports_to_sol(total_rewards.unsigned_abs())
+            )?;
+        }
+        for (index, entry) in self.encoded_confirmed_block.entries.iter().enumerate() {
+            writeln_entry(f, index, &entry.into(), "")?;
+            for (index, transaction_with_meta) in entry.transactions.iter().enumerate() {
+                writeln!(f, "  Transaction {index}:")?;
+                writeln_transaction(
+                    f,
+                    &transaction_with_meta.transaction.decode().unwrap(),
+                    transaction_with_meta.meta.as_ref(),
+                    "    ",
+                    None,
+                    None,
+                )?;
+            }
+        }
         Ok(())
     }
 }
