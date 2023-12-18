@@ -536,10 +536,7 @@ mod tests {
     use {
         super::*,
         nonce::state::Versions as NonceVersions,
-        solana_accounts_db::{
-            accounts::Accounts, accounts_db::AccountShrinkThreshold,
-            accounts_index::AccountSecondaryIndexes, rent_collector::RentCollector,
-        },
+        solana_accounts_db::{accounts::Accounts, rent_collector::RentCollector},
         solana_program_runtime::{
             compute_budget_processor,
             prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
@@ -548,7 +545,6 @@ mod tests {
             account::{AccountSharedData, WritableAccount},
             compute_budget::ComputeBudgetInstruction,
             epoch_schedule::EpochSchedule,
-            genesis_config::ClusterType,
             hash::Hash,
             instruction::CompiledInstruction,
             message::{Message, SanitizedMessage},
@@ -573,12 +569,7 @@ mod tests {
     ) -> Vec<TransactionLoadResult> {
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(&tx.message().recent_blockhash, lamports_per_signature);
-        let accounts_db = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
         let accounts = Accounts::new(Arc::new(accounts_db));
         for ka in ka.iter() {
             accounts.accounts_db.store_for_tests(0, &[(&ka.0, &ka.1)]);
@@ -1384,12 +1375,7 @@ mod tests {
     #[test]
     fn test_instructions() {
         solana_logger::setup();
-        let accounts_db = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
         let accounts = Accounts::new(Arc::new(accounts_db));
 
         let instructions_key = solana_sdk::sysvar::instructions::id();
@@ -1411,12 +1397,7 @@ mod tests {
     #[test]
     fn test_overrides() {
         solana_logger::setup();
-        let accounts_db = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
         let accounts = Accounts::new(Arc::new(accounts_db));
         let mut account_overrides = AccountOverrides::default();
         let slot_history_id = sysvar::slot_history::id();
