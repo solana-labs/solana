@@ -16,8 +16,9 @@ use {
     solana_runtime::{
         bank::Bank,
         installed_scheduler_pool::{
-            InstalledScheduler, InstalledSchedulerPool, InstalledSchedulerPoolArc,
-            ResultWithTimings, SchedulerId, SchedulingContext, UninstalledScheduler,
+            InstalledScheduler, InstalledSchedulerBox, InstalledSchedulerPool,
+            InstalledSchedulerPoolArc, ResultWithTimings, SchedulerId, SchedulingContext,
+            UninstalledScheduler, UninstalledSchedulerBox,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
@@ -137,7 +138,7 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> SchedulerPool<S, TH> {
 }
 
 impl<S: SpawnableScheduler<TH>, TH: TaskHandler> InstalledSchedulerPool for SchedulerPool<S, TH> {
-    fn take_scheduler(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler> {
+    fn take_scheduler(&self, context: SchedulingContext) -> InstalledSchedulerBox {
         Box::new(self.do_take_scheduler(context))
     }
 }
@@ -284,7 +285,7 @@ impl<TH: TaskHandler> InstalledScheduler for PooledScheduler<TH> {
     fn wait_for_termination(
         mut self: Box<Self>,
         _is_dropped: bool,
-    ) -> (Box<dyn UninstalledScheduler>, ResultWithTimings) {
+    ) -> (UninstalledSchedulerBox, ResultWithTimings) {
         let result_with_timings = self.do_wait_for_termination().unwrap();
         (Box::new(self.into_inner()), result_with_timings)
     }
@@ -609,7 +610,7 @@ mod tests {
         fn wait_for_termination(
             self: Box<Self>,
             is_dropped: bool,
-        ) -> (Box<dyn UninstalledScheduler>, ResultWithTimings) {
+        ) -> (UninstalledSchedulerBox, ResultWithTimings) {
             self.do_wait();
             Box::new(self.0).wait_for_termination(is_dropped)
         }

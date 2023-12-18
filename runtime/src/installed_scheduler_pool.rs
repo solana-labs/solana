@@ -39,7 +39,7 @@ use {
 use {mockall::automock, qualifier_attr::qualifiers};
 
 pub trait InstalledSchedulerPool: Send + Sync + Debug {
-    fn take_scheduler(&self, context: SchedulingContext) -> DefaultInstalledSchedulerBox;
+    fn take_scheduler(&self, context: SchedulingContext) -> InstalledSchedulerBox;
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -119,7 +119,7 @@ pub trait InstalledScheduler: Send + Sync + Debug + 'static {
     fn wait_for_termination(
         self: Box<Self>,
         is_dropped: bool,
-    ) -> (Box<dyn UninstalledScheduler>, ResultWithTimings);
+    ) -> (UninstalledSchedulerBox, ResultWithTimings);
 
     /// Pause a scheduler after processing to update bank's recent blockhash.
     ///
@@ -135,7 +135,8 @@ pub trait UninstalledScheduler: Send + Sync + Debug + 'static {
     fn return_to_pool(self: Box<Self>);
 }
 
-pub type DefaultInstalledSchedulerBox = Box<dyn InstalledScheduler>;
+pub type InstalledSchedulerBox = Box<dyn InstalledScheduler>;
+pub type UninstalledSchedulerBox = Box<dyn UninstalledScheduler>;
 
 pub type InstalledSchedulerPoolArc = Arc<dyn InstalledSchedulerPool>;
 
@@ -238,11 +239,11 @@ pub struct BankWithSchedulerInner {
     bank: Arc<Bank>,
     scheduler: InstalledSchedulerRwLock,
 }
-pub type InstalledSchedulerRwLock = RwLock<Option<DefaultInstalledSchedulerBox>>;
+pub type InstalledSchedulerRwLock = RwLock<Option<InstalledSchedulerBox>>;
 
 impl BankWithScheduler {
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
-    pub(crate) fn new(bank: Arc<Bank>, scheduler: Option<DefaultInstalledSchedulerBox>) -> Self {
+    pub(crate) fn new(bank: Arc<Bank>, scheduler: Option<InstalledSchedulerBox>) -> Self {
         if let Some(bank_in_context) = scheduler
             .as_ref()
             .map(|scheduler| scheduler.context().bank())
@@ -436,7 +437,7 @@ mod tests {
         bank: Arc<Bank>,
         is_dropped_flags: impl Iterator<Item = bool>,
         f: Option<impl Fn(&mut MockInstalledScheduler)>,
-    ) -> DefaultInstalledSchedulerBox {
+    ) -> InstalledSchedulerBox {
         let mut mock = MockInstalledScheduler::new();
         let mut seq = Sequence::new();
 
@@ -473,7 +474,7 @@ mod tests {
     fn setup_mocked_scheduler(
         bank: Arc<Bank>,
         is_dropped_flags: impl Iterator<Item = bool>,
-    ) -> DefaultInstalledSchedulerBox {
+    ) -> InstalledSchedulerBox {
         setup_mocked_scheduler_with_extra(
             bank,
             is_dropped_flags,
