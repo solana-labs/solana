@@ -4547,11 +4547,12 @@ pub mod tests {
         let txs = create_test_transactions(&mint_keypair, &genesis_config.hash());
 
         let mut mocked_scheduler = MockInstalledScheduler::new();
-        let mut seq = mockall::Sequence::new();
+        let seq = Arc::new(Mutex::new(mockall::Sequence::new()));
+        let seq_cloned = seq.clone();
         mocked_scheduler
             .expect_context()
             .times(1)
-            .in_sequence(&mut seq)
+            .in_sequence(&mut seq.lock().unwrap())
             .return_const(context);
         mocked_scheduler
             .expect_schedule_execution()
@@ -4561,12 +4562,13 @@ pub mod tests {
             .expect_wait_for_termination()
             .with(mockall::predicate::eq(true))
             .times(1)
-            .in_sequence(&mut seq)
-            .returning(|_| {
+            .in_sequence(&mut seq.lock().unwrap())
+            .returning(move |_| {
                 let mut mocked_uninstalled_scheduler = MockUninstalledScheduler::new();
                 mocked_uninstalled_scheduler
                     .expect_return_to_pool()
                     .times(1)
+                    .in_sequence(&mut seq_cloned.lock().unwrap())
                     .returning(|| ());
                 (
                     (Ok(()), ExecuteTimings::default()),

@@ -431,6 +431,7 @@ mod tests {
         assert_matches::assert_matches,
         mockall::Sequence,
         solana_sdk::system_transaction,
+        std::sync::Mutex,
     };
 
     fn setup_mocked_scheduler_with_extra(
@@ -439,23 +440,25 @@ mod tests {
         f: Option<impl Fn(&mut MockInstalledScheduler)>,
     ) -> InstalledSchedulerBox {
         let mut mock = MockInstalledScheduler::new();
-        let mut seq = Sequence::new();
+        let seq = Arc::new(Mutex::new(Sequence::new()));
 
         mock.expect_context()
             .times(1)
-            .in_sequence(&mut seq)
+            .in_sequence(&mut seq.lock().unwrap())
             .return_const(SchedulingContext::new(bank));
 
         for wait_reason in is_dropped_flags {
+            let seq_cloned = seq.clone();
             mock.expect_wait_for_termination()
                 .with(mockall::predicate::eq(wait_reason))
                 .times(1)
-                .in_sequence(&mut seq)
+                .in_sequence(&mut seq.lock().unwrap())
                 .returning(move |_| {
                     let mut mock_uninstalled = MockUninstalledScheduler::new();
                     mock_uninstalled
                         .expect_return_to_pool()
                         .times(1)
+                        .in_sequence(&mut seq_cloned.lock().unwrap())
                         .returning(|| ());
                     (
                         (Ok(()), ExecuteTimings::default()),
