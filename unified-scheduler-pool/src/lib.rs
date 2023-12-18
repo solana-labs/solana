@@ -268,20 +268,22 @@ impl<TH: TaskHandler> InstalledScheduler for PooledScheduler<TH> {
 
     fn schedule_execution(&self, &(transaction, index): &(&SanitizedTransaction, usize)) {
         let (result, timings) = &mut *self.result_with_timings.lock().expect("not poisoned");
+        if result.is_err() {
+            // just bail out early to short-circuit the processing altogether
+            return;
+        }
 
         // ... so, we're NOT scheduling at all here; rather, just execute tx straight off. the
         // inter-tx locking deps aren't needed to be resolved in the case of single-threaded FIFO
         // like this.
-        if result.is_ok() {
-            TH::handle(
-                result,
-                timings,
-                self.context().bank(),
-                transaction,
-                index,
-                &self.inner.pool.handler_context,
-            );
-        }
+        TH::handle(
+            result,
+            timings,
+            self.context().bank(),
+            transaction,
+            index,
+            &self.inner.pool.handler_context,
+        );
     }
 
     fn wait_for_termination(
