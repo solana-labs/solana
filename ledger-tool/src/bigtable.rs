@@ -1168,7 +1168,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
             let ref_app_profile_id =
                 value_t_or_exit!(arg_matches, "reference_app_profile_id", String);
             let ref_config = solana_storage_bigtable::LedgerStorageConfig {
-                read_only: false,
+                read_only: true,
                 credential_type: CredentialType::Filepath(credential_path),
                 instance_name: ref_instance_name,
                 app_profile_id: ref_app_profile_id,
