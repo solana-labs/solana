@@ -4421,7 +4421,7 @@ impl Bank {
 
         let mut results = vec![];
         for (transaction, number_of_accounts) in transactions.iter().zip(account_nums) {
-            let batch = self.prepare_unlocked_batch_from_single_tx(&transaction);
+            let batch = self.prepare_unlocked_batch_from_single_tx(transaction);
             let mut timings = ExecuteTimings::default();
             let LoadAndExecuteTransactionsOutput {
                 loaded_transactions,
