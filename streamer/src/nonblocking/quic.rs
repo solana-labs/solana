@@ -692,7 +692,7 @@ async fn handle_connection(
     stream_exit: Arc<AtomicBool>,
     stats: Arc<StreamStats>,
     peer_type: ConnectionPeerType,
-    wait_for_chunk_timeout: Duration,
+    _wait_for_chunk_timeout: Duration,
 ) {
     debug!(
         "quic new connection {} streams: {} connections: {}",
@@ -716,40 +716,19 @@ async fn handle_connection(
                     let last_update = last_update.clone();
                     tokio::spawn(async move {
                         let mut maybe_batch = None;
-                        // The min is to guard against a value too small which can wake up unnecessarily
-                        // frequently and wasting CPU cycles. The max guard against waiting for too long
-                        // which delay exit and cause some test failures when the timeout value is large.
-                        // Within this value, the heuristic is to wake up 10 times to check for exit
-                        // for the set timeout if there are no data.
-                        let exit_check_interval = (wait_for_chunk_timeout / 10)
-                            .clamp(Duration::from_millis(10), Duration::from_secs(1));
-                        let mut start = Instant::now();
                         while !stream_exit.load(Ordering::Relaxed) {
-                            if let Ok(chunk) = tokio::time::timeout(
-                                exit_check_interval,
-                                stream.read_chunk(PACKET_DATA_SIZE, false),
+                            let chunk = stream.read_chunk(PACKET_DATA_SIZE, false).await;
+                            if handle_chunk(
+                                chunk,
+                                &mut maybe_batch,
+                                &remote_addr,
+                                &packet_sender,
+                                stats.clone(),
+                                peer_type,
                             )
                             .await
                             {
-                                if handle_chunk(
-                                    chunk,
-                                    &mut maybe_batch,
-                                    &remote_addr,
-                                    &packet_sender,
-                                    stats.clone(),
-                                    peer_type,
-                                )
-                                .await
-                                {
-                                    last_update.store(timing::timestamp(), Ordering::Relaxed);
-                                    break;
-                                }
-                                start = Instant::now();
-                            } else if start.elapsed() > wait_for_chunk_timeout {
-                                debug!("Timeout in receiving on stream");
-                                stats
-                                    .total_stream_read_timeouts
-                                    .fetch_add(1, Ordering::Relaxed);
+                                last_update.store(timing::timestamp(), Ordering::Relaxed);
                                 break;
                             }
                         }
