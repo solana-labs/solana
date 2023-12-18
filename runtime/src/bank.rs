@@ -4327,7 +4327,7 @@ impl Bank {
     ) -> TransactionSimulationResult {
         let account_keys = transaction.message().account_keys();
         let number_of_accounts = account_keys.len();
-        let account_overrides = self.get_account_overrides_for_simulation(&account_keys);
+        let account_overrides = self.get_account_overrides_for_simulation(&[account_keys]);
         let batch = self.prepare_unlocked_batch_from_single_tx(transaction);
         let mut timings = ExecuteTimings::default();
 
@@ -4471,11 +4471,13 @@ impl Bank {
 
             let execution_result = execution_results.pop().unwrap();
             let flattened_result = execution_result.flattened_result();
-            let (logs, return_data) = match execution_result {
-                TransactionExecutionResult::Executed { details, .. } => {
-                    (details.log_messages, details.return_data)
-                }
-                TransactionExecutionResult::NotExecuted(_) => (None, None),
+            let (logs, return_data, inner_instructions) = match execution_result {
+                TransactionExecutionResult::Executed { details, .. } => (
+                    details.log_messages,
+                    details.return_data,
+                    details.inner_instructions,
+                ),
+                TransactionExecutionResult::NotExecuted(_) => (None, None, None),
             };
             let logs = logs.unwrap_or_default();
             post_simulation_accounts
@@ -4493,6 +4495,7 @@ impl Bank {
                 post_simulation_accounts,
                 units_consumed,
                 return_data,
+                inner_instructions,
             });
         }
         results
