@@ -69,7 +69,11 @@ pub struct HandlerContext {
 pub type DefaultSchedulerPool =
     SchedulerPool<PooledScheduler<DefaultTaskHandler>, DefaultTaskHandler>;
 
-impl<S: SpawnableScheduler<TH>, TH: TaskHandler> SchedulerPool<S, TH> {
+impl<S, TH> SchedulerPool<S, TH>
+where
+    S: SpawnableScheduler<TH>,
+    TH: TaskHandler,
+{
     // Some internal impl and test code want an actual concrete type, NOT the
     // `dyn InstalledSchedulerPool`. So don't merge this into `Self::new_dyn()`.
     fn new(
@@ -137,7 +141,11 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> SchedulerPool<S, TH> {
     }
 }
 
-impl<S: SpawnableScheduler<TH>, TH: TaskHandler> InstalledSchedulerPool for SchedulerPool<S, TH> {
+impl<S, TH> InstalledSchedulerPool for SchedulerPool<S, TH>
+where
+    S: SpawnableScheduler<TH>,
+    TH: TaskHandler,
+{
     fn take_scheduler(&self, context: SchedulingContext) -> InstalledSchedulerBox {
         Box::new(self.do_take_scheduler(context))
     }
@@ -289,8 +297,10 @@ impl<TH: TaskHandler> InstalledScheduler for PooledScheduler<TH> {
     }
 }
 
-impl<S: SpawnableScheduler<TH, Inner = PooledSchedulerInner<S, TH>>, TH: TaskHandler>
-    UninstalledScheduler for PooledSchedulerInner<S, TH>
+impl<S, TH> UninstalledScheduler for PooledSchedulerInner<S, TH>
+where
+    S: SpawnableScheduler<TH, Inner = PooledSchedulerInner<S, TH>>,
+    TH: TaskHandler,
 {
     fn return_to_pool(self: Box<Self>) {
         self.pool.clone().return_scheduler(*self)
