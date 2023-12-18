@@ -1,4 +1,3 @@
-//! Process compute_budget instructions to extract and sanitize limits.
 use {
     crate::{
         compute_budget::DEFAULT_HEAP_COST,
@@ -8,7 +7,6 @@ use {
         borsh1::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
         entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
-        feature_set::FeatureSet,
         fee::FeeBudgetLimits,
         instruction::{CompiledInstruction, InstructionError},
         pubkey::Pubkey,
@@ -69,7 +67,6 @@ impl From<ComputeBudgetLimits> for FeeBudgetLimits {
 /// are retrieved and returned,
 pub fn process_compute_budget_instructions<'a>(
     instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
-    _feature_set: &FeatureSet,
 ) -> Result<ComputeBudgetLimits, TransactionError> {
     let mut num_non_compute_budget_instructions: u32 = 0;
     let mut updated_compute_unit_limit = None;
@@ -178,11 +175,8 @@ mod tests {
                 Message::new($instructions, Some(&payer_keypair.pubkey())),
                 Hash::default(),
             ));
-            let feature_set = FeatureSet::default();
-            let result = process_compute_budget_instructions(
-                tx.message().program_instructions_iter(),
-                &feature_set,
-            );
+            let result =
+                process_compute_budget_instructions(tx.message().program_instructions_iter());
             assert_eq!($expected_result, result);
         };
     }
@@ -489,12 +483,8 @@ mod tests {
                 Hash::default(),
             ));
 
-        let feature_set = FeatureSet::default();
-
-        let result = process_compute_budget_instructions(
-            transaction.message().program_instructions_iter(),
-            &feature_set,
-        );
+        let result =
+            process_compute_budget_instructions(transaction.message().program_instructions_iter());
 
         // assert process_instructions will be successful with default,
         // and the default compute_unit_limit is 2 times default: one for bpf ix, one for

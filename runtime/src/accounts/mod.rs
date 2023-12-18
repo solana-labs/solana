@@ -80,7 +80,6 @@ pub(super) fn load_accounts(
                         lamports_per_signature,
                         &process_compute_budget_instructions(
                             tx.message().program_instructions_iter(),
-                            feature_set,
                         )
                         .unwrap_or_default()
                         .into(),
@@ -170,7 +169,7 @@ fn load_transaction_accounts(
         feature_set.is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
 
     let requested_loaded_accounts_data_size_limit =
-        get_requested_loaded_accounts_data_size_limit(tx, feature_set)?;
+        get_requested_loaded_accounts_data_size_limit(tx)?;
     let mut accumulated_accounts_data_size: usize = 0;
 
     let instruction_accounts = message
@@ -423,10 +422,9 @@ fn load_transaction_accounts(
 ///     Note, requesting zero bytes will result transaction error
 fn get_requested_loaded_accounts_data_size_limit(
     tx: &SanitizedTransaction,
-    feature_set: &FeatureSet,
 ) -> Result<Option<NonZeroUsize>> {
     let compute_budget_limits =
-        process_compute_budget_instructions(tx.message().program_instructions_iter(), feature_set)
+        process_compute_budget_instructions(tx.message().program_instructions_iter())
             .unwrap_or_default();
     // sanitize against setting size limit to zero
     NonZeroUsize::new(
@@ -732,13 +730,11 @@ mod tests {
             instructions,
         );
 
-        let feature_set = FeatureSet::all_enabled();
-
         let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
         let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,
-            &process_compute_budget_instructions(message.program_instructions_iter(), &feature_set)
+            &process_compute_budget_instructions(message.program_instructions_iter())
                 .unwrap_or_default()
                 .into(),
             true,
@@ -1502,7 +1498,6 @@ mod tests {
         // an prrivate helper function
         fn test(
             instructions: &[solana_sdk::instruction::Instruction],
-            feature_set: &FeatureSet,
             expected_result: &Result<Option<NonZeroUsize>>,
         ) {
             let payer_keypair = Keypair::new();
@@ -1513,7 +1508,7 @@ mod tests {
             ));
             assert_eq!(
                 *expected_result,
-                get_requested_loaded_accounts_data_size_limit(&tx, feature_set)
+                get_requested_loaded_accounts_data_size_limit(&tx)
             );
         }
 
@@ -1544,15 +1539,13 @@ mod tests {
             Ok(Some(NonZeroUsize::new(99).unwrap()));
         let result_invalid_limit = Err(TransactionError::InvalidLoadedAccountsDataSizeLimit);
 
-        let feature_set = FeatureSet::default();
-
         // the results should be:
         //    if tx doesn't set limit, then default limit (64MiB)
         //    if tx sets limit, then requested limit
         //    if tx sets limit to zero, then TransactionError::InvalidLoadedAccountsDataSizeLimit
-        test(tx_not_set_limit, &feature_set, &result_default_limit);
-        test(tx_set_limit_99, &feature_set, &result_requested_limit);
-        test(tx_set_limit_0, &feature_set, &result_invalid_limit);
+        test(tx_not_set_limit, &result_default_limit);
+        test(tx_set_limit_99, &result_requested_limit);
+        test(tx_set_limit_0, &result_invalid_limit);
     }
 
     #[test]
@@ -1583,13 +1576,11 @@ mod tests {
             Hash::default(),
         );
 
-        let feature_set = FeatureSet::all_enabled();
-
         let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
         let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,
-            &process_compute_budget_instructions(message.program_instructions_iter(), &feature_set)
+            &process_compute_budget_instructions(message.program_instructions_iter())
                 .unwrap_or_default()
                 .into(),
             true,

@@ -10012,10 +10012,9 @@ fn calculate_test_fee(
         );
     }
 
-    let budget_limits =
-        process_compute_budget_instructions(message.program_instructions_iter(), &feature_set)
-            .unwrap_or_default()
-            .into();
+    let budget_limits = process_compute_budget_instructions(message.program_instructions_iter())
+        .unwrap_or_default()
+        .into();
 
     fee_structure.calculate_fee(
         message,
@@ -14137,6 +14136,6 @@ fn test_failed_simulation_compute_units() {
 
     bank.freeze();
     let sanitized = SanitizedTransaction::from_transaction_for_tests(transaction);
-    let simulation = bank.simulate_transaction(sanitized);
+    let simulation = bank.simulate_transaction(&sanitized, false);
     assert_eq!(TEST_UNITS, simulation.units_consumed);
 }
