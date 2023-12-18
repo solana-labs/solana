@@ -7000,6 +7000,14 @@ impl Bank {
                 self.skipped_rewrites.lock().unwrap().clone(),
             );
 
+        // todo: note that this could be slow. My theory was we'd want to run this in the bg and have it ready later.
+        // It could be ready for the snapshot, accounts hash abs loop, publishing to gossip later, or even to include in the bank hash NEXT slot.
+        // having it ready THIS slot is a lot of work and adds loads into the dependency chain or makes every load more expensive (especially considering an account written multiple times in the same slot).
+        // We'd have to add infrastructure to keep hash values in the read only cache, for example.
+        // We could also build a HashMap<Pubkey, (AccountSharedData, RwLock<AccountHash>)> which is populated the FIRST time a writable account is loaded in this slot. a bg thread could hash the contents. Then, we would have the hash of each written account prior to the first load.
+        // We could even leave the RwLock<AccountsHash> out of it and just re-hash inside `accumulate_accounts_hash`. Depends on how much time loading from prior slots, cloning the account, hashing the account, and looking up the hash (in hashmap) take relative to each other.
+        // I think we want to avoid passing the hash value (or some type of Arc<RwLock<AccountHash>> all around to everyone at every load just for this feature). We need (impl ReadableAccount) + pubkey in order to calculate a hash, so we need something like &AccountSharedData, which we'd like to avoid cloning just so we can hash it later.
+        // All of this concern can get mitigated if we just wait a single slot and do this hash in the bg.
         let mut accumulated = self.parent().map(|bank| bank.accumulated_accounts_hash.read().unwrap().unwrap_or_default()).unwrap_or_default(); // todo probably not default here
         self
             .rc
