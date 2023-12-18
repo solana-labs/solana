@@ -131,6 +131,7 @@ impl BankForks {
             .write()
             .unwrap()
             .set_fork_graph(bank_forks.clone());
+        bank_forks.read().unwrap().prune_program_cache(root_slot);
 
         bank_forks
     }
