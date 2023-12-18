@@ -4607,7 +4607,7 @@ fn test_vote_refresh_outside_slothash() {
         info!("Copying A's ledger to B");
         let blockstore_a = open_blockstore(&a_ledger_path);
         let blockstore_b = open_blockstore(&b_ledger_path);
-        copy_blocks(common_ancestor_slot, &blockstore_a, &blockstore_b);
+        copy_blocks(common_ancestor_slot, &blockstore_a, &blockstore_b, true);
     }
 
     // Kill A and restart B with voting. B should now fork off
@@ -4658,7 +4658,7 @@ fn test_vote_refresh_outside_slothash() {
         let a_blockstore = open_blockstore(&a_ledger_path);
         let b_blockstore = open_blockstore(&b_ledger_path);
         purge_slots_with_count(&b_blockstore, last_vote_on_b_before_shutdown + 1, 100);
-        copy_blocks(last_vote_on_a, &a_blockstore, &b_blockstore);
+        copy_blocks(last_vote_on_a, &a_blockstore, &b_blockstore, true);
     }
 
     // Now restart A and B and see if B is able to eventually send a new vote on tip of its fork.
