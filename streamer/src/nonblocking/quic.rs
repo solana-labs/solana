@@ -727,13 +727,13 @@ async fn handle_connection(
                     // for the set timeout if there are no data.
                     // let exit_check_interval = (wait_for_chunk_timeout / 10)
                     //     .clamp(Duration::from_millis(10), Duration::from_secs(1));
-                    let exit_check_interval = Duration::from_secs(10);
+                    //let exit_check_interval = Duration::from_secs(10);
                     let mut start = Instant::now();
                     while !stream_exit.load(Ordering::Relaxed) {
                         tokio::select! {
-                            () = tokio::time::sleep(exit_check_interval) => {
-                                continue;
-                            },
+                            // () = tokio::time::sleep(exit_check_interval) => {
+                            //     continue;
+                            // },
                             chunk = stream.read_chunk(PACKET_DATA_SIZE, false) => {
                                 if handle_chunk(
                                     chunk,
