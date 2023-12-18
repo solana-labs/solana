@@ -1476,10 +1476,10 @@ impl Bank {
                 }
                 loaded_programs_cache.upcoming_environments = Some(upcoming_environments);
                 loaded_programs_cache.programs_to_recompile = loaded_programs_cache
-                    .get_entries_sorted_by_tx_usage(
-                        changed_program_runtime_v1,
-                        changed_program_runtime_v2,
-                    );
+                    .get_flattened_entries(changed_program_runtime_v1, changed_program_runtime_v2);
+                loaded_programs_cache
+                    .programs_to_recompile
+                    .sort_by_cached_key(|(_id, program)| program.decayed_usage_counter(slot));
             }
         });
 

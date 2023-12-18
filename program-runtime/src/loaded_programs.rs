@@ -3,7 +3,6 @@ use {
         invoke_context::{BuiltinFunctionWithContext, InvokeContext},
         timings::ExecuteDetailsTimings,
     },
-    itertools::Itertools,
     log::{debug, error, log_enabled, trace},
     percentage::PercentageInteger,
     rand::{thread_rng, Rng},
@@ -425,14 +424,10 @@ impl LoadedProgram {
     }
 
     pub fn update_access_slot(&self, slot: Slot) {
-        let _ = self.latest_access_slot.fetch_update(
-            Ordering::Relaxed,
-            Ordering::Relaxed,
-            |last_access| (last_access < slot).then_some(slot),
-        );
+        let _ = self.latest_access_slot.fetch_max(slot, Ordering::Relaxed);
     }
 
-    fn decayed_usage_counter(&self, now: Slot) -> u64 {
+    pub fn decayed_usage_counter(&self, now: Slot) -> u64 {
         let last_access = self.latest_access_slot.load(Ordering::Relaxed);
         let decaying_for = now.saturating_sub(last_access);
         self.tx_usage_counter.load(Ordering::Relaxed) >> decaying_for
@@ -883,7 +878,6 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                             if let LoadedProgramType::Unloaded(_environment) = &entry.program {
                                 break;
                             }
-                            entry.update_access_slot(loaded_programs_for_tx_batch.slot);
                             entry.clone()
                         } else if entry.is_implicit_delay_visibility_tombstone(
                             loaded_programs_for_tx_batch.slot,
@@ -898,6 +892,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                         } else {
                             continue;
                         };
+                        entry_to_return.update_access_slot(loaded_programs_for_tx_batch.slot);
                         entry_to_return
                             .tx_usage_counter
                             .fetch_add(*usage_count, Ordering::Relaxed);
@@ -957,29 +952,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
     }
 
     /// Returns the list of loaded programs which are verified and compiled.
-    fn get_flattened_entries(&self) -> Vec<(Pubkey, Arc<LoadedProgram>)> {
-        self.entries
-            .iter()
-            .flat_map(|(id, second_level)| {
-                second_level
-                    .slot_versions
-                    .iter()
-                    .filter_map(move |program| match program.program {
-                        LoadedProgramType::LegacyV0(_)
-                        | LoadedProgramType::LegacyV1(_)
-                        | LoadedProgramType::Typed(_) => Some((*id, program.clone())),
-                        #[cfg(test)]
-                        LoadedProgramType::TestLoaded(_) => Some((*id, program.clone())),
-                        _ => None,
-                    })
-            })
-            .collect()
-    }
-
-    /// Returns the list of loaded programs which are verified and compiled sorted by `tx_usage_counter`.
-    ///
-    /// Entries from program runtime v1 and v2 can be individually filtered.
-    pub fn get_entries_sorted_by_tx_usage(
+    pub fn get_flattened_entries(
         &self,
         include_program_runtime_v1: bool,
         include_program_runtime_v2: bool,
@@ -1004,13 +977,14 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                         _ => None,
                     })
             })
-            .sorted_by_cached_key(|(_id, program)| program.tx_usage_counter.load(Ordering::Relaxed))
             .collect()
     }
 
     /// Unloads programs which were used infrequently
     pub fn sort_and_unload(&mut self, shrink_to: PercentageInteger) {
-        let sorted_candidates = self.get_entries_sorted_by_tx_usage(true, true);
+        let mut sorted_candidates = self.get_flattened_entries(true, true);
+        sorted_candidates
+            .sort_by_cached_key(|(_id, program)| program.tx_usage_counter.load(Ordering::Relaxed));
         let num_to_unload = sorted_candidates
             .len()
             .saturating_sub(shrink_to.apply_to(MAX_LOADED_ENTRY_COUNT));
@@ -1020,7 +994,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
     /// Evicts programs using 2's random selection, choosing the least used program out of the two entries.
     /// The eviction is performed enough number of times to reduce the cache usage to the given percentage.
     pub fn evict_using_2s_random_selection(&mut self, shrink_to: PercentageInteger, now: Slot) {
-        let mut candidates = self.get_flattened_entries();
+        let mut candidates = self.get_flattened_entries(true, true);
         let num_to_unload = candidates
             .len()
             .saturating_sub(shrink_to.apply_to(MAX_LOADED_ENTRY_COUNT));
