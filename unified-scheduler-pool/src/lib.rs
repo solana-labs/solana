@@ -193,7 +193,7 @@ impl TaskHandler for DefaultTaskHandler {
 pub struct PooledScheduler<TH: TaskHandler> {
     inner: PooledSchedulerInner<Self, TH>,
     context: SchedulingContext,
-    result_with_timings: Mutex<Option<ResultWithTimings>>,
+    result_with_timings: Mutex<ResultWithTimings>,
 }
 
 #[derive(Debug)]
@@ -212,19 +212,12 @@ impl<TH: TaskHandler> PooledScheduler<TH> {
             initial_context,
         )
     }
-
-    fn do_wait_for_termination(&mut self) -> Option<ResultWithTimings> {
-        self.result_with_timings
-            .lock()
-            .expect("not poisoned")
-            .take()
-    }
 }
 
 pub trait SpawnableScheduler<TH: TaskHandler>: InstalledScheduler {
     type Inner: Debug + Send + Sync;
 
-    fn into_inner(self) -> Self::Inner;
+    fn into_inner(self) -> (ResultWithTimings, Self::Inner);
 
     fn from_inner(inner: Self::Inner, context: SchedulingContext) -> Self;
 
@@ -236,15 +229,18 @@ pub trait SpawnableScheduler<TH: TaskHandler>: InstalledScheduler {
 impl<TH: TaskHandler> SpawnableScheduler<TH> for PooledScheduler<TH> {
     type Inner = PooledSchedulerInner<Self, TH>;
 
-    fn into_inner(self) -> Self::Inner {
-        self.inner
+    fn into_inner(self) -> (ResultWithTimings, Self::Inner) {
+        (
+            self.result_with_timings.into_inner().expect("no poisoned"),
+            self.inner,
+        )
     }
 
     fn from_inner(inner: Self::Inner, context: SchedulingContext) -> Self {
         Self {
             inner,
             context,
-            result_with_timings: Mutex::new(Some((Ok(()), ExecuteTimings::default()))),
+            result_with_timings: Mutex::new((Ok(()), ExecuteTimings::default())),
         }
     }
 
@@ -263,9 +259,7 @@ impl<TH: TaskHandler> InstalledScheduler for PooledScheduler<TH> {
     }
 
     fn schedule_execution(&self, &(transaction, index): &(&SanitizedTransaction, usize)) {
-        let result_with_timings = &mut *self.result_with_timings.lock().expect("not poisoned");
-        let (result, timings) =
-            result_with_timings.get_or_insert_with(|| (Ok(()), ExecuteTimings::default()));
+        let (result, timings) = &mut *self.result_with_timings.lock().expect("not poisoned");
 
         // ... so, we're NOT scheduling at all here; rather, just execute tx straight off. the
         // inter-tx locking deps aren't needed to be resolved in the case of single-threaded FIFO
@@ -283,13 +277,11 @@ impl<TH: TaskHandler> InstalledScheduler for PooledScheduler<TH> {
     }
 
     fn wait_for_termination(
-        mut self: Box<Self>,
+        self: Box<Self>,
         _is_dropped: bool,
     ) -> (ResultWithTimings, UninstalledSchedulerBox) {
-        (
-            self.do_wait_for_termination().unwrap(),
-            Box::new(self.into_inner()),
-        )
+        let (result_with_timings, uninstalled_scheduler) = self.into_inner();
+        (result_with_timings, Box::new(uninstalled_scheduler))
     }
 
     fn pause_for_recent_blockhash(&mut self) {
@@ -366,16 +358,18 @@ mod tests {
         let bank = Arc::new(Bank::default_for_tests());
         let context = &SchedulingContext::new(bank);
 
-        let mut scheduler1 = pool.do_take_scheduler(context.clone());
+        let scheduler1 = pool.do_take_scheduler(context.clone());
         let scheduler_id1 = scheduler1.id();
-        let mut scheduler2 = pool.do_take_scheduler(context.clone());
+        let scheduler2 = pool.do_take_scheduler(context.clone());
         let scheduler_id2 = scheduler2.id();
         assert_ne!(scheduler_id1, scheduler_id2);
 
-        assert_matches!(scheduler1.do_wait_for_termination(), Some((Ok(()), _)));
-        pool.return_scheduler(scheduler1.into_inner());
-        assert_matches!(scheduler2.do_wait_for_termination(), Some((Ok(()), _)));
-        pool.return_scheduler(scheduler2.into_inner());
+        let (result_with_timings, scheduler1) = scheduler1.into_inner();
+        assert_matches!(result_with_timings, (Ok(()), _));
+        pool.return_scheduler(scheduler1);
+        let (result_with_timings, scheduler2) = scheduler2.into_inner();
+        assert_matches!(result_with_timings, (Ok(()), _));
+        pool.return_scheduler(scheduler2);
 
         let scheduler3 = pool.do_take_scheduler(context.clone());
         assert_eq!(scheduler_id2, scheduler3.id());
@@ -415,10 +409,9 @@ mod tests {
         let old_context = &SchedulingContext::new(old_bank.clone());
         let new_context = &SchedulingContext::new(new_bank.clone());
 
-        let mut scheduler = pool.do_take_scheduler(old_context.clone());
+        let scheduler = pool.do_take_scheduler(old_context.clone());
         let scheduler_id = scheduler.id();
-        scheduler.do_wait_for_termination();
-        pool.return_scheduler(scheduler.into_inner());
+        pool.return_scheduler(scheduler.into_inner().1);
 
         let scheduler = pool.take_scheduler(new_context.clone());
         assert_eq!(scheduler_id, scheduler.id());
@@ -569,7 +562,7 @@ mod tests {
                 }
                 overall_timings.accumulate(&timings);
             }
-            *self.0.result_with_timings.lock().unwrap() = Some((overall_result, overall_timings));
+            *self.0.result_with_timings.lock().unwrap() = (overall_result, overall_timings);
         }
     }
 
@@ -633,7 +626,7 @@ mod tests {
         // well, i wish i can use ! (never type).....
         type Inner = Self;
 
-        fn into_inner(self) -> Self::Inner {
+        fn into_inner(self) -> (ResultWithTimings, Self::Inner) {
             todo!();
         }
 
