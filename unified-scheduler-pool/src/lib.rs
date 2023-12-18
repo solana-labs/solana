@@ -475,6 +475,17 @@ mod tests {
         assert!(!child_bank.has_installed_scheduler());
     }
 
+    fn setup_dummy_fork_graph(bank: Bank) -> Arc<Bank> {
+        let slot = bank.slot();
+        let bank_fork = BankForks::new_rw_arc(bank);
+        let bank = bank_fork.read().unwrap().get(slot).unwrap();
+        bank.loaded_programs_cache
+            .write()
+            .unwrap()
+            .set_fork_graph(bank_fork);
+        bank
+    }
+
     #[test]
     fn test_scheduler_schedule_execution_success() {
         solana_logger::setup();
@@ -490,7 +501,8 @@ mod tests {
             2,
             genesis_config.hash(),
         ));
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = setup_dummy_fork_graph(bank);
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
             DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
@@ -513,7 +525,9 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = setup_dummy_fork_graph(bank);
+
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
             DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
@@ -690,16 +704,18 @@ mod tests {
                 2,
                 genesis_config.hash(),
             ));
-        let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let mut bank = Bank::new_for_tests(&genesis_config);
         for _ in 0..MAX_PROCESSING_AGE {
             bank.fill_bank_with_ticks_for_tests();
             bank.freeze();
-            bank = Arc::new(Bank::new_from_parent(
-                bank.clone(),
+            let slot = bank.slot();
+            bank = Bank::new_from_parent(
+                Arc::new(bank),
                 &Pubkey::default(),
-                bank.slot().checked_add(1).unwrap(),
-            ));
+                slot.checked_add(1).unwrap(),
+            );
         }
+        let bank = setup_dummy_fork_graph(bank);
         let context = SchedulingContext::new(bank.clone());
 
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
