@@ -119,6 +119,17 @@ impl From<EntrySummary> for CliEntry {
     }
 }
 
+impl From<CliPopulatedEntry> for CliEntry {
+    fn from(populated_entry: CliPopulatedEntry) -> Self {
+        Self {
+            num_hashes: populated_entry.num_hashes,
+            hash: populated_entry.hash,
+            num_transactions: populated_entry.num_transactions,
+            starting_transaction_index: populated_entry.starting_transaction_index,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliPopulatedEntry {
