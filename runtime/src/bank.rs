@@ -4401,17 +4401,19 @@ impl Bank {
     /// Run multiple sequential transactions against a frozen bank without committing the results
     pub fn simulate_multiple_transactions(
         &self,
-        transactions: Vec<SanitizedTransaction>,
+        transactions: &[SanitizedTransaction],
+        enable_cpi_recording: bool,
     ) -> Vec<TransactionSimulationResult> {
         assert!(self.is_frozen(), "simulation bank must be frozen");
-        self.simulate_multiple_transactions_unchecked(transactions)
+        self.simulate_multiple_transactions_unchecked(transactions, enable_cpi_recording)
     }
 
     /// Run multiple sequential transactions against a bank without committing the results; does not check if the bank
     /// is frozen
     pub fn simulate_multiple_transactions_unchecked(
         &self,
-        transactions: Vec<SanitizedTransaction>,
+        transactions: &[SanitizedTransaction],
+        enable_cpi_recording: bool,
     ) -> Vec<TransactionSimulationResult> {
         let account_keys: Vec<_> = transactions
             .iter()
@@ -4437,7 +4439,7 @@ impl Bank {
                 // for processing. During forwarding, the transaction could expire if the
                 // delay is not accounted for.
                 MAX_PROCESSING_AGE - MAX_TRANSACTION_FORWARDING_DELAY,
-                false,
+                enable_cpi_recording,
                 true,
                 true,
                 &mut timings,

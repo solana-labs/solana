@@ -3864,6 +3864,7 @@ pub mod rpc_full {
                 encoding,
                 accounts: config_accounts,
                 min_context_slot,
+                inner_instructions: enable_cpi_recording,
             } = config.unwrap_or_default();
             let tx_encoding = encoding.unwrap_or(UiTransactionEncoding::Base58);
             let binary_encoding = tx_encoding.into_binary_encoding().ok_or_else(|| {
@@ -3905,15 +3906,19 @@ pub mod rpc_full {
                     .try_for_each(|tx| verify_transaction(tx, &bank.feature_set))?;
             }
 
-            let simulation_results = bank.simulate_multiple_transactions(transactions);
+            let simulation_results =
+                bank.simulate_multiple_transactions(&transactions, enable_cpi_recording);
             let mut results = vec![];
-            for simulation_result in simulation_results {
+            for (simulation_result, transaction) in
+                simulation_results.into_iter().zip(transactions.iter())
+            {
                 let TransactionSimulationResult {
                     result,
                     logs,
                     post_simulation_accounts,
                     units_consumed,
                     return_data,
+                    inner_instructions,
                 } = simulation_result;
 
                 let accounts = if let Some(ref config_accounts) = config_accounts {
@@ -3951,12 +3956,22 @@ pub mod rpc_full {
                 } else {
                     None
                 };
+
+                let account_keys = transaction.message().account_keys();
+
+                let inner_instructions = inner_instructions.map(|info| {
+                    map_inner_instructions(info)
+                        .map(|converted| UiInnerInstructions::parse(converted, &account_keys))
+                        .collect()
+                });
+
                 results.push(RpcSimulateTransactionResult {
                     err: result.err(),
                     logs: Some(logs),
                     accounts,
                     units_consumed: Some(units_consumed),
                     return_data: return_data.map(|return_data| return_data.into()),
+                    inner_instructions,
                 })
             }
 
