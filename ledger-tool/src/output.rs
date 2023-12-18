@@ -70,6 +70,14 @@ impl Display for SlotBounds<'_> {
     }
 }
 
+fn writeln_entry(f: &mut dyn fmt::Write, i: usize, entry: &CliEntry, prefix: &str) -> fmt::Result {
+    writeln!(
+        f,
+        "{prefix}Entry {} - num_hashes: {}, hash: {}, transactions: {}, starting_transaction_index: {}",
+        i, entry.num_hashes, entry.hash, entry.num_transactions, entry.starting_transaction_index,
+    )
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliEntries {
@@ -85,15 +93,7 @@ impl fmt::Display for CliEntries {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "Slot {}", self.slot)?;
         for (i, entry) in self.entries.iter().enumerate() {
-            writeln!(
-                f,
-                "  Entry {} - num_hashes: {}, hash: {}, transactions: {}, starting_transaction_index: {}",
-                i,
-                entry.num_hashes,
-                entry.hash,
-                entry.num_transactions,
-                entry.starting_transaction_index,
-            )?;
+            writeln_entry(f, i, entry, "  ")?;
         }
         Ok(())
     }
