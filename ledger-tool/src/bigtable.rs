@@ -1118,7 +1118,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
         ("block", Some(arg_matches)) => {
             let slot = value_t_or_exit!(arg_matches, "slot", Slot);
             let config = solana_storage_bigtable::LedgerStorageConfig {
-                read_only: false,
+                read_only: true,
                 instance_name,
                 app_profile_id,
                 ..solana_storage_bigtable::LedgerStorageConfig::default()
@@ -1139,7 +1139,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
             let limit = value_t_or_exit!(arg_matches, "limit", usize);
             let config = solana_storage_bigtable::LedgerStorageConfig {
-                read_only: false,
+                read_only: true,
                 instance_name,
                 app_profile_id,
                 ..solana_storage_bigtable::LedgerStorageConfig::default()
@@ -1151,7 +1151,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
             let limit = value_t_or_exit!(arg_matches, "limit", usize);
             let config = solana_storage_bigtable::LedgerStorageConfig {
-                read_only: false,
+                read_only: true,
                 instance_name,
                 app_profile_id,
                 ..solana_storage_bigtable::LedgerStorageConfig::default()
@@ -1168,7 +1168,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
             let ref_app_profile_id =
                 value_t_or_exit!(arg_matches, "reference_app_profile_id", String);
             let ref_config = solana_storage_bigtable::LedgerStorageConfig {
-                read_only: false,
+                read_only: true,
                 credential_type: CredentialType::Filepath(credential_path),
                 instance_name: ref_instance_name,
                 app_profile_id: ref_app_profile_id,
@@ -1184,7 +1184,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 .parse()
                 .expect("Invalid signature");
             let config = solana_storage_bigtable::LedgerStorageConfig {
-                read_only: false,
+                read_only: true,
                 instance_name,
                 app_profile_id,
                 ..solana_storage_bigtable::LedgerStorageConfig::default()
