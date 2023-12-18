@@ -1,8 +1,8 @@
 use {
     serde::{Deserialize, Serialize},
     solana_cli_output::{QuietDisplay, VerboseDisplay},
-    solana_sdk::clock::Slot,
-    solana_transaction_status::EntrySummary,
+    solana_sdk::clock::{Slot, UnixTimestamp},
+    solana_transaction_status::{EncodedTransactionWithStatusMeta, EntrySummary, Rewards},
     std::fmt::{self, Display, Formatter, Result},
 };
 
@@ -117,4 +117,44 @@ impl From<EntrySummary> for CliEntry {
             starting_transaction_index: entry_summary.starting_transaction_index,
         }
     }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliPopulatedEntry {
+    num_hashes: u64,
+    hash: String,
+    num_transactions: u64,
+    starting_transaction_index: usize,
+    transactions: Vec<EncodedTransactionWithStatusMeta>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliBlockWithEntries {
+    #[serde(flatten)]
+    pub encoded_confirmed_block: EncodedConfirmedBlockWithEntries,
+    #[serde(skip_serializing)]
+    pub slot: Slot,
+}
+
+impl QuietDisplay for CliBlockWithEntries {}
+impl VerboseDisplay for CliBlockWithEntries {}
+
+impl fmt::Display for CliBlockWithEntries {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EncodedConfirmedBlockWithEntries {
+    pub previous_blockhash: String,
+    pub blockhash: String,
+    pub parent_slot: Slot,
+    pub entries: Vec<CliPopulatedEntry>,
+    pub rewards: Rewards,
+    pub block_time: Option<UnixTimestamp>,
+    pub block_height: Option<u64>,
 }
