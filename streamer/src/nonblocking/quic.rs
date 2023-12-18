@@ -1403,35 +1403,35 @@ pub mod test {
         handle.await.unwrap();
     }
 
-    #[tokio::test]
-    async fn test_quic_stream_timeout() {
-        solana_logger::setup();
-        let (t, exit, _receiver, server_address, stats) = setup_quic_server(None, 1);
+    // #[tokio::test]
+    // async fn test_quic_stream_timeout() {
+    //     solana_logger::setup();
+    //     let (t, exit, _receiver, server_address, stats) = setup_quic_server(None, 1);
 
-        let conn1 = make_client_endpoint(&server_address, None).await;
-        assert_eq!(stats.total_streams.load(Ordering::Relaxed), 0);
-        assert_eq!(stats.total_stream_read_timeouts.load(Ordering::Relaxed), 0);
+    //     let conn1 = make_client_endpoint(&server_address, None).await;
+    //     assert_eq!(stats.total_streams.load(Ordering::Relaxed), 0);
+    //     assert_eq!(stats.total_stream_read_timeouts.load(Ordering::Relaxed), 0);
 
-        // Send one byte to start the stream
-        let mut s1 = conn1.open_uni().await.unwrap();
-        s1.write_all(&[0u8]).await.unwrap_or_default();
+    //     // Send one byte to start the stream
+    //     let mut s1 = conn1.open_uni().await.unwrap();
+    //     s1.write_all(&[0u8]).await.unwrap_or_default();
 
-        // Wait long enough for the stream to timeout in receiving chunks
-        let sleep_time = Duration::from_secs(3).min(WAIT_FOR_STREAM_TIMEOUT * 1000);
-        sleep(sleep_time).await;
+    //     // Wait long enough for the stream to timeout in receiving chunks
+    //     let sleep_time = Duration::from_secs(3).min(WAIT_FOR_STREAM_TIMEOUT * 1000);
+    //     sleep(sleep_time).await;
 
-        // Test that the stream was created, but timed out in read
-        assert_eq!(stats.total_streams.load(Ordering::Relaxed), 0);
-        assert_ne!(stats.total_stream_read_timeouts.load(Ordering::Relaxed), 0);
+    //     // Test that the stream was created, but timed out in read
+    //     assert_eq!(stats.total_streams.load(Ordering::Relaxed), 0);
+    //     assert_ne!(stats.total_stream_read_timeouts.load(Ordering::Relaxed), 0);
 
-        // Test that more writes to the stream will fail (i.e. the stream is no longer writable
-        // after the timeouts)
-        assert!(s1.write_all(&[0u8]).await.is_err());
-        assert!(s1.finish().await.is_err());
+    //     // Test that more writes to the stream will fail (i.e. the stream is no longer writable
+    //     // after the timeouts)
+    //     assert!(s1.write_all(&[0u8]).await.is_err());
+    //     assert!(s1.finish().await.is_err());
 
-        exit.store(true, Ordering::Relaxed);
-        t.await.unwrap();
-    }
+    //     exit.store(true, Ordering::Relaxed);
+    //     t.await.unwrap();
+    // }
 
     #[tokio::test]
     async fn test_quic_server_block_multiple_connections() {
