@@ -3867,7 +3867,6 @@ fn test_program_fees() {
         &process_compute_budget_instructions(sanitized_message.program_instructions_iter())
             .unwrap_or_default()
             .into(),
-        true,
         false,
     );
     bank_client
@@ -3891,7 +3890,6 @@ fn test_program_fees() {
         &process_compute_budget_instructions(sanitized_message.program_instructions_iter())
             .unwrap_or_default()
             .into(),
-        true,
         false,
     );
     assert!(expected_normal_fee < expected_prioritized_fee);

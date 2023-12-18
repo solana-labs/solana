@@ -29,7 +29,6 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         feature_set::{
             include_loaded_accounts_data_size_in_fee_calculation,
-            remove_congestion_multiplier_from_fee_calculation,
             simplify_writable_program_account_check, FeatureSet,
         },
         fee::FeeStructure,
@@ -83,8 +82,6 @@ pub(super) fn load_accounts(
                         )
                         .unwrap_or_default()
                         .into(),
-                        feature_set
-                            .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
                         feature_set
                             .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                     )
@@ -728,7 +725,6 @@ mod tests {
             &process_compute_budget_instructions(message.program_instructions_iter())
                 .unwrap_or_default()
                 .into(),
-            true,
             false,
         );
         assert_eq!(fee, lamports_per_signature);
@@ -1564,7 +1560,6 @@ mod tests {
             &process_compute_budget_instructions(message.program_instructions_iter())
                 .unwrap_or_default()
                 .into(),
-            true,
             false,
         );
         assert_eq!(fee, lamports_per_signature + prioritization_fee);

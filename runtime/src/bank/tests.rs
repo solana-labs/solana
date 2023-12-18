@@ -2651,7 +2651,6 @@ fn test_bank_tx_compute_unit_fee() {
             .lamports_per_signature,
         &FeeStructure::default(),
         false,
-        true,
     );
 
     let (expected_fee_collected, expected_fee_burned) =
@@ -2832,7 +2831,6 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
         cheap_lamports_per_signature,
         &FeeStructure::default(),
         false,
-        true,
     );
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -2850,7 +2848,6 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
         expensive_lamports_per_signature,
         &FeeStructure::default(),
         false,
-        true,
     );
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -2963,7 +2960,6 @@ fn test_filter_program_errors_and_collect_compute_unit_fee() {
                             .lamports_per_signature,
                         &FeeStructure::default(),
                         false,
-                        true,
                     ) * 2
                 )
                 .0
@@ -10002,7 +9998,6 @@ fn calculate_test_fee(
     lamports_per_signature: u64,
     fee_structure: &FeeStructure,
     support_set_accounts_data_size_limit_ix: bool,
-    remove_congestion_multiplier: bool,
 ) -> u64 {
     let mut feature_set = FeatureSet::all_enabled();
 
@@ -10016,13 +10011,7 @@ fn calculate_test_fee(
         .unwrap_or_default()
         .into();
 
-    fee_structure.calculate_fee(
-        message,
-        lamports_per_signature,
-        &budget_limits,
-        remove_congestion_multiplier,
-        false,
-    )
+    fee_structure.calculate_fee(message, lamports_per_signature, &budget_limits, false)
 }
 
 #[test]
@@ -10040,7 +10029,6 @@ fn test_calculate_fee() {
                     ..FeeStructure::default()
                 },
                 support_set_accounts_data_size_limit_ix,
-                true,
             ),
             0
         );
@@ -10057,7 +10045,6 @@ fn test_calculate_fee() {
                     ..FeeStructure::default()
                 },
                 support_set_accounts_data_size_limit_ix,
-                true,
             ),
             1
         );
@@ -10079,7 +10066,6 @@ fn test_calculate_fee() {
                     ..FeeStructure::default()
                 },
                 support_set_accounts_data_size_limit_ix,
-                true,
             ),
             4
         );
@@ -10106,7 +10092,6 @@ fn test_calculate_fee_compute_units() {
                 1,
                 &fee_structure,
                 support_set_accounts_data_size_limit_ix,
-                true,
             ),
             max_fee + lamports_per_signature
         );
@@ -10125,7 +10110,6 @@ fn test_calculate_fee_compute_units() {
                 1,
                 &fee_structure,
                 support_set_accounts_data_size_limit_ix,
-                true,
             ),
             max_fee + 3 * lamports_per_signature
         );
@@ -10166,7 +10150,6 @@ fn test_calculate_fee_compute_units() {
                 1,
                 &fee_structure,
                 support_set_accounts_data_size_limit_ix,
-                true,
             );
             assert_eq!(
                 fee,
@@ -10204,7 +10187,6 @@ fn test_calculate_prioritization_fee() {
         &message,
         fee_structure.lamports_per_signature,
         &fee_structure,
-        true,
         true,
     );
     assert_eq!(
@@ -10250,7 +10232,6 @@ fn test_calculate_fee_secp256k1() {
                 1,
                 &fee_structure,
                 support_set_accounts_data_size_limit_ix,
-                true,
             ),
             2
         );
@@ -10270,7 +10251,6 @@ fn test_calculate_fee_secp256k1() {
                 1,
                 &fee_structure,
                 support_set_accounts_data_size_limit_ix,
-                true,
             ),
             11
         );
@@ -12015,39 +11995,22 @@ fn test_calculate_fee_with_congestion_multiplier() {
 
     // assert when lamports_per_signature is less than BASE_LAMPORTS, turnning on/off
     // congestion_multiplier has no effect on fee.
-    for remove_congestion_multiplier in [true, false] {
-        assert_eq!(
-            calculate_test_fee(
-                &message,
-                cheap_lamports_per_signature,
-                &fee_structure,
-                true,
-                remove_congestion_multiplier,
-            ),
-            signature_fee * signature_count
-        );
-    }
+    assert_eq!(
+        calculate_test_fee(&message, cheap_lamports_per_signature, &fee_structure, true,),
+        signature_fee * signature_count
+    );
 
     // assert when lamports_per_signature is more than BASE_LAMPORTS, turnning on/off
     // congestion_multiplier will change calculated fee.
-    for remove_congestion_multiplier in [true, false] {
-        let denominator: u64 = if remove_congestion_multiplier {
-            1
-        } else {
-            lamports_scale
-        };
-
-        assert_eq!(
-            calculate_test_fee(
-                &message,
-                expensive_lamports_per_signature,
-                &fee_structure,
-                true,
-                remove_congestion_multiplier,
-            ),
-            signature_fee * signature_count / denominator
-        );
-    }
+    assert_eq!(
+        calculate_test_fee(
+            &message,
+            expensive_lamports_per_signature,
+            &fee_structure,
+            true,
+        ),
+        signature_fee * signature_count
+    );
 }
 
 #[test]
@@ -12076,7 +12039,7 @@ fn test_calculate_fee_with_request_heap_frame_flag() {
     // assert when request_heap_frame is presented in tx, prioritization fee will be counted
     // into transaction fee
     assert_eq!(
-        calculate_test_fee(&message, lamports_per_signature, &fee_structure, true, true,),
+        calculate_test_fee(&message, lamports_per_signature, &fee_structure, true),
         signature_fee + request_cu * lamports_per_cu
     );
 }
