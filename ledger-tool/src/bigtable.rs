@@ -113,6 +113,7 @@ async fn first_available_block(
 async fn block(
     slot: Slot,
     output_format: OutputFormat,
+    _show_entries: bool,
     config: solana_storage_bigtable::LedgerStorageConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new_with_config(config)
@@ -823,6 +824,12 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(true)
                                 .index(1)
                                 .required(true),
+                        )
+                        .arg(
+                            Arg::with_name("show_entries")
+                                .long("show-entries")
+                                .required(false)
+                                .help("Display the transactions in their entries"),
                         ),
                 )
                 .subcommand(
@@ -1117,13 +1124,14 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
         }
         ("block", Some(arg_matches)) => {
             let slot = value_t_or_exit!(arg_matches, "slot", Slot);
+            let show_entries = arg_matches.is_present("show_entries");
             let config = solana_storage_bigtable::LedgerStorageConfig {
                 read_only: true,
                 instance_name,
                 app_profile_id,
                 ..solana_storage_bigtable::LedgerStorageConfig::default()
             };
-            runtime.block_on(block(slot, output_format, config))
+            runtime.block_on(block(slot, output_format, show_entries, config))
         }
         ("entries", Some(arg_matches)) => {
             let slot = value_t_or_exit!(arg_matches, "slot", Slot);
