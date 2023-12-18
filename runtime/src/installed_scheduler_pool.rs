@@ -107,23 +107,26 @@ pub trait InstalledScheduler: Send + Sync + Debug + 'static {
         transaction_with_index: &'a (&'a SanitizedTransaction, usize),
     );
 
-    /// Wait for a scheduler to terminate after it is notified with the given reason.
+    /// Wait for a scheduler to terminate after processing.
     ///
-    /// Firstly, this function blocks the current thread while waiting for the scheduler to
-    /// complete all of the executions for the scheduled transactions. This means the scheduler has
-    /// prepared the finalized `ResultWithTimings` at least internally at the time of existing from
-    /// this function. If no trsanction is scheduled, the result and timing will be `Ok(())` and
+    /// This function blocks the current thread while waiting for the scheduler to complete all of
+    /// the executions for the scheduled transactions and to return the finalized
+    /// `ResultWithTimings`. Along with the result, this function also makes the scheduler itself
+    /// uninstalled from the bank by transforming the consumed self.
+    ///
+    /// If no transaction is scheduled, the result and timing will be `Ok(())` and
     /// `ExecuteTimings::default()` respectively.
-    ///
     fn wait_for_termination(
         self: Box<Self>,
         is_dropped: bool,
     ) -> (Box<dyn UninstalledScheduler>, ResultWithTimings);
 
-    /// Pause a scheduler to update bank's recent blockhash after completion without being returned
-    /// to the pool to collect scheduler's internally-held `ResultWithTimings` later. The
-    /// scheduler is responsible to retain the finalized `ResultWithTimings` until it's
-    /// `wait_for_termination()`-ed.
+    /// Pause a scheduler after processing to update bank's recent blockhash.
+    ///
+    /// This function blocks the current thread like wait_for_termination(). However, the scheduler
+    /// won't be consumed. This means the scheduler is responsible to retain the finalized
+    /// `ResultWithTimings` internally until it's `wait_for_termination()`-ed to collect the result
+    /// later.
     fn pause_for_recent_blockhash(&mut self);
 }
 
@@ -169,7 +172,7 @@ impl SchedulingContext {
 
 pub type ResultWithTimings = (Result<()>, ExecuteTimings);
 
-/// A hint from the bank about the reason the caller is waiting on its scheduler termination.
+/// A hint from the bank about the reason the caller is waiting on its scheduler.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum WaitReason {
     // The bank wants its scheduler to terminate after the completion of transaction execution, in
@@ -182,8 +185,9 @@ enum WaitReason {
     // The bank wants its scheduler to terminate just like `TerminatedToFreeze` and indicate that
     // Drop::drop() is the caller.
     DroppedFromBankForks,
-    // The bank wants its scheduler to pause the scheduler after the completion without being
-    // returned to the pool to collect scheduler's internally-held `ResultWithTimings` later.
+    // The bank wants its scheduler to pause after the completion without being returned to the
+    // pool. This is to update bank's recent blockhash and to collect scheduler's internally-held
+    // `ResultWithTimings` later.
     PausedForRecentBlockhash,
 }
 

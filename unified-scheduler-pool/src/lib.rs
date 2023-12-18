@@ -1,12 +1,12 @@
 //! Transaction scheduling code.
 //!
-//! This crate implements two solana-runtime traits (`InstalledScheduler` and
-//! `InstalledSchedulerPool`) to provide concrete transaction scheduling implementation (including
-//! executing txes and committing tx results).
+//! This crate implements 3 solana-runtime traits (`InstalledScheduler`, `UninstalledScheduler` and
+//! `InstalledSchedulerPool`) to provide a concrete transaction scheduling implementation
+//! (including executing txes and committing tx results).
 //!
-//! At highest level, this crate takes `SanitizedTransaction`s via its `schedule_execution()` and
-//! commits any side-effects (i.e. on-chain state changes) into `Bank`s via `solana-ledger`'s
-//! helper fun called `execute_batch()`.
+//! At the highest level, this crate takes `SanitizedTransaction`s via its `schedule_execution()`
+//! and commits any side-effects (i.e. on-chain state changes) into the associated `Bank` via
+//! `solana-ledger`'s helper function called `execute_batch()`.
 
 use {
     solana_ledger::blockstore_processor::{
@@ -35,9 +35,9 @@ use {
 
 type AtomicSchedulerId = AtomicU64;
 
-// SchedulerPool must be accessed via dyn by solana-runtime code, because its internal fields'
-// types aren't available in the solana-runtime (currently TransactionStatusSender; also,
-// PohRecorder in the future)...
+// SchedulerPool must be accessed as a dyn trait from solana-runtime, because SchedulerPool
+// contain some internal fields, whose types aren't available in solana-runtime (currently
+// TransactionStatusSender; also, PohRecorder in the future)...
 #[derive(Debug)]
 pub struct SchedulerPool<S: SpawnableScheduler<TH>, TH: TaskHandler> {
     scheduler_inners: Mutex<Vec<S::Inner>>,
@@ -107,7 +107,7 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> SchedulerPool<S, TH> {
         )
     }
 
-    // See a comment at the weak_self field for justification of this.
+    // See a comment at the weak_self field for justification of this method's existence.
     fn self_arc(&self) -> Arc<Self> {
         self.weak_self
             .upgrade()
