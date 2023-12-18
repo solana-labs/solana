@@ -539,7 +539,7 @@ mod tests {
             genesis_config.hash(),
         ));
         assert_matches!(
-            bank.simulate_transaction_unchecked(tx1.clone()).result,
+            bank.simulate_transaction_unchecked(tx1, false).result,
             Ok(_)
         );
         scheduler.schedule_execution(&(tx1, 0));
