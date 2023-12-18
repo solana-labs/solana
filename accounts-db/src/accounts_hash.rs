@@ -1162,6 +1162,8 @@ impl<'a> AccountsHasher<'a> {
                 overall_sum = Self::checked_cast_for_capitalization(
                     item.lamports as u128 + overall_sum as u128,
                 );
+                // note that we DO have to dedup and avoid zero lamport hashes...
+                // todo: probably we could accumulate here instead of writing every hash here and accumulating each hash later (in a map/fold reduce)
                 hashes.write(&item.hash.0);
             } else {
                 // if lamports == 0, check if they should be included
@@ -1170,6 +1172,7 @@ impl<'a> AccountsHasher<'a> {
                     // the hash of its pubkey
                     let hash = blake3::hash(bytemuck::bytes_of(&item.pubkey));
                     let hash = Hash::new_from_array(hash.into());
+                    // todo: same as above
                     hashes.write(&hash);
                 }
             }
@@ -1204,6 +1207,16 @@ impl<'a> AccountsHasher<'a> {
 
         let _guard = self.active_stats.activate(ActiveStatItem::HashMerkleTree);
         let mut hash_time = Measure::start("hash");
+        let mut accumulated = Hash::default();
+        let mut i = 0;
+        while i < cumulative.total_count() {
+            let slice = cumulative.get_slice(i);
+            slice.iter().for_each(|hash| {
+                // todo: accumulate here if we weren't able to do it earlier
+                // accumulated += hash
+            });
+            i += slice.len();
+        }
         let (hash, _) = Self::compute_merkle_root_from_slices(
             cumulative.total_count(),
             MERKLE_FANOUT,
