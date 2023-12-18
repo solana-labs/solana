@@ -286,8 +286,8 @@ impl HotStorageReader {
         assert!(
             offset.saturating_add(std::mem::size_of::<HotAccountMeta>())
                 <= self.footer.index_block_offset as usize,
-            "HotAccountOffset ({}) exceeds accounts blocks offset boundary ({}).",
-            offset.saturating_add(std::mem::size_of::<HotAccountMeta>()),
+            "reading HotAccountOffset ({}) would exceed accounts blocks offset boundary ({}).",
+            offset,
             self.footer.index_block_offset,
         );
         let (meta, _) = get_pod::<HotAccountMeta>(&self.mmap, offset)?;
@@ -579,7 +579,7 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "exceeds accounts blocks offset boundary")]
+    #[should_panic(expected = "would exceed accounts blocks offset boundary")]
     fn test_get_acount_meta_from_offset_out_of_bounds() {
         // Generate a new temp path that is guaranteed to NOT already have a file.
         let temp_dir = TempDir::new().unwrap();
