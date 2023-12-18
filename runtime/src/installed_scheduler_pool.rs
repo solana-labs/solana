@@ -363,15 +363,13 @@ impl BankWithSchedulerInner {
             if let Some(scheduler) = scheduler.as_mut().filter(|_| reason.is_paused()) {
                 scheduler.pause_for_recent_blockhash();
                 None
+            } else if let Some(scheduler) = scheduler.take() {
+                let (result_with_timings, uninstalled_scheduler) =
+                    scheduler.wait_for_termination(reason.is_dropped());
+                uninstalled_scheduler.return_to_pool();
+                Some(result_with_timings)
             } else {
-                let (result_with_timings, uninstalled_scheduler) = scheduler
-                    .take()
-                    .map(|scheduler| scheduler.wait_for_termination(reason.is_dropped()))
-                    .unzip();
-                if let Some(uninstalled_scheduler) = uninstalled_scheduler {
-                    uninstalled_scheduler.return_to_pool();
-                }
-                result_with_timings
+                None
             };
         debug!(
             "wait_for_scheduler_termination(slot: {}, reason: {:?}): finished with: {:?}...",
