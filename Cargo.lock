@@ -5972,6 +5972,7 @@ dependencies = [
  "solana-tpu-client",
  "solana-transaction-status",
  "solana-turbine",
+ "solana-unified-scheduler-pool",
  "solana-version",
  "solana-vote",
  "solana-vote-program",
@@ -6431,6 +6432,7 @@ dependencies = [
  "solana-storage-bigtable",
  "solana-streamer",
  "solana-transaction-status",
+ "solana-unified-scheduler-pool",
  "solana-version",
  "solana-vote-program",
  "solana_rbpf",
@@ -7542,6 +7544,24 @@ dependencies = [
  "solana-streamer",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "solana-unified-scheduler-logic"
+version = "1.18.0"
+
+[[package]]
+name = "solana-unified-scheduler-pool"
+version = "1.18.0"
+dependencies = [
+ "assert_matches",
+ "solana-ledger",
+ "solana-logger",
+ "solana-program-runtime",
+ "solana-runtime",
+ "solana-sdk",
+ "solana-unified-scheduler-logic",
+ "solana-vote",
 ]
 
 [[package]]
