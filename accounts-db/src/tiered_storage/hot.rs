@@ -402,10 +402,10 @@ impl HotStorageReader {
     }
 
     /// Returns the account located at the specified index offset.
-    pub fn get_account<'a>(
-        &'a self,
+    pub fn get_account(
+        &self,
         index_offset: IndexOffset,
-    ) -> TieredStorageResult<Option<(StoredAccountMeta<'a>, usize)>> {
+    ) -> TieredStorageResult<Option<(StoredAccountMeta<'_>, usize)>> {
         if index_offset.0 >= self.footer.account_entry_count {
             return Ok(None);
         }
