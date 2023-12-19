@@ -258,19 +258,6 @@ pub struct SchedulingStateMachine {
 }
 
 impl SchedulingStateMachine {
-    pub fn new() -> Self {
-        Self {
-            retryable_task_queue: TaskQueue::default(),
-            active_task_count: 0,
-            handled_task_count: 0,
-            reschedule_count: 0,
-            rescheduled_task_count: 0,
-            total_task_count: 0,
-            task_token: unsafe { TaskToken::assume_on_the_scheduler_thread() },
-            page_token: unsafe { PageToken::assume_on_the_scheduler_thread() },
-        }
-    }
-
     pub fn is_empty(&self) -> bool {
         self.active_task_count == 0
     }
@@ -523,6 +510,22 @@ impl SchedulingStateMachine {
             }
         }
     }
+}
+
+impl Default for SchedulingStateMachine {
+    fn default() -> Self {
+        Self {
+            retryable_task_queue: TaskQueue::default(),
+            active_task_count: 0,
+            handled_task_count: 0,
+            reschedule_count: 0,
+            rescheduled_task_count: 0,
+            total_task_count: 0,
+            task_token: unsafe { TaskToken::assume_on_the_scheduler_thread() },
+            page_token: unsafe { PageToken::assume_on_the_scheduler_thread() },
+        }
+    }
+
 }
 
 enum TaskSource {
