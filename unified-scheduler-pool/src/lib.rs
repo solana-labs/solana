@@ -1172,6 +1172,7 @@ mod tests {
         },
         std::{sync::Arc, thread::JoinHandle},
     };
+    use solana_runtime::installed_scheduler_pool::SchedulingMode;
 
     #[test]
     fn test_scheduler_pool_new() {
