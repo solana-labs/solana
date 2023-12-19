@@ -1167,55 +1167,20 @@ impl Validator {
             turbine_quic_endpoint,
             turbine_quic_endpoint_sender,
             turbine_quic_endpoint_join_handle,
-<<<<<<< HEAD
-        ) = solana_turbine::quic_endpoint::new_quic_endpoint(
-            turbine_quic_endpoint_runtime
-                .as_ref()
-                .map(TokioRuntime::handle)
-                .unwrap_or_else(|| current_runtime_handle.as_ref().unwrap()),
-            &identity_keypair,
-            node.sockets.tvu_quic,
-            node.info
-                .tvu(Protocol::QUIC)
-                .expect("Operator must spin up node with valid QUIC TVU address")
-                .ip(),
-            turbine_quic_endpoint_sender,
-            bank_forks.clone(),
-        )
-        .unwrap();
-
-        // Repair quic endpoint.
-        let repair_quic_endpoint_runtime = current_runtime_handle.is_err().then(|| {
-            tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .thread_name("solRepairQuic")
-                .build()
-                .unwrap()
-        });
-        let (repair_quic_endpoint, repair_quic_endpoint_sender, repair_quic_endpoint_join_handle) =
-            repair::quic_endpoint::new_quic_endpoint(
-                repair_quic_endpoint_runtime
-=======
         ) = if genesis_config.cluster_type == ClusterType::MainnetBeta {
             let (sender, _receiver) = tokio::sync::mpsc::channel(1);
             (None, sender, None)
         } else {
             solana_turbine::quic_endpoint::new_quic_endpoint(
                 turbine_quic_endpoint_runtime
->>>>>>> 4feadbdb7c (disables turbine and repair QUIC endpoints on mainnet-beta (#34523))
                     .as_ref()
                     .map(TokioRuntime::handle)
                     .unwrap_or_else(|| current_runtime_handle.as_ref().unwrap()),
                 &identity_keypair,
                 node.sockets.tvu_quic,
                 node.info
-<<<<<<< HEAD
-                    .serve_repair(Protocol::QUIC)
-                    .expect("Operator must spin up node with valid QUIC serve-repair address")
-=======
                     .tvu(Protocol::QUIC)
-                    .map_err(|err| format!("Invalid QUIC TVU address: {err:?}"))?
->>>>>>> 4feadbdb7c (disables turbine and repair QUIC endpoints on mainnet-beta (#34523))
+                    .expect("Operator must spin up node with valid QUIC TVU address")
                     .ip(),
                 turbine_quic_endpoint_sender,
                 bank_forks.clone(),
@@ -1248,7 +1213,7 @@ impl Validator {
                     node.sockets.serve_repair_quic,
                     node.info
                         .serve_repair(Protocol::QUIC)
-                        .map_err(|err| format!("Invalid QUIC serve-repair address: {err:?}"))?
+                        .expect("Operator must spin up node with valid QUIC serve-repair address")
                         .ip(),
                     repair_quic_endpoint_sender,
                     bank_forks.clone(),
