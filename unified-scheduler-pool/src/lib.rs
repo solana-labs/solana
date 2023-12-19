@@ -743,9 +743,7 @@ where
                                 "step"
                             },
                         };
-                        if state_change != "step"
-                            || (state_change == "step" && log_interval.increment())
-                        {
+                        if state_change != "step" || log_interval.increment() {
                             log_scheduler!(state_change);
                         }
 
