@@ -267,11 +267,9 @@ pub fn write_bank_hash_details_file(bank: &Bank) -> std::result::Result<(), Stri
 pub mod tests {
     use super::*;
 
-    #[test]
-    fn test_serde_bank_hash_details() {
+    fn build_slot_details(slot: Slot) -> BankHashSlotDetails {
         use solana_sdk::hash::hash;
 
-        let slot = 123_456_789;
         let signature_count = 314;
 
         let account = AccountSharedData::from(Account {
@@ -296,7 +294,7 @@ pub mod tests {
         let accounts_delta_hash = hash("accounts_delta".as_bytes());
         let last_blockhash = hash("last_blockhash".as_bytes());
 
-        let bank_hash_details = BankHashSlotDetails::new(
+        BankHashSlotDetails::new(
             slot,
             bank_hash,
             parent_bank_hash,
@@ -304,7 +302,13 @@ pub mod tests {
             signature_count,
             last_blockhash,
             accounts,
-        );
+        )
+    }
+
+    #[test]
+    fn test_serde_bank_hash_details() {
+        let slot = 123_456_789;
+        let bank_hash_details = build_slot_details(slot);
 
         let serialized_bytes = serde_json::to_vec(&bank_hash_details).unwrap();
         let deserialized_bank_hash_details: BankHashSlotDetails =
