@@ -5696,11 +5696,9 @@ impl Bank {
                 programs_modified_by_tx,
             } = execution_result
             {
-                if details.status.is_ok() {
-                    if !programs_modified_by_tx.is_empty() {
-                        let mut cache = self.loaded_programs_cache.write().unwrap();
-                        cache.merge(programs_modified_by_tx);
-                    }
+                if details.status.is_ok() && !programs_modified_by_tx.is_empty() {
+                    let mut cache = self.loaded_programs_cache.write().unwrap();
+                    cache.merge(programs_modified_by_tx);
                 }
             }
         }
