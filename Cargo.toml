@@ -87,7 +87,7 @@ members = [
     "runtime",
     "runtime-transaction",
     "scheduler",
-    "scheduler-pool",
+    "unified-scheduler-pool",
     "sdk",
     "sdk/cargo-build-bpf",
     "sdk/cargo-build-sbf",
@@ -362,7 +362,7 @@ solana-quic-client = { path = "quic-client", version = "=1.18.0" }
 solana-rayon-threadlimit = { path = "rayon-threadlimit", version = "=1.18.0" }
 solana-remote-wallet = { path = "remote-wallet", version = "=1.18.0", default-features = false }
 solana-scheduler = { path = "scheduler", version = "=1.18.0" }
-solana-scheduler-pool = { path = "scheduler-pool", version = "=1.18.0" }
+solana-unified-scheduler-pool = { path = "unified-scheduler-pool", version = "=1.18.0" }
 solana-rpc = { path = "rpc", version = "=1.18.0" }
 solana-rpc-client = { path = "rpc-client", version = "=1.18.0", default-features = false }
 solana-rpc-client-api = { path = "rpc-client-api", version = "=1.18.0" }
