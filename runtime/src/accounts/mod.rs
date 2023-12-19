@@ -12,7 +12,6 @@ use {
         accounts::{LoadedTransaction, TransactionLoadResult, TransactionRent},
         accounts_db::AccountsDb,
         ancestors::Ancestors,
-        blockhash_queue::BlockhashQueue,
         nonce_info::NonceFull,
         rent_collector::{RentCollector, RENT_EXEMPT_RENT_EPOCH},
         rent_debits::RentDebits,
@@ -55,7 +54,6 @@ pub(super) fn load_accounts(
     ancestors: &Ancestors,
     txs: &[SanitizedTransaction],
     lock_results: Vec<TransactionCheckResult>,
-    _hash_queue: &BlockhashQueue,
     error_counters: &mut TransactionErrorMetrics,
     rent_collector: &RentCollector,
     feature_set: &FeatureSet,
@@ -553,14 +551,11 @@ mod tests {
     fn load_accounts_with_fee_and_rent(
         tx: Transaction,
         ka: &[TransactionAccount],
-        lamports_per_signature: u64,
         rent_collector: &RentCollector,
         error_counters: &mut TransactionErrorMetrics,
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
     ) -> Vec<TransactionLoadResult> {
-        let mut hash_queue = BlockhashQueue::new(100);
-        hash_queue.register_hash(&tx.message().recent_blockhash, lamports_per_signature);
         let accounts_db = AccountsDb::new_single_for_tests();
         let accounts = Accounts::new(Arc::new(accounts_db));
         for ka in ka.iter() {
@@ -574,7 +569,6 @@ mod tests {
             &ancestors,
             &[sanitized_tx],
             vec![(Ok(()), None)],
-            &hash_queue,
             error_counters,
             rent_collector,
             feature_set,
@@ -600,14 +594,12 @@ mod tests {
     fn load_accounts_with_fee(
         tx: Transaction,
         ka: &[TransactionAccount],
-        lamports_per_signature: u64,
         error_counters: &mut TransactionErrorMetrics,
         exclude_features: Option<&[Pubkey]>,
     ) -> Vec<TransactionLoadResult> {
         load_accounts_with_fee_and_rent(
             tx,
             ka,
-            lamports_per_signature,
             &RentCollector::default(),
             error_counters,
             &all_features_except(exclude_features),
@@ -620,7 +612,7 @@ mod tests {
         ka: &[TransactionAccount],
         error_counters: &mut TransactionErrorMetrics,
     ) -> Vec<TransactionLoadResult> {
-        load_accounts_with_fee(tx, ka, 0, error_counters, None)
+        load_accounts_with_fee(tx, ka, error_counters, None)
     }
 
     fn load_accounts_with_excluded_features(
@@ -629,7 +621,7 @@ mod tests {
         error_counters: &mut TransactionErrorMetrics,
         exclude_features: Option<&[Pubkey]>,
     ) -> Vec<TransactionLoadResult> {
-        load_accounts_with_fee(tx, ka, 0, error_counters, exclude_features)
+        load_accounts_with_fee(tx, ka, error_counters, exclude_features)
     }
 
     #[test]
@@ -723,13 +715,7 @@ mod tests {
         );
         assert_eq!(fee, lamports_per_signature);
 
-        let loaded_accounts = load_accounts_with_fee(
-            tx,
-            &accounts,
-            lamports_per_signature,
-            &mut error_counters,
-            None,
-        );
+        let loaded_accounts = load_accounts_with_fee(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.insufficient_funds, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -806,7 +792,6 @@ mod tests {
         let loaded_accounts = load_accounts_with_fee_and_rent(
             tx.clone(),
             &accounts,
-            lamports_per_signature,
             &rent_collector,
             &mut error_counters,
             &all_features_except(None),
@@ -822,7 +807,6 @@ mod tests {
         let loaded_accounts = load_accounts_with_fee_and_rent(
             tx.clone(),
             &accounts,
-            lamports_per_signature,
             &rent_collector,
             &mut error_counters,
             &FeatureSet::all_enabled(),
@@ -839,7 +823,6 @@ mod tests {
         let loaded_accounts = load_accounts_with_fee_and_rent(
             tx,
             &accounts,
-            lamports_per_signature,
             &rent_collector,
             &mut error_counters,
             &FeatureSet::all_enabled(),
@@ -1341,8 +1324,6 @@ mod tests {
     ) -> Vec<TransactionLoadResult> {
         let tx = SanitizedTransaction::from_transaction_for_tests(tx);
         let rent_collector = RentCollector::default();
-        let mut hash_queue = BlockhashQueue::new(100);
-        hash_queue.register_hash(tx.message().recent_blockhash(), 10);
 
         let ancestors = vec![(0, 0)].into_iter().collect();
         let mut error_counters = TransactionErrorMetrics::default();
@@ -1351,7 +1332,6 @@ mod tests {
             &ancestors,
             &[tx],
             vec![(Ok(()), None)],
-            &hash_queue,
             &mut error_counters,
             &rent_collector,
             &FeatureSet::all_enabled(),
@@ -1562,13 +1542,7 @@ mod tests {
         // assert fail to load account with 2B lamport balance for transaction asking for 2B
         // lamports as prioritization fee.
         let mut error_counters = TransactionErrorMetrics::default();
-        let loaded_accounts = load_accounts_with_fee(
-            tx,
-            &accounts,
-            lamports_per_signature,
-            &mut error_counters,
-            None,
-        );
+        let loaded_accounts = load_accounts_with_fee(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.insufficient_funds, 1);
         assert_eq!(loaded_accounts.len(), 1);

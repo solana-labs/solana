@@ -5162,7 +5162,6 @@ impl Bank {
             &self.ancestors,
             sanitized_txs,
             check_results,
-            &self.blockhash_queue.read().unwrap(),
             &mut error_counters,
             &self.rent_collector,
             &self.feature_set,
