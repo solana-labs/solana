@@ -650,7 +650,7 @@ where
             let result_with_timings = self
                 .session_result_with_timings
                 .take()
-                .unwrap_or((Ok(()), Default::default()));
+                .unwrap_or((Ok(()), ExecuteTimings::default()));
             drop_sender
                 .send(SessionedMessage::StartSession(result_with_timings))
                 .unwrap();
