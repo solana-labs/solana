@@ -676,8 +676,8 @@ mod thread_utilization {
             self.inner_scheduler.id()
         }
 
-        fn context(&self) -> SchedulingContext {
-            self.inner_scheduler.context().clone()
+        fn context(&self) -> &SchedulingContext {
+            self.inner_scheduler.context()
         }
 
         fn schedule_execution(&self, transaction_with_index: TransactionWithIndexForBench) {
