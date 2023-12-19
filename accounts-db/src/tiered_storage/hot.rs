@@ -630,7 +630,7 @@ pub mod tests {
             })
             .collect();
 
-        let footer = TieredStorageFooter {
+        let mut footer = TieredStorageFooter {
             account_meta_format: AccountMetaFormat::Hot,
             account_entry_count: NUM_ACCOUNTS,
             // Set index_block_offset to 0 as we didn't write any account
@@ -641,13 +641,11 @@ pub mod tests {
         {
             let file = TieredStorageFile::new_writable(&path).unwrap();
 
-            footer
+            let cursor = footer
                 .index_block_format
                 .write_index_block(&file, &index_writer_entries)
                 .unwrap();
-
-            // while the test only focuses on account metas, writing a footer
-            // here is necessary to make it a valid tiered-storage file.
+            footer.owners_block_offset = cursor as u64;
             footer.write_footer_block(&file).unwrap();
         }
 
