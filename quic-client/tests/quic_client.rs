@@ -358,11 +358,11 @@ mod tests {
             thread_pool.install(|| {
                 (0..QUIC_MAX_STAKED_CONCURRENT_STREAMS)
                     .into_par_iter()
-                    .for_each(|_i| {
+                    .for_each(|i| {
                         let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
                         let rslt = client.send_data_batch(&packets);
                         if let Err(rslt) = rslt {
-                            info!("Connection {i} error {_i} {rslt:?}");
+                            info!("Connection {i} error {rslt:?}");
                         }
                     });
             });
