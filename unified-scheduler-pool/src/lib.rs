@@ -845,7 +845,7 @@ where
         let drop_main_loop = || {
             move || 'outer: loop {
                 let mut session_result: Result<()> = Ok(());
-                let mut session_timings: ExecuteTimings = Default::default();
+                let mut session_timings = ExecuteTimings::default();
                 loop {
                     match drop_receiver.recv_timeout(Duration::from_millis(40)) {
                         Ok(SessionedMessage::Payload(task)) => {
