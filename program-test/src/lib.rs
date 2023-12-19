@@ -903,11 +903,16 @@ impl ProgramTest {
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(target_slot_duration).await;
-                bank_forks
-                    .read()
-                    .unwrap()
-                    .working_bank()
-                    .register_unique_recent_blockhash_for_test();
+                let mut bank_forks = bank_forks.write().unwrap();
+                let working_bank = bank_forks.working_bank();
+                let slot = working_bank.slot() + 1;
+                // Register a new blockhash for the next slot
+                working_bank.register_unique_recent_blockhash_for_test();
+                bank_forks.insert(Bank::new_from_parent(
+                    working_bank,
+                    &Pubkey::default(),
+                    slot,
+                ));
             }
         });
 
@@ -1055,11 +1060,16 @@ impl ProgramTestContext {
                         break;
                     }
                     tokio::time::sleep(target_slot_duration).await;
-                    running_bank_forks
-                        .read()
-                        .unwrap()
-                        .working_bank()
-                        .register_unique_recent_blockhash_for_test();
+                    let mut bank_forks = running_bank_forks.write().unwrap();
+                    let working_bank = bank_forks.working_bank();
+                    let slot = working_bank.slot() + 1;
+                    // Register a new blockhash for the next slot
+                    working_bank.register_unique_recent_blockhash_for_test();
+                    bank_forks.insert(Bank::new_from_parent(
+                        working_bank,
+                        &Pubkey::default(),
+                        slot,
+                    ));
                 }
             }),
         );
