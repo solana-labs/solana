@@ -1845,6 +1845,7 @@ impl Bank {
         let mut bank = Self {
             old_written_accounts: RwLock::default(),
             old_written_accounts_from_last_slot: RwLock::default(),
+            // todo: this has to be saved and loaded in bank persistence somehow
             accumulated_accounts_hash: RwLock::default(),
             skipped_rewrites: Mutex::default(),
             incremental_snapshot_persistence: fields.incremental_snapshot_persistence,
