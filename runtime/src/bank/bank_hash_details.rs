@@ -21,10 +21,12 @@ use {
     std::str::FromStr,
 };
 
+/// The components that go into a bank hash calculation
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct BankHashDetails {
-    /// client version
+    /// The client version
     pub version: String,
+    /// The encoding format for account data buffers
     pub account_data_encoding: String,
     pub slot: Slot,
     pub bank_hash: String,
@@ -99,15 +101,16 @@ impl TryFrom<&Bank> for BankHashDetails {
     }
 }
 
-// Wrap the Vec<...> so we can implement custom Serialize/Deserialize traits on the wrapper type
+/// Wrapper around a Vec<_> to facilitate custom Serialize/Deserialize trait
+/// implementations.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct BankHashAccounts {
     pub accounts: Vec<PubkeyHashAccount>,
 }
 
-#[derive(Deserialize, Serialize)]
 /// Used as an intermediate for serializing and deserializing account fields
 /// into a human readable format.
+#[derive(Deserialize, Serialize)]
 struct SerdeAccount {
     pubkey: String,
     hash: String,
@@ -193,7 +196,7 @@ impl<'de> Deserialize<'de> for BankHashAccounts {
     }
 }
 
-/// Output the components that comprise bank hash
+/// Output the components that comprise the overall bank hash for the supplied `Bank`
 pub fn write_bank_hash_details_file(bank: &Bank) -> std::result::Result<(), String> {
     let details = BankHashDetails::try_from(bank)?;
 
