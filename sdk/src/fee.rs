@@ -82,18 +82,13 @@ impl FeeStructure {
         message: &SanitizedMessage,
         lamports_per_signature: u64,
         budget_limits: &FeeBudgetLimits,
-        remove_congestion_multiplier: bool,
         include_loaded_account_data_size_in_fee: bool,
     ) -> u64 {
         // Fee based on compute units and signatures
         let congestion_multiplier = if lamports_per_signature == 0 {
             0.0 // test only
-        } else if remove_congestion_multiplier {
-            1.0 // multiplier that has no effect
         } else {
-            const BASE_CONGESTION: f64 = 5_000.0;
-            let current_congestion = BASE_CONGESTION.max(lamports_per_signature as f64);
-            BASE_CONGESTION / current_congestion
+            1.0 // multiplier that has no effect
         };
 
         let signature_fee = message
