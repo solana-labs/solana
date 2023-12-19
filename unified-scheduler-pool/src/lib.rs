@@ -965,7 +965,7 @@ where
 
         for j in self.handler_threads.drain(..) {
             debug!("joining...: {:?}", j);
-            assert_eq!(j.join().unwrap(), ());
+            () = j.join().unwrap();
         }
         debug!(
             "stop_threads(): successfully stopped threads by {:?}",
