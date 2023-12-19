@@ -955,6 +955,49 @@ pub(super) enum RewardInterval {
 }
 
 impl Bank {
+    /// Constructs a new Bank
+    #[must_use]
+    pub fn new(
+        accounts: Accounts,
+        genesis_config: &GenesisConfig,
+        runtime_config: Arc<RuntimeConfig>,
+        debug_keys: Option<Arc<HashSet<Pubkey>>>,
+        additional_builtins: Option<&[BuiltinPrototype]>,
+        debug_do_not_add_builtins: bool,
+    ) -> Self {
+        let mut bank = Self::default_with_accounts(accounts);
+        bank.ancestors = Ancestors::from(vec![bank.slot()]);
+        bank.transaction_debug_keys = debug_keys;
+        bank.runtime_config = runtime_config;
+        bank.cluster_type = Some(genesis_config.cluster_type);
+
+        bank.process_genesis_config(genesis_config);
+        bank.finish_init(
+            genesis_config,
+            additional_builtins,
+            debug_do_not_add_builtins,
+        );
+
+        // genesis needs stakes for all epochs up to the epoch implied by
+        //  slot = 0 and genesis configuration
+        {
+            let stakes = bank.stakes_cache.stakes().clone();
+            let stakes = Arc::new(StakesEnum::from(stakes));
+            for epoch in 0..=bank.get_leader_schedule_epoch(bank.slot) {
+                bank.epoch_stakes
+                    .insert(epoch, EpochStakes::new(stakes.clone(), epoch));
+            }
+            bank.update_stake_history(None);
+        }
+        bank.update_clock(None);
+        bank.update_rent();
+        bank.update_epoch_schedule();
+        bank.update_recent_blockhashes();
+        bank.update_last_restart_slot();
+        bank.fill_missing_sysvar_cache_entries();
+        bank
+    }
+
     pub fn new_for_benches(genesis_config: &GenesisConfig) -> Self {
         Self::new_with_paths_for_benches(genesis_config, Vec::new())
     }
@@ -1112,37 +1155,15 @@ impl Bank {
             exit,
         );
         let accounts = Accounts::new(Arc::new(accounts_db));
-        let mut bank = Self::default_with_accounts(accounts);
-        bank.ancestors = Ancestors::from(vec![bank.slot()]);
-        bank.transaction_debug_keys = debug_keys;
-        bank.runtime_config = runtime_config;
-        bank.cluster_type = Some(genesis_config.cluster_type);
 
-        bank.process_genesis_config(genesis_config);
-        bank.finish_init(
+        Self::new(
+            accounts,
             genesis_config,
+            runtime_config,
+            debug_keys,
             additional_builtins,
             debug_do_not_add_builtins,
-        );
-
-        // genesis needs stakes for all epochs up to the epoch implied by
-        //  slot = 0 and genesis configuration
-        {
-            let stakes = bank.stakes_cache.stakes().clone();
-            let stakes = Arc::new(StakesEnum::from(stakes));
-            for epoch in 0..=bank.get_leader_schedule_epoch(bank.slot) {
-                bank.epoch_stakes
-                    .insert(epoch, EpochStakes::new(stakes.clone(), epoch));
-            }
-            bank.update_stake_history(None);
-        }
-        bank.update_clock(None);
-        bank.update_rent();
-        bank.update_epoch_schedule();
-        bank.update_recent_blockhashes();
-        bank.update_last_restart_slot();
-        bank.fill_missing_sysvar_cache_entries();
-        bank
+        )
     }
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
