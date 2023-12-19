@@ -17,7 +17,7 @@ use {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         installed_scheduler_pool::{
             InstalledScheduler, ResultWithTimings, ScheduleExecutionArg, SchedulerId,
-            SchedulingContext, WithTransactionAndIndex,
+            SchedulingContext, SchedulingMode, WithTransactionAndIndex,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
@@ -241,6 +241,10 @@ mod nonblocking {
             _initial_context: SchedulingContext,
             _handler: H,
         ) -> Self {
+            unimplemented!();
+        }
+
+        fn retire_if_stale(&mut self) -> bool {
             unimplemented!();
         }
     }
@@ -694,10 +698,6 @@ mod thread_utilization {
 
     /*
     impl InstallableScheduler<ScheduleExecutionArgForBench> for NonblockingSchedulerWithDepGraph {
-        fn has_context(&self) -> bool {
-            self.inner_scheduler.has_context()
-        }
-
         fn replace_context(&mut self, context: SchedulingContext) {
             self.inner_scheduler.replace_context(context)
         }

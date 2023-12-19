@@ -10,7 +10,17 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+assert_matches = { workspace = true }
+cpu-time = "1.0.0"
+crossbeam-channel = { workspace = true }
+dashmap = { workspace = true }
+log = { workspace = true }
+procfs = { workspace = true }
+rustix = { workspace = true }
+serde_json = "1.0.81"
 solana-ledger = { workspace = true }
+solana-measure = { workspace = true }
+solana-metrics = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
@@ -18,11 +28,10 @@ solana-unified-scheduler-logic = { workspace = true }
 solana-vote = { workspace = true }
 
 [dev-dependencies]
-assert_matches = { workspace = true }
 bincode = { workspace = true }
-crossbeam-channel = { workspace = true }
 jemallocator = { workspace = true }
 log = { workspace = true }
+rand = { workspace = true }
 solana-logger = { workspace = true }
 solana-nohash-hasher = { workspace = true }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }

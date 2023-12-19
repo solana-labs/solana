@@ -279,9 +279,14 @@ impl BankWithScheduler {
     pub(crate) fn new(bank: Arc<Bank>, scheduler: Option<InstalledSchedulerBox>) -> Self {
         if let Some(bank_in_context) = scheduler
             .as_ref()
-            .map(|scheduler| scheduler.context().bank())
+            .map(|scheduler| scheduler.context().bank().clone())
         {
-            assert!(Arc::ptr_eq(&bank, bank_in_context));
+            assert!(
+                Arc::ptr_eq(&bank, &bank_in_context),
+                "different bank!? {} {}",
+                bank.slot(),
+                bank_in_context.slot()
+            );
         }
 
         Self {

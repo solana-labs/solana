@@ -36,11 +36,17 @@ pub struct SanitizedTransaction {
 }
 
 /// Set of accounts that must be locked for safe transaction processing
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
+use serde_with::serde_as;
+use serde_with::DisplayFromStr;
+
+#[serde_as]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize)]
 pub struct TransactionAccountLocks<'a> {
     /// List of readonly account key locks
+    #[serde_as(as = "Vec<DisplayFromStr>")]
     pub readonly: Vec<&'a Pubkey>,
     /// List of writable account key locks
+    #[serde_as(as = "Vec<DisplayFromStr>")]
     pub writable: Vec<&'a Pubkey>,
 }
 

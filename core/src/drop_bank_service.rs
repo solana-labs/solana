@@ -1,11 +1,8 @@
 use {
     crossbeam_channel::Receiver,
     solana_measure::measure::Measure,
-    solana_runtime::bank::Bank,
-    std::{
-        sync::Arc,
-        thread::{self, Builder, JoinHandle},
-    },
+    solana_runtime::installed_scheduler_pool::BankWithScheduler,
+    std::thread::{self, Builder, JoinHandle},
 };
 
 pub struct DropBankService {
@@ -13,7 +10,7 @@ pub struct DropBankService {
 }
 
 impl DropBankService {
-    pub fn new(bank_receiver: Receiver<Vec<Arc<Bank>>>) -> Self {
+    pub fn new(bank_receiver: Receiver<Vec<BankWithScheduler>>) -> Self {
         let thread_hdl = Builder::new()
             .name("solDropBankSrvc".to_string())
             .spawn(move || {

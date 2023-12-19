@@ -252,7 +252,7 @@ impl BankForks {
         self.insert(bank)
     }
 
-    pub fn remove(&mut self, slot: Slot) -> Option<Arc<Bank>> {
+    pub fn remove(&mut self, slot: Slot) -> Option<BankWithScheduler> {
         let bank = self.banks.remove(&slot)?;
         for parent in bank.proper_ancestors() {
             let Entry::Occupied(mut entry) = self.descendants.entry(parent) else {
@@ -269,7 +269,7 @@ impl BankForks {
         if entry.get().is_empty() {
             entry.remove_entry();
         }
-        Some(bank.clone_without_scheduler())
+        Some(bank)
     }
 
     pub fn highest_slot(&self) -> Slot {
@@ -289,7 +289,7 @@ impl BankForks {
         root: Slot,
         accounts_background_request_sender: &AbsRequestSender,
         highest_super_majority_root: Option<Slot>,
-    ) -> (Vec<Arc<Bank>>, SetRootMetrics) {
+    ) -> (Vec<BankWithScheduler>, SetRootMetrics) {
         let old_epoch = self.root_bank().epoch();
         // To support `RootBankCache` (via `ReadOnlyAtomicSlot`) accessing `root` *without* locking
         // BankForks first *and* from a different thread, this store *must* be at least Release to
@@ -468,7 +468,7 @@ impl BankForks {
         root: Slot,
         accounts_background_request_sender: &AbsRequestSender,
         highest_super_majority_root: Option<Slot>,
-    ) -> Vec<Arc<Bank>> {
+    ) -> Vec<BankWithScheduler> {
         let program_cache_prune_start = Instant::now();
         let set_root_start = Instant::now();
         let (removed_banks, set_root_metrics) = self.do_set_root_return_metrics(
@@ -629,7 +629,7 @@ impl BankForks {
         &mut self,
         root: Slot,
         highest_super_majority_root: Option<Slot>,
-    ) -> (Vec<Arc<Bank>>, u64, u64) {
+    ) -> (Vec<BankWithScheduler>, u64, u64) {
         // Clippy doesn't like separating the two collects below,
         // but we want to collect timing separately, and the 2nd requires
         // a unique borrow to self which is already borrowed by self.banks

@@ -181,7 +181,7 @@ impl Default for MetricsAgent {
 
         Self::new(
             Arc::new(InfluxDbMetricsWriter::new()),
-            Duration::from_secs(10),
+            Duration::from_secs(1),
             max_points_per_sec,
         )
     }

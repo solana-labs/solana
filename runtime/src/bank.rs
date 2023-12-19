@@ -5284,14 +5284,17 @@ impl Bank {
 
         execution_time.stop();
 
-        const SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE: u8 = 90;
-        self.loaded_programs_cache
-            .write()
-            .unwrap()
-            .evict_using_2s_random_selection(
-                Percentage::from(SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE),
-                self.slot(),
-            );
+        use rand::Rng;
+        if rand::thread_rng().gen_range(0..1000) == 0 {
+            const SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE: u8 = 90;
+            self.loaded_programs_cache
+                .write()
+                .unwrap()
+                .evict_using_2s_random_selection(
+                    Percentage::from(SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE),
+                    self.slot(),
+                );
+        }
 
         debug!(
             "check: {}us load: {}us execute: {}us txs_len={}",
@@ -5635,7 +5638,7 @@ impl Bank {
                 programs_modified_by_tx,
             } = execution_result
             {
-                if details.status.is_ok() {
+                if details.status.is_ok() && !programs_modified_by_tx.is_empty() {
                     let mut cache = self.loaded_programs_cache.write().unwrap();
                     cache.merge(programs_modified_by_tx);
                 }

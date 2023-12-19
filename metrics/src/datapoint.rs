@@ -60,6 +60,15 @@ impl DataPoint {
         }
     }
 
+    pub fn at(timestamp: SystemTime, name: &'static str) -> Self {
+        DataPoint {
+            name,
+            timestamp,
+            tags: vec![],
+            fields: vec![],
+        }
+    }
+
     pub fn add_tag(&mut self, name: &'static str, value: &str) -> &mut Self {
         self.tags.push((name, value.to_string()));
         self
@@ -164,6 +173,56 @@ macro_rules! create_datapoint {
 }
 
 #[macro_export]
+macro_rules! create_datapoint_at {
+    (@field $point:ident $name:expr, $string:expr, String) => {
+        $point.add_field_str($name, &$string);
+    };
+    (@field $point:ident $name:expr, $value:expr, i64) => {
+        $point.add_field_i64($name, $value as i64);
+    };
+    (@field $point:ident $name:expr, $value:expr, f64) => {
+        $point.add_field_f64($name, $value as f64);
+    };
+    (@field $point:ident $name:expr, $value:expr, bool) => {
+        $point.add_field_bool($name, $value as bool);
+    };
+    (@tag $point:ident $tag_name:expr, $tag_value:expr) => {
+        $point.add_tag($tag_name, &$tag_value);
+    };
+
+    (@fields $point:ident) => {};
+
+    // process tags
+    (@fields $point:ident $tag_name:expr => $tag_value:expr, $($rest:tt)*) => {
+        $crate::create_datapoint!(@tag $point $tag_name, $tag_value);
+        $crate::create_datapoint!(@fields $point $($rest)*);
+    };
+    (@fields $point:ident $tag_name:expr => $tag_value:expr) => {
+        $crate::create_datapoint!(@tag $point $tag_name, $tag_value);
+    };
+
+    // process fields
+    (@fields $point:ident ($name:expr, $value:expr, $type:ident) , $($rest:tt)*) => {
+        $crate::create_datapoint!(@field $point $name, $value, $type);
+        $crate::create_datapoint!(@fields $point $($rest)*);
+    };
+    (@fields $point:ident ($name:expr, $value:expr, $type:ident)) => {
+        $crate::create_datapoint!(@field $point $name, $value, $type);
+    };
+
+    (@point $name:expr, $at:expr, $($fields:tt)+) => {
+        {
+            let mut point = $crate::datapoint::DataPoint::at($at, &$name);
+            $crate::create_datapoint!(@fields point $($fields)+);
+            point
+        }
+    };
+    (@point $name:expr, $at:expr) => {
+        $crate::datapoint::DataPoint::at($at, &$name)
+    };
+}
+
+#[macro_export]
 macro_rules! datapoint {
     ($level:expr, $name:expr $(,)?) => {
         if log::log_enabled!($level) {
@@ -176,6 +235,21 @@ macro_rules! datapoint {
         }
     };
 }
+
+#[macro_export]
+macro_rules! datapoint_at {
+    ($level:expr, $at:expr, $name:expr) => {
+        if log::log_enabled!($level) {
+            $crate::submit($crate::create_datapoint_at!(@point $name, $at), $level);
+        }
+    };
+    ($level:expr, $at:expr, $name:expr, $($fields:tt)+) => {
+        if log::log_enabled!($level) {
+            $crate::submit($crate::create_datapoint_at!(@point $name, $at, $($fields)+), $level);
+        }
+    };
+}
+
 #[macro_export]
 macro_rules! datapoint_error {
     ($name:expr $(,)?) => {
@@ -203,6 +277,16 @@ macro_rules! datapoint_info {
     };
     ($name:expr, $($fields:tt)+) => {
         $crate::datapoint!(log::Level::Info, $name, $($fields)+);
+    };
+}
+
+#[macro_export]
+macro_rules! datapoint_info_at {
+    ($at:expr, $name:expr) => {
+        $crate::datapoint_at!(log::Level::Info, $at, $name);
+    };
+    ($at:expr, $name:expr, $($fields:tt)+) => {
+        $crate::datapoint_at!(log::Level::Info, $at, $name, $($fields)+);
     };
 }
 

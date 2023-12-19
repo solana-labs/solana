@@ -492,7 +492,7 @@ impl ReplayStage {
         cluster_slots_update_sender: ClusterSlotsUpdateSender,
         cost_update_sender: Sender<CostUpdate>,
         voting_sender: Sender<VoteOp>,
-        drop_bank_sender: Sender<Vec<Arc<Bank>>>,
+        drop_bank_sender: Sender<Vec<BankWithScheduler>>,
         block_metadata_notifier: Option<BlockMetadataNotifierArc>,
         log_messages_bytes_limit: Option<usize>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
@@ -1512,7 +1512,7 @@ impl ReplayStage {
 
         // Grab the Slot and BankId's of the banks we need to purge, then clear the banks
         // from BankForks
-        let (slots_to_purge, removed_banks): (Vec<(Slot, BankId)>, Vec<Arc<Bank>>) = {
+        let (slots_to_purge, removed_banks): (Vec<(Slot, BankId)>, Vec<BankWithScheduler>) = {
             let mut w_bank_forks = bank_forks.write().unwrap();
             slot_descendants
                 .iter()
@@ -2170,7 +2170,7 @@ impl ReplayStage {
         replay_timing: &mut ReplayTiming,
         voting_sender: &Sender<VoteOp>,
         epoch_slots_frozen_slots: &mut EpochSlotsFrozenSlots,
-        drop_bank_sender: &Sender<Vec<Arc<Bank>>>,
+        drop_bank_sender: &Sender<Vec<BankWithScheduler>>,
         wait_to_vote_slot: Option<Slot>,
     ) {
         if bank.is_empty() {
@@ -3932,7 +3932,7 @@ impl ReplayStage {
         has_new_vote_been_rooted: &mut bool,
         voted_signatures: &mut Vec<Signature>,
         epoch_slots_frozen_slots: &mut EpochSlotsFrozenSlots,
-        drop_bank_sender: &Sender<Vec<Arc<Bank>>>,
+        drop_bank_sender: &Sender<Vec<BankWithScheduler>>,
     ) {
         bank_forks.read().unwrap().prune_program_cache(new_root);
         let removed_banks = bank_forks.write().unwrap().set_root(
