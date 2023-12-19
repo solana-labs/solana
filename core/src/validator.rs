@@ -104,7 +104,7 @@ use {
             self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path_contents,
         },
     },
-    solana_scheduler_pool::DefaultSchedulerPool,
+    solana_unified_scheduler_pool::DefaultSchedulerPool,
     solana_sdk::{
         clock::Slot,
         epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
