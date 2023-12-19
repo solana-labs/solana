@@ -7845,8 +7845,7 @@ impl Bank {
 
     pub(crate) fn do_fill_bank_with_ticks_for_tests(&self, scheduler: &InstalledSchedulerRwLock) {
         if self.tick_height.load(Relaxed) < self.max_tick_height {
-            let last_blockhash = self.last_blockhash();
-            while self.last_blockhash() == last_blockhash {
+            while self.tick_height.load(Relaxed) < self.max_tick_height {
                 self.register_tick(&Hash::new_unique(), scheduler)
             }
         } else {
