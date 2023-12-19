@@ -752,12 +752,12 @@ pub mod tests {
         const NUM_ACCOUNTS: u32 = 30;
         let mut rng = rand::thread_rng();
 
-        let hot_account_metas: Vec<_> = (0..NUM_ACCOUNTS)
-            .map(|_| {
+        let hot_account_metas: Vec<_> = std::iter::repeat_with({||
                 HotAccountMeta::new()
                     .with_lamports(rng.gen_range(1..u64::MAX))
                     .with_owner_offset(OwnerOffset(rng.gen_range(0..NUM_OWNERS)))
             })
+            .take(NUM_ACCOUNTS as usize)
             .collect();
         let mut footer = TieredStorageFooter {
             account_meta_format: AccountMetaFormat::Hot,
