@@ -21,13 +21,29 @@ use {
     std::str::FromStr,
 };
 
-/// The components that go into a bank hash calculation
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub(crate) struct BankHashSlotDetails {
+pub(crate) struct BankHashDetails {
     /// The client version
     pub version: String,
     /// The encoding format for account data buffers
     pub account_data_encoding: String,
+    #[serde(rename = "banks")]
+    pub bank_hash_details: Vec<BankHashSlotDetails>,
+}
+
+impl BankHashDetails {
+    pub fn new(bank_hash_details: Vec<BankHashSlotDetails>) -> Self {
+        Self {
+            version: solana_version::version!().to_string(),
+            account_data_encoding: "base64".to_string(),
+            bank_hash_details,
+        }
+    }
+}
+
+/// The components that go into a bank hash calculation
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub(crate) struct BankHashSlotDetails {
     pub slot: Slot,
     pub bank_hash: String,
     pub parent_bank_hash: String,
@@ -48,8 +64,6 @@ impl BankHashSlotDetails {
         accounts: BankHashAccounts,
     ) -> Self {
         Self {
-            version: solana_version::version!().to_string(),
-            account_data_encoding: "base64".to_string(),
             slot,
             bank_hash: bank_hash.to_string(),
             parent_bank_hash: parent_bank_hash.to_string(),
@@ -198,10 +212,10 @@ impl<'de> Deserialize<'de> for BankHashAccounts {
 
 /// Output the components that comprise the overall bank hash for the supplied `Bank`
 pub fn write_bank_hash_details_file(bank: &Bank) -> std::result::Result<(), String> {
-    let details = BankHashSlotDetails::try_from(bank)?;
+    let slot_details = BankHashSlotDetails::try_from(bank)?;
 
-    let slot = details.slot;
-    let hash = &details.bank_hash;
+    let slot = slot_details.slot;
+    let hash = &slot_details.bank_hash;
     let file_name = format!("{slot}-{hash}.json");
     let parent_dir = bank
         .rc
@@ -214,6 +228,8 @@ pub fn write_bank_hash_details_file(bank: &Bank) -> std::result::Result<(), Stri
     // rewriting a duplicate file in this scenario
     if !path.exists() {
         info!("writing details of bank {} to {}", slot, path.display());
+
+        let details = BankHashDetails::new(vec![slot_details]);
 
         // std::fs::write may fail (depending on platform) if the full directory
         // path does not exist. So, call std::fs_create_dir_all first.
