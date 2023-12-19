@@ -1,7 +1,7 @@
 [package]
-name = "solana-scheduler-pool"
+name = "solana-unified-scheduler-pool"
 description = "The solana scheduler pool"
-documentation = "https://docs.rs/solana-scheduler-pool"
+documentation = "https://docs.rs/solana-unified-scheduler-pool"
 version = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
