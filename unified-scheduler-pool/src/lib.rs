@@ -24,8 +24,7 @@ use {
         installed_scheduler_pool::{
             DefaultScheduleExecutionArg, InstalledScheduler, InstalledSchedulerPool,
             InstalledSchedulerPoolArc, ResultWithTimings, ScheduleExecutionArg, SchedulerId,
-            SchedulingContext, SchedulingMode, WaitReason, WithSchedulingMode,
-            WithTransactionAndIndex,
+            SchedulingContext, WaitReason, WithTransactionAndIndex,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
