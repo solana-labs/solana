@@ -693,6 +693,10 @@ impl AdminRpcImpl {
                 .cluster_info
                 .set_keypair(Arc::new(identity_keypair));
             warn!("Identity set to {}", post_init.cluster_info.id());
+            solana_metrics::datapoint_info!(
+                "validator-new",
+                ("version", solana_version::version!(), String),
+            );
             Ok(())
         })
     }
