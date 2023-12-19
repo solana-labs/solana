@@ -434,7 +434,7 @@ impl SchedulingStateMachine {
         let (lock_count, usages) = Self::attempt_lock_for_execution(
             &mut self.page_token,
             &task.unique_weight,
-            &mut task.lock_attempts_mut(&mut self.task_token),
+            task.lock_attempts_mut(&mut self.task_token),
             &task_source,
         );
 
@@ -498,7 +498,7 @@ impl SchedulingStateMachine {
 
     fn unlock_after_execution(&mut self, task: &Task) {
         let unique_weight = &task.unique_weight;
-        let should_remove = task.has_contended(&mut self.task_token);
+        let should_remove = task.has_contended(self.task_token);
 
         for unlock_attempt in task.lock_attempts(&self.task_token) {
             if should_remove {
