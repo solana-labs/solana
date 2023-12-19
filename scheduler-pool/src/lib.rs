@@ -253,8 +253,6 @@ where
     }
 
     pub fn return_scheduler(&self, scheduler: Box<T>) {
-        assert!(!scheduler.has_context());
-
         self.schedulers
             .lock()
             .expect("not poisoned")
@@ -1016,7 +1014,6 @@ where
 }
 
 pub trait InstallableScheduler<SEA: ScheduleExecutionArg>: InstalledScheduler<SEA> {
-    fn has_context(&self) -> bool;
     fn replace_context(&mut self, context: SchedulingContext);
 }
 
@@ -1141,10 +1138,6 @@ where
     TH: Handler<SEA>,
     SEA: ScheduleExecutionArg,
 {
-    fn has_context(&self) -> bool {
-        true
-    }
-
     fn replace_context(&mut self, context: SchedulingContext) {
         self.thread_manager.write().unwrap().start_session(&context);
         self.context = context;
@@ -1245,17 +1238,14 @@ mod tests {
 
         let mut scheduler = pool.do_take_scheduler(context.clone());
 
-        assert!(scheduler.has_context());
         assert_matches!(
             scheduler.wait_for_termination(&WaitReason::PausedForRecentBlockhash),
             None
         );
-        assert!(scheduler.has_context());
         assert_matches!(
             scheduler.wait_for_termination(&WaitReason::TerminatedToFreeze),
             None
         );
-        assert!(!scheduler.has_context());
     }
 
     #[test]
@@ -1529,10 +1519,6 @@ mod tests {
     impl<const TRIGGER_RACE_CONDITION: bool> InstallableScheduler<DefaultScheduleExecutionArg>
         for AsyncScheduler<TRIGGER_RACE_CONDITION>
     {
-        fn has_context(&self) -> bool {
-            self.0.has_context()
-        }
-
         fn replace_context(&mut self, context: SchedulingContext) {
             self.0.replace_context(context)
         }
