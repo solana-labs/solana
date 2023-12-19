@@ -20,12 +20,12 @@ use {
         },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
-    solana_unified_scheduler_pool::{
-        TaskHandler, InstallableScheduler, PooledScheduler, SchedulerPool, SpawnableScheduler,
-    },
     solana_sdk::{
         system_transaction,
         transaction::{Result, SanitizedTransaction},
+    },
+    solana_unified_scheduler_pool::{
+        InstallableScheduler, PooledScheduler, SchedulerPool, SpawnableScheduler, TaskHandler,
     },
     std::{
         fmt::Debug,

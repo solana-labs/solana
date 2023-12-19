@@ -1155,7 +1155,7 @@ mod tests {
             bank::Bank,
             bank_forks::BankForks,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
-            installed_scheduler_pool::{BankWithScheduler, SchedulingContext},
+            installed_scheduler_pool::{BankWithScheduler, SchedulingContext, SchedulingMode},
             prioritization_fee_cache::PrioritizationFeeCache,
         },
         solana_sdk::{
@@ -1167,7 +1167,6 @@ mod tests {
         },
         std::{sync::Arc, thread::JoinHandle},
     };
-    use solana_runtime::installed_scheduler_pool::SchedulingMode;
 
     #[test]
     fn test_scheduler_pool_new() {

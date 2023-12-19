@@ -525,7 +525,6 @@ impl Default for SchedulingStateMachine {
             page_token: unsafe { PageToken::assume_on_the_scheduler_thread() },
         }
     }
-
 }
 
 enum TaskSource {
