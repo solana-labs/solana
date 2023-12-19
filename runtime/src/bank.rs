@@ -512,6 +512,7 @@ impl PartialEq for Bank {
         }
         let Self {
             accumulated_accounts_hash: _,
+            old_written_accounts_from_last_slot: _,
             old_written_accounts: _,
             skipped_rewrites: _,
             rc: _,
@@ -838,6 +839,8 @@ pub struct Bank {
     pub accumulated_accounts_hash: RwLock<Option<Hash>>,
     /// the pubkey, (account, hash) pairs that were loaded in this slot in order to be written. Ideally, when the bank is done, this contains a calculated hash value for all accounts which are written in THIS slot.
     pub old_written_accounts: RwLock<HashMap<Pubkey, (Option<AccountSharedData>, Option<AccountHash>)>>,
+    /// the pubkey, hash pairs that were written by the last slot. MANY accounts are written EVERY slot. This avoids a re-hashing.
+    pub old_written_accounts_from_last_slot: RwLock<HashMap<Pubkey, (Option<AccountSharedData>, Option<AccountHash>)>>,
 
     epoch_reward_status: EpochRewardStatus,
 }
@@ -983,6 +986,7 @@ impl Bank {
     fn default_with_accounts(accounts: Accounts) -> Self {
         let mut bank = Self {
             accumulated_accounts_hash: RwLock::default(),
+            old_written_accounts_from_last_slot: RwLock::default(),
             old_written_accounts: RwLock::default(),
             skipped_rewrites: Mutex::default(),
             incremental_snapshot_persistence: None,
@@ -1321,7 +1325,9 @@ impl Bank {
         let accounts_data_size_initial = parent.load_accounts_data_size();
         let mut new = Self {
             accumulated_accounts_hash: RwLock::default(),
-            old_written_accounts: RwLock::default(),
+            // start this slot's old written accounts with the accounts written in the last slot. many accounts are written every slot (like votes)
+            old_written_accounts: RwLock::new(std::mem::take(&mut parent.old_written_accounts_from_last_slot.write().unwrap())),
+            old_written_accounts_from_last_slot: RwLock::default(),
             skipped_rewrites: Mutex::default(),
             incremental_snapshot_persistence: None,
             rc,
@@ -1838,6 +1844,7 @@ impl Bank {
         let stakes_accounts_load_duration = now.elapsed();
         let mut bank = Self {
             old_written_accounts: RwLock::default(),
+            old_written_accounts_from_last_slot: RwLock::default(),
             accumulated_accounts_hash: RwLock::default(),
             skipped_rewrites: Mutex::default(),
             incremental_snapshot_persistence: fields.incremental_snapshot_persistence,
@@ -7015,6 +7022,17 @@ impl Bank {
         // We could even leave the RwLock<AccountsHash> out of it and just re-hash inside `accumulate_accounts_hash`. Depends on how much time loading from prior slots, cloning the account, hashing the account, and looking up the hash (in hashmap) take relative to each other.
         // I think we want to avoid passing the hash value (or some type of Arc<RwLock<AccountHash>> all around to everyone at every load just for this feature). We need (impl ReadableAccount) + pubkey in order to calculate a hash, so we need something like &AccountSharedData, which we'd like to avoid cloning just so we can hash it later.
         // All of this concern can get mitigated if we just wait a single slot and do this hash in the bg.
+
+
+        {
+            // every account that was written and hashed in this slot is likely going to be written again in the next slot. So, remember the pubkey and hash values as of the end of this slot.
+            // This will become the initial expected (pubkey, hash) pairs needed to subtract out these hashes from the accumulated hash next time.
+            let mut old_written_accounts_from_last_slot = self.old_written_accounts_from_last_slot.write().unwrap();
+            pubkey_hash.iter().for_each(|(k, h)| {
+                old_written_accounts_from_last_slot.insert(*k, (None, Some(*h)));
+            })
+        }
+
         let mut accumulated = self.parent().map(|bank| bank.accumulated_accounts_hash.read().unwrap().unwrap_or_default()).unwrap_or_default(); // todo probably not default here
         self
             .rc
