@@ -381,7 +381,7 @@ impl ExecutedTask {
     fn new_boxed(task: Task, thx: usize, slot: Slot) -> Box<Self> {
         Box::new(Self {
             task,
-            result_with_timings: (Ok(()), Default::default()),
+            result_with_timings: (Ok(()), ExecuteTimings::default()),
             slot,
             thx,
             handler_timings: None,
