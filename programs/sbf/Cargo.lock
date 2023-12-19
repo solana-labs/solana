@@ -6261,6 +6261,7 @@ dependencies = [
  "dashmap",
  "log",
  "procfs",
+ "rustix",
  "serde_json",
  "solana-ledger",
  "solana-measure",
