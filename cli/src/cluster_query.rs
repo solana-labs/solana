@@ -108,7 +108,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("OUR_VALIDATOR_PUBKEY")
                         .required(false),
-                    "Identity pubkey of the validator"
+                    "Identity of the validator."
                 ))
                 .arg(
                     Arg::with_name("node_json_rpc_url")
@@ -297,8 +297,8 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                 .about("Stream transaction logs")
                 .arg(pubkey!(
                     Arg::with_name("address").index(1).value_name("ADDRESS"),
-                    "Account address to monitor [default: monitor all transactions except for \
-                     votes] "
+                    "Account to monitor \
+                    [default: monitor all transactions except for votes]."
                 ))
                 .arg(
                     Arg::with_name("include_votes")
@@ -347,13 +347,13 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("VOTE_ACCOUNT_PUBKEYS")
                         .multiple(true),
-                    "Only show stake accounts delegated to the provided vote accounts. "
+                    "Only show stake accounts delegated to the provided vote account."
                 ))
                 .arg(pubkey!(
                     Arg::with_name("withdraw_authority")
                         .value_name("PUBKEY")
                         .long("withdraw-authority"),
-                    "Only show stake accounts with the provided withdraw authority. "
+                    "Only show stake accounts with the provided withdraw authority."
                 )),
         )
         .subcommand(
@@ -430,7 +430,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("ADDRESS")
                         .required(true),
-                    "Account address"
+                    "Account to query for transactions."
                 ))
                 .arg(
                     Arg::with_name("limit")

@@ -1,15 +1,14 @@
 //! Transaction scheduling code.
 //!
-//! This crate implements two solana-runtime traits (`InstalledScheduler` and
-//! `InstalledSchedulerPool`) to provide concrete transaction scheduling implementation (including
-//! executing txes and committing tx results).
+//! This crate implements 3 solana-runtime traits (`InstalledScheduler`, `UninstalledScheduler` and
+//! `InstalledSchedulerPool`) to provide a concrete transaction scheduling implementation
+//! (including executing txes and committing tx results).
 //!
-//! At highest level, this crate takes `SanitizedTransaction`s via its `schedule_execution()` and
-//! commits any side-effects (i.e. on-chain state changes) into `Bank`s via `solana-ledger`'s
-//! helper fun called `execute_batch()`.
+//! At the highest level, this crate takes `SanitizedTransaction`s via its `schedule_execution()`
+//! and commits any side-effects (i.e. on-chain state changes) into the associated `Bank` via
+//! `solana-ledger`'s helper function called `execute_batch()`.
 
 use {
-    rand::{thread_rng, Rng},
     solana_ledger::blockstore_processor::{
         execute_batch, TransactionBatchWithIndexes, TransactionStatusSender,
     },
@@ -19,36 +18,36 @@ use {
         installed_scheduler_pool::{
             DefaultScheduleExecutionArg, InstalledScheduler, InstalledSchedulerPool,
             InstalledSchedulerPoolArc, ResultWithTimings, ScheduleExecutionArg, SchedulerId,
-            SchedulingContext, WaitReason, WithTransactionAndIndex,
+            SchedulingContext, UninstalledScheduler, UninstalledSchedulerBox,
+            WithTransactionAndIndex,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
-    solana_sdk::{
-        scheduling::{SchedulingMode, WithSchedulingMode},
-        transaction::{Result, SanitizedTransaction},
-    },
+    solana_sdk::transaction::{Result, SanitizedTransaction},
     solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
         fmt::Debug,
         marker::PhantomData,
-        sync::{Arc, Mutex, Weak},
+        sync::{
+            atomic::{AtomicU64, Ordering::Relaxed},
+            Arc, Mutex, Weak,
+        },
     },
 };
+
+type AtomicSchedulerId = AtomicU64;
 
 // SchedulerPool must be accessed via dyn by solana-runtime code, because of its internal fields'
 // types (currently TransactionStatusSender; also, PohRecorder in the future) aren't available
 // there...
 #[derive(Debug)]
 pub struct SchedulerPool<
-    T: SpawnableScheduler<TH, SEA>,
-    TH: ScheduledTransactionHandler<SEA>,
+    S: SpawnableScheduler<TH, SEA>,
+    TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 > {
-    schedulers: Mutex<Vec<Box<T>>>,
-    log_messages_bytes_limit: Option<usize>,
-    transaction_status_sender: Option<TransactionStatusSender>,
-    replay_vote_sender: Option<ReplayVoteSender>,
-    prioritization_fee_cache: Arc<PrioritizationFeeCache>,
+    scheduler_inners: Mutex<Vec<S::Inner>>,
+    handler_context: HandlerContext,
     // weak_self could be elided by changing InstalledScheduler::take_scheduler()'s receiver to
     // Arc<Self> from &Self, because SchedulerPool is used as in the form of Arc<SchedulerPool>
     // almost always. But, this would cause wasted and noisy Arc::clone()'s at every call sites.
@@ -60,21 +59,32 @@ pub struct SchedulerPool<
     // After these considerations, this weak_self approach is chosen at the cost of some additional
     // memory increase.
     weak_self: Weak<Self>,
-    _phantom: PhantomData<(T, TH, SEA)>,
+    next_scheduler_id: AtomicSchedulerId,
+    _phantom: PhantomData<TH>,
+}
+
+#[derive(Debug)]
+pub struct HandlerContext {
+    log_messages_bytes_limit: Option<usize>,
+    transaction_status_sender: Option<TransactionStatusSender>,
+    replay_vote_sender: Option<ReplayVoteSender>,
+    prioritization_fee_cache: Arc<PrioritizationFeeCache>,
 }
 
 pub type DefaultSchedulerPool = SchedulerPool<
-    PooledScheduler<DefaultTransactionHandler, DefaultScheduleExecutionArg>,
-    DefaultTransactionHandler,
+    PooledScheduler<DefaultTaskHandler, DefaultScheduleExecutionArg>,
+    DefaultTaskHandler,
     DefaultScheduleExecutionArg,
 >;
 
-impl<
-        T: SpawnableScheduler<TH, SEA>,
-        TH: ScheduledTransactionHandler<SEA>,
-        SEA: ScheduleExecutionArg,
-    > SchedulerPool<T, TH, SEA>
+impl<S, TH, SEA> SchedulerPool<S, TH, SEA>
+where
+    S: SpawnableScheduler<TH, SEA>,
+    TH: TaskHandler<SEA>,
+    SEA: ScheduleExecutionArg,
 {
+    // Some internal impl and test code want an actual concrete type, NOT the
+    // `dyn InstalledSchedulerPool`. So don't merge this into `Self::new_dyn()`.
     pub fn new(
         log_messages_bytes_limit: Option<usize>,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -82,16 +92,21 @@ impl<
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Arc<Self> {
         Arc::new_cyclic(|weak_self| Self {
-            schedulers: Mutex::default(),
-            log_messages_bytes_limit,
-            transaction_status_sender,
-            replay_vote_sender,
-            prioritization_fee_cache,
+            scheduler_inners: Mutex::default(),
+            handler_context: HandlerContext {
+                log_messages_bytes_limit,
+                transaction_status_sender,
+                replay_vote_sender,
+                prioritization_fee_cache,
+            },
             weak_self: weak_self.clone(),
+            next_scheduler_id: AtomicSchedulerId::default(),
             _phantom: PhantomData,
         })
     }
 
+    // This apparently-meaningless wrapper is handy, because some callers explicitly want
+    // `dyn InstalledSchedulerPool` to be returned for type inference convenience.
     pub fn new_dyn(
         log_messages_bytes_limit: Option<usize>,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -106,80 +121,79 @@ impl<
         )
     }
 
-    // See a comment at the weak_self field for justification of this.
-    pub fn self_arc(&self) -> Arc<Self> {
+    // See a comment at the weak_self field for justification of this method's existence.
+    fn self_arc(&self) -> Arc<Self> {
         self.weak_self
             .upgrade()
             .expect("self-referencing Arc-ed pool")
     }
 
-    pub fn return_scheduler(&self, scheduler: Box<T>) {
-        assert!(!scheduler.has_context());
+    fn new_scheduler_id(&self) -> SchedulerId {
+        self.next_scheduler_id.fetch_add(1, Relaxed)
+    }
 
-        self.schedulers
+    fn return_scheduler(&self, scheduler: S::Inner) {
+        self.scheduler_inners
             .lock()
             .expect("not poisoned")
             .push(scheduler);
     }
 
-    pub fn do_take_scheduler(&self, context: SchedulingContext) -> Box<T> {
+    fn do_take_scheduler(&self, context: SchedulingContext) -> S {
         // pop is intentional for filo, expecting relatively warmed-up scheduler due to having been
         // returned recently
-        if let Some(mut scheduler) = self.schedulers.lock().expect("not poisoned").pop() {
-            scheduler.replace_context(context);
-            scheduler
+        if let Some(inner) = self.scheduler_inners.lock().expect("not poisoned").pop() {
+            S::from_inner(inner, context)
         } else {
-            Box::new(T::spawn(self.self_arc(), context, TH::create(self)))
+            S::spawn(self.self_arc(), context, TH::create(self))
         }
     }
 }
 
-impl<
-        T: SpawnableScheduler<TH, SEA>,
-        TH: ScheduledTransactionHandler<SEA>,
-        SEA: ScheduleExecutionArg,
-    > InstalledSchedulerPool<SEA> for SchedulerPool<T, TH, SEA>
+impl<S, TH, SEA> InstalledSchedulerPool<SEA> for SchedulerPool<S, TH, SEA>
+where
+    S: SpawnableScheduler<TH, SEA>,
+    TH: TaskHandler<SEA>,
+    SEA: ScheduleExecutionArg,
 {
     fn take_scheduler(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler<SEA>> {
-        self.do_take_scheduler(context)
+        Box::new(self.do_take_scheduler(context))
     }
 }
 
-pub trait ScheduledTransactionHandler<SEA: ScheduleExecutionArg>:
-    Send + Sync + Debug + Sized + 'static
-{
+pub trait TaskHandler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + Sized + 'static {
     fn create<T: SpawnableScheduler<Self, SEA>>(pool: &SchedulerPool<T, Self, SEA>) -> Self;
 
-    fn handle<T: SpawnableScheduler<Self, SEA>>(
+    fn handle(
         &self,
         result: &mut Result<()>,
         timings: &mut ExecuteTimings,
         bank: &Arc<Bank>,
         transaction: &SanitizedTransaction,
         index: usize,
-        pool: &SchedulerPool<T, Self, SEA>,
+        handler_context: &HandlerContext,
     );
 }
 
 #[derive(Debug)]
-pub struct DefaultTransactionHandler;
+pub struct DefaultTaskHandler;
 
-impl<SEA: ScheduleExecutionArg> ScheduledTransactionHandler<SEA> for DefaultTransactionHandler {
+impl<SEA: ScheduleExecutionArg> TaskHandler<SEA> for DefaultTaskHandler {
     fn create<T: SpawnableScheduler<Self, SEA>>(_pool: &SchedulerPool<T, Self, SEA>) -> Self {
         Self
     }
 
-    fn handle<T: SpawnableScheduler<Self, SEA>>(
+    fn handle(
         &self,
         result: &mut Result<()>,
         timings: &mut ExecuteTimings,
         bank: &Arc<Bank>,
         transaction: &SanitizedTransaction,
         index: usize,
-        pool: &SchedulerPool<T, Self, SEA>,
+        handler_context: &HandlerContext,
     ) {
-        // scheduler must properly prevent conflicting tx executions, so locking isn't needed
-        // here
+        // scheduler must properly prevent conflicting tx executions. thus, task handler isn't
+        // responsible for locking.
         let batch = bank.prepare_unlocked_batch_from_single_tx(transaction);
         let batch_with_indexes = TransactionBatchWithIndexes {
             batch,
@@ -189,11 +203,11 @@ impl<SEA: ScheduleExecutionArg> ScheduledTransactionHandler<SEA> for DefaultTran
         *result = execute_batch(
             &batch_with_indexes,
             bank,
-            pool.transaction_status_sender.as_ref(),
-            pool.replay_vote_sender.as_ref(),
+            handler_context.transaction_status_sender.as_ref(),
+            handler_context.replay_vote_sender.as_ref(),
             timings,
-            pool.log_messages_bytes_limit,
-            &pool.prioritization_fee_cache,
+            handler_context.log_messages_bytes_limit,
+            &handler_context.prioritization_fee_cache,
         );
     }
 }
@@ -202,40 +216,49 @@ impl<SEA: ScheduleExecutionArg> ScheduledTransactionHandler<SEA> for DefaultTran
 // this will be replaced with more proper implementation...
 // not usable at all, especially for mainnet-beta
 #[derive(Debug)]
-pub struct PooledScheduler<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> {
-    id: SchedulerId,
-    pool: Arc<SchedulerPool<Self, TH, SEA>>,
-    context: Option<SchedulingContext>,
-    result_with_timings: Mutex<Option<ResultWithTimings>>,
-    handler: TH,
-    _phantom: PhantomData<SEA>,
+pub struct PooledScheduler<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> {
+    inner: PooledSchedulerInner<Self, TH, SEA>,
+    context: SchedulingContext,
+    result_with_timings: Mutex<ResultWithTimings>,
 }
 
-impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
+#[derive(Debug)]
+pub struct PooledSchedulerInner<
+    S: SpawnableScheduler<TH, SEA>,
+    TH: TaskHandler<SEA>,
+    SEA: ScheduleExecutionArg,
+> {
+    id: SchedulerId,
+    pool: Arc<SchedulerPool<S, TH, SEA>>,
+    handler: TH,
+}
+
+impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
     pub fn do_spawn(
         pool: Arc<SchedulerPool<Self, TH, SEA>>,
         initial_context: SchedulingContext,
         handler: TH,
     ) -> Self {
-        Self {
-            id: thread_rng().gen::<SchedulerId>(),
-            pool,
-            context: Some(initial_context),
-            result_with_timings: Mutex::default(),
-            handler,
-            _phantom: PhantomData,
-        }
+        Self::from_inner(
+            PooledSchedulerInner::<Self, TH, SEA> {
+                id: pool.new_scheduler_id(),
+                pool,
+                handler,
+            },
+            initial_context,
+        )
     }
 }
 
-pub trait InstallableScheduler<SEA: ScheduleExecutionArg>: InstalledScheduler<SEA> {
-    fn has_context(&self) -> bool;
-    fn replace_context(&mut self, context: SchedulingContext);
-}
-
-pub trait SpawnableScheduler<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg>:
-    InstallableScheduler<SEA>
+pub trait SpawnableScheduler<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg>:
+    InstalledScheduler<SEA>
 {
+    type Inner: Debug + Send + Sync;
+
+    fn into_inner(self) -> (ResultWithTimings, Self::Inner);
+
+    fn from_inner(inner: Self::Inner, context: SchedulingContext) -> Self;
+
     fn spawn(
         pool: Arc<SchedulerPool<Self, TH, SEA>>,
         initial_context: SchedulingContext,
@@ -245,9 +268,26 @@ pub trait SpawnableScheduler<TH: ScheduledTransactionHandler<SEA>, SEA: Schedule
         Self: Sized;
 }
 
-impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
+impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
     for PooledScheduler<TH, SEA>
 {
+    type Inner = PooledSchedulerInner<Self, TH, SEA>;
+
+    fn into_inner(self) -> (ResultWithTimings, Self::Inner) {
+        (
+            self.result_with_timings.into_inner().expect("not poisoned"),
+            self.inner,
+        )
+    }
+
+    fn from_inner(inner: Self::Inner, context: SchedulingContext) -> Self {
+        Self {
+            inner,
+            context,
+            result_with_timings: Mutex::new((Ok(()), ExecuteTimings::default())),
+        }
+    }
+
     fn spawn(
         pool: Arc<SchedulerPool<Self, TH, SEA>>,
         initial_context: SchedulingContext,
@@ -257,80 +297,61 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> SpawnableS
     }
 }
 
-impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledScheduler<SEA>
+impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> InstalledScheduler<SEA>
     for PooledScheduler<TH, SEA>
 {
     fn id(&self) -> SchedulerId {
-        self.id
+        self.inner.id
     }
 
     fn context(&self) -> &SchedulingContext {
-        self.context.as_ref().expect("active context should exist")
+        &self.context
     }
 
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
-        let fail_fast = match self.context().mode() {
-            // this should be false, for (upcoming) BlockProduction variant.
-            SchedulingMode::BlockVerification => true,
-        };
-
-        let result_with_timings = &mut *self.result_with_timings.lock().expect("not poisoned");
-        let (result, timings) =
-            result_with_timings.get_or_insert_with(|| (Ok(()), ExecuteTimings::default()));
-
-        // so, we're NOT scheduling at all; rather, just execute tx straight off.  we doesn't need
-        // to solve inter-tx locking deps only in the case of single-thread fifo like this....
-        if result.is_ok() || !fail_fast {
-            transaction_with_index.with_transaction_and_index(|transaction, index| {
-                TH::handle(
-                    &self.handler,
-                    result,
-                    timings,
-                    self.context().bank(),
-                    transaction,
-                    index,
-                    &self.pool,
-                );
-            })
+        let (result, timings) = &mut *self.result_with_timings.lock().expect("not poisoned");
+        if result.is_err() {
+            // just bail out early to short-circuit the processing altogether
+            return;
         }
-    }
 
-    fn wait_for_termination(&mut self, wait_reason: &WaitReason) -> Option<ResultWithTimings> {
-        let keep_result_with_timings = wait_reason.is_paused();
-
-        if keep_result_with_timings {
-            None
-        } else {
-            drop(
-                self.context
-                    .take()
-                    .expect("active context should be dropped"),
+        // ... so, we're NOT scheduling at all here; rather, just execute tx straight off. the
+        // inter-tx locking deps aren't needed to be resolved in the case of single-threaded FIFO
+        // like this.
+        transaction_with_index.with_transaction_and_index(|transaction, index| {
+            TH::handle(
+                &self.inner.handler,
+                result,
+                timings,
+                self.context().bank(),
+                transaction,
+                index,
+                &self.inner.pool.handler_context,
             );
-            // current simplest form of this trait impl doesn't block the current thread materially
-            // just with the following single mutex lock. Suppose more elaborated synchronization
-            // across worker threads here in the future...
-            self.result_with_timings
-                .lock()
-                .expect("not poisoned")
-                .take()
-        }
+        });
     }
 
-    fn return_to_pool(self: Box<Self>) {
-        self.pool.clone().return_scheduler(self)
+    fn wait_for_termination(
+        self: Box<Self>,
+        _is_dropped: bool,
+    ) -> (ResultWithTimings, UninstalledSchedulerBox) {
+        let (result_with_timings, uninstalled_scheduler) = self.into_inner();
+        (result_with_timings, Box::new(uninstalled_scheduler))
+    }
+
+    fn pause_for_recent_blockhash(&mut self) {
+        // not surprisingly, there's nothing to do for this min impl!
     }
 }
 
-impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstallableScheduler<SEA>
-    for PooledScheduler<TH, SEA>
+impl<S, TH, SEA> UninstalledScheduler for PooledSchedulerInner<S, TH, SEA>
+where
+    S: SpawnableScheduler<TH, SEA, Inner = PooledSchedulerInner<S, TH, SEA>>,
+    TH: TaskHandler<SEA>,
+    SEA: ScheduleExecutionArg,
 {
-    fn has_context(&self) -> bool {
-        self.context.is_some()
-    }
-
-    fn replace_context(&mut self, context: SchedulingContext) {
-        self.context = Some(context);
-        *self.result_with_timings.lock().expect("not poisoned") = None;
+    fn return_to_pool(self: Box<Self>) {
+        self.pool.clone().return_scheduler(*self)
     }
 }
 
@@ -349,6 +370,7 @@ mod tests {
         solana_sdk::{
             clock::MAX_PROCESSING_AGE,
             pubkey::Pubkey,
+            scheduling::SchedulingMode,
             signer::keypair::Keypair,
             system_transaction,
             transaction::{SanitizedTransaction, TransactionError},
@@ -395,21 +417,17 @@ mod tests {
         let bank = Arc::new(Bank::default_for_tests());
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank);
 
-        let mut scheduler1 = pool.do_take_scheduler(context.clone());
+        let scheduler1 = pool.do_take_scheduler(context.clone());
         let scheduler_id1 = scheduler1.id();
-        let mut scheduler2 = pool.do_take_scheduler(context.clone());
+        let scheduler2 = pool.do_take_scheduler(context.clone());
         let scheduler_id2 = scheduler2.id();
         assert_ne!(scheduler_id1, scheduler_id2);
 
-        assert_matches!(
-            scheduler1.wait_for_termination(&WaitReason::TerminatedToFreeze),
-            None
-        );
+        let (result_with_timings, scheduler1) = scheduler1.into_inner();
+        assert_matches!(result_with_timings, (Ok(()), _));
         pool.return_scheduler(scheduler1);
-        assert_matches!(
-            scheduler2.wait_for_termination(&WaitReason::TerminatedToFreeze),
-            None
-        );
+        let (result_with_timings, scheduler2) = scheduler2.into_inner();
+        assert_matches!(result_with_timings, (Ok(()), _));
         pool.return_scheduler(scheduler2);
 
         let scheduler3 = pool.do_take_scheduler(context.clone());
@@ -426,20 +444,14 @@ mod tests {
         let pool = DefaultSchedulerPool::new(None, None, None, ignored_prioritization_fee_cache);
         let bank = Arc::new(Bank::default_for_tests());
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank);
-
         let mut scheduler = pool.do_take_scheduler(context.clone());
 
-        assert!(scheduler.has_context());
+        // should never panic.
+        scheduler.pause_for_recent_blockhash();
         assert_matches!(
-            scheduler.wait_for_termination(&WaitReason::PausedForRecentBlockhash),
-            None
+            Box::new(scheduler).wait_for_termination(false),
+            ((Ok(()), _), _)
         );
-        assert!(scheduler.has_context());
-        assert_matches!(
-            scheduler.wait_for_termination(&WaitReason::TerminatedToFreeze),
-            None
-        );
-        assert!(!scheduler.has_context());
     }
 
     #[test]
@@ -457,13 +469,9 @@ mod tests {
         let new_context =
             &SchedulingContext::new(SchedulingMode::BlockVerification, new_bank.clone());
 
-        let mut scheduler = pool.do_take_scheduler(old_context.clone());
+        let scheduler = pool.do_take_scheduler(old_context.clone());
         let scheduler_id = scheduler.id();
-        assert_matches!(
-            scheduler.wait_for_termination(&WaitReason::TerminatedToFreeze),
-            None
-        );
-        pool.return_scheduler(scheduler);
+        pool.return_scheduler(scheduler.into_inner().1);
 
         let scheduler = pool.take_scheduler(new_context.clone());
         assert_eq!(scheduler_id, scheduler.id());
@@ -516,6 +524,17 @@ mod tests {
         assert!(!child_bank.has_installed_scheduler());
     }
 
+    fn setup_dummy_fork_graph(bank: Bank) -> Arc<Bank> {
+        let slot = bank.slot();
+        let bank_fork = BankForks::new_rw_arc(bank);
+        let bank = bank_fork.read().unwrap().get(slot).unwrap();
+        bank.loaded_programs_cache
+            .write()
+            .unwrap()
+            .set_fork_graph(bank_fork);
+        bank
+    }
+
     #[test]
     fn test_scheduler_schedule_execution_success() {
         solana_logger::setup();
@@ -531,7 +550,8 @@ mod tests {
             2,
             genesis_config.hash(),
         ));
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = setup_dummy_fork_graph(bank);
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
             DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
@@ -554,35 +574,43 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
-        let unfunded_keypair = Keypair::new();
-        let tx0 = &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
-            &unfunded_keypair,
-            &solana_sdk::pubkey::new_rand(),
-            2,
-            genesis_config.hash(),
-        ));
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = setup_dummy_fork_graph(bank);
+
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
             DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
+        let mut scheduler = pool.take_scheduler(context);
 
+        let unfunded_keypair = Keypair::new();
+        let bad_tx =
+            &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &unfunded_keypair,
+                &solana_sdk::pubkey::new_rand(),
+                2,
+                genesis_config.hash(),
+            ));
         assert_eq!(bank.transaction_count(), 0);
-        let scheduler = pool.take_scheduler(context);
-        scheduler.schedule_execution(&(tx0, 0));
+        scheduler.schedule_execution(&(bad_tx, 0));
+        scheduler.pause_for_recent_blockhash();
         assert_eq!(bank.transaction_count(), 0);
 
-        let tx1 = &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
-            &mint_keypair,
-            &solana_sdk::pubkey::new_rand(),
-            3,
-            genesis_config.hash(),
-        ));
+        let good_tx_after_bad_tx =
+            &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &mint_keypair,
+                &solana_sdk::pubkey::new_rand(),
+                3,
+                genesis_config.hash(),
+            ));
+        // make sure this tx is really a good one to execute.
         assert_matches!(
-            bank.simulate_transaction_unchecked(tx1.clone()).result,
+            bank.simulate_transaction_unchecked(good_tx_after_bad_tx, false)
+                .result,
             Ok(_)
         );
-        scheduler.schedule_execution(&(tx1, 0));
+        scheduler.schedule_execution(&(good_tx_after_bad_tx, 0));
+        scheduler.pause_for_recent_blockhash();
         // transaction_count should remain same as scheduler should be bailing out.
         assert_eq!(bank.transaction_count(), 0);
 
@@ -598,9 +626,25 @@ mod tests {
 
     #[derive(Debug)]
     struct AsyncScheduler<const TRIGGER_RACE_CONDITION: bool>(
-        PooledScheduler<DefaultTransactionHandler, DefaultScheduleExecutionArg>,
+        PooledScheduler<DefaultTaskHandler, DefaultScheduleExecutionArg>,
         Mutex<Vec<JoinHandle<ResultWithTimings>>>,
     );
+
+    impl<const TRIGGER_RACE_CONDITION: bool> AsyncScheduler<TRIGGER_RACE_CONDITION> {
+        fn do_wait(&self) {
+            let mut overall_result = Ok(());
+            let mut overall_timings = ExecuteTimings::default();
+            for handle in self.1.lock().unwrap().drain(..) {
+                let (result, timings) = handle.join().unwrap();
+                match result {
+                    Ok(()) => {}
+                    Err(e) => overall_result = Err(e),
+                }
+                overall_timings.accumulate(&timings);
+            }
+            *self.0.result_with_timings.lock().unwrap() = (overall_result, overall_timings);
+        }
+    }
 
     impl<const TRIGGER_RACE_CONDITION: bool> InstalledScheduler<DefaultScheduleExecutionArg>
         for AsyncScheduler<TRIGGER_RACE_CONDITION>
@@ -613,101 +657,86 @@ mod tests {
             self.0.context()
         }
 
-        fn schedule_execution<'a>(
-            &'a self,
-            &(transaction, index): <DefaultScheduleExecutionArg as ScheduleExecutionArg>::TransactionWithIndex<'a>,
-        ) {
+        fn schedule_execution(&self, &(transaction, index): &(&SanitizedTransaction, usize)) {
             let transaction_and_index = (transaction.clone(), index);
             let context = self.context().clone();
-            let pool = self.0.pool.clone();
+            let pool = self.0.inner.pool.clone();
 
             self.1.lock().unwrap().push(std::thread::spawn(move || {
                 // intentionally sleep to simulate race condition where register_recent_blockhash
-                // is run before finishing executing scheduled transactions
+                // is handle before finishing executing scheduled transactions
                 std::thread::sleep(std::time::Duration::from_secs(1));
 
                 let mut result = Ok(());
                 let mut timings = ExecuteTimings::default();
 
-                <DefaultTransactionHandler as ScheduledTransactionHandler<
-                    DefaultScheduleExecutionArg,
-                >>::handle(
-                    &DefaultTransactionHandler,
+                <DefaultTaskHandler as TaskHandler<DefaultScheduleExecutionArg>>::handle(
+                    &DefaultTaskHandler,
                     &mut result,
                     &mut timings,
                     context.bank(),
                     &transaction_and_index.0,
                     transaction_and_index.1,
-                    &pool,
+                    &pool.handler_context,
                 );
                 (result, timings)
             }));
         }
 
-        fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings> {
-            if TRIGGER_RACE_CONDITION && matches!(reason, WaitReason::PausedForRecentBlockhash) {
-                // this is equivalent to NOT calling wait_for_paused_scheduler() in
-                // register_recent_blockhash().
-                return None;
-            }
-
-            let mut overall_result = Ok(());
-            let mut overall_timings = ExecuteTimings::default();
-            for handle in self.1.lock().unwrap().drain(..) {
-                let (result, timings) = handle.join().unwrap();
-                match result {
-                    Ok(()) => {}
-                    Err(e) => overall_result = Err(e),
-                }
-                overall_timings.accumulate(&timings);
-            }
-            *self.0.result_with_timings.lock().unwrap() = Some((overall_result, overall_timings));
-
-            self.0.wait_for_termination(reason)
+        fn wait_for_termination(
+            self: Box<Self>,
+            is_dropped: bool,
+        ) -> (ResultWithTimings, UninstalledSchedulerBox) {
+            self.do_wait();
+            Box::new(self.0).wait_for_termination(is_dropped)
         }
 
-        fn return_to_pool(self: Box<Self>) {
-            Box::new(self.0).return_to_pool()
+        fn pause_for_recent_blockhash(&mut self) {
+            if TRIGGER_RACE_CONDITION {
+                // this is equivalent to NOT calling wait_for_paused_scheduler() in
+                // register_recent_blockhash().
+                return;
+            }
+            self.do_wait();
         }
     }
 
     impl<const TRIGGER_RACE_CONDITION: bool>
-        SpawnableScheduler<DefaultTransactionHandler, DefaultScheduleExecutionArg>
+        SpawnableScheduler<DefaultTaskHandler, DefaultScheduleExecutionArg>
         for AsyncScheduler<TRIGGER_RACE_CONDITION>
     {
+        // well, i wish i can use ! (never type).....
+        type Inner = Self;
+
+        fn into_inner(self) -> (ResultWithTimings, Self::Inner) {
+            todo!();
+        }
+
+        fn from_inner(_inner: Self::Inner, _context: SchedulingContext) -> Self {
+            todo!();
+        }
+
         fn spawn(
-            pool: Arc<SchedulerPool<Self, DefaultTransactionHandler, DefaultScheduleExecutionArg>>,
+            pool: Arc<SchedulerPool<Self, DefaultTaskHandler, DefaultScheduleExecutionArg>>,
             initial_context: SchedulingContext,
-            handler: DefaultTransactionHandler,
+            handler: DefaultTaskHandler,
         ) -> Self {
             AsyncScheduler::<TRIGGER_RACE_CONDITION>(
-                PooledScheduler::<DefaultTransactionHandler, DefaultScheduleExecutionArg> {
-                    id: thread_rng().gen::<SchedulerId>(),
-                    pool: SchedulerPool::new(
-                        pool.log_messages_bytes_limit,
-                        pool.transaction_status_sender.clone(),
-                        pool.replay_vote_sender.clone(),
-                        pool.prioritization_fee_cache.clone(),
-                    ),
-                    context: Some(initial_context),
-                    result_with_timings: Mutex::default(),
-                    handler,
-                    _phantom: PhantomData,
-                },
+                PooledScheduler::<DefaultTaskHandler, DefaultScheduleExecutionArg>::from_inner(
+                    PooledSchedulerInner {
+                        id: pool.new_scheduler_id(),
+                        pool: SchedulerPool::new(
+                            pool.handler_context.log_messages_bytes_limit,
+                            pool.handler_context.transaction_status_sender.clone(),
+                            pool.handler_context.replay_vote_sender.clone(),
+                            pool.handler_context.prioritization_fee_cache.clone(),
+                        ),
+                        handler,
+                    },
+                    initial_context,
+                ),
                 Mutex::new(vec![]),
             )
-        }
-    }
-
-    impl<const TRIGGER_RACE_CONDITION: bool> InstallableScheduler<DefaultScheduleExecutionArg>
-        for AsyncScheduler<TRIGGER_RACE_CONDITION>
-    {
-        fn has_context(&self) -> bool {
-            self.0.has_context()
-        }
-
-        fn replace_context(&mut self, context: SchedulingContext) {
-            self.0.replace_context(context)
         }
     }
 
@@ -728,22 +757,24 @@ mod tests {
                 2,
                 genesis_config.hash(),
             ));
-        let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let mut bank = Bank::new_for_tests(&genesis_config);
         for _ in 0..MAX_PROCESSING_AGE {
             bank.fill_bank_with_ticks_for_tests();
             bank.freeze();
-            bank = Arc::new(Bank::new_from_parent(
-                bank.clone(),
+            let slot = bank.slot();
+            bank = Bank::new_from_parent(
+                Arc::new(bank),
                 &Pubkey::default(),
-                bank.slot().checked_add(1).unwrap(),
-            ));
+                slot.checked_add(1).unwrap(),
+            );
         }
+        let bank = setup_dummy_fork_graph(bank);
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
 
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::<
             AsyncScheduler<TRIGGER_RACE_CONDITION>,
-            DefaultTransactionHandler,
+            DefaultTaskHandler,
             DefaultScheduleExecutionArg,
         >::new_dyn(None, None, None, ignored_prioritization_fee_cache);
         let scheduler = pool.take_scheduler(context);

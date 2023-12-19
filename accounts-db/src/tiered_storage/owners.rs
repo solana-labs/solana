@@ -1,6 +1,6 @@
 use {
     crate::tiered_storage::{
-        file::TieredStorageFile, footer::TieredStorageFooter, mmap_utils::get_type,
+        file::TieredStorageFile, footer::TieredStorageFooter, mmap_utils::get_pod,
         TieredStorageResult,
     },
     memmap2::Mmap,
@@ -32,7 +32,7 @@ impl OwnersBlock {
     ) -> TieredStorageResult<usize> {
         let mut bytes_written = 0;
         for address in addresses {
-            bytes_written += file.write_type(address)?;
+            bytes_written += file.write_pod(address)?;
         }
 
         Ok(bytes_written)
@@ -47,7 +47,7 @@ impl OwnersBlock {
     ) -> TieredStorageResult<&'a Pubkey> {
         let offset = footer.owners_block_offset as usize
             + (std::mem::size_of::<Pubkey>() * owner_offset.0 as usize);
-        let (pubkey, _) = get_type::<Pubkey>(mmap, offset)?;
+        let (pubkey, _) = get_pod::<Pubkey>(mmap, offset)?;
 
         Ok(pubkey)
     }

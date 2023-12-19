@@ -39,7 +39,7 @@ impl InflationSubCommands for App<'_, '_> {
                                 .index(1)
                                 .multiple(true)
                                 .required(true),
-                            "Address of account to query for rewards. "
+                            "Account to query for rewards."
                         ))
                         .arg(
                             Arg::with_name("rewards_epoch")

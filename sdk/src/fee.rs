@@ -149,3 +149,40 @@ impl ::solana_frozen_abi::abi_example::AbiExample for FeeStructure {
         FeeStructure::default()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_memory_usage_cost() {
+        let heap_cost = 99;
+        const K: usize = 1024;
+
+        // accounts data size are priced in block of 32K, ...
+
+        // ... requesting less than 32K should still be charged as one block
+        assert_eq!(
+            heap_cost,
+            FeeStructure::calculate_memory_usage_cost(31 * K, heap_cost)
+        );
+
+        // ... requesting exact 32K should be charged as one block
+        assert_eq!(
+            heap_cost,
+            FeeStructure::calculate_memory_usage_cost(32 * K, heap_cost)
+        );
+
+        // ... requesting slightly above 32K should be charged as 2 block
+        assert_eq!(
+            heap_cost * 2,
+            FeeStructure::calculate_memory_usage_cost(33 * K, heap_cost)
+        );
+
+        // ... requesting exact 64K should be charged as 2 block
+        assert_eq!(
+            heap_cost * 2,
+            FeeStructure::calculate_memory_usage_cost(64 * K, heap_cost)
+        );
+    }
+}

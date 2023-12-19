@@ -435,10 +435,21 @@ async fn send_datagram_task(
     connection: Connection,
     mut receiver: AsyncReceiver<Bytes>,
 ) -> Result<(), Error> {
-    while let Some(bytes) = receiver.recv().await {
-        connection.send_datagram(bytes)?;
+    tokio::pin! {
+        let connection_closed = connection.closed();
     }
-    Ok(())
+    loop {
+        tokio::select! {
+            biased;
+            bytes = receiver.recv() => {
+                match bytes {
+                    None => return Ok(()),
+                    Some(bytes) => connection.send_datagram(bytes)?,
+                }
+            }
+            err = &mut connection_closed => return Err(Error::from(err)),
+        }
+    }
 }
 
 async fn make_connection_task(

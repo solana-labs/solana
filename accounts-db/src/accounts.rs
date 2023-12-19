@@ -1,14 +1,10 @@
 use {
     crate::{
         accounts_db::{
-            AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig, LoadHint,
-            LoadedAccount, ScanStorageResult, VerifyAccountsHashAndLamportsConfig,
-            ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
+            AccountsAddRootTiming, AccountsDb, LoadHint, LoadedAccount, ScanStorageResult,
+            VerifyAccountsHashAndLamportsConfig,
         },
-        accounts_index::{
-            AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ScanResult, ZeroLamport,
-        },
-        accounts_update_notifier_interface::AccountsUpdateNotifier,
+        accounts_index::{IndexKey, ScanConfig, ScanError, ScanResult, ZeroLamport},
         ancestors::Ancestors,
         nonce_info::{NonceFull, NonceInfo},
         rent_collector::RentCollector,
@@ -23,7 +19,6 @@ use {
         account_utils::StateMut,
         address_lookup_table::{self, error::AddressLookupError, state::AddressLookupTable},
         clock::{BankId, Slot},
-        genesis_config::ClusterType,
         message::v0::{LoadedAddresses, MessageAddressTableLookup},
         nonce::{
             state::{DurableNonce, Versions as NonceVersions},
@@ -41,9 +36,8 @@ use {
             BinaryHeap, HashMap, HashSet,
         },
         ops::RangeBounds,
-        path::PathBuf,
         sync::{
-            atomic::{AtomicBool, AtomicUsize, Ordering},
+            atomic::{AtomicUsize, Ordering},
             Arc, Mutex,
         },
     },
@@ -124,68 +118,6 @@ pub enum AccountAddressFilter {
 }
 
 impl Accounts {
-    pub fn default_for_tests() -> Self {
-        Self::new_empty(AccountsDb::default_for_tests())
-    }
-
-    pub fn new_with_config_for_tests(
-        paths: Vec<PathBuf>,
-        cluster_type: &ClusterType,
-        account_indexes: AccountSecondaryIndexes,
-        shrink_ratio: AccountShrinkThreshold,
-    ) -> Self {
-        Self::new_with_config(
-            paths,
-            cluster_type,
-            account_indexes,
-            shrink_ratio,
-            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
-            None,
-            Arc::default(),
-        )
-    }
-
-    pub fn new_with_config_for_benches(
-        paths: Vec<PathBuf>,
-        cluster_type: &ClusterType,
-        account_indexes: AccountSecondaryIndexes,
-        shrink_ratio: AccountShrinkThreshold,
-    ) -> Self {
-        Self::new_with_config(
-            paths,
-            cluster_type,
-            account_indexes,
-            shrink_ratio,
-            Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
-            None,
-            Arc::default(),
-        )
-    }
-
-    pub fn new_with_config(
-        paths: Vec<PathBuf>,
-        cluster_type: &ClusterType,
-        account_indexes: AccountSecondaryIndexes,
-        shrink_ratio: AccountShrinkThreshold,
-        accounts_db_config: Option<AccountsDbConfig>,
-        accounts_update_notifier: Option<AccountsUpdateNotifier>,
-        exit: Arc<AtomicBool>,
-    ) -> Self {
-        Self::new_empty(AccountsDb::new_with_config(
-            paths,
-            cluster_type,
-            account_indexes,
-            shrink_ratio,
-            accounts_db_config,
-            accounts_update_notifier,
-            exit,
-        ))
-    }
-
-    pub fn new_empty(accounts_db: AccountsDb) -> Self {
-        Self::new(Arc::new(accounts_db))
-    }
-
     pub fn new(accounts_db: Arc<AccountsDb>) -> Self {
         Self {
             accounts_db,
@@ -900,7 +832,6 @@ mod tests {
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             address_lookup_table::state::LookupTableMeta,
-            genesis_config::ClusterType,
             hash::Hash,
             instruction::{CompiledInstruction, InstructionError},
             message::{Message, MessageHeader},
@@ -948,7 +879,8 @@ mod tests {
 
     #[test]
     fn test_hold_range_in_memory() {
-        let accts = Accounts::default_for_tests();
+        let accounts_db = AccountsDb::default_for_tests();
+        let accts = Accounts::new(Arc::new(accounts_db));
         let range = Pubkey::from([0; 32])..=Pubkey::from([0xff; 32]);
         accts.hold_range_in_memory(&range, true, &test_thread_pool());
         accts.hold_range_in_memory(&range, false, &test_thread_pool());
@@ -960,7 +892,8 @@ mod tests {
 
     #[test]
     fn test_hold_range_in_memory2() {
-        let accts = Accounts::default_for_tests();
+        let accounts_db = AccountsDb::default_for_tests();
+        let accts = Accounts::new(Arc::new(accounts_db));
         let range = Pubkey::from([0; 32])..=Pubkey::from([0xff; 32]);
         let idx = &accts.accounts_db.accounts_index;
         let bins = idx.account_maps.len();
@@ -1003,12 +936,8 @@ mod tests {
     #[test]
     fn test_load_lookup_table_addresses_account_not_found() {
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
 
         let invalid_table_key = Pubkey::new_unique();
         let address_table_lookup = MessageAddressTableLookup {
@@ -1030,12 +959,8 @@ mod tests {
     #[test]
     fn test_load_lookup_table_addresses_invalid_account_owner() {
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
 
         let invalid_table_key = Pubkey::new_unique();
         let mut invalid_table_account = AccountSharedData::default();
@@ -1061,12 +986,8 @@ mod tests {
     #[test]
     fn test_load_lookup_table_addresses_invalid_account_data() {
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
 
         let invalid_table_key = Pubkey::new_unique();
         let invalid_table_account =
@@ -1092,12 +1013,8 @@ mod tests {
     #[test]
     fn test_load_lookup_table_addresses() {
         let ancestors = vec![(1, 1), (0, 0)].into_iter().collect();
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
 
         let table_key = Pubkey::new_unique();
         let table_addresses = vec![Pubkey::new_unique(), Pubkey::new_unique()];
@@ -1137,12 +1054,8 @@ mod tests {
 
     #[test]
     fn test_load_by_program_slot() {
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
 
         // Load accounts owned by various programs into AccountsDb
         let pubkey0 = solana_sdk::pubkey::new_rand();
@@ -1165,24 +1078,16 @@ mod tests {
 
     #[test]
     fn test_accounts_empty_bank_hash_stats() {
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
         assert!(accounts.accounts_db.get_bank_hash_stats(0).is_some());
         assert!(accounts.accounts_db.get_bank_hash_stats(1).is_none());
     }
 
     #[test]
     fn test_lock_accounts_with_duplicates() {
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
 
         let keypair = Keypair::new();
         let message = Message {
@@ -1201,12 +1106,8 @@ mod tests {
 
     #[test]
     fn test_lock_accounts_with_too_many_accounts() {
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
 
         let keypair = Keypair::new();
 
@@ -1266,12 +1167,8 @@ mod tests {
         let account2 = AccountSharedData::new(3, 0, &Pubkey::default());
         let account3 = AccountSharedData::new(4, 0, &Pubkey::default());
 
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
         accounts.store_for_tests(0, &keypair0.pubkey(), &account0);
         accounts.store_for_tests(0, &keypair1.pubkey(), &account1);
         accounts.store_for_tests(0, &keypair2.pubkey(), &account2);
@@ -1375,12 +1272,8 @@ mod tests {
         let account1 = AccountSharedData::new(2, 0, &Pubkey::default());
         let account2 = AccountSharedData::new(3, 0, &Pubkey::default());
 
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
         accounts.store_for_tests(0, &keypair0.pubkey(), &account0);
         accounts.store_for_tests(0, &keypair1.pubkey(), &account1);
         accounts.store_for_tests(0, &keypair2.pubkey(), &account2);
@@ -1456,12 +1349,8 @@ mod tests {
         let account2 = AccountSharedData::new(3, 0, &Pubkey::default());
         let account3 = AccountSharedData::new(4, 0, &Pubkey::default());
 
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
         accounts.store_for_tests(0, &keypair0.pubkey(), &account0);
         accounts.store_for_tests(0, &keypair1.pubkey(), &account1);
         accounts.store_for_tests(0, &keypair2.pubkey(), &account2);
@@ -1532,12 +1421,8 @@ mod tests {
         let account2 = AccountSharedData::new(3, 0, &Pubkey::default());
         let account3 = AccountSharedData::new(4, 0, &Pubkey::default());
 
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
         accounts.store_for_tests(0, &keypair0.pubkey(), &account0);
         accounts.store_for_tests(0, &keypair1.pubkey(), &account1);
         accounts.store_for_tests(0, &keypair2.pubkey(), &account2);
@@ -1691,12 +1576,8 @@ mod tests {
 
         let mut loaded = vec![loaded0, loaded1];
 
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
         {
             accounts
                 .account_locks
@@ -1742,12 +1623,8 @@ mod tests {
     #[test]
     fn huge_clean() {
         solana_logger::setup();
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
         let mut old_pubkey = Pubkey::default();
         let zero_account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
         info!("storing..");
@@ -2081,12 +1958,8 @@ mod tests {
         let mut loaded = vec![loaded];
 
         let durable_nonce = DurableNonce::from_blockhash(&Hash::new_unique());
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
         let txs = vec![tx];
         let execution_results = vec![new_execution_result(
             Err(TransactionError::InstructionError(
@@ -2194,12 +2067,8 @@ mod tests {
         let mut loaded = vec![loaded];
 
         let durable_nonce = DurableNonce::from_blockhash(&Hash::new_unique());
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
         let txs = vec![tx];
         let execution_results = vec![new_execution_result(
             Err(TransactionError::InstructionError(
@@ -2235,12 +2104,8 @@ mod tests {
 
     #[test]
     fn test_load_largest_accounts() {
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
 
         /* This test assumes pubkey0 < pubkey1 < pubkey2.
          * But the keys created with new_unique() does not gurantee this

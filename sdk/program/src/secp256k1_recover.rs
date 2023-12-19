@@ -78,6 +78,7 @@ pub const SECP256K1_PUBLIC_KEY_LENGTH: usize = 64;
     Hash,
     AbiExample,
 )]
+#[borsh(crate = "borsh")]
 pub struct Secp256k1Pubkey(pub [u8; SECP256K1_PUBLIC_KEY_LENGTH]);
 
 impl Secp256k1Pubkey {
@@ -254,6 +255,7 @@ impl Secp256k1Pubkey {
 /// use borsh::{BorshDeserialize, BorshSerialize};
 ///
 /// #[derive(BorshSerialize, BorshDeserialize, Debug)]
+/// # #[borsh(crate = "borsh")]
 /// pub struct DemoSecp256k1RecoverInstruction {
 ///     pub message: Vec<u8>,
 ///     pub signature: [u8; 64],
@@ -348,6 +350,7 @@ impl Secp256k1Pubkey {
 /// };
 /// # use borsh::{BorshDeserialize, BorshSerialize};
 /// # #[derive(BorshSerialize, BorshDeserialize, Debug)]
+/// # #[borsh(crate = "borsh")]
 /// # pub struct DemoSecp256k1RecoverInstruction {
 /// #     pub message: Vec<u8>,
 /// #     pub signature: [u8; 64],

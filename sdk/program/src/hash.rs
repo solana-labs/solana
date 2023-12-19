@@ -46,6 +46,7 @@ const MAX_BASE58_LEN: usize = 44;
     Pod,
     Zeroable,
 )]
+#[borsh(crate = "borsh")]
 #[repr(transparent)]
 pub struct Hash(pub(crate) [u8; HASH_BYTES]);
 

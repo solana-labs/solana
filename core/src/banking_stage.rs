@@ -801,9 +801,7 @@ mod tests {
             },
             poh_service::PohService,
         },
-        solana_runtime::{
-            bank::Bank, bank_forks::BankForks, genesis_utils::bootstrap_validator_stake_lamports,
-        },
+        solana_runtime::{bank::Bank, genesis_utils::bootstrap_validator_stake_lamports},
         solana_sdk::{
             hash::Hash,
             poh_config::PohConfig,
@@ -839,9 +837,7 @@ mod tests {
     #[test]
     fn test_banking_stage_shutdown1() {
         let genesis_config = create_genesis_config(2).genesis_config;
-        let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
-        let bank_forks = BankForks::new_rw_arc(bank);
-        let bank = bank_forks.read().unwrap().get(0).unwrap();
+        let (bank, bank_forks) = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
         let banking_tracer = BankingTracer::new_disabled();
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
         let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
@@ -891,9 +887,7 @@ mod tests {
         } = create_genesis_config(2);
         genesis_config.ticks_per_slot = 4;
         let num_extra_ticks = 2;
-        let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
-        let bank_forks = BankForks::new_rw_arc(bank);
-        let bank = bank_forks.read().unwrap().get(0).unwrap();
+        let (bank, bank_forks) = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
         let start_hash = bank.last_blockhash();
         let banking_tracer = BankingTracer::new_disabled();
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
@@ -970,9 +964,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_slow_genesis_config(10);
-        let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
-        let bank_forks = BankForks::new_rw_arc(bank);
-        let bank = bank_forks.read().unwrap().get(0).unwrap();
+        let (bank, bank_forks) = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
         let start_hash = bank.last_blockhash();
         let banking_tracer = BankingTracer::new_disabled();
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
@@ -1057,7 +1049,7 @@ mod tests {
             drop(poh_recorder);
 
             let mut blockhash = start_hash;
-            let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
+            let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config).0;
             bank.process_transaction(&fund_tx).unwrap();
             //receive entries + ticks
             loop {
@@ -1152,9 +1144,7 @@ mod tests {
 
             let entry_receiver = {
                 // start a banking_stage to eat verified receiver
-                let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
-                let bank_forks = BankForks::new_rw_arc(bank);
-                let bank = bank_forks.read().unwrap().get(0).unwrap();
+                let (bank, bank_forks) = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
                 let blockstore = Arc::new(
                     Blockstore::open(ledger_path.path())
                         .expect("Expected to be able to open database ledger"),
@@ -1203,7 +1193,7 @@ mod tests {
                 .map(|(_bank, (entry, _tick_height))| entry)
                 .collect();
 
-            let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
+            let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config).0;
             for entry in entries {
                 bank.process_entry_transactions(entry.transactions)
                     .iter()
@@ -1227,7 +1217,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
-        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
+        let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config).0;
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
             let blockstore = Blockstore::open(ledger_path.path())
@@ -1336,9 +1326,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_slow_genesis_config(10000);
-        let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
-        let bank_forks = BankForks::new_rw_arc(bank);
-        let bank = bank_forks.read().unwrap().get(0).unwrap();
+        let (bank, bank_forks) = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
         let start_hash = bank.last_blockhash();
         let banking_tracer = BankingTracer::new_disabled();
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();

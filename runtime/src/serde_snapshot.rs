@@ -620,7 +620,7 @@ where
         bank_fields.incremental_snapshot_persistence.as_ref(),
     )?;
 
-    let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
+    let bank_rc = BankRc::new(Accounts::new(Arc::new(accounts_db)), bank_fields.slot);
     let runtime_config = Arc::new(runtime_config.clone());
 
     // if limit_load_slot_count_from_snapshot is set, then we need to side-step some correctness checks beneath this call

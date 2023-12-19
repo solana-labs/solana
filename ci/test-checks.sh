@@ -84,4 +84,8 @@ _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" fmt --all -- --check
 
 _ ci/do-audit.sh
 
+if [[ -n $CI ]] && [[ $CHANNEL = "stable" ]]; then
+  _ ci/check-install-all.sh
+fi
+
 echo --- ok

@@ -53,11 +53,31 @@ impl ByteBlockWriter {
         self.len
     }
 
+    /// Write plain ol' data to the internal buffer of the ByteBlockWriter instance
+    ///
+    /// Prefer this over `write_type()`, as it prevents some undefined behavior.
+    pub fn write_pod<T: bytemuck::NoUninit>(&mut self, value: &T) -> IoResult<usize> {
+        // SAFETY: Since T is NoUninit, it does not contain any uninitialized bytes.
+        unsafe { self.write_type(value) }
+    }
+
     /// Write the specified typed instance to the internal buffer of
     /// the ByteBlockWriter instance.
-    pub fn write_type<T>(&mut self, value: &T) -> IoResult<usize> {
+    ///
+    /// Prefer `write_pod()` when possible, because `write_type()` may cause
+    /// undefined behavior if `value` contains uninitialized bytes.
+    ///
+    /// # Safety
+    ///
+    /// Caller must ensure casting T to bytes is safe.
+    /// Refer to the Safety sections in std::slice::from_raw_parts()
+    /// and bytemuck's Pod and NoUninit for more information.
+    pub unsafe fn write_type<T>(&mut self, value: &T) -> IoResult<usize> {
         let size = mem::size_of::<T>();
         let ptr = value as *const _ as *const u8;
+        // SAFETY: The caller ensures that `value` contains no uninitialized bytes,
+        // we ensure the size is safe by querying T directly,
+        // and Rust ensures all values are at least byte-aligned.
         let slice = unsafe { std::slice::from_raw_parts(ptr, size) };
         self.write(slice)?;
         Ok(size)
@@ -73,10 +93,10 @@ impl ByteBlockWriter {
     ) -> IoResult<usize> {
         let mut size = 0;
         if let Some(rent_epoch) = opt_fields.rent_epoch {
-            size += self.write_type(&rent_epoch)?;
+            size += self.write_pod(&rent_epoch)?;
         }
         if let Some(hash) = opt_fields.account_hash {
-            size += self.write_type(&hash)?;
+            size += self.write_pod(&hash)?;
         }
 
         debug_assert_eq!(size, opt_fields.size());
@@ -112,18 +132,40 @@ impl ByteBlockWriter {
 /// The util struct for reading byte blocks.
 pub struct ByteBlockReader;
 
+/// Reads the raw part of the input byte_block, at the specified offset, as type T.
+///
+/// Returns None if `offset` + size_of::<T>() exceeds the size of the input byte_block.
+///
+/// Type T must be plain ol' data to ensure no undefined behavior.
+pub fn read_pod<T: bytemuck::AnyBitPattern>(byte_block: &[u8], offset: usize) -> Option<&T> {
+    // SAFETY: Since T is AnyBitPattern, it is safe to cast bytes to T.
+    unsafe { read_type(byte_block, offset) }
+}
+
 /// Reads the raw part of the input byte_block at the specified offset
 /// as type T.
 ///
 /// If `offset` + size_of::<T>() exceeds the size of the input byte_block,
 /// then None will be returned.
-pub fn read_type<T>(byte_block: &[u8], offset: usize) -> Option<&T> {
+///
+/// Prefer `read_pod()` when possible, because `read_type()` may cause
+/// undefined behavior.
+///
+/// # Safety
+///
+/// Caller must ensure casting bytes to T is safe.
+/// Refer to the Safety sections in std::slice::from_raw_parts()
+/// and bytemuck's Pod and AnyBitPattern for more information.
+pub unsafe fn read_type<T>(byte_block: &[u8], offset: usize) -> Option<&T> {
     let (next, overflow) = offset.overflowing_add(std::mem::size_of::<T>());
     if overflow || next > byte_block.len() {
         return None;
     }
     let ptr = byte_block[offset..].as_ptr() as *const T;
     debug_assert!(ptr as usize % std::mem::align_of::<T>() == 0);
+    // SAFETY: The caller ensures it is safe to cast bytes to T,
+    // we ensure the size is safe by querying T directly,
+    // and we just checked above to ensure the ptr is aligned for T.
     Some(unsafe { &*ptr })
 }
 
@@ -169,7 +211,7 @@ mod tests {
         let mut writer = ByteBlockWriter::new(format);
         let value: u32 = 42;
 
-        writer.write_type(&value).unwrap();
+        writer.write_pod(&value).unwrap();
         assert_eq!(writer.raw_len(), mem::size_of::<u32>());
 
         let buffer = writer.finish().unwrap();
@@ -231,12 +273,14 @@ mod tests {
         let test_data3 = [33u8; 300];
 
         // Write the above meta and data in an interleaving way.
-        writer.write_type(&test_metas[0]).unwrap();
-        writer.write_type(&test_data1).unwrap();
-        writer.write_type(&test_metas[1]).unwrap();
-        writer.write_type(&test_data2).unwrap();
-        writer.write_type(&test_metas[2]).unwrap();
-        writer.write_type(&test_data3).unwrap();
+        unsafe {
+            writer.write_type(&test_metas[0]).unwrap();
+            writer.write_type(&test_data1).unwrap();
+            writer.write_type(&test_metas[1]).unwrap();
+            writer.write_type(&test_data2).unwrap();
+            writer.write_type(&test_metas[2]).unwrap();
+            writer.write_type(&test_data3).unwrap();
+        }
         assert_eq!(
             writer.raw_len(),
             mem::size_of::<TestMetaStruct>() * 3
@@ -346,13 +390,13 @@ mod tests {
         let mut offset = 0;
         for opt_fields in &opt_fields_vec {
             if let Some(expected_rent_epoch) = opt_fields.rent_epoch {
-                let rent_epoch = read_type::<Epoch>(&decoded_buffer, offset).unwrap();
+                let rent_epoch = read_pod::<Epoch>(&decoded_buffer, offset).unwrap();
                 assert_eq!(*rent_epoch, expected_rent_epoch);
                 verified_count += 1;
                 offset += std::mem::size_of::<Epoch>();
             }
             if let Some(expected_hash) = opt_fields.account_hash {
-                let hash = read_type::<AccountHash>(&decoded_buffer, offset).unwrap();
+                let hash = read_pod::<AccountHash>(&decoded_buffer, offset).unwrap();
                 assert_eq!(hash, &expected_hash);
                 verified_count += 1;
                 offset += std::mem::size_of::<AccountHash>();

@@ -2,7 +2,6 @@
 //!
 use solana_sdk::clock::Slot;
 
-#[allow(dead_code)]
 #[derive(Debug)]
 /// Configuration options for partitioned epoch rewards.
 /// This struct allows various forms of testing, especially prior to feature activation.
@@ -53,7 +52,6 @@ pub enum TestPartitionedEpochRewards {
     },
 }
 
-#[allow(dead_code)]
 impl PartitionedEpochRewardsConfig {
     pub fn new(test: TestPartitionedEpochRewards) -> Self {
         match test {

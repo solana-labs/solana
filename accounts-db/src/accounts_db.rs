@@ -31,7 +31,9 @@ use {
             AccountStorage, AccountStorageStatus, ShrinkInProgress,
         },
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
-        accounts_file::{AccountsFile, AccountsFileError, MatchAccountOwnerError},
+        accounts_file::{
+            AccountsFile, AccountsFileError, MatchAccountOwnerError, ALIGN_BOUNDARY_OFFSET,
+        },
         accounts_hash::{
             AccountHash, AccountsDeltaHash, AccountsHash, AccountsHashKind, AccountsHasher,
             CalcAccountsHashConfig, CalculateHashIntermediate, HashStats, IncrementalAccountsHash,
@@ -66,6 +68,7 @@ use {
         rent_collector::RentCollector,
         sorted_storages::SortedStorages,
         storable_accounts::StorableAccounts,
+        u64_align,
         verify_accounts_hash_in_background::VerifyAccountsHashInBackground,
     },
     blake3::traits::digest::Digest,
@@ -74,6 +77,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::{prelude::*, ThreadPool},
+    seqlock::SeqLock,
     serde::{Deserialize, Serialize},
     smallvec::SmallVec,
     solana_measure::{measure::Measure, measure_us},
@@ -334,13 +338,17 @@ impl CurrentAncientAppendVec {
         }
     }
 
+    /// Create ancient append vec for a slot
+    ///     min_bytes: the new append vec needs to have at least this capacity
     #[must_use]
     fn create_ancient_append_vec<'a>(
         &mut self,
         slot: Slot,
         db: &'a AccountsDb,
+        min_bytes: usize,
     ) -> ShrinkInProgress<'a> {
-        let shrink_in_progress = db.get_store_for_shrink(slot, get_ancient_append_vec_capacity());
+        let size = get_ancient_append_vec_capacity().max(min_bytes as u64);
+        let shrink_in_progress = db.get_store_for_shrink(slot, size);
         *self = Self::new(slot, Arc::clone(shrink_in_progress.new_storage()));
         shrink_in_progress
     }
@@ -349,9 +357,10 @@ impl CurrentAncientAppendVec {
         &mut self,
         slot: Slot,
         db: &'a AccountsDb,
+        min_bytes: usize,
     ) -> Option<ShrinkInProgress<'a>> {
         if self.slot_and_append_vec.is_none() {
-            Some(self.create_ancient_append_vec(slot, db))
+            Some(self.create_ancient_append_vec(slot, db, min_bytes))
         } else {
             None
         }
@@ -368,21 +377,31 @@ impl CurrentAncientAppendVec {
     }
 
     /// helper function to cleanup call to 'store_accounts_frozen'
+    /// return timing and bytes written
     fn store_ancient_accounts(
         &self,
         db: &AccountsDb,
         accounts_to_store: &AccountsToStore,
         storage_selector: StorageSelector,
-    ) -> StoreAccountsTiming {
+    ) -> (StoreAccountsTiming, u64) {
         let accounts = accounts_to_store.get(storage_selector);
 
-        db.store_accounts_frozen(
+        let previous_available = self.append_vec().accounts.remaining_bytes();
+        let timing = db.store_accounts_frozen(
             (self.slot(), accounts, accounts_to_store.slot()),
             None::<Vec<AccountHash>>,
             self.append_vec(),
             None,
             StoreReclaims::Ignore,
-        )
+        );
+        let bytes_written =
+            previous_available.saturating_sub(self.append_vec().accounts.remaining_bytes());
+        assert_eq!(
+            bytes_written,
+            u64_align!(accounts_to_store.get_bytes(storage_selector)) as u64
+        );
+
+        (timing, bytes_written)
     }
 }
 
@@ -994,7 +1013,7 @@ pub struct AccountStorageEntry {
     ///  any accounts in it
     /// status corresponding to the storage, lets us know that
     ///  the append_vec, once maxed out, then emptied, can be reclaimed
-    count_and_status: RwLock<(usize, AccountStorageStatus)>,
+    count_and_status: SeqLock<(usize, AccountStorageStatus)>,
 
     /// This is the total number of accounts stored ever since initialized to keep
     /// track of lifetime count of all store operations. And this differs from
@@ -1017,7 +1036,7 @@ impl AccountStorageEntry {
             id: AtomicAppendVecId::new(id),
             slot: AtomicU64::new(slot),
             accounts,
-            count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
+            count_and_status: SeqLock::new((0, AccountStorageStatus::Available)),
             approx_store_count: AtomicUsize::new(0),
             alive_bytes: AtomicUsize::new(0),
         }
@@ -1033,14 +1052,14 @@ impl AccountStorageEntry {
             id: AtomicAppendVecId::new(id),
             slot: AtomicU64::new(slot),
             accounts,
-            count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
+            count_and_status: SeqLock::new((0, AccountStorageStatus::Available)),
             approx_store_count: AtomicUsize::new(num_accounts),
             alive_bytes: AtomicUsize::new(0),
         }
     }
 
     pub fn set_status(&self, mut status: AccountStorageStatus) {
-        let mut count_and_status = self.count_and_status.write().unwrap();
+        let mut count_and_status = self.count_and_status.lock_write();
 
         let count = count_and_status.0;
 
@@ -1061,7 +1080,7 @@ impl AccountStorageEntry {
     }
 
     pub fn recycle(&self, slot: Slot, id: AppendVecId) {
-        let mut count_and_status = self.count_and_status.write().unwrap();
+        let mut count_and_status = self.count_and_status.lock_write();
         self.accounts.reset();
         *count_and_status = (0, AccountStorageStatus::Available);
         self.slot.store(slot, Ordering::Release);
@@ -1071,11 +1090,11 @@ impl AccountStorageEntry {
     }
 
     pub fn status(&self) -> AccountStorageStatus {
-        self.count_and_status.read().unwrap().1
+        self.count_and_status.read().1
     }
 
     pub fn count(&self) -> usize {
-        self.count_and_status.read().unwrap().0
+        self.count_and_status.read().0
     }
 
     pub fn approx_stored_count(&self) -> usize {
@@ -1115,14 +1134,14 @@ impl AccountStorageEntry {
     }
 
     fn add_account(&self, num_bytes: usize) {
-        let mut count_and_status = self.count_and_status.write().unwrap();
+        let mut count_and_status = self.count_and_status.lock_write();
         *count_and_status = (count_and_status.0 + 1, count_and_status.1);
         self.approx_store_count.fetch_add(1, Ordering::Relaxed);
         self.alive_bytes.fetch_add(num_bytes, Ordering::SeqCst);
     }
 
     fn try_available(&self) -> bool {
-        let mut count_and_status = self.count_and_status.write().unwrap();
+        let mut count_and_status = self.count_and_status.lock_write();
         let (count, status) = *count_and_status;
 
         if status == AccountStorageStatus::Available {
@@ -1138,7 +1157,7 @@ impl AccountStorageEntry {
     }
 
     fn remove_account(&self, num_bytes: usize, reset_accounts: bool) -> usize {
-        let mut count_and_status = self.count_and_status.write().unwrap();
+        let mut count_and_status = self.count_and_status.lock_write();
         let (mut count, mut status) = *count_and_status;
 
         if count == 1 && status == AccountStorageStatus::Full && reset_accounts {
@@ -2520,19 +2539,11 @@ impl AccountsDb {
         }
     }
 
-    pub fn new_for_tests(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
-        AccountsDb::new_with_config(
-            paths,
-            cluster_type,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
-            None,
-            Arc::default(),
-        )
+    pub fn new_single_for_tests() -> Self {
+        AccountsDb::new_for_tests(Vec::new(), &ClusterType::Development)
     }
 
-    pub fn new_for_tests_with_caching(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
+    pub fn new_for_tests(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
         AccountsDb::new_with_config(
             paths,
             cluster_type,
@@ -2652,14 +2663,6 @@ impl AccountsDb {
     /// Get the base working directory
     pub fn get_base_working_path(&self) -> PathBuf {
         self.base_working_path.clone()
-    }
-
-    pub fn new_single_for_tests() -> Self {
-        AccountsDb::new_for_tests(Vec::new(), &ClusterType::Development)
-    }
-
-    pub fn new_single_for_tests_with_caching() -> Self {
-        AccountsDb::new_for_tests_with_caching(Vec::new(), &ClusterType::Development)
     }
 
     fn next_id(&self) -> AppendVecId {
@@ -4587,8 +4590,10 @@ impl AccountsDb {
         }
 
         let mut stats_sub = ShrinkStatsSub::default();
-        let (mut shrink_in_progress, create_and_insert_store_elapsed_us) =
-            measure_us!(current_ancient.create_if_necessary(slot, self));
+        let mut bytes_remaining_to_write = shrink_collect.alive_total_bytes;
+        let (mut shrink_in_progress, create_and_insert_store_elapsed_us) = measure_us!(
+            current_ancient.create_if_necessary(slot, self, shrink_collect.alive_total_bytes)
+        );
         stats_sub.create_and_insert_store_elapsed_us = create_and_insert_store_elapsed_us;
         let available_bytes = current_ancient.append_vec().accounts.remaining_bytes();
         // split accounts in 'slot' into:
@@ -4610,8 +4615,10 @@ impl AccountsDb {
 
         let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
         // write what we can to the current ancient storage
-        stats_sub.store_accounts_timing =
+        let (store_accounts_timing, bytes_written) =
             current_ancient.store_ancient_accounts(self, &to_store, StorageSelector::Primary);
+        stats_sub.store_accounts_timing = store_accounts_timing;
+        bytes_remaining_to_write = bytes_remaining_to_write.saturating_sub(bytes_written as usize);
 
         // handle accounts from 'slot' which did not fit into the current ancient append vec
         if to_store.has_overflow() {
@@ -4619,8 +4626,14 @@ impl AccountsDb {
             // Assert: it cannot be the case that we already had an ancient append vec at this slot and
             // yet that ancient append vec does not have room for the accounts stored at this slot currently
             assert_ne!(slot, current_ancient.slot());
-            let (shrink_in_progress_overflow, time_us) =
-                measure_us!(current_ancient.create_ancient_append_vec(slot, self));
+
+            // Now we create an ancient append vec at `slot` to store the overflows.
+            let (shrink_in_progress_overflow, time_us) = measure_us!(current_ancient
+                .create_ancient_append_vec(
+                    slot,
+                    self,
+                    to_store.get_bytes(StorageSelector::Overflow)
+                ));
             stats_sub.create_and_insert_store_elapsed_us += time_us;
             // We cannot possibly be shrinking the original slot that created an ancient append vec
             // AND not have enough room in the ancient append vec at that slot
@@ -4632,10 +4645,16 @@ impl AccountsDb {
             shrink_in_progress = Some(shrink_in_progress_overflow);
 
             // write the overflow accounts to the next ancient storage
-            let timing =
+            let (store_accounts_timing, bytes_written) =
                 current_ancient.store_ancient_accounts(self, &to_store, StorageSelector::Overflow);
-            stats_sub.store_accounts_timing.accumulate(&timing);
+            bytes_remaining_to_write =
+                bytes_remaining_to_write.saturating_sub(bytes_written as usize);
+
+            stats_sub
+                .store_accounts_timing
+                .accumulate(&store_accounts_timing);
         }
+        assert_eq!(bytes_remaining_to_write, 0);
         rewrite_elapsed.stop();
         stats_sub.rewrite_elapsed_us = rewrite_elapsed.as_us();
 
@@ -6878,7 +6897,6 @@ impl AccountsDb {
         max_slot: Slot,
         config: &CalcAccountsHashConfig<'_>,
     ) -> Result<(AccountsHash, u64), AccountsHashVerificationError> {
-        use AccountsHashVerificationError::*;
         let mut collect = Measure::start("collect");
         let keys: Vec<_> = self
             .accounts_index
@@ -6974,7 +6992,7 @@ impl AccountsDb {
                 "{} mismatched account hash(es) found",
                 mismatch_found.load(Ordering::Relaxed)
             );
-            return Err(MismatchedAccountsHash);
+            return Err(AccountsHashVerificationError::MismatchedAccountsHash);
         }
 
         scan.stop();
@@ -7754,7 +7772,6 @@ impl AccountsDb {
         base: Option<(Slot, /*capitalization*/ u64)>,
         config: VerifyAccountsHashAndLamportsConfig,
     ) -> Result<(), AccountsHashVerificationError> {
-        use AccountsHashVerificationError::*;
         let calc_config = CalcAccountsHashConfig {
             use_bg_thread_pool: config.use_bg_thread_pool,
             check_hash: false,
@@ -7778,14 +7795,14 @@ impl AccountsDb {
             )?;
             let found_incremental_accounts_hash = self
                 .get_incremental_accounts_hash(slot)
-                .ok_or(MissingAccountsHash)?;
+                .ok_or(AccountsHashVerificationError::MissingAccountsHash)?;
             if calculated_incremental_accounts_hash != found_incremental_accounts_hash {
                 warn!(
                     "mismatched incremental accounts hash for slot {slot}: \
                     {calculated_incremental_accounts_hash:?} (calculated) != {found_incremental_accounts_hash:?} (expected)"
                 );
                 if hash_mismatch_is_error {
-                    return Err(MismatchedAccountsHash);
+                    return Err(AccountsHashVerificationError::MismatchedAccountsHash);
                 }
             }
         } else {
@@ -7803,18 +7820,22 @@ impl AccountsDb {
                     "Mismatched total lamports: {} calculated: {}",
                     total_lamports, calculated_lamports
                 );
-                return Err(MismatchedTotalLamports(calculated_lamports, total_lamports));
+                return Err(AccountsHashVerificationError::MismatchedTotalLamports(
+                    calculated_lamports,
+                    total_lamports,
+                ));
             }
 
-            let (found_accounts_hash, _) =
-                self.get_accounts_hash(slot).ok_or(MissingAccountsHash)?;
+            let (found_accounts_hash, _) = self
+                .get_accounts_hash(slot)
+                .ok_or(AccountsHashVerificationError::MissingAccountsHash)?;
             if calculated_accounts_hash != found_accounts_hash {
                 warn!(
                     "Mismatched accounts hash for slot {slot}: \
                     {calculated_accounts_hash:?} (calculated) != {found_accounts_hash:?} (expected)"
                 );
                 if hash_mismatch_is_error {
-                    return Err(MismatchedAccountsHash);
+                    return Err(AccountsHashVerificationError::MismatchedAccountsHash);
                 }
             }
         }
@@ -8989,17 +9010,17 @@ impl AccountsDb {
             slots.truncate(limit); // get rid of the newer slots and keep just the older
         }
         let max_slot = slots.last().cloned().unwrap_or_default();
-        let schedule = genesis_config.epoch_schedule;
+        let schedule = &genesis_config.epoch_schedule;
         let rent_collector = RentCollector::new(
             schedule.get_epoch(max_slot),
-            schedule,
+            schedule.clone(),
             genesis_config.slots_per_year(),
-            genesis_config.rent,
+            genesis_config.rent.clone(),
         );
         let accounts_data_len = AtomicU64::new(0);
 
         let rent_paying_accounts_by_partition =
-            Mutex::new(RentPayingAccountsByPartition::new(&schedule));
+            Mutex::new(RentPayingAccountsByPartition::new(schedule));
 
         // pass == 0 always runs and generates the index
         // pass == 1 only runs if verify == true.
@@ -9387,7 +9408,7 @@ impl AccountsDb {
                     store.count(),
                 );
                 {
-                    let mut count_and_status = store.count_and_status.write().unwrap();
+                    let mut count_and_status = store.count_and_status.lock_write();
                     assert_eq!(count_and_status.0, 0);
                     count_and_status.0 = entry.count;
                 }
@@ -9400,7 +9421,7 @@ impl AccountsDb {
                 );
             } else {
                 trace!("id: {} clearing count", id);
-                store.count_and_status.write().unwrap().0 = 0;
+                store.count_and_status.lock_write().0 = 0;
             }
         }
         storage_size_storages_time.stop();
@@ -9417,7 +9438,7 @@ impl AccountsDb {
                 "  slot: {} id: {} count_and_status: {:?} approx_store_count: {} len: {} capacity: {} (recycled: {:?})",
                 entry.slot(),
                 entry.append_vec_id(),
-                *entry.count_and_status.read().unwrap(),
+                entry.count_and_status.read(),
                 entry.approx_store_count.load(Ordering::Relaxed),
                 entry.accounts.len(),
                 entry.accounts.capacity(),
@@ -9455,7 +9476,7 @@ impl AccountsDb {
                 "  slot: {} id: {} count_and_status: {:?} approx_store_count: {} len: {} capacity: {}",
                 slot,
                 entry.append_vec_id(),
-                *entry.count_and_status.read().unwrap(),
+                entry.count_and_status.read(),
                 entry.approx_store_count.load(Ordering::Relaxed),
                 entry.accounts.len(),
                 entry.accounts.capacity(),
@@ -9498,60 +9519,9 @@ pub(crate) enum UpdateIndexThreadSelection {
     PoolWithThreshold,
 }
 
-#[cfg(test)]
-impl AccountsDb {
-    pub fn new_with_config_for_tests(
-        paths: Vec<PathBuf>,
-        cluster_type: &ClusterType,
-        account_indexes: AccountSecondaryIndexes,
-        shrink_ratio: AccountShrinkThreshold,
-    ) -> Self {
-        Self::new_with_config(
-            paths,
-            cluster_type,
-            account_indexes,
-            shrink_ratio,
-            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
-            None,
-            Arc::default(),
-        )
-    }
-
-    pub fn new_sized(paths: Vec<PathBuf>, file_size: u64) -> Self {
-        AccountsDb {
-            file_size,
-            ..AccountsDb::new(paths, &ClusterType::Development)
-        }
-    }
-
-    pub fn new_sized_caching(paths: Vec<PathBuf>, file_size: u64) -> Self {
-        AccountsDb {
-            file_size,
-            ..AccountsDb::new(paths, &ClusterType::Development)
-        }
-    }
-
-    pub fn new_sized_no_extra_stores(paths: Vec<PathBuf>, file_size: u64) -> Self {
-        AccountsDb {
-            file_size,
-            ..AccountsDb::new(paths, &ClusterType::Development)
-        }
-    }
-
-    pub fn get_append_vec_id(&self, pubkey: &Pubkey, slot: Slot) -> Option<AppendVecId> {
-        let ancestors = vec![(slot, 1)].into_iter().collect();
-        let result = self.accounts_index.get(pubkey, Some(&ancestors), None);
-        result.map(|(list, index)| list.slot_list()[index].1.store_id())
-    }
-}
-
 // These functions/fields are only usable from a dev context (i.e. tests and benches)
 #[cfg(feature = "dev-context-only-utils")]
 impl AccountsDb {
-    pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
-        Self::new_for_tests(paths, cluster_type)
-    }
-
     pub fn load_without_fixed_root(
         &self,
         ancestors: &Ancestors,
@@ -9814,6 +9784,7 @@ pub mod tests {
             accounts_index::{
                 tests::*, AccountSecondaryIndexesIncludeExclude, ReadAccountMapEntry, RefCount,
             },
+            ancient_append_vecs,
             append_vec::{test_utils::TempFile, AppendVecStoredAccountMeta},
             cache_hash_data::CacheHashDataFile,
             inline_spl_token,
@@ -9850,6 +9821,12 @@ pub mod tests {
     }
 
     impl AccountsDb {
+        pub fn get_append_vec_id(&self, pubkey: &Pubkey, slot: Slot) -> Option<AppendVecId> {
+            let ancestors = vec![(slot, 1)].into_iter().collect();
+            let result = self.accounts_index.get(pubkey, Some(&ancestors), None);
+            result.map(|(list, index)| list.slot_list()[index].1.store_id())
+        }
+
         fn scan_snapshot_stores(
             &self,
             storage: &SortedStorages,
@@ -9991,6 +9968,47 @@ pub mod tests {
     }
 
     #[test]
+    fn test_create_ancient_append_vec() {
+        let ancient_append_vec_size = ancient_append_vecs::get_ancient_append_vec_capacity();
+        let db = AccountsDb::new_single_for_tests();
+
+        {
+            // create an ancient appendvec from a small appendvec, the size of
+            // the ancient appendvec should be the size of the ideal ancient
+            // appendvec size.
+            let mut current_ancient = CurrentAncientAppendVec::default();
+            let slot0 = 0;
+
+            // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
+            let _existing_append_vec = db.create_and_insert_store(slot0, 1000, "test");
+            let _ = current_ancient.create_ancient_append_vec(slot0, &db, 0);
+            assert_eq!(
+                current_ancient.append_vec().capacity(),
+                ancient_append_vec_size
+            );
+        }
+
+        {
+            // create an ancient appendvec from a large appendvec (bigger than
+            // current ancient_append_vec_size), the ancient appendvec should be
+            // the size of the bigger ancient appendvec size.
+            let mut current_ancient = CurrentAncientAppendVec::default();
+            let slot1 = 1;
+            // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
+            let _existing_append_vec = db.create_and_insert_store(slot1, 1000, "test");
+            let _ = current_ancient.create_ancient_append_vec(
+                slot1,
+                &db,
+                2 * ancient_append_vec_size as usize,
+            );
+            assert_eq!(
+                current_ancient.append_vec().capacity(),
+                2 * ancient_append_vec_size
+            );
+        }
+    }
+
+    #[test]
     fn test_maybe_unref_accounts_already_in_ancient() {
         let db = AccountsDb::new_single_for_tests();
         let slot0 = 0;
@@ -10036,7 +10054,7 @@ pub mod tests {
         // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
         let _existing_append_vec = db.create_and_insert_store(slot0, 1000, "test");
         {
-            let _shrink_in_progress = current_ancient.create_ancient_append_vec(slot0, &db);
+            let _shrink_in_progress = current_ancient.create_ancient_append_vec(slot0, &db, 0);
         }
         let mut ancient_slot_pubkeys = AncientSlotPubkeys::default();
         assert!(ancient_slot_pubkeys.inner.is_none());
@@ -10051,7 +10069,7 @@ pub mod tests {
         // different slot than current_ancient, so update 'ancient_slot_pubkeys'
         // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
         let _existing_append_vec = db.create_and_insert_store(slot1, 1000, "test");
-        let _shrink_in_progress = current_ancient.create_ancient_append_vec(slot1, &db);
+        let _shrink_in_progress = current_ancient.create_ancient_append_vec(slot1, &db, 0);
         let slot2 = 2;
         ancient_slot_pubkeys.maybe_unref_accounts_already_in_ancient(
             slot2,
@@ -10772,7 +10790,7 @@ pub mod tests {
         solana_logger::setup();
 
         let (storages, _size, _slot_expected) = sample_storage();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
         let result = db
             .calculate_accounts_hash_from_storages(
                 &CalcAccountsHashConfig::default(),
@@ -10789,7 +10807,7 @@ pub mod tests {
     fn test_accountsdb_calculate_accounts_hash_from_storages() {
         solana_logger::setup();
 
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
         let (storages, raw_expected) = sample_storages_and_accounts(&db);
         let expected_hash =
             AccountsHasher::compute_merkle_root_loop(raw_expected.clone(), MERKLE_FANOUT, |item| {
@@ -11045,6 +11063,32 @@ pub mod tests {
         sample_storage_with_entries_id(tf, write_version, slot, pubkey, 0, mark_alive, None)
     }
 
+    fn sample_storage_with_entries_id_fill_percentage(
+        tf: &TempFile,
+        write_version: StoredMetaWriteVersion,
+        slot: Slot,
+        pubkey: &Pubkey,
+        id: AppendVecId,
+        mark_alive: bool,
+        account_data_size: Option<u64>,
+        fill_percentage: u64,
+    ) -> Arc<AccountStorageEntry> {
+        let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
+        let file_size = account_data_size.unwrap_or(123) * 100 / fill_percentage;
+        let size_aligned: usize = aligned_stored_size(file_size as usize);
+        let mut data = AccountStorageEntry::new(&paths[0], slot, id, size_aligned as u64);
+        let av = AccountsFile::AppendVec(AppendVec::new(
+            &tf.path,
+            true,
+            (1024 * 1024).max(size_aligned),
+        ));
+        data.accounts = av;
+
+        let arc = Arc::new(data);
+        append_sample_data_to_storage(&arc, pubkey, write_version, mark_alive, account_data_size);
+        arc
+    }
+
     fn sample_storage_with_entries_id(
         tf: &TempFile,
         write_version: StoredMetaWriteVersion,
@@ -11054,15 +11098,16 @@ pub mod tests {
         mark_alive: bool,
         account_data_size: Option<u64>,
     ) -> Arc<AccountStorageEntry> {
-        let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
-        let size: usize = aligned_stored_size(account_data_size.unwrap_or(123) as usize);
-        let mut data = AccountStorageEntry::new(&paths[0], slot, id, size as u64);
-        let av = AccountsFile::AppendVec(AppendVec::new(&tf.path, true, (1024 * 1024).max(size)));
-        data.accounts = av;
-
-        let arc = Arc::new(data);
-        append_sample_data_to_storage(&arc, pubkey, write_version, mark_alive, account_data_size);
-        arc
+        sample_storage_with_entries_id_fill_percentage(
+            tf,
+            write_version,
+            slot,
+            pubkey,
+            id,
+            mark_alive,
+            account_data_size,
+            100,
+        )
     }
 
     #[test]
@@ -11144,7 +11189,7 @@ pub mod tests {
     #[test]
     fn test_accountsdb_add_root() {
         solana_logger::setup();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
         let key = Pubkey::default();
         let account0 = AccountSharedData::new(1, 0, &key);
 
@@ -11160,7 +11205,7 @@ pub mod tests {
     #[test]
     fn test_accountsdb_latest_ancestor() {
         solana_logger::setup();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
         let key = Pubkey::default();
         let account0 = AccountSharedData::new(1, 0, &key);
 
@@ -11196,7 +11241,7 @@ pub mod tests {
     #[test]
     fn test_accountsdb_latest_ancestor_with_root() {
         solana_logger::setup();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
         let key = Pubkey::default();
         let account0 = AccountSharedData::new(1, 0, &key);
 
@@ -11222,7 +11267,7 @@ pub mod tests {
     #[test]
     fn test_accountsdb_root_one_slot() {
         solana_logger::setup();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
 
         let key = Pubkey::default();
         let account0 = AccountSharedData::new(1, 0, &key);
@@ -11275,7 +11320,7 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_add_root_many() {
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
 
         let mut pubkeys: Vec<Pubkey> = vec![];
         db.create_account(&mut pubkeys, 0, 100, 0, 0);
@@ -11360,7 +11405,7 @@ pub mod tests {
         let key = Pubkey::default();
 
         // 1 token in the "root", i.e. db zero
-        let db0 = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db0 = AccountsDb::new_single_for_tests();
         let account0 = AccountSharedData::new(1, 0, &key);
         db0.store_for_tests(0, &[(&key, &account0)]);
 
@@ -11385,7 +11430,7 @@ pub mod tests {
     fn run_test_remove_unrooted_slot(is_cached: bool) {
         let unrooted_slot = 9;
         let unrooted_bank_id = 9;
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
         let key = Pubkey::default();
         let account0 = AccountSharedData::new(1, 0, &key);
         let ancestors = vec![(unrooted_slot, 1)].into_iter().collect();
@@ -11457,7 +11502,7 @@ pub mod tests {
     #[test]
     fn test_account_one() {
         let (_accounts_dirs, paths) = get_temp_accounts_paths(1).unwrap();
-        let db = AccountsDb::new(paths, &ClusterType::Development);
+        let db = AccountsDb::new_for_tests(paths, &ClusterType::Development);
         let mut pubkeys: Vec<Pubkey> = vec![];
         db.create_account(&mut pubkeys, 0, 1, 0, 0);
         let ancestors = vec![(0, 0)].into_iter().collect();
@@ -11472,7 +11517,7 @@ pub mod tests {
     #[test]
     fn test_account_many() {
         let (_accounts_dirs, paths) = get_temp_accounts_paths(2).unwrap();
-        let db = AccountsDb::new(paths, &ClusterType::Development);
+        let db = AccountsDb::new_for_tests(paths, &ClusterType::Development);
         let mut pubkeys: Vec<Pubkey> = vec![];
         db.create_account(&mut pubkeys, 0, 100, 0, 0);
         db.check_accounts(&pubkeys, 0, 100, 1);
@@ -11492,7 +11537,10 @@ pub mod tests {
     fn test_account_grow_many() {
         let (_accounts_dir, paths) = get_temp_accounts_paths(2).unwrap();
         let size = 4096;
-        let accounts = AccountsDb::new_sized(paths, size);
+        let accounts = AccountsDb {
+            file_size: size,
+            ..AccountsDb::new_for_tests(paths, &ClusterType::Development)
+        };
         let mut keys = vec![];
         for i in 0..9 {
             let key = solana_sdk::pubkey::new_rand();
@@ -11608,7 +11656,7 @@ pub mod tests {
         //This test is pedantic
         //A slot is purged when a non root bank is cleaned up.  If a slot is behind root but it is
         //not root, it means we are retaining dead banks.
-        let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let accounts = AccountsDb::new_single_for_tests();
         let pubkey = solana_sdk::pubkey::new_rand();
         let account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
         //store an account
@@ -11660,7 +11708,7 @@ pub mod tests {
     fn test_clean_zero_lamport_and_dead_slot() {
         solana_logger::setup();
 
-        let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let accounts = AccountsDb::new_single_for_tests();
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
         let account = AccountSharedData::new(1, 1, AccountSharedData::default().owner());
@@ -11724,7 +11772,7 @@ pub mod tests {
     fn test_clean_multiple_zero_lamport_decrements_index_ref_count() {
         solana_logger::setup();
 
-        let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let accounts = AccountsDb::new_single_for_tests();
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
         let zero_lamport_account =
@@ -11772,7 +11820,7 @@ pub mod tests {
     fn test_clean_zero_lamport_and_old_roots() {
         solana_logger::setup();
 
-        let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let accounts = AccountsDb::new_single_for_tests();
         let pubkey = solana_sdk::pubkey::new_rand();
         let account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
         let zero_lamport_account =
@@ -11817,7 +11865,7 @@ pub mod tests {
     fn test_clean_old_with_normal_account() {
         solana_logger::setup();
 
-        let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let accounts = AccountsDb::new_single_for_tests();
         let pubkey = solana_sdk::pubkey::new_rand();
         let account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
         //store an account
@@ -11845,7 +11893,7 @@ pub mod tests {
     fn test_clean_old_with_zero_lamport_account() {
         solana_logger::setup();
 
-        let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let accounts = AccountsDb::new_single_for_tests();
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
         let normal_account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
@@ -11879,12 +11927,10 @@ pub mod tests {
     fn test_clean_old_with_both_normal_and_zero_lamport_accounts() {
         solana_logger::setup();
 
-        let mut accounts = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            spl_token_mint_index_enabled(),
-            AccountShrinkThreshold::default(),
-        );
+        let mut accounts = AccountsDb {
+            account_indexes: spl_token_mint_index_enabled(),
+            ..AccountsDb::new_single_for_tests()
+        };
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
 
@@ -12022,7 +12068,7 @@ pub mod tests {
     fn test_clean_max_slot_zero_lamport_account() {
         solana_logger::setup();
 
-        let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let accounts = AccountsDb::new_single_for_tests();
         let pubkey = solana_sdk::pubkey::new_rand();
         let account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
         let zero_account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
@@ -12067,7 +12113,7 @@ pub mod tests {
     fn test_uncleaned_roots_with_account() {
         solana_logger::setup();
 
-        let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let accounts = AccountsDb::new_single_for_tests();
         let pubkey = solana_sdk::pubkey::new_rand();
         let account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
         //store an account
@@ -12087,7 +12133,7 @@ pub mod tests {
     fn test_uncleaned_roots_with_no_account() {
         solana_logger::setup();
 
-        let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let accounts = AccountsDb::new_single_for_tests();
 
         assert_eq!(accounts.accounts_index.uncleaned_roots_len(), 0);
 
@@ -12255,7 +12301,10 @@ pub mod tests {
 
         let min_file_bytes = std::mem::size_of::<StoredMeta>() + std::mem::size_of::<AccountMeta>();
 
-        let db = Arc::new(AccountsDb::new_sized(Vec::new(), min_file_bytes as u64));
+        let db = Arc::new(AccountsDb {
+            file_size: min_file_bytes as u64,
+            ..AccountsDb::new_single_for_tests()
+        });
 
         db.add_root(slot);
         let thread_hdls: Vec<_> = (0..num_threads)
@@ -12294,7 +12343,7 @@ pub mod tests {
     #[test]
     fn test_accountsdb_scan_accounts() {
         solana_logger::setup();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
         let key = Pubkey::default();
         let key0 = solana_sdk::pubkey::new_rand();
         let account0 = AccountSharedData::new(1, 0, &key);
@@ -12368,7 +12417,7 @@ pub mod tests {
     #[test]
     fn test_store_large_account() {
         solana_logger::setup();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
 
         let key = Pubkey::default();
         let data_len = DEFAULT_FILE_SIZE as usize + 7;
@@ -12483,7 +12532,7 @@ pub mod tests {
     #[test]
     fn test_bank_hash_stats() {
         solana_logger::setup();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
 
         let key = Pubkey::default();
         let some_data_len = 5;
@@ -12511,7 +12560,7 @@ pub mod tests {
     #[test]
     fn test_calculate_accounts_hash_check_hash_mismatch() {
         solana_logger::setup();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
 
         let key = solana_sdk::pubkey::new_rand();
         let some_data_len = 0;
@@ -12574,7 +12623,7 @@ pub mod tests {
     #[test]
     fn test_calculate_accounts_hash_check_hash() {
         solana_logger::setup();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
 
         let key = solana_sdk::pubkey::new_rand();
         let some_data_len = 0;
@@ -12614,9 +12663,8 @@ pub mod tests {
 
     #[test]
     fn test_verify_accounts_hash() {
-        use AccountsHashVerificationError::*;
         solana_logger::setup();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
 
         let key = solana_sdk::pubkey::new_rand();
         let some_data_len = 0;
@@ -12646,7 +12694,7 @@ pub mod tests {
 
         assert_matches!(
             db.verify_accounts_hash_and_lamports(some_slot, 1, None, config.clone()),
-            Err(MissingAccountsHash)
+            Err(AccountsHashVerificationError::MissingAccountsHash)
         );
 
         db.set_accounts_hash(
@@ -12656,16 +12704,15 @@ pub mod tests {
 
         assert_matches!(
             db.verify_accounts_hash_and_lamports(some_slot, 1, None, config),
-            Err(MismatchedAccountsHash)
+            Err(AccountsHashVerificationError::MismatchedAccountsHash)
         );
     }
 
     #[test]
     fn test_verify_bank_capitalization() {
         for pass in 0..2 {
-            use AccountsHashVerificationError::*;
             solana_logger::setup();
-            let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+            let db = AccountsDb::new_single_for_tests();
 
             let key = solana_sdk::pubkey::new_rand();
             let some_data_len = 0;
@@ -12710,7 +12757,7 @@ pub mod tests {
 
             assert_matches!(
                 db.verify_accounts_hash_and_lamports(some_slot, 10, None, config),
-                Err(MismatchedTotalLamports(expected, actual)) if expected == 2 && actual == 10
+                Err(AccountsHashVerificationError::MismatchedTotalLamports(expected, actual)) if expected == 2 && actual == 10
             );
         }
     }
@@ -12718,7 +12765,7 @@ pub mod tests {
     #[test]
     fn test_verify_accounts_hash_no_account() {
         solana_logger::setup();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
 
         let some_slot: Slot = 0;
         let ancestors = vec![(some_slot, 0)].into_iter().collect();
@@ -12742,9 +12789,8 @@ pub mod tests {
 
     #[test]
     fn test_verify_accounts_hash_bad_account_hash() {
-        use AccountsHashVerificationError::*;
         solana_logger::setup();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
 
         let key = Pubkey::default();
         let some_data_len = 0;
@@ -12777,14 +12823,17 @@ pub mod tests {
 
         assert_matches!(
             db.verify_accounts_hash_and_lamports(some_slot, 1, None, config),
-            Err(MismatchedAccountsHash)
+            Err(AccountsHashVerificationError::MismatchedAccountsHash)
         );
     }
 
     #[test]
     fn test_storage_finder() {
         solana_logger::setup();
-        let db = AccountsDb::new_sized(Vec::new(), 16 * 1024);
+        let db = AccountsDb {
+            file_size: 16 * 1024,
+            ..AccountsDb::new_single_for_tests()
+        };
         let key = solana_sdk::pubkey::new_rand();
         let lamports = 100;
         let data_len = 8190;
@@ -12796,13 +12845,13 @@ pub mod tests {
 
     #[test]
     fn test_get_snapshot_storages_empty() {
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
         assert!(db.get_snapshot_storages(..=0).0.is_empty());
     }
 
     #[test]
     fn test_get_snapshot_storages_only_older_than_or_equal_to_snapshot_slot() {
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
 
         let key = Pubkey::default();
         let account = AccountSharedData::new(1, 0, &key);
@@ -12821,7 +12870,7 @@ pub mod tests {
     #[test]
     fn test_get_snapshot_storages_only_non_empty() {
         for pass in 0..2 {
-            let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+            let db = AccountsDb::new_single_for_tests();
 
             let key = Pubkey::default();
             let account = AccountSharedData::new(1, 0, &key);
@@ -12844,7 +12893,7 @@ pub mod tests {
 
     #[test]
     fn test_get_snapshot_storages_only_roots() {
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
 
         let key = Pubkey::default();
         let account = AccountSharedData::new(1, 0, &key);
@@ -12860,7 +12909,7 @@ pub mod tests {
 
     #[test]
     fn test_get_snapshot_storages_exclude_empty() {
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
 
         let key = Pubkey::default();
         let account = AccountSharedData::new(1, 0, &key);
@@ -12880,7 +12929,7 @@ pub mod tests {
 
     #[test]
     fn test_get_snapshot_storages_with_base_slot() {
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
 
         let key = Pubkey::default();
         let account = AccountSharedData::new(1, 0, &key);
@@ -12895,7 +12944,7 @@ pub mod tests {
     #[test]
     #[should_panic(expected = "double remove of account in slot: 0/store: 0!!")]
     fn test_storage_remove_account_double_remove() {
-        let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let accounts = AccountsDb::new_single_for_tests();
         let pubkey = solana_sdk::pubkey::new_rand();
         let account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
         accounts.store_for_tests(0, &[(&pubkey, &account)]);
@@ -12926,7 +12975,10 @@ pub mod tests {
         let zero_lamport_account = AccountSharedData::new(zero_lamport, data_size, &owner);
 
         let mut current_slot = 0;
-        let accounts = AccountsDb::new_sized_no_extra_stores(Vec::new(), store_size);
+        let accounts = AccountsDb {
+            file_size: store_size,
+            ..AccountsDb::new_single_for_tests()
+        };
 
         // A: Initialize AccountsDb with pubkey1 and pubkey2
         current_slot += 1;
@@ -13526,12 +13578,7 @@ pub mod tests {
     #[test]
     fn test_store_clean_after_shrink() {
         solana_logger::setup();
-        let accounts = AccountsDb::new_with_config_for_tests(
-            vec![],
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts = AccountsDb::new_single_for_tests();
         let epoch_schedule = EpochSchedule::default();
 
         let account = AccountSharedData::new(1, 16 * 4096, &Pubkey::default());
@@ -13575,7 +13622,10 @@ pub mod tests {
     #[test]
     fn test_store_reuse() {
         solana_logger::setup();
-        let accounts = AccountsDb::new_sized_caching(vec![], 4096);
+        let accounts = AccountsDb {
+            file_size: 4096,
+            ..AccountsDb::new_single_for_tests()
+        };
 
         let size = 100;
         let num_accounts: usize = 100;
@@ -13641,7 +13691,7 @@ pub mod tests {
     #[test]
     #[should_panic(expected = "We've run out of storage ids!")]
     fn test_wrapping_append_vec_id() {
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
 
         let zero_lamport_account =
             AccountSharedData::new(0, 0, AccountSharedData::default().owner());
@@ -13668,7 +13718,7 @@ pub mod tests {
     #[should_panic(expected = "We've run out of storage ids!")]
     fn test_reuse_append_vec_id() {
         solana_logger::setup();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
 
         let zero_lamport_account =
             AccountSharedData::new(0, 0, AccountSharedData::default().owner());
@@ -13694,7 +13744,7 @@ pub mod tests {
 
     #[test]
     fn test_zero_lamport_new_root_not_cleaned() {
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
         let account_key = Pubkey::new_unique();
         let zero_lamport_account =
             AccountSharedData::new(0, 0, AccountSharedData::default().owner());
@@ -13719,7 +13769,7 @@ pub mod tests {
 
     #[test]
     fn test_store_load_cached() {
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
         let key = Pubkey::default();
         let account0 = AccountSharedData::new(1, 0, &key);
         let slot = 0;
@@ -13751,7 +13801,7 @@ pub mod tests {
 
     #[test]
     fn test_store_flush_load_cached() {
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
         let key = Pubkey::default();
         let account0 = AccountSharedData::new(1, 0, &key);
         let slot = 0;
@@ -13778,7 +13828,7 @@ pub mod tests {
 
     #[test]
     fn test_flush_accounts_cache() {
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
         let account0 = AccountSharedData::new(1, 0, &Pubkey::default());
 
         let unrooted_slot = 4;
@@ -13843,7 +13893,7 @@ pub mod tests {
     }
 
     fn run_test_flush_accounts_cache_if_needed(num_roots: usize, num_unrooted: usize) {
-        let mut db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let mut db = AccountsDb::new_single_for_tests();
         db.write_cache_limit_bytes = Some(max_cache_slots() as u64);
         let space = 1; // # data bytes per account. write cache counts data len
         let account0 = AccountSharedData::new(1, space, &Pubkey::default());
@@ -13898,12 +13948,7 @@ pub mod tests {
 
     #[test]
     fn test_read_only_accounts_cache() {
-        let db = Arc::new(AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        ));
+        let db = Arc::new(AccountsDb::new_single_for_tests());
 
         let account_key = Pubkey::new_unique();
         let zero_lamport_account =
@@ -13943,12 +13988,7 @@ pub mod tests {
 
     #[test]
     fn test_account_matches_owners() {
-        let db = Arc::new(AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        ));
+        let db = Arc::new(AccountsDb::new_single_for_tests());
 
         let owners: Vec<Pubkey> = (0..2).map(|_| Pubkey::new_unique()).collect();
 
@@ -14040,12 +14080,7 @@ pub mod tests {
 
     #[test]
     fn test_flush_cache_clean() {
-        let db = Arc::new(AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        ));
+        let db = Arc::new(AccountsDb::new_single_for_tests());
 
         let account_key = Pubkey::new_unique();
         let zero_lamport_account =
@@ -14089,12 +14124,7 @@ pub mod tests {
 
     #[test]
     fn test_flush_cache_dont_clean_zero_lamport_account() {
-        let db = Arc::new(AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        ));
+        let db = Arc::new(AccountsDb::new_single_for_tests());
 
         let zero_lamport_account_key = Pubkey::new_unique();
         let other_account_key = Pubkey::new_unique();
@@ -14233,12 +14263,7 @@ pub mod tests {
 
     #[test]
     fn test_scan_flush_accounts_cache_then_clean_drop() {
-        let db = Arc::new(AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        ));
+        let db = Arc::new(AccountsDb::new_single_for_tests());
         let account_key = Pubkey::new_unique();
         let account_key2 = Pubkey::new_unique();
         let zero_lamport_account =
@@ -14348,12 +14373,7 @@ pub mod tests {
 
     #[test]
     fn test_alive_bytes() {
-        let accounts_db = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
         let slot: Slot = 0;
         let num_keys = 10;
 
@@ -14392,12 +14412,7 @@ pub mod tests {
         scan_slot: Option<Slot>,
         write_cache_limit_bytes: Option<u64>,
     ) -> (Arc<AccountsDb>, Vec<Pubkey>, Vec<Slot>, Option<ScanTracker>) {
-        let mut accounts_db = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let mut accounts_db = AccountsDb::new_single_for_tests();
         accounts_db.write_cache_limit_bytes = write_cache_limit_bytes;
         let accounts_db = Arc::new(accounts_db);
 
@@ -14799,12 +14814,7 @@ pub mod tests {
     }
 
     fn run_test_shrink_unref(do_intra_cache_clean: bool) {
-        let db = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let db = AccountsDb::new_single_for_tests();
         let epoch_schedule = EpochSchedule::default();
         let account_key1 = Pubkey::new_unique();
         let account_key2 = Pubkey::new_unique();
@@ -14874,7 +14884,7 @@ pub mod tests {
     #[test]
     fn test_partial_clean() {
         solana_logger::setup();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
         let account_key1 = Pubkey::new_unique();
         let account_key2 = Pubkey::new_unique();
         let account1 = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
@@ -15059,12 +15069,7 @@ pub mod tests {
     fn do_test_load_account_and_cache_flush_race(with_retry: bool) {
         solana_logger::setup();
 
-        let mut db = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let mut db = AccountsDb::new_single_for_tests();
         db.load_delay = RACY_SLEEP_MS;
         let db = Arc::new(db);
         let pubkey = Arc::new(Pubkey::new_unique());
@@ -15132,12 +15137,7 @@ pub mod tests {
     }
 
     fn do_test_load_account_and_shrink_race(with_retry: bool) {
-        let mut db = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let mut db = AccountsDb::new_single_for_tests();
         let epoch_schedule = EpochSchedule::default();
         db.load_delay = RACY_SLEEP_MS;
         let db = Arc::new(db);
@@ -15198,12 +15198,7 @@ pub mod tests {
 
     #[test]
     fn test_cache_flush_delayed_remove_unrooted_race() {
-        let mut db = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let mut db = AccountsDb::new_single_for_tests();
         db.load_delay = RACY_SLEEP_MS;
         let db = Arc::new(db);
         let slot = 10;
@@ -15268,12 +15263,7 @@ pub mod tests {
 
     #[test]
     fn test_cache_flush_remove_unrooted_race_multiple_slots() {
-        let db = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let db = AccountsDb::new_single_for_tests();
         let db = Arc::new(db);
         let num_cached_slots = 100;
 
@@ -15403,7 +15393,7 @@ pub mod tests {
     #[test]
     fn test_collect_uncleaned_slots_up_to_slot() {
         solana_logger::setup();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
 
         let slot1 = 11;
         let slot2 = 222;
@@ -15433,7 +15423,7 @@ pub mod tests {
     #[test]
     fn test_remove_uncleaned_slots_and_collect_pubkeys() {
         solana_logger::setup();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
 
         let slot1 = 11;
         let slot2 = 222;
@@ -15491,7 +15481,7 @@ pub mod tests {
     #[test]
     fn test_remove_uncleaned_slots_and_collect_pubkeys_up_to_slot() {
         solana_logger::setup();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let db = AccountsDb::new_single_for_tests();
 
         let slot1 = 11;
         let slot2 = 222;
@@ -15694,7 +15684,7 @@ pub mod tests {
         // fake out the store count to avoid the assert
         for (_, store) in accounts.storage.iter() {
             store.alive_bytes.store(0, Ordering::Release);
-            let mut count_and_status = store.count_and_status.write().unwrap();
+            let mut count_and_status = store.count_and_status.lock_write();
             count_and_status.0 = 0;
         }
 
@@ -15713,14 +15703,14 @@ pub mod tests {
         );
 
         for (_, store) in accounts.storage.iter() {
-            assert_eq!(store.count_and_status.read().unwrap().0, 0);
+            assert_eq!(store.count_and_status.read().0, 0);
             assert_eq!(store.alive_bytes.load(Ordering::Acquire), 0);
         }
         accounts.set_storage_count_and_alive_bytes(dashmap, &mut GenerateIndexTimings::default());
         assert_eq!(accounts.storage.len(), 1);
         for (_, store) in accounts.storage.iter() {
             assert_eq!(store.append_vec_id(), 0);
-            assert_eq!(store.count_and_status.read().unwrap().0, count);
+            assert_eq!(store.count_and_status.read().0, count);
             assert_eq!(store.alive_bytes.load(Ordering::Acquire), 2);
         }
     }
@@ -16875,7 +16865,7 @@ pub mod tests {
                 append_vec.append_vec_id()
             );
 
-            let _shrink_in_progress = current_ancient.create_if_necessary(slot2, &db);
+            let _shrink_in_progress = current_ancient.create_if_necessary(slot2, &db, 0);
             assert_eq!(current_ancient.slot(), slot);
             assert_eq!(current_ancient.append_vec_id(), append_vec.append_vec_id());
         }
@@ -16887,13 +16877,13 @@ pub mod tests {
             let _existing_append_vec = db.create_and_insert_store(slot2, 1000, "test");
 
             let mut current_ancient = CurrentAncientAppendVec::default();
-            let mut _shrink_in_progress = current_ancient.create_if_necessary(slot2, &db);
+            let mut _shrink_in_progress = current_ancient.create_if_necessary(slot2, &db, 0);
             let id = current_ancient.append_vec_id();
             assert_eq!(current_ancient.slot(), slot2);
             assert!(is_ancient(&current_ancient.append_vec().accounts));
             let slot3 = 3;
             // should do nothing
-            let _shrink_in_progress = current_ancient.create_if_necessary(slot3, &db);
+            let _shrink_in_progress = current_ancient.create_if_necessary(slot3, &db, 0);
             assert_eq!(current_ancient.slot(), slot2);
             assert_eq!(current_ancient.append_vec_id(), id);
             assert!(is_ancient(&current_ancient.append_vec().accounts));
@@ -16907,7 +16897,7 @@ pub mod tests {
             let _existing_append_vec = db.create_and_insert_store(slot2, 1000, "test");
 
             {
-                let _shrink_in_progress = current_ancient.create_ancient_append_vec(slot2, &db);
+                let _shrink_in_progress = current_ancient.create_ancient_append_vec(slot2, &db, 0);
             }
             let id = current_ancient.append_vec_id();
             assert_eq!(current_ancient.slot(), slot2);
@@ -16916,7 +16906,7 @@ pub mod tests {
             // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
             let _existing_append_vec = db.create_and_insert_store(slot3, 1000, "test");
 
-            let mut _shrink_in_progress = current_ancient.create_ancient_append_vec(slot3, &db);
+            let mut _shrink_in_progress = current_ancient.create_ancient_append_vec(slot3, &db, 0);
             assert_eq!(current_ancient.slot(), slot3);
             assert!(is_ancient(&current_ancient.append_vec().accounts));
             assert_ne!(current_ancient.append_vec_id(), id);
@@ -17258,6 +17248,152 @@ pub mod tests {
     }
 
     #[test]
+    fn test_shrink_ancient_overflow_with_min_size() {
+        solana_logger::setup();
+
+        let ideal_av_size = ancient_append_vecs::get_ancient_append_vec_capacity();
+        let num_normal_slots = 2;
+
+        // build an ancient append vec at slot 'ancient_slot' with one `fat`
+        // account that's larger than the ideal size of ancient append vec to
+        // simulate the *oversized* append vec for shrinking.
+        let account_size = (1.5 * ideal_av_size as f64) as u64;
+        let (db, ancient_slot) = get_one_ancient_append_vec_and_others_with_account_size(
+            true,
+            num_normal_slots,
+            Some(account_size),
+        );
+
+        let max_slot_inclusive = ancient_slot + (num_normal_slots as Slot);
+        let initial_accounts = get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1));
+
+        let ancient = db.storage.get_slot_storage_entry(ancient_slot).unwrap();
+
+        // assert that the min_size, which about 1.5 * ideal_av_size, kicked in
+        // and result that the ancient append vec capacity exceeds the ideal_av_size
+        assert!(ancient.capacity() > ideal_av_size);
+
+        // combine 1 normal append vec into existing oversize ancient append vec.
+        db.combine_ancient_slots(
+            (ancient_slot..max_slot_inclusive).collect(),
+            CAN_RANDOMLY_SHRINK_FALSE,
+        );
+
+        compare_all_accounts(
+            &initial_accounts,
+            &get_all_accounts(&db, ancient_slot..max_slot_inclusive),
+        );
+
+        // the append vec at max_slot_inclusive-1 should NOT have been removed
+        // since the append vec is already oversized and we created an ancient
+        // append vec there.
+        let ancient2 = db
+            .storage
+            .get_slot_storage_entry(max_slot_inclusive - 1)
+            .unwrap();
+        assert!(is_ancient(&ancient2.accounts));
+        assert!(ancient2.capacity() > ideal_av_size); // min_size kicked in, which cause the appendvec to be larger than the ideal_av_size
+
+        // Combine normal append vec(s) into existing ancient append vec this
+        // will overflow the original ancient append vec because of the oversized
+        // ancient append vec is full.
+        db.combine_ancient_slots(
+            (ancient_slot..=max_slot_inclusive).collect(),
+            CAN_RANDOMLY_SHRINK_FALSE,
+        );
+
+        compare_all_accounts(
+            &initial_accounts,
+            &get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1)),
+        );
+
+        // Nothing should be combined because the append vec are oversized.
+        // min_size kicked in, which cause the appendvecs to be larger than the ideal_av_size.
+        let ancient = db.storage.get_slot_storage_entry(ancient_slot).unwrap();
+        assert!(is_ancient(&ancient.accounts));
+        assert!(ancient.capacity() > ideal_av_size);
+
+        let ancient2 = db
+            .storage
+            .get_slot_storage_entry(max_slot_inclusive - 1)
+            .unwrap();
+        assert!(is_ancient(&ancient2.accounts));
+        assert!(ancient2.capacity() > ideal_av_size);
+
+        let ancient3 = db
+            .storage
+            .get_slot_storage_entry(max_slot_inclusive)
+            .unwrap();
+        assert!(is_ancient(&ancient3.accounts));
+        assert!(ancient3.capacity() > ideal_av_size);
+    }
+
+    #[test]
+    fn test_shink_overflow_too_much() {
+        let num_normal_slots = 2;
+        let ideal_av_size = ancient_append_vecs::get_ancient_append_vec_capacity();
+        let fat_account_size = (1.5 * ideal_av_size as f64) as u64;
+
+        // Prepare 4 appendvec to combine [small, big, small, small]
+        let account_data_sizes = vec![100, fat_account_size, 100, 100];
+        let (db, slot1) = create_db_with_storages_and_index_with_customized_account_size_per_slot(
+            true,
+            num_normal_slots + 1,
+            account_data_sizes,
+        );
+        let storage = db.get_storage_for_slot(slot1).unwrap();
+        let created_accounts = db.get_unique_accounts_from_storage(&storage);
+
+        // Adjust alive_ratio for slot2 to test it is shrinkable and is a
+        // candidate for squashing into the previous ancient append vec.
+        // However, due to the fact that this appendvec is `oversized`, it can't
+        // be squashed into the ancient append vec at previous slot (exceeds the
+        // size limit). Therefore, a new "oversized" ancient append vec are
+        // created at slot2 as the overflow. This is where the "min_bytes" in
+        // `fn create_ancient_append_vec` used for.
+        let slot2 = slot1 + 1;
+        let storage2 = db.storage.get_slot_storage_entry(slot2).unwrap();
+        let original_cap_slot2 = storage2.accounts.capacity();
+        storage2
+            .accounts
+            .set_current_len_for_tests(original_cap_slot2 as usize);
+
+        // Combine appendvec into ancient append vec.
+        let slots_to_combine: Vec<Slot> = (slot1..slot1 + (num_normal_slots + 1) as Slot).collect();
+        db.combine_ancient_slots(slots_to_combine, CAN_RANDOMLY_SHRINK_FALSE);
+
+        // slot2 is too big to fit into ideal ancient append vec at slot1. So slot2 won't be merged into slot1.
+        // slot1 will have its own ancient append vec.
+        assert!(db.storage.get_slot_storage_entry(slot1).is_some());
+        let ancient = db.get_storage_for_slot(slot1).unwrap();
+        assert!(is_ancient(&ancient.accounts));
+        assert_eq!(ancient.capacity(), ideal_av_size);
+
+        let after_store = db.get_storage_for_slot(slot1).unwrap();
+        let GetUniqueAccountsResult {
+            stored_accounts: after_stored_accounts,
+            capacity: after_capacity,
+        } = db.get_unique_accounts_from_storage(&after_store);
+        assert!(created_accounts.capacity <= after_capacity);
+        assert_eq!(created_accounts.stored_accounts.len(), 1);
+        assert_eq!(after_stored_accounts.len(), 1);
+
+        // slot2, even after shrinking, it is still oversized. Therefore, there
+        // exists as an ancient append vec at slot2.
+        let storage2_after = db.storage.get_slot_storage_entry(slot2).unwrap();
+        assert!(is_ancient(&storage2_after.accounts));
+        assert!(storage2_after.capacity() > ideal_av_size);
+        let after_store = db.get_storage_for_slot(slot2).unwrap();
+        let GetUniqueAccountsResult {
+            stored_accounts: after_stored_accounts,
+            capacity: after_capacity,
+        } = db.get_unique_accounts_from_storage(&after_store);
+        assert!(created_accounts.capacity <= after_capacity);
+        assert_eq!(created_accounts.stored_accounts.len(), 1);
+        assert_eq!(after_stored_accounts.len(), 1);
+    }
+
+    #[test]
     fn test_shrink_ancient_overflow() {
         solana_logger::setup();
 
@@ -17539,6 +17675,55 @@ pub mod tests {
         storage.remove_account(num_bytes, reset_accounts);
     }
 
+    pub(crate) fn create_storages_and_update_index_with_customized_account_size_per_slot(
+        db: &AccountsDb,
+        tf: Option<&TempFile>,
+        starting_slot: Slot,
+        num_slots: usize,
+        alive: bool,
+        account_data_sizes: Vec<u64>,
+    ) {
+        if num_slots == 0 {
+            return;
+        }
+        assert!(account_data_sizes.len() == num_slots + 1);
+        let local_tf = (tf.is_none()).then(|| {
+            crate::append_vec::test_utils::get_append_vec_path("create_storages_and_update_index")
+        });
+        let tf = tf.unwrap_or_else(|| local_tf.as_ref().unwrap());
+
+        let write_version1 = 0;
+        let starting_id = db
+            .storage
+            .iter()
+            .map(|storage| storage.1.append_vec_id())
+            .max()
+            .unwrap_or(999);
+        for (i, account_data_size) in account_data_sizes.iter().enumerate().take(num_slots) {
+            let id = starting_id + (i as AppendVecId);
+            let pubkey1 = solana_sdk::pubkey::new_rand();
+            let storage = sample_storage_with_entries_id_fill_percentage(
+                tf,
+                write_version1,
+                starting_slot + (i as Slot),
+                &pubkey1,
+                id,
+                alive,
+                Some(*account_data_size),
+                50,
+            );
+            insert_store(db, Arc::clone(&storage));
+        }
+
+        let storage = db.get_storage_for_slot(starting_slot).unwrap();
+        let created_accounts = db.get_unique_accounts_from_storage(&storage);
+        assert_eq!(created_accounts.stored_accounts.len(), 1);
+
+        if alive {
+            populate_index(db, starting_slot..(starting_slot + (num_slots as Slot) + 1));
+        }
+    }
+
     pub(crate) fn create_storages_and_update_index(
         db: &AccountsDb,
         tf: Option<&TempFile>,
@@ -17608,11 +17793,41 @@ pub mod tests {
         (db, slot1)
     }
 
-    fn get_one_ancient_append_vec_and_others(
+    pub(crate) fn create_db_with_storages_and_index_with_customized_account_size_per_slot(
+        alive: bool,
+        num_slots: usize,
+        account_data_size: Vec<u64>,
+    ) -> (AccountsDb, Slot) {
+        solana_logger::setup();
+
+        let db = AccountsDb::new_single_for_tests();
+
+        // create a single append vec with a single account in a slot
+        // add the pubkey to index if alive
+        // call combine_ancient_slots with the slot
+        // verify we create an ancient appendvec that has alive accounts and does not have dead accounts
+
+        let slot1 = 1;
+        create_storages_and_update_index_with_customized_account_size_per_slot(
+            &db,
+            None,
+            slot1,
+            num_slots,
+            alive,
+            account_data_size,
+        );
+
+        let slot1 = slot1 as Slot;
+        (db, slot1)
+    }
+
+    fn get_one_ancient_append_vec_and_others_with_account_size(
         alive: bool,
         num_normal_slots: usize,
+        account_data_size: Option<u64>,
     ) -> (AccountsDb, Slot) {
-        let (db, slot1) = create_db_with_storages_and_index(alive, num_normal_slots + 1, None);
+        let (db, slot1) =
+            create_db_with_storages_and_index(alive, num_normal_slots + 1, account_data_size);
         let storage = db.get_storage_for_slot(slot1).unwrap();
         let created_accounts = db.get_unique_accounts_from_storage(&storage);
 
@@ -17626,7 +17841,7 @@ pub mod tests {
             capacity: after_capacity,
         } = db.get_unique_accounts_from_storage(&after_store);
         if alive {
-            assert_ne!(created_accounts.capacity, after_capacity);
+            assert!(created_accounts.capacity <= after_capacity);
         } else {
             assert_eq!(created_accounts.capacity, after_capacity);
         }
@@ -17635,6 +17850,13 @@ pub mod tests {
         // or we create a new one and copy into it if account is alive
         assert_eq!(after_stored_accounts.len(), 1);
         (db, slot1)
+    }
+
+    fn get_one_ancient_append_vec_and_others(
+        alive: bool,
+        num_normal_slots: usize,
+    ) -> (AccountsDb, Slot) {
+        get_one_ancient_append_vec_and_others_with_account_size(alive, num_normal_slots, None)
     }
 
     #[test]
@@ -17848,8 +18070,7 @@ pub mod tests {
 
     #[test]
     fn test_calculate_incremental_accounts_hash() {
-        let accounts_db =
-            AccountsDb::new_for_tests_with_caching(Vec::new(), &ClusterType::Development);
+        let accounts_db = AccountsDb::new_single_for_tests();
 
         let owner = Pubkey::new_unique();
         let mut accounts: Vec<_> = (0..10)

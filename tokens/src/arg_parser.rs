@@ -652,7 +652,7 @@ where
 {
     let matches = get_matches(args);
     let config_file = matches.value_of("config_file").unwrap().to_string();
-    let url = matches.value_of("url").map(|x| x.to_string());
+    let url = matches.value_of("json_rpc_url").map(|x| x.to_string());
 
     let command = match matches.subcommand() {
         ("distribute-tokens", Some(matches)) => {

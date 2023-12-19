@@ -190,12 +190,12 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
         ..
     } = create_genesis_config(50);
     let bank = Bank::new_for_benches(&genesis_config);
-    let bank = Arc::new(bank);
+    let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
     let mut bank_client = BankClient::new_shared(bank.clone());
 
     let invoke_program_id = load_program(&bank_client, &bpf_loader::id(), &mint_keypair, "noop");
     let bank = bank_client
-        .advance_slot(1, &Pubkey::default())
+        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
         .expect("Failed to advance the slot");
 
     let mint_pubkey = mint_keypair.pubkey();

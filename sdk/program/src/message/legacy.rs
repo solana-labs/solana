@@ -26,7 +26,7 @@ use {
 };
 
 lazy_static! {
-    // Copied keys over since direct references create cyclical dependency.
+    // This will be deprecated and so this list shouldn't be modified
     pub static ref BUILTIN_PROGRAMS_KEYS: [Pubkey; 10] = {
         let parse = |s| Pubkey::from_str(s).unwrap();
         [
@@ -193,6 +193,7 @@ impl Message {
     /// // another crate so it can be shared between the on-chain program and
     /// // the client.
     /// #[derive(BorshSerialize, BorshDeserialize)]
+    /// # #[borsh(crate = "borsh")]
     /// enum BankInstruction {
     ///     Initialize,
     ///     Deposit { lamports: u64 },
@@ -264,6 +265,7 @@ impl Message {
     /// // another crate so it can be shared between the on-chain program and
     /// // the client.
     /// #[derive(BorshSerialize, BorshDeserialize)]
+    /// # #[borsh(crate = "borsh")]
     /// enum BankInstruction {
     ///     Initialize,
     ///     Deposit { lamports: u64 },
@@ -363,6 +365,7 @@ impl Message {
     /// // another crate so it can be shared between the on-chain program and
     /// // the client.
     /// #[derive(BorshSerialize, BorshDeserialize)]
+    /// # #[borsh(crate = "borsh")]
     /// enum BankInstruction {
     ///     Initialize,
     ///     Deposit { lamports: u64 },

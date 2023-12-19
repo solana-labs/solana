@@ -9,6 +9,7 @@ use {
         syscalls::create_program_runtime_environment_v1,
     },
     solana_clap_utils::input_parsers::pubkeys_of,
+    solana_cli_output::{OutputFormat, QuietDisplay, VerboseDisplay},
     solana_ledger::{
         blockstore_options::{AccessType, BlockstoreRecoveryMode},
         blockstore_processor::ProcessOptions,
@@ -33,7 +34,7 @@ use {
     },
     std::{
         collections::HashSet,
-        fmt::{Debug, Formatter},
+        fmt::{self, Debug, Formatter},
         fs::File,
         io::{Read, Seek, Write},
         path::{Path, PathBuf},
@@ -119,18 +120,14 @@ fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank
         force_update_to_open,
         enforce_ulimit_nofile,
     );
-    let (bank_forks, ..) = load_and_process_ledger(
+    let (bank_forks, ..) = load_and_process_ledger_or_exit(
         arg_matches,
         &genesis_config,
         Arc::new(blockstore),
         process_options,
         snapshot_archive_path,
         incremental_snapshot_archive_path,
-    )
-    .unwrap_or_else(|err| {
-        eprintln!("Ledger loading failed: {err:?}");
-        exit(1);
-    });
+    );
     let bank = bank_forks.read().unwrap().working_bank();
     bank
 }
@@ -267,8 +264,9 @@ struct Output {
     log: Vec<String>,
 }
 
-impl Debug for Output {
+impl fmt::Display for Output {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Program output:")?;
         writeln!(f, "Result: {}", self.result)?;
         writeln!(f, "Instruction Count: {}", self.instruction_count)?;
         writeln!(f, "Execution time: {} us", self.execution_time.as_micros())?;
@@ -278,6 +276,9 @@ impl Debug for Output {
         Ok(())
     }
 }
+
+impl QuietDisplay for Output {}
+impl VerboseDisplay for Output {}
 
 // Replace with std::lazy::Lazy when stabilized.
 // https://github.com/rust-lang/rust/issues/74465
@@ -616,16 +617,6 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
             .get_recorded_content()
             .to_vec(),
     };
-    match matches.value_of("output_format") {
-        Some("json") => {
-            println!("{}", serde_json::to_string_pretty(&output).unwrap());
-        }
-        Some("json-compact") => {
-            println!("{}", serde_json::to_string(&output).unwrap());
-        }
-        _ => {
-            println!("Program output:");
-            println!("{output:?}");
-        }
-    }
+    let output_format = OutputFormat::from_matches(matches, "output_format", false);
+    println!("{}", output_format.formatted_string(&output));
 }

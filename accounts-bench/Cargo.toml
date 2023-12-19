@@ -12,7 +12,7 @@ edition = { workspace = true }
 clap = { workspace = true }
 log = { workspace = true }
 rayon = { workspace = true }
-solana-accounts-db = { workspace = true }
+solana-accounts-db = { workspace = true, features = ["dev-context-only-utils"] }
 solana-logger = { workspace = true }
 solana-measure = { workspace = true }
 solana-sdk = { workspace = true }
@@ -20,3 +20,6 @@ solana-version = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
+
+[features]
+dev-context-only-utils = []
