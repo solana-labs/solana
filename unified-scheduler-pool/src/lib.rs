@@ -843,7 +843,7 @@ where
         };
 
         let drop_main_loop = || {
-            move || 'outer {
+            move || 'outer: {
                 let mut session_result: Result<()> = Ok(());
                 let mut session_timings = ExecuteTimings::default();
                 loop {
