@@ -53,11 +53,11 @@ use {
 // there...
 #[derive(Debug)]
 pub struct SchedulerPool<
-    T: SpawnableScheduler<TH, SEA>,
+    S: SpawnableScheduler<TH, SEA>,
     TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 > {
-    schedulers: Mutex<Vec<Box<T>>>,
+    schedulers: Mutex<Vec<Box<S>>>,
     log_messages_bytes_limit: Option<usize>,
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<ReplayVoteSender>,
@@ -78,7 +78,7 @@ pub struct SchedulerPool<
     watchdog_sender: Sender<Weak<RwLock<ThreadManager<TH, SEA>>>>,
     next_scheduler_id: AtomicU64,
     _watchdog_thread: JoinHandle<()>,
-    _phantom: PhantomData<(T, TH, SEA)>,
+    _phantom: PhantomData<(S, TH, SEA)>,
 }
 
 pub type DefaultSchedulerPool = SchedulerPool<
@@ -153,9 +153,9 @@ where
     }
 }
 
-impl<T, TH, SEA> SchedulerPool<T, TH, SEA>
+impl<S, TH, SEA> SchedulerPool<S, TH, SEA>
 where
-    T: SpawnableScheduler<TH, SEA>,
+    S: SpawnableScheduler<TH, SEA>,
     TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 {
@@ -252,21 +252,21 @@ where
             .expect("self-referencing Arc-ed pool")
     }
 
-    pub fn return_scheduler(&self, scheduler: Box<T>) {
+    pub fn return_scheduler(&self, scheduler: Box<S>) {
         self.schedulers
             .lock()
             .expect("not poisoned")
             .push(scheduler);
     }
 
-    pub fn do_take_scheduler(&self, context: SchedulingContext) -> Box<T> {
+    pub fn do_take_scheduler(&self, context: SchedulingContext) -> Box<S> {
         // pop is intentional for filo, expecting relatively warmed-up scheduler due to having been
         // returned recently
         if let Some(mut scheduler) = self.schedulers.lock().expect("not poisoned").pop() {
             scheduler.replace_context(context);
             scheduler
         } else {
-            Box::new(T::spawn(self.self_arc(), context, TH::create(self)))
+            Box::new(S::spawn(self.self_arc(), context, TH::create(self)))
         }
     }
 
@@ -279,9 +279,9 @@ where
     }
 }
 
-impl<T, TH, SEA> InstalledSchedulerPool<SEA> for SchedulerPool<T, TH, SEA>
+impl<S, TH, SEA> InstalledSchedulerPool<SEA> for SchedulerPool<S, TH, SEA>
 where
-    T: SpawnableScheduler<TH, SEA>,
+    S: SpawnableScheduler<TH, SEA>,
     TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 {
@@ -293,16 +293,16 @@ where
 pub trait TaskHandler<SEA: ScheduleExecutionArg>:
     Send + Sync + Debug + Sized + Clone + 'static
 {
-    fn create<T: SpawnableScheduler<Self, SEA>>(pool: &SchedulerPool<T, Self, SEA>) -> Self;
+    fn create<S: SpawnableScheduler<Self, SEA>>(pool: &SchedulerPool<S, Self, SEA>) -> Self;
 
-    fn handle<T: SpawnableScheduler<Self, SEA>>(
+    fn handle<S: SpawnableScheduler<Self, SEA>>(
         &self,
         result: &mut Result<()>,
         timings: &mut ExecuteTimings,
         bank: &Arc<Bank>,
         transaction: &SanitizedTransaction,
         index: usize,
-        pool: &SchedulerPool<T, Self, SEA>,
+        pool: &SchedulerPool<S, Self, SEA>,
     );
 }
 
@@ -310,18 +310,18 @@ pub trait TaskHandler<SEA: ScheduleExecutionArg>:
 pub struct DefaultTaskHandler;
 
 impl<SEA: ScheduleExecutionArg> TaskHandler<SEA> for DefaultTaskHandler {
-    fn create<T: SpawnableScheduler<Self, SEA>>(_pool: &SchedulerPool<T, Self, SEA>) -> Self {
+    fn create<S: SpawnableScheduler<Self, SEA>>(_pool: &SchedulerPool<S, Self, SEA>) -> Self {
         Self
     }
 
-    fn handle<T: SpawnableScheduler<Self, SEA>>(
+    fn handle<S: SpawnableScheduler<Self, SEA>>(
         &self,
         result: &mut Result<()>,
         timings: &mut ExecuteTimings,
         bank: &Arc<Bank>,
         transaction: &SanitizedTransaction,
         index: usize,
-        pool: &SchedulerPool<T, Self, SEA>,
+        pool: &SchedulerPool<S, Self, SEA>,
     ) {
         // scheduler must properly prevent conflicting tx executions, so locking isn't needed
         // here
