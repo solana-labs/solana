@@ -54,7 +54,7 @@ use {
 #[derive(Debug)]
 pub struct SchedulerPool<
     T: SpawnableScheduler<TH, SEA>,
-    TH: Handler<SEA>,
+    TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 > {
     schedulers: Mutex<Vec<Box<T>>>,
@@ -82,14 +82,14 @@ pub struct SchedulerPool<
 }
 
 pub type DefaultSchedulerPool = SchedulerPool<
-    PooledScheduler<DefaultTransactionHandler, DefaultScheduleExecutionArg>,
-    DefaultTransactionHandler,
+    PooledScheduler<DefaultTaskHandler, DefaultScheduleExecutionArg>,
+    DefaultTaskHandler,
     DefaultScheduleExecutionArg,
 >;
 
 struct WatchedThreadManager<TH, SEA>
 where
-    TH: Handler<SEA>,
+    TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 {
     thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>,
@@ -99,7 +99,7 @@ where
 
 impl<TH, SEA> WatchedThreadManager<TH, SEA>
 where
-    TH: Handler<SEA>,
+    TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 {
     fn new(thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>) -> Self {
@@ -156,7 +156,7 @@ where
 impl<T, TH, SEA> SchedulerPool<T, TH, SEA>
 where
     T: SpawnableScheduler<TH, SEA>,
-    TH: Handler<SEA>,
+    TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 {
     pub fn new(
@@ -282,7 +282,7 @@ where
 impl<T, TH, SEA> InstalledSchedulerPool<SEA> for SchedulerPool<T, TH, SEA>
 where
     T: SpawnableScheduler<TH, SEA>,
-    TH: Handler<SEA>,
+    TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 {
     fn take_scheduler(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler<SEA>> {
@@ -290,7 +290,7 @@ where
     }
 }
 
-pub trait Handler<SEA: ScheduleExecutionArg>:
+pub trait TaskHandler<SEA: ScheduleExecutionArg>:
     Send + Sync + Debug + Sized + Clone + 'static
 {
     fn create<T: SpawnableScheduler<Self, SEA>>(pool: &SchedulerPool<T, Self, SEA>) -> Self;
@@ -307,9 +307,9 @@ pub trait Handler<SEA: ScheduleExecutionArg>:
 }
 
 #[derive(Debug, Clone)]
-pub struct DefaultTransactionHandler;
+pub struct DefaultTaskHandler;
 
-impl<SEA: ScheduleExecutionArg> Handler<SEA> for DefaultTransactionHandler {
+impl<SEA: ScheduleExecutionArg> TaskHandler<SEA> for DefaultTaskHandler {
     fn create<T: SpawnableScheduler<Self, SEA>>(_pool: &SchedulerPool<T, Self, SEA>) -> Self {
         Self
     }
@@ -394,7 +394,7 @@ impl ExecutedTask {
 // this will be replaced with more proper implementation...
 // not usable at all, especially for mainnet-beta
 #[derive(Debug)]
-pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
+pub struct PooledScheduler<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> {
     completed_result_with_timings: Option<ResultWithTimings>,
     thread_manager: Arc<RwLock<ThreadManager<TH, SEA>>>,
     context: SchedulingContext,
@@ -405,7 +405,7 @@ pub struct PooledScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
 type Tid = i32;
 
 #[derive(Debug)]
-struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
+struct ThreadManager<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> {
     scheduler_id: SchedulerId,
     pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
     scheduler_thread_and_tid: Option<(JoinHandle<ResultWithTimings>, Tid)>,
@@ -420,7 +420,7 @@ struct ThreadManager<TH: Handler<SEA>, SEA: ScheduleExecutionArg> {
     session_result_with_timings: Option<ResultWithTimings>,
 }
 
-impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
+impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
     pub fn do_spawn(
         pool: Arc<SchedulerPool<Self, TH, SEA>>,
         initial_context: SchedulingContext,
@@ -526,7 +526,7 @@ const PRIMARY_SCHEDULER_ID: SchedulerId = 0;
 
 impl<TH, SEA> ThreadManager<TH, SEA>
 where
-    TH: Handler<SEA>,
+    TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 {
     fn new(
@@ -1017,7 +1017,7 @@ pub trait InstallableScheduler<SEA: ScheduleExecutionArg>: InstalledScheduler<SE
     fn replace_context(&mut self, context: SchedulingContext);
 }
 
-pub trait SpawnableScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg>:
+pub trait SpawnableScheduler<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg>:
     InstallableScheduler<SEA>
 {
     fn spawn(
@@ -1033,7 +1033,7 @@ pub trait SpawnableScheduler<TH: Handler<SEA>, SEA: ScheduleExecutionArg>:
         Self: Sized;
 }
 
-impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
+impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
     for PooledScheduler<TH, SEA>
 {
     fn spawn(
@@ -1093,7 +1093,7 @@ impl<TH: Handler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
 
 impl<TH, SEA> InstalledScheduler<SEA> for PooledScheduler<TH, SEA>
 where
-    TH: Handler<SEA>,
+    TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 {
     fn id(&self) -> SchedulerId {
@@ -1135,7 +1135,7 @@ where
 
 impl<TH, SEA> InstallableScheduler<SEA> for PooledScheduler<TH, SEA>
 where
-    TH: Handler<SEA>,
+    TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 {
     fn replace_context(&mut self, context: SchedulingContext) {
@@ -1404,7 +1404,7 @@ mod tests {
 
     #[derive(Debug)]
     struct AsyncScheduler<const TRIGGER_RACE_CONDITION: bool>(
-        PooledScheduler<DefaultTransactionHandler, DefaultScheduleExecutionArg>,
+        PooledScheduler<DefaultTaskHandler, DefaultScheduleExecutionArg>,
         Mutex<Vec<JoinHandle<ResultWithTimings>>>,
     );
 
@@ -1437,8 +1437,8 @@ mod tests {
                 let mut result = Ok(());
                 let mut timings = ExecuteTimings::default();
 
-                <DefaultTransactionHandler as Handler<DefaultScheduleExecutionArg>>::handle(
-                    &DefaultTransactionHandler,
+                <DefaultTaskHandler as TaskHandler<DefaultScheduleExecutionArg>>::handle(
+                    &DefaultTaskHandler,
                     &mut result,
                     &mut timings,
                     context.bank(),
@@ -1482,18 +1482,18 @@ mod tests {
     }
 
     impl<const TRIGGER_RACE_CONDITION: bool>
-        SpawnableScheduler<DefaultTransactionHandler, DefaultScheduleExecutionArg>
+        SpawnableScheduler<DefaultTaskHandler, DefaultScheduleExecutionArg>
         for AsyncScheduler<TRIGGER_RACE_CONDITION>
     {
         fn spawn(
-            _pool: Arc<SchedulerPool<Self, DefaultTransactionHandler, DefaultScheduleExecutionArg>>,
+            _pool: Arc<SchedulerPool<Self, DefaultTaskHandler, DefaultScheduleExecutionArg>>,
             _initial_context: SchedulingContext,
-            _handler: DefaultTransactionHandler,
+            _handler: DefaultTaskHandler,
         ) -> Self {
             todo!();
             /*
             AsyncScheduler::<TRIGGER_RACE_CONDITION>(
-                PooledScheduler::<DefaultTransactionHandler, DefaultScheduleExecutionArg> {
+                PooledScheduler::<DefaultTaskHandler, DefaultScheduleExecutionArg> {
                     id: thread_rng().gen::<SchedulerId>(),
                     pool: SchedulerPool::new(
                         pool.log_messages_bytes_limit,
@@ -1556,7 +1556,7 @@ mod tests {
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::<
             AsyncScheduler<TRIGGER_RACE_CONDITION>,
-            DefaultTransactionHandler,
+            DefaultTaskHandler,
             DefaultScheduleExecutionArg,
         >::new_dyn(None, None, None, ignored_prioritization_fee_cache);
         let scheduler = pool.take_scheduler(context);
