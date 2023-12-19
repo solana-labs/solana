@@ -9963,10 +9963,7 @@ fn test_call_precomiled_program() {
     bank.process_transaction(&tx).unwrap();
 }
 
-fn calculate_test_fee(
-    message: &SanitizedMessage,
-    fee_structure: &FeeStructure,
-) -> u64 {
+fn calculate_test_fee(message: &SanitizedMessage, fee_structure: &FeeStructure) -> u64 {
     let budget_limits = process_compute_budget_instructions(message.program_instructions_iter())
         .unwrap_or_default()
         .into();
@@ -10110,10 +10107,7 @@ fn test_calculate_prioritization_fee() {
     ))
     .unwrap();
 
-    let fee = calculate_test_fee(
-        &message,
-        &fee_structure,
-    );
+    let fee = calculate_test_fee(&message, &fee_structure);
     assert_eq!(
         fee,
         fee_structure.lamports_per_signature + prioritization_fee
