@@ -29,7 +29,7 @@ use {
         },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
-    solana_scheduler::{Page, SchedulingStateMachine, Task},
+    solana_unified_scheduler_logic::{Page, SchedulingStateMachine, Task},
     solana_sdk::{
         pubkey::Pubkey,
         slot_history::Slot,

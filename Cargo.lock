@@ -7136,14 +7136,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-scheduler"
-version = "1.18.0"
-dependencies = [
- "solana-sdk",
- "static_assertions",
-]
-
-[[package]]
 name = "solana-sdk"
 version = "1.18.0"
 dependencies = [
@@ -7566,6 +7558,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-unified-scheduler-logic"
+version = "1.18.0"
+dependencies = [
+ "solana-sdk",
+ "static_assertions",
+]
+
+[[package]]
 name = "solana-unified-scheduler-pool"
 version = "1.18.0"
 dependencies = [
@@ -7586,8 +7586,8 @@ dependencies = [
  "solana-nohash-hasher",
  "solana-program-runtime",
  "solana-runtime",
- "solana-scheduler",
  "solana-sdk",
+ "solana-unified-scheduler-logic",
  "solana-vote",
  "tikv-jemallocator",
 ]
