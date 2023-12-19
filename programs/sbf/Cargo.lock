@@ -5048,13 +5048,13 @@ dependencies = [
  "solana-rpc",
  "solana-rpc-client-api",
  "solana-runtime",
- "solana-scheduler-pool",
  "solana-sdk",
  "solana-send-transaction-service",
  "solana-streamer",
  "solana-tpu-client",
  "solana-transaction-status",
  "solana-turbine",
+ "solana-unified-scheduler-pool",
  "solana-version",
  "solana-vote",
  "solana-vote-program",
@@ -6244,36 +6244,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-scheduler"
-version = "1.18.0"
-dependencies = [
- "solana-sdk",
- "static_assertions",
-]
-
-[[package]]
-name = "solana-scheduler-pool"
-version = "1.18.0"
-dependencies = [
- "assert_matches",
- "cpu-time",
- "crossbeam-channel",
- "dashmap",
- "log",
- "procfs",
- "rustix",
- "serde_json",
- "solana-ledger",
- "solana-measure",
- "solana-metrics",
- "solana-program-runtime",
- "solana-runtime",
- "solana-scheduler",
- "solana-sdk",
- "solana-vote",
-]
-
-[[package]]
 name = "solana-sdk"
 version = "1.18.0"
 dependencies = [
@@ -6586,6 +6556,36 @@ dependencies = [
  "solana-streamer",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "solana-unified-scheduler-logic"
+version = "1.18.0"
+dependencies = [
+ "solana-sdk",
+ "static_assertions",
+]
+
+[[package]]
+name = "solana-unified-scheduler-pool"
+version = "1.18.0"
+dependencies = [
+ "assert_matches",
+ "cpu-time",
+ "crossbeam-channel",
+ "dashmap",
+ "log",
+ "procfs",
+ "rustix",
+ "serde_json",
+ "solana-ledger",
+ "solana-measure",
+ "solana-metrics",
+ "solana-program-runtime",
+ "solana-runtime",
+ "solana-sdk",
+ "solana-unified-scheduler-logic",
+ "solana-vote",
 ]
 
 [[package]]
