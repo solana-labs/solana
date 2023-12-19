@@ -23,8 +23,8 @@ solana-measure = { workspace = true }
 solana-metrics = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-runtime = { workspace = true }
-solana-unified-scheduler-logic = { workspace = true }
 solana-sdk = { workspace = true }
+solana-unified-scheduler-logic = { workspace = true }
 solana-vote = { workspace = true }
 
 [dev-dependencies]
