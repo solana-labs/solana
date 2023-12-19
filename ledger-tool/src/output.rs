@@ -6,7 +6,9 @@ use {
         clock::{Slot, UnixTimestamp},
         native_token::lamports_to_sol,
     },
-    solana_transaction_status::{EncodedTransactionWithStatusMeta, EntrySummary, Rewards},
+    solana_transaction_status::{
+        EncodedConfirmedBlock, EncodedTransactionWithStatusMeta, EntrySummary, Rewards,
+    },
     std::fmt::{self, Display, Formatter, Result},
 };
 
@@ -263,4 +265,41 @@ pub struct EncodedConfirmedBlockWithEntries {
     pub rewards: Rewards,
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
+}
+
+impl EncodedConfirmedBlockWithEntries {
+    pub fn try_from(
+        block: EncodedConfirmedBlock,
+        entries_iterator: impl Iterator<Item = EntrySummary>,
+    ) -> std::result::Result<Self, String> {
+        let mut entries = vec![];
+        for (i, entry) in entries_iterator.enumerate() {
+            let ending_transaction_index = entry
+                .starting_transaction_index
+                .saturating_add(entry.num_transactions as usize);
+            let transactions = block
+                .transactions
+                .get(entry.starting_transaction_index..ending_transaction_index)
+                .ok_or(format!(
+                    "Mismatched entry data and transactions: entry {:?}",
+                    i
+                ))?;
+            entries.push(CliPopulatedEntry {
+                num_hashes: entry.num_hashes,
+                hash: entry.hash.to_string(),
+                num_transactions: entry.num_transactions,
+                starting_transaction_index: entry.starting_transaction_index,
+                transactions: transactions.to_vec(),
+            });
+        }
+        Ok(Self {
+            previous_blockhash: block.previous_blockhash,
+            blockhash: block.blockhash,
+            parent_slot: block.parent_slot,
+            entries,
+            rewards: block.rewards,
+            block_time: block.block_time,
+            block_height: block.block_height,
+        })
+    }
 }
