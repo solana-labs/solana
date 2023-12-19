@@ -903,7 +903,7 @@ where
                                 .send((session_result, session_timings))
                                 .unwrap();
                             session_result = Ok(());
-                            session_timings = Default::default();
+                            session_timings = ExecuteTimings::default();
                         }
                         Err(RecvTimeoutError::Disconnected) => break 'outer,
                         Err(RecvTimeoutError::Timeout) => continue,
