@@ -658,7 +658,7 @@ where
             let mut session_ending = false;
             let mut thread_ending = false;
             move || {
-                let mut state_machine = SchedulingStateMachine::new();
+                let mut state_machine = SchedulingStateMachine::default();
                 let mut log_interval = LogInterval::default();
                 // hint compiler about inline[never] and unlikely?
                 macro_rules! log_scheduler {
@@ -756,8 +756,7 @@ where
 
                     if session_ending {
                         log_scheduler!("S:ended");
-                        (state_machine, log_interval) =
-                            (SchedulingStateMachine::new(), <_>::default());
+                        (state_machine, log_interval) = <_>::default();
                         drop_sender.send(SessionedMessage::EndSession).unwrap();
                         result_sender.send(drop_receiver2.recv().unwrap()).unwrap();
                         if !thread_ending {
