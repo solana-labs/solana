@@ -86,7 +86,7 @@ members = [
     "rpc-test",
     "runtime",
     "runtime-transaction",
-    "scheduler",
+    "unified-scheduler-logic",
     "unified-scheduler-pool",
     "sdk",
     "sdk/cargo-build-bpf",
