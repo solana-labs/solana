@@ -1056,24 +1056,22 @@ impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA
                 self.id(),
                 width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
             );
+        } else if self.thread_manager.read().unwrap().is_primary() {
+            info!(
+                "[sch_{:0width$x}]: watchdog: too big address book size: {page_count}...; emptying the primary scheduler",
+                self.id(),
+                width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
+            );
+            self.address_book.clear();
+            return true;
         } else {
-            if self.thread_manager.read().unwrap().is_primary() {
-                info!(
-                    "[sch_{:0width$x}]: watchdog: too big address book size: {page_count}...; emptying the primary scheduler",
-                    self.id(),
-                    width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
-                );
-                self.address_book.clear();
-                return true;
-            } else {
-                info!(
-                    "[sch_{:0width$x}]: watchdog: too big address book size: {page_count}...; retiring scheduler",
-                    self.id(),
-                    width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
-                );
-                self.stop_thread_manager();
-                return false;
-            }
+            info!(
+                "[sch_{:0width$x}]: watchdog: too big address book size: {page_count}...; retiring scheduler",
+                self.id(),
+                width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
+            );
+            self.stop_thread_manager();
+            return false;
         }
 
         let pooled_duration = self.pooled_since();
