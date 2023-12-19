@@ -727,7 +727,7 @@ async fn handle_connection(
                     // for the set timeout if there are no data.
                     // let exit_check_interval = (wait_for_chunk_timeout / 10)
                     //     .clamp(Duration::from_millis(10), Duration::from_secs(1));
-                    let exit_check_interval = Duration::from_secs(3600);
+                    let exit_check_interval = Duration::from_secs(60);
                     //let mut start = Instant::now();
                     while !stream_exit.load(Ordering::Relaxed) {
                         tokio::select! {
