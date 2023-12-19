@@ -709,10 +709,6 @@ mod thread_utilization {
     }
 
     impl InstallableScheduler<ScheduleExecutionArgForBench> for NonblockingSchedulerWithDepGraph {
-        fn has_context(&self) -> bool {
-            self.inner_scheduler.has_context()
-        }
-
         fn replace_context(&mut self, context: SchedulingContext) {
             self.inner_scheduler.replace_context(context)
         }
