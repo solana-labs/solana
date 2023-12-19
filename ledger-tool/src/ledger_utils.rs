@@ -36,12 +36,12 @@ use {
             move_and_async_delete_path_contents,
         },
     },
-    solana_unified_scheduler_pool::DefaultSchedulerPool,
     solana_sdk::{
         genesis_config::GenesisConfig, signature::Signer, signer::keypair::Keypair,
         timing::timestamp,
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_unified_scheduler_pool::DefaultSchedulerPool,
     solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
         path::{Path, PathBuf},

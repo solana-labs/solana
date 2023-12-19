@@ -29,12 +29,12 @@ use {
         },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
-    solana_unified_scheduler_logic::{Page, SchedulingStateMachine, Task},
     solana_sdk::{
         pubkey::Pubkey,
         slot_history::Slot,
         transaction::{Result, SanitizedTransaction},
     },
+    solana_unified_scheduler_logic::{Page, SchedulingStateMachine, Task},
     solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
         fmt::Debug,
@@ -448,7 +448,10 @@ impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
     }
 
     #[must_use]
-    fn ensure_thread_manager_started(&self, context: &SchedulingContext) -> RwLockReadGuard<'_, ThreadManager<TH, SEA>> {
+    fn ensure_thread_manager_started(
+        &self,
+        context: &SchedulingContext,
+    ) -> RwLockReadGuard<'_, ThreadManager<TH, SEA>> {
         loop {
             let r = self.thread_manager.read().unwrap();
             if r.is_active() {
@@ -747,7 +750,8 @@ where
                             log_scheduler!(state_change);
                         }
 
-                        let is_finished = state_machine.is_empty() && (session_ending || thread_ending);
+                        let is_finished =
+                            state_machine.is_empty() && (session_ending || thread_ending);
                         if is_finished {
                             break;
                         }
@@ -1109,14 +1113,19 @@ where
             let task = SchedulingStateMachine::create_task(transaction.clone(), index, |pubkey| {
                 self.address_book.load(pubkey)
             });
-            self.ensure_thread_manager_started(&self.context).send_task(task);
+            self.ensure_thread_manager_started(&self.context)
+                .send_task(task);
         });
     }
 
     fn wait_for_termination(&mut self, wait_reason: &WaitReason) -> Option<ResultWithTimings> {
         if self.completed_result_with_timings.is_none() {
-            self.completed_result_with_timings =
-                Some(self.thread_manager.write().unwrap().end_session(&self.context));
+            self.completed_result_with_timings = Some(
+                self.thread_manager
+                    .write()
+                    .unwrap()
+                    .end_session(&self.context),
+            );
         }
 
         if wait_reason.is_paused() {
