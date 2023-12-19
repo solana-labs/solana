@@ -382,10 +382,6 @@ mod nonblocking {
     impl<H: Handler<ScheduleExecutionArgForBench> + Clone>
         InstallableScheduler<ScheduleExecutionArgForBench> for NonblockingScheduler<H>
     {
-        fn has_context(&self) -> bool {
-            true
-        }
-
         fn replace_context(&mut self, context: SchedulingContext) {
             for _ in 0..self.lane_count {
                 self.transaction_sender
