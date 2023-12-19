@@ -580,7 +580,7 @@ where
             &mut task.result_with_timings.0,
             &mut task.result_with_timings.1,
             bank,
-            &task.task.transaction(),
+            task.task.transaction(),
             task.task.task_index(),
             pool,
         );
