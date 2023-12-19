@@ -447,7 +447,6 @@ impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
         scheduler
     }
 
-    #[must_use]
     fn ensure_thread_manager_started(
         &self,
         context: &SchedulingContext,
