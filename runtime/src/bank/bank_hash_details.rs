@@ -267,51 +267,57 @@ pub fn write_bank_hash_details_file(bank: &Bank) -> std::result::Result<(), Stri
 pub mod tests {
     use super::*;
 
-    fn build_slot_details(slot: Slot) -> BankHashSlotDetails {
-        use solana_sdk::hash::hash;
+    fn build_details(num_slots: usize) -> BankHashDetails {
+        use solana_sdk::hash::{hash, hashv};
 
-        let signature_count = 314;
+        let slot_details: Vec<_> = (0..num_slots)
+            .map(|slot| {
+                let signature_count = 314;
 
-        let account = AccountSharedData::from(Account {
-            lamports: 123_456_789,
-            data: vec![0, 9, 1, 8, 2, 7, 3, 6, 4, 5],
-            owner: Pubkey::new_unique(),
-            executable: true,
-            rent_epoch: 123,
-        });
-        let account_pubkey = Pubkey::new_unique();
-        let account_hash = AccountHash(hash("account".as_bytes()));
-        let accounts = BankHashAccounts {
-            accounts: vec![PubkeyHashAccount {
-                pubkey: account_pubkey,
-                hash: account_hash,
-                account,
-            }],
-        };
+                let account = AccountSharedData::from(Account {
+                    lamports: 123_456_789,
+                    data: vec![0, 9, 1, 8, 2, 7, 3, 6, 4, 5],
+                    owner: Pubkey::new_unique(),
+                    executable: true,
+                    rent_epoch: 123,
+                });
+                let account_pubkey = Pubkey::new_unique();
+                let account_hash = AccountHash(hash("account".as_bytes()));
+                let accounts = BankHashAccounts {
+                    accounts: vec![PubkeyHashAccount {
+                        pubkey: account_pubkey,
+                        hash: account_hash,
+                        account,
+                    }],
+                };
 
-        let bank_hash = hash("bank".as_bytes());
-        let parent_bank_hash = hash("parent_bank".as_bytes());
-        let accounts_delta_hash = hash("accounts_delta".as_bytes());
-        let last_blockhash = hash("last_blockhash".as_bytes());
+                let bank_hash = hashv(&["bank".as_bytes(), &slot.to_le_bytes()]);
+                let parent_bank_hash = hash("parent_bank".as_bytes());
+                let accounts_delta_hash = hash("accounts_delta".as_bytes());
+                let last_blockhash = hash("last_blockhash".as_bytes());
 
-        BankHashSlotDetails::new(
-            slot,
-            bank_hash,
-            parent_bank_hash,
-            accounts_delta_hash,
-            signature_count,
-            last_blockhash,
-            accounts,
-        )
+                BankHashSlotDetails::new(
+                    slot as Slot,
+                    bank_hash,
+                    parent_bank_hash,
+                    accounts_delta_hash,
+                    signature_count,
+                    last_blockhash,
+                    accounts,
+                )
+            })
+            .collect();
+
+        BankHashDetails::new(slot_details)
     }
 
     #[test]
     fn test_serde_bank_hash_details() {
-        let slot = 123_456_789;
-        let bank_hash_details = build_slot_details(slot);
+        let num_slots = 10;
+        let bank_hash_details = build_details(num_slots);
 
         let serialized_bytes = serde_json::to_vec(&bank_hash_details).unwrap();
-        let deserialized_bank_hash_details: BankHashSlotDetails =
+        let deserialized_bank_hash_details: BankHashDetails =
             serde_json::from_slice(&serialized_bytes).unwrap();
 
         assert_eq!(bank_hash_details, deserialized_bank_hash_details);
