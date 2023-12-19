@@ -1,3 +1,4 @@
+#![allow(arithmetic_side_effects)]
 use {
     crate::cell::{SchedulerCell, Token},
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
