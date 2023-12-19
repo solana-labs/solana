@@ -4008,7 +4008,7 @@ pub mod rpc_full {
                 .map_err(|err| {
                     Error::invalid_params(format!("invalid transaction message: {err}"))
                 })?;
-            let fee = bank.get_fee_for_message(&sanitized_message);
+            let fee = Some(bank.get_fee_for_message(&sanitized_message));
             Ok(new_response(bank, fee))
         }
 

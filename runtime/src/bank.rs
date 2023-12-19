@@ -3999,18 +3999,15 @@ impl Bank {
         &self.fee_rate_governor
     }
 
-    pub fn get_fee_for_message(&self, message: &SanitizedMessage) -> Option<u64> {
-        let lamports_per_signature = {
-            let blockhash_queue = self.blockhash_queue.read().unwrap();
-            blockhash_queue.get_lamports_per_signature(message.recent_blockhash())
-        }
-        .or_else(|| {
-            self.check_message_for_nonce(message)
-                .and_then(|(address, account)| {
-                    NoncePartial::new(address, account).lamports_per_signature()
-                })
-        })?;
-        Some(self.get_fee_for_message_with_lamports_per_signature(message, lamports_per_signature))
+    pub fn get_fee_for_message(&self, message: &SanitizedMessage) -> u64 {
+        self.fee_structure.calculate_fee(
+            message,
+            &process_compute_budget_instructions(message.program_instructions_iter())
+                .unwrap_or_default()
+                .into(),
+            self.feature_set
+                .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+        )
     }
 
     /// Returns true when startup accounts hash verification has completed or never had to run in background.
@@ -4042,22 +4039,6 @@ impl Bank {
             .accounts_db
             .verify_accounts_hash_in_bg
             .verification_complete()
-    }
-
-    pub fn get_fee_for_message_with_lamports_per_signature(
-        &self,
-        message: &SanitizedMessage,
-        lamports_per_signature: u64,
-    ) -> u64 {
-        self.fee_structure.calculate_fee(
-            message,
-            lamports_per_signature,
-            &process_compute_budget_instructions(message.program_instructions_iter())
-                .unwrap_or_default()
-                .into(),
-            self.feature_set
-                .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
-        )
     }
 
     #[deprecated(
@@ -5489,7 +5470,7 @@ impl Bank {
                     TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
                 }?;
 
-                let (lamports_per_signature, is_nonce) = durable_nonce_fee
+                let (_lamports_per_signature, is_nonce) = durable_nonce_fee
                     .map(|durable_nonce_fee| durable_nonce_fee.lamports_per_signature())
                     .map(|maybe_lamports_per_signature| (maybe_lamports_per_signature, true))
                     .unwrap_or_else(|| {
@@ -5499,12 +5480,7 @@ impl Bank {
                         )
                     });
 
-                let lamports_per_signature =
-                    lamports_per_signature.ok_or(TransactionError::BlockhashNotFound)?;
-                let fee = self.get_fee_for_message_with_lamports_per_signature(
-                    tx.message(),
-                    lamports_per_signature,
-                );
+                let fee = self.get_fee_for_message(tx.message());
 
                 // In case of instruction error, even though no accounts
                 // were stored we still need to charge the payer the

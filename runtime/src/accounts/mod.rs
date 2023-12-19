@@ -13,7 +13,7 @@ use {
         accounts_db::AccountsDb,
         ancestors::Ancestors,
         blockhash_queue::BlockhashQueue,
-        nonce_info::{NonceFull, NonceInfo},
+        nonce_info::NonceFull,
         rent_collector::{RentCollector, RENT_EXEMPT_RENT_EPOCH},
         rent_debits::RentDebits,
         transaction_error_metrics::TransactionErrorMetrics,
@@ -55,7 +55,7 @@ pub(super) fn load_accounts(
     ancestors: &Ancestors,
     txs: &[SanitizedTransaction],
     lock_results: Vec<TransactionCheckResult>,
-    hash_queue: &BlockhashQueue,
+    _hash_queue: &BlockhashQueue,
     error_counters: &mut TransactionErrorMetrics,
     rent_collector: &RentCollector,
     feature_set: &FeatureSet,
@@ -70,27 +70,14 @@ pub(super) fn load_accounts(
         .zip(lock_results)
         .map(|etx| match etx {
             (tx, (Ok(()), nonce)) => {
-                let lamports_per_signature = nonce
-                    .as_ref()
-                    .map(|nonce| nonce.lamports_per_signature())
-                    .unwrap_or_else(|| {
-                        hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
-                    });
-                let fee = if let Some(lamports_per_signature) = lamports_per_signature {
-                    fee_structure.calculate_fee(
-                        tx.message(),
-                        lamports_per_signature,
-                        &process_compute_budget_instructions(
-                            tx.message().program_instructions_iter(),
-                        )
+                let fee = fee_structure.calculate_fee(
+                    tx.message(),
+                    &process_compute_budget_instructions(tx.message().program_instructions_iter())
                         .unwrap_or_default()
                         .into(),
-                        feature_set
-                            .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
-                    )
-                } else {
-                    return (Err(TransactionError::BlockhashNotFound), None);
-                };
+                    feature_set
+                        .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+                );
 
                 // load transactions
                 let loaded_transaction = match load_transaction_accounts(
@@ -729,7 +716,6 @@ mod tests {
         let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
         let fee = FeeStructure::default().calculate_fee(
             &message,
-            lamports_per_signature,
             &process_compute_budget_instructions(message.program_instructions_iter())
                 .unwrap_or_default()
                 .into(),
@@ -1566,7 +1552,6 @@ mod tests {
         let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
         let fee = FeeStructure::default().calculate_fee(
             &message,
-            lamports_per_signature,
             &process_compute_budget_instructions(message.program_instructions_iter())
                 .unwrap_or_default()
                 .into(),
