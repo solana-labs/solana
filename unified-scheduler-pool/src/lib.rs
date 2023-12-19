@@ -37,9 +37,9 @@ use {
 
 type AtomicSchedulerId = AtomicU64;
 
-// SchedulerPool must be accessed via dyn by solana-runtime code, because of its internal fields'
-// types (currently TransactionStatusSender; also, PohRecorder in the future) aren't available
-// there...
+// SchedulerPool must be accessed as a dyn trait from solana-runtime, because SchedulerPool
+// contains some internal fields, whose types aren't available in solana-runtime (currently
+// TransactionStatusSender; also, PohRecorder in the future)...
 #[derive(Debug)]
 pub struct SchedulerPool<
     S: SpawnableScheduler<TH, SEA>,
