@@ -1,3 +1,4 @@
+#![allow(arithmetic_side_effects)]
 //! Transaction scheduling code.
 //!
 //! This crate implements two solana-runtime traits (`InstalledScheduler` and
