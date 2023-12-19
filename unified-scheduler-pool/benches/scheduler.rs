@@ -331,8 +331,8 @@ mod nonblocking {
             self.id
         }
 
-        fn context(&self) -> SchedulingContext {
-            self.context.clone()
+        fn context(&self) -> &SchedulingContext {
+            self.context
         }
 
         fn schedule_execution(&self, transaction_with_index: TransactionWithIndexForBench) {
