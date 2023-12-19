@@ -1,7 +1,7 @@
 [package]
-name = "solana-scheduler"
-description = "The solana scheduler"
-documentation = "https://docs.rs/solana-scheduler"
+name = "solana-unified-scheduler-logic"
+description = "The solana unified scheduler logic"
+documentation = "https://docs.rs/solana-unified-scheduler-logic"
 version = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
