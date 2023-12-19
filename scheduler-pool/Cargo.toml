@@ -16,6 +16,7 @@ crossbeam-channel = { workspace = true }
 dashmap = { workspace = true }
 log = { workspace = true }
 procfs = { workspace = true }
+rustix = { workspace = true }
 serde_json = "1.0.81"
 solana-ledger = { workspace = true }
 solana-measure = { workspace = true }
