@@ -512,6 +512,7 @@ impl PartialEq for Bank {
         }
         let Self {
             accumulated_accounts_hash: _,
+            old_written_accounts: _,
             skipped_rewrites: _,
             rc: _,
             status_cache: _,
@@ -835,6 +836,8 @@ pub struct Bank {
     pub check_program_modification_slot: bool,
 
     pub accumulated_accounts_hash: RwLock<Option<Hash>>,
+    /// the pubkey, (account, hash) pairs that were loaded in this slot in order to be written. Ideally, when the bank is done, this contains a calculated hash value for all accounts which are written in THIS slot.
+    pub old_written_accounts: RwLock<HashMap<Pubkey, (Option<AccountSharedData>, Option<AccountHash>)>>,
 
     epoch_reward_status: EpochRewardStatus,
 }
@@ -980,6 +983,7 @@ impl Bank {
     fn default_with_accounts(accounts: Accounts) -> Self {
         let mut bank = Self {
             accumulated_accounts_hash: RwLock::default(),
+            old_written_accounts: RwLock::default(),
             skipped_rewrites: Mutex::default(),
             incremental_snapshot_persistence: None,
             rc: BankRc::new(accounts, Slot::default()),
@@ -1317,6 +1321,7 @@ impl Bank {
         let accounts_data_size_initial = parent.load_accounts_data_size();
         let mut new = Self {
             accumulated_accounts_hash: RwLock::default(),
+            old_written_accounts: RwLock::default(),
             skipped_rewrites: Mutex::default(),
             incremental_snapshot_persistence: None,
             rc,
@@ -1832,6 +1837,7 @@ impl Bank {
         );
         let stakes_accounts_load_duration = now.elapsed();
         let mut bank = Self {
+            old_written_accounts: RwLock::default(),
             accumulated_accounts_hash: RwLock::default(),
             skipped_rewrites: Mutex::default(),
             incremental_snapshot_persistence: fields.incremental_snapshot_persistence,
@@ -5221,6 +5227,7 @@ impl Bank {
             &program_accounts_map,
             &programs_loaded_for_tx_batch.borrow(),
             self.should_collect_rent(),
+            &self.old_written_accounts,
         );
         load_time.stop();
 
@@ -7018,6 +7025,7 @@ impl Bank {
                 self.ancestors.clone(),
                 &mut accumulated,
                 pubkey_hash,
+                &self.old_written_accounts,
             );
 
         *self.accumulated_accounts_hash.write().unwrap() = Some(accumulated);

@@ -46,6 +46,8 @@ use {
     solana_system_program::{get_system_account_kind, SystemAccountKind},
     std::{collections::HashMap, num::NonZeroUsize},
 };
+use solana_accounts_db::accounts_hash::AccountHash;
+use std::sync::RwLock;
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn load_accounts(
@@ -63,6 +65,7 @@ pub(super) fn load_accounts(
     program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
     loaded_programs: &LoadedProgramsForTxBatch,
     should_collect_rent: bool,
+    old_written_accounts: &RwLock<HashMap<Pubkey, (Option<AccountSharedData>, Option<AccountHash>)>>,
 ) -> Vec<TransactionLoadResult> {
     txs.iter()
         .zip(lock_results)
@@ -106,6 +109,7 @@ pub(super) fn load_accounts(
                     program_accounts,
                     loaded_programs,
                     should_collect_rent,
+                    old_written_accounts,
                 ) {
                     Ok(loaded_transaction) => loaded_transaction,
                     Err(e) => return (Err(e), None),
@@ -147,6 +151,7 @@ fn load_transaction_accounts(
     program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
     loaded_programs: &LoadedProgramsForTxBatch,
     should_collect_rent: bool,
+    old_written_accounts: &RwLock<HashMap<Pubkey, (Option<AccountSharedData>, Option<AccountHash>)>>,
 ) -> Result<LoadedTransaction> {
     let in_reward_interval = reward_interval == RewardInterval::InsideInterval;
 
@@ -215,6 +220,13 @@ fn load_transaction_accounts(
                         .load_with_fixed_root(ancestors, key)
                         .map(|(mut account, _)| {
                             if message.is_writable(i) {
+                                {
+                                    // todo: find all the places this has to happen
+                                    let mut old_written_accounts= old_written_accounts.write().unwrap();
+                                    if !old_written_accounts.contains_key(key) {
+                                        old_written_accounts.insert(*key, (Some(account.clone()), None));
+                                    }
+                                }
                                 if should_collect_rent {
                                     let rent_due = rent_collector
                                         .collect_from_existing_account(

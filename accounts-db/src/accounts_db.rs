@@ -7926,13 +7926,20 @@ impl AccountsDb {
         mut ancestors: Ancestors,
         accumulated_accounts_hash: &mut Hash,
         pubkey_hash: Vec<(Pubkey, AccountHash)>,
+        old_written_accounts: &RwLock<HashMap<Pubkey, (Option<AccountSharedData>, Option<AccountHash>)>>
     ) {
         // we are assuming it was easy to lookup a hash for everything written in `slot` when we were calculating the delta hash. So, caller passes in `pubkey_hash`
         // note we don't need rewrites in `pubkey_hash`. these accounts had the same hash before and after. So, we only have to consider what was written that changed.
         ancestors.remove(&slot);
+        let old_written_accounts = old_written_accounts.read().unwrap();
         // if we want to look it up ourselves: let (hashes, _scan_us, _accumulate) = self.get_pubkey_hash_for_slot(slot);
         let old = pubkey_hash.iter().map(|(k, _)| {
-            self.load_with_fixed_root(&ancestors, k).map(|(account, _)| Self::hash_account(&account, k))
+            if let Some((account, hash)) = old_written_accounts.get(k) {
+                Some(hash.unwrap()) // todo on demand calculate, calculate in bg
+            }
+            else {
+                self.load_with_fixed_root(&ancestors, k).map(|(account, _)| Self::hash_account(&account, k))
+            }
         }).collect::<Vec<_>>();
         pubkey_hash.into_iter().zip(old.into_iter()).for_each(|((k, new_hash), old_hash)| {
             if let Some(old) = old_hash {
