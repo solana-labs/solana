@@ -39,6 +39,30 @@ impl BankHashDetails {
             bank_hash_details,
         }
     }
+
+    /// Determines a filename given the currently held bank details
+    pub fn filename(&self) -> Result<String, String> {
+        if self.bank_hash_details.is_empty() {
+            return Err("BankHashDetails does not contains details for any banks".to_string());
+        }
+        // From here on, .unwrap() on .first() and .second() is safe as
+        // self.bank_hash_details is known to be non-empty
+        let (first_slot, first_hash) = {
+            let details = self.bank_hash_details.first().unwrap();
+            (details.slot, &details.bank_hash)
+        };
+
+        let filename = if self.bank_hash_details.len() == 1 {
+            format!("{first_slot}-{first_hash}.json")
+        } else {
+            let (last_slot, last_hash) = {
+                let details = self.bank_hash_details.last().unwrap();
+                (details.slot, &details.bank_hash)
+            };
+            format!("{first_slot}-{first_hash}_{last_slot}-{last_hash}.json")
+        };
+        Ok(filename)
+    }
 }
 
 /// The components that go into a bank hash calculation
@@ -213,23 +237,19 @@ impl<'de> Deserialize<'de> for BankHashAccounts {
 /// Output the components that comprise the overall bank hash for the supplied `Bank`
 pub fn write_bank_hash_details_file(bank: &Bank) -> std::result::Result<(), String> {
     let slot_details = BankHashSlotDetails::try_from(bank)?;
+    let details = BankHashDetails::new(vec![slot_details]);
 
-    let slot = slot_details.slot;
-    let hash = &slot_details.bank_hash;
-    let file_name = format!("{slot}-{hash}.json");
     let parent_dir = bank
         .rc
         .accounts
         .accounts_db
         .get_base_working_path()
         .join("bank_hash_details");
-    let path = parent_dir.join(file_name);
+    let path = parent_dir.join(details.filename()?);
     // A file with the same name implies the same hash for this slot. Skip
     // rewriting a duplicate file in this scenario
     if !path.exists() {
-        info!("writing details of bank {} to {}", slot, path.display());
-
-        let details = BankHashDetails::new(vec![slot_details]);
+        info!("writing bank hash details file: {}", path.display());
 
         // std::fs::write may fail (depending on platform) if the full directory
         // path does not exist. So, call std::fs_create_dir_all first.
