@@ -34,3 +34,6 @@ tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
 solana-stake-program = { workspace = true }
+
+[features]
+dev-context-only-utils = []

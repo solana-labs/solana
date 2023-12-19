@@ -32,6 +32,7 @@ declare tainted_packages=(
   solana-accounts-bench
   solana-banking-bench
   solana-ledger-tool
+  solana-program-test
 )
 
 # convert to comma separeted (ref: https://stackoverflow.com/a/53839433)
