@@ -7558,7 +7558,6 @@ dependencies = [
  "bincode",
  "crossbeam-channel",
  "log",
- "rand 0.8.5",
  "solana-ledger",
  "solana-logger",
  "solana-nohash-hasher",

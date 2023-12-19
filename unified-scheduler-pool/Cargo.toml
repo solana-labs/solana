@@ -10,7 +10,6 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-rand = { workspace = true }
 solana-ledger = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-runtime = { workspace = true }

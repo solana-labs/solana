@@ -6554,7 +6554,6 @@ version = "1.18.0"
 name = "solana-unified-scheduler-pool"
 version = "1.18.0"
 dependencies = [
- "rand 0.8.5",
  "solana-ledger",
  "solana-program-runtime",
  "solana-runtime",
