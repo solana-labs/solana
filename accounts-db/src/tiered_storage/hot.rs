@@ -412,10 +412,10 @@ impl HotStorageReader {
 
         let account_offset = self.get_account_offset(index_offset)?;
 
-        let meta: &'a _ = self.get_account_meta_from_offset(account_offset)?;
-        let address: &'a _ = self.get_account_address(index_offset)?;
-        let owner: &'a _ = self.get_owner_address(meta.owner_offset())?;
-        let account_block: &'a _ = self.get_account_block(account_offset, index_offset)?;
+        let meta = self.get_account_meta_from_offset(account_offset)?;
+        let address = self.get_account_address(index_offset)?;
+        let owner = self.get_owner_address(meta.owner_offset())?;
+        let account_block = self.get_account_block(account_offset, index_offset)?;
 
         Ok(Some((
             StoredAccountMeta::Hot(TieredReadableAccount {
