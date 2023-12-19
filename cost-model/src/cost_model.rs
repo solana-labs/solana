@@ -18,11 +18,13 @@ use {
     solana_sdk::{
         borsh1::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
+        ed25519_program,
         feature_set::{include_loaded_accounts_data_size_in_fee_calculation, FeatureSet},
         fee::FeeStructure,
         instruction::CompiledInstruction,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
+        secp256k1_program,
         system_instruction::SystemInstruction,
         system_program,
         transaction::SanitizedTransaction,
@@ -43,7 +45,6 @@ impl CostModel {
         } else {
             let mut tx_cost = UsageCostDetails::new_with_default_capacity();
 
-            tx_cost.signature_cost = Self::get_signature_cost(transaction);
             Self::get_write_lock_cost(&mut tx_cost, transaction);
             Self::get_transaction_cost(&mut tx_cost, transaction, feature_set);
             tx_cost.account_data_size = Self::calculate_account_data_size(transaction);
@@ -51,10 +52,6 @@ impl CostModel {
             debug!("transaction {:?} has cost {:?}", transaction, tx_cost);
             TransactionCost::Transaction(tx_cost)
         }
-    }
-
-    fn get_signature_cost(transaction: &SanitizedTransaction) -> u64 {
-        transaction.signatures().len() as u64 * SIGNATURE_COST
     }
 
     fn get_writable_accounts(transaction: &SanitizedTransaction) -> Vec<Pubkey> {
@@ -89,6 +86,7 @@ impl CostModel {
         let mut loaded_accounts_data_size_cost = 0u64;
         let mut data_bytes_len_total = 0u64;
         let mut compute_unit_limit_is_set = false;
+        let mut num_signatures = transaction.signatures().len() as u64;
 
         for (program_id, instruction) in transaction.message().program_instructions_iter() {
             // to keep the same behavior, look for builtin first
@@ -108,6 +106,12 @@ impl CostModel {
                 {
                     compute_unit_limit_is_set = true;
                 }
+            }
+
+            if (secp256k1_program::check_id(program_id) || ed25519_program::check_id(program_id))
+                && !instruction.data.is_empty()
+            {
+                num_signatures = num_signatures.saturating_add(instruction.data[0] as u64);
             }
         }
 
@@ -146,6 +150,7 @@ impl CostModel {
         tx_cost.bpf_execution_cost = bpf_costs;
         tx_cost.loaded_accounts_data_size_cost = loaded_accounts_data_size_cost;
         tx_cost.data_bytes_cost = data_bytes_len_total / INSTRUCTION_DATA_BYTES_COST;
+        tx_cost.signature_cost = SIGNATURE_COST.saturating_mul(num_signatures);
     }
 
     fn calculate_account_data_size_on_deserialized_system_instruction(
