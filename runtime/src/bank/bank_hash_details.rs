@@ -23,7 +23,7 @@ use {
 
 /// The components that go into a bank hash calculation
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub(crate) struct BankHashDetails {
+pub(crate) struct BankHashSlotDetails {
     /// The client version
     pub version: String,
     /// The encoding format for account data buffers
@@ -37,7 +37,7 @@ pub(crate) struct BankHashDetails {
     pub accounts: BankHashAccounts,
 }
 
-impl BankHashDetails {
+impl BankHashSlotDetails {
     pub fn new(
         slot: Slot,
         bank_hash: Hash,
@@ -61,7 +61,7 @@ impl BankHashDetails {
     }
 }
 
-impl TryFrom<&Bank> for BankHashDetails {
+impl TryFrom<&Bank> for BankHashSlotDetails {
     type Error = String;
 
     fn try_from(bank: &Bank) -> Result<Self, Self::Error> {
@@ -198,7 +198,7 @@ impl<'de> Deserialize<'de> for BankHashAccounts {
 
 /// Output the components that comprise the overall bank hash for the supplied `Bank`
 pub fn write_bank_hash_details_file(bank: &Bank) -> std::result::Result<(), String> {
-    let details = BankHashDetails::try_from(bank)?;
+    let details = BankHashSlotDetails::try_from(bank)?;
 
     let slot = details.slot;
     let hash = &details.bank_hash;
@@ -260,7 +260,7 @@ pub mod tests {
         let accounts_delta_hash = hash("accounts_delta".as_bytes());
         let last_blockhash = hash("last_blockhash".as_bytes());
 
-        let bank_hash_details = BankHashDetails::new(
+        let bank_hash_details = BankHashSlotDetails::new(
             slot,
             bank_hash,
             parent_bank_hash,
@@ -271,7 +271,7 @@ pub mod tests {
         );
 
         let serialized_bytes = serde_json::to_vec(&bank_hash_details).unwrap();
-        let deserialized_bank_hash_details: BankHashDetails =
+        let deserialized_bank_hash_details: BankHashSlotDetails =
             serde_json::from_slice(&serialized_bytes).unwrap();
 
         assert_eq!(bank_hash_details, deserialized_bank_hash_details);
