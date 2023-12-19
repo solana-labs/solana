@@ -36,7 +36,7 @@ use {
             move_and_async_delete_path_contents,
         },
     },
-    solana_scheduler_pool::DefaultSchedulerPool,
+    solana_unified_scheduler_pool::DefaultSchedulerPool,
     solana_sdk::{
         genesis_config::GenesisConfig, signature::Signer, signer::keypair::Keypair,
         timing::timestamp,
