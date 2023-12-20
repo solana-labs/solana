@@ -1615,7 +1615,7 @@ mod tests {
             handler: DefaultTaskHandler,
         ) -> Self {
             AsyncScheduler::<TRIGGER_RACE_CONDITION>(
-                usize,
+                3_usize,
                 Mutex::new(vec![]),
                 initial_context,
                 pool.handler_context,
