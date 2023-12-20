@@ -1167,7 +1167,7 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn return_to_pool(mut self: Box<Self>) {
-        self.thread_manager.lock().unwrap().put_session_result_with_timings(initialized_result_with_timings());
+        self.thread_manager.write().unwrap().put_session_result_with_timings(initialized_result_with_timings());
         let pool = self.thread_manager.read().unwrap().pool.clone();
         self.pooled_at = Instant::now();
         pool.return_scheduler(*self)
