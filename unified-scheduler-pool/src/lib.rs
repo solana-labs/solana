@@ -1496,7 +1496,7 @@ mod tests {
         Mutex<ResultWithTimings>,
         Mutex<Vec<JoinHandle<ResultWithTimings>>>,
         SchedulingContext,
-        Arc<HandlerContext>,
+        Arc<SchedulerPool<Self, DefaultTaskHandler, DefaultScheduleExecutionArg>>,
     );
 
     impl<const TRIGGER_RACE_CONDITION: bool> AsyncScheduler<TRIGGER_RACE_CONDITION> {
@@ -1603,7 +1603,7 @@ mod tests {
                 Mutex::new(initialized_result_with_timings()),
                 Mutex::new(vec![]),
                 initial_context,
-                Arc::new(pool.handler_context.clone()),
+                pool,
             )
         }
     }
