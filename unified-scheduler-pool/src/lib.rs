@@ -1517,11 +1517,11 @@ mod tests {
         for AsyncScheduler<TRIGGER_RACE_CONDITION>
     {
         fn id(&self) -> SchedulerId {
-            self.0.id()
+            todo!();
         }
 
         fn context(&self) -> &SchedulingContext {
-            self.0.context()
+            todo!();
         }
 
         fn schedule_execution<'a>(
