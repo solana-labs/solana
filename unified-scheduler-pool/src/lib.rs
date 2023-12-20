@@ -1556,7 +1556,10 @@ mod tests {
             */
         }
 
-        fn wait_for_termination(&mut self, _is_dropped: bool) -> Option<ResultWithTimings> {
+        fn wait_for_termination(
+            self: Box<Self>,
+            _is_dropped: bool,
+        ) -> (ResultWithTimings, UninstalledSchedulerBox) {
             todo!();
             /*
             if TRIGGER_RACE_CONDITION && matches!(reason, WaitReason::PausedForRecentBlockhash) {
