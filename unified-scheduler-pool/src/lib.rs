@@ -1023,7 +1023,7 @@ where
         self.schedulrable_transaction_sender
             .send(SessionedMessage::EndSession)
             .unwrap();
-        self.session_result_with_timings = Some(self.result_receiver.recv().unwrap());
+        self.put_session_result_with_timings(self.result_receiver.recv().unwrap());
     }
 
     fn start_session(
