@@ -579,7 +579,7 @@ where
             handler_count,
             handler,
             pool,
-            session_result_with_timings: None,
+            session_result_with_timings: Some((Ok(()), ExecuteTimings::default())),
         }
     }
 
@@ -1096,7 +1096,6 @@ where
     }
 
     fn from_inner(inner: Self::Inner, context: SchedulingContext) -> Self {
-        inner.thread_manager.write().unwrap().put_session_result_with_timings((Ok(()), ExecuteTimings::default()));
         inner
             .thread_manager
             .write()
