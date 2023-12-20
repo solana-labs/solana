@@ -436,10 +436,7 @@ where
 
     fn stop_thread_manager(&mut self) {
         debug!("stop_thread_manager()");
-        self.thread_manager
-            .write()
-            .unwrap()
-            .stop_threads();
+        self.thread_manager.write().unwrap().stop_threads();
     }
 
     fn id(&self) -> SchedulerId {
@@ -655,13 +652,14 @@ where
     }
 
     fn put_session_result_with_timings(&mut self, result_with_timings: ResultWithTimings) {
-        assert_matches!(self.session_result_with_timings.replace(result_with_timings), None);
+        assert_matches!(
+            self.session_result_with_timings
+                .replace(result_with_timings),
+            None
+        );
     }
 
-    fn start_threads(
-        &mut self,
-        context: &SchedulingContext,
-    ) {
+    fn start_threads(&mut self, context: &SchedulingContext) {
         if self.is_active() {
             // this can't be promoted to panic! as read => write upgrade isn't completely
             // race-free in ensure_thread_manager_started()...
@@ -1020,9 +1018,7 @@ where
             .unwrap();
     }
 
-    fn end_session(
-        &mut self,
-    ) {
+    fn end_session(&mut self) {
         debug!("end_session(): will end session...");
         if !self.is_active() {
             assert_matches!(self.session_result_with_timings, Some(_));
@@ -1035,10 +1031,7 @@ where
         self.put_session_result_with_timings(self.result_receiver.recv().unwrap());
     }
 
-    fn start_session(
-        &mut self,
-        context: &SchedulingContext,
-    ) {
+    fn start_session(&mut self, context: &SchedulingContext) {
         if self.is_active() {
             self.schedulrable_transaction_sender
                 .send(SessionedMessage::StartSession(context.clone()))
@@ -1096,12 +1089,13 @@ where
     type Inner = PooledSchedulerInner<Self, TH, SEA>;
 
     fn into_inner(self) -> (ResultWithTimings, Self::Inner) {
-        self.inner
+        self.inner.thread_manager.write().unwrap().end_session();
+        let r = self
+            .inner
             .thread_manager
             .write()
             .unwrap()
-            .end_session();
-        let r = self.inner.thread_manager.write().unwrap().take_session_result_with_timings();
+            .take_session_result_with_timings();
         (r, self.inner)
     }
 
@@ -1112,10 +1106,7 @@ where
             .unwrap()
             .start_session(&context);
 
-        Self {
-            inner,
-            context,
-        }
+        Self { inner, context }
     }
 
     fn spawn(
@@ -1159,11 +1150,7 @@ where
     }
 
     fn pause_for_recent_blockhash(&mut self) {
-        self.inner
-            .thread_manager
-            .write()
-            .unwrap()
-            .end_session();
+        self.inner.thread_manager.write().unwrap().end_session();
     }
 }
 
