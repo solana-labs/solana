@@ -485,6 +485,7 @@ where
     fn ensure_thread_manager_started(
         &self,
         context: &SchedulingContext,
+        result_with_timings: &mut ResultWithTimings,
     ) -> RwLockReadGuard<'_, ThreadManager<Self, TH, SEA>> {
         loop {
             let r = self.inner.thread_manager.read().unwrap();
@@ -495,7 +496,7 @@ where
                 debug!("ensure_thread_manager_started(): will start threads...");
                 drop(r);
                 let mut w = self.inner.thread_manager.write().unwrap();
-                w.start_threads(context);
+                w.start_threads(context, result_with_timings);
                 drop(w);
             }
         }
