@@ -438,7 +438,7 @@ where
         &self,
         context: &SchedulingContext,
         result_with_timings: &mut ResultWithTimings,
-    ) -> RwLockReadGuard<'_, ThreadManager<Self, TH, SEA>> {
+    ) -> RwLockReadGuard<'_, ThreadManager<S, TH, SEA>> {
         loop {
             let r = self.inner.thread_manager.read().unwrap();
             if r.is_active() {
