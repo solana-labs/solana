@@ -1096,7 +1096,7 @@ where
             .thread_manager
             .write()
             .unwrap()
-            .start_session(&context, &mut result_with_timings);
+            .start_session(&context, &result_with_timings);
 
         Self {
             inner,
