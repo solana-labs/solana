@@ -336,7 +336,7 @@ impl ExecuteTimings {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct ExecuteProcessInstructionTimings {
     pub total_us: u64,
     pub verify_caller_us: u64,
