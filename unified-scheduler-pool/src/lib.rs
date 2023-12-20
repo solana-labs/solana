@@ -510,7 +510,7 @@ where
 
     fn stop_thread_manager(&mut self) {
         debug!("stop_thread_manager()");
-        self.inner.thread_manager.write().unwrap().stop_threads();
+        self.inner.thread_manager.write().unwrap().stop_threads(&mut self.completed_result_with_timings);
     }
 }
 
