@@ -441,6 +441,10 @@ where
             .unwrap()
             .stop_threads();
     }
+
+    fn id(&self) -> SchedulerId {
+        self.thread_manager.read().unwrap().scheduler_id
+    }
 }
 
 type Tid = i32;
@@ -1129,7 +1133,7 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn id(&self) -> SchedulerId {
-        self.inner.thread_manager.read().unwrap().scheduler_id
+        self.inner.id()
     }
 
     fn context(&self) -> &SchedulingContext {
