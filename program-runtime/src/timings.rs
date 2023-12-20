@@ -356,7 +356,7 @@ impl ExecuteProcessInstructionTimings {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct ExecuteAccessoryTimings {
     pub feature_set_clone_us: u64,
     pub compute_budget_process_transaction_us: u64,
