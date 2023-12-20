@@ -1583,6 +1583,10 @@ mod tests {
             self.0.wait_for_termination(reason)
             */
         }
+
+        fn pause_for_recent_blockhash(&mut self) {
+            todo!();
+        }
     }
 
     impl<const TRIGGER_RACE_CONDITION: bool> UninstalledScheduler for AsyncScheduler<TRIGGER_RACE_CONDITION> {
