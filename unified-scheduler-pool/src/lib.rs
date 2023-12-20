@@ -1084,6 +1084,9 @@ where
     */
 }
 
+pub trait AAA {
+}
+
 impl<TH, SEA> SpawnableScheduler<TH, SEA> for PooledScheduler<TH, SEA>
 where
     TH: TaskHandler<SEA>,
