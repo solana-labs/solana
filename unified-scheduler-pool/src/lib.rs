@@ -1255,7 +1255,10 @@ mod tests {
 
         // this indirectly proves that there should be circular link because there's only one Arc
         // at this moment now
-        assert_eq!((Arc::strong_count(&pool), Arc::weak_count(&pool)), (1 + 1 /* todo */, 1));
+        assert_eq!(
+            (Arc::strong_count(&pool), Arc::weak_count(&pool)),
+            (1 + 1 /* todo */, 1)
+        );
         let debug = format!("{pool:#?}");
         assert!(!debug.is_empty());
     }
@@ -1560,7 +1563,10 @@ mod tests {
             _is_dropped: bool,
         ) -> (ResultWithTimings, UninstalledSchedulerBox) {
             self.do_wait();
-            let r = std::mem::replace(&mut *self.0.lock().unwrap(), initialized_result_with_timings());
+            let r = std::mem::replace(
+                &mut *self.0.lock().unwrap(),
+                initialized_result_with_timings(),
+            );
             (r, self)
         }
 
@@ -1574,7 +1580,9 @@ mod tests {
         }
     }
 
-    impl<const TRIGGER_RACE_CONDITION: bool> UninstalledScheduler for AsyncScheduler<TRIGGER_RACE_CONDITION> {
+    impl<const TRIGGER_RACE_CONDITION: bool> UninstalledScheduler
+        for AsyncScheduler<TRIGGER_RACE_CONDITION>
+    {
         fn return_to_pool(self: Box<Self>) {
             self.3.clone().return_scheduler(*self)
         }
@@ -1609,9 +1617,9 @@ mod tests {
         }
     }
 
-    impl<const TRIGGER_RACE_CONDITION: bool>
-        RetirableSchedulerInner
-        for AsyncScheduler<TRIGGER_RACE_CONDITION> {
+    impl<const TRIGGER_RACE_CONDITION: bool> RetirableSchedulerInner
+        for AsyncScheduler<TRIGGER_RACE_CONDITION>
+    {
         fn retire_if_stale(&mut self) -> bool {
             todo!();
         }
