@@ -271,6 +271,7 @@ where
     }
 
     fn return_scheduler(&self, scheduler: S::Inner) {
+        scheduler.thread_manager.lock().unwrap().put_session_result_with_timings(initialized_result_with_timings());
         self.scheduler_inners
             .lock()
             .expect("not poisoned")
