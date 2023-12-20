@@ -581,7 +581,9 @@ mod tests {
         // It creates a runtime explicitly (no globals via tokio macros) and calls
         // `runtime.block_on()` just once, to run all the async code.
 
-        let genesis = create_genesis_config(10);
+        // Fund payer account with minimal transaction fee for one signature, plus some extra.
+        let mint_lamports = 10 + solana_sdk::fee::FeeStructure::default().lamports_per_signature;
+        let genesis = create_genesis_config(mint_lamports);
         let bank = Bank::new_for_tests(&genesis.genesis_config);
         let slot = bank.slot();
         let block_commitment_cache = Arc::new(RwLock::new(
@@ -620,7 +622,9 @@ mod tests {
         // is processed (or blockhash expires). In this test, we verify the
         // server-side functionality is available to the client.
 
-        let genesis = create_genesis_config(10);
+        // Fund payer account with minimal transaction fee for one signature, plus some extra.
+        let mint_lamports = 10 + solana_sdk::fee::FeeStructure::default().lamports_per_signature;
+        let genesis = create_genesis_config(mint_lamports);
         let bank = Bank::new_for_tests(&genesis.genesis_config);
         let slot = bank.slot();
         let block_commitment_cache = Arc::new(RwLock::new(

@@ -133,7 +133,9 @@ fn test_bench_tps_test_validator(config: Config) {
     let client =
         Arc::new(TpuClient::new(rpc_client, &websocket_url, TpuClientConfig::default()).unwrap());
 
-    let lamports_per_account = 1000;
+    // fund accounts with 2 signatures, and extra
+    let lamports_per_account =
+        1000 + 2 * solana_sdk::fee::FeeStructure::default().lamports_per_signature;
 
     let keypair_count = config.tx_count * config.keypair_multiplier;
     let keypairs = generate_and_fund_keypairs(
