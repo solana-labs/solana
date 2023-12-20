@@ -1099,7 +1099,7 @@ where
             let manager = self.inner.thread_manager.write().unwrap();
             manager.end_session();
             manager.take_session_result_with_timings()
-        }
+        };
         (result_with_timings, self.inner)
     }
 
