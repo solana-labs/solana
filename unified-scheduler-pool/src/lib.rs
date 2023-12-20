@@ -1646,6 +1646,9 @@ mod tests {
     impl<const TRIGGER_RACE_CONDITION: bool>
         RetirableSchedulerInner
         for AsyncScheduler<TRIGGER_RACE_CONDITION> {
+        fn retire_if_stale(&mut self) -> bool {
+            todo!();
+        }
     }
 
     fn do_test_scheduler_schedule_execution_recent_blockhash_edge_case<
