@@ -473,12 +473,6 @@ where
             },
             initial_context,
         );
-        scheduler
-            .inner
-            .thread_manager
-            .write()
-            .unwrap()
-            .start_threads(&scheduler.context);
         pool.register_to_watchdog(Arc::downgrade(&scheduler.inner.thread_manager));
 
         scheduler
@@ -585,7 +579,7 @@ where
             handler_count,
             handler,
             pool,
-            session_result_with_timings: Some((Ok(()), ExecuteTimings::default())),
+            session_result_with_timings: None,
         }
     }
 
@@ -1093,6 +1087,7 @@ where
     }
 
     fn from_inner(inner: Self::Inner, context: SchedulingContext) -> Self {
+        self.inner.thread_manager.write().unwrap().session_result_with_timings = Some((Ok(()), ExecuteTimings::default()));
         inner
             .thread_manager
             .write()
