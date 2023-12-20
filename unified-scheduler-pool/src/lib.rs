@@ -1090,7 +1090,8 @@ where
             .unwrap()
             .end_session(&self.context);
 
-        (self.inner.thread_manager.write().unwrap().result_with_timings.clone(), self.inner)
+        let r = self.inner.thread_manager.write().unwrap().result_with_timings.clone();
+        (r, self.inner)
     }
 
     fn from_inner(inner: Self::Inner, context: SchedulingContext) -> Self {
