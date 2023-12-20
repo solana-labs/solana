@@ -1023,6 +1023,8 @@ where
         if !self.is_active() {
             assert_matches!(self.session_result_with_timings, Some(_));
             return;
+        } else if self.session_result_with_timings.is_some() {
+            return;
         }
 
         self.schedulrable_transaction_sender
