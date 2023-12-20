@@ -983,7 +983,7 @@ where
             self.schedulrable_transaction_sender,
             self.schedulable_transaction_receiver,
         ) = unbounded();
-        self.session_result_with_timings = Some(self
+        self.put_session_result_with_timings(self
             .scheduler_thread_and_tid
             .take()
             .unwrap()
