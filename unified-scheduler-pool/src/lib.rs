@@ -1012,7 +1012,6 @@ where
 
     fn end_session(
         &mut self,
-        context: &SchedulingContext,
     ) {
         debug!("end_session(): will end session...");
         if !self.is_active() {
