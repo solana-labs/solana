@@ -427,6 +427,34 @@ where
     pooled_at: Instant,
 }
 
+
+impl<S, TH, SEA> PooledSchedulerInner
+where
+    S: SpawnableScheduler<TH, SEA>,
+    TH: TaskHandler<SEA>,
+    SEA: ScheduleExecutionArg,
+{
+    fn ensure_thread_manager_started(
+        &self,
+        context: &SchedulingContext,
+        result_with_timings: &mut ResultWithTimings,
+    ) -> RwLockReadGuard<'_, ThreadManager<Self, TH, SEA>> {
+        loop {
+            let r = self.inner.thread_manager.read().unwrap();
+            if r.is_active() {
+                debug!("ensure_thread_manager_started(): is already active...");
+                return r;
+            } else {
+                debug!("ensure_thread_manager_started(): will start threads...");
+                drop(r);
+                let mut w = self.inner.thread_manager.write().unwrap();
+                w.start_threads(context, result_with_timings);
+                drop(w);
+            }
+        }
+    }
+}
+
 type Tid = i32;
 
 #[derive(Debug)]
@@ -480,26 +508,6 @@ where
         pool.register_to_watchdog(Arc::downgrade(&scheduler.inner.thread_manager));
 
         scheduler
-    }
-
-    fn ensure_thread_manager_started(
-        &self,
-        context: &SchedulingContext,
-        result_with_timings: &mut ResultWithTimings,
-    ) -> RwLockReadGuard<'_, ThreadManager<Self, TH, SEA>> {
-        loop {
-            let r = self.inner.thread_manager.read().unwrap();
-            if r.is_active() {
-                debug!("ensure_thread_manager_started(): is already active...");
-                return r;
-            } else {
-                debug!("ensure_thread_manager_started(): will start threads...");
-                drop(r);
-                let mut w = self.inner.thread_manager.write().unwrap();
-                w.start_threads(context, result_with_timings);
-                drop(w);
-            }
-        }
     }
 
     fn pooled_now(&mut self) {
@@ -1167,7 +1175,7 @@ where
             let task = SchedulingStateMachine::create_task(transaction.clone(), index, |pubkey| {
                 self.inner.address_book.load(pubkey)
             });
-            self.ensure_thread_manager_started(&self.context, &mut self.completed_result_with_timings)
+            self.inner.ensure_thread_manager_started(&self.context, &mut self.completed_result_with_timings)
                 .send_task(task);
         });
     }
