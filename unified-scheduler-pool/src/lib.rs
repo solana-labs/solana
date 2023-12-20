@@ -1576,7 +1576,6 @@ mod tests {
 
     impl<const TRIGGER_RACE_CONDITION: bool> UninstalledScheduler for AsyncScheduler<TRIGGER_RACE_CONDITION> {
         fn return_to_pool(self: Box<Self>) {
-            todo!();
         }
     }
 
