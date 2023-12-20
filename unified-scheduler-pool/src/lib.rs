@@ -1495,6 +1495,7 @@ mod tests {
     struct AsyncScheduler<const TRIGGER_RACE_CONDITION: bool>(
         Mutex<ResultWithTimings>,
         Mutex<Vec<JoinHandle<ResultWithTimings>>>,
+        HandlerContext,
     );
 
     impl<const TRIGGER_RACE_CONDITION: bool> AsyncScheduler<TRIGGER_RACE_CONDITION> {
