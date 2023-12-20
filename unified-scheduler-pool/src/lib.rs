@@ -1167,7 +1167,7 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn return_to_pool(mut self: Box<Self>) {
-        let m = self.thread_manager.write().unwrap();
+        let mut m = self.thread_manager.write().unwrap();
         if !m.is_active() {
             m.put_session_result_with_timings(initialized_result_with_timings());
         }
