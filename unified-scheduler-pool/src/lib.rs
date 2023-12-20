@@ -444,7 +444,7 @@ where
     result_sender: Sender<ResultWithTimings>,
     result_receiver: Receiver<ResultWithTimings>,
     handler_count: usize,
-    result_with_timings: ResultWithTimings,
+    session_result_with_timings: Option<ResultWithTimings>,
 }
 
 impl<TH, SEA> PooledScheduler<TH, SEA>
@@ -585,7 +585,7 @@ where
             handler_count,
             handler,
             pool,
-            result_with_timings: (Ok(()), ExecuteTimings::default()),
+            session_result_with_timings: Some((Ok(()), ExecuteTimings::default()),
         }
     }
 
