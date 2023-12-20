@@ -427,34 +427,6 @@ where
     pooled_at: Instant,
 }
 
-
-impl<S, TH, SEA> PooledSchedulerInner<S, TH, SEA>
-where
-    S: SpawnableScheduler<TH, SEA>,
-    TH: TaskHandler<SEA>,
-    SEA: ScheduleExecutionArg,
-{
-    fn ensure_thread_manager_started(
-        &self,
-        context: &SchedulingContext,
-        result_with_timings: &mut ResultWithTimings,
-    ) -> RwLockReadGuard<'_, ThreadManager<S, TH, SEA>> {
-        loop {
-            let r = self.thread_manager.read().unwrap();
-            if r.is_active() {
-                debug!("ensure_thread_manager_started(): is already active...");
-                return r;
-            } else {
-                debug!("ensure_thread_manager_started(): will start threads...");
-                drop(r);
-                let mut w = self.thread_manager.write().unwrap();
-                w.start_threads(context, result_with_timings);
-                drop(w);
-            }
-        }
-    }
-}
-
 type Tid = i32;
 
 #[derive(Debug)]
@@ -491,7 +463,7 @@ where
             .unwrap_or(format!("{}", 8))
             .parse::<usize>()
             .unwrap();
-        let mut scheduler = Self::from_inner(
+        let scheduler = Self::from_inner(
             PooledSchedulerInner::<Self, TH, SEA> {
                 thread_manager: Arc::new(RwLock::new(ThreadManager::<Self, TH, SEA>::new(
                     &initial_context,
@@ -508,6 +480,26 @@ where
         pool.register_to_watchdog(Arc::downgrade(&scheduler.inner.thread_manager));
 
         scheduler
+    }
+
+    fn ensure_thread_manager_started(
+        &self,
+        context: &SchedulingContext,
+        result_with_timings: &ResultWithTimings,
+    ) -> RwLockReadGuard<'_, ThreadManager<Self, TH, SEA>> {
+        loop {
+            let r = self.inner.thread_manager.read().unwrap();
+            if r.is_active() {
+                debug!("ensure_thread_manager_started(): is already active...");
+                return r;
+            } else {
+                debug!("ensure_thread_manager_started(): will start threads...");
+                drop(r);
+                let mut w = self.inner.thread_manager.write().unwrap();
+                w.start_threads(context, result_with_timings);
+                drop(w);
+            }
+        }
     }
 
     fn pooled_now(&mut self) {
@@ -657,7 +649,7 @@ where
         *blocked_transaction_sessioned_sender = next_blocked_transaction_sessioned_sender;
     }
 
-    fn start_threads(&mut self, context: &SchedulingContext, result_with_timings: &mut ResultWithTimings) {
+    fn start_threads(&mut self, context: &SchedulingContext, result_with_timings: &ResultWithTimings) {
         if self.is_active() {
             // this can't be promoted to panic! as read => write upgrade isn't completely
             // race-free in ensure_thread_manager_started()...
@@ -689,7 +681,7 @@ where
                 self.schedulable_transaction_receiver.clone();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
-            let result_with_timings = replace(result_with_timings, (Ok(()), ExecuteTimings::default()));
+            let result_with_timings = result_with_timings.clone();
             drop_sender
                 .send(SessionedMessage::StartSession(result_with_timings))
                 .unwrap();
@@ -1175,7 +1167,7 @@ where
             let task = SchedulingStateMachine::create_task(transaction.clone(), index, |pubkey| {
                 self.inner.address_book.load(pubkey)
             });
-            self.inner.ensure_thread_manager_started(&self.context, &mut self.completed_result_with_timings)
+            self.ensure_thread_manager_started(&self.context, &mut self.completed_result_with_timings)
                 .send_task(task);
         });
     }
