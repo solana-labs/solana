@@ -1064,7 +1064,7 @@ where
     TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 {
-    type Inner: Debug + Send + Sync + AAA;
+    type Inner: Debug + Send + Sync + RetirableSchedulerInner;
 
     fn into_inner(self) -> (ResultWithTimings, Self::Inner);
 
@@ -1079,7 +1079,7 @@ where
         Self: Sized;
 }
 
-pub trait AAA {
+pub trait RetirableSchedulerInner {
     fn retire_if_stale(&mut self) -> bool
     where
         Self: Sized;
@@ -1171,7 +1171,7 @@ where
     }
 }
 
-impl<S, TH, SEA> AAA for PooledSchedulerInner<S, TH, SEA>
+impl<S, TH, SEA> RetirableSchedulerInner for PooledSchedulerInner<S, TH, SEA>
 where
     S: SpawnableScheduler<TH, SEA, Inner = PooledSchedulerInner<S, TH, SEA>>,
     TH: TaskHandler<SEA>,
