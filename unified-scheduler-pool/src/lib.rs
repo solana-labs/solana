@@ -1080,9 +1080,7 @@ where
 }
 
 pub trait RetirableSchedulerInner {
-    fn retire_if_stale(&mut self) -> bool
-    where
-        Self: Sized;
+    fn retire_if_stale(&mut self) -> bool;
 }
 
 impl<TH, SEA> SpawnableScheduler<TH, SEA> for PooledScheduler<TH, SEA>
