@@ -1615,7 +1615,7 @@ mod tests {
             handler: DefaultTaskHandler,
         ) -> Self {
             AsyncScheduler::<TRIGGER_RACE_CONDITION>(
-                Default::default(),
+                Mutex::new(initialized_result_with_timings()),
                 Mutex::new(vec![]),
                 initial_context,
                 Arc::new(pool.handler_context.clone()),
