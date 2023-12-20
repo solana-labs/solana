@@ -428,7 +428,7 @@ where
 }
 
 
-impl<S, TH, SEA> PooledSchedulerInner
+impl<S, TH, SEA> PooledSchedulerInner<S, TH, SEA>
 where
     S: SpawnableScheduler<TH, SEA>,
     TH: TaskHandler<SEA>,
