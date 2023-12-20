@@ -39,8 +39,8 @@ use {
     tokio::{task::JoinHandle, time::timeout},
 };
 
-//const WAIT_FOR_STREAM_TIMEOUT: Duration = Duration::from_secs(3600);
-pub const DEFAULT_WAIT_FOR_CHUNK_TIMEOUT: Duration = Duration::from_secs(3600);
+const WAIT_FOR_STREAM_TIMEOUT: Duration = Duration::from_secs(100);
+pub const DEFAULT_WAIT_FOR_CHUNK_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub const ALPN_TPU_PROTOCOL_ID: &[u8] = b"solana-tpu";
 
@@ -698,7 +698,7 @@ async fn handle_connection(
     stream_exit: Arc<AtomicBool>,
     stats: Arc<StreamStats>,
     peer_type: ConnectionPeerType,
-    _wait_for_chunk_timeout: Duration,
+    wait_for_chunk_timeout: Duration,
 ) {
     debug!(
         "quic new connection {} streams: {} connections: {}",
@@ -709,32 +709,34 @@ async fn handle_connection(
     let stable_id = connection.stable_id();
     stats.total_connections.fetch_add(1, Ordering::Relaxed);
     while !stream_exit.load(Ordering::Relaxed) {
-        let stream = connection.accept_uni().await;
-        match stream {
-            Ok(mut stream) => {
-                stats.total_streams.fetch_add(1, Ordering::Relaxed);
-                stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
-                let stream_exit = stream_exit.clone();
-                let stats = stats.clone();
-                let packet_sender = packet_sender.clone();
-                let last_update = last_update.clone();
-                tokio::spawn(async move {
-                    let mut maybe_batch = None;
-                    // The min is to guard against a value too small which can wake up unnecessarily
-                    // frequently and wasting CPU cycles. The max guard against waiting for too long
-                    // which delay exit and cause some test failures when the timeout value is large.
-                    // Within this value, the heuristic is to wake up 10 times to check for exit
-                    // for the set timeout if there are no data.
-                    // let exit_check_interval = (wait_for_chunk_timeout / 10)
-                    //     .clamp(Duration::from_millis(10), Duration::from_secs(1));
-                    let exit_check_interval = Duration::from_secs(60);
-                    //let mut start = Instant::now();
-                    while !stream_exit.load(Ordering::Relaxed) {
-                        tokio::select! {
-                            () = tokio::time::sleep(exit_check_interval) => {
-                                continue;
-                            },
-                            chunk = stream.read_chunk(PACKET_DATA_SIZE, false) => {
+        if let Ok(stream) =
+            tokio::time::timeout(WAIT_FOR_STREAM_TIMEOUT, connection.accept_uni()).await
+        {
+            match stream {
+                Ok(mut stream) => {
+                    stats.total_streams.fetch_add(1, Ordering::Relaxed);
+                    stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
+                    let stream_exit = stream_exit.clone();
+                    let stats = stats.clone();
+                    let packet_sender = packet_sender.clone();
+                    let last_update = last_update.clone();
+                    tokio::spawn(async move {
+                        let mut maybe_batch = None;
+                        // The min is to guard against a value too small which can wake up unnecessarily
+                        // frequently and wasting CPU cycles. The max guard against waiting for too long
+                        // which delay exit and cause some test failures when the timeout value is large.
+                        // Within this value, the heuristic is to wake up 10 times to check for exit
+                        // for the set timeout if there are no data.
+                        let exit_check_interval = (wait_for_chunk_timeout / 10)
+                            .clamp(Duration::from_millis(10), Duration::from_secs(1));
+                        let mut start = Instant::now();
+                        while !stream_exit.load(Ordering::Relaxed) {
+                            if let Ok(chunk) = tokio::time::timeout(
+                                exit_check_interval,
+                                stream.read_chunk(PACKET_DATA_SIZE, false),
+                            )
+                            .await
+                            {
                                 if handle_chunk(
                                     chunk,
                                     &mut maybe_batch,
@@ -748,26 +750,21 @@ async fn handle_connection(
                                     last_update.store(timing::timestamp(), Ordering::Relaxed);
                                     break;
                                 }
+                                start = Instant::now();
+                            } else if start.elapsed() > wait_for_chunk_timeout {
+                                debug!("Timeout in receiving on stream");
+                                stats
+                                    .total_stream_read_timeouts
+                                    .fetch_add(1, Ordering::Relaxed);
+                                break;
                             }
-                        };
-
-                        //start = Instant::now();
-                    }
-                    stats.total_streams.fetch_sub(1, Ordering::Relaxed);
-                });
-            }
-            Err(e) => {
-                debug!("stream error: {:?}", e);
-                match e {
-                    quinn_proto::ConnectionError::VersionMismatch => break,
-                    quinn_proto::ConnectionError::TransportError(_) => break,
-                    quinn_proto::ConnectionError::ConnectionClosed(_) => break,
-                    quinn_proto::ConnectionError::ApplicationClosed(_) => break,
-                    quinn_proto::ConnectionError::Reset => break,
-                    quinn_proto::ConnectionError::TimedOut => {
-                        break;
-                    }
-                    quinn_proto::ConnectionError::LocallyClosed => break,
+                        }
+                        stats.total_streams.fetch_sub(1, Ordering::Relaxed);
+                    });
+                }
+                Err(e) => {
+                    debug!("stream error: {:?}", e);
+                    break;
                 }
             }
         }
