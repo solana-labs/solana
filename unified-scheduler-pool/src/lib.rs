@@ -681,7 +681,7 @@ where
                 self.schedulable_transaction_receiver.clone();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
-            let result_with_timings = result_with_timings.clone();
+            let result_with_timings: ResultWithTimings = result_with_timings.clone();
             drop_sender
                 .send(SessionedMessage::StartSession(result_with_timings))
                 .unwrap();
