@@ -424,6 +424,25 @@ where
     pooled_at: Instant,
 }
 
+impl<S, TH, SEA> PooledSchedulerInner<S, TH, SEA>
+where
+    S: SpawnableScheduler<TH, SEA>,
+    TH: TaskHandler<SEA>,
+    SEA: ScheduleExecutionArg,
+{
+    fn pooled_since(&self) -> Duration {
+        self.pooled_at.elapsed()
+    }
+
+    fn stop_thread_manager(&mut self) {
+        debug!("stop_thread_manager()");
+        self.thread_manager
+            .write()
+            .unwrap()
+            .stop_threads();
+    }
+}
+
 type Tid = i32;
 
 #[derive(Debug)]
@@ -495,19 +514,6 @@ where
                 drop(w);
             }
         }
-    }
-
-    fn pooled_since(&self) -> Duration {
-        self.inner.pooled_at.elapsed()
-    }
-
-    fn stop_thread_manager(&mut self) {
-        debug!("stop_thread_manager()");
-        self.inner
-            .thread_manager
-            .write()
-            .unwrap()
-            .stop_threads();
     }
 }
 
