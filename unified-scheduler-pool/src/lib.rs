@@ -411,7 +411,6 @@ where
 {
     inner: PooledSchedulerInner<Self, TH, SEA>,
     context: SchedulingContext,
-    result_with_timings: ResultWithTimings,
 }
 
 #[derive(Debug)]
@@ -446,6 +445,7 @@ where
     result_sender: Sender<ResultWithTimings>,
     result_receiver: Receiver<ResultWithTimings>,
     handler_count: usize,
+    result_with_timings: ResultWithTimings,
 }
 
 impl<TH, SEA> PooledScheduler<TH, SEA>
