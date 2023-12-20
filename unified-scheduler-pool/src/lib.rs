@@ -1010,7 +1010,7 @@ where
     fn end_session(&mut self, context: &SchedulingContext, result_with_timings: &mut ResultWithTimings) {
         debug!("end_session(): will end session...");
         if !self.is_active() {
-            self.start_threads(context);
+            self.start_threads(context, result_with_timings);
         }
 
         self.schedulrable_transaction_sender
