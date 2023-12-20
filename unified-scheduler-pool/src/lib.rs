@@ -1532,7 +1532,7 @@ mod tests {
         ) {
             let transaction_and_index = (transaction.clone(), index);
             let context = self.context().clone();
-            let handler_context = self.3.clone();
+            let pool = self.3.clone();
 
             self.1.lock().unwrap().push(std::thread::spawn(move || {
                 // intentionally sleep to simulate race condition where register_recent_blockhash
@@ -1549,7 +1549,7 @@ mod tests {
                     context.bank(),
                     &transaction_and_index.0,
                     transaction_and_index.1,
-                    &handler_context,
+                    &pool.handler_context,
                 );
                 (result, timings)
             }));
