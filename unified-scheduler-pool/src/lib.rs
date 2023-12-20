@@ -1019,13 +1019,13 @@ where
         *result_with_timings = self.result_receiver.recv().unwrap();
     }
 
-    fn start_session(&mut self, context: &SchedulingContext) {
+    fn start_session(&mut self, context: &SchedulingContext, result_with_timings: &mut ResultWithTimings) {
         if self.is_active() {
             self.schedulrable_transaction_sender
                 .send(SessionedMessage::StartSession(context.clone()))
                 .unwrap();
         } else {
-            self.start_threads(context);
+            self.start_threads(context, result_with_timings);
         }
     }
 
