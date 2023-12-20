@@ -501,10 +501,6 @@ where
         }
     }
 
-    fn pooled_now(&mut self) {
-        self.inner.pooled_at = Instant::now();
-    }
-
     fn pooled_since(&self) -> Duration {
         self.inner.pooled_at.elapsed()
     }
@@ -1198,7 +1194,6 @@ where
 {
     fn return_to_pool(mut self: Box<Self>) {
         let pool = self.thread_manager.read().unwrap().pool.clone();
-        //self.pooled_now();
         self.pooled_at = Instant::now();
         pool.return_scheduler(*self)
     }
