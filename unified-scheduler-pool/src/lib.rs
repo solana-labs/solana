@@ -585,7 +585,7 @@ where
             handler_count,
             handler,
             pool,
-            session_result_with_timings: Some((Ok(()), ExecuteTimings::default()),
+            session_result_with_timings: Some((Ok(()), ExecuteTimings::default())),
         }
     }
 
