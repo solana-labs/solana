@@ -1200,7 +1200,7 @@ where
             .thread_manager
             .write()
             .unwrap()
-            .end_session(&self.context);
+            .end_session();
     }
 }
 
