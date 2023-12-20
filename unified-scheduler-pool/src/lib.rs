@@ -812,7 +812,7 @@ where
 
                 log_scheduler!("T:ended");
                 let result_with_timings = if session_ending {
-                    (Ok(()), ExecuteTimings::default())
+                    initialized_result_with_timings();
                 } else {
                     drop_sender.send(SessionedMessage::EndSession).unwrap();
                     drop_receiver2.recv().unwrap()
