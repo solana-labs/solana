@@ -1088,8 +1088,7 @@ where
             .write()
             .unwrap()
             .end_session(&self.context);
-
-        let r = self.inner.thread_manager.write().unwrap().result_with_timings.clone();
+        let r = self.inner.thread_manager.write().unwrap().session_result_with_timings.take().unwrap();
         (r, self.inner)
     }
 
