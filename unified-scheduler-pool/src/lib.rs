@@ -1185,7 +1185,7 @@ where
     }
 
     fn wait_for_termination(
-        mut self: Box<Self>,
+        self: Box<Self>,
         _is_dropped: bool,
     ) -> (ResultWithTimings, UninstalledSchedulerBox) {
         let (result_with_timings, uninstalled_scheduler) = self.into_inner();
