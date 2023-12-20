@@ -411,7 +411,7 @@ where
 {
     inner: PooledSchedulerInner<Self, TH, SEA>,
     context: SchedulingContext,
-    completed_result_with_timings: Option<ResultWithTimings>,
+    completed_result_with_timings: ResultWithTimings,
 }
 
 #[derive(Debug)]
@@ -1012,7 +1012,7 @@ where
             .unwrap();
     }
 
-    fn end_session(&mut self, context: &SchedulingContext) -> ResultWithTimings {
+    fn end_session(&mut self, context: &SchedulingContext, result_with_timings: &mut ResultWithTimings) {
         debug!("end_session(): will end session...");
         if !self.is_active() {
             self.start_threads(context);
@@ -1021,7 +1021,7 @@ where
         self.schedulrable_transaction_sender
             .send(SessionedMessage::EndSession)
             .unwrap();
-        self.result_receiver.recv().unwrap()
+        *result_with_timings = self.result_receiver.recv().unwrap();
     }
 
     fn start_session(&mut self, context: &SchedulingContext) {
@@ -1083,7 +1083,7 @@ where
 
     fn into_inner(self) -> (ResultWithTimings, Self::Inner) {
         (
-            self.completed_result_with_timings.expect("not none"),
+            self.completed_result_with_timings,
             self.inner,
         )
     }
@@ -1094,7 +1094,7 @@ where
         Self {
             inner,
             context,
-            completed_result_with_timings: None,
+            completed_result_with_timings: (Ok(()), ExecuteTimings::default()),
         }
     }
 
@@ -1177,30 +1177,22 @@ where
     }
 
     fn wait_for_termination(mut self: Box<Self>, _is_dropped: bool) -> (ResultWithTimings, UninstalledSchedulerBox) {
-        if self.completed_result_with_timings.is_none() {
-            self.completed_result_with_timings = Some(
-                self.inner
-                    .thread_manager
-                    .write()
-                    .unwrap()
-                    .end_session(&self.context),
-            );
-        }
+        self.inner
+            .thread_manager
+            .write()
+            .unwrap()
+            .end_session(&self.context, &mut self.completed_result_with_timings);
 
         let (result_with_timings, uninstalled_scheduler) = self.into_inner();
         (result_with_timings, Box::new(uninstalled_scheduler))
     }
 
     fn pause_for_recent_blockhash(&mut self) {
-        if self.completed_result_with_timings.is_none() {
-            self.completed_result_with_timings = Some(
-                self.inner
-                    .thread_manager
-                    .write()
-                    .unwrap()
-                    .end_session(&self.context),
-            );
-        }
+        self.inner
+            .thread_manager
+            .write()
+            .unwrap()
+            .end_session(&self.context, &mut self.completed_result_with_timings);
     }
 }
 
@@ -1214,7 +1206,7 @@ where
         let pool = self.thread_manager.read().unwrap().pool.clone();
         //self.pooled_now();
         self.pooled_at = Instant::now();
-        pool/*.clone()*/.return_scheduler(*self)
+        pool.return_scheduler(*self)
     }
 }
 
