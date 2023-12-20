@@ -1526,7 +1526,7 @@ mod tests {
 
         fn schedule_execution<'a>(
             &'a self,
-            &(_transaction, _index): <DefaultScheduleExecutionArg as ScheduleExecutionArg>::TransactionWithIndex<'a>,
+            &(transaction, index): <DefaultScheduleExecutionArg as ScheduleExecutionArg>::TransactionWithIndex<'a>,
         ) {
             let transaction_and_index = (transaction.clone(), index);
             let context = self.context().clone();
