@@ -1074,8 +1074,10 @@ where
     */
 }
 
-impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
-    for PooledScheduler<TH, SEA>
+impl<TH, SEA> SpawnableScheduler<TH, SEA> for PooledScheduler<TH, SEA>
+where
+    TH: TaskHandler<SEA>,
+    SEA: ScheduleExecutionArg,
 {
     type Inner = PooledSchedulerInner<Self, TH, SEA>;
 
