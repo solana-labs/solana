@@ -39,6 +39,7 @@ use {
     solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
         fmt::Debug,
+        mem::replace,
         sync::{
             atomic::{AtomicU64, Ordering::Relaxed},
             Arc, Mutex, RwLock, RwLockReadGuard, Weak,
@@ -942,7 +943,7 @@ where
                         }
                         Ok(SessionedMessage::EndSession) => {
                             drop_sender2
-                                .send(std::mem::replace(
+                                .send(replace(
                                     &mut result_with_timings,
                                     initialized_result_with_timings(),
                                 ))
@@ -1563,7 +1564,7 @@ mod tests {
             _is_dropped: bool,
         ) -> (ResultWithTimings, UninstalledSchedulerBox) {
             self.do_wait();
-            let r = std::mem::replace(
+            let r = replace(
                 &mut *self.0.lock().unwrap(),
                 initialized_result_with_timings(),
             );
