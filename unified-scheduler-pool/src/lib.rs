@@ -1530,17 +1530,14 @@ mod tests {
             &self.2
         }
 
-        fn schedule_execution<'a>(
-            &'a self,
-            &(transaction, index): <DefaultScheduleExecutionArg as ScheduleExecutionArg>::TransactionWithIndex<'a>,
-        ) {
+        fn schedule_execution(&self, &(transaction, index): &(&SanitizedTransaction, usize)) {
             let transaction_and_index = (transaction.clone(), index);
             let context = self.context().clone();
             let pool = self.3.clone();
 
             self.1.lock().unwrap().push(std::thread::spawn(move || {
                 // intentionally sleep to simulate race condition where register_recent_blockhash
-                // is run before finishing executing scheduled transactions
+                // is handle before finishing executing scheduled transactions
                 std::thread::sleep(std::time::Duration::from_secs(1));
 
                 let mut result = Ok(());
