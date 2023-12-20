@@ -158,8 +158,7 @@ mkdir -p "$installDir/bin"
     "$cargo" $maybeRustVersion \
       --config 'patch.crates-io.ntapi.git="https://github.com/solana-labs/ntapi"' \
       --config 'patch.crates-io.ntapi.rev="97ede981a1777883ff86d142b75024b023f04fad"' \
-      $maybeSplTokenCliVersionArg \
-      install --locked spl-token-cli --root "$installDir"
+      install --locked spl-token-cli --root "$installDir" $maybeSplTokenCliVersionArg
   fi
 )
 
