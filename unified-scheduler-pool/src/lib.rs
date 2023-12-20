@@ -1495,6 +1495,7 @@ mod tests {
     struct AsyncScheduler<const TRIGGER_RACE_CONDITION: bool>(
         Mutex<ResultWithTimings>,
         Mutex<Vec<JoinHandle<ResultWithTimings>>>,
+        SchedulingContext,
         Arc<HandlerContext>,
     );
 
@@ -1522,7 +1523,7 @@ mod tests {
         }
 
         fn context(&self) -> &SchedulingContext {
-            todo!();
+            &self.2
         }
 
         fn schedule_execution<'a>(
@@ -1531,7 +1532,7 @@ mod tests {
         ) {
             let transaction_and_index = (transaction.clone(), index);
             let context = self.context().clone();
-            let handler_context = self.2.clone();
+            let handler_context = self.3.clone();
 
             self.1.lock().unwrap().push(std::thread::spawn(move || {
                 // intentionally sleep to simulate race condition where register_recent_blockhash
