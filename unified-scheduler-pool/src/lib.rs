@@ -476,7 +476,7 @@ where
             },
             initial_context,
         );
-        scheduler.inner.thread_manager.write().unwrap().start_threads(initial_context, &mut scheduler.completed_result_with_timings);
+        scheduler.inner.thread_manager.write().unwrap().start_threads(&scheduler.context, &mut scheduler.completed_result_with_timings);
         pool.register_to_watchdog(Arc::downgrade(&scheduler.inner.thread_manager));
 
         scheduler
