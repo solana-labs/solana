@@ -1618,7 +1618,7 @@ mod tests {
                 3_usize,
                 Mutex::new(vec![]),
                 initial_context,
-                pool.handler_context,
+                Arc::new(pool.handler_context.clone()),
             )
         }
     }
