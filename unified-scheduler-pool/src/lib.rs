@@ -891,7 +891,10 @@ where
                                 .accumulate(&task.result_with_timings.1);
                             match &task.result_with_timings.0 {
                                 Ok(()) => {}
-                                Err(e) => result_with_timings.0 = Err(e.clone()),
+                                Err(e) => {
+                                    error!("sc error: {:?}", e);
+                                    result_with_timings.0 = Err(e.clone());
+                                }
                             }
                             if let Some(handler_timings) = &task.handler_timings {
                                 use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
