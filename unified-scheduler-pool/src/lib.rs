@@ -412,7 +412,7 @@ where
 {
     inner: PooledSchedulerInner<Self, TH, SEA>,
     context: SchedulingContext,
-    completed_result_with_timings: ResultWithTimings,
+    result_with_timings: ResultWithTimings,
 }
 
 #[derive(Debug)]
@@ -476,7 +476,7 @@ where
             },
             initial_context,
         );
-        scheduler.inner.thread_manager.write().unwrap().start_threads(&scheduler.context, &scheduler.completed_result_with_timings);
+        scheduler.inner.thread_manager.write().unwrap().start_threads(&scheduler.context, &scheduler.result_with_timings);
         pool.register_to_watchdog(Arc::downgrade(&scheduler.inner.thread_manager));
 
         scheduler
@@ -512,7 +512,7 @@ where
 
     fn stop_thread_manager(&mut self) {
         debug!("stop_thread_manager()");
-        self.inner.thread_manager.write().unwrap().stop_threads(&mut self.completed_result_with_timings);
+        self.inner.thread_manager.write().unwrap().stop_threads(&mut self.result_with_timings);
     }
 }
 
@@ -1078,19 +1078,19 @@ where
 
     fn into_inner(self) -> (ResultWithTimings, Self::Inner) {
         (
-            self.completed_result_with_timings,
+            self.result_with_timings,
             self.inner,
         )
     }
 
     fn from_inner(inner: Self::Inner, context: SchedulingContext) -> Self {
-        let mut completed_result_with_timings = (Ok(()), ExecuteTimings::default());
-        inner.thread_manager.write().unwrap().start_session(&context, &mut completed_result_with_timings);
+        let mut result_with_timings = (Ok(()), ExecuteTimings::default());
+        inner.thread_manager.write().unwrap().start_session(&context, &mut result_with_timings);
 
         Self {
             inner,
             context,
-            completed_result_with_timings,
+            result_with_timings,
         }
     }
 
@@ -1167,7 +1167,7 @@ where
             let task = SchedulingStateMachine::create_task(transaction.clone(), index, |pubkey| {
                 self.inner.address_book.load(pubkey)
             });
-            self.ensure_thread_manager_started(&self.context, &self.completed_result_with_timings)
+            self.ensure_thread_manager_started(&self.context, &self.result_with_timings)
                 .send_task(task);
         });
     }
@@ -1177,7 +1177,7 @@ where
             .thread_manager
             .write()
             .unwrap()
-            .end_session(&self.context, &mut self.completed_result_with_timings);
+            .end_session(&self.context, &mut self.result_with_timings);
 
         let (result_with_timings, uninstalled_scheduler) = self.into_inner();
         (result_with_timings, Box::new(uninstalled_scheduler))
@@ -1188,7 +1188,7 @@ where
             .thread_manager
             .write()
             .unwrap()
-            .end_session(&self.context, &mut self.completed_result_with_timings);
+            .end_session(&self.context, &mut self.result_with_timings);
     }
 }
 
