@@ -1634,12 +1634,6 @@ mod tests {
             )
             */
         }
-
-        /*
-        fn retire_if_stale(&mut self) -> bool {
-            todo!();
-        }
-        */
     }
 
     impl<const TRIGGER_RACE_CONDITION: bool>
