@@ -681,7 +681,7 @@ where
                 self.schedulable_transaction_receiver.clone();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
-            let result_with_timings: ResultWithTimings = std::mem::replace(&mut self.result_with_timings, (Ok(()), ExecuteTimings::default()));
+            let result_with_timings: ResultWithTimings = self.session_result_with_timings.take().unwrap();
             drop_sender
                 .send(SessionedMessage::StartSession(result_with_timings))
                 .unwrap();
