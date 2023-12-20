@@ -571,6 +571,7 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
             .get_current_instruction_context()
             .unwrap(),
         true, // copy_account_data
+        &invoke_context.feature_set,
     )
     .unwrap();
 
