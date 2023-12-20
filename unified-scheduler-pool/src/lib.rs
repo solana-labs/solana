@@ -1087,7 +1087,7 @@ where
     }
 
     fn from_inner(inner: Self::Inner, context: SchedulingContext) -> Self {
-        self.inner.thread_manager.write().unwrap().session_result_with_timings = Some((Ok(()), ExecuteTimings::default()));
+        inner.thread_manager.write().unwrap().session_result_with_timings = Some((Ok(()), ExecuteTimings::default()));
         inner
             .thread_manager
             .write()
