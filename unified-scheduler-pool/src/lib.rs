@@ -650,7 +650,6 @@ where
     fn start_threads(
         &mut self,
         context: &SchedulingContext,
-        result_with_timings: &ResultWithTimings,
     ) {
         if self.is_active() {
             // this can't be promoted to panic! as read => write upgrade isn't completely
@@ -683,7 +682,7 @@ where
                 self.schedulable_transaction_receiver.clone();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
-            let result_with_timings: ResultWithTimings = result_with_timings.clone();
+            let result_with_timings: ResultWithTimings = std::mem::replace(self.result_with_timings, (Ok(()), ExecuteTimings::default()));
             drop_sender
                 .send(SessionedMessage::StartSession(result_with_timings))
                 .unwrap();
