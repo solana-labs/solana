@@ -1493,7 +1493,7 @@ mod tests {
 
     #[derive(Debug)]
     struct AsyncScheduler<const TRIGGER_RACE_CONDITION: bool>(
-        usize,
+        Mutex<ResultWithTimings>,
         Mutex<Vec<JoinHandle<ResultWithTimings>>>,
     );
 
@@ -1509,7 +1509,7 @@ mod tests {
                 }
                 overall_timings.accumulate(&timings);
             }
-            *self.0.result_with_timings.lock().unwrap() = (overall_result, overall_timings);
+            *self.0.lock().unwrap() = (overall_result, overall_timings);
         }
     }
 
