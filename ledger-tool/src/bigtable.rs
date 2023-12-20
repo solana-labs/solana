@@ -1,6 +1,9 @@
 //! The `bigtable` subcommand
 use {
-    crate::{ledger_path::canonicalize_ledger_path, output::CliEntries},
+    crate::{
+        ledger_path::canonicalize_ledger_path,
+        output::{CliBlockWithEntries, CliEntries, EncodedConfirmedBlockWithEntries},
+    },
     clap::{
         value_t, value_t_or_exit, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
     },
@@ -23,8 +26,8 @@ use {
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
     solana_storage_bigtable::CredentialType,
     solana_transaction_status::{
-        BlockEncodingOptions, ConfirmedBlock, EncodeError, TransactionDetails,
-        UiTransactionEncoding, VersionedConfirmedBlock,
+        BlockEncodingOptions, ConfirmedBlock, EncodeError, EncodedConfirmedBlock,
+        TransactionDetails, UiTransactionEncoding, VersionedConfirmedBlock,
     },
     std::{
         cmp::min,
@@ -113,6 +116,7 @@ async fn first_available_block(
 async fn block(
     slot: Slot,
     output_format: OutputFormat,
+    show_entries: bool,
     config: solana_storage_bigtable::LedgerStorageConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new_with_config(config)
@@ -134,12 +138,25 @@ async fn block(
                 format!("Failed to process unsupported transaction version ({version}) in block")
             }
         })?;
+    let encoded_block: EncodedConfirmedBlock = encoded_block.into();
 
-    let cli_block = CliBlock {
-        encoded_confirmed_block: encoded_block.into(),
-        slot,
-    };
-    println!("{}", output_format.formatted_string(&cli_block));
+    if show_entries {
+        let entries = bigtable.get_entries(slot).await?;
+        let cli_block = CliBlockWithEntries {
+            encoded_confirmed_block: EncodedConfirmedBlockWithEntries::try_from(
+                encoded_block,
+                entries,
+            )?,
+            slot,
+        };
+        println!("{}", output_format.formatted_string(&cli_block));
+    } else {
+        let cli_block = CliBlock {
+            encoded_confirmed_block: encoded_block,
+            slot,
+        };
+        println!("{}", output_format.formatted_string(&cli_block));
+    }
     Ok(())
 }
 
@@ -823,6 +840,12 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(true)
                                 .index(1)
                                 .required(true),
+                        )
+                        .arg(
+                            Arg::with_name("show_entries")
+                                .long("show-entries")
+                                .required(false)
+                                .help("Display the transactions in their entries"),
                         ),
                 )
                 .subcommand(
@@ -1117,13 +1140,14 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
         }
         ("block", Some(arg_matches)) => {
             let slot = value_t_or_exit!(arg_matches, "slot", Slot);
+            let show_entries = arg_matches.is_present("show_entries");
             let config = solana_storage_bigtable::LedgerStorageConfig {
                 read_only: true,
                 instance_name,
                 app_profile_id,
                 ..solana_storage_bigtable::LedgerStorageConfig::default()
             };
-            runtime.block_on(block(slot, output_format, config))
+            runtime.block_on(block(slot, output_format, show_entries, config))
         }
         ("entries", Some(arg_matches)) => {
             let slot = value_t_or_exit!(arg_matches, "slot", Slot);
