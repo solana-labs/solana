@@ -671,6 +671,7 @@ where
         let scheduler_id = self.scheduler_id;
         let mut slot = context.bank().slot();
         let (tid_sender, tid_receiver) = bounded(1);
+        let result_with_timings = self.take_session_result_with_timings();
 
         let scheduler_main_loop = || {
             let handler_count = self.handler_count;
@@ -679,7 +680,6 @@ where
                 self.schedulable_transaction_receiver.clone();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
-            let result_with_timings = self.take_session_result_with_timings();
             drop_sender
                 .send(SessionedMessage::StartSession(result_with_timings))
                 .unwrap();
