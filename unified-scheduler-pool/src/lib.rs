@@ -587,6 +587,7 @@ where
             handler_count,
             handler,
             pool,
+            result_with_timings: (Ok(()), ExecuteTimings::default()),
         }
     }
 
@@ -1091,17 +1092,15 @@ where
     }
 
     fn from_inner(inner: Self::Inner, context: SchedulingContext) -> Self {
-        let mut result_with_timings = (Ok(()), ExecuteTimings::default());
         inner
             .thread_manager
             .write()
             .unwrap()
-            .start_session(&context, &result_with_timings);
+            .start_session(&context);
 
         Self {
             inner,
             context,
-            result_with_timings,
         }
     }
 
