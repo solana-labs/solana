@@ -8,7 +8,10 @@ use {
     base64::{prelude::BASE64_STANDARD, Engine},
     chrono_humanize::{Accuracy, HumanTime, Tense},
     log::*,
-    solana_accounts_db::epoch_accounts_hash::EpochAccountsHash,
+    solana_accounts_db::{
+        accounts_db::AccountShrinkThreshold, accounts_index::AccountSecondaryIndexes,
+        epoch_accounts_hash::EpochAccountsHash,
+    },
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
     solana_bpf_loader_program::serialization::serialize_parameters,
@@ -805,7 +808,7 @@ impl ProgramTest {
         debug!("Payer address: {}", mint_keypair.pubkey());
         debug!("Genesis config: {}", genesis_config);
 
-        let mut bank = Bank::new_with_runtime_config_for_tests(
+        let mut bank = Bank::new_with_paths(
             &genesis_config,
             Arc::new(RuntimeConfig {
                 compute_budget: self.compute_max_units.map(|max_units| ComputeBudget {
@@ -815,6 +818,15 @@ impl ProgramTest {
                 transaction_account_lock_limit: self.transaction_account_lock_limit,
                 ..RuntimeConfig::default()
             }),
+            Vec::default(),
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            AccountShrinkThreshold::default(),
+            false,
+            None,
+            None,
+            Arc::default(),
         );
 
         // Add commonly-used SPL programs as a convenience to the user
