@@ -918,13 +918,8 @@ lazy_static! {
         (validate_fee_collector_account::id(), "validate fee collector account #33888"),
         (enable_zk_transfer_with_fee::id(), "enable Zk Token proof program transfer with fee"),
         (drop_legacy_shreds::id(), "drops legacy shreds #34328"),
-<<<<<<< HEAD
-        (consume_blockstore_duplicate_proofs::id(), "consume duplicate proofs from blockstore in consensus #34372")
-=======
-        (allow_commission_decrease_at_any_time::id(), "Allow commission decrease at any time in epoch #33843"),
         (consume_blockstore_duplicate_proofs::id(), "consume duplicate proofs from blockstore in consensus #34372"),
         (index_erasure_conflict_duplicate_proofs::id(), "generate duplicate proofs for index and erasure conflicts #34360"),
->>>>>>> def3bc4c4f (Add feature flag for LastIndex and Erasure duplicate proofs (#34360))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
