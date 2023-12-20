@@ -1172,7 +1172,7 @@ where
             if !m.is_active() {
                 m.put_session_result_with_timings(initialized_result_with_timings());
             }
-            m.pool.clone();
+            m.pool.clone()
         };
         self.pooled_at = Instant::now();
         pool.return_scheduler(*self)
