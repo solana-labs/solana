@@ -983,13 +983,14 @@ where
             self.schedulrable_transaction_sender,
             self.schedulable_transaction_receiver,
         ) = unbounded();
-        self.put_session_result_with_timings(self
+        let r = self
             .scheduler_thread_and_tid
             .take()
             .unwrap()
             .0
             .join()
-            .unwrap());
+            .unwrap();
+        self.put_session_result_with_timings(r);
         let () = self.drop_thread.take().unwrap().join().unwrap();
 
         for j in self.handler_threads.drain(..) {
