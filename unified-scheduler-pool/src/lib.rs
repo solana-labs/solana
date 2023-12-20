@@ -1075,6 +1075,8 @@ impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA
     }
 
     fn from_inner(inner: Self::Inner, context: SchedulingContext) -> Self {
+        inner.thread_manager.write().unwrap().start_session(&context);
+
         Self {
             inner,
             context,
