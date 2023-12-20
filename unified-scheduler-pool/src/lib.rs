@@ -968,7 +968,7 @@ where
             .collect();
     }
 
-    fn stop_threads(&mut self, result_with_timings: &mut ResultWithTimings) {
+    fn stop_threads(&mut self) {
         if !self.is_active() {
             warn!("stop_threads(): already not active anymore...");
             return;
@@ -982,7 +982,7 @@ where
             self.schedulrable_transaction_sender,
             self.schedulable_transaction_receiver,
         ) = unbounded();
-        *result_with_timings = self
+        self.result_with_timings = self
             .scheduler_thread_and_tid
             .take()
             .unwrap()
