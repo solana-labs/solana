@@ -303,7 +303,9 @@ where
     }
 }
 
-pub trait TaskHandler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + Sized + Clone + 'static {
+pub trait TaskHandler<SEA: ScheduleExecutionArg>:
+    Send + Sync + Debug + Sized + Clone + 'static
+{
     fn create<T: SpawnableScheduler<Self, SEA>>(pool: &SchedulerPool<T, Self, SEA>) -> Self;
 
     fn handle(
@@ -431,7 +433,7 @@ struct ThreadManager<S, TH, SEA>
 where
     S: SpawnableScheduler<TH, SEA>,
     TH: TaskHandler<SEA>,
-    SEA: ScheduleExecutionArg
+    SEA: ScheduleExecutionArg,
 {
     scheduler_id: SchedulerId,
     pool: Arc<SchedulerPool<S, TH, SEA>>,
@@ -449,7 +451,7 @@ where
 impl<TH, SEA> PooledScheduler<TH, SEA>
 where
     TH: TaskHandler<SEA>,
-    SEA: ScheduleExecutionArg
+    SEA: ScheduleExecutionArg,
 {
     pub fn do_spawn(
         pool: Arc<SchedulerPool<Self, TH, SEA>>,
@@ -472,7 +474,12 @@ where
             },
             initial_context,
         );
-        scheduler.inner.thread_manager.write().unwrap().start_threads(&scheduler.context, &scheduler.result_with_timings);
+        scheduler
+            .inner
+            .thread_manager
+            .write()
+            .unwrap()
+            .start_threads(&scheduler.context, &scheduler.result_with_timings);
         pool.register_to_watchdog(Arc::downgrade(&scheduler.inner.thread_manager));
 
         scheduler
@@ -504,7 +511,11 @@ where
 
     fn stop_thread_manager(&mut self) {
         debug!("stop_thread_manager()");
-        self.inner.thread_manager.write().unwrap().stop_threads(&mut self.result_with_timings);
+        self.inner
+            .thread_manager
+            .write()
+            .unwrap()
+            .stop_threads(&mut self.result_with_timings);
     }
 }
 
@@ -560,11 +571,7 @@ where
     TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 {
-    fn new(
-        handler: TH,
-        pool: Arc<SchedulerPool<S, TH, SEA>>,
-        handler_count: usize,
-    ) -> Self {
+    fn new(handler: TH, pool: Arc<SchedulerPool<S, TH, SEA>>, handler_count: usize) -> Self {
         let (schedulrable_transaction_sender, schedulable_transaction_receiver) = unbounded();
         let (result_sender, result_receiver) = unbounded();
 
@@ -640,7 +647,11 @@ where
         *blocked_transaction_sessioned_sender = next_blocked_transaction_sessioned_sender;
     }
 
-    fn start_threads(&mut self, context: &SchedulingContext, result_with_timings: &ResultWithTimings) {
+    fn start_threads(
+        &mut self,
+        context: &SchedulingContext,
+        result_with_timings: &ResultWithTimings,
+    ) {
         if self.is_active() {
             // this can't be promoted to panic! as read => write upgrade isn't completely
             // race-free in ensure_thread_manager_started()...
@@ -998,7 +1009,11 @@ where
             .unwrap();
     }
 
-    fn end_session(&mut self, context: &SchedulingContext, result_with_timings: &mut ResultWithTimings) {
+    fn end_session(
+        &mut self,
+        context: &SchedulingContext,
+        result_with_timings: &mut ResultWithTimings,
+    ) {
         debug!("end_session(): will end session...");
         if !self.is_active() {
             self.start_threads(context, result_with_timings);
@@ -1010,7 +1025,11 @@ where
         *result_with_timings = self.result_receiver.recv().unwrap();
     }
 
-    fn start_session(&mut self, context: &SchedulingContext, result_with_timings: &mut ResultWithTimings) {
+    fn start_session(
+        &mut self,
+        context: &SchedulingContext,
+        result_with_timings: &mut ResultWithTimings,
+    ) {
         if self.is_active() {
             self.schedulrable_transaction_sender
                 .send(SessionedMessage::StartSession(context.clone()))
@@ -1068,15 +1087,16 @@ where
     type Inner = PooledSchedulerInner<Self, TH, SEA>;
 
     fn into_inner(self) -> (ResultWithTimings, Self::Inner) {
-        (
-            self.result_with_timings,
-            self.inner,
-        )
+        (self.result_with_timings, self.inner)
     }
 
     fn from_inner(inner: Self::Inner, context: SchedulingContext) -> Self {
         let mut result_with_timings = (Ok(()), ExecuteTimings::default());
-        inner.thread_manager.write().unwrap().start_session(&context, &mut result_with_timings);
+        inner
+            .thread_manager
+            .write()
+            .unwrap()
+            .start_session(&context, &mut result_with_timings);
 
         Self {
             inner,
@@ -1163,7 +1183,10 @@ where
         });
     }
 
-    fn wait_for_termination(mut self: Box<Self>, _is_dropped: bool) -> (ResultWithTimings, UninstalledSchedulerBox) {
+    fn wait_for_termination(
+        mut self: Box<Self>,
+        _is_dropped: bool,
+    ) -> (ResultWithTimings, UninstalledSchedulerBox) {
         self.inner
             .thread_manager
             .write()
