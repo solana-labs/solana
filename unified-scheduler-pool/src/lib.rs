@@ -1121,52 +1121,6 @@ where
     ) -> Self {
         Self::do_spawn(pool, initial_context, handler)
     }
-
-    /*
-    fn retire_if_stale(&mut self) -> bool {
-        const BITS_PER_HEX_DIGIT: usize = 4;
-        let page_count = self.inner.address_book.page_count();
-        if page_count < 200_000 {
-            info!(
-                "[sch_{:0width$x}]: watchdog: address book size: {page_count}...",
-                self.id(),
-                width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
-            );
-        } else if self.inner.thread_manager.read().unwrap().is_primary() {
-            info!(
-                "[sch_{:0width$x}]: watchdog: too big address book size: {page_count}...; emptying the primary scheduler",
-                self.id(),
-                width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
-            );
-            self.inner.address_book.clear();
-            return true;
-        } else {
-            info!(
-                "[sch_{:0width$x}]: watchdog: too big address book size: {page_count}...; retiring scheduler",
-                self.id(),
-                width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
-            );
-            self.stop_thread_manager();
-            return false;
-        }
-
-        let pooled_duration = self.pooled_since();
-        if pooled_duration <= Duration::from_secs(600) {
-            true
-        } else if !self.inner.thread_manager.read().unwrap().is_primary() {
-            info!(
-                "[sch_{:0width$x}]: watchdog: retiring unused scheduler after {:?}...",
-                self.id(),
-                pooled_duration,
-                width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
-            );
-            self.stop_thread_manager();
-            false
-        } else {
-            true
-        }
-    }
-    */
 }
 
 impl<TH, SEA> InstalledScheduler<SEA> for PooledScheduler<TH, SEA>
@@ -1228,6 +1182,49 @@ where
     TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 {
+    fn retire_if_stale(&mut self) -> bool {
+        const BITS_PER_HEX_DIGIT: usize = 4;
+        let page_count = self.inner.address_book.page_count();
+        if page_count < 200_000 {
+            info!(
+                "[sch_{:0width$x}]: watchdog: address book size: {page_count}...",
+                self.id(),
+                width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
+            );
+        } else if self.inner.thread_manager.read().unwrap().is_primary() {
+            info!(
+                "[sch_{:0width$x}]: watchdog: too big address book size: {page_count}...; emptying the primary scheduler",
+                self.id(),
+                width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
+            );
+            self.inner.address_book.clear();
+            return true;
+        } else {
+            info!(
+                "[sch_{:0width$x}]: watchdog: too big address book size: {page_count}...; retiring scheduler",
+                self.id(),
+                width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
+            );
+            self.stop_thread_manager();
+            return false;
+        }
+
+        let pooled_duration = self.pooled_since();
+        if pooled_duration <= Duration::from_secs(600) {
+            true
+        } else if !self.inner.thread_manager.read().unwrap().is_primary() {
+            info!(
+                "[sch_{:0width$x}]: watchdog: retiring unused scheduler after {:?}...",
+                self.id(),
+                pooled_duration,
+                width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
+            );
+            self.stop_thread_manager();
+            false
+        } else {
+            true
+        }
+    }
 }
 
 #[cfg(test)]
