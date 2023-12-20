@@ -1528,11 +1528,8 @@ mod tests {
             &'a self,
             &(_transaction, _index): <DefaultScheduleExecutionArg as ScheduleExecutionArg>::TransactionWithIndex<'a>,
         ) {
-            todo!();
-            /*
             let transaction_and_index = (transaction.clone(), index);
             let context = self.context().clone();
-            let pool = self.0.pool.clone();
 
             self.1.lock().unwrap().push(std::thread::spawn(move || {
                 // intentionally sleep to simulate race condition where register_recent_blockhash
@@ -1549,11 +1546,10 @@ mod tests {
                     context.bank(),
                     &transaction_and_index.0,
                     transaction_and_index.1,
-                    &pool,
+                    &self.2,
                 );
                 (result, timings)
             }));
-            */
         }
 
         fn wait_for_termination(
