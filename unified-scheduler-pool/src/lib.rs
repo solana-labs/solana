@@ -446,7 +446,6 @@ where
     result_sender: Sender<ResultWithTimings>,
     result_receiver: Receiver<ResultWithTimings>,
     handler_count: usize,
-    session_result_with_timings: Option<ResultWithTimings>,
 }
 
 impl<TH, SEA> PooledScheduler<TH, SEA>
@@ -587,7 +586,6 @@ where
             handler_count,
             handler,
             pool,
-            session_result_with_timings: None,
         };
         thread_manager.start_threads(initial_context);
         thread_manager
@@ -650,7 +648,7 @@ where
         *blocked_transaction_sessioned_sender = next_blocked_transaction_sessioned_sender;
     }
 
-    fn start_threads(&mut self, context: &SchedulingContext) {
+    fn start_threads(&mut self, context: &SchedulingContext, result_with_timings: &mut ResultWithTimings) {
         if self.is_active() {
             // this can't be promoted to panic! as read => write upgrade isn't completely
             // race-free in ensure_thread_manager_started()...
@@ -682,10 +680,7 @@ where
                 self.schedulable_transaction_receiver.clone();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
-            let result_with_timings = self
-                .session_result_with_timings
-                .take()
-                .unwrap_or((Ok(()), ExecuteTimings::default()));
+            let result_with_timings = replace(result_with_timings, (Ok(()), ExecuteTimings::default()));
             drop_sender
                 .send(SessionedMessage::StartSession(result_with_timings))
                 .unwrap();
@@ -971,7 +966,7 @@ where
             .collect();
     }
 
-    fn stop_threads(&mut self) {
+    fn stop_threads(&mut self, result_with_timings: &mut ResultWithTimings) {
         if !self.is_active() {
             warn!("stop_threads(): already not active anymore...");
             return;
@@ -985,7 +980,7 @@ where
             self.schedulrable_transaction_sender,
             self.schedulable_transaction_receiver,
         ) = unbounded();
-        let result_with_timings = self
+        *result_with_timings = self
             .scheduler_thread_and_tid
             .take()
             .unwrap()
@@ -993,7 +988,6 @@ where
             .join()
             .unwrap();
         let () = self.drop_thread.take().unwrap().join().unwrap();
-        self.session_result_with_timings = Some(result_with_timings);
 
         for j in self.handler_threads.drain(..) {
             debug!("joining...: {:?}", j);
