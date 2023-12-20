@@ -1586,6 +1586,11 @@ mod tests {
         }
     }
 
+    impl<const TRIGGER_RACE_CONDITION: bool> UninstalledScheduler<DefaultScheduleExecutionArg>
+        for AsyncScheduler<TRIGGER_RACE_CONDITION>
+    {
+    }
+
     impl<const TRIGGER_RACE_CONDITION: bool>
         SpawnableScheduler<DefaultTaskHandler, DefaultScheduleExecutionArg>
         for AsyncScheduler<TRIGGER_RACE_CONDITION>
