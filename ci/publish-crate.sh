@@ -2,6 +2,7 @@
 set -e
 cd "$(dirname "$0")/.."
 source ci/semver_bash/semver.sh
+export RUST_STABLE_VERSION=1.70.0
 source ci/rust-version.sh stable
 
 # shellcheck disable=SC2086
