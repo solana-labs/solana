@@ -479,7 +479,7 @@ where
             .thread_manager
             .write()
             .unwrap()
-            .start_threads(&scheduler.context, &scheduler.result_with_timings);
+            .start_threads(&scheduler.context);
         pool.register_to_watchdog(Arc::downgrade(&scheduler.inner.thread_manager));
 
         scheduler
