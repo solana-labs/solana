@@ -1084,13 +1084,13 @@ where
     type Inner = PooledSchedulerInner<Self, TH, SEA>;
 
     fn into_inner(self) -> (ResultWithTimings, Self::Inner) {
-        let result_with_timings = self.inner
+        self.inner
             .thread_manager
             .write()
             .unwrap()
             .end_session(&self.context);
 
-        (result_with_timings, self.inner)
+        (self.inner.thread_manager.write().unwrap().result_with_timings.clone(), self.inner)
     }
 
     fn from_inner(inner: Self::Inner, context: SchedulingContext) -> Self {
