@@ -1559,32 +1559,17 @@ mod tests {
             self: Box<Self>,
             _is_dropped: bool,
         ) -> (ResultWithTimings, UninstalledSchedulerBox) {
-            todo!();
-            /*
-            if TRIGGER_RACE_CONDITION && matches!(reason, WaitReason::PausedForRecentBlockhash) {
-                // this is equivalent to NOT calling wait_for_paused_scheduler() in
-                // register_recent_blockhash().
-                return None;
-            }
-
-            let mut overall_result = Ok(());
-            let mut overall_timings = ExecuteTimings::default();
-            for handle in self.1.lock().unwrap().drain(..) {
-                let (result, timings) = handle.join().unwrap();
-                match result {
-                    Ok(()) => {}
-                    Err(e) => overall_result = Err(e),
-                }
-                overall_timings.accumulate(&timings);
-            }
-            *self.0.result_with_timings.lock().unwrap() = Some((overall_result, overall_timings));
-
-            self.0.wait_for_termination(reason)
-            */
+            self.do_wait();
+            (std::mem::replace(self.0.lock().unwrap(), initialized_result_with_timings()), *self)
         }
 
         fn pause_for_recent_blockhash(&mut self) {
-            todo!();
+            if TRIGGER_RACE_CONDITION {
+                // this is equivalent to NOT calling wait_for_paused_scheduler() in
+                // register_recent_blockhash().
+                return;
+            }
+            self.do_wait();
         }
     }
 
