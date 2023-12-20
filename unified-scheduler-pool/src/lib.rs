@@ -1095,14 +1095,12 @@ where
     type Inner = PooledSchedulerInner<Self, TH, SEA>;
 
     fn into_inner(self) -> (ResultWithTimings, Self::Inner) {
-        self.inner.thread_manager.write().unwrap().end_session();
-        let r = self
-            .inner
-            .thread_manager
-            .write()
-            .unwrap()
-            .take_session_result_with_timings();
-        (r, self.inner)
+        let result_with_timings = {
+            let manager = self.inner.thread_manager.write().unwrap();
+            manager.end_session();
+            manager.take_session_result_with_timings()
+        }
+        (result_with_timings, self.inner)
     }
 
     fn from_inner(inner: Self::Inner, context: SchedulingContext) -> Self {
@@ -1168,11 +1166,11 @@ where
 {
     fn return_to_pool(mut self: Box<Self>) {
         let pool = {
-            let mut m = self.thread_manager.write().unwrap();
-            if !m.is_active() {
-                m.put_session_result_with_timings(initialized_result_with_timings());
+            let mut manager = self.thread_manager.write().unwrap();
+            if !manager.is_active() {
+                manager.put_session_result_with_timings(initialized_result_with_timings());
             }
-            m.pool.clone()
+            manager.pool.clone()
         };
         self.pooled_at = Instant::now();
         pool.return_scheduler(*self)
