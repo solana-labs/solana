@@ -394,7 +394,7 @@ impl ExecutedTask {
     fn new_boxed(task: Task, thx: usize, slot: Slot) -> Box<Self> {
         Box::new(Self {
             task,
-            result_with_timings: (Ok(()), ExecuteTimings::default()),
+            result_with_timings: initialized_result_with_timings(),
             slot,
             thx,
             handler_timings: None,
@@ -687,7 +687,6 @@ where
         let scheduler_id = self.scheduler_id;
         let mut slot = context.bank().slot();
         let (tid_sender, tid_receiver) = bounded(1);
-        let result_with_timings = self.take_session_result_with_timings();
 
         let scheduler_main_loop = || {
             let handler_count = self.handler_count;
@@ -696,9 +695,6 @@ where
                 self.schedulable_transaction_receiver.clone();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
-            drop_sender
-                .send(SessionedMessage::StartSession(result_with_timings))
-                .unwrap();
 
             let mut session_ending = false;
             let mut thread_ending = false;
@@ -884,17 +880,16 @@ where
             }
         };
 
+        let mut result_with_timings = self.take_session_result_with_timings();
         let drop_main_loop = || {
             move || 'outer: {
-                let mut session_result: Result<()> = Ok(());
-                let mut session_timings = ExecuteTimings::default();
                 loop {
                     match drop_receiver.recv_timeout(Duration::from_millis(40)) {
                         Ok(SessionedMessage::Payload(task)) => {
-                            session_timings.accumulate(&task.result_with_timings.1);
+                            result_with_timings.1.accumulate(&task.result_with_timings.1);
                             match &task.result_with_timings.0 {
                                 Ok(()) => {}
-                                Err(e) => session_result = Err(e.clone()),
+                                Err(e) => result_with_timings.0 = Err(e.clone()),
                             }
                             if let Some(handler_timings) = &task.handler_timings {
                                 use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
@@ -937,15 +932,13 @@ where
                             }
                             drop(task);
                         }
-                        Ok(SessionedMessage::StartSession(result_with_timings)) => {
-                            (session_result, session_timings) = result_with_timings;
+                        Ok(SessionedMessage::StartSession(_result_with_timings)) => {
+                            unreachable!();
                         }
                         Ok(SessionedMessage::EndSession) => {
                             drop_sender2
-                                .send((session_result, session_timings))
+                                .send(std::mem::replace(&mut result_with_timings, initialized_result_with_timings()))
                                 .unwrap();
-                            session_result = Ok(());
-                            session_timings = ExecuteTimings::default();
                         }
                         Err(RecvTimeoutError::Disconnected) => break 'outer,
                         Err(RecvTimeoutError::Timeout) => continue,
