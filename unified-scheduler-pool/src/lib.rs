@@ -48,7 +48,6 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
-use std::mem::replace;
 
 type AtomicSchedulerId = AtomicU64;
 
