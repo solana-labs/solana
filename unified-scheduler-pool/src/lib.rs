@@ -39,7 +39,6 @@ use {
     solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
         fmt::Debug,
-        marker::PhantomData,
         sync::{
             atomic::{AtomicU64, Ordering::Relaxed},
             Arc, Mutex, RwLock, RwLockReadGuard, Weak,
