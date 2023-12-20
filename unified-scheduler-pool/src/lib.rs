@@ -151,7 +151,7 @@ where
                     elapsed,
                     width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
                 );
-                todo!(); //thread_manager.stop_threads();
+                thread_manager.stop_threads();
                 self.tick = 0;
                 self.updated_at = Instant::now();
             }
