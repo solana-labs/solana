@@ -1491,8 +1491,6 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "dummy")]
-    mod aaaa {
     #[derive(Debug)]
     struct AsyncScheduler<const TRIGGER_RACE_CONDITION: bool>(
         PooledScheduler<DefaultTaskHandler, DefaultScheduleExecutionArg>,
@@ -1704,6 +1702,5 @@ mod tests {
     #[test]
     fn test_scheduler_schedule_execution_recent_blockhash_edge_case_without_race() {
         do_test_scheduler_schedule_execution_recent_blockhash_edge_case::<false>();
-    }
     }
 }
