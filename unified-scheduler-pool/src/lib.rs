@@ -459,7 +459,7 @@ where
     handler_threads: Vec<JoinHandle<()>>,
     drop_thread: Option<JoinHandle<()>>,
     handler: TH,
-    schedulrable_transaction_sender: Sender<SessionedMessage<Task, SchedulingContext>>,
+    schedulable_transaction_sender: Sender<SessionedMessage<Task, SchedulingContext>>,
     schedulable_transaction_receiver: Receiver<SessionedMessage<Task, SchedulingContext>>,
     result_sender: Sender<ResultWithTimings>,
     result_receiver: Receiver<ResultWithTimings>,
@@ -571,12 +571,12 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn new(handler: TH, pool: Arc<SchedulerPool<S, TH, SEA>>, handler_count: usize) -> Self {
-        let (schedulrable_transaction_sender, schedulable_transaction_receiver) = unbounded();
+        let (schedulable_transaction_sender, schedulable_transaction_receiver) = unbounded();
         let (result_sender, result_receiver) = unbounded();
 
         Self {
             scheduler_id: pool.new_scheduler_id(),
-            schedulrable_transaction_sender,
+            schedulable_transaction_sender,
             schedulable_transaction_receiver,
             result_sender,
             result_receiver,
@@ -988,7 +988,7 @@ where
         );
 
         (
-            self.schedulrable_transaction_sender,
+            self.schedulable_transaction_sender,
             self.schedulable_transaction_receiver,
         ) = unbounded();
         let r = self
@@ -1013,7 +1013,7 @@ where
 
     fn send_task(&self, task: Task) {
         debug!("send_task()");
-        self.schedulrable_transaction_sender
+        self.schedulable_transaction_sender
             .send(SessionedMessage::Payload(task))
             .unwrap();
     }
@@ -1027,7 +1027,7 @@ where
             return;
         }
 
-        self.schedulrable_transaction_sender
+        self.schedulable_transaction_sender
             .send(SessionedMessage::EndSession)
             .unwrap();
         self.put_session_result_with_timings(self.result_receiver.recv().unwrap());
@@ -1035,7 +1035,7 @@ where
 
     fn start_session(&mut self, context: &SchedulingContext) {
         if self.is_active() {
-            self.schedulrable_transaction_sender
+            self.schedulable_transaction_sender
                 .send(SessionedMessage::StartSession(context.clone()))
                 .unwrap();
         } else {
