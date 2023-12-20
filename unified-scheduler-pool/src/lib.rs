@@ -1560,7 +1560,8 @@ mod tests {
             _is_dropped: bool,
         ) -> (ResultWithTimings, UninstalledSchedulerBox) {
             self.do_wait();
-            (std::mem::replace(&mut self.0.lock().unwrap(), initialized_result_with_timings()), self)
+            let r = std::mem::replace(&mut self.0.lock().unwrap(), initialized_result_with_timings());
+            (r, self)
         }
 
         fn pause_for_recent_blockhash(&mut self) {
