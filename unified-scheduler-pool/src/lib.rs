@@ -476,6 +476,7 @@ where
             },
             initial_context,
         );
+        scheduler.thread_manager.write().unwrap().start_threads(initial_context, &mut scheduler.completed_result_with_timings);
         pool.register_to_watchdog(Arc::downgrade(&scheduler.inner.thread_manager));
 
         scheduler
@@ -575,7 +576,7 @@ where
         let (schedulrable_transaction_sender, schedulable_transaction_receiver) = unbounded();
         let (result_sender, result_receiver) = unbounded();
 
-        let mut thread_manager = Self {
+        Self {
             scheduler_id: pool.new_scheduler_id(),
             schedulrable_transaction_sender,
             schedulable_transaction_receiver,
@@ -587,9 +588,7 @@ where
             handler_count,
             handler,
             pool,
-        };
-        thread_manager.start_threads(initial_context);
-        thread_manager
+        }
     }
 
     fn is_active(&self) -> bool {
