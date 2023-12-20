@@ -18,13 +18,11 @@ use {
     solana_sdk::{
         borsh1::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
-        ed25519_program,
         feature_set::{include_loaded_accounts_data_size_in_fee_calculation, FeatureSet},
         fee::FeeStructure,
         instruction::CompiledInstruction,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
-        secp256k1_program,
         system_instruction::SystemInstruction,
         system_program,
         transaction::SanitizedTransaction,
@@ -86,7 +84,7 @@ impl CostModel {
         let mut loaded_accounts_data_size_cost = 0u64;
         let mut data_bytes_len_total = 0u64;
         let mut compute_unit_limit_is_set = false;
-        let mut num_signatures = transaction.signatures().len() as u64;
+        let num_signatures = transaction.message().num_signatures();
 
         for (program_id, instruction) in transaction.message().program_instructions_iter() {
             // to keep the same behavior, look for builtin first
@@ -106,12 +104,6 @@ impl CostModel {
                 {
                     compute_unit_limit_is_set = true;
                 }
-            }
-
-            if (secp256k1_program::check_id(program_id) || ed25519_program::check_id(program_id))
-                && !instruction.data.is_empty()
-            {
-                num_signatures = num_signatures.saturating_add(instruction.data[0] as u64);
             }
         }
 
