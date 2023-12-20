@@ -1013,7 +1013,7 @@ where
     ) {
         debug!("end_session(): will end session...");
         if !self.is_active() {
-            self.start_threads(context);
+            return;
         }
 
         self.schedulrable_transaction_sender
