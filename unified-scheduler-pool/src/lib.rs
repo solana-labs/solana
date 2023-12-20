@@ -491,7 +491,7 @@ where
             .unwrap_or(format!("{}", 8))
             .parse::<usize>()
             .unwrap();
-        let scheduler = Self::from_inner(
+        let mut scheduler = Self::from_inner(
             PooledSchedulerInner::<Self, TH, SEA> {
                 thread_manager: Arc::new(RwLock::new(ThreadManager::<Self, TH, SEA>::new(
                     &initial_context,
