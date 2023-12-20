@@ -1084,12 +1084,13 @@ where
     }
 
     fn from_inner(inner: Self::Inner, context: SchedulingContext) -> Self {
-        inner.thread_manager.write().unwrap().start_session(&context);
+        let mut completed_result_with_timings = (Ok(()), ExecuteTimings::default());
+        inner.thread_manager.write().unwrap().start_session(&context, &mut completed_result_with_timings);
 
         Self {
             inner,
             context,
-            completed_result_with_timings: (Ok(()), ExecuteTimings::default()),
+            completed_result_with_timings,
         }
     }
 
