@@ -744,6 +744,10 @@ pub mod consume_blockstore_duplicate_proofs {
     solana_sdk::declare_id!("6YsBCejwK96GZCkJ6mkZ4b68oP63z2PLoQmWjC7ggTqZ");
 }
 
+pub mod index_erasure_conflict_duplicate_proofs {
+    solana_sdk::declare_id!("dupPajaLy2SSn8ko42aZz4mHANDNrLe8Nw8VQgFecLa");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -924,7 +928,8 @@ lazy_static! {
         (enable_zk_transfer_with_fee::id(), "enable Zk Token proof program transfer with fee"),
         (drop_legacy_shreds::id(), "drops legacy shreds #34328"),
         (allow_commission_decrease_at_any_time::id(), "Allow commission decrease at any time in epoch #33843"),
-        (consume_blockstore_duplicate_proofs::id(), "consume duplicate proofs from blockstore in consensus #34372")
+        (consume_blockstore_duplicate_proofs::id(), "consume duplicate proofs from blockstore in consensus #34372"),
+        (index_erasure_conflict_duplicate_proofs::id(), "generate duplicate proofs for index and erasure conflicts #34360"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
