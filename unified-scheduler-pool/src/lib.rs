@@ -440,14 +440,14 @@ where
         result_with_timings: &mut ResultWithTimings,
     ) -> RwLockReadGuard<'_, ThreadManager<S, TH, SEA>> {
         loop {
-            let r = self.inner.thread_manager.read().unwrap();
+            let r = self.thread_manager.read().unwrap();
             if r.is_active() {
                 debug!("ensure_thread_manager_started(): is already active...");
                 return r;
             } else {
                 debug!("ensure_thread_manager_started(): will start threads...");
                 drop(r);
-                let mut w = self.inner.thread_manager.write().unwrap();
+                let mut w = self.thread_manager.write().unwrap();
                 w.start_threads(context, result_with_timings);
                 drop(w);
             }
