@@ -1090,7 +1090,7 @@ where
             .thread_manager
             .write()
             .unwrap()
-            .end_session(&self.context);
+            .end_session();
         let r = self.inner.thread_manager.write().unwrap().take_session_result_with_timings();
         (r, self.inner)
     }
