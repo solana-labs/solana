@@ -640,6 +640,10 @@ where
         *blocked_transaction_sessioned_sender = next_blocked_transaction_sessioned_sender;
     }
 
+    fn take_session_result_with_timings(&mut self) -> ResultWithTimings {
+        self.session_result_with_timings.take().unwrap()
+    }
+
     fn start_threads(
         &mut self,
         context: &SchedulingContext,
@@ -675,7 +679,7 @@ where
                 self.schedulable_transaction_receiver.clone();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
-            let result_with_timings: ResultWithTimings = self.session_result_with_timings.take().unwrap();
+            let result_with_timings = self.take_session_result_with_timings();
             drop_sender
                 .send(SessionedMessage::StartSession(result_with_timings))
                 .unwrap();
