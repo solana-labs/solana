@@ -1063,7 +1063,7 @@ where
     TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 {
-    type Inner: Debug + Send + Sync;
+    type Inner: Debug + Send + Sync + AAA;
 
     fn into_inner(self) -> (ResultWithTimings, Self::Inner);
 
