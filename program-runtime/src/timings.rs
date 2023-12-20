@@ -53,6 +53,7 @@ pub enum ExecuteTimingType {
     UpdateTransactionStatuses,
 }
 
+#[derive(Clone)]
 pub struct Metrics([u64; ExecuteTimingType::CARDINALITY]);
 
 impl Index<ExecuteTimingType> for Metrics {
