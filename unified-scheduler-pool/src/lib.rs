@@ -78,7 +78,6 @@ pub struct SchedulerPool<
     // address book after scheduler is returned.
     watchdog_sender: Sender<Weak<RwLock<ThreadManager<S, TH, SEA>>>>,
     _watchdog_thread: JoinHandle<()>,
-    _phantom: PhantomData<TH>,
 }
 
 #[derive(Debug)]
@@ -239,7 +238,6 @@ where
             next_scheduler_id: AtomicU64::new(PRIMARY_SCHEDULER_ID),
             _watchdog_thread: watchdog_thread,
             watchdog_sender,
-            _phantom: PhantomData,
         });
         scheduler_pool_sender.send(scheduler_pool.clone()).unwrap();
         scheduler_pool
