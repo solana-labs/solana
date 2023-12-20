@@ -1493,7 +1493,7 @@ mod tests {
 
     #[derive(Debug)]
     struct AsyncScheduler<const TRIGGER_RACE_CONDITION: bool>(
-        PooledScheduler<DefaultTaskHandler, DefaultScheduleExecutionArg>,
+        usize,
         Mutex<Vec<JoinHandle<ResultWithTimings>>>,
     );
 
