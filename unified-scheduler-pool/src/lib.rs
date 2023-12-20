@@ -564,6 +564,10 @@ impl LogInterval {
 
 const PRIMARY_SCHEDULER_ID: SchedulerId = 0;
 
+fn initialized_result_with_timings() -> ResultWithTimings {
+    (Ok(()), ExecuteTimings::default())
+}
+
 impl<S, TH, SEA> ThreadManager<S, TH, SEA>
 where
     S: SpawnableScheduler<TH, SEA>,
@@ -586,7 +590,7 @@ where
             handler_count,
             handler,
             pool,
-            session_result_with_timings: Some((Ok(()), ExecuteTimings::default())),
+            session_result_with_timings: Some(initialized_result_with_timings()),
         }
     }
 
