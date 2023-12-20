@@ -453,7 +453,7 @@ fn test_sol_alloc_free_no_longer_deployable() {
     // Enable _sol_alloc_free syscall
     let slot = bank.slot();
     drop(bank);
-    let mut bank = Arc::into_inner(bank_forks.write().unwrap().remove(slot).unwrap()).unwrap();
+    let mut bank = Arc::into_inner(bank_forks.write().unwrap().remove(slot).unwrap().clone_without_scheduler()).unwrap();
     bank.deactivate_feature(&solana_sdk::feature_set::disable_deploy_of_alloc_free_syscall::id());
     bank.clear_signatures();
     bank.clear_program_cache();
@@ -478,7 +478,7 @@ fn test_sol_alloc_free_no_longer_deployable() {
     // disable _sol_alloc_free
     let slot = bank.slot();
     drop(bank);
-    let mut bank = Arc::try_unwrap(bank_forks.write().unwrap().remove(slot).unwrap()).unwrap();
+    let mut bank = Arc::try_unwrap(bank_forks.write().unwrap().remove(slot).unwrap().clone_without_scheduler()).unwrap();
     bank.activate_feature(&solana_sdk::feature_set::disable_deploy_of_alloc_free_syscall::id());
     bank.clear_signatures();
     let bank = bank_forks
