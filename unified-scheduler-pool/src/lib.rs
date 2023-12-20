@@ -79,7 +79,7 @@ pub struct SchedulerPool<
     _watchdog_thread: JoinHandle<()>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct HandlerContext {
     log_messages_bytes_limit: Option<usize>,
     transaction_status_sender: Option<TransactionStatusSender>,
