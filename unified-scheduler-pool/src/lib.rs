@@ -290,7 +290,7 @@ where
     fn register_to_watchdog(&self, thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>) {
         self.watchdog_sender.send(thread_manager).unwrap();
     }
-k
+}
 
 impl<S, TH, SEA> InstalledSchedulerPool<SEA> for SchedulerPool<S, TH, SEA>
 where
