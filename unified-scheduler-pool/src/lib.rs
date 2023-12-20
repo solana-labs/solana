@@ -1201,7 +1201,7 @@ where
             .thread_manager
             .write()
             .unwrap()
-            .end_session(&self.context, &mut self.result_with_timings);
+            .end_session(&self.context);
     }
 }
 
