@@ -514,7 +514,7 @@ where
             .thread_manager
             .write()
             .unwrap()
-            .stop_threads(&mut self.result_with_timings);
+            .stop_threads();
     }
 }
 
