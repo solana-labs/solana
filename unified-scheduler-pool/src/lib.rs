@@ -404,18 +404,23 @@ impl ExecutedTask {
 }
 
 #[derive(Debug)]
-pub struct PooledScheduler<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> {
+pub struct PooledScheduler<TH, SEA>
+where
+    TH: TaskHandler<SEA>,
+    SEA: ScheduleExecutionArg,
+{
     inner: PooledSchedulerInner<Self, TH, SEA>,
     context: SchedulingContext,
     completed_result_with_timings: Option<ResultWithTimings>,
 }
 
 #[derive(Debug)]
-pub struct PooledSchedulerInner<
+pub struct PooledSchedulerInner<S, TH, SEA>
+where
     S: SpawnableScheduler<TH, SEA>,
     TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
-> {
+{
     thread_manager: Arc<RwLock<ThreadManager<S, TH, SEA>>>,
     address_book: AddressBook,
     pooled_at: Instant,
@@ -424,7 +429,12 @@ pub struct PooledSchedulerInner<
 type Tid = i32;
 
 #[derive(Debug)]
-struct ThreadManager<S: SpawnableScheduler<TH, SEA>, TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> {
+struct ThreadManager<S, TH, SEA>
+where
+    S: SpawnableScheduler<TH, SEA>,
+    TH: TaskHandler<SEA>,
+    SEA: ScheduleExecutionArg
+{
     scheduler_id: SchedulerId,
     pool: Arc<SchedulerPool<S, TH, SEA>>,
     scheduler_thread_and_tid: Option<(JoinHandle<ResultWithTimings>, Tid)>,
@@ -439,7 +449,11 @@ struct ThreadManager<S: SpawnableScheduler<TH, SEA>, TH: TaskHandler<SEA>, SEA: 
     session_result_with_timings: Option<ResultWithTimings>,
 }
 
-impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
+impl<TH, SEA> PooledScheduler<TH, SEA>
+where
+    TH: TaskHandler<SEA>,
+    SEA: ScheduleExecutionArg
+{
     pub fn do_spawn(
         pool: Arc<SchedulerPool<Self, TH, SEA>>,
         initial_context: SchedulingContext,
@@ -1034,12 +1048,10 @@ where
     }
 }
 
-pub trait InstallableScheduler<SEA: ScheduleExecutionArg>: InstalledScheduler<SEA> {
-    fn replace_context(&mut self, context: SchedulingContext);
-}
-
-pub trait SpawnableScheduler<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg>:
-    InstalledScheduler<SEA>
+pub trait SpawnableScheduler<TH, SEA>: InstalledScheduler<SEA>
+where
+    TH: TaskHandler<SEA>,
+    SEA: ScheduleExecutionArg,
 {
     type Inner: Debug + Send + Sync;
 
@@ -1613,14 +1625,6 @@ mod tests {
             todo!();
         }
         */
-    }
-
-    impl<const TRIGGER_RACE_CONDITION: bool> InstallableScheduler<DefaultScheduleExecutionArg>
-        for AsyncScheduler<TRIGGER_RACE_CONDITION>
-    {
-        fn replace_context(&mut self, context: SchedulingContext) {
-            self.0.replace_context(context)
-        }
     }
 
     fn do_test_scheduler_schedule_execution_recent_blockhash_edge_case<
