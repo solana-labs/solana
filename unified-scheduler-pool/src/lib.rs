@@ -569,7 +569,6 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn new(
-        initial_context: &SchedulingContext,
         handler: TH,
         pool: Arc<SchedulerPool<S, TH, SEA>>,
         handler_count: usize,
