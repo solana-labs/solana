@@ -1598,7 +1598,7 @@ mod tests {
         fn spawn(
             pool: Arc<SchedulerPool<Self, DefaultTaskHandler, DefaultScheduleExecutionArg>>,
             initial_context: SchedulingContext,
-            handler: DefaultTaskHandler,
+            _handler: DefaultTaskHandler,
         ) -> Self {
             AsyncScheduler::<TRIGGER_RACE_CONDITION>(
                 Mutex::new(initialized_result_with_timings()),
