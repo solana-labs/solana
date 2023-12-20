@@ -1028,7 +1028,7 @@ where
     fn start_session(
         &mut self,
         context: &SchedulingContext,
-        result_with_timings: &mut ResultWithTimings,
+        result_with_timings: &ResultWithTimings,
     ) {
         if self.is_active() {
             self.schedulrable_transaction_sender
