@@ -886,7 +886,9 @@ where
                 loop {
                     match drop_receiver.recv_timeout(Duration::from_millis(40)) {
                         Ok(SessionedMessage::Payload(task)) => {
-                            result_with_timings.1.accumulate(&task.result_with_timings.1);
+                            result_with_timings
+                                .1
+                                .accumulate(&task.result_with_timings.1);
                             match &task.result_with_timings.0 {
                                 Ok(()) => {}
                                 Err(e) => result_with_timings.0 = Err(e.clone()),
@@ -937,7 +939,10 @@ where
                         }
                         Ok(SessionedMessage::EndSession) => {
                             drop_sender2
-                                .send(std::mem::replace(&mut result_with_timings, initialized_result_with_timings()))
+                                .send(std::mem::replace(
+                                    &mut result_with_timings,
+                                    initialized_result_with_timings(),
+                                ))
                                 .unwrap();
                         }
                         Err(RecvTimeoutError::Disconnected) => break 'outer,
