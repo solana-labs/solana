@@ -381,7 +381,7 @@ impl ExecuteAccessoryTimings {
     }
 }
 
-#[derive(Default, Debug, PartialEq, Eq)]
+#[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct ExecuteDetailsTimings {
     pub serialize_us: u64,
     pub create_vm_us: u64,
