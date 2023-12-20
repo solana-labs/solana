@@ -1086,7 +1086,13 @@ where
     type Inner = PooledSchedulerInner<Self, TH, SEA>;
 
     fn into_inner(self) -> (ResultWithTimings, Self::Inner) {
-        (self.result_with_timings, self.inner)
+        let result_with_timings = self.inner
+            .thread_manager
+            .write()
+            .unwrap()
+            .end_session(&self.context);
+
+        (result_with_timings, self.inner)
     }
 
     fn from_inner(inner: Self::Inner, context: SchedulingContext) -> Self {
@@ -1184,12 +1190,6 @@ where
         mut self: Box<Self>,
         _is_dropped: bool,
     ) -> (ResultWithTimings, UninstalledSchedulerBox) {
-        self.inner
-            .thread_manager
-            .write()
-            .unwrap()
-            .end_session(&self.context, &mut self.result_with_timings);
-
         let (result_with_timings, uninstalled_scheduler) = self.into_inner();
         (result_with_timings, Box::new(uninstalled_scheduler))
     }
