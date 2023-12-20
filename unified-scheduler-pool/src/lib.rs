@@ -76,7 +76,7 @@ pub struct SchedulerPool<
     next_scheduler_id: AtomicSchedulerId,
     // prune schedulers, stop idling scheduler's threads, sanity check on the
     // address book after scheduler is returned.
-    watchdog_sender: Sender<Weak<RwLock<ThreadManager<TH, SEA>>>>,
+    watchdog_sender: Sender<Weak<RwLock<ThreadManager<S, TH, SEA>>>>,
     _watchdog_thread: JoinHandle<()>,
     _phantom: PhantomData<TH>,
 }
@@ -95,22 +95,24 @@ pub type DefaultSchedulerPool = SchedulerPool<
     DefaultScheduleExecutionArg,
 >;
 
-struct WatchedThreadManager<TH, SEA>
+struct WatchedThreadManager<S, TH, SEA>
 where
+    S: SpawnableScheduler<TH, SEA>,
     TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 {
-    thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>,
+    thread_manager: Weak<RwLock<ThreadManager<S, TH, SEA>>>,
     tick: u64,
     updated_at: Instant,
 }
 
-impl<TH, SEA> WatchedThreadManager<TH, SEA>
+impl<S, TH, SEA> WatchedThreadManager<S, TH, SEA>
 where
+    S: SpawnableScheduler<TH, SEA>,
     TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 {
-    fn new(thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>) -> Self {
+    fn new(thread_manager: Weak<RwLock<ThreadManager<S, TH, SEA>>>) -> Self {
         Self {
             thread_manager,
             tick: 0,
@@ -183,12 +185,12 @@ where
                 let scheduler_pool: Arc<Self> = scheduler_pool_receiver.recv().unwrap();
                 drop(scheduler_pool_receiver);
 
-                let mut thread_managers: Vec<WatchedThreadManager<TH, SEA>> = vec![];
+                let mut thread_managers: Vec<WatchedThreadManager<S, TH, SEA>> = vec![];
 
                 'outer: loop {
-                    let mut schedulers = scheduler_pool.schedulers.lock().unwrap();
+                    let /*mut*/ schedulers = scheduler_pool.scheduler_inners.lock().unwrap();
                     let schedulers_len_pre_retain = schedulers.len();
-                    schedulers.retain_mut(|scheduler| scheduler.retire_if_stale());
+                    //schedulers.retain_mut(|scheduler| scheduler.retire_if_stale());
                     let schedulers_len_post_retain = schedulers.len();
                     drop(schedulers);
 
@@ -287,7 +289,7 @@ where
         }
     }
 
-    fn register_to_watchdog(&self, thread_manager: Weak<RwLock<ThreadManager<TH, SEA>>>) {
+    fn register_to_watchdog(&self, thread_manager: Weak<RwLock<ThreadManager<S, TH, SEA>>>) {
         self.watchdog_sender.send(thread_manager).unwrap();
     }
 }
@@ -303,7 +305,7 @@ where
     }
 }
 
-pub trait TaskHandler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + Sized + 'static {
+pub trait TaskHandler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + Sized + Clone + 'static {
     fn create<T: SpawnableScheduler<Self, SEA>>(pool: &SchedulerPool<T, Self, SEA>) -> Self;
 
     fn handle(
@@ -317,7 +319,7 @@ pub trait TaskHandler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + Sized + 
     );
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct DefaultTaskHandler;
 
 impl<SEA: ScheduleExecutionArg> TaskHandler<SEA> for DefaultTaskHandler {
@@ -401,14 +403,11 @@ impl ExecutedTask {
     }
 }
 
-// Currently, simplest possible implementation (i.e. single-threaded)
-// this will be replaced with more proper implementation...
-// not usable at all, especially for mainnet-beta
 #[derive(Debug)]
 pub struct PooledScheduler<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> {
     inner: PooledSchedulerInner<Self, TH, SEA>,
     context: SchedulingContext,
-    completed_result_with_timings: Mutex<ResultWithTimings>,
+    completed_result_with_timings: Option<ResultWithTimings>,
 }
 
 #[derive(Debug)]
@@ -417,10 +416,7 @@ pub struct PooledSchedulerInner<
     TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 > {
-    id: SchedulerId,
-    pool: Arc<SchedulerPool<S, TH, SEA>>,
-    handler: TH,
-    thread_manager: Arc<RwLock<ThreadManager<TH, SEA>>>,
+    thread_manager: Arc<RwLock<ThreadManager<S, TH, SEA>>>,
     address_book: AddressBook,
     pooled_at: Instant,
 }
@@ -428,9 +424,9 @@ pub struct PooledSchedulerInner<
 type Tid = i32;
 
 #[derive(Debug)]
-struct ThreadManager<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> {
+struct ThreadManager<S: SpawnableScheduler<TH, SEA>, TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> {
     scheduler_id: SchedulerId,
-    pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
+    pool: Arc<SchedulerPool<S, TH, SEA>>,
     scheduler_thread_and_tid: Option<(JoinHandle<ResultWithTimings>, Tid)>,
     handler_threads: Vec<JoinHandle<()>>,
     drop_thread: Option<JoinHandle<()>>,
@@ -455,7 +451,7 @@ impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             .unwrap();
         let scheduler = Self::from_inner(
             PooledSchedulerInner::<Self, TH, SEA> {
-                thread_manager: Arc::new(RwLock::new(ThreadManager::<TH, SEA>::new(
+                thread_manager: Arc::new(RwLock::new(ThreadManager::<Self, TH, SEA>::new(
                     &initial_context,
                     handler,
                     pool.clone(),
@@ -466,7 +462,7 @@ impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
             },
             initial_context,
         );
-        pool.register_to_watchdog(Arc::downgrade(&scheduler.thread_manager));
+        pool.register_to_watchdog(Arc::downgrade(&scheduler.inner.thread_manager));
 
         scheduler
     }
@@ -474,16 +470,16 @@ impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
     fn ensure_thread_manager_started(
         &self,
         context: &SchedulingContext,
-    ) -> RwLockReadGuard<'_, ThreadManager<TH, SEA>> {
+    ) -> RwLockReadGuard<'_, ThreadManager<Self, TH, SEA>> {
         loop {
-            let r = self.thread_manager.read().unwrap();
+            let r = self.inner.thread_manager.read().unwrap();
             if r.is_active() {
                 debug!("ensure_thread_manager_started(): is already active...");
                 return r;
             } else {
                 debug!("ensure_thread_manager_started(): will start threads...");
                 drop(r);
-                let mut w = self.thread_manager.write().unwrap();
+                let mut w = self.inner.thread_manager.write().unwrap();
                 w.start_threads(context);
                 drop(w);
             }
@@ -491,16 +487,16 @@ impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
     }
 
     fn pooled_now(&mut self) {
-        self.pooled_at = Instant::now();
+        self.inner.pooled_at = Instant::now();
     }
 
     fn pooled_since(&self) -> Duration {
-        self.pooled_at.elapsed()
+        self.inner.pooled_at.elapsed()
     }
 
     fn stop_thread_manager(&mut self) {
         debug!("stop_thread_manager()");
-        self.thread_manager.write().unwrap().stop_threads();
+        self.inner.thread_manager.write().unwrap().stop_threads();
     }
 }
 
@@ -550,15 +546,16 @@ impl LogInterval {
 
 const PRIMARY_SCHEDULER_ID: SchedulerId = 0;
 
-impl<TH, SEA> ThreadManager<TH, SEA>
+impl<S, TH, SEA> ThreadManager<S, TH, SEA>
 where
+    S: SpawnableScheduler<TH, SEA>,
     TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 {
     fn new(
         initial_context: &SchedulingContext,
         handler: TH,
-        pool: Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
+        pool: Arc<SchedulerPool<S, TH, SEA>>,
         handler_count: usize,
     ) -> Self {
         let (schedulrable_transaction_sender, schedulable_transaction_receiver) = unbounded();
@@ -590,7 +587,7 @@ where
         handler: &TH,
         bank: &Arc<Bank>,
         task: &mut Box<ExecutedTask>,
-        pool: &Arc<SchedulerPool<PooledScheduler<TH, SEA>, TH, SEA>>,
+        pool: &Arc<SchedulerPool<S, TH, SEA>>,
         send_metrics: bool,
     ) {
         use solana_measure::measure::Measure;
@@ -606,7 +603,7 @@ where
             bank,
             task.task.transaction(),
             task.task.task_index(),
-            pool,
+            &pool.handler_context,
         );
         if let Some((mut wall_time, cpu_time)) = handler_timings {
             task.handler_timings = Some(HandlerTimings {
@@ -1058,9 +1055,11 @@ pub trait SpawnableScheduler<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg>:
     where
         Self: Sized;
 
+    /*
     fn retire_if_stale(&mut self) -> bool
     where
         Self: Sized;
+    */
 }
 
 impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA>
@@ -1070,7 +1069,7 @@ impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA
 
     fn into_inner(self) -> (ResultWithTimings, Self::Inner) {
         (
-            self.result_with_timings.into_inner().expect("not poisoned"),
+            self.completed_result_with_timings.expect("not none"),
             self.inner,
         )
     }
@@ -1079,7 +1078,7 @@ impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA
         Self {
             inner,
             context,
-            result_with_timings: Mutex::new((Ok(()), ExecuteTimings::default())),
+            completed_result_with_timings: None,
         }
     }
 
@@ -1091,22 +1090,23 @@ impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA
         Self::do_spawn(pool, initial_context, handler)
     }
 
+    /*
     fn retire_if_stale(&mut self) -> bool {
         const BITS_PER_HEX_DIGIT: usize = 4;
-        let page_count = self.address_book.page_count();
+        let page_count = self.inner.address_book.page_count();
         if page_count < 200_000 {
             info!(
                 "[sch_{:0width$x}]: watchdog: address book size: {page_count}...",
                 self.id(),
                 width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
             );
-        } else if self.thread_manager.read().unwrap().is_primary() {
+        } else if self.inner.thread_manager.read().unwrap().is_primary() {
             info!(
                 "[sch_{:0width$x}]: watchdog: too big address book size: {page_count}...; emptying the primary scheduler",
                 self.id(),
                 width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
             );
-            self.address_book.clear();
+            self.inner.address_book.clear();
             return true;
         } else {
             info!(
@@ -1121,7 +1121,7 @@ impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA
         let pooled_duration = self.pooled_since();
         if pooled_duration <= Duration::from_secs(600) {
             true
-        } else if !self.thread_manager.read().unwrap().is_primary() {
+        } else if !self.inner.thread_manager.read().unwrap().is_primary() {
             info!(
                 "[sch_{:0width$x}]: watchdog: retiring unused scheduler after {:?}...",
                 self.id(),
@@ -1134,6 +1134,7 @@ impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> SpawnableScheduler<TH, SEA
             true
         }
     }
+    */
 }
 
 impl<TH, SEA> InstalledScheduler<SEA> for PooledScheduler<TH, SEA>
@@ -1152,17 +1153,18 @@ where
     fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
         transaction_with_index.with_transaction_and_index(|transaction, index| {
             let task = SchedulingStateMachine::create_task(transaction.clone(), index, |pubkey| {
-                self.address_book.load(pubkey)
+                self.inner.address_book.load(pubkey)
             });
             self.ensure_thread_manager_started(&self.context)
                 .send_task(task);
         });
     }
 
-    fn wait_for_termination(self: Box<Self>, _is_dropped: bool) -> (ResultWithTimings, UninstalledSchedulerBox) {
+    fn wait_for_termination(mut self: Box<Self>, _is_dropped: bool) -> (ResultWithTimings, UninstalledSchedulerBox) {
         if self.completed_result_with_timings.is_none() {
             self.completed_result_with_timings = Some(
-                self.thread_manager
+                self.inner
+                    .thread_manager
                     .write()
                     .unwrap()
                     .end_session(&self.context),
@@ -1176,7 +1178,8 @@ where
     fn pause_for_recent_blockhash(&mut self) {
         if self.completed_result_with_timings.is_none() {
             self.completed_result_with_timings = Some(
-                self.thread_manager
+                self.inner
+                    .thread_manager
                     .write()
                     .unwrap()
                     .end_session(&self.context),
@@ -1191,9 +1194,10 @@ where
     TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 {
-    fn return_to_pool(self: Box<Self>) {
+    fn return_to_pool(mut self: Box<Self>) {
         let pool = self.thread_manager.read().unwrap().pool.clone();
-        self.pooled_now();
+        //self.pooled_now();
+        self.pooled_at = Instant::now();
         pool/*.clone()*/.return_scheduler(*self)
     }
 }
@@ -1602,9 +1606,11 @@ mod tests {
             */
         }
 
+        /*
         fn retire_if_stale(&mut self) -> bool {
             todo!();
         }
+        */
     }
 
     impl<const TRIGGER_RACE_CONDITION: bool> InstallableScheduler<DefaultScheduleExecutionArg>
