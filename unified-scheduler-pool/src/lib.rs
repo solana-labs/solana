@@ -1610,29 +1610,16 @@ mod tests {
         }
 
         fn spawn(
-            _pool: Arc<SchedulerPool<Self, DefaultTaskHandler, DefaultScheduleExecutionArg>>,
-            _initial_context: SchedulingContext,
-            _handler: DefaultTaskHandler,
+            pool: Arc<SchedulerPool<Self, DefaultTaskHandler, DefaultScheduleExecutionArg>>,
+            initial_context: SchedulingContext,
+            handler: DefaultTaskHandler,
         ) -> Self {
-            todo!();
-            /*
             AsyncScheduler::<TRIGGER_RACE_CONDITION>(
-                PooledScheduler::<DefaultTaskHandler, DefaultScheduleExecutionArg> {
-                    id: thread_rng().gen::<SchedulerId>(),
-                    pool: SchedulerPool::new(
-                        pool.log_messages_bytes_limit,
-                        pool.transaction_status_sender.clone(),
-                        pool.replay_vote_sender.clone(),
-                        pool.prioritization_fee_cache.clone(),
-                    ),
-                    context: Some(initial_context),
-                    result_with_timings: Mutex::default(),
-                    handler,
-                    _phantom: PhantomData,
-                },
+                usize,
                 Mutex::new(vec![]),
+                initial_context,
+                pool.handler_context,
             )
-            */
         }
     }
 
