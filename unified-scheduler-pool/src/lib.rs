@@ -687,6 +687,7 @@ where
         let scheduler_id = self.scheduler_id;
         let mut slot = context.bank().slot();
         let (tid_sender, tid_receiver) = bounded(1);
+        let mut result_with_timings = self.take_session_result_with_timings();
 
         let scheduler_main_loop = || {
             let handler_count = self.handler_count;
@@ -880,7 +881,6 @@ where
             }
         };
 
-        let mut result_with_timings = self.take_session_result_with_timings();
         let drop_main_loop = || {
             move || 'outer: {
                 loop {
