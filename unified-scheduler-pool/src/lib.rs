@@ -464,7 +464,7 @@ impl<TH: TaskHandler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
                 address_book: AddressBook::default(),
                 pooled_at: Instant::now(),
             },
-            context: initial_context,
+            initial_context,
         );
         pool.register_to_watchdog(Arc::downgrade(&scheduler.thread_manager));
 
