@@ -15,7 +15,6 @@ cpu-time = { workspace = true }
 crossbeam-channel = { workspace = true }
 dashmap = { workspace = true }
 log = { workspace = true }
-rustix = { workspace = true }
 serde_json = { workspace = true }
 solana-ledger = { workspace = true }
 solana-measure = { workspace = true }
