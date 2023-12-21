@@ -97,7 +97,7 @@ impl DuplicateShredHandler {
         self.last_root = last_root;
         if let Ok(bank_fork) = self.bank_forks.try_read() {
             let root_bank = bank_fork.root_bank();
-            self.cached_epoch_schedule = Some(*root_bank.epoch_schedule());
+            self.cached_epoch_schedule = Some(root_bank.epoch_schedule().clone());
             let epoch_info = root_bank.get_epoch_info();
             self.enable_gossip_duplicate_proof_ingestion_epoch = root_bank
                 .feature_set
@@ -149,6 +149,7 @@ impl DuplicateShredHandler {
                     shred2.into_payload(),
                 )?;
                 if let Some(epoch_schedule) = self.cached_epoch_schedule {
+                    // feature_epoch could only be 0 in tests and new cluster setup.
                     if self
                         .enable_gossip_duplicate_proof_ingestion_epoch
                         .is_some_and(|feature_epoch| epoch_schedule.get_epoch(slot) > feature_epoch)
