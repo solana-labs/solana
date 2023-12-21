@@ -8196,21 +8196,6 @@ impl Bank {
         )
     }
 
-    /// Intended for use by tests only.
-    /// create new bank with the given configs.
-    pub fn new_with_runtime_config_for_tests(
-        genesis_config: &GenesisConfig,
-        runtime_config: Arc<RuntimeConfig>,
-    ) -> Self {
-        Self::new_with_paths_for_tests(
-            genesis_config,
-            runtime_config,
-            Vec::new(),
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        )
-    }
-
     pub fn new_with_paths_for_tests(
         genesis_config: &GenesisConfig,
         runtime_config: Arc<RuntimeConfig>,
