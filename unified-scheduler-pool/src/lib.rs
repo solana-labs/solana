@@ -132,7 +132,7 @@ where
         //
         // Thus, this OS-specific implementation can be justified because this enables the hot-path
         // (the scheduler main thread) to omit VDSO calls and timed-out futex syscalls by relying on
-        // this out-of-bound watchdog to be equipped with a defensive thread reclaiming.
+        // this out-of-bound watchdog for a defensive thread reclaiming.
         #[cfg(target_os = "linux")]
         {
             let Some(tid) = thread_manager.read().unwrap().active_tid_if_not_primary() else {
