@@ -123,14 +123,14 @@ where
         let Some(thread_manager) = self.thread_manager.upgrade() else {
             return false;
         };
-        let Some(tid) = thread_manager.read().unwrap().active_tid_if_not_primary() else {
-            self.tick = 0;
-            self.updated_at = Instant::now();
-            return true;
-        };
-
         #[cfg(target_os = "linux")]
         {
+            let Some(tid) = thread_manager.read().unwrap().active_tid_if_not_primary() else {
+                self.tick = 0;
+                self.updated_at = Instant::now();
+                return true;
+            };
+
             let pid = std::process::id();
             let task = procfs::process::Process::new(pid.try_into().unwrap())
                 .unwrap()
