@@ -205,7 +205,7 @@ async fn stake_rewards_from_warp() {
     assert_eq!(
         stake
             .delegation
-            .stake_activating_and_deactivating(clock.epoch, Some(&stake_history), None),
+            .stake_activating_and_deactivating(clock.epoch, &stake_history, None),
         StakeActivationStatus::with_effective(stake.delegation.stake),
     );
 }
@@ -321,7 +321,7 @@ async fn stake_rewards_filter_bench_core(num_stake_accounts: u64) {
     assert_eq!(
         stake
             .delegation
-            .stake_activating_and_deactivating(clock.epoch, Some(&stake_history), None),
+            .stake_activating_and_deactivating(clock.epoch, &stake_history, None),
         StakeActivationStatus::with_effective(stake.delegation.stake),
     );
 }

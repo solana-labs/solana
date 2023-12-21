@@ -2320,7 +2320,7 @@ pub fn build_stake_state(
                 deactivating,
             } = stake.delegation.stake_activating_and_deactivating(
                 current_epoch,
-                Some(stake_history),
+                stake_history,
                 new_rate_activation_epoch,
             );
             let lockup = if lockup.is_in_force(clock, None) {

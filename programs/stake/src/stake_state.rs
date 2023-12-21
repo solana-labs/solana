@@ -111,7 +111,7 @@ fn get_stake_status(
     let stake_history = invoke_context.get_sysvar_cache().get_stake_history()?;
     Ok(stake.delegation.stake_activating_and_deactivating(
         clock.epoch,
-        Some(&stake_history),
+        &stake_history,
         new_warmup_cooldown_rate_epoch(invoke_context),
     ))
 }
@@ -127,7 +127,7 @@ fn redelegate_stake(
 ) -> Result<(), StakeError> {
     let new_rate_activation_epoch = new_warmup_cooldown_rate_epoch(invoke_context);
     // If stake is currently active:
-    if stake.stake(clock.epoch, Some(stake_history), new_rate_activation_epoch) != 0 {
+    if stake.stake(clock.epoch, stake_history, new_rate_activation_epoch) != 0 {
         let stake_lamports_ok = if invoke_context
             .feature_set
             .is_active(&feature_set::stake_redelegate_instruction::id())
@@ -194,7 +194,7 @@ fn redeem_stake_rewards(
     stake: &mut Stake,
     point_value: &PointValue,
     vote_state: &VoteState,
-    stake_history: Option<&StakeHistory>,
+    stake_history: &StakeHistory,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
     new_rate_activation_epoch: Option<Epoch>,
 ) -> Option<(u64, u64)> {
@@ -232,7 +232,7 @@ fn redeem_stake_rewards(
 fn calculate_stake_points(
     stake: &Stake,
     vote_state: &VoteState,
-    stake_history: Option<&StakeHistory>,
+    stake_history: &StakeHistory,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
     new_rate_activation_epoch: Option<Epoch>,
 ) -> u128 {
@@ -259,7 +259,7 @@ struct CalculatedStakePoints {
 fn calculate_stake_points_and_credits(
     stake: &Stake,
     new_vote_state: &VoteState,
-    stake_history: Option<&StakeHistory>,
+    stake_history: &StakeHistory,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
     new_rate_activation_epoch: Option<Epoch>,
 ) -> CalculatedStakePoints {
@@ -378,7 +378,7 @@ fn calculate_stake_rewards(
     stake: &Stake,
     point_value: &PointValue,
     vote_state: &VoteState,
-    stake_history: Option<&StakeHistory>,
+    stake_history: &StakeHistory,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
     new_rate_activation_epoch: Option<Epoch>,
 ) -> Option<CalculatedStakeRewards> {
@@ -638,7 +638,7 @@ fn deactivate_stake(
             // deactivation is only permitted when the stake delegation activating amount is zero.
             let status = stake.delegation.stake_activating_and_deactivating(
                 epoch,
-                Some(stake_history.as_ref()),
+                &stake_history,
                 new_warmup_cooldown_rate_epoch(invoke_context),
             );
             if status.activating != 0 {
@@ -1070,7 +1070,7 @@ pub fn withdraw(
             let staked = if clock.epoch >= stake.delegation.deactivation_epoch {
                 stake
                     .delegation
-                    .stake(clock.epoch, Some(stake_history), new_rate_activation_epoch)
+                    .stake(clock.epoch, stake_history, new_rate_activation_epoch)
             } else {
                 // Assume full stake if the stake account hasn't been
                 //  de-activated, because in the future the exposed stake
@@ -1356,7 +1356,7 @@ impl MergeKind {
                 // activating or deactivating with non-zero effective stake.
                 let status = stake.delegation.stake_activating_and_deactivating(
                     clock.epoch,
-                    Some(stake_history),
+                    stake_history,
                     new_warmup_cooldown_rate_epoch(invoke_context),
                 );
 
@@ -1554,7 +1554,7 @@ pub fn redeem_rewards(
     stake_account: &mut AccountSharedData,
     vote_state: &VoteState,
     point_value: &PointValue,
-    stake_history: Option<&StakeHistory>,
+    stake_history: &StakeHistory,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
     new_rate_activation_epoch: Option<Epoch>,
 ) -> Result<(u64, u64), InstructionError> {
@@ -1601,7 +1601,7 @@ pub fn redeem_rewards(
 pub fn calculate_points(
     stake_state: &StakeStateV2,
     vote_state: &VoteState,
-    stake_history: Option<&StakeHistory>,
+    stake_history: &StakeHistory,
     new_rate_activation_epoch: Option<Epoch>,
 ) -> Result<u128, InstructionError> {
     if let StakeStateV2::Stake(_meta, stake, _stake_flags) = stake_state {
@@ -1623,7 +1623,7 @@ pub type RewriteStakeStatus = (&'static str, (u64, u64), (u64, u64));
 pub fn new_stake_history_entry<'a, I>(
     epoch: Epoch,
     stakes: I,
-    history: Option<&StakeHistory>,
+    history: &StakeHistory,
     new_rate_activation_epoch: Option<Epoch>,
 ) -> StakeHistoryEntry
 where
@@ -1657,7 +1657,7 @@ pub fn create_stake_history_from_delegations(
         let entry = new_stake_history_entry(
             epoch,
             delegations.iter().chain(bootstrap_delegation.iter()),
-            Some(&stake_history),
+            &stake_history,
             new_rate_activation_epoch,
         );
         stake_history.add(epoch, entry);
@@ -1951,33 +1951,25 @@ mod tests {
         let mut stake_history = StakeHistory::default();
         // assert that this stake follows step function if there's no history
         assert_eq!(
-            stake.stake_activating_and_deactivating(
-                stake.activation_epoch,
-                Some(&stake_history),
-                None
-            ),
+            stake.stake_activating_and_deactivating(stake.activation_epoch, &stake_history, None),
             StakeActivationStatus::with_effective_and_activating(0, stake.stake),
         );
         for epoch in stake.activation_epoch + 1..stake.deactivation_epoch {
             assert_eq!(
-                stake.stake_activating_and_deactivating(epoch, Some(&stake_history), None),
+                stake.stake_activating_and_deactivating(epoch, &stake_history, None),
                 StakeActivationStatus::with_effective(stake.stake),
             );
         }
         // assert that this stake is full deactivating
         assert_eq!(
-            stake.stake_activating_and_deactivating(
-                stake.deactivation_epoch,
-                Some(&stake_history),
-                None
-            ),
+            stake.stake_activating_and_deactivating(stake.deactivation_epoch, &stake_history, None),
             StakeActivationStatus::with_deactivating(stake.stake),
         );
         // assert that this stake is fully deactivated if there's no history
         assert_eq!(
             stake.stake_activating_and_deactivating(
                 stake.deactivation_epoch + 1,
-                Some(&stake_history),
+                &stake_history,
                 None
             ),
             StakeActivationStatus::default(),
@@ -1992,7 +1984,7 @@ mod tests {
         );
         // assert that this stake is broken, because above setup is broken
         assert_eq!(
-            stake.stake_activating_and_deactivating(1, Some(&stake_history), None),
+            stake.stake_activating_and_deactivating(1, &stake_history, None),
             StakeActivationStatus::with_effective_and_activating(0, stake.stake),
         );
 
@@ -2007,7 +1999,7 @@ mod tests {
         );
         // assert that this stake is broken, because above setup is broken
         assert_eq!(
-            stake.stake_activating_and_deactivating(2, Some(&stake_history), None),
+            stake.stake_activating_and_deactivating(2, &stake_history, None),
             StakeActivationStatus::with_effective_and_activating(
                 increment,
                 stake.stake - increment
@@ -2028,7 +2020,7 @@ mod tests {
         assert_eq!(
             stake.stake_activating_and_deactivating(
                 stake.deactivation_epoch + 1,
-                Some(&stake_history),
+                &stake_history,
                 None,
             ),
             StakeActivationStatus::with_deactivating(stake.stake),
@@ -2047,7 +2039,7 @@ mod tests {
         assert_eq!(
             stake.stake_activating_and_deactivating(
                 stake.deactivation_epoch + 2,
-                Some(&stake_history),
+                &stake_history,
                 None,
             ),
             // hung, should be lower
@@ -2117,7 +2109,7 @@ mod tests {
                 (0..expected_stakes.len())
                     .map(|epoch| stake.stake_activating_and_deactivating(
                         epoch as u64,
-                        Some(&stake_history),
+                        &stake_history,
                         None,
                     ))
                     .collect::<Vec<_>>()
@@ -2246,11 +2238,7 @@ mod tests {
         let calculate_each_staking_status = |stake: &Delegation, epoch_count: usize| -> Vec<_> {
             (0..epoch_count)
                 .map(|epoch| {
-                    stake.stake_activating_and_deactivating(
-                        epoch as u64,
-                        Some(&stake_history),
-                        None,
-                    )
+                    stake.stake_activating_and_deactivating(epoch as u64, &stake_history, None)
                 })
                 .collect::<Vec<_>>()
         };
@@ -2370,7 +2358,7 @@ mod tests {
                 (0, history.deactivating)
             };
             assert_eq!(
-                stake.stake_activating_and_deactivating(epoch, Some(&stake_history), None),
+                stake.stake_activating_and_deactivating(epoch, &stake_history, None),
                 StakeActivationStatus {
                     effective: expected_stake,
                     activating: expected_activating,
@@ -2401,7 +2389,7 @@ mod tests {
         for epoch in 0..epochs {
             let stake = delegations
                 .iter()
-                .map(|delegation| delegation.stake(epoch, Some(&stake_history), None))
+                .map(|delegation| delegation.stake(epoch, &stake_history, None))
                 .sum::<u64>();
             max_stake = max_stake.max(stake);
             min_stake = min_stake.min(stake);
@@ -2470,7 +2458,7 @@ mod tests {
 
         let mut prev_total_effective_stake = delegations
             .iter()
-            .map(|delegation| delegation.stake(0, Some(&stake_history), new_rate_activation_epoch))
+            .map(|delegation| delegation.stake(0, &stake_history, new_rate_activation_epoch))
             .sum::<u64>();
 
         // uncomment and add ! for fun with graphing
@@ -2479,7 +2467,7 @@ mod tests {
             let total_effective_stake = delegations
                 .iter()
                 .map(|delegation| {
-                    delegation.stake(epoch, Some(&stake_history), new_rate_activation_epoch)
+                    delegation.stake(epoch, &stake_history, new_rate_activation_epoch)
                 })
                 .sum::<u64>();
 
@@ -2530,7 +2518,7 @@ mod tests {
                     points: 1
                 },
                 &vote_state,
-                None,
+                &StakeHistory::default(),
                 null_tracer(),
                 None,
             )
@@ -2551,7 +2539,7 @@ mod tests {
                     points: 1
                 },
                 &vote_state,
-                None,
+                &StakeHistory::default(),
                 null_tracer(),
                 None,
             )
@@ -2588,7 +2576,7 @@ mod tests {
                     points: 1
                 },
                 &vote_state,
-                None,
+                &StakeHistory::default(),
                 null_tracer(),
                 None,
             )
@@ -2604,7 +2592,13 @@ mod tests {
         // no overflow on points
         assert_eq!(
             u128::from(stake.delegation.stake) * epoch_slots,
-            calculate_stake_points(&stake, &vote_state, None, null_tracer(), None)
+            calculate_stake_points(
+                &stake,
+                &vote_state,
+                &StakeHistory::default(),
+                null_tracer(),
+                None
+            )
         );
     }
 
@@ -2626,7 +2620,7 @@ mod tests {
                     points: 1
                 },
                 &vote_state,
-                None,
+                &StakeHistory::default(),
                 null_tracer(),
                 None,
             )
@@ -2651,7 +2645,7 @@ mod tests {
                     points: 2 // all his
                 },
                 &vote_state,
-                None,
+                &StakeHistory::default(),
                 null_tracer(),
                 None,
             )
@@ -2673,7 +2667,7 @@ mod tests {
                     points: 1
                 },
                 &vote_state,
-                None,
+                &StakeHistory::default(),
                 null_tracer(),
                 None,
             )
@@ -2698,7 +2692,7 @@ mod tests {
                     points: 2
                 },
                 &vote_state,
-                None,
+                &StakeHistory::default(),
                 null_tracer(),
                 None,
             )
@@ -2721,7 +2715,7 @@ mod tests {
                     points: 2
                 },
                 &vote_state,
-                None,
+                &StakeHistory::default(),
                 null_tracer(),
                 None,
             )
@@ -2746,7 +2740,7 @@ mod tests {
                     points: 4
                 },
                 &vote_state,
-                None,
+                &StakeHistory::default(),
                 null_tracer(),
                 None,
             )
@@ -2765,7 +2759,7 @@ mod tests {
                     points: 4
                 },
                 &vote_state,
-                None,
+                &StakeHistory::default(),
                 null_tracer(),
                 None,
             )
@@ -2781,7 +2775,7 @@ mod tests {
                     points: 4
                 },
                 &vote_state,
-                None,
+                &StakeHistory::default(),
                 null_tracer(),
                 None,
             )
@@ -2804,7 +2798,7 @@ mod tests {
                     points: 4
                 },
                 &vote_state,
-                None,
+                &StakeHistory::default(),
                 null_tracer(),
                 None,
             )
@@ -2827,7 +2821,7 @@ mod tests {
                     points: 4
                 },
                 &vote_state,
-                None,
+                &StakeHistory::default(),
                 null_tracer(),
                 None,
             )
@@ -2839,7 +2833,13 @@ mod tests {
                 new_credits_observed: 4,
                 force_credits_update_with_skipped_reward: false,
             },
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), None)
+            calculate_stake_points_and_credits(
+                &stake,
+                &vote_state,
+                &StakeHistory::default(),
+                null_tracer(),
+                None
+            )
         );
 
         // credits_observed is auto-rewinded when vote_state credits are assumed to have been
@@ -2852,7 +2852,13 @@ mod tests {
                 new_credits_observed: 4,
                 force_credits_update_with_skipped_reward: true,
             },
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), None)
+            calculate_stake_points_and_credits(
+                &stake,
+                &vote_state,
+                &StakeHistory::default(),
+                null_tracer(),
+                None
+            )
         );
         // this is new behavior 2; don't hint when credits both from stake and vote are identical
         stake.credits_observed = 4;
@@ -2862,7 +2868,13 @@ mod tests {
                 new_credits_observed: 4,
                 force_credits_update_with_skipped_reward: false,
             },
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), None)
+            calculate_stake_points_and_credits(
+                &stake,
+                &vote_state,
+                &StakeHistory::default(),
+                null_tracer(),
+                None
+            )
         );
 
         // get rewards and credits observed when not the activation epoch
@@ -2883,7 +2895,7 @@ mod tests {
                     points: 1
                 },
                 &vote_state,
-                None,
+                &StakeHistory::default(),
                 null_tracer(),
                 None,
             )
@@ -2907,7 +2919,7 @@ mod tests {
                     points: 1
                 },
                 &vote_state,
-                None,
+                &StakeHistory::default(),
                 null_tracer(),
                 None,
             )
