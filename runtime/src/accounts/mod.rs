@@ -479,7 +479,7 @@ fn accumulate_and_check_loaded_account_data_size(
     }
 }
 
-fn validate_fee_payer(
+pub fn validate_fee_payer(
     payer_address: &Pubkey,
     payer_account: &mut AccountSharedData,
     payer_index: IndexOfAccount,

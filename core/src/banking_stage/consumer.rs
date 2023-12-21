@@ -19,8 +19,11 @@ use {
         BankStart, PohRecorderError, RecordTransactionsSummary, RecordTransactionsTimings,
         TransactionRecorder,
     },
-    solana_program_runtime::timings::ExecuteTimings,
+    solana_program_runtime::{
+        compute_budget_processor::process_compute_budget_instructions, timings::ExecuteTimings,
+    },
     solana_runtime::{
+        accounts::validate_fee_payer,
         bank::{Bank, LoadAndExecuteTransactionsOutput},
         transaction_batch::TransactionBatch,
     },
@@ -394,9 +397,52 @@ impl Consumer {
         txs: &[SanitizedTransaction],
         chunk_offset: usize,
     ) -> ProcessTransactionBatchOutput {
-        // No filtering before QoS - transactions should have been sanitized immediately prior to this call
-        let pre_results = std::iter::repeat(Ok(()));
-        self.process_and_record_transactions_with_pre_results(bank, txs, chunk_offset, pre_results)
+        let mut error_counters = TransactionErrorMetrics::default(); // todo how to actually accumulate these?
+        let pre_results = vec![Ok(()); txs.len()];
+        let check_results =
+            bank.check_transactions(txs, &pre_results, MAX_PROCESSING_AGE, &mut error_counters);
+
+        let fee_check_results: Vec<_> = check_results
+            .into_iter()
+            .zip(txs)
+            .map(|((result, _nonce), tx)| {
+                result?; // if there's already error do nothing
+                let fee_payer = tx.message().fee_payer();
+                let budget_limits =
+                    process_compute_budget_instructions(tx.message().program_instructions_iter())?
+                        .into();
+                let fee = bank.fee_structure.calculate_fee(
+                    tx.message(),
+                    bank.get_lamports_per_signature(),
+                    &budget_limits,
+                    bank.feature_set.is_active(
+                        &feature_set::include_loaded_accounts_data_size_in_fee_calculation::id(),
+                    ),
+                );
+                let (mut fee_payer_account, _slot) = bank
+                    .rc
+                    .accounts
+                    .accounts_db
+                    .load_with_fixed_root(&bank.ancestors, fee_payer)
+                    .ok_or(TransactionError::AccountNotFound)?;
+
+                validate_fee_payer(
+                    fee_payer,
+                    &mut fee_payer_account,
+                    0,
+                    &mut error_counters,
+                    bank.rent_collector(),
+                    fee,
+                )
+            })
+            .collect();
+
+        self.process_and_record_transactions_with_pre_results(
+            bank,
+            txs,
+            chunk_offset,
+            fee_check_results.into_iter(),
+        )
     }
 
     pub fn process_and_record_aged_transactions(
