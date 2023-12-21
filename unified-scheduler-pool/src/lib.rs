@@ -449,8 +449,8 @@ where
 }
 
 type Tid = i32;
-// The linux's tid (essentially is same in the pid name space) is guaranteed to be non-zero; so
-// using 0 for special purpose at userland is totaly safe.
+// The linux's tid (essentially is in the pid name space) is guaranteed to be non-zero; so
+// using 0 for special purpose at user-land is totally safe.
 #[cfg_attr(target_os = "linux", allow(dead_code))]
 const DUMMY_TID: Tid = 0;
 
