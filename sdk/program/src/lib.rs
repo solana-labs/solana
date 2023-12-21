@@ -416,7 +416,7 @@
 //! active on any particular network. The `solana feature status` CLI command
 //! can help in determining active features.
 //!
-//! [slot]: https://docs.solana.com/terminology#slot
+//! [slot]: https://solana.com/docs/terminology#slot
 //!
 //! Native programs important to Solana program authors include:
 //!

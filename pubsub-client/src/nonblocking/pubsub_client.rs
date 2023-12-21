@@ -468,7 +468,7 @@ impl PubsubClient {
     /// Receives messages of type [`Slot`] when a new [root] is set by the
     /// validator.
     ///
-    /// [root]: https://docs.solana.com/terminology#root
+    /// [root]: https://solana.com/docs/terminology#root
     ///
     /// # RPC Reference
     ///
