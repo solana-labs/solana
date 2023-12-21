@@ -27,7 +27,7 @@ pub(crate) struct BankHashDetails {
     pub version: String,
     /// The encoding format for account data buffers
     pub account_data_encoding: String,
-    #[serde(rename = "banks")]
+    /// Bank hash details for a collection of banks
     pub bank_hash_details: Vec<BankHashSlotDetails>,
 }
 
@@ -65,7 +65,7 @@ impl BankHashDetails {
     }
 }
 
-/// The components that go into a bank hash calculation
+/// The components that go into a bank hash calculation for a single bank/slot.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct BankHashSlotDetails {
     pub slot: Slot,
