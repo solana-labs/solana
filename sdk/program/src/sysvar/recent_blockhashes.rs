@@ -10,7 +10,7 @@
 //! see the [Comprehensive Compute Fees proposal][ccf].
 //!
 //! [`getFeeForMessage`]: https://docs.solana.com/developing/clients/jsonrpc-api#getfeeformessage
-//! [ccf]: https://docs.solana.com/proposals/comprehensive-compute-fees
+//! [ccf]: https://docs.solanalabs.com/proposals/comprehensive-compute-fees
 //!
 //! See also the Solana [documentation on the recent blockhashes sysvar][sdoc].
 //!

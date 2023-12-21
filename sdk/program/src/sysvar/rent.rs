@@ -1,6 +1,6 @@
 //! Configuration for network [rent].
 //!
-//! [rent]: https://docs.solana.com/implemented-proposals/rent
+//! [rent]: https://docs.solanalabs.com/implemented-proposals/rent
 //!
 //! The _rent sysvar_ provides access to the [`Rent`] type, which defines
 //! storage rent fees.

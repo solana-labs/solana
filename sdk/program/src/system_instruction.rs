@@ -4,7 +4,7 @@
 //! accounts][na]. It is responsible for transferring lamports from accounts
 //! owned by the system program, including typical user wallet accounts.
 //!
-//! [na]: https://docs.solana.com/implemented-proposals/durable-tx-nonces
+//! [na]: https://docs.solanalabs.com/implemented-proposals/durable-tx-nonces
 //!
 //! Account creation typically involves three steps: [`allocate`] space,
 //! [`transfer`] lamports for rent, [`assign`] to its owning program. The
@@ -1330,7 +1330,7 @@ pub fn create_nonce_account_with_seed(
 /// Consequently, it is not possible to sign a transaction, wait more than two
 /// minutes, then successfully execute that transaction.
 ///
-/// [dtn]: https://docs.solana.com/implemented-proposals/durable-tx-nonces
+/// [dtn]: https://docs.solanalabs.com/implemented-proposals/durable-tx-nonces
 /// [rbh]: crate::message::Message::recent_blockhash
 /// [nonce]: https://en.wikipedia.org/wiki/Cryptographic_nonce
 ///
