@@ -1242,7 +1242,7 @@ where
         }
 
         let pooled_duration = self.pooled_since();
-        if pooled_duration <= Duration::from_secs(IDLE_DURATION_FOR_LAZY_THREAD_RECLAIM) {
+        if pooled_duration <= IDLE_DURATION_FOR_LAZY_THREAD_RECLAIM {
             true
         } else if !self.thread_manager.read().unwrap().is_primary() {
             info!(
