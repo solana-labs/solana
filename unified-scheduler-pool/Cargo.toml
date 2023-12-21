@@ -15,7 +15,6 @@ cpu-time = { workspace = true }
 crossbeam-channel = { workspace = true }
 dashmap = { workspace = true }
 log = { workspace = true }
-procfs = { workspace = true }
 rustix = { workspace = true }
 serde_json = { workspace = true }
 solana-ledger = { workspace = true }
@@ -26,6 +25,9 @@ solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana-unified-scheduler-logic = { workspace = true }
 solana-vote = { workspace = true }
+
+[target."cfg(target_os = \"linux\")".dependencies]
+procfs = { workspace = true }
 
 [dev-dependencies]
 bincode = { workspace = true }
