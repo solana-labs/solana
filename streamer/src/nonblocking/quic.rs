@@ -357,7 +357,6 @@ fn handle_and_cache_new_connection(
                 connection_table,
                 stream_exit,
                 params.clone(),
-                max_uni_streams,
                 peer_type,
                 wait_for_chunk_timeout,
             ));
@@ -707,7 +706,6 @@ async fn handle_connection(
     connection_table: Arc<Mutex<ConnectionTable>>,
     stream_exit: Arc<AtomicBool>,
     params: NewConnectionHandlerParams,
-    max_streams: VarInt,
     peer_type: ConnectionPeerType,
     wait_for_chunk_timeout: Duration,
 ) {
@@ -727,10 +725,6 @@ async fn handle_connection(
     let max_streams_per_100ms =
         max_streams_for_connection_in_100ms(peer_type, params.stake, params.total_stake);
     while !stream_exit.load(Ordering::Relaxed) {
-        if streams_in_current_interval >= max_streams_per_100ms {
-            connection.set_max_concurrent_uni_streams(VarInt::from_u32(0));
-        }
-
         if next_interval
             .saturating_duration_since(tokio::time::Instant::now())
             .as_millis()
@@ -740,14 +734,19 @@ async fn handle_connection(
                 .checked_add(Duration::from_millis(100))
                 .unwrap();
             streams_in_current_interval = 0;
-            connection.set_max_concurrent_uni_streams(max_streams);
         }
+
+        let drop_new_streams = streams_in_current_interval >= max_streams_per_100ms;
 
         if let Ok(stream) =
             tokio::time::timeout(WAIT_FOR_STREAM_TIMEOUT, connection.accept_uni()).await
         {
             match stream {
                 Ok(mut stream) => {
+                    if drop_new_streams {
+                        let _ = stream.stop(VarInt::from_u32(0));
+                        break;
+                    }
                     streams_in_current_interval = streams_in_current_interval.saturating_add(1);
                     stats.total_streams.fetch_add(1, Ordering::Relaxed);
                     stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
