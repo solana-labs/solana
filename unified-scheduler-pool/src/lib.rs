@@ -449,6 +449,9 @@ where
 }
 
 type Tid = i32;
+// The linux's tid (essentially is same in the pid name space) is guaranteed to be non-zero; so
+// using 0 for special purpose at userland is totaly safe.
+const DUMMY_TID: Tid = 0;
 
 #[derive(Debug)]
 struct ThreadManager<S, TH, SEA>
@@ -732,7 +735,12 @@ where
                     std::thread::current()
                 );
                 tid_sender
-                    .send(rustix::thread::gettid().as_raw_nonzero().get())
+                    .send({
+                        #[cfg(not(target_os = "linux"))]
+                        DUMMY_TID
+                        #[cfg(target_os = "linux")]
+                        rustix::thread::gettid().as_raw_nonzero().get()
+                    })
                     .unwrap();
                 let (always_retry, never_retry) = (&disconnected::<()>(), &never());
 
