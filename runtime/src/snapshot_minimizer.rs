@@ -43,7 +43,7 @@ pub struct SnapshotMinimizer<'a> {
 impl<'a> SnapshotMinimizer<'a> {
     /// Removes all accounts not necessary for replaying slots in the range [starting_slot, ending_slot].
     /// `transaction_account_set` should contain accounts used in transactions in the slot range [starting_slot, ending_slot].
-    /// This function will accumulate other accounts (rent colleciton, builtins, etc) necessary to replay transactions.
+    /// This function will accumulate other accounts (rent collection, builtins, etc) necessary to replay transactions.
     ///
     /// This function will modify accounts_db by removing accounts not needed to replay [starting_slot, ending_slot],
     /// and update the bank's capitalization.

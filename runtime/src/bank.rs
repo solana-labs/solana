@@ -5701,7 +5701,7 @@ impl Bank {
     /// Calculates (and returns) skipped rewrites for this bank
     ///
     /// Refer to `rebuild_skipped_rewrites()` for more documentation.
-    /// This implementaion is purposely separate to facilitate testing.
+    /// This implementation is purposely separate to facilitate testing.
     ///
     /// The key observation is that accounts in Bank::skipped_rewrites are only used IFF the
     /// specific account is *not* already in the accounts delta hash.  If an account is not in
@@ -7258,7 +7258,7 @@ impl Bank {
     /// This should only be used for developing purposes.
     pub fn set_capitalization(&self) -> u64 {
         let old = self.capitalization();
-        // We cannot debug verify the hash calculation here becuase calculate_capitalization will use the index calculation due to callers using the write cache.
+        // We cannot debug verify the hash calculation here because calculate_capitalization will use the index calculation due to callers using the write cache.
         // debug_verify only exists as an extra debugging step under the assumption that this code path is only used for tests. But, this is used by ledger-tool create-snapshot
         // for example.
         let debug_verify = false;

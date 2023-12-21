@@ -254,7 +254,7 @@ mod tests {
             source_pk.encrypt_with(22_u64, &final_source_open).into();
         assert_eq!(expected_source, final_source_spendable);
 
-        // program arithemtic for the destination account
+        // program arithmetic for the destination account
         let dest_lo_ct: pod::ElGamalCiphertext = (comm_lo, handle_dest_lo).into();
         let dest_hi_ct: pod::ElGamalCiphertext = (comm_hi, handle_dest_hi).into();
 

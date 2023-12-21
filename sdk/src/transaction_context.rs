@@ -995,7 +995,7 @@ impl<'a> BorrowedAccount<'a> {
         // about to write into it. Make the account mutable by copying it in a
         // buffer with MAX_PERMITTED_DATA_INCREASE capacity so that if the
         // transaction reallocs, we don't have to copy the whole account data a
-        // second time to fullfill the realloc.
+        // second time to fulfill the realloc.
         //
         // NOTE: The account memory region CoW code in bpf_loader::create_vm() implements the same
         // logic and must be kept in sync.

@@ -2383,7 +2383,7 @@ fn test_hard_fork_with_gap_in_roots() {
         .reversed_rooted_slot_iterator(common_root)
         .unwrap()
         .collect::<Vec<_>>();
-    // artifically restore the forcibly purged genesis only for the validator A just for the sake of
+    // artificially restore the forcibly purged genesis only for the validator A just for the sake of
     // the final assertions.
     slots_a.push(genesis_slot);
     roots_a.push(genesis_slot);
@@ -4286,7 +4286,7 @@ fn test_leader_failure_4() {
 //
 // Validator A (60%)
 // Validator B (40%)
-//                                  / --- 10 --- [..] --- 16 (B is voting, due to network issues is initally not able to see the other fork at all)
+//                                  / --- 10 --- [..] --- 16 (B is voting, due to network issues is initially not able to see the other fork at all)
 //                                 /
 // 1 - 2 - 3 - 4 - 5 - 6 - 7 - 8 - 9 (A votes 1 - 9 votes are landing normally. B does the same however votes are not landing)
 //                                 \
@@ -4482,7 +4482,7 @@ fn test_slot_hash_expiry() {
     );
 }
 
-// This test simulates a case where a leader sends a duplicate block with different ancestory. One
+// This test simulates a case where a leader sends a duplicate block with different ancestry. One
 // version builds off of the rooted path, however the other version builds off a pruned branch. The
 // validators that receive the pruned version will need to repair in order to continue, which
 // requires an ancestor hashes repair.
@@ -4511,7 +4511,7 @@ fn test_slot_hash_expiry() {
 //    reached as minority cannot pass threshold otherwise).
 // 4) Let minority produce forks on pruned forks until out of leader slots then kill.
 // 5) Truncate majority ledger past fork slot so it starts building off of fork slot.
-// 6) Restart majority and wait untill it starts producing blocks on main fork and roots something
+// 6) Restart majority and wait until it starts producing blocks on main fork and roots something
 //    past the fork slot.
 // 7) Construct our ledger by copying majority ledger and copying blocks from minority for the pruned path.
 // 8) In our node's ledger, change the parent of the latest slot in majority fork to be the latest

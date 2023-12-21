@@ -1662,7 +1662,7 @@ mod tests {
             }
         }
 
-        // If payer account has insufficent balance, expect InsufficientFundsForFee error
+        // If payer account has insufficient balance, expect InsufficientFundsForFee error
         // regardless feature gate status, or if payer is nonce account.
         {
             for (is_nonce, min_balance) in [(true, min_balance), (false, 0)] {
