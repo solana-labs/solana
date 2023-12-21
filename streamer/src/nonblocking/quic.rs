@@ -1,6 +1,6 @@
 use {
     crate::{
-        quic::{configure_server, QuicServerError, StreamStats},
+        quic::{configure_server, QuicServerError, StreamStats, MAX_UNSTAKED_CONNECTIONS},
         streamer::StakedNodes,
         tls_certificates::get_pubkey_from_tls_certificate,
     },
@@ -39,7 +39,9 @@ use {
     tokio::{task::JoinHandle, time::timeout},
 };
 
-const MAX_UNSTAKED_STREAMS_PER_CONNECTION_PER_100MS: u64 = 1024;
+/// Limit to 500K PPS
+const MAX_STREAMS_PER_100MS: u64 = 500_000 / 10;
+const MAX_UNSTAKED_STREAMS_PERCENT: u64 = 20;
 const WAIT_FOR_STREAM_TIMEOUT: Duration = Duration::from_millis(100);
 pub const DEFAULT_WAIT_FOR_CHUNK_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -265,6 +267,7 @@ enum ConnectionHandlerError {
     MaxStreamError,
 }
 
+#[derive(Clone)]
 struct NewConnectionHandlerParams {
     // In principle, the code can be made to work with a crossbeam channel
     // as long as we're careful never to use a blocking recv or send call
@@ -349,13 +352,11 @@ fn handle_and_cache_new_connection(
             drop(connection_table_l);
             tokio::spawn(handle_connection(
                 connection,
-                params.packet_sender.clone(),
                 remote_addr,
-                params.remote_pubkey,
                 last_update,
                 connection_table,
                 stream_exit,
-                params.stats.clone(),
+                params.clone(),
                 peer_type,
                 wait_for_chunk_timeout,
             ));
@@ -682,19 +683,33 @@ async fn packet_batch_sender(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+fn max_streams_for_connection_in_100ms(
+    connection_type: ConnectionPeerType,
+    stake: u64,
+    total_stake: u64,
+) -> u64 {
+    if matches!(connection_type, ConnectionPeerType::Unstaked) || stake == 0 {
+        Percentage::from(MAX_UNSTAKED_STREAMS_PERCENT)
+            .apply_to(MAX_STREAMS_PER_100MS)
+            .saturating_div(MAX_UNSTAKED_CONNECTIONS as u64)
+    } else {
+        let max_total_staked_streams: u64 = MAX_STREAMS_PER_100MS
+            - Percentage::from(MAX_UNSTAKED_STREAMS_PERCENT).apply_to(MAX_STREAMS_PER_100MS);
+        max_total_staked_streams * stake / total_stake
+    }
+}
+
 async fn handle_connection(
     connection: Connection,
-    packet_sender: AsyncSender<PacketAccumulator>,
     remote_addr: SocketAddr,
-    remote_pubkey: Option<Pubkey>,
     last_update: Arc<AtomicU64>,
     connection_table: Arc<Mutex<ConnectionTable>>,
     stream_exit: Arc<AtomicBool>,
-    stats: Arc<StreamStats>,
+    params: NewConnectionHandlerParams,
     peer_type: ConnectionPeerType,
     wait_for_chunk_timeout: Duration,
 ) {
+    let stats = params.stats;
     debug!(
         "quic new connection {} streams: {} connections: {}",
         remote_addr,
@@ -707,23 +722,30 @@ async fn handle_connection(
         .checked_add(Duration::from_millis(100))
         .unwrap();
     let mut streams_in_current_interval: u64 = 0;
+    let max_streams_per_100ms =
+        max_streams_for_connection_in_100ms(peer_type, params.stake, params.total_stake);
+    let mut paused_streams: u64 = 0;
     while !stream_exit.load(Ordering::Relaxed) {
-        if matches!(peer_type, ConnectionPeerType::Unstaked) {
-            if streams_in_current_interval >= MAX_UNSTAKED_STREAMS_PER_CONNECTION_PER_100MS {
-                tokio::time::sleep_until(next_interval).await;
-            }
+        let pause_new_stream = if streams_in_current_interval >= max_streams_per_100ms {
+            paused_streams = paused_streams.saturating_add(1);
+            true
+        } else {
+            false
+        };
 
-            if next_interval
-                .saturating_duration_since(tokio::time::Instant::now())
-                .as_millis()
-                == 0
-            {
-                next_interval = tokio::time::Instant::now()
-                    .checked_add(Duration::from_millis(100))
-                    .unwrap();
-                streams_in_current_interval = 0;
-            }
+        if next_interval
+            .saturating_duration_since(tokio::time::Instant::now())
+            .as_millis()
+            == 0
+        {
+            next_interval = tokio::time::Instant::now()
+                .checked_add(Duration::from_millis(100))
+                .unwrap();
+            // The paused streams will resume in the new interval
+            streams_in_current_interval = paused_streams;
+            paused_streams = 0;
         }
+
         if let Ok(stream) =
             tokio::time::timeout(WAIT_FOR_STREAM_TIMEOUT, connection.accept_uni()).await
         {
@@ -734,8 +756,11 @@ async fn handle_connection(
                     stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
                     let stream_exit = stream_exit.clone();
                     let stats = stats.clone();
-                    let packet_sender = packet_sender.clone();
+                    let packet_sender = params.packet_sender.clone();
                     let last_update = last_update.clone();
+                    let stream_pause_duration = pause_new_stream.then_some(
+                        next_interval.saturating_duration_since(tokio::time::Instant::now()),
+                    );
                     tokio::spawn(async move {
                         let mut maybe_batch = None;
                         // The min is to guard against a value too small which can wake up unnecessarily
@@ -760,6 +785,7 @@ async fn handle_connection(
                                     &packet_sender,
                                     stats.clone(),
                                     peer_type,
+                                    stream_pause_duration,
                                 )
                                 .await
                                 {
@@ -787,7 +813,7 @@ async fn handle_connection(
     }
 
     let removed_connection_count = connection_table.lock().unwrap().remove_connection(
-        ConnectionTableKey::new(remote_addr.ip(), remote_pubkey),
+        ConnectionTableKey::new(remote_addr.ip(), params.remote_pubkey),
         remote_addr.port(),
         stable_id,
     );
@@ -811,7 +837,12 @@ async fn handle_chunk(
     packet_sender: &AsyncSender<PacketAccumulator>,
     stats: Arc<StreamStats>,
     peer_type: ConnectionPeerType,
+    pause_duration: Option<Duration>,
 ) -> bool {
+    if let Some(duration) = pause_duration {
+        let _ = tokio::time::sleep(duration).await;
+    }
+
     match chunk {
         Ok(maybe_chunk) => {
             if let Some(chunk) = maybe_chunk {
@@ -2010,5 +2041,41 @@ pub mod test {
         let ratio =
             compute_receive_window_ratio_for_staked_node(max_stake, min_stake, max_stake + 10);
         assert_eq!(ratio, max_ratio);
+    }
+
+    #[test]
+    fn test_max_streams_for_connection_in_100ms() {
+        // 50K packets per ms * 20% / 500 max unstaked connections
+        assert_eq!(
+            max_streams_for_connection_in_100ms(ConnectionPeerType::Unstaked, 0, 10000),
+            20
+        );
+
+        // 50K packets per ms * 20% / 500 max unstaked connections
+        assert_eq!(
+            max_streams_for_connection_in_100ms(ConnectionPeerType::Unstaked, 10, 10000),
+            20
+        );
+
+        // If stake is 0, same limits as unstaked connections will apply.
+        // 50K packets per ms * 20% / 500 max unstaked connections
+        assert_eq!(
+            max_streams_for_connection_in_100ms(ConnectionPeerType::Staked, 0, 10000),
+            20
+        );
+
+        // max staked streams = 50K packets per ms * 80% = 40K
+        // function = 40K * stake / total_stake
+        assert_eq!(
+            max_streams_for_connection_in_100ms(ConnectionPeerType::Staked, 15, 10000),
+            60
+        );
+
+        // max staked streams = 50K packets per ms * 80% = 40K
+        // function = 40K * stake / total_stake
+        assert_eq!(
+            max_streams_for_connection_in_100ms(ConnectionPeerType::Staked, 1000, 10000),
+            4000
+        );
     }
 }
