@@ -4145,6 +4145,9 @@ impl Bank {
         let mut status_cache = self.status_cache.write().unwrap();
         assert_eq!(sanitized_txs.len(), execution_results.len());
         for (tx, execution_result) in sanitized_txs.iter().zip(execution_results) {
+            if let TransactionExecutionResult::NotExecuted(err) = execution_result {
+                self.notify_transaction_error(tx, Some(err.clone()));
+            }
             if let Some(details) = execution_result.details() {
                 // Add the message hash to the status cache to ensure that this message
                 // won't be processed again with a different signature.
@@ -4486,6 +4489,7 @@ impl Bank {
             (Ok(()), Some(NoncePartial::new(address, account)))
         } else {
             error_counters.blockhash_not_found += 1;
+            self.notify_transaction_error(tx, Some(TransactionError::BlockhashNotFound));
             (Err(TransactionError::BlockhashNotFound), None)
         }
     }
@@ -4518,6 +4522,10 @@ impl Bank {
                     && self.is_transaction_already_processed(sanitized_tx, &rcache)
                 {
                     error_counters.already_processed += 1;
+                    self.notify_transaction_error(
+                        sanitized_tx,
+                        Some(TransactionError::AlreadyProcessed),
+                    );
                     return (Err(TransactionError::AlreadyProcessed), None);
                 }
 
@@ -4932,6 +4940,7 @@ impl Bank {
                         error_counters.instruction_error += 1;
                     }
                 }
+                self.notify_transaction_error(tx, Some(err.clone()));
                 err
             });
 
@@ -4962,6 +4971,7 @@ impl Bank {
                 .filter(|lamports_after_tx| lamports_before_tx == *lamports_after_tx)
                 .is_none()
         {
+            self.notify_transaction_error(tx, Some(TransactionError::UnbalancedTransaction));
             status = Err(TransactionError::UnbalancedTransaction);
         }
         let status = status.map(|_| ());
@@ -5111,6 +5121,23 @@ impl Bank {
             }
         });
         result
+    }
+
+    pub fn notify_transaction_error(
+        &self,
+        transaction: &SanitizedTransaction,
+        result: Option<TransactionError>,
+    ) {
+        if let Some(transaction_result_notifier_lock) = &self.banking_transaction_result_notifier {
+            let transaction_error_notifier = transaction_result_notifier_lock.lock.read();
+            if let Ok(transaction_error_notifier) = transaction_error_notifier {
+                transaction_error_notifier.notify_banking_transaction_result(
+                    transaction,
+                    result,
+                    self.slot,
+                );
+            }
+        }
     }
 
     #[allow(clippy::type_complexity)]

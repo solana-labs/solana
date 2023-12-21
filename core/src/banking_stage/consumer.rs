@@ -414,7 +414,13 @@ impl Consumer {
                 // Re-sanitized transaction should be equal to the original transaction,
                 // but whether it will pass sanitization needs to be checked.
                 let resanitized_tx =
-                    bank.fully_verify_transaction(tx.to_versioned_transaction())?;
+                    match bank.fully_verify_transaction(tx.to_versioned_transaction()) {
+                        Ok(resanitized_tx) => resanitized_tx,
+                        Err(e) => {
+                            bank.notify_transaction_error(tx, Some(e.clone()));
+                            return Err(e);
+                        }
+                    };
                 if resanitized_tx != *tx {
                     // Sanitization before/after epoch give different transaction data - do not execute.
                     return Err(TransactionError::ResanitizationNeeded);
