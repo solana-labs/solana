@@ -127,8 +127,8 @@ where
         // The following linux-only code implements an eager native thread reclaiming, which is
         // only useful if the solana-validator sees many unrooted forks. Such hostile situations
         // should NEVER happen on remotely-uncontrollable ledgers created by solana-test-validator.
-        // And it's generally not expected mainnet-beta validators (or any live clusters) to be run
-        // on non-linux OSes at all.
+        // And it's generally not expected mainnet-beta validators (or any live clusters for that
+        // matter) to be run on non-linux OSes at all.
         //
         // Thus, this OS-specific implementation can be justified because this enables the hot-path
         // (the scheduler main thread) to omit VDSOs and timed-out futex syscalls by relying on
