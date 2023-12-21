@@ -713,8 +713,8 @@ async fn handle_connection(
                 tokio::time::sleep_until(next_interval).await;
             }
 
-            if tokio::time::Instant::now()
-                .saturating_duration_since(next_interval)
+            if next_interval
+                .saturating_duration_since(tokio::time::Instant::now())
                 .as_millis()
                 == 0
             {
