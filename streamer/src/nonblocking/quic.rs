@@ -39,6 +39,7 @@ use {
     tokio::{task::JoinHandle, time::timeout},
 };
 
+const MAX_UNSTAKED_STREAMS_PER_CONNECTION_PER_100MS: u64 = 1024;
 const WAIT_FOR_STREAM_TIMEOUT: Duration = Duration::from_millis(100);
 pub const DEFAULT_WAIT_FOR_CHUNK_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -702,12 +703,33 @@ async fn handle_connection(
     );
     let stable_id = connection.stable_id();
     stats.total_connections.fetch_add(1, Ordering::Relaxed);
+    let mut next_interval = tokio::time::Instant::now()
+        .checked_add(Duration::from_millis(100))
+        .unwrap();
+    let mut streams_in_current_interval: u64 = 0;
     while !stream_exit.load(Ordering::Relaxed) {
+        if matches!(peer_type, ConnectionPeerType::Unstaked) {
+            if streams_in_current_interval >= MAX_UNSTAKED_STREAMS_PER_CONNECTION_PER_100MS {
+                tokio::time::sleep_until(next_interval).await;
+            }
+
+            if tokio::time::Instant::now()
+                .saturating_duration_since(next_interval)
+                .as_millis()
+                == 0
+            {
+                next_interval = tokio::time::Instant::now()
+                    .checked_add(Duration::from_millis(100))
+                    .unwrap();
+                streams_in_current_interval = 0;
+            }
+        }
         if let Ok(stream) =
             tokio::time::timeout(WAIT_FOR_STREAM_TIMEOUT, connection.accept_uni()).await
         {
             match stream {
                 Ok(mut stream) => {
+                    streams_in_current_interval = streams_in_current_interval.saturating_add(1);
                     stats.total_streams.fetch_add(1, Ordering::Relaxed);
                     stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
                     let stream_exit = stream_exit.clone();
