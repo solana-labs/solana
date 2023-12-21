@@ -42,6 +42,7 @@ use {
 /// Limit to 500K PPS
 const MAX_STREAMS_PER_100MS: u64 = 500_000 / 10;
 const MAX_UNSTAKED_STREAMS_PERCENT: u64 = 20;
+const STREAM_THROTTLING_INTERVAL: Duration = Duration::from_millis(100);
 const WAIT_FOR_STREAM_TIMEOUT: Duration = Duration::from_millis(100);
 pub const DEFAULT_WAIT_FOR_CHUNK_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -695,7 +696,16 @@ fn max_streams_for_connection_in_100ms(
     } else {
         let max_total_staked_streams: u64 = MAX_STREAMS_PER_100MS
             - Percentage::from(MAX_UNSTAKED_STREAMS_PERCENT).apply_to(MAX_STREAMS_PER_100MS);
-        max_total_staked_streams * stake / total_stake
+        ((max_total_staked_streams as f64 / total_stake as f64) * stake as f64) as u64
+    }
+}
+
+fn reset_throttling_params_if_needed(last_instant: &mut tokio::time::Instant) -> bool {
+    if tokio::time::Instant::now().duration_since(*last_instant) > STREAM_THROTTLING_INTERVAL {
+        *last_instant = tokio::time::Instant::now();
+        true
+    } else {
+        false
     }
 }
 
@@ -718,24 +728,11 @@ async fn handle_connection(
     );
     let stable_id = connection.stable_id();
     stats.total_connections.fetch_add(1, Ordering::Relaxed);
-    let mut next_interval = tokio::time::Instant::now()
-        .checked_add(Duration::from_millis(100))
-        .unwrap();
-    let mut streams_in_current_interval: u64 = 0;
     let max_streams_per_100ms =
         max_streams_for_connection_in_100ms(peer_type, params.stake, params.total_stake);
+    let mut last_throttling_instant = tokio::time::Instant::now();
+    let mut streams_in_current_interval = 0;
     while !stream_exit.load(Ordering::Relaxed) {
-        if next_interval
-            .saturating_duration_since(tokio::time::Instant::now())
-            .as_millis()
-            == 0
-        {
-            next_interval = tokio::time::Instant::now()
-                .checked_add(Duration::from_millis(100))
-                .unwrap();
-            streams_in_current_interval = 0;
-        }
-
         let drop_new_streams = streams_in_current_interval >= max_streams_per_100ms;
 
         if let Ok(stream) =
@@ -743,9 +740,11 @@ async fn handle_connection(
         {
             match stream {
                 Ok(mut stream) => {
-                    if drop_new_streams {
+                    if reset_throttling_params_if_needed(&mut last_throttling_instant) {
+                        streams_in_current_interval = 0;
+                    } else if drop_new_streams {
                         let _ = stream.stop(VarInt::from_u32(0));
-                        break;
+                        continue;
                     }
                     streams_in_current_interval = streams_in_current_interval.saturating_add(1);
                     stats.total_streams.fetch_add(1, Ordering::Relaxed);
