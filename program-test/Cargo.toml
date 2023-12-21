@@ -33,4 +33,5 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 solana-stake-program = { workspace = true }

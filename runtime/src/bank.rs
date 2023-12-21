@@ -1190,11 +1190,6 @@ impl Bank {
         }
     }
 
-    /// For testing only
-    pub fn force_reward_interval_end_for_tests(&mut self) {
-        self.epoch_reward_status = EpochRewardStatus::Inactive;
-    }
-
     fn _new_from_parent(
         parent: Arc<Bank>,
         collector_id: &Pubkey,
@@ -2128,22 +2123,6 @@ impl Bank {
                 });
             }
         }
-    }
-
-    pub fn set_sysvar_for_tests<T>(&self, sysvar: &T)
-    where
-        T: Sysvar + SysvarId,
-    {
-        self.update_sysvar_account(&T::id(), |account| {
-            create_account(
-                sysvar,
-                self.inherit_specially_retained_account_fields(account),
-            )
-        });
-        // Simply force fill sysvar cache rather than checking which sysvar was
-        // actually updated since tests don't need to be optimized for performance.
-        self.reset_sysvar_cache();
-        self.fill_missing_sysvar_cache_entries();
     }
 
     fn update_slot_history(&self) {
@@ -4138,21 +4117,6 @@ impl Bank {
         // committed before this tick height is incremented (like the blockhash
         // sysvar above)
         self.tick_height.fetch_add(1, Relaxed);
-    }
-
-    #[cfg(feature = "dev-context-only-utils")]
-    pub fn register_tick_for_test(&self, hash: &Hash) {
-        self.register_tick(hash, &BankWithScheduler::no_scheduler_available())
-    }
-
-    #[cfg(feature = "dev-context-only-utils")]
-    pub fn register_default_tick_for_test(&self) {
-        self.register_tick_for_test(&Hash::default())
-    }
-
-    #[cfg(feature = "dev-context-only-utils")]
-    pub fn register_unique_tick(&self) {
-        self.register_tick_for_test(&Hash::new_unique())
     }
 
     pub fn is_complete(&self) -> bool {
@@ -8314,6 +8278,39 @@ impl Bank {
 
     pub fn update_accounts_hash_for_tests(&self) -> AccountsHash {
         self.update_accounts_hash(CalcAccountsHashDataSource::IndexForTests, false, false)
+    }
+
+    pub fn register_tick_for_test(&self, hash: &Hash) {
+        self.register_tick(hash, &BankWithScheduler::no_scheduler_available())
+    }
+
+    pub fn register_default_tick_for_test(&self) {
+        self.register_tick_for_test(&Hash::default())
+    }
+
+    pub fn register_unique_tick(&self) {
+        self.register_tick_for_test(&Hash::new_unique())
+    }
+
+    /// For testing only
+    pub fn force_reward_interval_end_for_tests(&mut self) {
+        self.epoch_reward_status = EpochRewardStatus::Inactive;
+    }
+
+    pub fn set_sysvar_for_tests<T>(&self, sysvar: &T)
+    where
+        T: Sysvar + SysvarId,
+    {
+        self.update_sysvar_account(&T::id(), |account| {
+            create_account(
+                sysvar,
+                self.inherit_specially_retained_account_fields(account),
+            )
+        });
+        // Simply force fill sysvar cache rather than checking which sysvar was
+        // actually updated since tests don't need to be optimized for performance.
+        self.reset_sysvar_cache();
+        self.fill_missing_sysvar_cache_entries();
     }
 }
 
