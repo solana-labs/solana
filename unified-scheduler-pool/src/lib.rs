@@ -135,7 +135,6 @@ where
         // this out-of-bound watchdog to be equipped with a defensive thread reclaiming.
         #[cfg(target_os = "linux")]
         {
-
             let Some(tid) = thread_manager.read().unwrap().active_tid_if_not_primary() else {
                 self.tick = 0;
                 self.updated_at = Instant::now();
