@@ -132,10 +132,9 @@ where
         //
         // Thus, this OS-specific implementation can be justified because this enables the hot-path
         // (the scheduler main thread) to omit VDSO calls and timed-out futex syscalls by relying on
-        // this out-of-bound watchdog for this defensive thread reclaiming.
+        // this out-of-bound watchdog to realize a defensive thread reclaiming.
         #[cfg(target_os = "linux")]
         {
-            const IDLE_DURATION_FOR_EAGER_THREAD_RECLAIM: Duration = Duration::from_secs(2); // 5x of 400ms block time
             let Some(tid) = thread_manager.read().unwrap().active_tid_if_not_primary() else {
                 self.tick = 0;
                 self.updated_at = Instant::now();
@@ -153,6 +152,9 @@ where
                 self.tick = current_tick;
                 self.updated_at = Instant::now();
             } else {
+                // 5x of 400ms block time
+                const IDLE_DURATION_FOR_EAGER_THREAD_RECLAIM: Duration = Duration::from_secs(2);
+
                 let elapsed = self.updated_at.elapsed();
                 if elapsed > IDLE_DURATION_FOR_EAGER_THREAD_RECLAIM {
                     const BITS_PER_HEX_DIGIT: usize = 4;
