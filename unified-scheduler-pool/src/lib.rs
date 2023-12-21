@@ -235,7 +235,7 @@ where
                 prioritization_fee_cache,
             },
             weak_self: weak_self.clone(),
-            next_scheduler_id: AtomicU64::new(PRIMARY_SCHEDULER_ID),
+            next_scheduler_id: AtomicSchedulerId::new(PRIMARY_SCHEDULER_ID),
             _watchdog_thread: watchdog_thread,
             watchdog_sender,
         });
