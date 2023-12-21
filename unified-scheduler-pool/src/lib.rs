@@ -131,8 +131,8 @@ where
         // matter) to be run on non-linux OSes at all.
         //
         // Thus, this OS-specific implementation can be justified because this enables the hot-path
-        // (the scheduler main thread) to omit VDSOs and timed-out futex syscalls by relying on
-        // this out-of-bound thread watchdog for these defensive thread reclaiming.
+        // (the scheduler main thread) to omit VDSO calls and timed-out futex syscalls by relying on
+        // this out-of-bound watchdog for this defensive thread reclaiming.
         #[cfg(target_os = "linux")]
         {
             const IDLE_DURATION_FOR_EAGER_THREAD_RECLAIM: Duration = Duration::from_secs(2); // 5x of 400ms block time
