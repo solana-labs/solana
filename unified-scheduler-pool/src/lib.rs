@@ -101,7 +101,9 @@ where
     SEA: ScheduleExecutionArg,
 {
     thread_manager: Weak<RwLock<ThreadManager<S, TH, SEA>>>,
+    #[cfg(target_os = "linux")]
     tick: u64,
+    #[cfg(target_os = "linux")]
     updated_at: Instant,
 }
 
@@ -114,12 +116,15 @@ where
     fn new(thread_manager: Weak<RwLock<ThreadManager<S, TH, SEA>>>) -> Self {
         Self {
             thread_manager,
+            #[cfg(target_os = "linux")]
             tick: 0,
+            #[cfg(target_os = "linux")]
             updated_at: Instant::now(),
         }
     }
 
     fn retire_if_stale(&mut self) -> bool {
+        #[cfg_attr(not(target_os = "linux"), allow(unused_variables))]
         let Some(thread_manager) = self.thread_manager.upgrade() else {
             return false;
         };
@@ -1079,6 +1084,7 @@ where
         self.scheduler_id == PRIMARY_SCHEDULER_ID
     }
 
+    #[cfg(target_os = "linux")]
     fn active_tid_if_not_primary(&self) -> Option<Tid> {
         if self.is_primary() {
             // always exempt from watchdog...
