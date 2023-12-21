@@ -1,6 +1,6 @@
 //! The [address lookup table program][np].
 //!
-//! [np]: https://docs.solana.com/developing/runtime-facilities/programs#address-lookup-table-program
+//! [np]: https://docs.solanalabs.com/runtime/programs#address-lookup-table-program
 
 pub mod error;
 pub mod instruction;

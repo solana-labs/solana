@@ -16,7 +16,7 @@
 //!
 //! See also the Solana [documentation on the fees sysvar][sdoc].
 //!
-//! [sdoc]: https://docs.solana.com/developing/runtime-facilities/sysvars#fees
+//! [sdoc]: https://docs.solanalabs.com/runtime/sysvars#fees
 
 #![allow(deprecated)]
 

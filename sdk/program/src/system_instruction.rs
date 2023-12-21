@@ -12,7 +12,7 @@
 //! contain enough lamports to be [rent exempt], or else the creation
 //! instruction will fail.
 //!
-//! [rent exempt]: https://docs.solana.com/developing/programming-model/accounts#rent-exemption
+//! [rent exempt]: https://solana.com/docs/core/accounts#rent-exemption
 //!
 //! The accounts created by the system program can either be user-controlled,
 //! where the secret keys are held outside the blockchain,
@@ -1601,7 +1601,7 @@ pub fn advance_nonce_account(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey) 
 /// would leave the nonce account with a balance less than required for rent
 /// exemption, but also greater than zero, then the transaction will fail.
 ///
-/// [rent exemption]: https://docs.solana.com/developing/programming-model/accounts#rent-exemption
+/// [rent exemption]: https://solana.com/docs/core/accounts#rent-exemption
 ///
 /// This constructor creates a [`SystemInstruction::WithdrawNonceAccount`]
 /// instruction.

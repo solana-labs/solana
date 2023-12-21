@@ -14,7 +14,7 @@
 //! of that account array, a [recent blockhash], and a compact encoding of the
 //! message's instructions.
 //!
-//! [recent blockhash]: https://docs.solana.com/developing/programming-model/transactions#recent-blockhash
+//! [recent blockhash]: https://solana.com/docs/core/transactions#recent-blockhash
 //!
 //! Clients most often deal with `Instruction`s and `Transaction`s, with
 //! `Message`s being created by `Transaction` constructors.

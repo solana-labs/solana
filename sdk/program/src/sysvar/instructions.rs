@@ -18,7 +18,7 @@
 //!
 //! See also the Solana [documentation on the instructions sysvar][sdoc].
 //!
-//! [sdoc]: https://docs.solana.com/developing/runtime-facilities/sysvars#instructions
+//! [sdoc]: https://docs.solanalabs.com/runtime/sysvars#instructions
 //!
 //! # Examples
 //!

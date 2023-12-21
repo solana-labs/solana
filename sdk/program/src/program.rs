@@ -6,7 +6,7 @@
 //!
 //! [`invoke`]: invoke
 //! [`invoke_signed`]: invoke_signed
-//! [cpi]: https://docs.solana.com/developing/programming-model/calling-between-programs
+//! [cpi]: https://solana.com/docs/core/cpi
 
 use crate::{
     account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction, pubkey::Pubkey,
@@ -174,7 +174,7 @@ pub fn invoke_unchecked(instruction: &Instruction, account_infos: &[AccountInfo]
 /// PDA from the seeds and the calling program's ID, and if it matches one of
 /// the accounts in `account_info`, will consider that account "signed".
 ///
-/// [pda]: https://docs.solana.com/developing/programming-model/calling-between-programs#program-derived-addresses
+/// [pda]: https://solana.com/docs/core/cpi#program-derived-addresses
 ///
 /// See the documentation for [`Pubkey::find_program_address`] for more
 /// about program derived addresses.

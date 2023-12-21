@@ -14,7 +14,7 @@
 //!
 //! See also the Solana [documentation on the recent blockhashes sysvar][sdoc].
 //!
-//! [sdoc]: https://docs.solana.com/developing/runtime-facilities/sysvars#recentblockhashes
+//! [sdoc]: https://docs.solanalabs.com/runtime/sysvars#recentblockhashes
 
 #![allow(deprecated)]
 #![allow(clippy::arithmetic_side_effects)]

@@ -10,7 +10,7 @@
 //!
 //! See also the Solana [documentation on the rent sysvar][sdoc].
 //!
-//! [sdoc]: https://docs.solana.com/developing/runtime-facilities/sysvars#rent
+//! [sdoc]: https://docs.solanalabs.com/runtime/sysvars#rent
 //!
 //! # Examples
 //!
