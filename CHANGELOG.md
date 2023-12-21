@@ -25,9 +25,13 @@ Release channels have their own copy of this changelog:
   * Updated local ledger storage so that the RPC endpoint
     `getSignaturesForAddress` always returns signatures in block-inclusion order
   * RPC's `simulateTransaction` now returns `innerInstructions` as `json`/`jsonParsed` (#34313).
+  * Bigtable upload now includes entry summary data for each slot, stored in a
+    new `entries` table
 * Upgrade Notes
   * `solana-program` and `solana-sdk` default to support for Borsh v1, with
 limited backward compatibility for v0.10 and v0.9. Please upgrade to Borsh v1.
+  * Operators running their own bigtable instances need to create the `entries`
+    table before upgrading their warehouse nodes
 
 ## [1.17.0]
 * Changes
