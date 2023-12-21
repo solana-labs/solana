@@ -357,6 +357,7 @@ fn handle_and_cache_new_connection(
                 connection_table,
                 stream_exit,
                 params.clone(),
+                max_uni_streams,
                 peer_type,
                 wait_for_chunk_timeout,
             ));
@@ -706,6 +707,7 @@ async fn handle_connection(
     connection_table: Arc<Mutex<ConnectionTable>>,
     stream_exit: Arc<AtomicBool>,
     params: NewConnectionHandlerParams,
+    max_streams: VarInt,
     peer_type: ConnectionPeerType,
     wait_for_chunk_timeout: Duration,
 ) {
@@ -724,14 +726,10 @@ async fn handle_connection(
     let mut streams_in_current_interval: u64 = 0;
     let max_streams_per_100ms =
         max_streams_for_connection_in_100ms(peer_type, params.stake, params.total_stake);
-    let mut paused_streams: u64 = 0;
     while !stream_exit.load(Ordering::Relaxed) {
-        let pause_new_stream = if streams_in_current_interval >= max_streams_per_100ms {
-            paused_streams = paused_streams.saturating_add(1);
-            true
-        } else {
-            false
-        };
+        if streams_in_current_interval >= max_streams_per_100ms {
+            connection.set_max_concurrent_uni_streams(VarInt::from_u32(0));
+        }
 
         if next_interval
             .saturating_duration_since(tokio::time::Instant::now())
@@ -741,9 +739,8 @@ async fn handle_connection(
             next_interval = tokio::time::Instant::now()
                 .checked_add(Duration::from_millis(100))
                 .unwrap();
-            // The paused streams will resume in the new interval
-            streams_in_current_interval = paused_streams;
-            paused_streams = 0;
+            streams_in_current_interval = 0;
+            connection.set_max_concurrent_uni_streams(max_streams);
         }
 
         if let Ok(stream) =
@@ -758,9 +755,6 @@ async fn handle_connection(
                     let stats = stats.clone();
                     let packet_sender = params.packet_sender.clone();
                     let last_update = last_update.clone();
-                    let stream_pause_duration = pause_new_stream.then_some(
-                        next_interval.saturating_duration_since(tokio::time::Instant::now()),
-                    );
                     tokio::spawn(async move {
                         let mut maybe_batch = None;
                         // The min is to guard against a value too small which can wake up unnecessarily
@@ -785,7 +779,6 @@ async fn handle_connection(
                                     &packet_sender,
                                     stats.clone(),
                                     peer_type,
-                                    stream_pause_duration,
                                 )
                                 .await
                                 {
@@ -837,12 +830,7 @@ async fn handle_chunk(
     packet_sender: &AsyncSender<PacketAccumulator>,
     stats: Arc<StreamStats>,
     peer_type: ConnectionPeerType,
-    pause_duration: Option<Duration>,
 ) -> bool {
-    if let Some(duration) = pause_duration {
-        let _ = tokio::time::sleep(duration).await;
-    }
-
     match chunk {
         Ok(maybe_chunk) => {
             if let Some(chunk) = maybe_chunk {
