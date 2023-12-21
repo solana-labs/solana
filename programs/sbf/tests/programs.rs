@@ -458,7 +458,7 @@ fn test_sol_alloc_free_no_longer_deployable() {
             .write()
             .unwrap()
             .remove_without_scheduler(slot)
-            .unwrap()
+            .unwrap(),
     )
     .unwrap();
     bank.deactivate_feature(&solana_sdk::feature_set::disable_deploy_of_alloc_free_syscall::id());
@@ -490,7 +490,7 @@ fn test_sol_alloc_free_no_longer_deployable() {
             .write()
             .unwrap()
             .remove_without_scheduler(slot)
-            .unwrap()
+            .unwrap(),
     )
     .unwrap();
     bank.activate_feature(&solana_sdk::feature_set::disable_deploy_of_alloc_free_syscall::id());
