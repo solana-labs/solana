@@ -358,9 +358,7 @@ impl LoadedProgram {
             metrics.jit_compile_us = jit_compile_time.as_us();
         }
 
-        // Allowing mut here, since it may be needed for jit compile, which is under a config flag
-        #[allow(unused_mut)]
-        let mut program = if bpf_loader_deprecated::check_id(loader_key) {
+        let program = if bpf_loader_deprecated::check_id(loader_key) {
             LoadedProgramType::LegacyV0(executable)
         } else if bpf_loader::check_id(loader_key) || bpf_loader_upgradeable::check_id(loader_key) {
             LoadedProgramType::LegacyV1(executable)
