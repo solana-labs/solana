@@ -199,12 +199,8 @@ fn load_transaction_accounts(
                 .then_some(())
                 .and_then(|_| loaded_programs.find(key))
                 {
-                    // This condition block does special handling for accounts that are passed
-                    // as instruction account to any of the instructions in the transaction.
-                    // It's been noticed that some programs are reading other program accounts
-                    // (that are passed to the program as instruction accounts). So such accounts
-                    // are needed to be loaded even though corresponding compiled program may
-                    // already be present in the cache.
+                    // Optimization to skip loading of accounts which are only used as
+                    // programs in top-level instructions and not passed as instruction accounts.
                     account_shared_data_from_program(key, program_accounts)
                         .map(|program_account| (program.account_size, program_account, 0))?
                 } else {
