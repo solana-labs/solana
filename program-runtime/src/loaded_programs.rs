@@ -335,27 +335,24 @@ impl LoadedProgram {
         metrics: &mut LoadProgramMetrics,
         reloading: bool,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut load_elf_time = Measure::start("load_elf_time");
+        let load_elf_time = Measure::start("load_elf_time");
         // The following unused_mut exception is needed for architectures that do not
         // support JIT compilation.
         #[allow(unused_mut)]
         let mut executable = Executable::load(elf_bytes, program_runtime_environment.clone())?;
-        load_elf_time.stop();
-        metrics.load_elf_us = load_elf_time.as_us();
+        metrics.load_elf_us = load_elf_time.end_as_us();
 
         if !reloading {
-            let mut verify_code_time = Measure::start("verify_code_time");
+            let verify_code_time = Measure::start("verify_code_time");
             executable.verify::<RequisiteVerifier>()?;
-            verify_code_time.stop();
-            metrics.verify_code_us = verify_code_time.as_us();
+            metrics.verify_code_us = verify_code_time.end_as_us();
         }
 
         #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
         {
-            let mut jit_compile_time = Measure::start("jit_compile_time");
+            let jit_compile_time = Measure::start("jit_compile_time");
             executable.jit_compile()?;
-            jit_compile_time.stop();
-            metrics.jit_compile_us = jit_compile_time.as_us();
+            metrics.jit_compile_us = jit_compile_time.end_as_us();
         }
 
         let program = if bpf_loader_deprecated::check_id(loader_key) {
