@@ -15,17 +15,8 @@ set -o errexit
 
 here="$(dirname "$0")"
 
-<<<<<<< HEAD
-if [[ -z $cargo ]]; then
-  echo >&2 "Failed to find cargo. Mac readlink doesn't support -f. Consider switching
-  to gnu readlink with 'brew install coreutils' and then symlink greadlink as
-  /usr/local/bin/readlink."
-  exit 1
-fi
-=======
 # stable
 "$here/cargo-clippy-stable.sh"
->>>>>>> 5247be17a9 (ci: split cargo-clippy into stable and nightly (#34566))
 
 # nightly
 "$here/cargo-clippy-nightly.sh"
