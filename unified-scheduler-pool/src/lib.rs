@@ -135,7 +135,7 @@ where
         // this out-of-bound thread watchdog for these defensive thread reclaiming.
         #[cfg(target_os = "linux")]
         {
-            const IDLE_DURATION_FOR_THREAD_RECLAIM: Duration = Duration::from_secs(2); // 5x of 400ms block time
+            const IDLE_DURATION_FOR_EAGER_THREAD_RECLAIM: Duration = Duration::from_secs(2); // 5x of 400ms block time
             let Some(tid) = thread_manager.read().unwrap().active_tid_if_not_primary() else {
                 self.tick = 0;
                 self.updated_at = Instant::now();
@@ -154,7 +154,7 @@ where
                 self.updated_at = Instant::now();
             } else {
                 let elapsed = self.updated_at.elapsed();
-                if elapsed > IDLE_DURATION_FOR_THREAD_RECLAIM {
+                if elapsed > IDLE_DURATION_FOR_EAGER_THREAD_RECLAIM {
                     const BITS_PER_HEX_DIGIT: usize = 4;
                     let mut thread_manager = thread_manager.write().unwrap();
                     info!(
@@ -1208,6 +1208,13 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn retire_if_stale(&mut self) -> bool {
+        // reap threads after 10mins of inactivity for any pooled (idle) schedulers. The primary
+        // scheduler is special-cased to empty its address book instead, for easier monitoring to
+        // accumulate os-level thread metrics. The duration is chosen based on the rough estimation
+        // from the frequency of short-lived forks on the mainnet-beta, with consideration of some
+        // increased forking at epoch boundaries.
+        const IDLE_DURATION_FOR_LAZY_THREAD_RECLAIM: Duration = Duration::from_secs(600);
+
         const BITS_PER_HEX_DIGIT: usize = 4;
         let page_count = self.address_book.page_count();
         if page_count < 200_000 {
@@ -1235,7 +1242,7 @@ where
         }
 
         let pooled_duration = self.pooled_since();
-        if pooled_duration <= Duration::from_secs(600) {
+        if pooled_duration <= Duration::from_secs(IDLE_DURATION_FOR_LAZY_THREAD_RECLAIM) {
             true
         } else if !self.thread_manager.read().unwrap().is_primary() {
             info!(
