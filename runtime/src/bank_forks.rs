@@ -272,6 +272,17 @@ impl BankForks {
         Some(bank)
     }
 
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn remove_without_scheduler(&mut self, slot: Slot) -> Option<Arc<Bank>> {
+        self.remove(slot).map(|bank| {
+            // This closure will drop BankWithScheduler, which in turn would terminate the
+            // scheduler if installed. Ensure the very odd operation is prevent with assert!(),
+            // even if this is for tests
+            assert!(!bank.has_installed_scheduler());
+            bank.clone_without_scheduler()
+        })
+    }
+
     pub fn highest_slot(&self) -> Slot {
         self.banks.values().map(|bank| bank.slot()).max().unwrap()
     }
