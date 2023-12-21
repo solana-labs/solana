@@ -737,9 +737,10 @@ where
                 tid_sender
                     .send({
                         #[cfg(not(target_os = "linux"))]
-                        DUMMY_TID
+                        let tid = DUMMY_TID;
                         #[cfg(target_os = "linux")]
-                        rustix::thread::gettid().as_raw_nonzero().get()
+                        let tid = rustix::thread::gettid().as_raw_nonzero().get();
+                        tid
                     })
                     .unwrap();
                 let (always_retry, never_retry) = (&disconnected::<()>(), &never());
