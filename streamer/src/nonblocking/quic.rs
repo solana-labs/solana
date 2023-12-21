@@ -733,8 +733,6 @@ async fn handle_connection(
     let mut last_throttling_instant = tokio::time::Instant::now();
     let mut streams_in_current_interval = 0;
     while !stream_exit.load(Ordering::Relaxed) {
-        let drop_new_streams = streams_in_current_interval >= max_streams_per_100ms;
-
         if let Ok(stream) =
             tokio::time::timeout(WAIT_FOR_STREAM_TIMEOUT, connection.accept_uni()).await
         {
@@ -742,7 +740,7 @@ async fn handle_connection(
                 Ok(mut stream) => {
                     if reset_throttling_params_if_needed(&mut last_throttling_instant) {
                         streams_in_current_interval = 0;
-                    } else if drop_new_streams {
+                    } else if streams_in_current_interval >= max_streams_per_100ms {
                         let _ = stream.stop(VarInt::from_u32(0));
                         continue;
                     }
