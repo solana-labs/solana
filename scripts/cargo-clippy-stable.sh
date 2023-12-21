@@ -26,6 +26,5 @@ source "$here/../ci/rust-version.sh" stable
   --workspace --tests --bins --examples --features dummy-for-ci-check -- \
   --deny=warnings \
   --deny=clippy::default_trait_access \
-  --deny=clippy::arithmetic_side_effects \
-  --deny=clippy::manual_let_else \
+  --deny=clippy::integer_arithmetic \
   --deny=clippy::used_underscore_binding
