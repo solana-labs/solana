@@ -18,6 +18,7 @@ use {
 use {
     crate::{
         account::{AccountSharedData, ReadableAccount},
+        feature_set::FeatureSet,
         instruction::InstructionError,
         pubkey::Pubkey,
     },
@@ -739,7 +740,11 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Assignes the owner of this account (transaction wide)
     #[cfg(not(target_os = "solana"))]
-    pub fn set_owner(&mut self, pubkey: &[u8]) -> Result<(), InstructionError> {
+    pub fn set_owner(
+        &mut self,
+        pubkey: &[u8],
+        feature_set: &FeatureSet,
+    ) -> Result<(), InstructionError> {
         // Only the owner can assign a new owner
         if !self.is_owned_by_current_program() {
             return Err(InstructionError::ModifiedProgramId);
@@ -749,7 +754,7 @@ impl<'a> BorrowedAccount<'a> {
             return Err(InstructionError::ModifiedProgramId);
         }
         // and only if the account is not executable
-        if self.is_executable() {
+        if self.is_executable(feature_set) {
             return Err(InstructionError::ModifiedProgramId);
         }
         // and only if the data is zero-initialized or empty
@@ -773,7 +778,11 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Overwrites the number of lamports of this account (transaction wide)
     #[cfg(not(target_os = "solana"))]
-    pub fn set_lamports(&mut self, lamports: u64) -> Result<(), InstructionError> {
+    pub fn set_lamports(
+        &mut self,
+        lamports: u64,
+        feature_set: &FeatureSet,
+    ) -> Result<(), InstructionError> {
         // An account not owned by the program cannot have its balance decrease
         if !self.is_owned_by_current_program() && lamports < self.get_lamports() {
             return Err(InstructionError::ExternalAccountLamportSpend);
@@ -783,7 +792,7 @@ impl<'a> BorrowedAccount<'a> {
             return Err(InstructionError::ReadonlyLamportChange);
         }
         // The balance of executable accounts may not change
-        if self.is_executable() {
+        if self.is_executable(feature_set) {
             return Err(InstructionError::ExecutableLamportChange);
         }
         // don't touch the account if the lamports do not change
@@ -797,21 +806,31 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Adds lamports to this account (transaction wide)
     #[cfg(not(target_os = "solana"))]
-    pub fn checked_add_lamports(&mut self, lamports: u64) -> Result<(), InstructionError> {
+    pub fn checked_add_lamports(
+        &mut self,
+        lamports: u64,
+        feature_set: &FeatureSet,
+    ) -> Result<(), InstructionError> {
         self.set_lamports(
             self.get_lamports()
                 .checked_add(lamports)
                 .ok_or(InstructionError::ArithmeticOverflow)?,
+            feature_set,
         )
     }
 
     /// Subtracts lamports from this account (transaction wide)
     #[cfg(not(target_os = "solana"))]
-    pub fn checked_sub_lamports(&mut self, lamports: u64) -> Result<(), InstructionError> {
+    pub fn checked_sub_lamports(
+        &mut self,
+        lamports: u64,
+        feature_set: &FeatureSet,
+    ) -> Result<(), InstructionError> {
         self.set_lamports(
             self.get_lamports()
                 .checked_sub(lamports)
                 .ok_or(InstructionError::ArithmeticOverflow)?,
+            feature_set,
         )
     }
 
@@ -823,8 +842,11 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Returns a writable slice of the account data (transaction wide)
     #[cfg(not(target_os = "solana"))]
-    pub fn get_data_mut(&mut self) -> Result<&mut [u8], InstructionError> {
-        self.can_data_be_changed()?;
+    pub fn get_data_mut(
+        &mut self,
+        feature_set: &FeatureSet,
+    ) -> Result<&mut [u8], InstructionError> {
+        self.can_data_be_changed(feature_set)?;
         self.touch()?;
         self.make_data_mut();
         Ok(self.account.data_as_mut_slice())
@@ -849,9 +871,13 @@ impl<'a> BorrowedAccount<'a> {
         not(target_os = "solana"),
         any(test, feature = "dev-context-only-utils")
     ))]
-    pub fn set_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
+    pub fn set_data(
+        &mut self,
+        data: Vec<u8>,
+        feature_set: &FeatureSet,
+    ) -> Result<(), InstructionError> {
         self.can_data_be_resized(data.len())?;
-        self.can_data_be_changed()?;
+        self.can_data_be_changed(feature_set)?;
         self.touch()?;
 
         self.update_accounts_resize_delta(data.len())?;
@@ -864,14 +890,18 @@ impl<'a> BorrowedAccount<'a> {
     /// Call this when you have a slice of data you do not own and want to
     /// replace the account data with it.
     #[cfg(not(target_os = "solana"))]
-    pub fn set_data_from_slice(&mut self, data: &[u8]) -> Result<(), InstructionError> {
+    pub fn set_data_from_slice(
+        &mut self,
+        data: &[u8],
+        feature_set: &FeatureSet,
+    ) -> Result<(), InstructionError> {
         self.can_data_be_resized(data.len())?;
-        self.can_data_be_changed()?;
+        self.can_data_be_changed(feature_set)?;
         self.touch()?;
         self.update_accounts_resize_delta(data.len())?;
         // Calling make_data_mut() here guarantees that set_data_from_slice()
         // copies in places, extending the account capacity if necessary but
-        // never reducing it. This is required as the account migh be directly
+        // never reducing it. This is required as the account might be directly
         // mapped into a MemoryRegion, and therefore reducing capacity would
         // leave a hole in the vm address space. After CPI or upon program
         // termination, the runtime will zero the extra capacity.
@@ -885,9 +915,13 @@ impl<'a> BorrowedAccount<'a> {
     ///
     /// Fills it with zeros at the end if is extended or truncates at the end otherwise.
     #[cfg(not(target_os = "solana"))]
-    pub fn set_data_length(&mut self, new_length: usize) -> Result<(), InstructionError> {
+    pub fn set_data_length(
+        &mut self,
+        new_length: usize,
+        feature_set: &FeatureSet,
+    ) -> Result<(), InstructionError> {
         self.can_data_be_resized(new_length)?;
-        self.can_data_be_changed()?;
+        self.can_data_be_changed(feature_set)?;
         // don't touch the account if the length does not change
         if self.get_data().len() == new_length {
             return Ok(());
@@ -900,10 +934,14 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Appends all elements in a slice to the account
     #[cfg(not(target_os = "solana"))]
-    pub fn extend_from_slice(&mut self, data: &[u8]) -> Result<(), InstructionError> {
+    pub fn extend_from_slice(
+        &mut self,
+        data: &[u8],
+        feature_set: &FeatureSet,
+    ) -> Result<(), InstructionError> {
         let new_len = self.get_data().len().saturating_add(data.len());
         self.can_data_be_resized(new_len)?;
-        self.can_data_be_changed()?;
+        self.can_data_be_changed(feature_set)?;
 
         if data.is_empty() {
             return Ok(());
@@ -976,8 +1014,12 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Serializes a state into the account data
     #[cfg(not(target_os = "solana"))]
-    pub fn set_state<T: serde::Serialize>(&mut self, state: &T) -> Result<(), InstructionError> {
-        let data = self.get_data_mut()?;
+    pub fn set_state<T: serde::Serialize>(
+        &mut self,
+        state: &T,
+        feature_set: &FeatureSet,
+    ) -> Result<(), InstructionError> {
+        let data = self.get_data_mut(feature_set)?;
         let serialized_size =
             bincode::serialized_size(state).map_err(|_| InstructionError::GenericError)?;
         if serialized_size > data.len() as u64 {
@@ -998,7 +1040,7 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Returns whether this account is executable (transaction wide)
     #[inline]
-    pub fn is_executable(&self) -> bool {
+    pub fn is_executable(&self, _feature_set: &FeatureSet) -> bool {
         self.account.executable()
     }
 
@@ -1022,11 +1064,11 @@ impl<'a> BorrowedAccount<'a> {
             return Err(InstructionError::ExecutableModified);
         }
         // one can not clear the executable flag
-        if self.is_executable() && !is_executable {
+        if self.account.executable() && !is_executable {
             return Err(InstructionError::ExecutableModified);
         }
         // don't touch the account if the executable flag does not change
-        if self.is_executable() == is_executable {
+        if self.account.executable() == is_executable {
             return Ok(());
         }
         self.touch()?;
@@ -1077,9 +1119,9 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Returns an error if the account data can not be mutated by the current program
     #[cfg(not(target_os = "solana"))]
-    pub fn can_data_be_changed(&self) -> Result<(), InstructionError> {
+    pub fn can_data_be_changed(&self, feature_set: &FeatureSet) -> Result<(), InstructionError> {
         // Only non-executable accounts data can be changed
-        if self.is_executable() {
+        if self.is_executable(feature_set) {
             return Err(InstructionError::ExecutableDataModified);
         }
         // and only if the account is writable
