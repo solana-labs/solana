@@ -29,7 +29,6 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         feature_set::{
             include_loaded_accounts_data_size_in_fee_calculation,
-            remove_congestion_multiplier_from_fee_calculation,
             simplify_writable_program_account_check, FeatureSet,
         },
         fee::FeeStructure,
@@ -83,8 +82,6 @@ pub(super) fn load_accounts(
                         )
                         .unwrap_or_default()
                         .into(),
-                        feature_set
-                            .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
                         feature_set
                             .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                     )
@@ -202,12 +199,8 @@ fn load_transaction_accounts(
                 .then_some(())
                 .and_then(|_| loaded_programs.find(key))
                 {
-                    // This condition block does special handling for accounts that are passed
-                    // as instruction account to any of the instructions in the transaction.
-                    // It's been noticed that some programs are reading other program accounts
-                    // (that are passed to the program as instruction accounts). So such accounts
-                    // are needed to be loaded even though corresponding compiled program may
-                    // already be present in the cache.
+                    // Optimization to skip loading of accounts which are only used as
+                    // programs in top-level instructions and not passed as instruction accounts.
                     account_shared_data_from_program(key, program_accounts)
                         .map(|program_account| (program.account_size, program_account, 0))?
                 } else {
@@ -536,10 +529,7 @@ mod tests {
     use {
         super::*,
         nonce::state::Versions as NonceVersions,
-        solana_accounts_db::{
-            accounts::Accounts, accounts_db::AccountShrinkThreshold,
-            accounts_index::AccountSecondaryIndexes, rent_collector::RentCollector,
-        },
+        solana_accounts_db::{accounts::Accounts, rent_collector::RentCollector},
         solana_program_runtime::{
             compute_budget_processor,
             prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
@@ -548,7 +538,6 @@ mod tests {
             account::{AccountSharedData, WritableAccount},
             compute_budget::ComputeBudgetInstruction,
             epoch_schedule::EpochSchedule,
-            genesis_config::ClusterType,
             hash::Hash,
             instruction::CompiledInstruction,
             message::{Message, SanitizedMessage},
@@ -573,12 +562,7 @@ mod tests {
     ) -> Vec<TransactionLoadResult> {
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(&tx.message().recent_blockhash, lamports_per_signature);
-        let accounts_db = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
         let accounts = Accounts::new(Arc::new(accounts_db));
         for ka in ka.iter() {
             accounts.accounts_db.store_for_tests(0, &[(&ka.0, &ka.1)]);
@@ -737,7 +721,6 @@ mod tests {
             &process_compute_budget_instructions(message.program_instructions_iter())
                 .unwrap_or_default()
                 .into(),
-            true,
             false,
         );
         assert_eq!(fee, lamports_per_signature);
@@ -1384,12 +1367,7 @@ mod tests {
     #[test]
     fn test_instructions() {
         solana_logger::setup();
-        let accounts_db = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
         let accounts = Accounts::new(Arc::new(accounts_db));
 
         let instructions_key = solana_sdk::sysvar::instructions::id();
@@ -1411,12 +1389,7 @@ mod tests {
     #[test]
     fn test_overrides() {
         solana_logger::setup();
-        let accounts_db = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
         let accounts = Accounts::new(Arc::new(accounts_db));
         let mut account_overrides = AccountOverrides::default();
         let slot_history_id = sysvar::slot_history::id();
@@ -1583,7 +1556,6 @@ mod tests {
             &process_compute_budget_instructions(message.program_instructions_iter())
                 .unwrap_or_default()
                 .into(),
-            true,
             false,
         );
         assert_eq!(fee, lamports_per_signature + prioritization_fee);

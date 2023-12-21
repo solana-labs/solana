@@ -10,6 +10,7 @@ use {
         accounts_db::{
             test_utils::{create_test_accounts, update_accounts_bench},
             AccountShrinkThreshold, AccountsDb, CalcAccountsHashDataSource,
+            ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS,
         },
         accounts_index::AccountSecondaryIndexes,
         ancestors::Ancestors,
@@ -69,11 +70,14 @@ fn main() {
     if fs::remove_dir_all(path.clone()).is_err() {
         println!("Warning: Couldn't remove {path:?}");
     }
-    let accounts_db = AccountsDb::new_with_config_for_benches(
+    let accounts_db = AccountsDb::new_with_config(
         vec![path],
         &ClusterType::Testnet,
         AccountSecondaryIndexes::default(),
         AccountShrinkThreshold::default(),
+        Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
+        None,
+        Arc::default(),
     );
     let accounts = Accounts::new(Arc::new(accounts_db));
     println!("Creating {num_accounts} accounts");

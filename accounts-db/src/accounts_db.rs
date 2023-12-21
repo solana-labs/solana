@@ -9522,40 +9522,6 @@ pub(crate) enum UpdateIndexThreadSelection {
 // These functions/fields are only usable from a dev context (i.e. tests and benches)
 #[cfg(feature = "dev-context-only-utils")]
 impl AccountsDb {
-    pub fn new_with_config_for_tests(
-        paths: Vec<PathBuf>,
-        cluster_type: &ClusterType,
-        account_indexes: AccountSecondaryIndexes,
-        shrink_ratio: AccountShrinkThreshold,
-    ) -> Self {
-        Self::new_with_config(
-            paths,
-            cluster_type,
-            account_indexes,
-            shrink_ratio,
-            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
-            None,
-            Arc::default(),
-        )
-    }
-
-    pub fn new_with_config_for_benches(
-        paths: Vec<PathBuf>,
-        cluster_type: &ClusterType,
-        account_indexes: AccountSecondaryIndexes,
-        shrink_ratio: AccountShrinkThreshold,
-    ) -> Self {
-        Self::new_with_config(
-            paths,
-            cluster_type,
-            account_indexes,
-            shrink_ratio,
-            Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
-            None,
-            Arc::default(),
-        )
-    }
-
     pub fn load_without_fixed_root(
         &self,
         ancestors: &Ancestors,
@@ -9855,13 +9821,6 @@ pub mod tests {
     }
 
     impl AccountsDb {
-        pub fn new_sized(paths: Vec<PathBuf>, file_size: u64) -> Self {
-            AccountsDb {
-                file_size,
-                ..AccountsDb::new_for_tests(paths, &ClusterType::Development)
-            }
-        }
-
         pub fn get_append_vec_id(&self, pubkey: &Pubkey, slot: Slot) -> Option<AppendVecId> {
             let ancestors = vec![(slot, 1)].into_iter().collect();
             let result = self.accounts_index.get(pubkey, Some(&ancestors), None);
@@ -11578,7 +11537,10 @@ pub mod tests {
     fn test_account_grow_many() {
         let (_accounts_dir, paths) = get_temp_accounts_paths(2).unwrap();
         let size = 4096;
-        let accounts = AccountsDb::new_sized(paths, size);
+        let accounts = AccountsDb {
+            file_size: size,
+            ..AccountsDb::new_for_tests(paths, &ClusterType::Development)
+        };
         let mut keys = vec![];
         for i in 0..9 {
             let key = solana_sdk::pubkey::new_rand();
@@ -11965,12 +11927,10 @@ pub mod tests {
     fn test_clean_old_with_both_normal_and_zero_lamport_accounts() {
         solana_logger::setup();
 
-        let mut accounts = AccountsDb::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            spl_token_mint_index_enabled(),
-            AccountShrinkThreshold::default(),
-        );
+        let mut accounts = AccountsDb {
+            account_indexes: spl_token_mint_index_enabled(),
+            ..AccountsDb::new_single_for_tests()
+        };
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
 
@@ -12341,7 +12301,10 @@ pub mod tests {
 
         let min_file_bytes = std::mem::size_of::<StoredMeta>() + std::mem::size_of::<AccountMeta>();
 
-        let db = Arc::new(AccountsDb::new_sized(Vec::new(), min_file_bytes as u64));
+        let db = Arc::new(AccountsDb {
+            file_size: min_file_bytes as u64,
+            ..AccountsDb::new_single_for_tests()
+        });
 
         db.add_root(slot);
         let thread_hdls: Vec<_> = (0..num_threads)
@@ -12867,7 +12830,10 @@ pub mod tests {
     #[test]
     fn test_storage_finder() {
         solana_logger::setup();
-        let db = AccountsDb::new_sized(Vec::new(), 16 * 1024);
+        let db = AccountsDb {
+            file_size: 16 * 1024,
+            ..AccountsDb::new_single_for_tests()
+        };
         let key = solana_sdk::pubkey::new_rand();
         let lamports = 100;
         let data_len = 8190;
@@ -13009,7 +12975,10 @@ pub mod tests {
         let zero_lamport_account = AccountSharedData::new(zero_lamport, data_size, &owner);
 
         let mut current_slot = 0;
-        let accounts = AccountsDb::new_sized(Vec::new(), store_size);
+        let accounts = AccountsDb {
+            file_size: store_size,
+            ..AccountsDb::new_single_for_tests()
+        };
 
         // A: Initialize AccountsDb with pubkey1 and pubkey2
         current_slot += 1;
@@ -13653,7 +13622,10 @@ pub mod tests {
     #[test]
     fn test_store_reuse() {
         solana_logger::setup();
-        let accounts = AccountsDb::new_sized(vec![], 4096);
+        let accounts = AccountsDb {
+            file_size: 4096,
+            ..AccountsDb::new_single_for_tests()
+        };
 
         let size = 100;
         let num_accounts: usize = 100;
