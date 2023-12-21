@@ -104,7 +104,7 @@ use {
 ///
 /// [`Finalized`]: CommitmentLevel::Finalized
 /// [`Processed`]: CommitmentLevel::Processed
-/// [jsonprot]: https://docs.solana.com/developing/clients/jsonrpc-api
+/// [jsonprot]: https://solana.com/docs/rpc
 /// [JSON-RPC]: https://www.jsonrpc.org/specification
 /// [slots]: https://solana.com/docs/terminology#slot
 /// [cl]: https://solana.com/docs/rpc#configuring-state-commitment
@@ -639,8 +639,8 @@ impl RpcClient {
     /// This method is built on the [`sendTransaction`] RPC method, and the
     /// [`getLatestBlockhash`] RPC method.
     ///
-    /// [`sendTransaction`]: https://docs.solana.com/developing/clients/jsonrpc-api#sendtransaction
-    /// [`getLatestBlockhash`]: https://docs.solana.com/developing/clients/jsonrpc-api#getlatestblockhash
+    /// [`sendTransaction`]: https://solana.com/docs/rpc/http/sendtransaction
+    /// [`getLatestBlockhash`]: https://solana.com/docs/rpc/http/getlatestblockhash
     ///
     /// # Examples
     ///
@@ -811,7 +811,7 @@ impl RpcClient {
     ///
     /// This method is built on the [`sendTransaction`] RPC method.
     ///
-    /// [`sendTransaction`]: https://docs.solana.com/developing/clients/jsonrpc-api#sendtransaction
+    /// [`sendTransaction`]: https://solana.com/docs/rpc/http/sendtransaction
     ///
     /// # Examples
     ///
@@ -900,7 +900,7 @@ impl RpcClient {
     ///
     /// This method is built on the [`sendTransaction`] RPC method.
     ///
-    /// [`sendTransaction`]: https://docs.solana.com/developing/clients/jsonrpc-api#sendtransaction
+    /// [`sendTransaction`]: https://solana.com/docs/rpc/http/sendtransaction
     ///
     /// # Examples
     ///
@@ -1028,7 +1028,7 @@ impl RpcClient {
     ///
     /// This method is built on the [`getSignatureStatuses`] RPC method.
     ///
-    /// [`getSignatureStatuses`]: https://docs.solana.com/developing/clients/jsonrpc-api#getsignaturestatuses
+    /// [`getSignatureStatuses`]: https://solana.com/docs/rpc/http/getsignaturestatuses
     ///
     /// # Examples
     ///
@@ -1087,7 +1087,7 @@ impl RpcClient {
     ///
     /// This method is built on the [`getSignatureStatuses`] RPC method.
     ///
-    /// [`getSignatureStatuses`]: https://docs.solana.com/developing/clients/jsonrpc-api#getsignaturestatuses
+    /// [`getSignatureStatuses`]: https://solana.com/docs/rpc/http/getsignaturestatuses
     ///
     /// # Examples
     ///
@@ -1255,7 +1255,7 @@ impl RpcClient {
     /// Simulating a transaction is similar to the ["preflight check"] that is
     /// run by default when sending a transaction.
     ///
-    /// ["preflight check"]: https://docs.solana.com/developing/clients/jsonrpc-api#sendtransaction
+    /// ["preflight check"]: https://solana.com/docs/rpc/http/sendtransaction
     ///
     /// By default, signatures are not verified during simulation. To verify
     /// signatures, call the [`simulate_transaction_with_config`] method, with
@@ -1269,7 +1269,7 @@ impl RpcClient {
     ///
     /// This method is built on the [`simulateTransaction`] RPC method.
     ///
-    /// [`simulateTransaction`]: https://docs.solana.com/developing/clients/jsonrpc-api#simulatetransaction
+    /// [`simulateTransaction`]: https://solana.com/docs/rpc/http/simulatetransaction
     ///
     /// # Examples
     ///
@@ -1326,7 +1326,7 @@ impl RpcClient {
     /// Simulating a transaction is similar to the ["preflight check"] that is
     /// run by default when sending a transaction.
     ///
-    /// ["preflight check"]: https://docs.solana.com/developing/clients/jsonrpc-api#sendtransaction
+    /// ["preflight check"]: https://solana.com/docs/rpc/http/sendtransaction
     ///
     /// By default, signatures are not verified during simulation. To verify
     /// signatures, call the [`simulate_transaction_with_config`] method, with
@@ -1349,7 +1349,7 @@ impl RpcClient {
     ///
     /// This method is built on the [`simulateTransaction`] RPC method.
     ///
-    /// [`simulateTransaction`]: https://docs.solana.com/developing/clients/jsonrpc-api#simulatetransaction
+    /// [`simulateTransaction`]: https://solana.com/docs/rpc/http/simulatetransaction
     ///
     /// # Examples
     ///
@@ -1421,7 +1421,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getHighestSnapshotSlot`] RPC method.
     ///
-    /// [`getHighestSnapshotSlot`]: https://docs.solana.com/developing/clients/jsonrpc-api#gethighestsnapshotslot
+    /// [`getHighestSnapshotSlot`]: https://solana.com/docs/rpc/http/gethighestsnapshotslot
     ///
     /// # Examples
     ///
@@ -1487,7 +1487,7 @@ impl RpcClient {
     ///
     /// This method is built on the [`getSignatureStatuses`] RPC method.
     ///
-    /// [`getSignatureStatuses`]: https://docs.solana.com/developing/clients/jsonrpc-api#gitsignaturestatuses
+    /// [`getSignatureStatuses`]: https://solana.com/docs/rpc/http/getsignaturestatuses
     ///
     /// # Examples
     ///
@@ -1556,7 +1556,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getSignatureStatuses`] RPC method.
     ///
-    /// [`getSignatureStatuses`]: https://docs.solana.com/developing/clients/jsonrpc-api#getsignaturestatuses
+    /// [`getSignatureStatuses`]: https://solana.com/docs/rpc/http/getsignaturestatuses
     ///
     /// # Examples
     ///
@@ -1636,7 +1636,7 @@ impl RpcClient {
     /// method, with the `searchTransactionHistory` configuration option set to
     /// `true`.
     ///
-    /// [`getSignatureStatuses`]: https://docs.solana.com/developing/clients/jsonrpc-api#getsignaturestatuses
+    /// [`getSignatureStatuses`]: https://solana.com/docs/rpc/http/getsignaturestatuses
     ///
     /// # Examples
     ///
@@ -1707,7 +1707,7 @@ impl RpcClient {
     ///
     /// This method is built on the [`getSignatureStatuses`] RPC method.
     ///
-    /// [`getSignatureStatuses`]: https://docs.solana.com/developing/clients/jsonrpc-api#getsignaturestatuses
+    /// [`getSignatureStatuses`]: https://solana.com/docs/rpc/http/getsignaturestatuses
     ///
     /// # Examples
     ///
@@ -1779,7 +1779,7 @@ impl RpcClient {
     ///
     /// This method is built on the [`getSignatureStatuses`] RPC method.
     ///
-    /// [`getSignatureStatuses`]: https://docs.solana.com/developing/clients/jsonrpc-api#getsignaturestatuses
+    /// [`getSignatureStatuses`]: https://solana.com/docs/rpc/http/getsignaturestatuses
     ///
     /// # Examples
     ///
@@ -1840,7 +1840,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getSlot`] RPC method.
     ///
-    /// [`getSlot`]: https://docs.solana.com/developing/clients/jsonrpc-api#getslot
+    /// [`getSlot`]: https://solana.com/docs/rpc/http/getslot
     ///
     /// # Examples
     ///
@@ -1866,7 +1866,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getSlot`] RPC method.
     ///
-    /// [`getSlot`]: https://docs.solana.com/developing/clients/jsonrpc-api#getslot
+    /// [`getSlot`]: https://solana.com/docs/rpc/http/getslot
     ///
     /// # Examples
     ///
@@ -1901,7 +1901,7 @@ impl RpcClient {
     ///
     /// This method is corresponds directly to the [`getBlockHeight`] RPC method.
     ///
-    /// [`getBlockHeight`]: https://docs.solana.com/developing/clients/jsonrpc-api#getblockheight
+    /// [`getBlockHeight`]: https://solana.com/docs/rpc/http/getblockheight
     ///
     /// # Examples
     ///
@@ -1928,7 +1928,7 @@ impl RpcClient {
     ///
     /// This method is corresponds directly to the [`getBlockHeight`] RPC method.
     ///
-    /// [`getBlockHeight`]: https://docs.solana.com/developing/clients/jsonrpc-api#getblockheight
+    /// [`getBlockHeight`]: https://solana.com/docs/rpc/http/getblockheight
     ///
     /// # Examples
     ///
@@ -1963,7 +1963,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getSlotLeaders`] RPC method.
     ///
-    /// [`getSlotLeaders`]: https://docs.solana.com/developing/clients/jsonrpc-api#getslotleaders
+    /// [`getSlotLeaders`]: https://solana.com/docs/rpc/http/getslotleaders
     ///
     /// # Examples
     ///
@@ -2006,7 +2006,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getBlockProduction`] RPC method.
     ///
-    /// [`getBlockProduction`]: https://docs.solana.com/developing/clients/jsonrpc-api#getblockproduction
+    /// [`getBlockProduction`]: https://solana.com/docs/rpc/http/getblockproduction
     ///
     /// # Examples
     ///
@@ -2030,7 +2030,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getBlockProduction`] RPC method.
     ///
-    /// [`getBlockProduction`]: https://docs.solana.com/developing/clients/jsonrpc-api#getblockproduction
+    /// [`getBlockProduction`]: https://solana.com/docs/rpc/http/getblockproduction
     ///
     /// # Examples
     ///
@@ -2086,7 +2086,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getStakeActivation`] RPC method.
     ///
-    /// [`getStakeActivation`]: https://docs.solana.com/developing/clients/jsonrpc-api#getstakeactivation
+    /// [`getStakeActivation`]: https://solana.com/docs/rpc/http/getstakeactivation
     ///
     /// # Examples
     ///
@@ -2179,7 +2179,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getSupply`] RPC method.
     ///
-    /// [`getSupply`]: https://docs.solana.com/developing/clients/jsonrpc-api#getsupply
+    /// [`getSupply`]: https://solana.com/docs/rpc/http/getsupply
     ///
     /// # Examples
     ///
@@ -2203,7 +2203,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getSupply`] RPC method.
     ///
-    /// [`getSupply`]: https://docs.solana.com/developing/clients/jsonrpc-api#getsupply
+    /// [`getSupply`]: https://solana.com/docs/rpc/http/getsupply
     ///
     /// # Examples
     ///
@@ -2239,7 +2239,7 @@ impl RpcClient {
     /// This method corresponds directly to the [`getLargestAccounts`] RPC
     /// method.
     ///
-    /// [`getLargestAccounts`]: https://docs.solana.com/developing/clients/jsonrpc-api#getlargestaccounts
+    /// [`getLargestAccounts`]: https://solana.com/docs/rpc/http/getlargestaccounts
     ///
     /// # Examples
     ///
@@ -2289,7 +2289,7 @@ impl RpcClient {
     /// This method corresponds directly to the [`getVoteAccounts`]
     /// RPC method.
     ///
-    /// [`getVoteAccounts`]: https://docs.solana.com/developing/clients/jsonrpc-api#getvoteaccounts
+    /// [`getVoteAccounts`]: https://solana.com/docs/rpc/http/getvoteaccounts
     ///
     /// # Examples
     ///
@@ -2317,7 +2317,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getVoteAccounts`] RPC method.
     ///
-    /// [`getVoteAccounts`]: https://docs.solana.com/developing/clients/jsonrpc-api#getvoteaccounts
+    /// [`getVoteAccounts`]: https://solana.com/docs/rpc/http/getvoteaccounts
     ///
     /// # Examples
     ///
@@ -2355,7 +2355,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getVoteAccounts`] RPC method.
     ///
-    /// [`getVoteAccounts`]: https://docs.solana.com/developing/clients/jsonrpc-api#getvoteaccounts
+    /// [`getVoteAccounts`]: https://solana.com/docs/rpc/http/getvoteaccounts
     ///
     /// # Examples
     ///
@@ -2435,7 +2435,7 @@ impl RpcClient {
     /// This method corresponds directly to the [`getClusterNodes`]
     /// RPC method.
     ///
-    /// [`getClusterNodes`]: https://docs.solana.com/developing/clients/jsonrpc-api#getclusternodes
+    /// [`getClusterNodes`]: https://solana.com/docs/rpc/http/getclusternodes
     ///
     /// # Examples
     ///
@@ -2467,7 +2467,7 @@ impl RpcClient {
     /// This method corresponds directly to the [`getBlock`] RPC
     /// method.
     ///
-    /// [`getBlock`]: https://docs.solana.com/developing/clients/jsonrpc-api#getblock
+    /// [`getBlock`]: https://solana.com/docs/rpc/http/getblock
     ///
     /// # Examples
     ///
@@ -2493,7 +2493,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getBlock`] RPC method.
     ///
-    /// [`getBlock`]: https://docs.solana.com/developing/clients/jsonrpc-api#getblock
+    /// [`getBlock`]: https://solana.com/docs/rpc/http/getblock
     ///
     /// # Examples
     ///
@@ -2531,7 +2531,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getBlock`] RPC method.
     ///
-    /// [`getBlock`]: https://docs.solana.com/developing/clients/jsonrpc-api#getblock
+    /// [`getBlock`]: https://solana.com/docs/rpc/http/getblock
     ///
     /// # Examples
     ///
@@ -2638,8 +2638,8 @@ impl RpcClient {
     /// the remote node version is less than 1.7, in which case it maps to the
     /// [`getConfirmedBlocks`] RPC method.
     ///
-    /// [`getBlocks`]: https://docs.solana.com/developing/clients/jsonrpc-api#getblocks
-    /// [`getConfirmedBlocks`]: https://docs.solana.com/developing/clients/jsonrpc-api#getConfirmedblocks
+    /// [`getBlocks`]: https://solana.com/docs/rpc/http/getblocks
+    /// [`getConfirmedBlocks`]: https://solana.com/docs/rpc/http/getConfirmedblocks
     ///
     /// # Examples
     ///
@@ -2700,8 +2700,8 @@ impl RpcClient {
     /// the remote node version is less than 1.7, in which case it maps to the
     /// [`getConfirmedBlocks`] RPC method.
     ///
-    /// [`getBlocks`]: https://docs.solana.com/developing/clients/jsonrpc-api#getblocks
-    /// [`getConfirmedBlocks`]: https://docs.solana.com/developing/clients/jsonrpc-api#getConfirmedblocks
+    /// [`getBlocks`]: https://solana.com/docs/rpc/http/getblocks
+    /// [`getConfirmedBlocks`]: https://solana.com/docs/rpc/http/getConfirmedblocks
     ///
     /// # Examples
     ///
@@ -2764,8 +2764,8 @@ impl RpcClient {
     /// method, unless the remote node version is less than 1.7, in which case
     /// it maps to the [`getConfirmedBlocksWithLimit`] RPC method.
     ///
-    /// [`getBlocksWithLimit`]: https://docs.solana.com/developing/clients/jsonrpc-api#getblockswithlimit
-    /// [`getConfirmedBlocksWithLimit`]: https://docs.solana.com/developing/clients/jsonrpc-api#getconfirmedblockswithlimit
+    /// [`getBlocksWithLimit`]: https://solana.com/docs/rpc/http/getblockswithlimit
+    /// [`getConfirmedBlocksWithLimit`]: https://solana.com/docs/rpc/http/getconfirmedblockswithlimit
     ///
     /// # Examples
     ///
@@ -2813,8 +2813,8 @@ impl RpcClient {
     /// method, unless the remote node version is less than 1.7, in which case
     /// it maps to the `getConfirmedBlocksWithLimit` RPC method.
     ///
-    /// [`getBlocksWithLimit`]: https://docs.solana.com/developing/clients/jsonrpc-api#getblockswithlimit
-    /// [`getConfirmedBlocksWithLimit`]: https://docs.solana.com/developing/clients/jsonrpc-api#getconfirmedblockswithlimit
+    /// [`getBlocksWithLimit`]: https://solana.com/docs/rpc/http/getblockswithlimit
+    /// [`getConfirmedBlocksWithLimit`]: https://solana.com/docs/rpc/http/getconfirmedblockswithlimit
     ///
     /// # Examples
     ///
@@ -2949,8 +2949,8 @@ impl RpcClient {
     /// method, unless the remote node version is less than 1.7, in which case
     /// it maps to the [`getSignaturesForAddress2`] RPC method.
     ///
-    /// [`getSignaturesForAddress`]: https://docs.solana.com/developing/clients/jsonrpc-api#getsignaturesforaddress
-    /// [`getSignaturesForAddress2`]: https://docs.solana.com/developing/clients/jsonrpc-api#getsignaturesforaddress2
+    /// [`getSignaturesForAddress`]: https://solana.com/docs/rpc/http/getsignaturesforaddress
+    /// [`getSignaturesForAddress2`]: https://solana.com/docs/rpc/http/getsignaturesforaddress2
     ///
     /// # Examples
     ///
@@ -2999,8 +2999,8 @@ impl RpcClient {
     /// method, unless the remote node version is less than 1.7, in which case
     /// it maps to the [`getSignaturesForAddress2`] RPC method.
     ///
-    /// [`getSignaturesForAddress`]: https://docs.solana.com/developing/clients/jsonrpc-api#getsignaturesforaddress
-    /// [`getSignaturesForAddress2`]: https://docs.solana.com/developing/clients/jsonrpc-api#getsignaturesforaddress2
+    /// [`getSignaturesForAddress`]: https://solana.com/docs/rpc/http/getsignaturesforaddress
+    /// [`getSignaturesForAddress2`]: https://solana.com/docs/rpc/http/getsignaturesforaddress2
     ///
     /// # Examples
     ///
@@ -3118,8 +3118,8 @@ impl RpcClient {
     /// unless the remote node version is less than 1.7, in which case it maps
     /// to the [`getConfirmedTransaction`] RPC method.
     ///
-    /// [`getTransaction`]: https://docs.solana.com/developing/clients/jsonrpc-api#gettransaction
-    /// [`getConfirmedTransaction`]: https://docs.solana.com/developing/clients/jsonrpc-api#getconfirmedtransaction
+    /// [`getTransaction`]: https://solana.com/docs/rpc/http/gettransaction
+    /// [`getConfirmedTransaction`]: https://solana.com/docs/rpc/http/getconfirmedtransaction
     ///
     /// # Examples
     ///
@@ -3177,8 +3177,8 @@ impl RpcClient {
     /// unless the remote node version is less than 1.7, in which case it maps
     /// to the [`getConfirmedTransaction`] RPC method.
     ///
-    /// [`getTransaction`]: https://docs.solana.com/developing/clients/jsonrpc-api#gettransaction
-    /// [`getConfirmedTransaction`]: https://docs.solana.com/developing/clients/jsonrpc-api#getconfirmedtransaction
+    /// [`getTransaction`]: https://solana.com/docs/rpc/http/gettransaction
+    /// [`getConfirmedTransaction`]: https://solana.com/docs/rpc/http/getconfirmedtransaction
     ///
     /// # Examples
     ///
@@ -3269,7 +3269,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getBlockTime`] RPC method.
     ///
-    /// [`getBlockTime`]: https://docs.solana.com/developing/clients/jsonrpc-api#getblocktime
+    /// [`getBlockTime`]: https://solana.com/docs/rpc/http/getblocktime
     ///
     /// # Examples
     ///
@@ -3312,7 +3312,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getEpochInfo`] RPC method.
     ///
-    /// [`getEpochInfo`]: https://docs.solana.com/developing/clients/jsonrpc-api#getepochinfo
+    /// [`getEpochInfo`]: https://solana.com/docs/rpc/http/getepochinfo
     ///
     /// # Examples
     ///
@@ -3336,7 +3336,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getEpochInfo`] RPC method.
     ///
-    /// [`getEpochInfo`]: https://docs.solana.com/developing/clients/jsonrpc-api#getepochinfo
+    /// [`getEpochInfo`]: https://solana.com/docs/rpc/http/getepochinfo
     ///
     /// # Examples
     ///
@@ -3375,7 +3375,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getLeaderSchedule`] RPC method.
     ///
-    /// [`getLeaderSchedule`]: https://docs.solana.com/developing/clients/jsonrpc-api#getleaderschedule
+    /// [`getLeaderSchedule`]: https://solana.com/docs/rpc/http/getleaderschedule
     ///
     /// # Examples
     ///
@@ -3407,7 +3407,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getLeaderSchedule`] RPC method.
     ///
-    /// [`getLeaderSchedule`]: https://docs.solana.com/developing/clients/jsonrpc-api#getleaderschedule
+    /// [`getLeaderSchedule`]: https://solana.com/docs/rpc/http/getleaderschedule
     ///
     /// # Examples
     ///
@@ -3448,7 +3448,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getLeaderSchedule`] RPC method.
     ///
-    /// [`getLeaderSchedule`]: https://docs.solana.com/developing/clients/jsonrpc-api#getleaderschedule
+    /// [`getLeaderSchedule`]: https://solana.com/docs/rpc/http/getleaderschedule
     ///
     /// # Examples
     ///
@@ -3490,7 +3490,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getEpochSchedule`] RPC method.
     ///
-    /// [`getEpochSchedule`]: https://docs.solana.com/developing/clients/jsonrpc-api#getepochschedule
+    /// [`getEpochSchedule`]: https://solana.com/docs/rpc/http/getepochschedule
     ///
     /// # Examples
     ///
@@ -3517,7 +3517,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getRecentPerformanceSamples`] RPC method.
     ///
-    /// [`getRecentPerformanceSamples`]: https://docs.solana.com/developing/clients/jsonrpc-api#getrecentperformancesamples
+    /// [`getRecentPerformanceSamples`]: https://solana.com/docs/rpc/http/getrecentperformancesamples
     ///
     /// # Examples
     ///
@@ -3553,7 +3553,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getRecentPrioritizationFees`] RPC method.
     ///
-    /// [`getRecentPrioritizationFees`]: https://docs.solana.com/developing/clients/jsonrpc-api#getrecentprioritizationfees
+    /// [`getRecentPrioritizationFees`]: https://solana.com/docs/rpc/http/getrecentprioritizationfees
     ///
     /// # Examples
     ///
@@ -3591,7 +3591,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getIdentity`] RPC method.
     ///
-    /// [`getIdentity`]: https://docs.solana.com/developing/clients/jsonrpc-api#getidentity
+    /// [`getIdentity`]: https://solana.com/docs/rpc/http/getidentity
     ///
     /// # Examples
     ///
@@ -3628,7 +3628,7 @@ impl RpcClient {
     /// This method corresponds directly to the [`getInflationGovernor`] RPC
     /// method.
     ///
-    /// [`getInflationGovernor`]: https://docs.solana.com/developing/clients/jsonrpc-api#getinflationgovernor
+    /// [`getInflationGovernor`]: https://solana.com/docs/rpc/http/getinflationgovernor
     ///
     /// # Examples
     ///
@@ -3653,7 +3653,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getInflationRate`] RPC method.
     ///
-    /// [`getInflationRate`]: https://docs.solana.com/developing/clients/jsonrpc-api#getinflationrate
+    /// [`getInflationRate`]: https://solana.com/docs/rpc/http/getinflationrate
     ///
     /// # Examples
     ///
@@ -3681,7 +3681,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getInflationReward`] RPC method.
     ///
-    /// [`getInflationReward`]: https://docs.solana.com/developing/clients/jsonrpc-api#getinflationreward
+    /// [`getInflationReward`]: https://solana.com/docs/rpc/http/getinflationreward
     ///
     /// # Examples
     ///
@@ -3733,7 +3733,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getVersion`] RPC method.
     ///
-    /// [`getVersion`]: https://docs.solana.com/developing/clients/jsonrpc-api#getversion
+    /// [`getVersion`]: https://solana.com/docs/rpc/http/getversion
     ///
     /// # Examples
     ///
@@ -3765,7 +3765,7 @@ impl RpcClient {
     /// This method corresponds directly to the [`minimumLedgerSlot`] RPC
     /// method.
     ///
-    /// [`minimumLedgerSlot`]: https://docs.solana.com/developing/clients/jsonrpc-api#minimumledgerslot
+    /// [`minimumLedgerSlot`]: https://solana.com/docs/rpc/http/minimumledgerslot
     ///
     /// # Examples
     ///
@@ -3805,7 +3805,7 @@ impl RpcClient {
     ///
     /// This method is built on the [`getAccountInfo`] RPC method.
     ///
-    /// [`getAccountInfo`]: https://docs.solana.com/developing/clients/jsonrpc-api#getaccountinfo
+    /// [`getAccountInfo`]: https://solana.com/docs/rpc/http/getaccountinfo
     ///
     /// # Examples
     ///
@@ -3846,7 +3846,7 @@ impl RpcClient {
     ///
     /// This method is built on the [`getAccountInfo`] RPC method.
     ///
-    /// [`getAccountInfo`]: https://docs.solana.com/developing/clients/jsonrpc-api#getaccountinfo
+    /// [`getAccountInfo`]: https://solana.com/docs/rpc/http/getaccountinfo
     ///
     /// # Examples
     ///
@@ -3901,7 +3901,7 @@ impl RpcClient {
     ///
     /// This method is built on the [`getAccountInfo`] RPC method.
     ///
-    /// [`getAccountInfo`]: https://docs.solana.com/developing/clients/jsonrpc-api#getaccountinfo
+    /// [`getAccountInfo`]: https://solana.com/docs/rpc/http/getaccountinfo
     ///
     /// # Examples
     ///
@@ -3983,7 +3983,7 @@ impl RpcClient {
     /// This method corresponds directly to the [`getMaxRetransmitSlot`] RPC
     /// method.
     ///
-    /// [`getMaxRetransmitSlot`]: https://docs.solana.com/developing/clients/jsonrpc-api#getmaxretransmitslot
+    /// [`getMaxRetransmitSlot`]: https://solana.com/docs/rpc/http/getmaxretransmitslot
     ///
     /// # Examples
     ///
@@ -4008,7 +4008,7 @@ impl RpcClient {
     /// This method corresponds directly to the
     /// [`getMaxShredInsertSlot`] RPC method.
     ///
-    /// [`getMaxShredInsertSlot`]: https://docs.solana.com/developing/clients/jsonrpc-api#getmaxshredinsertslot
+    /// [`getMaxShredInsertSlot`]: https://solana.com/docs/rpc/http/getmaxshredinsertslot
     ///
     /// # Examples
     ///
@@ -4036,7 +4036,7 @@ impl RpcClient {
     ///
     /// This method is built on the [`getMultipleAccounts`] RPC method.
     ///
-    /// [`getMultipleAccounts`]: https://docs.solana.com/developing/clients/jsonrpc-api#getmultipleaccounts
+    /// [`getMultipleAccounts`]: https://solana.com/docs/rpc/http/getmultipleaccounts
     ///
     /// # Examples
     ///
@@ -4073,7 +4073,7 @@ impl RpcClient {
     ///
     /// This method is built on the [`getMultipleAccounts`] RPC method.
     ///
-    /// [`getMultipleAccounts`]: https://docs.solana.com/developing/clients/jsonrpc-api#getmultipleaccounts
+    /// [`getMultipleAccounts`]: https://solana.com/docs/rpc/http/getmultipleaccounts
     ///
     /// # Examples
     ///
@@ -4122,7 +4122,7 @@ impl RpcClient {
     ///
     /// This method is built on the [`getMultipleAccounts`] RPC method.
     ///
-    /// [`getMultipleAccounts`]: https://docs.solana.com/developing/clients/jsonrpc-api#getmultipleaccounts
+    /// [`getMultipleAccounts`]: https://solana.com/docs/rpc/http/getmultipleaccounts
     ///
     /// # Examples
     ///
@@ -4196,7 +4196,7 @@ impl RpcClient {
     ///
     /// This method is built on the [`getAccountInfo`] RPC method.
     ///
-    /// [`getAccountInfo`]: https://docs.solana.com/developing/clients/jsonrpc-api#getaccountinfo
+    /// [`getAccountInfo`]: https://solana.com/docs/rpc/http/getaccountinfo
     ///
     /// # Examples
     ///
@@ -4229,7 +4229,7 @@ impl RpcClient {
     /// This method corresponds directly to the
     /// [`getMinimumBalanceForRentExemption`] RPC method.
     ///
-    /// [`getMinimumBalanceForRentExemption`]: https://docs.solana.com/developing/clients/jsonrpc-api#getminimumbalanceforrentexemption
+    /// [`getMinimumBalanceForRentExemption`]: https://solana.com/docs/rpc/http/getminimumbalanceforrentexemption
     ///
     /// # Examples
     ///
@@ -4274,7 +4274,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getBalance`] RPC method.
     ///
-    /// [`getBalance`]: https://docs.solana.com/developing/clients/jsonrpc-api#getbalance
+    /// [`getBalance`]: https://solana.com/docs/rpc/http/getbalance
     ///
     /// # Examples
     ///
@@ -4306,7 +4306,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getBalance`] RPC method.
     ///
-    /// [`getBalance`]: https://docs.solana.com/developing/clients/jsonrpc-api#getbalance
+    /// [`getBalance`]: https://solana.com/docs/rpc/http/getbalance
     ///
     /// # Examples
     ///
@@ -4356,7 +4356,7 @@ impl RpcClient {
     /// This method corresponds directly to the [`getProgramAccounts`] RPC
     /// method.
     ///
-    /// [`getProgramAccounts`]: https://docs.solana.com/developing/clients/jsonrpc-api#getprogramaccounts
+    /// [`getProgramAccounts`]: https://solana.com/docs/rpc/http/getprogramaccounts
     ///
     /// # Examples
     ///
@@ -4398,7 +4398,7 @@ impl RpcClient {
     ///
     /// This method is built on the [`getProgramAccounts`] RPC method.
     ///
-    /// [`getProgramAccounts`]: https://docs.solana.com/developing/clients/jsonrpc-api#getprogramaccounts
+    /// [`getProgramAccounts`]: https://solana.com/docs/rpc/http/getprogramaccounts
     ///
     /// # Examples
     ///
@@ -4481,7 +4481,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getStakeMinimumDelegation`] RPC method.
     ///
-    /// [`getStakeMinimumDelegation`]: https://docs.solana.com/developing/clients/jsonrpc-api#getstakeminimumdelegation
+    /// [`getStakeMinimumDelegation`]: https://solana.com/docs/rpc/http/getstakeminimumdelegation
     ///
     /// # Examples
     ///
@@ -4506,7 +4506,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getStakeMinimumDelegation`] RPC method.
     ///
-    /// [`getStakeMinimumDelegation`]: https://docs.solana.com/developing/clients/jsonrpc-api#getstakeminimumdelegation
+    /// [`getStakeMinimumDelegation`]: https://solana.com/docs/rpc/http/getstakeminimumdelegation
     ///
     /// # Examples
     ///

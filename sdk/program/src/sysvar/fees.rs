@@ -11,7 +11,7 @@
 //! method. For additional context see the [Comprehensive Compute Fees
 //! proposal][ccf].
 //!
-//! [`getFeeForMessage`]: https://docs.solana.com/developing/clients/jsonrpc-api#getfeeformessage
+//! [`getFeeForMessage`]: https://solana.com/docs/rpc/http/getfeeformessage
 //! [ccf]: https://docs.solanalabs.com/proposals/comprehensive-compute-fees
 //!
 //! See also the Solana [documentation on the fees sysvar][sdoc].
