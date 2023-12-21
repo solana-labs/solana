@@ -123,8 +123,19 @@ where
         let Some(thread_manager) = self.thread_manager.upgrade() else {
             return false;
         };
+
+        // The following linux-only code implements an eager native thread reclaiming, which is
+        // only useful if the solana-validator sees many unrooted forks. Such hostile situations
+        // should NEVER happen on remotely-uncontrollable ledgers created by solana-test-validator.
+        // And it's generally not expected mainnet-beta validators (or any live clusters) to be run
+        // on non-linux OSes at all.
+        //
+        // Thus, this OS-specific implementation can be justified because this enables the hot-path
+        // (the scheduler main thread) to omit VDSOs and timed-out futex syscalls by relying on
+        // this out-of-bound thread watchdog for these defensive thread reclaiming.
         #[cfg(target_os = "linux")]
         {
+            const IDLE_DURATION_FOR_THREAD_RECLAIM: Duration = Duration::from_secs(2); // 5x of 400ms block time
             let Some(tid) = thread_manager.read().unwrap().active_tid_if_not_primary() else {
                 self.tick = 0;
                 self.updated_at = Instant::now();
@@ -143,7 +154,7 @@ where
                 self.updated_at = Instant::now();
             } else {
                 let elapsed = self.updated_at.elapsed();
-                if elapsed > Duration::from_secs(60) {
+                if elapsed > IDLE_DURATION_FOR_THREAD_RECLAIM {
                     const BITS_PER_HEX_DIGIT: usize = 4;
                     let mut thread_manager = thread_manager.write().unwrap();
                     info!(
