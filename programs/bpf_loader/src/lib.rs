@@ -4021,6 +4021,7 @@ mod tests {
             maybe_expiration_slot: None,
             tx_usage_counter: AtomicU64::new(100),
             ix_usage_counter: AtomicU64::new(100),
+            latest_access_slot: AtomicU64::new(0),
         };
         invoke_context
             .programs_modified_by_tx
@@ -4061,6 +4062,7 @@ mod tests {
             maybe_expiration_slot: None,
             tx_usage_counter: AtomicU64::new(100),
             ix_usage_counter: AtomicU64::new(100),
+            latest_access_slot: AtomicU64::new(0),
         };
         invoke_context
             .programs_modified_by_tx
