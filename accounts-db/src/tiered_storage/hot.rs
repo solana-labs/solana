@@ -839,36 +839,4 @@ pub mod tests {
             );
         }
     }
-
-    #[test]
-    #[should_panic(expected = "would exceed accounts blocks offset boundary")]
-    fn test_account_matches_owners_unable_to_load() {
-        // Generate a new temp path that is guaranteed to NOT already have a file.
-        let temp_dir = TempDir::new().unwrap();
-        let path = temp_dir
-            .path()
-            .join("test_get_acount_meta_from_offset_out_of_bounds");
-
-        let footer = TieredStorageFooter {
-            account_meta_format: AccountMetaFormat::Hot,
-            index_block_offset: 160,
-            ..TieredStorageFooter::default()
-        };
-
-        {
-            let file = TieredStorageFile::new_writable(&path).unwrap();
-            footer.write_footer_block(&file).unwrap();
-        }
-        let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
-
-        // Currently, this results in out-of-bound panic instead.
-        // If it's offset mis-alignment error, it is handled inside
-        // HotAccountOffset.
-        hot_storage
-            .account_matches_owners(
-                HotAccountOffset::new(footer.index_block_offset as usize).unwrap(),
-                &[],
-            )
-            .unwrap();
-    }
 }
