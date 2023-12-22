@@ -358,7 +358,7 @@ fn process_batches(
 fn schedule_batches_for_execution(
     bank: &BankWithScheduler,
     batches: &[TransactionBatchWithIndexes],
-) {
+) -> Result<()> {
     for TransactionBatchWithIndexes {
         batch,
         transaction_indexes,
