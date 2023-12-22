@@ -371,6 +371,7 @@ fn schedule_batches_for_execution(
                 .zip(transaction_indexes.iter()),
         )?;
     }
+    Ok(())
 }
 
 fn rebatch_transactions<'a>(
