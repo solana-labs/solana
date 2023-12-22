@@ -387,12 +387,12 @@ impl HotStorageReader {
 
     /// Returns the account block that contains the account associated with
     /// the specified index given the offset to the account meta and its index.
-    fn get_account_block<'a>(
-        &'a self,
+    fn get_account_block(
+        &self,
         account_offset: HotAccountOffset,
         index_offset: IndexOffset,
-    ) -> TieredStorageResult<&'a [u8]> {
-        let (data, _): (&'a [u8], _) = get_slice(
+    ) -> TieredStorageResult<&[u8]> {
+        let (data, _) = get_slice(
             &self.mmap,
             account_offset.offset() + std::mem::size_of::<HotAccountMeta>(),
             self.get_account_block_size(account_offset, index_offset)?,
@@ -968,7 +968,7 @@ pub mod tests {
             let mut current_offset = 0;
 
             // write accounts blocks
-            let padding_buffer: Vec<u8> = vec![0u8; HOT_ACCOUNT_ALIGNMENT];
+            let padding_buffer = vec![0u8; HOT_ACCOUNT_ALIGNMENT];
             let index_writer_entries: Vec<_> = account_metas
                 .iter()
                 .zip(account_datas.iter())
@@ -1019,5 +1019,11 @@ pub mod tests {
 
             assert_eq!(i + 1, next);
         }
+        // Make sure it returns None on NUM_ACCOUNTS to allow termination on
+        // while loop in actual accounts-db read case.
+        assert_matches!(
+            hot_storage.get_account(IndexOffset(NUM_ACCOUNTS as u32)),
+            Ok(None)
+        );
     }
 }
