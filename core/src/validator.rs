@@ -126,7 +126,7 @@ use {
         net::SocketAddr,
         path::{Path, PathBuf},
         sync::{
-            atomic::{AtomicBool, AtomicU64, Ordering},
+            atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
             Arc, RwLock,
         },
         thread::{sleep, Builder, JoinHandle},
@@ -1174,8 +1174,12 @@ impl Validator {
             && genesis_config.cluster_type != ClusterType::MainnetBeta)
             .then(|| {
                 tokio::runtime::Builder::new_multi_thread()
+                    .thread_name_fn(|| {
+                        static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
+                        let id = ATOMIC_ID.fetch_add(1, Ordering::Relaxed);
+                        format!("solTurbineQuic{id:02}")
+                    })
                     .enable_all()
-                    .thread_name("solTurbineQuic")
                     .build()
                     .unwrap()
             });
@@ -1211,8 +1215,12 @@ impl Validator {
             && genesis_config.cluster_type != ClusterType::MainnetBeta)
             .then(|| {
                 tokio::runtime::Builder::new_multi_thread()
+                    .thread_name_fn(|| {
+                        static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
+                        let id = ATOMIC_ID.fetch_add(1, Ordering::Relaxed);
+                        format!("solRepairQuic{id:02}")
+                    })
                     .enable_all()
-                    .thread_name("solRepairQuic")
                     .build()
                     .unwrap()
             });

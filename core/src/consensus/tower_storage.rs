@@ -11,6 +11,7 @@ use {
         fs::{self, File},
         io::{self, BufReader},
         path::PathBuf,
+        sync::atomic::{AtomicUsize, Ordering},
     },
 };
 
@@ -234,6 +235,11 @@ impl EtcdTowerStorage {
         tls_config: Option<EtcdTlsConfig>,
     ) -> Result<Self> {
         let runtime = tokio::runtime::Builder::new_current_thread()
+            .thread_name_fn(|| {
+                static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
+                let id = ATOMIC_ID.fetch_add(1, Ordering::Relaxed);
+                format!("solEtcdStorage{id:02}")
+            })
             .enable_io()
             .enable_time()
             .build()

@@ -103,7 +103,11 @@ pub(crate) fn configure_server(
 
 fn rt() -> Runtime {
     tokio::runtime::Builder::new_multi_thread()
-        .thread_name("quic-server")
+        .thread_name_fn(|| {
+            static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
+            let id = ATOMIC_ID.fetch_add(1, Ordering::Relaxed);
+            format!("solQuicServerWork{id:02}")
+        })
         .enable_all()
         .build()
         .unwrap()

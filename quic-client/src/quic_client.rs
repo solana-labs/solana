@@ -15,7 +15,10 @@ use {
     solana_sdk::transport::{Result as TransportResult, TransportError},
     std::{
         net::SocketAddr,
-        sync::{atomic::Ordering, Arc, Condvar, Mutex, MutexGuard},
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc, Condvar, Mutex, MutexGuard,
+        },
         time::Duration,
     },
     tokio::{runtime::Runtime, time::timeout},
@@ -69,7 +72,11 @@ lazy_static! {
     static ref ASYNC_TASK_SEMAPHORE: AsyncTaskSemaphore =
         AsyncTaskSemaphore::new(MAX_OUTSTANDING_TASK);
     static ref RUNTIME: Runtime = tokio::runtime::Builder::new_multi_thread()
-        .thread_name("quic-client")
+        .thread_name_fn(|| {
+            static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
+            let id = ATOMIC_ID.fetch_add(1, Ordering::Relaxed);
+            format!("solQuicClientWork{id:02}")
+        })
         .enable_all()
         .build()
         .unwrap();

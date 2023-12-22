@@ -30,7 +30,10 @@ use {
         fmt::{self, Display},
         net::SocketAddr,
         path::{Path, PathBuf},
-        sync::{Arc, RwLock},
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc, RwLock,
+        },
         thread::{self, Builder},
         time::{Duration, SystemTime},
     },
@@ -711,8 +714,12 @@ pub fn run(ledger_path: &Path, metadata: AdminRpcRequestMetadata) {
     let admin_rpc_path = admin_rpc_path(ledger_path);
 
     let event_loop = tokio::runtime::Builder::new_multi_thread()
-        .thread_name("solAdminRpcEl")
         .worker_threads(3) // Three still seems like a lot, and better than the default of available core count
+        .thread_name_fn(|| {
+            static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
+            let id = ATOMIC_ID.fetch_add(1, Ordering::Relaxed);
+            format!("solAdminRpcEl{id:02}")
+        })
         .enable_all()
         .build()
         .unwrap();
