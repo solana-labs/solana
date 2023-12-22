@@ -1054,7 +1054,7 @@ where
         match self.schedulable_transaction_sender.send(SessionedMessage::Payload(task)) {
             Ok(()) => Ok(()),
             Err(SendError(_)) => {
-                self
+                self.session_result_with_timings.0.clone()
             }
         }
     }
