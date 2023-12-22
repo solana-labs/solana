@@ -1052,7 +1052,7 @@ where
         debug!("send_task()");
         match self.schedulable_transaction_sender.send(SessionedMessage::Payload(task)) {
             Ok(()) => Ok(()),
-            Err(SendError) => {
+            Err(SendError::JJ) => {
                 panic!();
             }
         }
