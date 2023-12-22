@@ -389,12 +389,13 @@ solana-zk-keygen = { path = "zk-keygen", version = "=1.18.0" }
 solana-zk-token-proof-program = { path = "programs/zk-token-proof", version = "=1.18.0" }
 solana-zk-token-sdk = { path = "zk-token-sdk", version = "=1.18.0" }
 solana_rbpf = "=0.8.0"
-spl-associated-token-account = "=2.2.0"
+spl-associated-token-account = "=2.3.0"
 spl-instruction-padding = "0.1"
 spl-memo = "=4.0.0"
 spl-pod = "=0.1.0"
 spl-token = "=4.0.0"
-spl-token-2022 = "=0.9.0"
+spl-token-2022 = "=1.0.0"
+spl-token-group-interface = "=0.1.0"
 spl-token-metadata-interface = "=0.2.0"
 static_assertions = "1.1.0"
 stream-cancel = "0.8.2"
