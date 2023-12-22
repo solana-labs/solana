@@ -1,3 +1,4 @@
+#![allow(clippy::arithmetic_side_effects)]
 use {
     bzip2::bufread::BzDecoder,
     console::Emoji,
@@ -163,6 +164,7 @@ pub fn parse_and_format_bench_tps_args(bench_tps_args: Option<&str>) -> Option<V
     })
 }
 
+//TODO: ensure math division and modulo and += safe and remove clippy at top
 pub fn calculate_stake_allocations(
     total_sol: f64,
     num_validators: i32,
