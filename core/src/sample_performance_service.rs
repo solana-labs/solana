@@ -28,7 +28,7 @@ impl SamplePerformanceService {
 
         info!("Starting SamplePerformance service");
         let thread_hdl = Builder::new()
-            .name("sample-performance".to_string())
+            .name("solSamplePerformance".to_string())
             .spawn(move || {
                 Self::run(bank_forks, blockstore, exit);
             })
