@@ -550,6 +550,8 @@ impl Crds {
         self.shards.remove(index, &value);
         match value.value.data {
             CrdsData::LegacyContactInfo(_) => {
+                //notify geyzer interface
+                self.notify_clusterinfo_remove(&value.value.pubkey());
                 self.nodes.swap_remove(&index);
             }
             CrdsData::Vote(_, _) => {

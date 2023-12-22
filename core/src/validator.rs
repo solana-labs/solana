@@ -744,6 +744,8 @@ impl Validator {
             identity_keypair.clone(),
             socket_addr_space,
         );
+
+        //register Geyzer notifier.
         cluster_info.set_clusterinfo_notifier(cluster_info_notifier);
         cluster_info.set_contact_debug_interval(config.contact_debug_interval);
         cluster_info.set_entrypoints(cluster_entrypoints);

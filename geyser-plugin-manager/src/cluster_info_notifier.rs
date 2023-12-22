@@ -109,6 +109,45 @@ impl ClusterInfoNotifierInterface for ClusterInfoNotifierImpl {
     }
 
     fn notify_clusterinfo_remove(&self, pubkey: &Pubkey) {
-        todo!()
+        let mut measure2 = Measure::start("geyser-plugin-notify_plugins_of_cluster_info_update");
+        let plugin_manager = self.plugin_manager.read().unwrap();
+
+        if plugin_manager.plugins.is_empty() {
+            return;
+        }
+        for plugin in plugin_manager.plugins.iter() {
+            let mut measure = Measure::start("geyser-plugin-remove-cluster_info");
+            match plugin.notify_clusterinfo_remove(pubkey) {
+                Err(err) => {
+                    error!(
+                        "Failed to remove cluster_info {}, error: {} to plugin {}",
+                        bs58::encode(pubkey).into_string(),
+                        err,
+                        plugin.name()
+                    )
+                }
+                Ok(_) => {
+                    trace!(
+                        "Successfully remove cluster_info {} to plugin {}",
+                        bs58::encode(pubkey).into_string(),
+                        plugin.name()
+                    );
+                }
+            }
+            measure.stop();
+            inc_new_counter_debug!(
+                "geyser-plugin-remove-cluster_info-us",
+                measure.as_us() as usize,
+                100000,
+                100000
+            );
+        }
+        measure2.stop();
+        inc_new_counter_debug!(
+            "geyser-plugin-notify_plugins_of_cluster_info_remove-us",
+            measure2.as_us() as usize,
+            100000,
+            100000
+        );
     }
 }
