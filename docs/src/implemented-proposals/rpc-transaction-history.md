@@ -109,6 +109,8 @@ The row data is a compressed `TransactionInfo` struct.
 
 ### Entries Table: `entries`
 
+> Support for the `entries` table was added in v1.18.0.
+
 This table contains data about the entries in a slot.
 
 The row key is the same as a `block` row key.
