@@ -355,6 +355,12 @@ pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
         Ok(())
     }
 
+    /// Called when a cluster info is removed on gossip network.
+    #[allow(unused_variables)]
+    fn notify_clusterinfo_remove(&self, pubkey: &Pubkey) -> Result<()> {
+        Ok(())
+    }
+
     /// Called when all accounts are notified of during startup.
     fn notify_end_of_startup(&self) -> Result<()> {
         Ok(())

@@ -18,5 +18,10 @@ impl Crds {
 
     /// Notified when the AccountsDb is initialized at start when restored
     /// from a snapshot.
-    pub fn notify_clusterinfo_remove(&self, pubkey: &Pubkey) {}
+    pub fn notify_clusterinfo_remove(&self, pubkey: &Pubkey) {
+        if let Some(clusterinfo_update_notifier) = &self.clusterinfo_update_notifier {
+            let notifier = &clusterinfo_update_notifier.read().unwrap();
+            notifier.notify_clusterinfo_remove(pubkey);
+        }
+    }
 }
