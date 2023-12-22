@@ -142,7 +142,7 @@ pub type InstalledSchedulerPoolArc<SEA> = Arc<dyn InstalledSchedulerPool<SEA>>;
 pub type SchedulerId = u64;
 
 pub trait WithTransactionAndIndex: Send + Sync + Debug {
-    fn with_transaction_and_index<R>(&self, callback: impl FnOnce(&SanitizedTransaction, usize) -> R);
+    fn with_transaction_and_index<R>(&self, callback: impl FnOnce(&SanitizedTransaction, usize) -> R) -> R;
 }
 
 impl<
@@ -151,7 +151,7 @@ impl<
         Z: Send + Sync + Debug + Deref<Target = (T, U)>,
     > WithTransactionAndIndex for Z
 {
-    fn with_transaction_and_index<R>(&self, callback: impl FnOnce(&SanitizedTransaction, usize) -> R) {
+    fn with_transaction_and_index<R>(&self, callback: impl FnOnce(&SanitizedTransaction, usize) -> R) -> R {
         callback(self.0.borrow(), *self.1.borrow());
     }
 }
