@@ -1167,7 +1167,7 @@ where
         &self.context
     }
 
-    fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
+    fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) -> Result<()> {
         transaction_with_index.with_transaction_and_index(|transaction, index| {
             let task = SchedulingStateMachine::create_task(transaction.clone(), index, |pubkey| {
                 self.inner.address_book.load(pubkey)
@@ -1175,6 +1175,7 @@ where
             self.ensure_thread_manager_started(&self.context)
                 .send_task(task);
         });
+        Ok(())
     }
 
     fn wait_for_termination(
