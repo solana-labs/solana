@@ -36,7 +36,7 @@ use {
         iter::repeat_with,
         net::{SocketAddr, UdpSocket},
         sync::{
-            atomic::{AtomicBool, Ordering},
+            atomic::{AtomicBool, AtomicUsize, Ordering},
             Arc, Mutex, RwLock,
         },
         thread::{self, Builder, JoinHandle},
@@ -316,8 +316,10 @@ impl BroadcastStage {
                     return res;
                 }
             };
+            static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
+            let id = ATOMIC_ID.fetch_add(1, Ordering::Relaxed);
             Builder::new()
-                .name("solBroadcastTx".to_string())
+                .name(format!("solBroadcastTx{id:02}"))
                 .spawn(run_transmit)
                 .unwrap()
         }));
@@ -333,8 +335,10 @@ impl BroadcastStage {
                         return res;
                     }
                 };
+                static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
+                let id = ATOMIC_ID.fetch_add(1, Ordering::Relaxed);
                 Builder::new()
-                    .name("solBroadcastRec".to_string())
+                    .name(format!("solBroadcastRec{id:02}"))
                     .spawn(run_record)
                     .unwrap()
             })

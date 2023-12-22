@@ -168,8 +168,10 @@ pub fn receiver(
 ) -> JoinHandle<()> {
     let res = socket.set_read_timeout(Some(Duration::new(1, 0)));
     assert!(res.is_ok(), "streamer::receiver set_read_timeout error");
+    static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
+    let id = ATOMIC_ID.fetch_add(1, Ordering::Relaxed);
     Builder::new()
-        .name("solReceiver".to_string())
+        .name(format!("solReceiver{id:02}"))
         .spawn(move || {
             let _ = recv_loop(
                 &socket,

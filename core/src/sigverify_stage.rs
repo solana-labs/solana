@@ -21,6 +21,7 @@ use {
     solana_sdk::timing,
     solana_streamer::streamer::{self, StreamerError},
     std::{
+        sync::atomic::{AtomicUsize, Ordering},
         thread::{self, Builder, JoinHandle},
         time::Instant,
     },
@@ -414,8 +415,10 @@ impl SigVerifyStage {
         const MAX_DEDUPER_AGE: Duration = Duration::from_secs(2);
         const DEDUPER_FALSE_POSITIVE_RATE: f64 = 0.001;
         const DEDUPER_NUM_BITS: u64 = 63_999_979;
+        static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
+        let id = ATOMIC_ID.fetch_add(1, Ordering::Relaxed);
         Builder::new()
-            .name("solSigVerifier".to_string())
+            .name(format!("solSigVerifier{id:02}"))
             .spawn(move || {
                 let mut rng = rand::thread_rng();
                 let mut deduper = Deduper::<2, [u8]>::new(&mut rng, DEDUPER_NUM_BITS);

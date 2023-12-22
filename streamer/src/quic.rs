@@ -101,12 +101,12 @@ pub(crate) fn configure_server(
     Ok((server_config, cert_chain_pem))
 }
 
-fn rt() -> Runtime {
+fn rt(gid: usize) -> Runtime {
     tokio::runtime::Builder::new_multi_thread()
-        .thread_name_fn(|| {
+        .thread_name_fn(move || {
             static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
             let id = ATOMIC_ID.fetch_add(1, Ordering::Relaxed);
-            format!("solQuicServerWork{id:02}")
+            format!("solQuicServerWork{gid:02}.{id:02}")
         })
         .enable_all()
         .build()
@@ -428,7 +428,9 @@ pub fn spawn_server(
     wait_for_chunk_timeout: Duration,
     coalesce: Duration,
 ) -> Result<SpawnServerResult, QuicServerError> {
-    let runtime = rt();
+    static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
+    let id = ATOMIC_ID.fetch_add(1, Ordering::Relaxed);
+    let runtime = rt(id);
     let (endpoint, _stats, task) = {
         let _guard = runtime.enter();
         crate::nonblocking::quic::spawn_server(
@@ -447,7 +449,7 @@ pub fn spawn_server(
         )
     }?;
     let handle = thread::Builder::new()
-        .name("solQuicServer".into())
+        .name(format!("solQuicServer{id:02}"))
         .spawn(move || {
             if let Err(e) = runtime.block_on(task) {
                 warn!("error from runtime.block_on: {:?}", e);
@@ -521,7 +523,7 @@ mod test {
     fn test_quic_timeout() {
         solana_logger::setup();
         let (t, exit, receiver, server_address) = setup_quic_server();
-        let runtime = rt();
+        let runtime = rt(0);
         runtime.block_on(check_timeout(receiver, server_address));
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
@@ -532,7 +534,7 @@ mod test {
         solana_logger::setup();
         let (t, exit, _receiver, server_address) = setup_quic_server();
 
-        let runtime = rt();
+        let runtime = rt(0);
         runtime.block_on(check_block_multiple_connections(server_address));
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
@@ -568,7 +570,7 @@ mod test {
         )
         .unwrap();
 
-        let runtime = rt();
+        let runtime = rt(0);
         runtime.block_on(check_multiple_streams(receiver, server_address));
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
@@ -579,7 +581,7 @@ mod test {
         solana_logger::setup();
         let (t, exit, receiver, server_address) = setup_quic_server();
 
-        let runtime = rt();
+        let runtime = rt(0);
         runtime.block_on(check_multiple_writes(receiver, server_address, None));
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
@@ -615,7 +617,7 @@ mod test {
         )
         .unwrap();
 
-        let runtime = rt();
+        let runtime = rt(0);
         runtime.block_on(check_unstaked_node_connect_failure(server_address));
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();

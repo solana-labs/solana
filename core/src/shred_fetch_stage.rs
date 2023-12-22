@@ -20,7 +20,7 @@ use {
     std::{
         net::{SocketAddr, UdpSocket},
         sync::{
-            atomic::{AtomicBool, Ordering},
+            atomic::{AtomicBool, AtomicUsize, Ordering},
             Arc, RwLock,
         },
         thread::{self, Builder, JoinHandle},
@@ -159,8 +159,10 @@ impl ShredFetchStage {
                 )
             })
             .collect();
+        static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
+        let id = ATOMIC_ID.fetch_add(1, Ordering::Relaxed);
         let modifier_hdl = Builder::new()
-            .name("solTvuFetchPMod".to_string())
+            .name(format!("solTvuFetchPMod{id:02}"))
             .spawn(move || {
                 let repair_context = repair_context
                     .as_ref()
