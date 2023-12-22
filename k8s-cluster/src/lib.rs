@@ -1,6 +1,7 @@
 use {
     bzip2::bufread::BzDecoder,
     console::Emoji,
+    indexmap::IndexMap,
     indicatif::{ProgressBar, ProgressStyle},
     lazy_static::lazy_static,
     log::*,
@@ -13,7 +14,6 @@ use {
     },
     tar::Archive,
     url::Url,
-    indexmap::IndexMap,
 };
 
 lazy_static! {
@@ -163,12 +163,20 @@ pub fn parse_and_format_bench_tps_args(bench_tps_args: Option<&str>) -> Option<V
     })
 }
 
-pub fn calculate_stake_allocations(total_sol: f64, num_validators: i32, distribution: &mut Vec<u8>) -> Result<(Vec<f64>, Vec<f64>), String> {
+pub fn calculate_stake_allocations(
+    total_sol: f64,
+    num_validators: i32,
+    distribution: &mut Vec<u8>,
+) -> Result<(Vec<f64>, Vec<f64>), String> {
     if distribution.iter().sum::<u8>() != 100 {
         return Err("The sum of distribution percentages must be 100".to_string());
     }
     if (num_validators as usize) < distribution.len() {
-        return Err(format!("num_validators < distribution.len(). {} < {}", num_validators, distribution.len()));
+        return Err(format!(
+            "num_validators < distribution.len(). {} < {}",
+            num_validators,
+            distribution.len()
+        ));
     }
     let mut allocations: Vec<f64> = Vec::with_capacity(num_validators as usize);
     let mut stake_per_bucket: Vec<f64> = Vec::with_capacity(distribution.len());
@@ -179,7 +187,7 @@ pub fn calculate_stake_allocations(total_sol: f64, num_validators: i32, distribu
     if nodes_per_stake_grouping == 0 {
         return Err(format!("Fewer validators than distribution called for. num_validators: {}, distribution_len: {}", num_validators, distribution.len()));
     }
-    
+
     let num_extra_validators = num_validators as usize % distribution.len();
     if num_extra_validators != 0 {
         warn!("WARNING: number of desired validators does not evenly split across desired distribution. \
@@ -216,8 +224,17 @@ fn test_stake_allocations() {
 
     match calculate_stake_allocations(total_sol, num_validators, &mut distribution) {
         Ok((stake_per_bucket, allocations)) => {
-            assert_eq!(vec![200000.0, 200000.0, 150000.0, 150000.0, 90000.0, 90000.0, 50000.0, 50000.0, 10000.0, 10000.0], allocations);
-            assert_eq!(vec![400000.0, 300000.0, 180000.0, 100000.0, 20000.0], stake_per_bucket);
+            assert_eq!(
+                vec![
+                    200000.0, 200000.0, 150000.0, 150000.0, 90000.0, 90000.0, 50000.0, 50000.0,
+                    10000.0, 10000.0
+                ],
+                allocations
+            );
+            assert_eq!(
+                vec![400000.0, 300000.0, 180000.0, 100000.0, 20000.0],
+                stake_per_bucket
+            );
         }
         Err(err) => error!("calculate_stake_allocation() failed: {}", err),
     }
@@ -228,8 +245,17 @@ fn test_stake_allocations() {
 
     match calculate_stake_allocations(total_sol, num_validators, &mut distribution) {
         Ok((stake_per_bucket, allocations)) => {
-            assert_eq!(vec![140000.0, 140000.0, 140000.0, 110000.0, 110000.0, 110000.0, 40000.0, 40000.0, 40000.0, 50000.0, 50000.0, 15000.0, 15000.0], allocations);
-            assert_eq!(vec![420000.0, 330000.0, 120000.0, 100000.0, 30000.0], stake_per_bucket);
+            assert_eq!(
+                vec![
+                    140000.0, 140000.0, 140000.0, 110000.0, 110000.0, 110000.0, 40000.0, 40000.0,
+                    40000.0, 50000.0, 50000.0, 15000.0, 15000.0
+                ],
+                allocations
+            );
+            assert_eq!(
+                vec![420000.0, 330000.0, 120000.0, 100000.0, 30000.0],
+                stake_per_bucket
+            );
         }
         Err(err) => error!("calculate_stake_allocation() failed: {}", err),
     }
@@ -249,9 +275,12 @@ fn test_stake_allocations() {
     let mut distribution = vec![50, 40, 5];
 
     match calculate_stake_allocations(total_sol, num_validators, &mut distribution) {
-        Ok((_, _)) =>
-            panic!("ERROR. should not be here. calculate_stake_allocations() should sum to 100 error"),
-        Err(err) => assert_eq!("The sum of distribution percentages must be 100".to_string(), err),
+        Ok((_, _)) => panic!(
+            "ERROR. should not be here. calculate_stake_allocations() should sum to 100 error"
+        ),
+        Err(err) => assert_eq!(
+            "The sum of distribution percentages must be 100".to_string(),
+            err
+        ),
     }
-
 }

@@ -1,5 +1,8 @@
 use {
-    crate::{boxed_error, k8s_helpers, SOLANA_ROOT, genesis::DEFAULT_INTERNAL_NODE_SOL_TO_STAKE_SOL_RATIO},
+    crate::{
+        boxed_error, genesis::DEFAULT_INTERNAL_NODE_SOL_TO_STAKE_SOL_RATIO, k8s_helpers,
+        SOLANA_ROOT,
+    },
     k8s_openapi::{
         api::{
             apps::v1::ReplicaSet,
