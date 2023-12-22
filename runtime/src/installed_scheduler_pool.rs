@@ -328,7 +328,7 @@ impl BankWithScheduler {
     pub fn schedule_transaction_executions<'a>(
         &self,
         transactions_with_indexes: impl ExactSizeIterator<Item = (&'a SanitizedTransaction, &'a usize)>,
-    ) {
+    ) -> Result<()> {
         trace!(
             "schedule_transaction_executions(): {} txs",
             transactions_with_indexes.len()
@@ -338,7 +338,7 @@ impl BankWithScheduler {
         let scheduler = scheduler_guard.as_ref().unwrap();
 
         for (sanitized_transaction, &index) in transactions_with_indexes {
-            scheduler.schedule_execution(&(sanitized_transaction, index));
+            scheduler.schedule_execution(&(sanitized_transaction, index))?;
         }
     }
 
