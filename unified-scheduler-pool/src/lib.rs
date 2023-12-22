@@ -48,6 +48,7 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
+use crossbeam_channel::SendError;
 
 type AtomicSchedulerId = AtomicU64;
 
