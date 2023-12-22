@@ -1,5 +1,8 @@
 use {
-    crate::{boxed_error, k8s_helpers, SOLANA_ROOT},
+    crate::{
+        boxed_error, genesis::DEFAULT_INTERNAL_NODE_SOL_TO_STAKE_SOL_RATIO, k8s_helpers,
+        SOLANA_ROOT,
+    },
     k8s_openapi::{
         api::{
             apps::v1::ReplicaSet,
@@ -240,14 +243,23 @@ impl<'a> Kubernetes<'a> {
         }
     }
 
-    fn generate_validator_command_flags(&self) -> Vec<String> {
+    fn generate_validator_command_flags(&self, validator_stake: &Option<f64>) -> Vec<String> {
         let mut flags: Vec<String> = Vec::new();
         self.generate_command_flags(&mut flags);
 
         flags.push("--internal-node-stake-sol".to_string());
-        flags.push(self.validator_config.internal_node_stake_sol.to_string());
+        if let Some(stake) = validator_stake {
+            flags.push(stake.to_string());
+        } else {
+            flags.push(self.validator_config.internal_node_stake_sol.to_string());
+        }
+
         flags.push("--internal-node-sol".to_string());
-        flags.push(self.validator_config.internal_node_sol.to_string());
+        if let Some(stake) = validator_stake {
+            flags.push((DEFAULT_INTERNAL_NODE_SOL_TO_STAKE_SOL_RATIO * stake).to_string());
+        } else {
+            flags.push(self.validator_config.internal_node_sol.to_string());
+        }
 
         if let Some(shred_version) = self.validator_config.shred_version {
             flags.push("--expected-shred-version".to_string());
@@ -652,6 +664,7 @@ impl<'a> Kubernetes<'a> {
         image_name: &str,
         secret_name: Option<String>,
         label_selector: &BTreeMap<String, String>,
+        validator_stake: &Option<f64>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
         let mut env_vars = self.set_non_bootstrap_environment_variables();
         if self.metrics.is_some() {
@@ -676,7 +689,7 @@ impl<'a> Kubernetes<'a> {
 
         let mut command =
             vec!["/home/solana/k8s-cluster-scripts/validator-startup-script.sh".to_string()];
-        command.extend(self.generate_validator_command_flags());
+        command.extend(self.generate_validator_command_flags(validator_stake));
 
         for c in command.iter() {
             debug!("validator command: {}", c);
