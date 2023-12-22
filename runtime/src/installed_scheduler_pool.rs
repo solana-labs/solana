@@ -340,6 +340,8 @@ impl BankWithScheduler {
         for (sanitized_transaction, &index) in transactions_with_indexes {
             scheduler.schedule_execution(&(sanitized_transaction, index))?;
         }
+
+        Ok(())
     }
 
     // take needless &mut only to communicate its semantic mutability to humans...
