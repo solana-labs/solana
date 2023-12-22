@@ -106,3 +106,15 @@ This table maps a transaction signature to its confirmed block, and index within
 
 The row key is the base58-encoded transaction signature.
 The row data is a compressed `TransactionInfo` struct.
+
+### Entries Table: `entries`
+
+> Support for the `entries` table was added in v1.18.0.
+
+This table contains data about the entries in a slot.
+
+The row key is the same as a `block` row key.
+
+The row data is a compressed `Entries` struct, which is a list of entry-summary
+data, including hash, number of hashes since previous entry, number of
+transactions, and starting transaction index.
