@@ -59,6 +59,7 @@ const CONNECTION_CLOSE_REASON_EXCEED_MAX_STREAM_COUNT: &[u8] = b"exceed_max_stre
 
 const CONNECTION_CLOSE_CODE_TOO_MANY: u32 = 4;
 const CONNECTION_CLOSE_REASON_TOO_MANY: &[u8] = b"too_many";
+const STREAM_STOP_CODE_THROTTLING: u32 = 15;
 
 // A sequence of bytes that is part of a packet
 // along with where in the packet it is
@@ -741,7 +742,7 @@ async fn handle_connection(
                     if reset_throttling_params_if_needed(&mut last_throttling_instant) {
                         streams_in_current_interval = 0;
                     } else if streams_in_current_interval >= max_streams_per_100ms {
-                        let _ = stream.stop(VarInt::from_u32(0));
+                        let _ = stream.stop(VarInt::from_u32(STREAM_STOP_CODE_THROTTLING));
                         continue;
                     }
                     streams_in_current_interval = streams_in_current_interval.saturating_add(1);

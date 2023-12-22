@@ -46,6 +46,7 @@ mod tests {
                 assert_eq!(p.meta().size, num_bytes);
             }
         }
+        assert!(total_packets > 0);
     }
 
     fn server_args() -> (UdpSocket, Arc<AtomicBool>, Keypair, IpAddr) {
@@ -138,6 +139,7 @@ mod tests {
                 assert_eq!(p.meta().size, num_bytes);
             }
         }
+        assert!(total_packets > 0);
     }
 
     #[tokio::test]
