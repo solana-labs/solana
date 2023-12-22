@@ -1054,6 +1054,7 @@ where
             Ok(()) => Ok(()),
             Err(usize) => {
             }
+        }
     }
 
     fn end_session(&mut self) {
