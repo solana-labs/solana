@@ -1,23 +1,6 @@
 #!/bin/bash
 # set -e
 
-SECRET_FILE="/home/solana/client-accounts/faucet.base64"
-DECODED_FILE="/home/solana/faucet.json"
-
-# Check if the secret file exists
-if [ -f "$SECRET_FILE" ]; then
-    echo "Secret file found at $SECRET_FILE"
-
-    # Read and decode the base64-encoded secret
-    SECRET_CONTENT=$(base64 -d < "$SECRET_FILE")
-
-    # Save the decoded secret content to a file
-    echo "$SECRET_CONTENT" > "$DECODED_FILE"
-    echo "Decoded secret content saved to $DECODED_FILE"
-else
-    echo "Secret file not found at $SECRET_FILE"
-fi
-
 mkdir -p /home/solana/logs
 
 clientToRun="$1"
@@ -30,7 +13,7 @@ runtime_args=()
 while [[ -n $1 ]]; do
   if [[ ${1:0:1} = - ]]; then
     if [[ $1 = --target-node ]]; then
-      echo "--target-node not supported yet...not including" >> logs/client.log 2>&1
+      echo "--target-node not supported yet...not included" >> logs/client.log 2>&1
       # runtime_args+=("$1" "$2")
       shift 2
     elif [[ $1 = --duration ]]; then
@@ -56,13 +39,12 @@ missing() {
   exit 1
 }
 
-# [[ -n $deployMethod ]] || missing deployMethod
-# [[ -n $entrypointIp ]] || missing entrypointIp
-
 threadCount=$(nproc)
 if [[ $threadCount -gt 4 ]]; then
   threadCount=4
 fi
+
+echo "threadCount: $threadCount"
 
 TPU_CLIENT=false
 RPC_CLIENT=false
@@ -91,10 +73,12 @@ bench-tps)
 
   if ${TPU_CLIENT}; then
     args+=(--use-tpu-client)
-    args+=(--url "$BOOTSTRAP_RPC_ADDRESS")
+    # args+=(--url "$BOOTSTRAP_RPC_ADDRESS")
+    args+=(--url "$LOAD_BALANCER_RPC_ADDRESS")
   elif ${RPC_CLIENT}; then
     args+=(--use-rpc-client)
-    args+=(--url "$BOOTSTRAP_RPC_ADDRESS")
+    # args+=(--url "$BOOTSTRAP_RPC_ADDRESS")
+    args+=(--url "$LOAD_BALANCER_RPC_ADDRESS")
   else
     args+=(--entrypoint "$BOOTSTRAP_GOSSIP_ADDRESS")
   fi

@@ -10,6 +10,7 @@ use {
         get_solana_root, initialize_globals, calculate_stake_allocations,
         kubernetes::{ClientConfig, Kubernetes, Metrics, NodeAffinityType, ValidatorConfig},
         ledger_helper::LedgerHelper,
+        parse_and_format_bench_tps_args,
         release::{BuildConfig, Deploy},
         ValidatorType,
     },
@@ -347,12 +348,9 @@ fn parse_matches() -> ArgMatches<'static> {
                 User can optionally provide extraArgs that are transparently
                 supplied to the client program as command line parameters.
                 For example,
-                    --bench-tps-args tx_count=25000
-                This will start bench-tps clients, and supply '--tx_count 25000'
-                to the bench-tps client.
-                If you want multiple args, pass in twice:
-                    --bench-tps-args tx_count=25000 --bench-tps-args --other-flag=<val>
-                "),
+                    --bench-tps-args 'tx-count=5000 thread-batch-sleep-ms=250'
+                This will start bench-tps clients, and supply '--tx-count 5000 --thread-batch-sleep-ms 250'
+                to the bench-tps client."),
         )
         .arg(
             Arg::with_name("target_node")
@@ -504,22 +502,7 @@ async fn main() {
             .value_of("client_to_run")
             .unwrap_or_default()
             .to_string(),
-        bench_tps_args: matches
-            .values_of("bench_tps_args")
-            .unwrap_or_default()
-            .flat_map(|arg| {
-                arg.split('=')
-                    .enumerate()
-                    .map(|(idx, s)| {
-                        if idx == 0 {
-                            format!("--{}", s) // prepend '--' to the flag
-                        } else {
-                            s.to_string()
-                        }
-                    })
-                    .collect::<Vec<String>>()
-            })
-            .collect(),
+        bench_tps_args: parse_and_format_bench_tps_args(matches.value_of("bench_tps_args")),
         target_node: match matches.value_of("target_node") {
             Some(s) => match s.parse::<Pubkey>() {
                 Ok(pubkey) => Some(pubkey),
@@ -532,6 +515,12 @@ async fn main() {
             .value_of("num_nodes")
             .map(|value_str| value_str.parse().expect("Invalid value for num_nodes")),
     };
+
+    if let Some(ref bench_tps_args) = client_config.bench_tps_args {
+        for s in bench_tps_args.iter() {
+            info!("s: {}", s);
+        }
+    }
 
     let build_config = BuildConfig {
         release_channel: matches.value_of("release_channel").unwrap_or_default(),

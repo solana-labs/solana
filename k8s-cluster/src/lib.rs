@@ -154,6 +154,15 @@ pub fn cat_file(path: &PathBuf) -> io::Result<()> {
     Ok(())
 }
 
+pub fn parse_and_format_bench_tps_args(bench_tps_args: Option<&str>) -> Option<Vec<String>> {
+    bench_tps_args.map(|args| {
+        args.split_whitespace()
+            .filter_map(|arg| arg.split_once('='))
+            .flat_map(|(key, value)| vec![format!("--{}", key), value.to_string()])
+            .collect()
+    })
+}
+
 pub fn calculate_stake_allocations(total_sol: f64, num_validators: i32, distribution: &mut Vec<u8>) -> Result<(Vec<f64>, Vec<f64>), String> {
     if distribution.iter().sum::<u8>() != 100 {
         return Err("The sum of distribution percentages must be 100".to_string());

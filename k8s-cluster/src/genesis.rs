@@ -262,7 +262,7 @@ impl Genesis {
         &mut self,
         number_of_clients: i32,
         target_lamports_per_signature: u64,
-        bench_tps_args: Vec<String>,
+        bench_tps_args: Option<Vec<String>>,
     ) -> Result<(), Box<dyn Error>> {
         let client_accounts_file = SOLANA_ROOT.join("config-k8s/client-accounts.yml");
         for i in 0..number_of_clients {
@@ -273,12 +273,12 @@ impl Genesis {
             args.push("--target-lamports-per-signature".to_string());
             args.push(target_lamports_per_signature.to_string());
 
-            if !bench_tps_args.is_empty() {
-                args.extend(bench_tps_args.clone());
-            }
-
-            for i in bench_tps_args.iter() {
-                info!("bench_tps_arg: {}", i);
+            if bench_tps_args.is_some() {
+                let list_of_bench_tps_args = bench_tps_args.as_ref().unwrap();
+                args.extend(list_of_bench_tps_args.clone()); //can unwrap since we checked is_some()
+                for i in list_of_bench_tps_args.iter() {
+                    info!("bench_tps_arg: {}", i);
+                }
             }
 
             info!("generating client accounts...");
