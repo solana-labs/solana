@@ -435,7 +435,7 @@ fn parse_matches() -> ArgMatches<'static> {
         .get_matches()
 }
 
-pub const TOTAL_SOL: f64 = 1000000.0; // 1 mil sol to distribute across validators
+pub const TOTAL_SOL: f64 = 1000.0; // 1 mil sol to distribute across validators
 
 #[derive(Clone, Debug)]
 pub struct SetupConfig<'a> {
@@ -461,17 +461,20 @@ async fn main() {
     let stake_distribution: Option<Vec<u8>> = matches.values_of("internal_node_stake_distribution")
         .map(|values| values.map(|s| s.parse::<u8>().expect("Invalid percentage in distribution")).collect());
 
-    let (stake_per_bucket, allocations) = match stake_distribution {
-        Some(dist) => {
-            match calculate_stake_allocations(TOTAL_SOL,  setup_config.num_validators, &dist) {
+    let (stake_per_bucket, stake_allocations) = match stake_distribution {
+        Some(mut dist) => {
+            match calculate_stake_allocations(TOTAL_SOL,  setup_config.num_validators, &mut dist) {
                 Ok((stake_per_bucket, alloc)) => (Some(stake_per_bucket), Some(alloc)),
-                Err(err) => panic!("{}", err),
+                Err(err) => {
+                    error!("{}", err);
+                    std::process::exit(1);
+                }
             }
         },
         None => (None, None)
     };
 
-    if let (Some(stake_buckets), Some(allocations)) = (&stake_per_bucket, &allocations) {
+    if let (Some(stake_buckets), Some(allocations)) = (&stake_per_bucket, &stake_allocations) {
         info!("stake per node bucket");
         for i in stake_buckets.iter() {
             info!("{}", i);
@@ -481,6 +484,8 @@ async fn main() {
             info!("{}", i);
         }
     }
+
+    // std::process::exit(1);
 
     if setup_config.skip_genesis_build
         && !get_solana_root()
@@ -1192,12 +1197,24 @@ async fn main() {
             validator_keypair.pubkey().to_string(),
         );
 
+        let stake = stake_allocations
+            .as_ref()
+            .and_then(|stake_vec| stake_vec.get(validator_index as usize))
+            .copied();
+
+        let stake_value = stake
+            .map(|s| s.to_string())
+            .unwrap_or(DEFAULT_INTERNAL_NODE_STAKE_SOL.to_string());
+
+        validator_labels.insert("app.kubernetes.io/stake_in_sol".to_string(), stake_value);
+
         let validator_replica_set = match kub_controller.create_validator_replica_set(
             validator_container_name,
             validator_index,
             validator_image_name,
             validator_secret.metadata.name.clone(),
             &validator_labels,
+            &stake,
         ) {
             Ok(replica_set) => replica_set,
             Err(err) => {

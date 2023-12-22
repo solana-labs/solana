@@ -13,6 +13,7 @@ use {
     },
     tar::Archive,
     url::Url,
+    indexmap::IndexMap,
 };
 
 lazy_static! {
@@ -153,31 +154,100 @@ pub fn cat_file(path: &PathBuf) -> io::Result<()> {
     Ok(())
 }
 
-pub fn calculate_stake_allocations(total_sol: f64, num_validators: i32, distribution: &Vec<u8>) -> Result<(Vec<f64>, Vec<f64>), String> {
+pub fn calculate_stake_allocations(total_sol: f64, num_validators: i32, distribution: &mut Vec<u8>) -> Result<(Vec<f64>, Vec<f64>), String> {
     if distribution.iter().sum::<u8>() != 100 {
         return Err("The sum of distribution percentages must be 100".to_string());
     }
+    if (num_validators as usize) < distribution.len() {
+        return Err(format!("num_validators < distribution.len(). {} < {}", num_validators, distribution.len()));
+    }
     let mut allocations: Vec<f64> = Vec::with_capacity(num_validators as usize);
     let mut stake_per_bucket: Vec<f64> = Vec::with_capacity(distribution.len());
-    // let mut remaining_sol = total_sol;
+
+    let mut buckets: IndexMap<u8, usize> = IndexMap::new();
+    distribution.sort_by(|a, b| b.cmp(a)); // sort largest to smallest
     let nodes_per_stake_grouping = num_validators as usize / distribution.len();
+    let num_extra_validators = num_validators as usize % distribution.len();
+    if num_extra_validators != 0 {
+        warn!("WARNING: number of desired validators does not evenly split across desired distribution. \
+        additional validators added one by one to distribution buckets starting with heaviest buckets by stake ({:?}%)
+        num_validators: {}, distribution_len: {}, extra_validators: {}", distribution.first(), num_validators, distribution.len(), num_extra_validators);
+    }
 
-    for (_, &percent) in distribution.iter().enumerate() {
-        // let is_last = i == distribution.len() - 1;
-        // let sol_to_alloc = if is_last {
-        //     remaining_sol //alloc all remaining sol to last validator
-        // } else {
-        //     (total_sol * (percent as f64 / 100.0))
-        // };
+    for dist in distribution.iter() {
+        info!("dist: {}", dist);
+    }
 
-        let sol_per_node = total_sol * (percent as f64 / 100.0);
-        stake_per_bucket.push(sol_per_node);
-        // remaining_sol -= sol_per_node * nodes_per_stake_grouping as f64;
+    if nodes_per_stake_grouping == 0 {
+        return Err(format!("Fewer validators than distribution called for. num_validators: {}, distribution_len: {}", num_validators, distribution.len()));
+    }
 
-        for _ in 0..nodes_per_stake_grouping {
-            allocations.push(sol_per_node);
+    for (i, percentage) in distribution.iter().enumerate() {
+        info!("percentage: {}", percentage);
+        let mut nodes_per_bucket = nodes_per_stake_grouping;
+        if i < num_extra_validators {
+            nodes_per_bucket += 1;
         }
+        buckets.insert(*percentage, nodes_per_bucket);
+    }
 
+    for (percent, num_nodes) in buckets.iter() {
+        let total_sol_per_bucket = total_sol * (*percent as f64 / 100.0);
+        stake_per_bucket.push(total_sol_per_bucket);
+        for _ in 0..*num_nodes {
+            allocations.push(total_sol_per_bucket / *num_nodes as f64);
+        }
     }
     Ok((stake_per_bucket, allocations))
+}
+
+#[test]
+fn test_stake_allocations() {
+    solana_logger::setup();
+    let total_sol = 1000000.0;
+
+    // No extra validators. Test num_validators % distribution.len() == 0
+    let num_validators = 10;
+    let mut distribution = vec![40, 30, 18, 10, 2];
+
+    match calculate_stake_allocations(total_sol, num_validators, &mut distribution) {
+        Ok((stake_per_bucket, allocations)) => {
+            assert_eq!(vec![200000.0, 200000.0, 150000.0, 150000.0, 90000.0, 90000.0, 50000.0, 50000.0, 10000.0, 10000.0], allocations);
+            assert_eq!(vec![400000.0, 300000.0, 180000.0, 100000.0, 20000.0], stake_per_bucket);
+        }
+        Err(err) => error!("calculate_stake_allocation() failed: {}", err),
+    }
+
+    // Three extra validators. Test num_validators % distribution.len() == 3
+    let num_validators = 13;
+    let mut distribution = vec![42, 33, 12, 10, 3];
+
+    match calculate_stake_allocations(total_sol, num_validators, &mut distribution) {
+        Ok((stake_per_bucket, allocations)) => {
+            assert_eq!(vec![140000.0, 140000.0, 140000.0, 110000.0, 110000.0, 110000.0, 40000.0, 40000.0, 40000.0, 50000.0, 50000.0, 15000.0, 15000.0], allocations);
+            assert_eq!(vec![420000.0, 330000.0, 120000.0, 100000.0, 30000.0], stake_per_bucket);
+        }
+        Err(err) => error!("calculate_stake_allocation() failed: {}", err),
+    }
+
+    // Too few validators. Test num_validators < distribution.len()
+    let num_validators = 2;
+    let mut distribution = vec![50, 40, 10];
+
+    match calculate_stake_allocations(total_sol, num_validators, &mut distribution) {
+        Ok((_, _)) =>
+            panic!("ERROR. should not be here. calculate_stake_allocations() should return too few validators error"),
+        Err(err) => assert_eq!("num_validators < distribution.len(). 2 < 3".to_string(), err),
+    }
+
+    // Sum of distribution should be 100
+    let num_validators = 3;
+    let mut distribution = vec![50, 40, 5];
+
+    match calculate_stake_allocations(total_sol, num_validators, &mut distribution) {
+        Ok((_, _)) =>
+            panic!("ERROR. should not be here. calculate_stake_allocations() should sum to 100 error"),
+        Err(err) => assert_eq!("The sum of distribution percentages must be 100".to_string(), err),
+    }
+
 }

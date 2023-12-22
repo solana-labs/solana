@@ -28,8 +28,8 @@ pub const DEFAULT_MAX_GENESIS_ARCHIVE_UNPACKED_SIZE: u64 = 1073741824;
 pub const DEFAULT_COMMISSION: u8 = 100;
 pub const DEFAULT_INTERNAL_NODE_STAKE_SOL: f64 = 100.0; // 10000000000 lamports
 pub const DEFAULT_INTERNAL_NODE_SOL: f64 = 1000.0; // 500000000000 lamports
-pub const DEFAULT_BOOTSTRAP_NODE_STAKE_SOL: f64 = 10.0;
-pub const DEFAULT_BOOTSTRAP_NODE_SOL: f64 = 500.0;
+pub const DEFAULT_BOOTSTRAP_NODE_STAKE_SOL: f64 = 100.0;
+pub const DEFAULT_BOOTSTRAP_NODE_SOL: f64 = 1000.0;
 pub const DEFAULT_CLIENT_LAMPORTS_PER_SIGNATURE: u64 = 42;
 
 fn output_keypair(keypair: &Keypair, outfile: &str) -> Result<(), ThreadSafeError> {
