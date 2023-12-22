@@ -968,7 +968,7 @@ pub mod tests {
             let mut current_offset = 0;
 
             // write accounts blocks
-            let padding_buffer = vec![0u8; HOT_ACCOUNT_ALIGNMENT];
+            let padding_buffer = [0u8; HOT_ACCOUNT_ALIGNMENT];
             let index_writer_entries: Vec<_> = account_metas
                 .iter()
                 .zip(account_datas.iter())
