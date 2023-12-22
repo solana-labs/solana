@@ -104,7 +104,7 @@ pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + '
     fn context(&self) -> &SchedulingContext;
 
     // Calling this is illegal as soon as wait_for_termination is called.
-    fn schedule_execution<'a>(&'a self, transaction_with_index: SEA::TransactionWithIndex<'a>);
+    fn schedule_execution<'a>(&'a self, transaction_with_index: SEA::TransactionWithIndex<'a>) -> Result<()>;
 
     /// Wait for a scheduler to terminate after processing.
     ///
