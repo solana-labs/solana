@@ -1050,10 +1050,10 @@ where
 
     fn send_task(&self, task: Task) -> Result<()> {
         debug!("send_task()");
-        self.schedulable_transaction_sender
-            .send(SessionedMessage::Payload(task))
-            .unwrap();
-        Ok(())
+        match self.schedulable_transaction_sender.send(SessionedMessage::Payload(task)) {
+            Ok(()) => Ok(()),
+            Err(usize) => {
+            }
     }
 
     fn end_session(&mut self) {
