@@ -369,7 +369,7 @@ fn schedule_batches_for_execution(
                 .sanitized_transactions()
                 .iter()
                 .zip(transaction_indexes.iter()),
-        );
+        )?;
     }
 }
 
