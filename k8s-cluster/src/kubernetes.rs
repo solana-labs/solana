@@ -1,5 +1,5 @@
 use {
-    crate::{boxed_error, k8s_helpers, SOLANA_ROOT},
+    crate::{boxed_error, k8s_helpers, SOLANA_ROOT, genesis::DEFAULT_INTERNAL_NODE_SOL_TO_STAKE_SOL_RATIO},
     k8s_openapi::{
         api::{
             apps::v1::ReplicaSet,
@@ -253,7 +253,7 @@ impl<'a> Kubernetes<'a> {
 
         flags.push("--internal-node-sol".to_string());
         if let Some(stake) = validator_stake {
-            flags.push(stake.to_string());
+            flags.push((DEFAULT_INTERNAL_NODE_SOL_TO_STAKE_SOL_RATIO * stake).to_string());
         } else {
             flags.push(self.validator_config.internal_node_sol.to_string());
         }

@@ -167,6 +167,10 @@ pub fn calculate_stake_allocations(total_sol: f64, num_validators: i32, distribu
     let mut buckets: IndexMap<u8, usize> = IndexMap::new();
     distribution.sort_by(|a, b| b.cmp(a)); // sort largest to smallest
     let nodes_per_stake_grouping = num_validators as usize / distribution.len();
+    if nodes_per_stake_grouping == 0 {
+        return Err(format!("Fewer validators than distribution called for. num_validators: {}, distribution_len: {}", num_validators, distribution.len()));
+    }
+    
     let num_extra_validators = num_validators as usize % distribution.len();
     if num_extra_validators != 0 {
         warn!("WARNING: number of desired validators does not evenly split across desired distribution. \
@@ -174,16 +178,7 @@ pub fn calculate_stake_allocations(total_sol: f64, num_validators: i32, distribu
         num_validators: {}, distribution_len: {}, extra_validators: {}", distribution.first(), num_validators, distribution.len(), num_extra_validators);
     }
 
-    for dist in distribution.iter() {
-        info!("dist: {}", dist);
-    }
-
-    if nodes_per_stake_grouping == 0 {
-        return Err(format!("Fewer validators than distribution called for. num_validators: {}, distribution_len: {}", num_validators, distribution.len()));
-    }
-
     for (i, percentage) in distribution.iter().enumerate() {
-        info!("percentage: {}", percentage);
         let mut nodes_per_bucket = nodes_per_stake_grouping;
         if i < num_extra_validators {
             nodes_per_bucket += 1;

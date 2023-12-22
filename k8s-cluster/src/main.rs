@@ -200,7 +200,7 @@ fn parse_matches() -> ArgMatches<'static> {
                 .takes_value(true)
                 .multiple(true)
                 .help("Distribution of node stake. based on 1,000,000 SOL.
-                list of percentages. e.g.
+                list of percentages. must add to 100%. e.g.
                     --internal-node-stake-distribution 33 33 34
                     --internal-node-stake-distribution 50 50
                     --internal-node-stake-distribution 22 18 21 5 34
@@ -435,7 +435,7 @@ fn parse_matches() -> ArgMatches<'static> {
         .get_matches()
 }
 
-pub const TOTAL_SOL: f64 = 1000.0; // 1 mil sol to distribute across validators
+pub const TOTAL_SOL: f64 = 1000000.0; // 1 mil sol to distribute across validators
 
 #[derive(Clone, Debug)]
 pub struct SetupConfig<'a> {
@@ -474,18 +474,9 @@ async fn main() {
         None => (None, None)
     };
 
-    if let (Some(stake_buckets), Some(allocations)) = (&stake_per_bucket, &stake_allocations) {
-        info!("stake per node bucket");
-        for i in stake_buckets.iter() {
-            info!("{}", i);
-        }
-        info!("stake per node");
-        for i in allocations.iter() {
-            info!("{}", i);
-        }
+    if let (Some(_), Some(allocations)) = (&stake_per_bucket, &stake_allocations) {
+        info!("stake per validator: {:?}", allocations);
     }
-
-    // std::process::exit(1);
 
     if setup_config.skip_genesis_build
         && !get_solana_root()
