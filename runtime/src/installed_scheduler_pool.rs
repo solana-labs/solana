@@ -152,7 +152,7 @@ impl<
     > WithTransactionAndIndex for Z
 {
     fn with_transaction_and_index<R>(&self, callback: impl FnOnce(&SanitizedTransaction, usize) -> R) -> R {
-        callback(self.0.borrow(), *self.1.borrow());
+        callback(self.0.borrow(), *self.1.borrow())
     }
 }
 
