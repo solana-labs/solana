@@ -1053,6 +1053,7 @@ where
         match self.schedulable_transaction_sender.send(SessionedMessage::Payload(task)) {
             Ok(()) => Ok(()),
             Err(usize) => {
+                panic!();
             }
         }
     }
