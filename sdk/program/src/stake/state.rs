@@ -641,7 +641,7 @@ impl Delegation {
     pub fn stake(
         &self,
         epoch: Epoch,
-        history: Option<&StakeHistory>,
+        history: &StakeHistory,
         new_rate_activation_epoch: Option<Epoch>,
     ) -> u64 {
         self.stake_activating_and_deactivating(epoch, history, new_rate_activation_epoch)
@@ -652,7 +652,7 @@ impl Delegation {
     pub fn stake_activating_and_deactivating(
         &self,
         target_epoch: Epoch,
-        history: Option<&StakeHistory>,
+        history: &StakeHistory,
         new_rate_activation_epoch: Option<Epoch>,
     ) -> StakeActivationStatus {
         // first, calculate an effective and activating stake
@@ -673,17 +673,14 @@ impl Delegation {
         } else if target_epoch == self.deactivation_epoch {
             // can only deactivate what's activated
             StakeActivationStatus::with_deactivating(effective_stake)
-        } else if let Some((history, mut prev_epoch, mut prev_cluster_stake)) =
-            history.and_then(|history| {
-                history
-                    .get(self.deactivation_epoch)
-                    .map(|cluster_stake_at_deactivation_epoch| {
-                        (
-                            history,
-                            self.deactivation_epoch,
-                            cluster_stake_at_deactivation_epoch,
-                        )
-                    })
+        } else if let Some((history, mut prev_epoch, mut prev_cluster_stake)) = history
+            .get(self.deactivation_epoch)
+            .map(|cluster_stake_at_deactivation_epoch| {
+                (
+                    history,
+                    self.deactivation_epoch,
+                    cluster_stake_at_deactivation_epoch,
+                )
             })
         {
             // target_epoch > self.deactivation_epoch
@@ -742,7 +739,7 @@ impl Delegation {
     fn stake_and_activating(
         &self,
         target_epoch: Epoch,
-        history: Option<&StakeHistory>,
+        history: &StakeHistory,
         new_rate_activation_epoch: Option<Epoch>,
     ) -> (u64, u64) {
         let delegated_stake = self.stake;
@@ -760,17 +757,14 @@ impl Delegation {
         } else if target_epoch < self.activation_epoch {
             // not yet enabled
             (0, 0)
-        } else if let Some((history, mut prev_epoch, mut prev_cluster_stake)) =
-            history.and_then(|history| {
-                history
-                    .get(self.activation_epoch)
-                    .map(|cluster_stake_at_activation_epoch| {
-                        (
-                            history,
-                            self.activation_epoch,
-                            cluster_stake_at_activation_epoch,
-                        )
-                    })
+        } else if let Some((history, mut prev_epoch, mut prev_cluster_stake)) = history
+            .get(self.activation_epoch)
+            .map(|cluster_stake_at_activation_epoch| {
+                (
+                    history,
+                    self.activation_epoch,
+                    cluster_stake_at_activation_epoch,
+                )
             })
         {
             // target_epoch > self.activation_epoch
@@ -926,7 +920,7 @@ impl Stake {
     pub fn stake(
         &self,
         epoch: Epoch,
-        history: Option<&StakeHistory>,
+        history: &StakeHistory,
         new_rate_activation_epoch: Option<Epoch>,
     ) -> u64 {
         self.delegation

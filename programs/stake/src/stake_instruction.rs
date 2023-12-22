@@ -595,7 +595,7 @@ mod tests {
             if let StakeStateV2::Stake(_meta, stake, _stake_flags) = account.state().unwrap() {
                 let stake_status = stake.delegation.stake_activating_and_deactivating(
                     clock.epoch,
-                    Some(stake_history),
+                    stake_history,
                     None,
                 );
                 active_stake += stake_status.effective;
@@ -6846,15 +6846,11 @@ mod tests {
                 create_account_shared_data_for_test(&stake_history),
             );
             if stake_amount
-                == stake.stake(
-                    clock.epoch,
-                    Some(&stake_history),
-                    new_warmup_cooldown_rate_epoch,
-                )
+                == stake.stake(clock.epoch, &stake_history, new_warmup_cooldown_rate_epoch)
                 && merge_from_amount
                     == merge_from_stake.stake(
                         clock.epoch,
-                        Some(&stake_history),
+                        &stake_history,
                         new_warmup_cooldown_rate_epoch,
                     )
             {
@@ -6935,14 +6931,10 @@ mod tests {
                 stake_history::id(),
                 create_account_shared_data_for_test(&stake_history),
             );
-            if 0 == stake.stake(
-                clock.epoch,
-                Some(&stake_history),
-                new_warmup_cooldown_rate_epoch,
-            ) && 0
-                == merge_from_stake.stake(
+            if 0 == stake.stake(clock.epoch, &stake_history, new_warmup_cooldown_rate_epoch)
+                && 0 == merge_from_stake.stake(
                     clock.epoch,
-                    Some(&stake_history),
+                    &stake_history,
                     new_warmup_cooldown_rate_epoch,
                 )
             {
@@ -7388,11 +7380,7 @@ mod tests {
                     initial_stake_state
                         .delegation()
                         .unwrap()
-                        .stake_activating_and_deactivating(
-                            current_epoch,
-                            Some(&stake_history),
-                            None
-                        )
+                        .stake_activating_and_deactivating(current_epoch, &stake_history, None)
                 );
             }
 
@@ -7888,7 +7876,7 @@ mod tests {
                 },
                 stake.delegation.stake_activating_and_deactivating(
                     current_epoch,
-                    Some(&stake_history),
+                    &stake_history,
                     None
                 )
             );
