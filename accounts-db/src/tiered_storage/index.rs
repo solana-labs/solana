@@ -94,7 +94,7 @@ impl IndexBlockFormat {
         debug_assert!(
             offset.saturating_add(std::mem::size_of::<Pubkey>())
                 <= footer.owners_block_offset as usize,
-            "reading IndexOffset ({}) would exceeds index block boundary ({}).",
+            "reading IndexOffset ({}) would exceed index block boundary ({}).",
             offset,
             footer.owners_block_offset,
         );
@@ -221,7 +221,7 @@ mod tests {
         };
 
         {
-            // we only writes a footer here as the test should hit an assert
+            // we only write a footer here as the test should hit an assert
             // failure before it actually reads the file.
             let file = TieredStorageFile::new_writable(&path).unwrap();
             footer.write_footer_block(&file).unwrap();
@@ -240,7 +240,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "would exceeds index block boundary")]
+    #[should_panic(expected = "would exceed index block boundary")]
     fn test_get_account_address_exceeds_index_block_boundary() {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir
@@ -257,7 +257,7 @@ mod tests {
         };
 
         {
-            // we only writes a footer here as the test should hit an assert
+            // we only write a footer here as the test should hit an assert
             // failure before it actually reads the file.
             let file = TieredStorageFile::new_writable(&path).unwrap();
             footer.write_footer_block(&file).unwrap();
@@ -269,7 +269,7 @@ mod tests {
             .open(&path)
             .unwrap();
         let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
-        // IndexOffset does not exceeds the account_entry_count but exceeds
+        // IndexOffset does not exceed the account_entry_count but exceeds
         // the index block boundary.
         footer
             .index_block_format
@@ -292,8 +292,8 @@ mod tests {
         };
 
         {
-            // we only writes a footer here as the test should hit an assert
-            // failure before it actually reads the file.
+            // we only write a footer here as the test should hit an assert
+            // failure before we actually read the file.
             let file = TieredStorageFile::new_writable(&path).unwrap();
             footer.write_footer_block(&file).unwrap();
         }
@@ -344,7 +344,7 @@ mod tests {
             .open(&path)
             .unwrap();
         let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
-        // IndexOffset does not exceeds the account_entry_count but exceeds
+        // IndexOffset does not exceed the account_entry_count but exceeds
         // the index block boundary.
         footer
             .index_block_format
