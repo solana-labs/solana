@@ -1173,7 +1173,7 @@ where
                 self.inner.address_book.load(pubkey)
             });
             self.ensure_thread_manager_started(&self.context)
-                .send_task(task);
+                .send_task(task)?;
         });
         Ok(())
     }
