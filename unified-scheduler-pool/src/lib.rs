@@ -1048,11 +1048,12 @@ where
         );
     }
 
-    fn send_task(&self, task: Task) {
+    fn send_task(&self, task: Task) -> Result<()> {
         debug!("send_task()");
         self.schedulable_transaction_sender
             .send(SessionedMessage::Payload(task))
             .unwrap();
+        Ok(())
     }
 
     fn end_session(&mut self) {
