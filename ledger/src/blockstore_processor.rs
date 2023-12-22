@@ -336,8 +336,7 @@ fn process_batches(
         // scheduling always succeeds here without being blocked on actual transaction executions.
         // The transaction execution errors will be collected via the blocking fn called
         // BankWithScheduler::wait_for_completed_scheduler(), if any.
-        schedule_batches_for_execution(bank, batches);
-        Ok(())
+        schedule_batches_for_execution(bank, batches)
     } else {
         debug!(
             "process_batches()/rebatch_and_execute_batches({} batches)",
