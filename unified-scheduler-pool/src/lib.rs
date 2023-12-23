@@ -782,12 +782,14 @@ where
                         let state_change = select_biased! {
                             recv(handled_blocked_transaction_receiver) -> executed_task => {
                                 let executed_task = executed_task.unwrap();
+                                state_machine.deschedule_task(&executed_task.task);
                                 if executed_task.is_err() {
                                     log_scheduler!("T:aborted");
+                                    executed_task_sender.send(SessionedMessage::Payload(executed_task)).unwrap();
                                     return executed_task.result_with_timings;
+                                } else {
+                                    executed_task_sender.send_buffered(SessionedMessage::Payload(executed_task)).unwrap();
                                 }
-                                state_machine.deschedule_task(&executed_task.task);
-                                executed_task_sender.send_buffered(SessionedMessage::Payload(executed_task)).unwrap();
                                 "step"
                             },
                             recv(schedulable_transaction_receiver) -> message => {
