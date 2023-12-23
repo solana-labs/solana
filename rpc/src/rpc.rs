@@ -8021,31 +8021,36 @@ pub mod tests {
                 .expect("actual response deserialization");
             let largest_accounts: Vec<RpcTokenAccountBalance> =
                 serde_json::from_value(result["result"]["value"].clone()).unwrap();
-            assert_eq!(largest_accounts.len(), NUM_LARGEST_ACCOUNTS);
 
+            let response_len = largest_accounts.len();
             let response_iter = largest_accounts.into_iter();
-            // [42].chain([30, 29, 28...])
-            let expected_iter = std::iter::once(RpcTokenAccountBalance {
-                address: token_with_different_mint_pubkey.to_string(),
-                amount: UiTokenAmount {
-                    ui_amount: Some(0.42),
-                    decimals: 2,
-                    amount: "42".to_string(),
-                    ui_amount_string: "0.42".to_string(),
-                },
-            })
-            .chain(token_account_pubkeys.into_iter().enumerate().map(
-                |(i, token_acccount_pubkey)| RpcTokenAccountBalance {
-                    address: token_acccount_pubkey.to_string(),
+            // [42].chain([30, 29, 28...]).take(NUM_LARGEST_ACCOUNTS)
+            let expected_iter =
+                std::iter::once(RpcTokenAccountBalance {
+                    address: token_with_different_mint_pubkey.to_string(),
                     amount: UiTokenAmount {
-                        ui_amount: Some((30 - i) as f64 / 100.0),
+                        ui_amount: Some(0.42),
                         decimals: 2,
-                        amount: (30 - i).to_string(),
-                        ui_amount_string: ((30 - i) as f64 / 100.0).to_string(),
+                        amount: "42".to_string(),
+                        ui_amount_string: "0.42".to_string(),
                     },
-                },
-            ))
-            .take(NUM_LARGEST_ACCOUNTS);
+                })
+                .chain(token_account_pubkeys.iter().enumerate().map(
+                    |(i, token_acccount_pubkey)| RpcTokenAccountBalance {
+                        address: token_acccount_pubkey.to_string(),
+                        amount: UiTokenAmount {
+                            ui_amount: Some((30 - i) as f64 / 100.0),
+                            decimals: 2,
+                            amount: (30 - i).to_string(),
+                            ui_amount_string: ((30 - i) as f64 / 100.0).to_string(),
+                        },
+                    },
+                ))
+                .take(NUM_LARGEST_ACCOUNTS);
+            // Explicit len check is necessary when checking iterators in this way.
+            // Otherwise, if an iterator is empty or otherwise shorter less asserts
+            // may be performed than expected.
+            assert_eq!(response_len, NUM_LARGEST_ACCOUNTS);
             for (response, expected) in response_iter.zip(expected_iter) {
                 assert_eq!(response, expected);
             }
