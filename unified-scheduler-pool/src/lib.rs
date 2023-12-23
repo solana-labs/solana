@@ -1488,7 +1488,7 @@ mod tests {
 
         assert_eq!(bank.transaction_count(), 0);
         let scheduler = pool.take_scheduler(context);
-        scheduler.schedule_execution(&(tx0, 0));
+        assert_matches!(scheduler.schedule_execution(&(tx0, 0)), Ok(()));
         let bank = BankWithScheduler::new(bank, Some(scheduler));
         assert_matches!(bank.wait_for_completed_scheduler(), Some((Ok(()), _)));
         assert_eq!(bank.transaction_count(), 1);
@@ -1521,7 +1521,7 @@ mod tests {
                 genesis_config.hash(),
             ));
         assert_eq!(bank.transaction_count(), 0);
-        scheduler.schedule_execution(&(bad_tx, 0));
+        assert_matches!(scheduler.schedule_execution(&(bad_tx, 0)), Ok(()));
         scheduler.pause_for_recent_blockhash();
         assert_eq!(bank.transaction_count(), 0);
 
