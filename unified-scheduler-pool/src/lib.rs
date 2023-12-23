@@ -364,7 +364,7 @@ impl<SEA: ScheduleExecutionArg> TaskHandler<SEA> for DefaultTaskHandler {
             batch,
             transaction_indexes: vec![index],
         };
-        std::thread::sleep(Duration::from_secs(20));
+        //std::thread::sleep(Duration::from_secs(20));
 
         *result = execute_batch(
             &batch_with_indexes,
@@ -1213,8 +1213,8 @@ where
             let task = SchedulingStateMachine::create_task(transaction.clone(), index, |pubkey| {
                 self.inner.address_book.load(pubkey)
             });
-            let abort_detected = self.ensure_thread_manager_started(&self.context)
-                .send_task(task);
+            let abort_detected = self.ensure_thread_manager_started(&self.context).send_task(task);
+            info!("a: {}", abort_detected);
             if abort_detected {
                 let mut thread_manager = self.inner.thread_manager.write().unwrap();
                 thread_manager.stop_and_join_threads();
