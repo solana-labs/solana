@@ -715,7 +715,8 @@ where
             unbounded::<Box<ExecutedTask>>();
         let (executed_task_sender, executed_task_receiver) =
             unbounded::<SessionedMessage<Box<ExecutedTask>, ()>>();
-        let (accumulated_result_sender, accumulated_result_receiver) = unbounded::<ResultWithTimings>();
+        let (accumulated_result_sender, accumulated_result_receiver) =
+            unbounded::<ResultWithTimings>();
         let scheduler_id = self.scheduler_id;
         let mut slot = context.bank().slot();
         let (tid_sender, tid_receiver) = bounded(1);
@@ -837,8 +838,12 @@ where
                     if session_ending {
                         log_scheduler!("S:ended");
                         (state_machine, log_interval) = <_>::default();
-                        executed_task_sender.send(SessionedMessage::EndSession).unwrap();
-                        result_sender.send(accumulated_result_receiver.recv().unwrap()).unwrap();
+                        executed_task_sender
+                            .send(SessionedMessage::EndSession)
+                            .unwrap();
+                        result_sender
+                            .send(accumulated_result_receiver.recv().unwrap())
+                            .unwrap();
                         if !thread_ending {
                             session_ending = false;
                         }
@@ -849,7 +854,9 @@ where
                 let result_with_timings = if session_ending {
                     initialized_result_with_timings()
                 } else {
-                    executed_task_sender.send(SessionedMessage::EndSession).unwrap();
+                    executed_task_sender
+                        .send(SessionedMessage::EndSession)
+                        .unwrap();
                     accumulated_result_receiver.recv().unwrap()
                 };
                 trace!(
