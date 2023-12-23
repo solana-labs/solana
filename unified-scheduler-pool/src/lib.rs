@@ -964,7 +964,7 @@ where
                                     ),
                                     (
                                         "status",
-                                        format!("{:?}", task.result_with_timings.0),
+                                        format!("{:?}", executed_task.result_with_timings.0),
                                         String
                                     ),
                                     ("duration", handler_timings.execution_us, i64),
@@ -981,7 +981,7 @@ where
                                     ),
                                 );
                             }
-                            drop(task);
+                            drop(executed_task);
                         }
                         Ok(SessionedMessage::StartSession(())) => {
                             unreachable!();
