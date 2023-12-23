@@ -40,7 +40,7 @@ impl ProgramTiming {
 }
 
 /// Used as an index for `Metrics`.
-#[derive(Debug, Sequence)]
+#[derive(Debug, Sequence, Clone)]
 pub enum ExecuteTimingType {
     CheckUs,
     LoadUs,
@@ -380,7 +380,7 @@ impl ExecuteAccessoryTimings {
     }
 }
 
-#[derive(Default, Debug, PartialEq, Eq)]
+#[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct ExecuteDetailsTimings {
     pub serialize_us: u64,
     pub create_vm_us: u64,
