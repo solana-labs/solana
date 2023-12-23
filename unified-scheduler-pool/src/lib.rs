@@ -1092,8 +1092,8 @@ where
         if !self.is_active() {
             assert_matches!(*self.session_result_with_timings.lock().unwrap(), Some(_));
             return;
-        } else if let Some((result, _timings)) = &mut *self.session_result_with_timings.lock().unwrap() {
-            if result.is_err() {
+        } else if let Some(aborted) = &mut *self.session_result_with_timings.lock().unwrap().map(|(r, t) r.is_err()) {
+            if aborted {
                 self.stop_threads();
             }
             return;
