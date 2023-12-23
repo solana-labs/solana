@@ -785,7 +785,7 @@ where
                                 match message {
                                     Ok(SessionedMessage::Payload(task)) => {
                                         assert!(!session_ending && !thread_ending);
-                                        if let Some(task) = state_machine.schedule_new_task(task) {
+                                        if let Some(task) = state_machine.schedule_task(task) {
                                             idle_transaction_sender.send(task).unwrap();
                                         }
                                         "step"
