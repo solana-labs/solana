@@ -1538,7 +1538,7 @@ mod tests {
                 .result,
             Ok(_)
         );
-        scheduler.schedule_execution(&(good_tx_after_bad_tx, 0));
+        assert_matches!(scheduler.schedule_execution(&(good_tx_after_bad_tx, 0)), Ok(()));
         scheduler.pause_for_recent_blockhash();
         // transaction_count should remain same as scheduler should be bailing out.
         assert_eq!(bank.transaction_count(), 0);
@@ -1726,7 +1726,7 @@ mod tests {
         assert_eq!(bank.transaction_count(), 0);
 
         // schedule but not immediately execute transaction
-        bank.schedule_transaction_executions([(&very_old_valid_tx, &0)].into_iter());
+        assert_matches!(bank.schedule_transaction_executions([(&very_old_valid_tx, &0)].into_iter()), Ok(()));
         // this calls register_recent_blockhash internally
         bank.fill_bank_with_ticks_for_tests();
 
