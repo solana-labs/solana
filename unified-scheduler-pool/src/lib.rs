@@ -1020,7 +1020,7 @@ where
     }
 
     fn stop_threads(&mut self) {
-        let Some(scheduler_thread) = self.take_scheduler_thread() {
+        let Some(scheduler_thread) = self.take_scheduler_thread() else {
             warn!("stop_threads(): already not active anymore...");
             return;
         }
