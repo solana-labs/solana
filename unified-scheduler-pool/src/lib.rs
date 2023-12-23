@@ -952,12 +952,19 @@ where
                                     "transaction_timings",
                                     ("slot", executed_task.slot, i64),
                                     ("index", executed_task.task.task_index(), i64),
-                                    ("thread", format!("solScExLane{:02}", executed_task.thx), String),
+                                    (
+                                        "thread",
+                                        format!("solScExLane{:02}", executed_task.thx),
+                                        String
+                                    ),
                                     ("signature", &sig, String),
                                     (
                                         "account_locks_in_json",
                                         serde_json::to_string(
-                                            &executed_task.task.transaction().get_account_locks_unchecked()
+                                            &executed_task
+                                                .task
+                                                .transaction()
+                                                .get_account_locks_unchecked()
                                         )
                                         .unwrap(),
                                         String
@@ -972,7 +979,8 @@ where
                                     ("compute_units", 0 /*task.cu*/, i64),
                                     (
                                         "priority",
-                                        executed_task.task
+                                        executed_task
+                                            .task
                                             .transaction()
                                             .get_transaction_priority_details(false)
                                             .map(|d| d.priority)
