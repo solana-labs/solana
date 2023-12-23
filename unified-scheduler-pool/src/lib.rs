@@ -626,7 +626,7 @@ where
     }
 
     fn take_scheduler_thread(&mut self) -> Option<usize> {
-        self.scheduler_thread_and_tid.take().map(|thread_and_tid| thread)
+        self.scheduler_thread_and_tid.take().map(|(thread, tid)| thread)
     }
 
     fn receive_scheduled_transaction(
