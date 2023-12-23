@@ -1948,13 +1948,13 @@ impl JsonRpcRequestProcessor {
                 let is_larger = Some(&wrapped_token_account_balance) < smallest_in_heap;
 
                 // We evict smallest entry if the current entry is larger AND the heap is full
-                let evict_one = is_larger & !is_not_full;
+                let evict_one = is_larger && !is_not_full;
                 if evict_one {
                     token_accounts_min_heap.pop();
                 }
 
                 // We will add to heap if the heap is not full or if the entry is larger
-                let add_to_heap = is_not_full | is_larger;
+                let add_to_heap = is_not_full || is_larger;
                 if add_to_heap {
                     // Push to min heap after updating values
                     wrapped_token_account_balance.inner.address = address.to_string();
