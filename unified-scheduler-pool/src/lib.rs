@@ -422,6 +422,10 @@ impl ExecutedTask {
             handler_timings: None,
         })
     }
+
+    fn is_err(&self) -> bool {
+        self.result_with_timings.is_err()
+    }
 }
 
 #[derive(Debug)]
