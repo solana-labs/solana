@@ -808,8 +808,8 @@ where
                                     }
                                 }
                             },
-                            recv(if state_machine.has_retryable_task() { do_now } else { dont_now }) -> result => {
-                                assert_matches!(result, Err(RecvError));
+                            recv(if state_machine.has_retryable_task() { do_now } else { dont_now }) -> dummy_result => {
+                                assert_matches!(dummy_result, Err(RecvError));
 
                                 if let Some(task) = state_machine.schedule_retryable_task() {
                                     blocked_transaction_sessioned_sender
