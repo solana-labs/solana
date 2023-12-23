@@ -364,6 +364,7 @@ impl<SEA: ScheduleExecutionArg> TaskHandler<SEA> for DefaultTaskHandler {
             batch,
             transaction_indexes: vec![index],
         };
+        std::thread::sleep(Duration::from_secs(20));
 
         *result = execute_batch(
             &batch_with_indexes,
