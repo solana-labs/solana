@@ -625,6 +625,10 @@ where
         self.scheduler_thread_and_tid.is_some()
     }
 
+    fn take_scheduler_thread(&mut) -> Option<usize> {
+        self.scheduler_thread_and_tid.take().map(|thread_and_tid| thread)
+    }
+
     fn receive_scheduled_transaction(
         handler: &TH,
         bank: &Arc<Bank>,
