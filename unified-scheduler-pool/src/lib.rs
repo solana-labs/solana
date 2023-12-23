@@ -1219,6 +1219,7 @@ where
                 let mut thread_manager = self.inner.thread_manager.write().unwrap();
                 thread_manager.stop_and_join_threads();
                 let r = thread_manager.session_result_with_timings.lock().unwrap().as_ref().unwrap().0.clone();
+                assert_matches!(r, Err(_));
                 r
             } else {
                 Ok(())
