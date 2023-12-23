@@ -770,7 +770,7 @@ where
                         tid
                     })
                     .unwrap();
-                let (always_retry, never_retry) = (&disconnected::<()>(), &never());
+                let (do_now, dont_now) = (&disconnected::<()>(), &never());
 
                 while !thread_ending {
                     loop {
@@ -808,7 +808,7 @@ where
                                     }
                                 }
                             },
-                            recv(if state_machine.has_retryable_task() { always_retry } else { never_retry }) -> result => {
+                            recv(if state_machine.has_retryable_task() { do_now } else { dont_now }) -> result => {
                                 assert_matches!(result, Err(RecvError));
 
                                 if let Some(task) = state_machine.schedule_retryable_task() {
