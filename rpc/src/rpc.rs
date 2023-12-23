@@ -1939,17 +1939,23 @@ impl JsonRpcRequestProcessor {
                     amount: Reverse(amount_u64),
                 };
 
-                // Add if balance is larger than smallest item in heap.
-                // Reverse requires < to check for larger, e.g. Reverse(5) < Reverse(3)
+                // Auxiliary booleans for evict_one & add_to_heap conditions
                 let is_not_full = token_accounts_min_heap.len() < NUM_LARGEST_ACCOUNTS;
+                // Reverse requires < to check for larger, e.g. Reverse(5) < Reverse(3).
+                // Note that Some(...) < None evaluates to false, but add_to_heap will be true
+                // because None is only returned when the heap is empty (is_not_full = true)
                 let smallest_in_heap = token_accounts_min_heap.peek();
                 let is_larger = Some(&wrapped_token_account_balance) < smallest_in_heap;
-                if is_not_full | is_larger {
-                    // Remove smallest if full
-                    if !is_not_full {
-                        token_accounts_min_heap.pop();
-                    }
 
+                // We evict smallest entry if the current entry is larger AND the heap is full
+                let evict_one = is_larger & !is_not_full;
+                if evict_one {
+                    token_accounts_min_heap.pop();
+                }
+
+                // We will add to heap if the heap is not full or if the entry is larger
+                let add_to_heap = is_not_full | is_larger;
+                if add_to_heap {
                     // Push to min heap after updating values
                     wrapped_token_account_balance.inner.address = address.to_string();
                     wrapped_token_account_balance.inner.amount =
@@ -7981,26 +7987,30 @@ pub mod tests {
                 &Pubkey::from_str(&new_mint.to_string()).unwrap(),
                 &mint_account,
             );
-            let mut account_data = vec![0; TokenAccount::get_packed_len()];
-            let token_account = TokenAccount {
-                mint: new_mint,
-                owner,
-                delegate: COption::Some(delegate),
-                amount: 10,
-                state: TokenAccountState::Initialized,
-                is_native: COption::None,
-                delegated_amount: 30,
-                close_authority: COption::Some(owner),
-            };
-            TokenAccount::pack(token_account, &mut account_data).unwrap();
-            let token_account = AccountSharedData::from(Account {
-                lamports: 111,
-                data: account_data.to_vec(),
-                owner: program_id,
-                ..Account::default()
-            });
-            let token_with_smaller_balance = solana_sdk::pubkey::new_rand();
-            bank.store_account(&token_with_smaller_balance, &token_account);
+            let mut token_account_pubkeys: Vec<Pubkey> = vec![];
+            for i in 0..30 {
+                let mut account_data = vec![0; TokenAccount::get_packed_len()];
+                let token_account = TokenAccount {
+                    mint: new_mint,
+                    owner,
+                    delegate: COption::Some(delegate),
+                    amount: 30 - i,
+                    state: TokenAccountState::Initialized,
+                    is_native: COption::None,
+                    delegated_amount: 0,
+                    close_authority: COption::Some(owner),
+                };
+                TokenAccount::pack(token_account, &mut account_data).unwrap();
+                let token_account = AccountSharedData::from(Account {
+                    lamports: 111,
+                    data: account_data.to_vec(),
+                    owner: program_id,
+                    ..Account::default()
+                });
+                let token_account_pubkey = solana_sdk::pubkey::new_rand();
+                token_account_pubkeys.push(token_account_pubkey);
+                bank.store_account(&token_account_pubkey, &token_account);
+            }
 
             // Test largest token accounts
             let req = format!(
@@ -8011,29 +8021,34 @@ pub mod tests {
                 .expect("actual response deserialization");
             let largest_accounts: Vec<RpcTokenAccountBalance> =
                 serde_json::from_value(result["result"]["value"].clone()).unwrap();
-            assert_eq!(
-                largest_accounts,
-                vec![
-                    RpcTokenAccountBalance {
-                        address: token_with_different_mint_pubkey.to_string(),
-                        amount: UiTokenAmount {
-                            ui_amount: Some(0.42),
-                            decimals: 2,
-                            amount: "42".to_string(),
-                            ui_amount_string: "0.42".to_string(),
-                        }
+            assert_eq!(largest_accounts.len(), NUM_LARGEST_ACCOUNTS);
+
+            let response_iter = largest_accounts.into_iter();
+            // [42].chain([30, 29, 28...])
+            let expected_iter = std::iter::once(RpcTokenAccountBalance {
+                address: token_with_different_mint_pubkey.to_string(),
+                amount: UiTokenAmount {
+                    ui_amount: Some(0.42),
+                    decimals: 2,
+                    amount: "42".to_string(),
+                    ui_amount_string: "0.42".to_string(),
+                },
+            })
+            .chain(token_account_pubkeys.into_iter().enumerate().map(
+                |(i, token_acccount_pubkey)| RpcTokenAccountBalance {
+                    address: token_acccount_pubkey.to_string(),
+                    amount: UiTokenAmount {
+                        ui_amount: Some((30 - i) as f64 / 100.0),
+                        decimals: 2,
+                        amount: (30 - i).to_string(),
+                        ui_amount_string: ((30 - i) as f64 / 100.0).to_string(),
                     },
-                    RpcTokenAccountBalance {
-                        address: token_with_smaller_balance.to_string(),
-                        amount: UiTokenAmount {
-                            ui_amount: Some(0.1),
-                            decimals: 2,
-                            amount: "10".to_string(),
-                            ui_amount_string: "0.1".to_string(),
-                        }
-                    }
-                ]
-            );
+                },
+            ))
+            .take(NUM_LARGEST_ACCOUNTS);
+            for (response, expected) in response_iter.zip(expected_iter) {
+                assert_eq!(response, expected);
+            }
         }
     }
 
