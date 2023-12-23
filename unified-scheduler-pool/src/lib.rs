@@ -781,11 +781,11 @@ where
                                 executed_task_sender.send_buffered(SessionedMessage::Payload(executed_task)).unwrap();
                                 "step"
                             },
-                            recv(schedulable_transaction_receiver) -> m => {
-                                match m {
-                                    Ok(SessionedMessage::Payload(payload)) => {
+                            recv(schedulable_transaction_receiver) -> message => {
+                                match message {
+                                    Ok(SessionedMessage::Payload(task)) => {
                                         assert!(!session_ending && !thread_ending);
-                                        if let Some(task) = state_machine.schedule_new_task(payload) {
+                                        if let Some(task) = state_machine.schedule_new_task(task) {
                                             idle_transaction_sender.send(task).unwrap();
                                         }
                                         "step"
