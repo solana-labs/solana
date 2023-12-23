@@ -770,7 +770,7 @@ where
                         tid
                     })
                     .unwrap();
-                let (do_now, dont_now) = (&disconnected::<()>(), &never());
+                let (do_now, dont_now) = (&disconnected(), &never());
 
                 while !thread_ending {
                     loop {
