@@ -1087,7 +1087,7 @@ where
         }
     }
 
-    fn did_abort(&self) -> Option<bool> {
+    fn ended_session(&self) -> Option<bool> {
         self.session_result_with_timings.lock().unwrap().as_ref().map(|(r, t)| r.is_err())
     }
 
@@ -1096,7 +1096,7 @@ where
         if !self.is_active() {
             assert_matches!(*self.session_result_with_timings.lock().unwrap(), Some(_));
             return;
-        } else if let Some(aborted) = self.did_abort() {
+        } else if let Some(aborted) = self.ended_session() {
             if aborted {
                 self.stop_threads();
             }
