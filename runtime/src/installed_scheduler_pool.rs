@@ -625,7 +625,7 @@ mod tests {
                     mocked
                         .expect_schedule_execution()
                         .times(1)
-                        .returning(|(_, _)| ());
+                        .returning(|(_, _)| Ok(()));
                 },
             ),
         );
