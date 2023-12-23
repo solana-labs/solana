@@ -1215,7 +1215,7 @@ where
             let abort_detected = self.ensure_thread_manager_started(&self.context)
                 .send_task(task);
             if abort_detected {
-                self.thread_manager.write().unwrap().stop_and_join_threads();
+                self.inner.thread_manager.write().unwrap().stop_and_join_threads();
             }
         })
     }
