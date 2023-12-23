@@ -1093,7 +1093,7 @@ where
     fn end_session(&mut self) {
         debug!("end_session(): will end session...");
         if !self.is_active() {
-            assert_matches!(self.session_result_with_timings.lock().unwrap(), Some(_));
+            assert_matches!(*self.session_result_with_timings.lock().unwrap(), Some(_));
             return;
         } else if self.session_result_with_timings.lock().unwrap().is_some() {
             return;
