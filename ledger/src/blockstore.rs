@@ -1597,7 +1597,7 @@ impl Blockstore {
     /// the existing `merkle_root_meta` and `shred`
     ///
     /// Otherwise return false and if not already present, add duplicate proof to
-    /// blockstore and `duplicate_shreds`.
+    /// `duplicate_shreds`.
     fn perform_merkle_check(
         &self,
         just_inserted_shreds: &HashMap<ShredId, Shred>,
@@ -1636,12 +1636,6 @@ impl Blockstore {
             let conflicting_shred = self
                 .get_shred_from_just_inserted_or_db(just_inserted_shreds, shred_id)
                 .into_owned();
-            if self
-                .store_duplicate_slot(slot, conflicting_shred.clone(), shred.payload().clone())
-                .is_err()
-            {
-                warn!("store duplicate error");
-            }
             duplicate_shreds.push(PossibleDuplicateShred::MerkleRootConflict(
                 shred.clone(),
                 conflicting_shred,
