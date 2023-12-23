@@ -8,7 +8,7 @@ use {
     },
 };
 
-#[derive(Default, Debug, PartialEq, Eq)]
+#[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct ProgramTiming {
     pub accumulated_us: u64,
     pub accumulated_units: u64,
