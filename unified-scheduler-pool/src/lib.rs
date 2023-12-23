@@ -717,6 +717,7 @@ where
             unbounded::<SessionedMessage<Box<ExecutedTask>, ()>>();
         let (accumulated_result_sender, accumulated_result_receiver) =
             unbounded::<ResultWithTimings>();
+
         let scheduler_id = self.scheduler_id;
         let mut slot = context.bank().slot();
         let (tid_sender, tid_receiver) = bounded(1);
