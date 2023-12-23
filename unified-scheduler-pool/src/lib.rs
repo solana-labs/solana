@@ -172,7 +172,7 @@ where
                         elapsed,
                         width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
                     );
-                    thread_manager.stop_threads();
+                    thread_manager.stop_and_join_threads();
                     self.tick = 0;
                     self.updated_at = Instant::now();
                 }
@@ -462,7 +462,7 @@ where
 
     fn stop_thread_manager(&mut self) {
         debug!("stop_thread_manager()");
-        self.thread_manager.write().unwrap().stop_threads();
+        self.thread_manager.write().unwrap().stop_and_join_threads();
     }
 
     fn id(&self) -> SchedulerId {
@@ -1045,13 +1045,13 @@ where
             .collect();
     }
 
-    fn stop_threads(&mut self) {
+    fn stop_and_join_threads(&mut self) {
         let Some(scheduler_thread) = self.take_scheduler_thread() else {
-            warn!("stop_threads(): already not active anymore...");
+            warn!("stop_and_join_threads(): already not active anymore...");
             return;
         };
         debug!(
-            "stop_threads(): stopping threads by {:?}",
+            "stop_and_join_threads(): stopping threads by {:?}",
             std::thread::current()
         );
 
@@ -1069,7 +1069,7 @@ where
         self.put_session_result_with_timings(result_with_timings);
 
         debug!(
-            "stop_threads(): successfully stopped threads by {:?}",
+            "stop_and_join_threads(): successfully stopped threads by {:?}",
             std::thread::current()
         );
     }
@@ -1096,7 +1096,7 @@ where
             return;
         } else if let Some(did_aborted) = self.ended_session_did_abort() {
             if did_aborted {
-                self.stop_threads();
+                self.stop_and_join_threads();
             }
             return;
         }
@@ -1212,8 +1212,11 @@ where
             let task = SchedulingStateMachine::create_task(transaction.clone(), index, |pubkey| {
                 self.inner.address_book.load(pubkey)
             });
-            self.ensure_thread_manager_started(&self.context)
-                .send_task(task)
+            let abort_detected = self.ensure_thread_manager_started(&self.context)
+                .send_task(task);
+            if abort_detected {
+                self.thread_manager.write().unwrap().stop_and_join_threads();
+            }
         })
     }
 
