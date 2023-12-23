@@ -4556,7 +4556,7 @@ pub mod tests {
         mocked_scheduler
             .expect_schedule_execution()
             .times(txs.len())
-            .returning(|_| ());
+            .returning(|_| Ok(()));
         mocked_scheduler
             .expect_wait_for_termination()
             .with(mockall::predicate::eq(true))
