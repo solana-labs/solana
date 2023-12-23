@@ -1081,8 +1081,8 @@ where
             .schedulable_transaction_sender
             .send(SessionedMessage::Payload(task))
         {
-            Ok(()) => true,
-            Err(SendError(_)) => false,
+            Ok(()) => false,
+            Err(SendError(_)) => true,
         }
     }
 
