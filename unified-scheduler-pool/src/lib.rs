@@ -782,8 +782,8 @@ where
                             recv(handled_blocked_transaction_receiver) -> executed_task => {
                                 let executed_task = executed_task.unwrap();
                                 if executed_task.is_err() {
-                                    panic!();
                                     log_scheduler!("T:aborted");
+                                    panic!();
                                     return executed_task.result_with_timings;
                                 }
                                 state_machine.deschedule_task(&executed_task.task);
@@ -830,8 +830,8 @@ where
                             recv(handled_idle_transaction_receiver) -> executed_task => {
                                 let executed_task = executed_task.unwrap();
                                 if executed_task.is_err() {
-                                    panic!(); 
                                     log_scheduler!("T:aborted");
+                                    panic!(); 
                                     return executed_task.result_with_timings;
                                 }
                                 state_machine.deschedule_task(&executed_task.task);
