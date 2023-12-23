@@ -713,9 +713,9 @@ where
             unbounded::<Box<ExecutedTask>>();
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
             unbounded::<Box<ExecutedTask>>();
-        let (drop_sender, drop_receiver) =
+        let (executed_task_sender, executed_task_receiver) =
             unbounded::<SessionedMessage<Box<ExecutedTask>, ()>>();
-        let (drop_sender2, drop_receiver2) = unbounded::<ResultWithTimings>();
+        let (accumulated_result_sender, accumulated_result_receiver) = unbounded::<ResultWithTimings>();
         let scheduler_id = self.scheduler_id;
         let mut slot = context.bank().slot();
         let (tid_sender, tid_receiver) = bounded(1);
@@ -776,7 +776,7 @@ where
                             recv(handled_blocked_transaction_receiver) -> task => {
                                 let task = task.unwrap();
                                 state_machine.deschedule_task(&task.task);
-                                drop_sender.send_buffered(SessionedMessage::Payload(task)).unwrap();
+                                executed_task_sender.send_buffered(SessionedMessage::Payload(task)).unwrap();
                                 "step"
                             },
                             recv(schedulable_transaction_receiver) -> m => {
@@ -819,7 +819,7 @@ where
                             recv(handled_idle_transaction_receiver) -> task => {
                                 let task = task.unwrap();
                                 state_machine.deschedule_task(&task.task);
-                                drop_sender.send_buffered(SessionedMessage::Payload(task)).unwrap();
+                                executed_task_sender.send_buffered(SessionedMessage::Payload(task)).unwrap();
                                 "step"
                             },
                         };
@@ -837,8 +837,8 @@ where
                     if session_ending {
                         log_scheduler!("S:ended");
                         (state_machine, log_interval) = <_>::default();
-                        drop_sender.send(SessionedMessage::EndSession).unwrap();
-                        result_sender.send(drop_receiver2.recv().unwrap()).unwrap();
+                        executed_task_sender.send(SessionedMessage::EndSession).unwrap();
+                        result_sender.send(accumulated_result_receiver.recv().unwrap()).unwrap();
                         if !thread_ending {
                             session_ending = false;
                         }
@@ -849,8 +849,8 @@ where
                 let result_with_timings = if session_ending {
                     initialized_result_with_timings()
                 } else {
-                    drop_sender.send(SessionedMessage::EndSession).unwrap();
-                    drop_receiver2.recv().unwrap()
+                    executed_task_sender.send(SessionedMessage::EndSession).unwrap();
+                    accumulated_result_receiver.recv().unwrap()
                 };
                 trace!(
                     "solScheduler thread is ended at: {:?}",
@@ -922,7 +922,7 @@ where
         let drop_main_loop = || {
             move || 'outer: {
                 loop {
-                    match drop_receiver.recv_timeout(Duration::from_millis(40)) {
+                    match executed_task_receiver.recv_timeout(Duration::from_millis(40)) {
                         Ok(SessionedMessage::Payload(task)) => {
                             result_with_timings
                                 .1
@@ -979,7 +979,7 @@ where
                             unreachable!();
                         }
                         Ok(SessionedMessage::EndSession) => {
-                            drop_sender2
+                            accumulated_result_sender
                                 .send(replace(
                                     &mut result_with_timings,
                                     initialized_result_with_timings(),
