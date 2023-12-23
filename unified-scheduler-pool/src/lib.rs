@@ -1092,7 +1092,7 @@ where
         if !self.is_active() {
             assert_matches!(*self.session_result_with_timings.lock().unwrap(), Some(_));
             return;
-        } else if let Some(result_with_timings) = &mut self.session_result_with_timings.lock().unwrap() {
+        } else if let Some(result_with_timings) = &mut *self.session_result_with_timings.lock().unwrap() {
             if result_with_timings.is_err() {
                 self.stop_threads();
             }
