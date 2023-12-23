@@ -1023,7 +1023,7 @@ where
         let Some(scheduler_thread) = self.take_scheduler_thread() else {
             warn!("stop_threads(): already not active anymore...");
             return;
-        }
+        };
         debug!(
             "stop_threads(): stopping threads by {:?}",
             std::thread::current()
