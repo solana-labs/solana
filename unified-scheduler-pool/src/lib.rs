@@ -483,7 +483,7 @@ where
     pool: Arc<SchedulerPool<S, TH, SEA>>,
     scheduler_thread_and_tid: Option<(JoinHandle<ResultWithTimings>, Tid)>,
     handler_threads: Vec<JoinHandle<()>>,
-    drop_thread: Option<JoinHandle<()>>,
+    accumulator_thread: Option<JoinHandle<()>>,
     handler: TH,
     schedulable_transaction_sender: Sender<SessionedMessage<Task, SchedulingContext>>,
     schedulable_transaction_receiver: Receiver<SessionedMessage<Task, SchedulingContext>>,
@@ -611,7 +611,7 @@ where
             result_sender,
             result_receiver,
             scheduler_thread_and_tid: None,
-            drop_thread: None,
+            accumulator_thread: None,
             handler_threads: Vec::with_capacity(handler_count),
             handler_count,
             handler,
@@ -1001,7 +1001,7 @@ where
             tid_receiver.recv().unwrap(),
         ));
 
-        self.drop_thread = Some(
+        self.accumulator_thread = Some(
             std::thread::Builder::new()
                 .name("solScDrop".to_owned())
                 .spawn(drop_main_loop())
@@ -1035,7 +1035,7 @@ where
             self.schedulable_transaction_receiver,
         ) = unbounded();
 
-        let () = self.drop_thread.take().unwrap().join().unwrap();
+        let () = self.accumulator_thread.take().unwrap().join().unwrap();
         for thread in self.handler_threads.drain(..) {
             debug!("joining...: {:?}", thread);
             () = thread.join().unwrap();
