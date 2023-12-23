@@ -1,5 +1,4 @@
 //! The `rpc` module implements the Solana RPC interface.
-
 use {
     crate::{
         max_slots::MaxSlots, optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
@@ -1941,11 +1940,13 @@ impl JsonRpcRequestProcessor {
                 };
 
                 // Add if balance is larger than smallest item in heap.
-                // Some(any u64) > None captures empty case.
                 // Reverse requires < to check for larger, e.g. Reverse(5) < Reverse(3)
-                if Some(&wrapped_token_account_balance) < token_accounts_min_heap.peek() {
+                let is_not_full = token_accounts_min_heap.len() < NUM_LARGEST_ACCOUNTS;
+                let smallest_in_heap = token_accounts_min_heap.peek();
+                let is_larger = Some(&wrapped_token_account_balance) < smallest_in_heap;
+                if is_not_full | is_larger {
                     // Remove smallest if full
-                    if token_accounts_min_heap.len() == NUM_LARGEST_ACCOUNTS {
+                    if !is_not_full {
                         token_accounts_min_heap.pop();
                     }
 
@@ -1958,12 +1959,12 @@ impl JsonRpcRequestProcessor {
             }
 
             // Sort and return the min heap's inner vec.
-            // The entries are yielded in ascending order so we need to reverse.
+            // The inner vector is sorted in Reverse(ascending) -> descending order,
+            // so there is no need to reverse
             let mut token_balances = vec![];
             for wrapped_balance in token_accounts_min_heap.into_sorted_vec() {
                 token_balances.push(wrapped_balance.inner);
             }
-            token_balances.reverse();
             token_balances
         };
 
