@@ -1065,7 +1065,7 @@ where
             self.schedulable_transaction_receiver,
         ) = unbounded();
 
-        let () = self.accumulator_thread.take().unwrap().try_join().unwrap();
+        let () = self.accumulator_thread.take().unwrap().join().unwrap();
         for thread in self.handler_threads.drain(..) {
             debug!("joining...: {:?}", thread);
             () = thread.join().unwrap();
