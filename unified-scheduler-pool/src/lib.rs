@@ -529,16 +529,16 @@ where
         context: &SchedulingContext,
     ) -> RwLockReadGuard<'_, ThreadManager<Self, TH, SEA>> {
         loop {
-            let r = self.inner.thread_manager.read().unwrap();
-            if r.is_active() {
+            let read = self.inner.thread_manager.read().unwrap();
+            if read.is_active() {
                 debug!("ensure_thread_manager_started(): is already active...");
-                return r;
+                return read;
             } else {
                 debug!("ensure_thread_manager_started(): will start threads...");
-                drop(r);
-                let mut w = self.inner.thread_manager.write().unwrap();
-                w.start_threads(context);
-                drop(w);
+                drop(read);
+                let mut write = self.inner.thread_manager.write().unwrap();
+                write.start_threads(context);
+                drop(write);
             }
         }
     }
