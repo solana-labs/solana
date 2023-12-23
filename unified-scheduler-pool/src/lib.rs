@@ -424,7 +424,7 @@ impl ExecutedTask {
     }
 
     fn is_err(&self) -> bool {
-        self.result_with_timings.is_err()
+        self.result_with_timings.0.is_err()
     }
 }
 
