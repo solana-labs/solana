@@ -633,7 +633,7 @@ where
     fn receive_scheduled_transaction(
         handler: &TH,
         bank: &Arc<Bank>,
-        task: &mut Box<ExecutedTask>,
+        executed_task: &mut Box<ExecutedTask>,
         pool: &Arc<SchedulerPool<S, TH, SEA>>,
         send_metrics: bool,
     ) {
@@ -645,15 +645,15 @@ where
         debug!("handling task at {:?}", std::thread::current());
         TH::handle(
             handler,
-            &mut task.result_with_timings.0,
-            &mut task.result_with_timings.1,
+            &mut executed_task.result_with_timings.0,
+            &mut executed_task.result_with_timings.1,
             bank,
-            task.task.transaction(),
-            task.task.task_index(),
+            executed_task.task.transaction(),
+            executed_task.task.task_index(),
             &pool.handler_context,
         );
         if let Some((mut wall_time, cpu_time)) = handler_timings {
-            task.handler_timings = Some(HandlerTimings {
+            executed_task.handler_timings = Some(HandlerTimings {
                 finish_time: SystemTime::now(),
                 execution_cpu_us: cpu_time.elapsed().as_micros(),
                 execution_us: {
@@ -775,10 +775,10 @@ where
                 while !thread_ending {
                     loop {
                         let state_change = select_biased! {
-                            recv(handled_blocked_transaction_receiver) -> task => {
-                                let task = task.unwrap();
-                                state_machine.deschedule_task(&task.task);
-                                executed_task_sender.send_buffered(SessionedMessage::Payload(task)).unwrap();
+                            recv(handled_blocked_transaction_receiver) -> executed_task => {
+                                let executed_task = executed_task.unwrap();
+                                state_machine.deschedule_task(&executed_task.task);
+                                executed_task_sender.send_buffered(SessionedMessage::Payload(executed_task)).unwrap();
                                 "step"
                             },
                             recv(schedulable_transaction_receiver) -> m => {
@@ -818,10 +818,10 @@ where
                                 }
                                 "step"
                             },
-                            recv(handled_idle_transaction_receiver) -> task => {
-                                let task = task.unwrap();
-                                state_machine.deschedule_task(&task.task);
-                                executed_task_sender.send_buffered(SessionedMessage::Payload(task)).unwrap();
+                            recv(handled_idle_transaction_receiver) -> executed_task => {
+                                let executed_task = executed_task.unwrap();
+                                state_machine.deschedule_task(&executed_task.task);
+                                executed_task_sender.send_buffered(SessionedMessage::Payload(executed_task)).unwrap();
                                 "step"
                             },
                         };
@@ -931,33 +931,33 @@ where
             move || 'outer: {
                 loop {
                     match executed_task_receiver.recv_timeout(Duration::from_millis(40)) {
-                        Ok(SessionedMessage::Payload(task)) => {
+                        Ok(SessionedMessage::Payload(executed_task)) => {
                             result_with_timings
                                 .1
-                                .accumulate(&task.result_with_timings.1);
-                            match &task.result_with_timings.0 {
+                                .accumulate(&executed_task.result_with_timings.1);
+                            match &executed_task.result_with_timings.0 {
                                 Ok(()) => {}
                                 Err(e) => {
                                     error!("sc error: {:?}", e);
                                     result_with_timings.0 = Err(e.clone());
                                 }
                             }
-                            if let Some(handler_timings) = &task.handler_timings {
+                            if let Some(handler_timings) = &executed_task.handler_timings {
                                 use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
 
-                                let sig = task.task.transaction().signature().to_string();
+                                let sig = executed_task.task.transaction().signature().to_string();
 
                                 solana_metrics::datapoint_info_at!(
                                     handler_timings.finish_time,
                                     "transaction_timings",
-                                    ("slot", task.slot, i64),
-                                    ("index", task.task.task_index(), i64),
-                                    ("thread", format!("solScExLane{:02}", task.thx), String),
+                                    ("slot", executed_task.slot, i64),
+                                    ("index", executed_task.task.task_index(), i64),
+                                    ("thread", format!("solScExLane{:02}", executed_task.thx), String),
                                     ("signature", &sig, String),
                                     (
                                         "account_locks_in_json",
                                         serde_json::to_string(
-                                            &task.task.transaction().get_account_locks_unchecked()
+                                            &executed_task.task.transaction().get_account_locks_unchecked()
                                         )
                                         .unwrap(),
                                         String
@@ -972,7 +972,7 @@ where
                                     ("compute_units", 0 /*task.cu*/, i64),
                                     (
                                         "priority",
-                                        task.task
+                                        executed_task.task
                                             .transaction()
                                             .get_transaction_priority_details(false)
                                             .map(|d| d.priority)
