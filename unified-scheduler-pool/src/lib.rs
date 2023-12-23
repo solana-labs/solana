@@ -783,7 +783,6 @@ where
                                 let executed_task = executed_task.unwrap();
                                 if executed_task.is_err() {
                                     log_scheduler!("T:aborted");
-                                    panic!();
                                     return executed_task.result_with_timings;
                                 }
                                 state_machine.deschedule_task(&executed_task.task);
@@ -831,7 +830,6 @@ where
                                 let executed_task = executed_task.unwrap();
                                 if executed_task.is_err() {
                                     log_scheduler!("T:aborted");
-                                    panic!(); 
                                     return executed_task.result_with_timings;
                                 }
                                 state_machine.deschedule_task(&executed_task.task);
@@ -1076,14 +1074,14 @@ where
         );
     }
 
-    fn send_task(&self, task: Task) -> Result<()> {
+    fn send_task(&self, task: Task) -> bool {
         debug!("send_task()");
         match self
             .schedulable_transaction_sender
             .send(SessionedMessage::Payload(task))
         {
-            Ok(()) => Ok(()),
-            Err(SendError(_)) => self.session_result_with_timings.lock().unwrap().as_ref().unwrap().0.clone(),
+            Ok(()) => true,
+            Err(SendError(_)) => false,
         }
     }
 
