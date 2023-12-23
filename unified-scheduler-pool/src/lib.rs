@@ -688,12 +688,12 @@ where
     }
 
     fn take_session_result_with_timings(&mut self) -> ResultWithTimings {
-        self.session_result_with_timings.take().unwrap()
+        self.session_result_with_timings.lock().unwrap().take().unwrap()
     }
 
     fn put_session_result_with_timings(&mut self, result_with_timings: ResultWithTimings) {
         assert_matches!(
-            self.session_result_with_timings
+            self.session_result_with_timings.lock().unwrap()
                 .replace(result_with_timings),
             None
         );
