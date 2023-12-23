@@ -1033,14 +1033,15 @@ where
             self.schedulable_transaction_sender,
             self.schedulable_transaction_receiver,
         ) = unbounded();
+
+        let () = self.drop_thread.take().unwrap().join().unwrap();
+        for thread in self.handler_threads.drain(..) {
+            debug!("joining...: {:?}", thread);
+            () = thread.join().unwrap();
+        }
         let result_with_timings = scheduler_thread.join().unwrap();
         self.put_session_result_with_timings(result_with_timings);
-        let () = self.drop_thread.take().unwrap().join().unwrap();
 
-        for j in self.handler_threads.drain(..) {
-            debug!("joining...: {:?}", j);
-            () = j.join().unwrap();
-        }
         debug!(
             "stop_threads(): successfully stopped threads by {:?}",
             std::thread::current()
