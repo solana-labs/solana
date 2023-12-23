@@ -1086,7 +1086,7 @@ where
             .send(SessionedMessage::Payload(task))
         {
             Ok(()) => Ok(()),
-            Err(SendError(_)) => self.session_result_with_timings.as_ref().unwrap().0.clone(),
+            Err(SendError(_)) => self.session_result_with_timings.lock().unwrap().as_ref().unwrap().0.clone(),
         }
     }
 
