@@ -104,7 +104,10 @@ pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + '
     fn context(&self) -> &SchedulingContext;
 
     // Calling this is illegal as soon as wait_for_termination is called.
-    fn schedule_execution<'a>(&'a self, transaction_with_index: SEA::TransactionWithIndex<'a>) -> Result<()>;
+    fn schedule_execution<'a>(
+        &'a self,
+        transaction_with_index: SEA::TransactionWithIndex<'a>,
+    ) -> Result<()>;
 
     /// Wait for a scheduler to terminate after processing.
     ///
@@ -142,7 +145,10 @@ pub type InstalledSchedulerPoolArc<SEA> = Arc<dyn InstalledSchedulerPool<SEA>>;
 pub type SchedulerId = u64;
 
 pub trait WithTransactionAndIndex: Send + Sync + Debug {
-    fn with_transaction_and_index<R>(&self, callback: impl FnOnce(&SanitizedTransaction, usize) -> R) -> R;
+    fn with_transaction_and_index<R>(
+        &self,
+        callback: impl FnOnce(&SanitizedTransaction, usize) -> R,
+    ) -> R;
 }
 
 impl<
@@ -151,7 +157,10 @@ impl<
         Z: Send + Sync + Debug + Deref<Target = (T, U)>,
     > WithTransactionAndIndex for Z
 {
-    fn with_transaction_and_index<R>(&self, callback: impl FnOnce(&SanitizedTransaction, usize) -> R) -> R {
+    fn with_transaction_and_index<R>(
+        &self,
+        callback: impl FnOnce(&SanitizedTransaction, usize) -> R,
+    ) -> R {
         callback(self.0.borrow(), *self.1.borrow())
     }
 }

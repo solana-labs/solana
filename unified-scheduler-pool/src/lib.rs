@@ -13,7 +13,7 @@ use {
     assert_matches::assert_matches,
     crossbeam_channel::{
         bounded, disconnected, never, select_biased, unbounded, Receiver, RecvError,
-        RecvTimeoutError, Sender, TryRecvError,
+        RecvTimeoutError, SendError, Sender, TryRecvError,
     },
     log::*,
     solana_ledger::blockstore_processor::{
@@ -48,7 +48,6 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
-use crossbeam_channel::SendError;
 
 type AtomicSchedulerId = AtomicU64;
 
@@ -626,7 +625,9 @@ where
     }
 
     pub fn take_scheduler_thread(&mut self) -> Option<JoinHandle<ResultWithTimings>> {
-        self.scheduler_thread_and_tid.take().map(|(thread, _tid)| thread)
+        self.scheduler_thread_and_tid
+            .take()
+            .map(|(thread, _tid)| thread)
     }
 
     fn receive_scheduled_transaction(
@@ -1050,11 +1051,12 @@ where
 
     fn send_task(&self, task: Task) -> Result<()> {
         debug!("send_task()");
-        match self.schedulable_transaction_sender.send(SessionedMessage::Payload(task)) {
+        match self
+            .schedulable_transaction_sender
+            .send(SessionedMessage::Payload(task))
+        {
             Ok(()) => Ok(()),
-            Err(SendError(_)) => {
-                self.session_result_with_timings.as_ref().unwrap().0.clone()
-            }
+            Err(SendError(_)) => self.session_result_with_timings.as_ref().unwrap().0.clone(),
         }
     }
 
@@ -1170,7 +1172,10 @@ where
         &self.context
     }
 
-    fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) -> Result<()> {
+    fn schedule_execution(
+        &self,
+        transaction_with_index: SEA::TransactionWithIndex<'_>,
+    ) -> Result<()> {
         transaction_with_index.with_transaction_and_index(|transaction, index| {
             let task = SchedulingStateMachine::create_task(transaction.clone(), index, |pubkey| {
                 self.inner.address_book.load(pubkey)
