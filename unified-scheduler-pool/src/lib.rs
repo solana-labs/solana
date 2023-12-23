@@ -785,8 +785,9 @@ where
                                 state_machine.deschedule_task(&executed_task.task);
                                 if executed_task.is_err() {
                                     log_scheduler!("T:aborted");
+                                    let r = executed_task.result_with_timings.clone();
                                     executed_task_sender.send(SessionedMessage::Payload(executed_task)).unwrap();
-                                    return executed_task.result_with_timings;
+                                    return r;
                                 } else {
                                     executed_task_sender.send_buffered(SessionedMessage::Payload(executed_task)).unwrap();
                                 }
