@@ -941,7 +941,7 @@ where
             }
         };
 
-        let drop_main_loop = || {
+        let accumulator_main_thread = || {
             move || 'outer: {
                 loop {
                     match executed_task_receiver.recv_timeout(Duration::from_millis(40)) {
@@ -951,10 +951,7 @@ where
                                 .accumulate(&executed_task.result_with_timings.1);
                             match &executed_task.result_with_timings.0 {
                                 Ok(()) => {}
-                                Err(e) => {
-                                    error!("sc error: {:?}", e);
-                                    result_with_timings.0 = Err(e.clone());
-                                }
+                                Err(_err) => unreachable!(),
                             }
                             if let Some(handler_timings) = &executed_task.handler_timings {
                                 use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
@@ -1034,7 +1031,7 @@ where
         self.accumulator_thread = Some(
             std::thread::Builder::new()
                 .name("solScDrop".to_owned())
-                .spawn(drop_main_loop())
+                .spawn(accumulator_main_thread())
                 .unwrap(),
         );
 
@@ -1095,7 +1092,10 @@ where
         if !self.is_active() {
             assert_matches!(*self.session_result_with_timings.lock().unwrap(), Some(_));
             return;
-        } else if self.session_result_with_timings.lock().unwrap().is_some() {
+        } else if let Some(result_with_timings) = self.session_result_with_timings.lock().unwrap() {
+            if result_with_timings.is_err() {
+                self.stop_threads();
+            }
             return;
         }
 
