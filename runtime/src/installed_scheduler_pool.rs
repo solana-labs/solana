@@ -631,6 +631,9 @@ mod tests {
         );
 
         let bank = BankWithScheduler::new(bank, Some(mocked_scheduler));
-        assert_matches!(bank.schedule_transaction_executions([(&tx0, &0)].into_iter()), Ok(()));
+        assert_matches!(
+            bank.schedule_transaction_executions([(&tx0, &0)].into_iter()),
+            Ok(())
+        );
     }
 }
