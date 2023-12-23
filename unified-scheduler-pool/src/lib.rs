@@ -1588,7 +1588,7 @@ mod tests {
             &self.2
         }
 
-        fn schedule_execution(&self, &(transaction, index): &(&SanitizedTransaction, usize)) {
+        fn schedule_execution(&self, &(transaction, index): &(&SanitizedTransaction, usize)) -> Result<()> {
             let transaction_and_index = (transaction.clone(), index);
             let context = self.context().clone();
             let pool = self.3.clone();
@@ -1612,6 +1612,8 @@ mod tests {
                 );
                 (result, timings)
             }));
+
+            Ok(())
         }
 
         fn wait_for_termination(
