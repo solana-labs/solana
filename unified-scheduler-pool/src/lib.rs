@@ -1627,11 +1627,11 @@ mod tests {
             _is_dropped: bool,
         ) -> (ResultWithTimings, UninstalledSchedulerBox) {
             self.do_wait();
-            let r = replace(
+            let result_with_timings = replace(
                 &mut *self.0.lock().unwrap(),
                 initialized_result_with_timings(),
             );
-            (r, self)
+            (result_with_timings, self)
         }
 
         fn pause_for_recent_blockhash(&mut self) {
