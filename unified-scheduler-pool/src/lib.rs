@@ -625,7 +625,7 @@ where
         self.scheduler_thread_and_tid.is_some()
     }
 
-    fn take_scheduler_thread(&mut) -> Option<usize> {
+    fn take_scheduler_thread(&mut self) -> Option<usize> {
         self.scheduler_thread_and_tid.take().map(|thread_and_tid| thread)
     }
 
