@@ -1093,9 +1093,9 @@ where
     fn end_session(&mut self) {
         debug!("end_session(): will end session...");
         if !self.is_active() {
-            assert_matches!(self.session_result_with_timings, Some(_));
+            assert_matches!(self.session_result_with_timings.lock().uwnrap(), Some(_));
             return;
-        } else if self.session_result_with_timings.is_some() {
+        } else if self.session_result_with_timings.lock().uwnrap().is_some() {
             return;
         }
 
