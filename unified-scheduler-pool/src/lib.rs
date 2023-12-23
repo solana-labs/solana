@@ -625,7 +625,7 @@ where
         self.scheduler_thread_and_tid.is_some()
     }
 
-    fn take_scheduler_thread(&mut self) -> Option<JoinHandle<ResultWithTimings>> {
+    pub fn take_scheduler_thread(&mut self) -> Option<JoinHandle<ResultWithTimings>> {
         self.scheduler_thread_and_tid.take().map(|(thread, _tid)| thread)
     }
 
@@ -1020,7 +1020,7 @@ where
     }
 
     fn stop_threads(&mut self) {
-        if !self.is_active() {
+        let Some(scheduler_thread) = self.take_scheduler_thread() {
             warn!("stop_threads(): already not active anymore...");
             return;
         }
@@ -1033,14 +1033,8 @@ where
             self.schedulable_transaction_sender,
             self.schedulable_transaction_receiver,
         ) = unbounded();
-        let r = self
-            .scheduler_thread_and_tid
-            .take()
-            .unwrap()
-            .0
-            .join()
-            .unwrap();
-        self.put_session_result_with_timings(r);
+        let result_with_timings = scheduler_thread.join().unwrap();
+        self.put_session_result_with_timings(result_with_timings);
         let () = self.drop_thread.take().unwrap().join().unwrap();
 
         for j in self.handler_threads.drain(..) {
