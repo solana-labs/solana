@@ -534,7 +534,7 @@ where
     ) -> RwLockReadGuard<'_, ThreadManager<Self, TH, SEA>> {
         loop {
             let read = self.inner.thread_manager.read().unwrap();
-            if read.is_active() {
+            if read.has_active_threads_to_be_joined() {
                 debug!("ensure_thread_manager_started(): is already active...");
                 return read;
             } else {
@@ -624,7 +624,7 @@ where
         }
     }
 
-    fn is_active(&self) -> bool {
+    fn has_active_threads_to_be_joined(&self) -> bool {
         self.scheduler_thread_and_tid.is_some()
     }
 
@@ -700,7 +700,7 @@ where
     }
 
     fn start_threads(&mut self, context: &SchedulingContext) {
-        if self.is_active() {
+        if self.has_active_threads_to_be_joined() {
             // this can't be promoted to panic! as read => write upgrade isn't completely
             // race-free in ensure_thread_manager_started()...
             warn!("start_threads(): already started");
@@ -1087,17 +1087,17 @@ where
         }
     }
 
-    fn ended_session(&self) -> Option<bool> {
+    fn ended_session_did_abort(&self) -> Option<bool> {
         self.session_result_with_timings.lock().unwrap().as_ref().map(|(r, t)| r.is_err())
     }
 
     fn end_session(&mut self) {
         debug!("end_session(): will end session...");
-        if !self.is_active() {
+        if !self.has_active_threads_to_be_joined() {
             assert_matches!(*self.session_result_with_timings.lock().unwrap(), Some(_));
             return;
-        } else if let Some(aborted) = self.ended_session() {
-            if aborted {
+        } else if let Some(did_aborted) = self.ended_session_did_abort() {
+            if did_aborted {
                 self.stop_threads();
             }
             return;
@@ -1110,7 +1110,7 @@ where
     }
 
     fn start_session(&mut self, context: &SchedulingContext) {
-        if self.is_active() {
+        if self.has_active_threads_to_be_joined() {
             self.schedulable_transaction_sender
                 .send(SessionedMessage::StartSession(context.clone()))
                 .unwrap();
@@ -1241,7 +1241,7 @@ where
     fn return_to_pool(mut self: Box<Self>) {
         let pool = {
             let mut manager = self.thread_manager.write().unwrap();
-            if !manager.is_active() {
+            if !manager.has_active_threads_to_be_joined() {
                 manager.put_session_result_with_timings(initialized_result_with_timings());
             }
             manager.pool.clone()
