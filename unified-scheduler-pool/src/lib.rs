@@ -620,7 +620,7 @@ where
             handler_count,
             handler,
             pool,
-            session_result_with_timings: Some(initialized_result_with_timings()).into(),
+            session_result_with_timings: Arc::new(Mutex::new(Some(initialized_result_with_timings()))),
         }
     }
 
