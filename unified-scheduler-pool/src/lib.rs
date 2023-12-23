@@ -494,7 +494,7 @@ where
     result_sender: Sender<ResultWithTimings>,
     result_receiver: Receiver<ResultWithTimings>,
     handler_count: usize,
-    session_result_with_timings: Option<ResultWithTimings>,
+    session_result_with_timings: Arc<Mutex<Option<ResultWithTimings>>>,
 }
 
 impl<TH, SEA> PooledScheduler<TH, SEA>
@@ -620,7 +620,7 @@ where
             handler_count,
             handler,
             pool,
-            session_result_with_timings: Some(initialized_result_with_timings()),
+            session_result_with_timings: Some(initialized_result_with_timings()).into(),
         }
     }
 
