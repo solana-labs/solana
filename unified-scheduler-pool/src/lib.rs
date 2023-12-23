@@ -1217,7 +1217,8 @@ where
             if abort_detected {
                 let mut thread_manager = self.inner.thread_manager.write().unwrap();
                 thread_manager.stop_and_join_threads();
-                thread_manager.session_result_with_timings.lock().unwrap().as_ref().unwrap().0.clone()
+                let r = thread_manager.session_result_with_timings.lock().unwrap().as_ref().unwrap().0.clone();
+                r
             } else {
                 Ok(())
             }
