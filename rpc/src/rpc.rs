@@ -1,4 +1,5 @@
 //! The `rpc` module implements the Solana RPC interface.
+
 use {
     crate::{
         max_slots::MaxSlots, optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
@@ -100,8 +101,8 @@ use {
     },
     std::{
         any::type_name,
-        cmp::{max, min},
-        collections::{HashMap, HashSet},
+        cmp::{max, min, Reverse},
+        collections::{BinaryHeap, HashMap, HashSet},
         convert::TryFrom,
         net::SocketAddr,
         str::FromStr,
@@ -1857,29 +1858,115 @@ impl JsonRpcRequestProcessor {
                 "Invalid param: not a Token mint".to_string(),
             ));
         }
-        let mut token_balances: Vec<RpcTokenAccountBalance> = self
-            .get_filtered_spl_token_accounts_by_mint(&bank, &mint_owner, mint, vec![])?
-            .into_iter()
-            .map(|(address, account)| {
-                let amount = StateWithExtensions::<TokenAccount>::unpack(account.data())
+
+        // Fetch all token accounts
+        let token_accounts =
+            self.get_filtered_spl_token_accounts_by_mint(&bank, &mint_owner, mint, vec![])?;
+
+        // Handle <= MAX case with reversed sort + return
+        let reversed_sort_and_return = token_accounts.len() <= NUM_LARGEST_ACCOUNTS;
+        let token_balances: Vec<RpcTokenAccountBalance> = if reversed_sort_and_return {
+            let mut token_balances: Vec<RpcTokenAccountBalance> = token_accounts
+                .into_iter()
+                .map(|(address, account)| {
+                    let amount_u64 = StateWithExtensions::<TokenAccount>::unpack(account.data())
+                        .map(|account| account.base.amount)
+                        .unwrap_or(0);
+                    let amount = token_amount_to_ui_amount(amount_u64, decimals);
+
+                    RpcTokenAccountBalance {
+                        address: address.to_string(),
+                        amount,
+                    }
+                })
+                .collect();
+            token_balances.sort_by(|a, b| {
+                a.amount
+                    .amount
+                    .parse::<u64>()
+                    .unwrap()
+                    .cmp(&b.amount.amount.parse::<u64>().unwrap())
+                    .reverse()
+            });
+
+            token_balances
+        } else {
+            // Otherwise, use a minheap to partially sort entire list
+
+            #[derive(PartialEq)]
+            /// An ephemeral wrapper type used to make a minheap
+            struct RpcTokenAccountBalanceWrapper {
+                /// We need to reverse the cmp logic to make the maxheap a minheap
+                /// We reverse through use of Reverse<u64>
+                amount: Reverse<u64>,
+
+                inner: RpcTokenAccountBalance,
+            }
+            /// We only need partially ordered entries (total by u64)
+            impl PartialOrd for RpcTokenAccountBalanceWrapper {
+                fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+                    // Reverse wrapper reverses this cmp to make maxheap a minheap
+                    Some(self.amount.cmp(&other.amount))
+                }
+            }
+            impl Eq for RpcTokenAccountBalanceWrapper {}
+            impl Ord for RpcTokenAccountBalanceWrapper {
+                fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+                    self.amount.cmp(&other.amount)
+                }
+            }
+
+            // Pre allocate minheap
+            let mut token_accounts_min_heap = BinaryHeap::with_capacity(NUM_LARGEST_ACCOUNTS);
+
+            for (address, account) in token_accounts.into_iter() {
+                let amount_u64 = StateWithExtensions::<TokenAccount>::unpack(account.data())
                     .map(|account| account.base.amount)
                     .unwrap_or(0);
-                let amount = token_amount_to_ui_amount(amount, decimals);
-                RpcTokenAccountBalance {
-                    address: address.to_string(),
-                    amount,
+
+                // Create a wrapped type that is used for the min heap
+                let mut wrapped_token_account_balance = RpcTokenAccountBalanceWrapper {
+                    inner: RpcTokenAccountBalance {
+                        // Only do base58 if we are adding to heap and returning
+                        address: String::new(),
+                        // Only allocate strings if we are adding to heap and returning
+                        amount: UiTokenAmount {
+                            ui_amount: Default::default(),
+                            decimals,
+                            amount: Default::default(),
+                            ui_amount_string: Default::default(),
+                        },
+                    },
+                    amount: Reverse(amount_u64),
+                };
+
+                // Add if balance is larger than smallest item in heap.
+                // Some(any u64) > None captures empty case.
+                // Reverse requires < to check for larger, e.g. Reverse(5) < Reverse(3)
+                if Some(&wrapped_token_account_balance) < token_accounts_min_heap.peek() {
+                    // Remove smallest if full
+                    if token_accounts_min_heap.len() == NUM_LARGEST_ACCOUNTS {
+                        token_accounts_min_heap.pop();
+                    }
+
+                    // Push to min heap after updating values
+                    wrapped_token_account_balance.inner.address = address.to_string();
+                    wrapped_token_account_balance.inner.amount =
+                        token_amount_to_ui_amount(amount_u64, decimals);
+                    token_accounts_min_heap.push(wrapped_token_account_balance);
                 }
-            })
-            .collect();
-        token_balances.sort_by(|a, b| {
-            a.amount
-                .amount
-                .parse::<u64>()
-                .unwrap()
-                .cmp(&b.amount.amount.parse::<u64>().unwrap())
-                .reverse()
-        });
-        token_balances.truncate(NUM_LARGEST_ACCOUNTS);
+            }
+
+            // Sort and return the min heap's inner vec.
+            // The entries are yielded in ascending order so we need to reverse.
+            let mut token_balances = vec![];
+            for wrapped_balance in token_accounts_min_heap.into_sorted_vec() {
+                token_balances.push(wrapped_balance.inner);
+            }
+            token_balances.reverse();
+            token_balances
+        };
+
         Ok(new_response(&bank, token_balances))
     }
 
