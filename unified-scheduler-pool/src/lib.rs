@@ -1087,12 +1087,16 @@ where
         }
     }
 
+    fn did_abort(&self) -> Option<bool> {
+        self.session_result_with_timings.lock().unwrap().as_ref().map(|(r, t)| r.is_err())
+    }
+
     fn end_session(&mut self) {
         debug!("end_session(): will end session...");
         if !self.is_active() {
             assert_matches!(*self.session_result_with_timings.lock().unwrap(), Some(_));
             return;
-        } else if let Some(aborted) = self.session_result_with_timings.lock().unwrap().as_ref().map(|(r, t)| r.is_err()) {
+        } else if let Some(aborted) = self.did_abort() {
             if aborted {
                 self.stop_threads();
             }
