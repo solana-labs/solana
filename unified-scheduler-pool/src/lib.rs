@@ -625,8 +625,8 @@ where
         self.scheduler_thread_and_tid.is_some()
     }
 
-    fn take_scheduler_thread(&mut self) -> Option<usize> {
-        self.scheduler_thread_and_tid.take().map(|(thread, tid)| thread)
+    fn take_scheduler_thread(&mut self) -> Option<JoinHandle<ResultWithTimings>> {
+        self.scheduler_thread_and_tid.take().map(|(thread, _tid)| thread)
     }
 
     fn receive_scheduled_transaction(
